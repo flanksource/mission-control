@@ -12,8 +12,14 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+type syncHandlerData struct {
+	fn          postq.SyncEventHandlerFunc
+	handlerName string
+}
+
 type asyncHandlerData struct {
 	fn           func(ctx context.Context, e models.Events) models.Events
+	handlerName  string
 	batchSize    int
 	numConsumers int
 }
@@ -27,7 +33,7 @@ const (
 	DefaultEventLogSize = 20
 )
 
-var SyncHandlers = utils.SyncedMap[string, postq.SyncEventHandlerFunc]{}
+var SyncHandlers = utils.SyncedMap[string, syncHandlerData]{}
 var AsyncHandlers = utils.SyncedMap[string, asyncHandlerData]{}
 
 var consumers []*postq.PGConsumer
@@ -38,9 +44,14 @@ func Register(fn func(ctx context.Context)) {
 }
 
 func RegisterAsyncHandler(fn func(ctx context.Context, e models.Events) models.Events, batchSize int, consumers int, events ...string) {
+	RegisterAsyncHandlerNamed(getHandlerName(fn), fn, batchSize, consumers, events...)
+}
+
+func RegisterAsyncHandlerNamed(name string, fn func(ctx context.Context, e models.Events) models.Events, batchSize int, consumers int, events ...string) {
 	for _, event := range events {
 		AsyncHandlers.Append(event, asyncHandlerData{
 			fn:           fn,
+			handlerName:  name,
 			batchSize:    batchSize,
 			numConsumers: consumers,
 		})
@@ -48,8 +59,15 @@ func RegisterAsyncHandler(fn func(ctx context.Context, e models.Events) models.E
 }
 
 func RegisterSyncHandler(fn postq.SyncEventHandlerFunc, events ...string) {
+	RegisterSyncHandlerNamed(getHandlerName(fn), fn, events...)
+}
+
+func RegisterSyncHandlerNamed(name string, fn postq.SyncEventHandlerFunc, events ...string) {
 	for _, event := range events {
-		SyncHandlers.Append(event, fn)
+		SyncHandlers.Append(event, syncHandlerData{
+			fn:          fn,
+			handlerName: name,
+		})
 	}
 }
 
@@ -72,11 +90,29 @@ func StartConsumers(ctx context.Context) {
 	notifyRouter := pg.NewNotifyRouter()
 	go notifyRouter.Run(ctx, eventQueueUpdateChannel)
 
-	SyncHandlers.Each(func(event string, handlers []postq.SyncEventHandlerFunc) {
+	SyncHandlers.Each(func(event string, handlers []syncHandlerData) {
 		log.Tracef("Registering %d sync event handlers for %s", len(handlers), event)
+
+		wrappedHandlers := make([]postq.SyncEventHandlerFunc, 0, len(handlers))
+		for _, handler := range handlers {
+			h := handler
+			wrappedHandlers = append(wrappedHandlers, func(ctx context.Context, e models.Event) error {
+				start := time.Now()
+				err := h.fn(ctx, e)
+				success := err == nil
+				recordEventHandlerDuration(event, h.handlerName, success, time.Since(start))
+				if success {
+					recordEventHandlerEvents(event, h.handlerName, 1, 0)
+				} else {
+					recordEventHandlerEvents(event, h.handlerName, 0, 1)
+				}
+				return err
+			})
+		}
+
 		consumer := postq.SyncEventConsumer{
 			WatchEvents: []string{event},
-			Consumers:   handlers,
+			Consumers:   wrappedHandlers,
 			ConsumerOption: &postq.ConsumerOption{
 				ErrorHandler: defaultLoggerErrorHandler,
 			},
@@ -95,6 +131,7 @@ func StartConsumers(ctx context.Context) {
 		log.Tracef("Registering %d async event handlers for %v", len(handlers), event)
 		for _, handler := range handlers {
 			h := handler.fn
+			handlerName := handler.handlerName
 			batchSize := ctx.Properties().Int(event+".batchSize", handler.batchSize)
 
 			consumer := postq.AsyncEventConsumer{
@@ -108,7 +145,18 @@ func StartConsumers(ctx context.Context) {
 					if ctx.Properties().Off(event+".debug", false) {
 						c = c.WithDebug()
 					}
-					return h(c, e)
+
+					start := time.Now()
+					failedEvents := h(c, e)
+					failedCount := len(failedEvents)
+					processedCount := len(e) - failedCount
+					if processedCount < 0 {
+						processedCount = 0
+					}
+
+					recordEventHandlerDuration(event, handlerName, failedCount == 0, time.Since(start))
+					recordEventHandlerEvents(event, handlerName, processedCount, failedCount)
+					return failedEvents
 				},
 				ConsumerOption: &postq.ConsumerOption{
 					NumConsumers: handler.numConsumers,
