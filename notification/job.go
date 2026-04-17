@@ -558,17 +558,31 @@ func SyncWatchdogJob(ctx context.Context, scheduler *cron.Cron, notificationID s
 		if schedule != nil {
 			scheduleChanged = existingJob.Schedule != *schedule
 		}
+	}
 
-		if schedule == nil || scheduleChanged {
+	if schedule == nil {
+		if existingJob != nil {
 			ctx.Debugf("deleting existing watchdog job for %s", notificationID)
 			existingJob.Unschedule()
 			watchdogJobs.Delete(notificationID)
 		}
+		return nil
 	}
 
-	if schedule != nil && (scheduleChanged || existingJob == nil) {
+	if existingJob == nil {
 		return scheduleWatchdogJob(ctx, scheduler, notificationID, *schedule)
 	}
+
+	if !scheduleChanged {
+		return nil
+	}
+
+	if err := scheduleWatchdogJob(ctx, scheduler, notificationID, *schedule); err != nil {
+		return err
+	}
+
+	ctx.Debugf("deleting existing watchdog job for %s after replacement", notificationID)
+	existingJob.Unschedule()
 
 	return nil
 }

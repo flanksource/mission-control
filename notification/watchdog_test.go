@@ -77,6 +77,22 @@ var _ = ginkgo.Describe("Notification watchdog", func() {
 		Expect(scheduler.Entries()).To(BeEmpty())
 	})
 
+	ginkgo.It("should keep the existing watchdog when schedule update fails", func() {
+		scheduler := cron.New()
+		ginkgo.DeferCleanup(func() {
+			scheduler.Stop()
+		})
+
+		notificationID := uuid.New().String()
+		schedule := "*/1 * * * *"
+		Expect(notification.SyncWatchdogJob(DefaultContext, scheduler, notificationID, &schedule)).To(BeNil())
+		Expect(scheduler.Entries()).To(HaveLen(1))
+
+		invalidSchedule := "not-a-cron-expression"
+		Expect(notification.SyncWatchdogJob(DefaultContext, scheduler, notificationID, &invalidSchedule)).To(HaveOccurred())
+		Expect(scheduler.Entries()).To(HaveLen(1))
+	})
+
 	ginkgo.It("should resolve watchdog statistics from the event id", func() {
 		notif := createWatchdogNotification()
 
