@@ -2,12 +2,14 @@ on:
   pull_request:
 permissions:
   contents: read
-  checks: write
-  issues: write
-  pull-requests: write
 name: Test
 jobs:
   test:
+    permissions:
+      contents: read
+      checks: write
+      issues: write
+      pull-requests: write
     runs-on: ubuntu-latest
     steps:
       - name: Free up disk space
@@ -58,7 +60,7 @@ jobs:
           du -sh ~/go/pkg/mod ~/.cache/go-build .bin 2>/dev/null || echo "Some cache directories not found yet"
 
       - name: Install bun
-        uses: oven-sh/setup-bun@v2
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
       - name: Install facet
         run: |
