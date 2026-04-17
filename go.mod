@@ -54,7 +54,7 @@ require (
 	github.com/flanksource/commons-test v0.1.13
 	github.com/fluxcd/pkg/gittestserver v0.26.0
 	github.com/go-git/go-billy/v5 v5.8.0
-	github.com/go-git/go-git/v5 v5.17.2
+	github.com/go-git/go-git/v5 v5.18.0
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/gofrs/uuid/v5 v5.4.0
