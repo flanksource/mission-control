@@ -65,12 +65,12 @@ type ConnectionPushover struct {
 
 type ConnectionTeams struct {
 	// Incoming webhook URL from Microsoft Teams
-	WebhookURL string `json:"webhookURL"`
+	WebhookURL types.EnvVar `json:"webhookURL"`
 }
 
 type ConnectionMattermost struct {
 	// Incoming webhook URL
-	WebhookURL string `json:"webhookURL"`
+	WebhookURL types.EnvVar `json:"webhookURL"`
 
 	// Channel override (optional)
 	Channel string `json:"channel,omitempty"`

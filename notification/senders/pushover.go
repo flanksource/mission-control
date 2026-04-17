@@ -1,12 +1,13 @@
 package senders
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 
-	"context"
 	"github.com/flanksource/duty/models"
 )
 
@@ -27,7 +28,13 @@ func (p *Pushover) Send(ctx context.Context, conn *models.Connection, data Data)
 		"html":    {"1"},
 	}
 
-	resp, err := httpClient.PostForm("https://api.pushover.net/1/messages.json", form)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.pushover.net/1/messages.json", strings.NewReader(form.Encode()))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}

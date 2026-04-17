@@ -18,6 +18,7 @@ type Sender interface {
 type Data struct {
 	Title       string
 	Message     string
+	Properties  map[string]string
 	Attachments []mail.Attachment
 }
 

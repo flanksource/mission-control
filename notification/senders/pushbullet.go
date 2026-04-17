@@ -30,7 +30,7 @@ func (p *Pushbullet) Send(ctx context.Context, conn *models.Connection, data Dat
 		return err
 	}
 
-	req, err := http.NewRequest(http.MethodPost, "https://api.pushbullet.com/v2/pushes", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://api.pushbullet.com/v2/pushes", bytes.NewReader(body))
 	if err != nil {
 		return err
 	}

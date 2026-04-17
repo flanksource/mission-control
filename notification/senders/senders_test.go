@@ -127,6 +127,34 @@ var _ = ginkgo.Describe("Discord sender", func() {
 	})
 })
 
+var _ = ginkgo.Describe("Telegram sender", func() {
+	ginkgo.It("escapes MarkdownV2 special characters in message body", func() {
+		var received map[string]any
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			body, _ := io.ReadAll(r.Body)
+			Expect(json.Unmarshal(body, &received)).To(Succeed())
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		origClient := httpClient
+		httpClient = &http.Client{Transport: &rewriteTransport{server.URL, http.DefaultTransport}}
+		defer func() { httpClient = origClient }()
+
+		conn := &models.Connection{Type: models.ConnectionTypeTelegram, Password: "fake-token", Username: "12345"}
+		err := (&Telegram{}).Send(context.TODO(), conn, Data{
+			Title:   "Alert!",
+			Message: "server-01.prod is down!",
+		})
+		Expect(err).ToNot(HaveOccurred())
+		text := received["text"].(string)
+		Expect(text).To(ContainSubstring(`\!`))
+		Expect(text).To(ContainSubstring(`\.`))
+		Expect(text).To(ContainSubstring(`\-`))
+		Expect(received["parse_mode"]).To(Equal("MarkdownV2"))
+	})
+})
+
 var _ = ginkgo.Describe("Ntfy sender", func() {
 	ginkgo.It("sends message with title header", func() {
 		var receivedTitle string

@@ -45,7 +45,13 @@ func (m *Mattermost) Send(ctx context.Context, conn *models.Connection, data Dat
 		return err
 	}
 
-	resp, err := httpClient.Post(webhookURL, "application/json", bytes.NewReader(body))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, webhookURL, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return err
 	}

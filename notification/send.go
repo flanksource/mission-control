@@ -401,6 +401,7 @@ func SendRawNotification(ctx *Context, connectionName, shoutrrrURL string, celEn
 			senderData := senders.Data{
 				Title:       data.Title,
 				Message:     data.Message,
+				Properties:  data.Properties,
 				Attachments: data.Attachments,
 			}
 			if err := sender.Send(ctx.Context, connection, senderData); err != nil {
@@ -411,7 +412,7 @@ func SendRawNotification(ctx *Context, connectionName, shoutrrrURL string, celEn
 		}
 	}
 
-	// Fallback: Shoutrrr for SMTP and unknown connection types
+	// Fallback: SMTP and unknown connection types
 	data.Properties = collections.MergeMap(connectionProperties(connection), data.Properties)
 	service, err := shoutrrrSendRaw(ctx, celEnv, shoutrrrURL, data)
 	if err != nil {
@@ -510,8 +511,9 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, payload 
 				return "", fmt.Errorf("failed to format message: %w", err)
 			}
 			senderData := senders.Data{
-				Title:   payload.Title,
-				Message: message,
+				Title:      payload.Title,
+				Message:    message,
+				Properties: properties,
 			}
 			if err := sender.Send(ctx.Context, connection, senderData); err != nil {
 				return "", fmt.Errorf("failed to send via %s: %w", connection.Type, err)
@@ -521,7 +523,7 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, payload 
 		}
 	}
 
-	// Fallback: Shoutrrr for SMTP and unknown types
+	// Fallback: SMTP and unknown types
 	properties = collections.MergeMap(connectionProperties(connection), properties)
 	service, err := shoutrrrSend(ctx, shoutrrrURL, payload, properties)
 	if err != nil {

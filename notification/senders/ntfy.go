@@ -29,15 +29,17 @@ func (n *Ntfy) Send(ctx context.Context, conn *models.Connection, data Data) err
 		return fmt.Errorf("ntfy connection requires a topic")
 	}
 
-	req, err := http.NewRequest(http.MethodPost, host+"/"+topic, strings.NewReader(data.Message))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, host+"/"+topic, strings.NewReader(data.Message))
 	if err != nil {
 		return err
 	}
 	if data.Title != "" {
 		req.Header.Set("Title", data.Title)
 	}
-	if conn.Password != "" {
+	if conn.Username != "" && conn.Password != "" {
 		req.SetBasicAuth(conn.Username, conn.Password)
+	} else if conn.Password != "" {
+		req.Header.Set("Authorization", "Bearer "+conn.Password)
 	}
 
 	resp, err := httpClient.Do(req)
