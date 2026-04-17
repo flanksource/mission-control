@@ -53,6 +53,13 @@ func (j JWT) Pretty() api.Text {
 	return t
 }
 
+func (j JWT) ScopeCount() int {
+	if j.Scopes == "" {
+		return 0
+	}
+	return len(strings.Fields(j.Scopes))
+}
+
 func (j JWT) PrettyFull() api.Text {
 	t := j.Pretty()
 	if j.Raw != "" {
@@ -85,6 +92,10 @@ func DecodeJWT(token string) *JWT {
 	j := &JWT{Raw: token}
 	if v, ok := claims["aud"].(string); ok {
 		j.Audience = v
+	} else if arr, ok := claims["aud"].([]any); ok && len(arr) > 0 {
+		if s, ok := arr[0].(string); ok {
+			j.Audience = s
+		}
 	}
 	if v, ok := claims["sub"].(string); ok {
 		j.Subject = v

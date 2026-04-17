@@ -613,8 +613,14 @@
         "url": {
           "type": "string"
         },
-        "pdfOptions": {
-          "$ref": "#/$defs/FacetPDFOptions"
+        "pageSize": {
+          "type": "string"
+        },
+        "landscape": {
+          "type": "boolean"
+        },
+        "margins": {
+          "$ref": "#/$defs/FacetPDFMargins"
         },
         "header": {
           "type": "string"
@@ -642,21 +648,6 @@
         },
         "right": {
           "type": "integer"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "FacetPDFOptions": {
-      "properties": {
-        "pageSize": {
-          "type": "string"
-        },
-        "landscape": {
-          "type": "boolean"
-        },
-        "margins": {
-          "$ref": "#/$defs/FacetPDFMargins"
         }
       },
       "additionalProperties": false,

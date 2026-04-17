@@ -58,8 +58,9 @@ test:
 		--succinct --label-filter='!ignore_local'
 
 .PHONY: ci-test
-ci-test:
-	ginkgo -r -p --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct
+ci-test: $(TAILWIND_JS) $(LOCALBIN)
+	go build -o ./.bin/$(NAME) main.go
+	ginkgo -r --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct
 
 .PHONY: e2e
 e2e: $(TAILWIND_JS)
@@ -149,7 +150,7 @@ build: static
 	go build -o ./.bin/$(NAME) -ldflags "-X \"main.version=$(VERSION_TAG) built at $(DATE)\""  main.go
 
 .PHONY: dev
-dev:
+dev: static
  	# Disabling CGO because of slow build times in apple silicon (just experimenting)
 	CGO_ENABLED=0 go build -v -o ./.bin/$(NAME) -gcflags="all=-N -l" main.go
 
@@ -188,21 +189,24 @@ ginkgo:
 
 .PHONY: controller-gen
 controller-gen: install-deps $(LOCALBIN)
-	$(LOCALBIN)/deps install controller-gen@$(CONTROLLER_TOOLS_VERSION) --bin-dir $(LOCALBIN)
+	deps install controller-gen@$(CONTROLLER_TOOLS_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: golangci-lint
 golangci-lint: install-deps $(LOCALBIN)
-	$(LOCALBIN)/deps install golangci/golangci-lint@v$(GOLANGCI_LINT_VERSION) --bin-dir $(LOCALBIN)
+	deps install golangci/golangci-lint@v$(GOLANGCI_LINT_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: kustomize
 kustomize: install-deps $(LOCALBIN)
-	$(LOCALBIN)/deps install kubernetes-sigs/kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
+	deps install kubernetes-sigs/kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: docs\:mcp
 docs\:mcp: ## Generate MCP tools reference documentation
 	@mkdir -p docs
 	go run ./hack/gen-mcp-docs > docs/mcp-tools.md
 	@echo "Generated docs/mcp-tools.md"
+
+report/kitchen-sink.json: report/build-kitchen-sink.ts report/testdata/kitchen-sink.yaml
+	cd report && ./node_modules/.bin/tsx build-kitchen-sink.ts
 
 .PHONY: lint
 lint: golangci-lint
