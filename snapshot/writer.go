@@ -10,7 +10,12 @@ import (
 )
 
 func writeToCSVFile(pathPrefix, name string, headerRow string, dbRows []map[string]any) error {
-	f, err := os.Create(utils.SafeJoin(pathPrefix, name))
+	path, err := utils.SafeJoin(pathPrefix, name)
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
@@ -33,12 +38,23 @@ func writeToJSONFile(pathPrefix, name string, data []byte) error {
 		return nil
 	}
 
-	return os.WriteFile(utils.SafeJoin(pathPrefix, name), data, 0644)
+	path, err := utils.SafeJoin(pathPrefix, name)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0644)
 }
 
 func writeToLogFile(pathPrefix, name string, logs []byte) error {
 	if len(logs) == 0 {
 		return nil
 	}
-	return os.WriteFile(utils.SafeJoin(pathPrefix, name), logs, 0644)
+
+	path, err := utils.SafeJoin(pathPrefix, name)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, logs, 0644)
 }
