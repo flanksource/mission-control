@@ -4255,24 +4255,21 @@ spec:
                               type: string
                             header:
                               type: string
-                            pdfOptions:
+                            landscape:
+                              type: boolean
+                            margins:
                               properties:
-                                landscape:
-                                  type: boolean
-                                margins:
-                                  properties:
-                                    bottom:
-                                      type: integer
-                                    left:
-                                      type: integer
-                                    right:
-                                      type: integer
-                                    top:
-                                      type: integer
-                                  type: object
-                                pageSize:
-                                  type: string
+                                bottom:
+                                  type: integer
+                                left:
+                                  type: integer
+                                right:
+                                  type: integer
+                                top:
+                                  type: integer
                               type: object
+                            pageSize:
+                              type: string
                             timestampUrl:
                               type: string
                             url:

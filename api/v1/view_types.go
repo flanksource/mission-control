@@ -111,8 +111,10 @@ type ViewSpec struct {
 	// Include other views in the view
 	Sections []api.ViewSection `json:"sections,omitempty" yaml:"sections,omitempty"`
 
-	// MCP defines metadata for MCP tool registration, controlling how
-	// this view appears to LLM clients (Claude, Gemini, Codex).
+	PDF *FacetOptions `json:"pdf,omitempty" yaml:"pdf,omitempty"`
+
+	// MCP metadata for tool registration with LLM clients.
+	//+kubebuilder:validation:Optional
 	MCP MCPMetadata `json:"mcp,omitempty" yaml:"mcp,omitempty"`
 }
 
