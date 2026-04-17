@@ -16,6 +16,9 @@ export interface RBACResource {
   configId: string;
   configName: string;
   configType: string;
+  configClass?: string;
+  parentId?: string;
+  path?: string;
   status?: string;
   health?: string;
   description?: string;
@@ -62,6 +65,8 @@ export interface RBACUserResource {
   configId: string;
   configName: string;
   configType: string;
+  configClass?: string;
+  path?: string;
   role: string;
   roleSource: string;
   createdAt: string;
@@ -84,10 +89,28 @@ export interface RBACUserReport {
   resources: RBACUserResource[];
 }
 
+export interface ConfigItem {
+  id: string;
+  name?: string;
+  type?: string;
+  config_class?: string;
+  status?: string;
+  health?: string;
+  description?: string;
+  path?: string;
+  parent_id?: string;
+  tags?: Record<string, string>;
+  labels?: Record<string, string>;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface RBACReport {
   title: string;
   query?: string;
   generatedAt: string;
+  subject?: ConfigItem;
+  parents?: ConfigItem[];
   resources: RBACResource[];
   changelog: RBACChangeEntry[];
   summary: RBACSummary;

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Section, CompactTable } from '@flanksource/facet';
+import { Badge, Section, CompactTable } from '@flanksource/facet';
 import { Icon } from '@flanksource/icons/icon';
 import type {
   ViewReportData, ViewColumnDef,
@@ -50,12 +50,7 @@ const STATUS_COLORS: Record<string, { bg: string; fg: string }> = {
 function StatusBadge({ value }: { value: string }) {
   const colors = STATUS_COLORS[value.toLowerCase()] ?? { bg: '#F3F4F6', fg: '#374151' };
   return (
-    <span
-      className="inline-flex px-[1.5mm] py-[0.3mm] rounded text-[6pt] font-semibold"
-      style={{ backgroundColor: colors.bg, color: colors.fg }}
-    >
-      {value}
-    </span>
+    <Badge variant="custom" size="xs" shape="rounded" label={value} color={colors.bg} textColor={colors.fg} borderColor={colors.bg} className="font-semibold" />
   );
 }
 
@@ -72,12 +67,7 @@ function BadgeCell({ value, config }: { value: string; config?: BadgeConfig }) {
   }
 
   return (
-    <span
-      className="inline-flex px-[1.5mm] py-[0.3mm] rounded text-[6pt] font-semibold"
-      style={{ backgroundColor: bg, color: fg }}
-    >
-      {value}
-    </span>
+    <Badge variant="custom" size="xs" shape="rounded" label={value} color={bg} textColor={fg} borderColor={bg} className="font-semibold" />
   );
 }
 
@@ -131,10 +121,17 @@ function TagBadges({ value }: { value: Record<string, string> }) {
   return (
     <span className="inline-flex flex-wrap gap-[0.5mm]">
       {Object.entries(value).map(([k, v]) => (
-        <span key={k} className="inline-flex items-center border border-blue-200 rounded overflow-hidden text-[6pt]" style={{ whiteSpace: 'nowrap' }}>
-          <span className="px-[1.5mm] py-[0.3mm] font-medium" style={{ backgroundColor: '#DBEAFE', color: '#475569' }}>{k}</span>
-          <span className="px-[1.5mm] py-[0.3mm]" style={{ backgroundColor: '#FFFFFF', color: '#0F172A' }}>{v}</span>
-        </span>
+        <Badge
+          key={k}
+          variant="label"
+          size="xs"
+          shape="rounded"
+          label={k}
+          value={String(v)}
+          color="bg-blue-50"
+          textColor="text-slate-600"
+          className="bg-white"
+        />
       ))}
     </span>
   );
@@ -1021,10 +1018,17 @@ export default function ViewResultSection({ data }: Props) {
       {data.variables && data.variables.length > 0 && (
         <div className="flex flex-wrap gap-[2mm] mb-[2mm]">
           {data.variables.map((v) => (
-            <span key={v.key} className="inline-flex items-center bg-blue-50 text-blue-800 text-[7pt] px-[2mm] py-[0.5mm] rounded">
-              <span className="font-medium mr-[1mm]">{v.label || v.key}:</span>
-              {v.default || '-'}
-            </span>
+            <Badge
+              key={v.key}
+              variant="label"
+              size="xs"
+              shape="rounded"
+              label={v.label || v.key}
+              value={v.default || '-'}
+              color="bg-blue-50"
+              textColor="text-blue-800"
+              className="bg-white"
+            />
           ))}
         </div>
       )}

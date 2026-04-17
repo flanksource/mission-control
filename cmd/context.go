@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	nethttp "net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -217,8 +218,141 @@ var contextCurrentCmd = &cobra.Command{
 	},
 }
 
+var (
+	contextAddName   string
+	contextAddServer string
+	contextAddDB     string
+	contextAddToken  string
+	contextAddUse    bool
+)
+
+var contextAddCmd = &cobra.Command{
+	Use:   "add",
+	Short: "Add or update a Mission Control context",
+	Long: `Add a new context (or update an existing one by name). At least one of --server
+or --db-url is required. Pass --use to switch to the new context immediately.
+
+Examples:
+  mission-control context add --name local --db-url "$DB_URL"
+  mission-control context add --name beta --server https://beta.flanksource.com --token "$TOKEN" --use`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if contextAddName == "" {
+			return fmt.Errorf("--name is required")
+		}
+		if contextAddServer == "" && contextAddDB == "" {
+			return fmt.Errorf("at least one of --server or --db-url is required")
+		}
+
+		cfg, err := LoadConfig()
+		if err != nil {
+			return err
+		}
+
+		existingCtx := cfg.GetContext(contextAddName)
+		existing := existingCtx != nil
+		ctx := MCContext{Name: contextAddName}
+		if existingCtx != nil {
+			ctx = *existingCtx
+		}
+		if cmd.Flags().Changed("server") {
+			ctx.Server = strings.TrimRight(contextAddServer, "/")
+		}
+		if cmd.Flags().Changed("db-url") {
+			ctx.DB = contextAddDB
+		}
+		if cmd.Flags().Changed("token") {
+			ctx.Token = contextAddToken
+		}
+		cfg.SetContext(ctx)
+
+		if contextAddUse || cfg.CurrentContext == "" {
+			cfg.CurrentContext = contextAddName
+		}
+
+		if err := SaveConfig(cfg); err != nil {
+			return err
+		}
+
+		action := "Added"
+		if existing {
+			action = "Updated"
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "%s context %q\n", action, contextAddName)
+		if cfg.CurrentContext == contextAddName {
+			fmt.Fprintf(cmd.OutOrStdout(), "Switched to context %q\n", contextAddName)
+		}
+		return nil
+	},
+}
+
+// ensureAPIBase probes serverURL + "/api/db/connections" and, if that path
+// returns JSON, appends "/api" to the stored server URL and saves the config.
+// Returns true when the context was upgraded. Used to self-heal after the SDK
+// reports ErrHTMLResponse.
+func ensureAPIBase(ctx *MCContext) (bool, error) {
+	if ctx == nil || ctx.Server == "" {
+		return false, nil
+	}
+	if strings.HasSuffix(strings.TrimRight(ctx.Server, "/"), "/api") {
+		return false, nil
+	}
+
+	probeURL := strings.TrimRight(ctx.Server, "/") + "/api/db/connections?limit=0"
+	req, err := nethttp.NewRequest(nethttp.MethodGet, probeURL, nil)
+	if err != nil {
+		return false, err
+	}
+	if ctx.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+ctx.Token)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := nethttp.DefaultClient.Do(req)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	buf := make([]byte, 512)
+	n, _ := resp.Body.Read(buf)
+	body := strings.TrimLeft(string(buf[:n]), " \t\r\n")
+	switch resp.StatusCode {
+	case nethttp.StatusOK, nethttp.StatusUnauthorized, nethttp.StatusForbidden:
+	default:
+		return false, nil
+	}
+	ct := strings.ToLower(resp.Header.Get("Content-Type"))
+	if strings.Contains(ct, "text/html") || strings.HasPrefix(body, "<") {
+		return false, nil
+	}
+	if !strings.Contains(ct, "json") && !strings.HasPrefix(body, "[") && !strings.HasPrefix(body, "{") {
+		return false, nil
+	}
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		return false, err
+	}
+	stored := cfg.GetContext(ctx.Name)
+	if stored == nil {
+		return false, nil
+	}
+	stored.Server = strings.TrimRight(stored.Server, "/") + "/api"
+	ctx.Server = stored.Server
+	if err := SaveConfig(cfg); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func init() {
-	ContextCmd.AddCommand(contextUseCmd, contextListCmd, contextCurrentCmd)
+	contextAddCmd.Flags().StringVar(&contextAddName, "name", "", "Context name (required)")
+	contextAddCmd.Flags().StringVar(&contextAddServer, "server", "", "Mission Control server URL")
+	contextAddCmd.Flags().StringVar(&contextAddDB, "db-url", "", "Direct database connection URL")
+	contextAddCmd.Flags().StringVar(&contextAddToken, "token", "", "API token for the server")
+	contextAddCmd.Flags().BoolVar(&contextAddUse, "use", false, "Switch to this context after adding")
+
+	ContextCmd.AddCommand(contextUseCmd, contextListCmd, contextCurrentCmd, contextAddCmd)
 	Root.AddCommand(ContextCmd)
 	Root.PersistentFlags().StringVar(&contextFlag, "context", "", "Mission Control context to use")
 }
