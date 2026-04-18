@@ -4,12 +4,18 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
+
+	"github.com/flanksource/incident-commander/utils"
 )
 
 func writeToCSVFile(pathPrefix, name string, headerRow string, dbRows []map[string]any) error {
-	f, err := os.Create(filepath.Join(pathPrefix, name))
+	path, err := utils.SafeJoin(pathPrefix, name)
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Create(path)
 	if err != nil {
 		return err
 	}
@@ -32,12 +38,23 @@ func writeToJSONFile(pathPrefix, name string, data []byte) error {
 		return nil
 	}
 
-	return os.WriteFile(filepath.Join(pathPrefix, name), data, 0644)
+	path, err := utils.SafeJoin(pathPrefix, name)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, data, 0644)
 }
 
 func writeToLogFile(pathPrefix, name string, logs []byte) error {
 	if len(logs) == 0 {
 		return nil
 	}
-	return os.WriteFile(filepath.Join(pathPrefix, name), logs, 0644)
+
+	path, err := utils.SafeJoin(pathPrefix, name)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, logs, 0644)
 }
