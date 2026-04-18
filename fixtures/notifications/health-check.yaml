@@ -6,5 +6,7 @@ spec:
   events:
     - check.passed
   filter: check.type == 'http'
+  watchdog:
+    schedule: "@every 2h"
   to:
     team: backend

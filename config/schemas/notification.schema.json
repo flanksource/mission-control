@@ -362,6 +362,10 @@
           },
           "type": "array",
           "description": "Inhibit controls notification suppression for related resources.\nIt uses the repeat interval as the window for suppression\nas well as the wait for period."
+        },
+        "watchdog": {
+          "$ref": "#/$defs/NotificationWatchdog",
+          "description": "Watchdog config for periodic watchdog notifications."
         }
       },
       "additionalProperties": false,
@@ -407,6 +411,16 @@
       "additionalProperties": false,
       "type": "object",
       "description": "NotificationStatus defines the observed state of Notification"
+    },
+    "NotificationWatchdog": {
+      "properties": {
+        "schedule": {
+          "type": "string",
+          "description": "Schedule, if set, will send a periodic watchdog notification on this cron schedule.\nA watchdog notification contains the statistics of this notification.\n\nFormat: standard cron expression (e.g., \"0 * * * *\")."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "NotificationWebhookReceiver": {
       "properties": {

@@ -1382,6 +1382,17 @@ spec:
 
                   Format: duration string (e.g., "30s", "2m")
                 type: string
+              watchdog:
+                description: Watchdog config for periodic watchdog notifications.
+                properties:
+                  schedule:
+                    description: |-
+                      Schedule, if set, will send a periodic watchdog notification on this cron schedule.
+                      A watchdog notification contains the statistics of this notification.
+
+                      Format: standard cron expression (e.g., "0 * * * *").
+                    type: string
+                type: object
             required:
             - events
             - to
