@@ -222,7 +222,7 @@ func RegisterEvents(ctx context.Context) {
     events.RegisterSyncHandler(handleStatusChange, api.EventStatusGroup...)
 
     // Asynchronous — processed in batches with configurable consumers
-    events.RegisterAsyncHandler(sendNotifications, 1, 5, api.EventNotificationSend)
+    events.RegisterAsyncHandler("notification.sendNotifications", sendNotifications, 1, 5, api.EventNotificationSend)
     // args: handler func, batchSize, numConsumers, event names...
 }
 ```

@@ -49,9 +49,9 @@ func init() {
 func RegisterEvents(ctx context.Context) {
 	EventRing = events.NewEventRing(ctx.Properties().Int("events.audit.size", events.DefaultEventLogSize))
 	nh := notificationHandler{Ring: EventRing}
-	events.RegisterSyncHandler(nh.addNotificationEvent, append(api.EventStatusGroup, api.EventIncidentGroup...)...)
+	events.RegisterSyncHandlerNamed("notification.addNotificationEvent", nh.addNotificationEvent, append(api.EventStatusGroup, api.EventIncidentGroup...)...)
 
-	events.RegisterAsyncHandler(sendNotifications, 1, 5, api.EventNotificationSend)
+	events.RegisterAsyncHandler("notification.sendNotifications", sendNotifications, 1, 5, api.EventNotificationSend)
 }
 
 func getOrCreateRateLimiter(ctx context.Context, notificationID string) (*sw.Limiter, error) {

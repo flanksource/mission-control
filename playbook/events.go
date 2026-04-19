@@ -69,11 +69,11 @@ func init() {
 func RegisterEvents(ctx context.Context) {
 	EventRing = events.NewEventRing(ctx.Properties().Int("events.audit.size", events.DefaultEventLogSize))
 	ps := playbookScheduler{Ring: EventRing}
-	events.RegisterSyncHandler(ps.Handle, api.EventStatusGroup...)
+	events.RegisterSyncHandlerNamed("playbook.Handle", ps.Handle, api.EventStatusGroup...)
 
-	events.RegisterSyncHandler(onNewRun, api.EventPlaybookRun)
-	events.RegisterSyncHandler(onApprovalUpdated, api.EventPlaybookSpecApprovalUpdated)
-	events.RegisterSyncHandler(onPlaybookRunNewApproval, api.EventPlaybookApprovalInserted)
+	events.RegisterSyncHandlerNamed("playbook.onNewRun", onNewRun, api.EventPlaybookRun)
+	events.RegisterSyncHandlerNamed("playbook.onApprovalUpdated", onApprovalUpdated, api.EventPlaybookSpecApprovalUpdated)
+	events.RegisterSyncHandlerNamed("playbook.onPlaybookRunNewApproval", onPlaybookRunNewApproval, api.EventPlaybookApprovalInserted)
 
 	go func() {
 		logs.IfError(StartPlaybookConsumers(ctx), "error starting playbook consumers")
