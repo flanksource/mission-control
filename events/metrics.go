@@ -1,9 +1,6 @@
 package events
 
 import (
-	"reflect"
-	"runtime"
-	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -48,26 +45,4 @@ func recordEventHandlerEvents(event, handler string, processed, failed int) {
 	if failed > 0 {
 		eventHandlerEventsTotal.WithLabelValues(event, handler, "failed").Add(float64(failed))
 	}
-}
-
-func getHandlerName(fn any) string {
-	if fn == nil {
-		return "unknown"
-	}
-
-	fnValue := reflect.ValueOf(fn)
-	if !fnValue.IsValid() || fnValue.Kind() != reflect.Func {
-		return "unknown"
-	}
-
-	rf := runtime.FuncForPC(fnValue.Pointer())
-	if rf == nil {
-		return "unknown"
-	}
-
-	name := rf.Name()
-	if idx := strings.LastIndex(name, "/"); idx >= 0 {
-		name = name[idx+1:]
-	}
-	return strings.TrimSuffix(name, "-fm")
 }

@@ -51,7 +51,7 @@ func RegisterEvents(ctx context.Context) {
 	nh := notificationHandler{Ring: EventRing}
 	events.RegisterSyncHandlerNamed("notification.addNotificationEvent", nh.addNotificationEvent, append(api.EventStatusGroup, api.EventIncidentGroup...)...)
 
-	events.RegisterAsyncHandlerNamed("notification.sendNotifications", sendNotifications, 1, 5, api.EventNotificationSend)
+	events.RegisterAsyncHandler("notification.sendNotifications", sendNotifications, 1, 5, api.EventNotificationSend)
 }
 
 func getOrCreateRateLimiter(ctx context.Context, notificationID string) (*sw.Limiter, error) {
