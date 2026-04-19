@@ -145,7 +145,7 @@ generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and
 	$(CONTROLLER_GEN) object paths="./api/..." paths="./logs/..."
 
 .PHONY: build
-build: static
+build: install-deps static
 	go build -o ./.bin/$(NAME) -ldflags "-X \"main.version=$(VERSION_TAG) built at $(DATE)\""  main.go
 
 .PHONY: dev
@@ -175,9 +175,11 @@ test-e2e: bin
 	mkdir -p .bin
 
 
+DEPS = $(shell which deps 2>/dev/null || echo $(LOCALBIN)/deps)
+
 .PHONY: install-deps
-install-deps: $(LOCALBIN) ## Install the deps CLI if not present
-	which deps 2>/dev/null || test -x $(LOCALBIN)/deps || curl -sSL https://github.com/flanksource/deps/releases/latest/download/deps-$(OS)-$(ARCH).tar.gz | tar -xz -C $(LOCALBIN)
+install-deps: $(LOCALBIN)
+	@test -x $(DEPS) || curl -sSL https://github.com/flanksource/deps/releases/latest/download/deps-$(OS)-$(ARCH).tar.gz | tar -xz -C $(LOCALBIN)
 
 .PHONY: deps
 deps: install-deps ginkgo controller-gen golangci-lint kustomize $(TAILWIND_JS) ## Install all tool dependencies
@@ -187,16 +189,16 @@ ginkgo:
 	go install github.com/onsi/ginkgo/v2/ginkgo
 
 .PHONY: controller-gen
-controller-gen: install-deps $(LOCALBIN)
-	$(LOCALBIN)/deps install controller-gen@$(CONTROLLER_TOOLS_VERSION) --bin-dir $(LOCALBIN)
+controller-gen: install-deps
+	$(DEPS) install controller-gen@$(CONTROLLER_TOOLS_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: golangci-lint
-golangci-lint: install-deps $(LOCALBIN)
-	$(LOCALBIN)/deps install golangci/golangci-lint@v$(GOLANGCI_LINT_VERSION) --bin-dir $(LOCALBIN)
+golangci-lint: install-deps
+	$(DEPS) install golangci/golangci-lint@v$(GOLANGCI_LINT_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: kustomize
-kustomize: install-deps $(LOCALBIN)
-	$(LOCALBIN)/deps install kubernetes-sigs/kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
+kustomize: install-deps
+	$(DEPS) install kubernetes-sigs/kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: docs\:mcp
 docs\:mcp: ## Generate MCP tools reference documentation
