@@ -63,6 +63,25 @@ type ConnectionPushover struct {
 	User string `json:"user"`
 }
 
+type ConnectionTeams struct {
+	// Incoming webhook URL from Microsoft Teams
+	WebhookURL types.EnvVar `json:"webhookURL"`
+}
+
+type ConnectionMattermost struct {
+	// Incoming webhook URL
+	WebhookURL types.EnvVar `json:"webhookURL"`
+
+	// Channel override (optional)
+	Channel string `json:"channel,omitempty"`
+
+	// Username override (optional)
+	Username string `json:"username,omitempty"`
+
+	// Icon URL override (optional)
+	IconURL string `json:"iconURL,omitempty"`
+}
+
 type ConnectionPostgres struct {
 	// URL is the connection url.
 	URL types.EnvVar `json:"url,omitempty"`

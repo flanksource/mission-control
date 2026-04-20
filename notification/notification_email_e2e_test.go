@@ -3,9 +3,12 @@ package notification_test
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
+	"strings"
 	"time"
 
+	gomessage "github.com/emersion/go-message"
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
@@ -26,7 +29,45 @@ func lastSMTPMessage() string {
 	if len(messages) == 0 {
 		return ""
 	}
-	return string(messages[len(messages)-1].Data)
+	return decodeMIME(string(messages[len(messages)-1].Data))
+}
+
+func decodeMIME(raw string) string {
+	entity, err := gomessage.Read(strings.NewReader(raw))
+	if err != nil {
+		return raw
+	}
+
+	// Start with raw headers (contains Subject, From, To, etc.)
+	headerEnd := strings.Index(raw, "\r\n\r\n")
+	if headerEnd < 0 {
+		headerEnd = strings.Index(raw, "\n\n")
+	}
+
+	var decoded strings.Builder
+	if headerEnd > 0 {
+		decoded.WriteString(raw[:headerEnd])
+		decoded.WriteString("\n\n")
+	}
+
+	if mr := entity.MultipartReader(); mr != nil {
+		for {
+			part, err := mr.NextPart()
+			if err != nil {
+				break
+			}
+			body, _ := io.ReadAll(part.Body)
+			decoded.Write(body)
+		}
+		return decoded.String()
+	}
+
+	body, err := io.ReadAll(entity.Body)
+	if err != nil {
+		return raw
+	}
+	decoded.Write(body)
+	return decoded.String()
 }
 
 var _ = ginkgo.Describe("Notification email end-to-end", ginkgo.Ordered, func() {
@@ -86,9 +127,8 @@ var _ = ginkgo.Describe("Notification email end-to-end", ginkgo.Ordered, func() 
 			}
 			Expect(DefaultContext.DB().Create(&event).Error).To(BeNil())
 
-			events.ConsumeAll(DefaultContext)
-
 			Eventually(func() int {
+				events.ConsumeAll(DefaultContext)
 				return len(getSMTPMessages())
 			}, "10s", "200ms").Should(Equal(1))
 
@@ -100,13 +140,13 @@ var _ = ginkgo.Describe("Notification email end-to-end", ginkgo.Ordered, func() 
 
 	ginkgo.Describe("check passed team email", ginkgo.Ordered, func() {
 		var (
-			n           models.Notification
-			team        dbModels.Team
-			creator     models.Person
-			agent       models.Agent
-			canary      models.Canary
-			check       models.Check
-			checkRun    models.CheckStatus
+			n       models.Notification
+			team    dbModels.Team
+			creator models.Person
+			agent   models.Agent
+			canary  models.Canary
+			check   models.Check
+
 			lastRuntime string
 		)
 
@@ -190,27 +230,25 @@ var _ = ginkgo.Describe("Notification email end-to-end", ginkgo.Ordered, func() 
 		})
 
 		ginkgo.It("sends custom team email", func() {
-			lastRuntime = time.Now().UTC().Format(time.DateTime)
-			checkRun = models.CheckStatus{
+			lastRuntime = time.Now().UTC().Format(time.RFC3339)
+
+			Expect(DefaultContext.DB().Create(&models.CheckStatus{
 				CheckID: check.ID,
 				Status:  true,
 				Time:    lastRuntime,
 				Message: "All good",
-			}
-			Expect(DefaultContext.DB().Create(&checkRun).Error).To(BeNil())
+			}).Error).To(BeNil())
 
-			event := models.Event{
+			Expect(DefaultContext.DB().Create(&models.Event{
 				Name:    api.EventCheckPassed,
 				EventID: check.ID,
 				Properties: types.JSONStringMap{
 					"last_runtime": lastRuntime,
 				},
-			}
-			Expect(DefaultContext.DB().Create(&event).Error).To(BeNil())
-
-			events.ConsumeAll(DefaultContext)
+			}).Error).To(BeNil())
 
 			Eventually(func() int {
+				events.ConsumeAll(DefaultContext)
 				return len(getSMTPMessages())
 			}, "10s", "200ms").Should(Equal(1))
 
@@ -222,12 +260,12 @@ var _ = ginkgo.Describe("Notification email end-to-end", ginkgo.Ordered, func() 
 
 	ginkgo.Describe("check failed person email", ginkgo.Ordered, func() {
 		var (
-			n           models.Notification
-			person      models.Person
-			agent       models.Agent
-			canary      models.Canary
-			check       models.Check
-			checkRun    models.CheckStatus
+			n      models.Notification
+			person models.Person
+			agent  models.Agent
+			canary models.Canary
+			check  models.Check
+
 			lastRuntime string
 		)
 
@@ -286,27 +324,25 @@ var _ = ginkgo.Describe("Notification email end-to-end", ginkgo.Ordered, func() 
 		})
 
 		ginkgo.It("sends default person email", func() {
-			lastRuntime = time.Now().UTC().Format(time.DateTime)
-			checkRun = models.CheckStatus{
+			lastRuntime = time.Now().UTC().Format(time.RFC3339)
+
+			Expect(DefaultContext.DB().Create(&models.CheckStatus{
 				CheckID: check.ID,
 				Status:  false,
 				Time:    lastRuntime,
 				Error:   "Timeout",
-			}
-			Expect(DefaultContext.DB().Create(&checkRun).Error).To(BeNil())
+			}).Error).To(BeNil())
 
-			event := models.Event{
+			Expect(DefaultContext.DB().Create(&models.Event{
 				Name:    api.EventCheckFailed,
 				EventID: check.ID,
 				Properties: types.JSONStringMap{
 					"last_runtime": lastRuntime,
 				},
-			}
-			Expect(DefaultContext.DB().Create(&event).Error).To(BeNil())
-
-			events.ConsumeAll(DefaultContext)
+			}).Error).To(BeNil())
 
 			Eventually(func() int {
+				events.ConsumeAll(DefaultContext)
 				return len(getSMTPMessages())
 			}, "10s", "200ms").Should(Equal(1))
 
