@@ -135,15 +135,6 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	// So we use the system user as the subject.
 	ctx = ctx.WithSubject(api.SystemUserID.String())
 
-	notificationIDs, err := GetNotificationIDsForEvent(ctx, event.Name)
-	if err != nil {
-		return ctx.Oops().Wrapf(err, "failed to get notification ids for event")
-	}
-
-	if len(notificationIDs) == 0 {
-		return nil
-	}
-
 	celEnv, err := GetEnvForEvent(ctx, event)
 	if err != nil {
 		return ctx.Oops().Wrapf(err, "failed to get env for event %s %s", event.ID, event.Name)
@@ -158,6 +149,15 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 		if err := resolveGroupMembership(ctx, celEnv, configID); err != nil {
 			return ctx.Oops().Wrapf(err, "failed to resolve group membership for event")
 		}
+	}
+
+	notificationIDs, err := GetNotificationIDsForEvent(ctx, event.Name)
+	if err != nil {
+		return ctx.Oops().Wrapf(err, "failed to get notification ids for event")
+	}
+
+	if len(notificationIDs) == 0 {
+		return nil
 	}
 
 	t.Ring.Add(event, celEnv.AsMap(ctx))
