@@ -135,6 +135,15 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	// So we use the system user as the subject.
 	ctx = ctx.WithSubject(api.SystemUserID.String())
 
+	notificationIDs, err := GetNotificationIDsForEvent(ctx, event.Name)
+	if err != nil {
+		return ctx.Oops().Wrapf(err, "failed to get notification ids for event")
+	}
+
+	if len(notificationIDs) == 0 {
+		return nil
+	}
+
 	celEnv, err := GetEnvForEvent(ctx, event)
 	if err != nil {
 		return ctx.Oops().Wrapf(err, "failed to get env for event %s %s", event.ID, event.Name)
@@ -149,15 +158,6 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 		if err := resolveGroupMembership(ctx, celEnv, configID); err != nil {
 			return ctx.Oops().Wrapf(err, "failed to resolve group membership for event")
 		}
-	}
-
-	notificationIDs, err := GetNotificationIDsForEvent(ctx, event.Name)
-	if err != nil {
-		return ctx.Oops().Wrapf(err, "failed to get notification ids for event")
-	}
-
-	if len(notificationIDs) == 0 {
-		return nil
 	}
 
 	t.Ring.Add(event, celEnv.AsMap(ctx))
@@ -948,17 +948,19 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 			env.Agent = agent
 		}
 
-		if err := ctx.DB().Model(&models.ConfigChange{}).
-			Select("change_type").
-			Where("config_id = ?", configID).
-			Where("severity IN ('low', 'medium', 'high')").
-			Where("source NOT IN ('diff', 'config-db', 'notification', 'Playbook')").
-			Where("created_at >= NOW() - INTERVAL '1 HOUR'").
-			Group("change_type, severity").
-			Order("CASE severity WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END").
-			Limit(3).
-			Find(&env.RecentEvents).Error; err != nil {
-			return nil, fmt.Errorf("error finding recent changes for config(id=%s): %v", configID, err)
+		if ctx.Properties().On(true, "notification.recent_config_events") {
+			if err := ctx.DB().Model(&models.ConfigChange{}).
+				Select("change_type").
+				Where("config_id = ?", configID).
+				Where("severity IN ('low', 'medium', 'high')").
+				Where("source NOT IN ('diff', 'config-db', 'notification', 'Playbook')").
+				Where("created_at >= NOW() - INTERVAL '1 HOUR'").
+				Group("change_type, severity").
+				Order("CASE severity WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END").
+				Limit(3).
+				Find(&env.RecentEvents).Error; err != nil {
+				return nil, fmt.Errorf("error finding recent changes for config(id=%s): %v", configID, err)
+			}
 		}
 
 		eventSuffix := strings.TrimPrefix(event.Name, "config.")
