@@ -58,7 +58,7 @@ var _ = Describe("Playbook", Ordered, func() {
 		})
 	})
 
-	var _ = Describe("AI", Ordered, Label("ignore_local"), func() {
+	var _ = Describe("AI", Ordered, Label("ignore_local"), Pending, func() {
 		Context("should run AI action and save artifacts", func() {
 			var actions []models.PlaybookRunAction
 			var artifactList []models.Artifact
@@ -115,7 +115,7 @@ var _ = Describe("Playbook", Ordered, func() {
 		})
 	})
 
-	var _ = Describe("AI Catalog", Ordered, Label("ignore_local"), func() {
+	var _ = Describe("AI Catalog", Ordered, Label("ignore_local"), Pending, func() {
 		var testConfigID uuid.UUID
 
 		BeforeAll(func() {

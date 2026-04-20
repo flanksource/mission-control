@@ -137,7 +137,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 
 	celEnv, err := GetEnvForEvent(ctx, event)
 	if err != nil {
-		return ctx.Oops().Wrapf(err, "failed to get env for event %s %s", event.ID, event.Name)
+		return ctx.Oops().Wrapf(err, "failed to get env for event(id=%s, event_id=%s) %s", event.ID, event.EventID, event.Name)
 	}
 
 	if lo.Contains(api.ConfigEvents, event.Name) {

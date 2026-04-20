@@ -6,6 +6,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	eventHandlerStatusSuccess = "success"
+	eventHandlerStatusFailed  = "failed"
+)
+
 var (
 	eventHandlerEventsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -23,16 +28,46 @@ var (
 		},
 		[]string{"event", "handler", "status"},
 	)
+
+	eventHandlerLastRunTimestampSeconds = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "event_handler_last_run_timestamp_seconds",
+			Help: "Unix timestamp of the last event handler invocation.",
+		},
+		[]string{"event", "handler", "status"},
+	)
+
+	eventHandlerInFlight = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "event_handler_inflight",
+			Help: "Number of in-flight event handler invocations.",
+		},
+		[]string{"event", "handler"},
+	)
+
+	eventHandlerLastStartTimestampSeconds = prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "event_handler_last_start_timestamp_seconds",
+			Help: "Unix timestamp of the last started event handler invocation.",
+		},
+		[]string{"event", "handler"},
+	)
 )
 
 func init() {
-	prometheus.MustRegister(eventHandlerEventsTotal, eventHandlerDurationSeconds)
+	prometheus.MustRegister(
+		eventHandlerEventsTotal,
+		eventHandlerDurationSeconds,
+		eventHandlerLastRunTimestampSeconds,
+		eventHandlerInFlight,
+		eventHandlerLastStartTimestampSeconds,
+	)
 }
 
 func recordEventHandlerDuration(event, handler string, success bool, duration time.Duration) {
-	status := "success"
+	status := eventHandlerStatusSuccess
 	if !success {
-		status = "fail"
+		status = eventHandlerStatusFailed
 	}
 
 	eventHandlerDurationSeconds.WithLabelValues(event, handler, status).Observe(duration.Seconds())
@@ -40,9 +75,27 @@ func recordEventHandlerDuration(event, handler string, success bool, duration ti
 
 func recordEventHandlerEvents(event, handler string, processed, failed int) {
 	if processed > 0 {
-		eventHandlerEventsTotal.WithLabelValues(event, handler, "success").Add(float64(processed))
+		eventHandlerEventsTotal.WithLabelValues(event, handler, eventHandlerStatusSuccess).Add(float64(processed))
 	}
 	if failed > 0 {
-		eventHandlerEventsTotal.WithLabelValues(event, handler, "failed").Add(float64(failed))
+		eventHandlerEventsTotal.WithLabelValues(event, handler, eventHandlerStatusFailed).Add(float64(failed))
 	}
+}
+
+func recordEventHandlerLastRun(event, handler string, success bool, at time.Time) {
+	status := eventHandlerStatusSuccess
+	if !success {
+		status = eventHandlerStatusFailed
+	}
+
+	eventHandlerLastRunTimestampSeconds.WithLabelValues(event, handler, status).Set(float64(at.Unix()))
+}
+
+func recordEventHandlerStart(event, handler string, at time.Time) {
+	eventHandlerLastStartTimestampSeconds.WithLabelValues(event, handler).Set(float64(at.Unix()))
+	eventHandlerInFlight.WithLabelValues(event, handler).Inc()
+}
+
+func recordEventHandlerEnd(event, handler string) {
+	eventHandlerInFlight.WithLabelValues(event, handler).Dec()
 }
