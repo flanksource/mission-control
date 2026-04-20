@@ -6,6 +6,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	eventHandlerStatusSuccess = "success"
+	eventHandlerStatusFailed  = "failed"
+)
+
 var (
 	eventHandlerEventsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
@@ -60,9 +65,9 @@ func init() {
 }
 
 func recordEventHandlerDuration(event, handler string, success bool, duration time.Duration) {
-	status := "success"
+	status := eventHandlerStatusSuccess
 	if !success {
-		status = "fail"
+		status = eventHandlerStatusFailed
 	}
 
 	eventHandlerDurationSeconds.WithLabelValues(event, handler, status).Observe(duration.Seconds())
@@ -70,17 +75,17 @@ func recordEventHandlerDuration(event, handler string, success bool, duration ti
 
 func recordEventHandlerEvents(event, handler string, processed, failed int) {
 	if processed > 0 {
-		eventHandlerEventsTotal.WithLabelValues(event, handler, "success").Add(float64(processed))
+		eventHandlerEventsTotal.WithLabelValues(event, handler, eventHandlerStatusSuccess).Add(float64(processed))
 	}
 	if failed > 0 {
-		eventHandlerEventsTotal.WithLabelValues(event, handler, "failed").Add(float64(failed))
+		eventHandlerEventsTotal.WithLabelValues(event, handler, eventHandlerStatusFailed).Add(float64(failed))
 	}
 }
 
 func recordEventHandlerLastRun(event, handler string, success bool, at time.Time) {
-	status := "success"
+	status := eventHandlerStatusSuccess
 	if !success {
-		status = "fail"
+		status = eventHandlerStatusFailed
 	}
 
 	eventHandlerLastRunTimestampSeconds.WithLabelValues(event, handler, status).Set(float64(at.Unix()))
