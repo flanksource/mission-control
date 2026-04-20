@@ -91,9 +91,13 @@ func StartConsumers(ctx context.Context) {
 		for _, h := range handlers {
 			wrappedHandlers = append(wrappedHandlers, func(ctx context.Context, e models.Event) error {
 				start := time.Now()
+				recordEventHandlerStart(event, h.handlerName, start)
+				defer recordEventHandlerEnd(event, h.handlerName)
+
 				err := h.fn(ctx, e)
 				success := err == nil
 				recordEventHandlerDuration(event, h.handlerName, success, time.Since(start))
+				recordEventHandlerLastRun(event, h.handlerName, success, time.Now())
 				if success {
 					recordEventHandlerEvents(event, h.handlerName, 1, 0)
 				} else {
@@ -138,6 +142,9 @@ func StartConsumers(ctx context.Context) {
 					}
 
 					start := time.Now()
+					recordEventHandlerStart(event, handler.name, start)
+					defer recordEventHandlerEnd(event, handler.name)
+
 					failedEvents := handler.fn(c, e)
 					failedCount := len(failedEvents)
 					processedCount := len(e) - failedCount
@@ -145,7 +152,9 @@ func StartConsumers(ctx context.Context) {
 						processedCount = 0
 					}
 
-					recordEventHandlerDuration(event, handler.name, failedCount == 0, time.Since(start))
+					success := failedCount == 0
+					recordEventHandlerDuration(event, handler.name, success, time.Since(start))
+					recordEventHandlerLastRun(event, handler.name, success, time.Now())
 					recordEventHandlerEvents(event, handler.name, processedCount, failedCount)
 					return failedEvents
 				},
