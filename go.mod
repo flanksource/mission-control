@@ -10,7 +10,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.34.0 // indirect
 	github.com/flanksource/commons v1.50.2
-	github.com/flanksource/duty v1.0.1278
+	github.com/flanksource/duty v1.0.1283
 	github.com/flanksource/gomplate/v3 v3.24.76
 	github.com/flanksource/kopper v1.0.21
 	github.com/gomarkdown/markdown v0.0.0-20260411013819-759bbc3e3207
@@ -23,7 +23,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
-	github.com/ory/client-go v1.22.35
+	github.com/ory/client-go v1.22.36
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
@@ -79,7 +79,7 @@ require (
 	github.com/tmc/langchaingo v0.1.14
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/xeipuuv/gojsonschema v1.2.0
-	github.com/zitadel/oidc/v3 v3.47.3
+	github.com/zitadel/oidc/v3 v3.47.5
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.68.0
 	go.opentelemetry.io/otel v1.43.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.43.0
