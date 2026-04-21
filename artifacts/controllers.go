@@ -17,6 +17,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/flanksource/duty/rbac/policy"
+	icapi "github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
@@ -83,25 +84,38 @@ func DownloadArtifact(c echo.Context) error {
 		return api.WriteError(c, api.Errorf(api.ENOTFOUND, "artifact(%s) was not found", artifactID))
 	}
 
-	conn, err := pkgConnection.Get(ctx, artifact.ConnectionID.String())
-	if err != nil {
-		return api.WriteError(c, err)
-	} else if conn == nil {
-		return api.WriteError(c, api.Errorf(api.ENOTFOUND, "artifact's connection was not found"))
+	if icapi.DefaultArtifactConnection != "" {
+		conn, err := pkgConnection.Get(ctx, artifact.ConnectionID.String())
+		if err != nil {
+			return api.WriteError(c, fmt.Errorf("artifact connection not found: %w", err))
+		} else if conn == nil {
+			return api.WriteError(c, api.Errorf(api.ENOTFOUND, "artifact's connection was not found"))
+		}
+
+		fs, err := artifacts.GetFSForConnection(ctx, *conn)
+		if err != nil {
+			return api.WriteError(c, err)
+		}
+		defer fs.Close()
+
+		file, err := fs.Read(ctx, artifact.Path)
+		if err != nil {
+			return api.WriteError(c, err)
+		}
+		defer file.Close()
+
+		return c.Stream(http.StatusOK, artifact.ContentType, file)
 	}
 
-	// TODO: Pool connection to the underlying filesystem
-	fs, err := artifacts.GetFSForConnection(ctx, *conn)
+	fs, err := ctx.Blobs()
 	if err != nil {
 		return api.WriteError(c, err)
 	}
-	defer fs.Close()
 
-	file, err := fs.Read(ctx, artifact.Path)
+	file, err := fs.Read(artifactID)
 	if err != nil {
 		return api.WriteError(c, err)
 	}
-	defer file.Close()
 
-	return c.Stream(http.StatusOK, artifact.ContentType, file)
+	return c.Stream(http.StatusOK, artifact.ContentType, file.Content)
 }
