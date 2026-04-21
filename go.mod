@@ -23,7 +23,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/onsi/ginkgo/v2 v2.28.1
 	github.com/onsi/gomega v1.39.1
-	github.com/ory/client-go v1.22.35
+	github.com/ory/client-go v1.22.36
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
@@ -52,7 +52,7 @@ require (
 	github.com/flanksource/artifacts v1.0.24
 	github.com/flanksource/clicky v1.21.4
 	github.com/flanksource/commons-test v0.1.13
-	github.com/fluxcd/pkg/gittestserver v0.26.0
+	github.com/fluxcd/pkg/gittestserver v0.27.0
 	github.com/go-git/go-billy/v5 v5.8.0
 	github.com/go-git/go-git/v5 v5.18.0
 	github.com/go-jose/go-jose/v4 v4.1.4
@@ -79,7 +79,7 @@ require (
 	github.com/tmc/langchaingo v0.1.14
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/xeipuuv/gojsonschema v1.2.0
-	github.com/zitadel/oidc/v3 v3.47.3
+	github.com/zitadel/oidc/v3 v3.47.5
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.68.0
 	go.opentelemetry.io/otel v1.43.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.43.0
