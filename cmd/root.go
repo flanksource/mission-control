@@ -59,6 +59,12 @@ var Root = &cobra.Command{
 		}
 		dutyApi.DefaultConfig.SkipMigrationFiles = []string{"012_changelog.sql"}
 		dutyApi.DefaultConfig = dutyApi.DefaultConfig.ReadEnv()
+
+		if f := cmd.Flags().Lookup("artifact-connection"); f != nil && f.Changed {
+			properties.Set("artifacts.connection", f.Value.String())
+		}
+
+		api.DefaultArtifactConnection = properties.String(api.DefaultArtifactConnection, "artifacts.connection")
 		applyContext()
 	},
 }
@@ -102,6 +108,8 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&api.DefaultArtifactConnection, "artifact-connection", "", "Specify the default connection to use for artifacts (can be the connection string or the connection id)")
 	flags.StringVar(&api.DefaultLLMConnection, "llm-connection", "", "Specify the default connection to use for LLM provider (can be the connection string or the connection id)")
 	flags.StringVar(&secret.KMSConnection, "secret-keeper-connection", "", "Specify the connection to use for secret keepers (can be the connection string or the connection id)")
+
+	_ = flags.MarkDeprecated("artifact-connection", "use property artifacts.connection=<connection-id-or-url> instead")
 
 	var upstreamPageSizeDefault = 500
 	if val, exists := os.LookupEnv("UPSTREAM_PAGE_SIZE"); exists {
