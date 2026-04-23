@@ -21,10 +21,10 @@ func connectionFromCRDSpec(obj *v1.Connection, dbObj *models.Connection) {
 		dbObj.URL = obj.Spec.AWS.URL.String()
 		dbObj.Username = obj.Spec.AWS.AccessKey.String()
 		dbObj.Password = obj.Spec.AWS.SecretKey.String()
+		dbObj.InsecureTLS = obj.Spec.AWS.InsecureTLS
 		dbObj.Properties = map[string]string{
 			"region":       obj.Spec.AWS.Region,
 			"profile":      obj.Spec.AWS.Profile,
-			"insecure_tls": strconv.FormatBool(obj.Spec.AWS.InsecureTLS),
 			"sessionToken": obj.Spec.AWS.SessionToken.String(),
 			"assumeRole":   obj.Spec.AWS.AssumeRole,
 		}
@@ -35,11 +35,11 @@ func connectionFromCRDSpec(obj *v1.Connection, dbObj *models.Connection) {
 		dbObj.URL = obj.Spec.AWSKMS.URL.String()
 		dbObj.Username = obj.Spec.AWSKMS.AccessKey.String()
 		dbObj.Password = obj.Spec.AWSKMS.SecretKey.String()
+		dbObj.InsecureTLS = obj.Spec.AWSKMS.InsecureTLS
 		dbObj.Properties = map[string]string{
 			"keyID":        obj.Spec.AWSKMS.KeyID,
 			"region":       obj.Spec.AWSKMS.Region,
 			"profile":      obj.Spec.AWSKMS.Profile,
-			"insecure_tls": strconv.FormatBool(obj.Spec.AWSKMS.InsecureTLS),
 			"sessionToken": obj.Spec.AWSKMS.SessionToken.String(),
 			"assumeRole":   obj.Spec.AWSKMS.AssumeRole,
 		}
@@ -50,11 +50,11 @@ func connectionFromCRDSpec(obj *v1.Connection, dbObj *models.Connection) {
 		dbObj.URL = obj.Spec.S3.URL.String()
 		dbObj.Username = obj.Spec.S3.AccessKey.String()
 		dbObj.Password = obj.Spec.S3.SecretKey.String()
+		dbObj.InsecureTLS = obj.Spec.S3.InsecureTLS
 		dbObj.Properties = map[string]string{
 			"bucket":       obj.Spec.S3.Bucket,
 			"region":       obj.Spec.S3.Region,
 			"profile":      obj.Spec.S3.Profile,
-			"insecure_tls": strconv.FormatBool(obj.Spec.S3.InsecureTLS),
 			"usePathStyle": strconv.FormatBool(obj.Spec.S3.UsePathStyle),
 			"sessionToken": obj.Spec.S3.SessionToken.String(),
 			"assumeRole":   obj.Spec.S3.AssumeRole,
