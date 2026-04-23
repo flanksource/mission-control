@@ -43,6 +43,8 @@ type celVariables struct {
 	Permalink  string
 	SilenceURL string
 
+	Summary models.NotificationSummary
+
 	GroupedResources []string
 }
 
@@ -119,6 +121,8 @@ func (t *celVariables) AsMap(ctx context.Context, opts ...celAsMapOption) map[st
 
 		"comment": lo.FromPtr(t.Comment).AsMap(),
 		"author":  lo.FromPtr(t.Author).AsMap(),
+
+		"summary": t.Summary.AsMap(),
 	}
 
 	if len(t.GroupedResources) > 0 {

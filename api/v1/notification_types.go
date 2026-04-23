@@ -55,6 +55,14 @@ type NotificationFallback struct {
 	Delay string `json:"delay,omitempty" yaml:"delay,omitempty"`
 }
 
+type NotificationWatchdog struct {
+	// Schedule, if set, will send a periodic watchdog notification on this cron schedule.
+	// A watchdog notification contains the statistics of this notification.
+	//
+	// Format: standard cron expression (e.g., "0 * * * *").
+	Schedule *string `json:"schedule,omitempty" yaml:"schedule,omitempty"`
+}
+
 // +kubebuilder:object:generate=true
 type NotificationSpec struct {
 	// List of events that can trigger this notification
@@ -115,6 +123,9 @@ type NotificationSpec struct {
 	// It uses the repeat interval as the window for suppression
 	// as well as the wait for period.
 	Inhibitions []NotificationInihibition `json:"inhibitions,omitempty"`
+
+	// Watchdog config for periodic watchdog notifications.
+	Watchdog *NotificationWatchdog `json:"watchdog,omitempty" yaml:"watchdog,omitempty"`
 }
 
 type NotificationInihibition struct {
