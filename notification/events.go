@@ -619,7 +619,9 @@ func sendPendingNotification(ctx context.Context, history models.NotificationSen
 		}
 	}
 
-	logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")
+	if endLogErr := notificationContext.EndLog(); endLogErr != nil {
+		logNotificationEndLogError(notificationContext, err, endLogErr)
+	}
 	if IsStaleResourceEventError(err) {
 		return nil
 	}
@@ -694,7 +696,9 @@ func sendNotification(ctx context.Context, payload NotificationEventPayload) err
 	notificationContext.WithSource(payload.EventName, payload.ResourceID)
 	notificationContext.WithGroupID(payload.GroupID)
 
-	logs.IfError(notificationContext.StartLog(), "error persisting start of notification send history")
+	if err := notificationContext.StartLog(); err != nil {
+		return fmt.Errorf("failed to create notification send history before dispatch: %w", err)
+	}
 
 	err := _sendNotification(notificationContext, payload)
 	if err != nil {
@@ -706,11 +710,36 @@ func sendNotification(ctx context.Context, payload NotificationEventPayload) err
 		}
 	}
 
-	logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")
+	if endLogErr := notificationContext.EndLog(); endLogErr != nil {
+		logNotificationEndLogError(notificationContext, err, endLogErr)
+	}
 	if IsStaleResourceEventError(err) {
 		return nil
 	}
 	return err
+}
+
+func logNotificationEndLogError(ctx *Context, sendErr, endLogErr error) {
+	if ctx == nil || ctx.log == nil {
+		logs.IfError(endLogErr, "error persisting end of notification send history")
+		return
+	}
+
+	sendErrMsg := ""
+	if sendErr != nil {
+		sendErrMsg = sendErr.Error()
+	}
+
+	ctx.Errorf(
+		"error persisting end of notification send history: history_id=%s notification_id=%s source_event=%s resource_id=%s status=%s send_error=%q error=%v",
+		ctx.log.ID,
+		ctx.log.NotificationID,
+		ctx.log.SourceEvent,
+		ctx.log.ResourceID,
+		ctx.log.Status,
+		sendErrMsg,
+		endLogErr,
+	)
 }
 
 func _sendNotification(ctx *Context, payload NotificationEventPayload) error {
