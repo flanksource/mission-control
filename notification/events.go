@@ -169,7 +169,8 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	}
 
 	for _, id := range notificationIDs {
-		if err := addNotificationEvent(ctx, id, celEnv, event, matchingSilences); err != nil {
+		notificationEnv := celEnv.WithNotificationRef(id)
+		if err := addNotificationEvent(ctx, id, &notificationEnv, event, matchingSilences); err != nil {
 			return ctx.Oops().Wrapf(err, "failed to add notification.send event for event=%s notification=%s", event.Name, id)
 		}
 	}
@@ -780,6 +781,8 @@ func _sendNotification(ctx *Context, payload NotificationEventPayload) error {
 	if err != nil {
 		return fmt.Errorf("failed to get cel env: %w", err)
 	}
+	notificationEnv := celEnv.WithNotificationRef(payload.NotificationID.String())
+	celEnv = &notificationEnv
 
 	if payload.GroupID != nil {
 		celEnv.GroupedResources, err = db.GetGroupedResources(ctx.Context, *payload.GroupID, payload.ResourceID.String())
