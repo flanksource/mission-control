@@ -3,6 +3,7 @@ package notification
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"slices"
 	"time"
 
@@ -59,6 +60,28 @@ func (t *celVariables) SetSilenceURL(frontendURL string) {
 	case t.Canary != nil:
 		t.SilenceURL = fmt.Sprintf("%s?canary_id=%s", baseURL, t.Canary.ID.String())
 	}
+}
+
+func (t celVariables) WithNotificationRef(notificationID string) celVariables {
+	t.Permalink = appendRefNotification(t.Permalink, notificationID)
+	return t
+}
+
+func appendRefNotification(rawURL string, notificationID string) string {
+	if rawURL == "" || notificationID == "" {
+		return rawURL
+	}
+
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+
+	query := u.Query()
+	query.Set("refNotification", notificationID)
+	u.RawQuery = query.Encode()
+
+	return u.String()
 }
 
 type ResourceHealthRow struct {
