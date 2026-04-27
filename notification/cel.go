@@ -132,11 +132,31 @@ func (t *celVariables) AsMap(ctx context.Context, opts ...celAsMapOption) map[st
 	resourceContext := duty.GetResourceContext(ctx, t.SelectableResource())
 	if ctx.DB() != nil && slices.Contains(opts, celVarGetLatestHealthStatus) {
 		if r, err := t.GetResourceCurrentHealthStatus(ctx); err == nil {
-			resourceContext["health"] = r.Health
-			resourceContext["status"] = r.Status
+			t.setResourceCurrentHealthStatus(resourceContext, output, r)
 		}
 	}
 	return collections.MergeMap(resourceContext, output)
+}
+
+func (t *celVariables) setResourceCurrentHealthStatus(resourceContext, output map[string]any, r ResourceHealthRow) {
+	resourceContext["health"] = r.Health
+	resourceContext["status"] = r.Status
+
+	switch {
+	case t.ConfigItem != nil:
+		setResourceMapCurrentHealthStatus(output, "config", r)
+	case t.Component != nil:
+		setResourceMapCurrentHealthStatus(output, "component", r)
+	case t.Check != nil:
+		setResourceMapCurrentHealthStatus(output, "check", r)
+	}
+}
+
+func setResourceMapCurrentHealthStatus(output map[string]any, key string, r ResourceHealthRow) {
+	if resourceMap, ok := output[key].(map[string]any); ok {
+		resourceMap["health"] = r.Health
+		resourceMap["status"] = r.Status
+	}
 }
 
 func (t *celVariables) SelectableResource() types.ResourceSelectable {
