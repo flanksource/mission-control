@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -26,6 +27,72 @@ import (
 	_ "github.com/flanksource/incident-commander/playbook"
 	_ "github.com/flanksource/incident-commander/upstream"
 )
+
+var _ = ginkgo.Describe("GetEnvForEvent", func() {
+	ginkgo.It("uses the config event snapshot when evaluating notification filters", func() {
+		query.FlushGettersCache()
+
+		config := models.ConfigItem{
+			ID:          uuid.New(),
+			Name:        lo.ToPtr("daemonset-rolling-out"),
+			ConfigClass: "DaemonSet",
+			Type:        lo.ToPtr("Kubernetes::DaemonSet"),
+			Health:      lo.ToPtr(models.HealthHealthy),
+			Status:      lo.ToPtr("Pending"),
+		}
+		Expect(DefaultContext.DB().Create(&config).Error).To(BeNil())
+		ginkgo.DeferCleanup(func() {
+			Expect(DefaultContext.DB().Delete(&config).Error).To(BeNil())
+			query.FlushGettersCache()
+		})
+
+		rollingOutEnv, err := notification.GetEnvForEvent(DefaultContext, models.Event{
+			Name:    api.EventConfigWarning,
+			EventID: config.ID,
+			Properties: types.JSONStringMap{
+				"status":      "Rolling Out",
+				"description": "DaemonSet is rolling out",
+			},
+		})
+		Expect(err).To(BeNil())
+
+		// Regression: cached config items must not be mutated in-place. A later Running
+		// event must not make the earlier Rolling Out event pass this notification filter.
+		runningEnv, err := notification.GetEnvForEvent(DefaultContext, models.Event{
+			Name:    api.EventConfigWarning,
+			EventID: config.ID,
+			Properties: types.JSONStringMap{
+				"status":      "Running",
+				"description": "DaemonSet is running",
+			},
+		})
+		Expect(err).To(BeNil())
+
+		Expect(rollingOutEnv.ConfigItem.Status).NotTo(BeNil())
+		Expect(runningEnv.ConfigItem.Status).NotTo(BeNil())
+		Expect(*rollingOutEnv.ConfigItem.Status).To(Equal("Rolling Out"))
+		Expect(*runningEnv.ConfigItem.Status).To(Equal("Running"))
+
+		rollingOutMap := rollingOutEnv.AsMap(DefaultContext)
+		runningMap := runningEnv.AsMap(DefaultContext)
+		Expect(rollingOutMap).To(HaveKeyWithValue("status", "Rolling Out"))
+		Expect(runningMap).To(HaveKeyWithValue("status", "Running"))
+		Expect(rollingOutMap["config"]).To(HaveKeyWithValue("status", "Rolling Out"))
+		Expect(runningMap["config"]).To(HaveKeyWithValue("status", "Running"))
+
+		matchesDaemonSetFilter, err := DefaultContext.RunTemplateBool(gomplate.Template{
+			Expression: `config.type == "Kubernetes::DaemonSet" && config.status != "Rolling Out"`,
+		}, rollingOutMap)
+		Expect(err).To(BeNil())
+		Expect(matchesDaemonSetFilter).To(BeFalse())
+
+		matchesDaemonSetFilter, err = DefaultContext.RunTemplateBool(gomplate.Template{
+			Expression: `config.type == "Kubernetes::DaemonSet" && config.status != "Rolling Out"`,
+		}, runningMap)
+		Expect(err).To(BeNil())
+		Expect(matchesDaemonSetFilter).To(BeTrue())
+	})
+})
 
 var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3), func() {
 	var customReceiverJson []byte

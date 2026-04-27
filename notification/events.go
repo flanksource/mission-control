@@ -825,6 +825,7 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 		} else if check == nil {
 			return nil, fmt.Errorf("check(id=%s) not found", checkID)
 		}
+		check = new(check.Clone())
 
 		canary, err := query.FindCachedCanary(ctx, check.CanaryID.String())
 		if err != nil {
@@ -940,6 +941,7 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 		} else if component == nil {
 			return nil, fmt.Errorf("component(id=%s) not found", componentID)
 		}
+		component = new(component.Clone())
 
 		agent, err := query.FindCachedAgent(ctx, component.AgentID.String())
 		if err != nil {
@@ -969,6 +971,7 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 		} else if config == nil {
 			return nil, fmt.Errorf("config(id=%s) not found", configID)
 		}
+		config = new(config.Clone())
 
 		agent, err := query.FindCachedAgent(ctx, config.AgentID.String())
 		if err != nil {
