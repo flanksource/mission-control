@@ -487,6 +487,28 @@ func processNotificationConstraints(ctx context.Context,
 	return nil, nil
 }
 
+func shouldSkipNotificationDueToFilter(ctx context.Context, notif NotificationWithSpec, currentHistory models.NotificationSendHistory, celEnv *celVariables) (bool, error) {
+	if notif.Filter == "" {
+		return false, nil
+	}
+
+	valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: notif.Filter}, celEnv.AsMap(ctx, celVarGetLatestHealthStatus))
+	if err != nil {
+		return false, ctx.Oops().Wrapf(err, "failed to validate notification filter for notification:%s", notif.ID)
+	}
+
+	if valid {
+		return false, nil
+	}
+
+	traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] Filter no longer matches, skipping", notif.ID, currentHistory.ID, currentHistory.SourceEvent, currentHistory.ResourceID)
+	if err := db.SkipNotificationSendHistory(ctx, currentHistory.ID); err != nil {
+		return false, fmt.Errorf("failed to skip notification send history (%s): %w", currentHistory.ID, err)
+	}
+
+	return true, nil
+}
+
 func checkInhibition(ctx context.Context, notif NotificationWithSpec, resource types.ResourceSelectable) (*uuid.UUID, error) {
 	// Note: we use the repeat interval as the inhibition window.
 	inhibitionWindow := notif.RepeatInterval

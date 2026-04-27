@@ -431,6 +431,12 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 		return fmt.Errorf("failed to get cel env: %w", err)
 	}
 
+	if skipNotif, err := shouldSkipNotificationDueToFilter(ctx, *notif, currentHistory, celEnv); err != nil {
+		return fmt.Errorf("failed to check notification filter: %w", err)
+	} else if skipNotif {
+		return nil
+	}
+
 	silencedResource := getSilencedResourceFromCelEnv(celEnv)
 	matchingSilences, err := db.GetMatchingNotificationSilences(ctx, silencedResource)
 	if err != nil {

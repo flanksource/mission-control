@@ -1179,7 +1179,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 				Title:          "Dummy",
 				Template:       "dummy",
 				CustomServices: types.JSON(customReceiverJson),
-				WaitFor:        new(time.Millisecond),
+				WaitFor:        lo.ToPtr(time.Millisecond),
 			}
 			Expect(DefaultContext.DB().Create(&n).Error).To(BeNil())
 
@@ -1255,6 +1255,88 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 				g.Expect(got.Status).To(Equal(models.NotificationStatusSilenced))
 				g.Expect(got.SilencedBy).ToNot(BeNil())
 				g.Expect(*got.SilencedBy).To(Equal(silence.ID))
+			}, "10s", "200ms").Should(Succeed())
+		})
+	})
+
+	var _ = ginkgo.Describe("pending notification filter re-evaluation", func() {
+		var n models.Notification
+		var config models.ConfigItem
+
+		ginkgo.BeforeAll(func() {
+			n = models.Notification{
+				ID:             uuid.New(),
+				Name:           "pending-filter-reevaluation-test",
+				Events:         pq.StringArray([]string{"config.unhealthy"}),
+				Source:         models.SourceCRD,
+				Title:          "Dummy",
+				Template:       "dummy",
+				CustomServices: types.JSON(customReceiverJson),
+				WaitFor:        lo.ToPtr(time.Millisecond),
+				Filter:         ".status == 'CrashLoopBackOff'",
+			}
+			Expect(DefaultContext.DB().Create(&n).Error).To(BeNil())
+
+			config = models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr("worker"),
+				ConfigClass: models.ConfigClassDeployment,
+				Health:      lo.ToPtr(models.HealthHealthy),
+				Description: lo.ToPtr("deployment/worker is running"),
+				Status:      lo.ToPtr("Running"),
+				Config:      lo.ToPtr(`{"namespace":"prod","name":"worker"}`),
+				Type:        lo.ToPtr("Kubernetes::Deployment"),
+			}
+			Expect(DefaultContext.DB().Create(&config).Error).To(BeNil())
+			Expect(query.FlushConfigCache(DefaultContext)).To(BeNil())
+			events.ConsumeAll(DefaultContext)
+
+			Expect(DefaultContext.DB().Model(&models.ConfigItem{}).
+				Where("id = ?", config.ID).
+				Updates(map[string]any{
+					"health":      models.HealthUnhealthy,
+					"status":      "CrashLoopBackOff",
+					"description": "deployment/worker has crashing pods",
+				}).Error).To(BeNil())
+
+			events.ConsumeAll(DefaultContext)
+			Eventually(func(g Gomega) {
+				var pending models.NotificationSendHistory
+				g.Expect(DefaultContext.DB().Where("notification_id = ?", n.ID).
+					Where("resource_id = ?", config.ID).
+					Where("source_event = ?", "config.unhealthy").
+					Where("status = ?", models.NotificationStatusPending).
+					First(&pending).Error).To(BeNil())
+			}, "10s", "200ms").Should(Succeed())
+
+			Expect(DefaultContext.DB().Model(&models.ConfigItem{}).
+				Where("id = ?", config.ID).
+				Updates(map[string]any{
+					"status":      "ImagePullBackOff",
+					"description": "deployment/worker is now failing with ImagePullBackOff",
+				}).Error).To(BeNil())
+			Expect(query.FlushConfigCache(DefaultContext)).To(BeNil())
+		})
+
+		ginkgo.AfterAll(func() {
+			Expect(DefaultContext.DB().Where("notification_id = ?", n.ID).Delete(&models.NotificationSendHistory{}).Error).To(BeNil())
+			Expect(DefaultContext.DB().Delete(&config).Error).To(BeNil())
+			Expect(DefaultContext.DB().Delete(&n).Error).To(BeNil())
+			notification.PurgeCache(n.ID.String())
+			Expect(query.FlushConfigCache(DefaultContext)).To(BeNil())
+		})
+
+		ginkgo.It("skips pending notifications when the filter no longer matches", func() {
+			Eventually(func(g Gomega) {
+				_, err := notification.ProcessPendingNotifications(DefaultContext)
+				g.Expect(err).To(BeNil())
+
+				var got models.NotificationSendHistory
+				g.Expect(DefaultContext.DB().Where("notification_id = ?", n.ID).
+					Where("resource_id = ?", config.ID).
+					Where("source_event = ?", "config.unhealthy").
+					First(&got).Error).To(BeNil())
+				g.Expect(got.Status).To(Equal(models.NotificationStatusSkipped))
 			}, "10s", "200ms").Should(Succeed())
 		})
 	})
