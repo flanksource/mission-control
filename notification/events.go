@@ -749,11 +749,9 @@ func _sendNotification(ctx *Context, payload NotificationEventPayload) error {
 		return ErrStaleResourceEvent
 	}
 
-	originalEvent := payload.ParentEvent()
-	if len(payload.Properties) > 0 {
-		if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
-			return fmt.Errorf("failed to unmarshal properties: %w", err)
-		}
+	originalEvent, err := payload.originalEvent()
+	if err != nil {
+		return err
 	}
 
 	celEnv, err := GetEnvForEvent(ctx.Context, originalEvent)
