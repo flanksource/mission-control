@@ -437,6 +437,21 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 		return nil
 	}
 
+	if shouldSkipDueToGeneration(payload, celEnv) {
+		reason := generationChangedMessage(payload, celEnv)
+		ctx.Logger.V(6).Infof("skipping notification[%s] as resource generation changed", notif.ID)
+		traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] %s Skipping", notif.ID, currentHistory.ID, payload.EventName, payload.ResourceID, reason)
+
+		if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
+			"status": models.NotificationStatusSkipped,
+			"error":  reason,
+		}).Error; dberr != nil {
+			return fmt.Errorf("failed to mark notification as skipped: %w", dberr)
+		}
+
+		return nil
+	}
+
 	silencedResource := getSilencedResourceFromCelEnv(celEnv)
 	matchingSilences, err := db.GetMatchingNotificationSilences(ctx, silencedResource)
 	if err != nil {
