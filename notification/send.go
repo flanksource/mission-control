@@ -147,6 +147,17 @@ func (t NotificationEventPayload) ParentEvent() models.Event {
 	return event
 }
 
+func (t NotificationEventPayload) originalEvent() (models.Event, error) {
+	event := t.ParentEvent()
+	if len(t.Properties) > 0 {
+		if err := json.Unmarshal(t.Properties, &event.Properties); err != nil {
+			return models.Event{}, fmt.Errorf("failed to unmarshal properties: %w", err)
+		}
+	}
+
+	return event, nil
+}
+
 func (t *NotificationEventPayload) FromMap(m map[string]string) {
 	b, _ := json.Marshal(m)
 	_ = json.Unmarshal(b, &t)

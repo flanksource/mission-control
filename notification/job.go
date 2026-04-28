@@ -321,11 +321,9 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 	var payload NotificationEventPayload
 	payload.FromMap(currentHistory.Payload)
 
-	originalEvent := models.Event{Name: payload.EventName, EventID: payload.EventID, CreatedAt: payload.EventCreatedAt}
-	if len(payload.Properties) > 0 {
-		if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
-			return false, fmt.Errorf("failed to unmarshal properties: %w", err)
-		}
+	originalEvent, err := payload.originalEvent()
+	if err != nil {
+		return false, err
 	}
 
 	celEnv, err := GetEnvForEvent(ctx, originalEvent)
@@ -423,9 +421,20 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 	var payload NotificationEventPayload
 	payload.FromMap(currentHistory.Payload)
 
-	celEnv, err := GetEnvForEvent(ctx, payload.ParentEvent())
+	originalEvent, err := payload.originalEvent()
+	if err != nil {
+		return err
+	}
+
+	celEnv, err := GetEnvForEvent(ctx, originalEvent)
 	if err != nil {
 		return fmt.Errorf("failed to get cel env: %w", err)
+	}
+
+	if skipNotif, err := shouldSkipNotificationDueToFilter(ctx, *notif, currentHistory, celEnv); err != nil {
+		return fmt.Errorf("failed to check notification filter: %w", err)
+	} else if skipNotif {
+		return nil
 	}
 
 	silencedResource := getSilencedResourceFromCelEnv(celEnv)
