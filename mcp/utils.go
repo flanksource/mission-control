@@ -216,7 +216,7 @@ func structToMCPResponse(req mcp.CallToolRequest, s ...any) *mcp.CallToolResult 
 		return mcp.NewToolResultText("")
 	}
 
-	if req.Header.Get(echo.HeaderContentType) == echo.MIMEApplicationJSON {
+	if strings.HasPrefix(req.Header.Get(echo.HeaderAccept), echo.MIMEApplicationJSON) {
 		var data any = s
 		if len(s) == 1 {
 			data = s[0]
