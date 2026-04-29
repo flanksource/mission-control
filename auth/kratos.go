@@ -14,6 +14,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	incAPI "github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -230,6 +231,8 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		return next(c)
 	}
 }
+
+var _ oidc.ExternalLoginProvider = (*KratosCredentialChecker)(nil)
 
 // KratosCredentialChecker validates Kratos browser sessions for the OIDC login flow.
 type KratosCredentialChecker struct {

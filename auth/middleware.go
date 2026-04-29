@@ -141,6 +141,14 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 		}
 		e.Use(clerkHandler.Session)
 
+		if OIDCEnabled {
+			clerkChecker := NewClerkCredentialChecker(clerkHandler)
+			if err := oidc.MountRoutes(e, ctx, api.FrontendURL, OIDCSigningKeyPath, nil, clerkChecker, nil); err != nil {
+				return fmt.Errorf("failed to mount OIDC routes: %w", err)
+			}
+			logger.Infof("OIDC provider enabled at %s (Clerk auth)", api.FrontendURL)
+		}
+
 		// We also need to disable "settings.users" feature in database
 		// to hide the menu from UI
 		if err := context.UpdateProperty(ctx, "settings.user.disabled", "true"); err != nil {
