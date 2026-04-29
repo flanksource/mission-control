@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -148,6 +149,13 @@ func New(ctx context.Context) *echov4.Echo {
 
 	e.GET("/health", func(c echov4.Context) error {
 		return c.String(http.StatusOK, "OK")
+	})
+
+	e.GET("/about", func(c echov4.Context) error {
+		return c.JSON(http.StatusOK, map[string]string{
+			"appVersion":   api.BuildVersion,
+			"chartVersion": os.Getenv("FLANKSOURCE_CHART_VERSION"),
+		})
 	})
 
 	personController := PersonController{kratos: auth.NewAPIClient(auth.KratosAPI)}
