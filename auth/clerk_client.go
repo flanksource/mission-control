@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -12,6 +13,8 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
@@ -80,6 +83,18 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		ctx := c.Request().Context().(context.Context)
+
+		if OIDCEnabled {
+			if token, ok := extractBearerAuthToken(c.Request().Header); ok {
+				if authenticated, err := authenticateOIDCToken(c, token); err != nil {
+					return c.JSON(http.StatusInternalServerError, map[string]string{
+						"error": err.Error(),
+					})
+				} else if authenticated {
+					return next(c)
+				}
+			}
+		}
 
 		// Agents use basic auth with `token:<access_token>` format
 		authResult, err := h.authenticateRequest(ctx, c)
@@ -244,6 +259,7 @@ func (h ClerkHandler) authenticateBasicAuth(ctx context.Context, c echo.Context)
 func (h ClerkHandler) authenticateBearerOrCookie(ctx context.Context, c echo.Context) (AuthResult, error) {
 	sessionToken := h.extractSessionToken(c)
 	if sessionToken == "" {
+		setWWWAuthenticate(c)
 		return AuthResult{}, c.String(http.StatusUnauthorized, "Unauthorized")
 	}
 
@@ -302,4 +318,48 @@ func (h ClerkHandler) extractSessionToken(c echo.Context) string {
 	}
 
 	return ""
+}
+
+var _ oidc.ExternalLoginProvider = (*ClerkCredentialChecker)(nil)
+
+// ClerkCredentialChecker validates Clerk browser sessions for the OIDC login flow.
+type ClerkCredentialChecker struct {
+	handler *ClerkHandler
+}
+
+func NewClerkCredentialChecker(h *ClerkHandler) *ClerkCredentialChecker {
+	return &ClerkCredentialChecker{handler: h}
+}
+
+func (c *ClerkCredentialChecker) LoginRedirectURL(authRequestID string) (string, error) {
+	frontendURL := strings.TrimRight(api.FrontendURL, "/")
+	if frontendURL == "" {
+		return "", fmt.Errorf("frontend URL is not configured")
+	}
+
+	q := url.Values{}
+	q.Set("return_to", "/oidc/clerk/callback?auth_request_id="+authRequestID)
+	return frontendURL + "/login?" + q.Encode(), nil
+}
+
+func (c *ClerkCredentialChecker) CallbackSubject(ec echo.Context) (string, error) {
+	ctx := ec.Request().Context().(context.Context)
+
+	sessionToken := c.handler.extractSessionToken(ec)
+	if sessionToken == "" {
+		return "", fmt.Errorf("no Clerk session token found")
+	}
+	if strings.Count(sessionToken, ".") == 4 {
+		return "", fmt.Errorf("access tokens cannot complete Clerk browser login")
+	}
+
+	authResult, err := c.handler.getUserFromSessionToken(ctx, sessionToken)
+	if err != nil {
+		return "", err
+	}
+	if authResult.User == nil {
+		return "", fmt.Errorf("user is not authenticated")
+	}
+
+	return authResult.User.ID.String(), nil
 }
