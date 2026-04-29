@@ -14,14 +14,19 @@ import (
 // The OIDC provider is mounted under /oidc/ with the issuer set to {issuerURL}/oidc
 // so that discovery at /oidc/.well-known/openid-configuration returns correct endpoint URLs.
 // A convenience redirect from /.well-known/openid-configuration is provided for standard discovery.
-func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL, signingKeyPath string, checker CredentialChecker, lookup PersonLookup) error {
+func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL, signingKeyPath string, passwordChecker PasswordLoginChecker, externalProvider ExternalLoginProvider, lookup PersonLookup) error {
 	oidcIssuer := strings.TrimRight(issuerURL, "/")
 	provider, err := NewProvider(ctx, oidcIssuer, signingKeyPath)
 	if err != nil {
 		return err
 	}
 
-	loginHandler := NewLoginHandler(provider.Storage, provider.OpenIDProvider, checker, lookup, oidcIssuer)
+	var loginHandler *LoginHandler
+	if externalProvider != nil {
+		loginHandler = NewExternalLoginHandler(provider.Storage, provider.OpenIDProvider, externalProvider, oidcIssuer)
+	} else {
+		loginHandler = NewPasswordLoginHandler(provider.Storage, provider.OpenIDProvider, passwordChecker, lookup, oidcIssuer)
+	}
 
 	// Custom login form (not part of the standard OIDC protocol paths).
 	e.GET("/oidc/login", loginHandler.ShowForm)

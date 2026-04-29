@@ -231,19 +231,13 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-// KratosCredentialChecker validates credentials via Kratos API,
-// implementing oidc.CredentialChecker for the OIDC login flow.
+// KratosCredentialChecker validates Kratos browser sessions for the OIDC login flow.
 type KratosCredentialChecker struct {
 	middleware *kratosMiddleware
 }
 
 func NewKratosCredentialChecker(m *kratosMiddleware) *KratosCredentialChecker {
 	return &KratosCredentialChecker{middleware: m}
-}
-
-func (k *KratosCredentialChecker) Match(ctx context.Context, user, pass string) error {
-	_, err := k.middleware.kratosLoginWithCache(ctx, user, pass)
-	return err
 }
 
 func (k *KratosCredentialChecker) LoginRedirectURL(authRequestID string) (string, error) {
