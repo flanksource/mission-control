@@ -53,6 +53,7 @@ require (
 	github.com/flanksource/clicky v1.21.4
 	github.com/flanksource/commons-test v0.1.13
 	github.com/fluxcd/pkg/gittestserver v0.26.0
+	github.com/glebarez/sqlite v1.11.0
 	github.com/go-git/go-billy/v5 v5.8.0
 	github.com/go-git/go-git/v5 v5.18.0
 	github.com/go-jose/go-jose/v4 v4.1.4
@@ -191,7 +192,7 @@ require (
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/flanksource/deps v1.0.28 // indirect
-	github.com/flanksource/is-healthy v1.0.86 // indirect
+	github.com/flanksource/is-healthy v1.0.87 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/flanksource/sandbox-runtime v1.0.2 // indirect
 	github.com/fluxcd/gitkit v0.6.0 // indirect
@@ -200,7 +201,6 @@ require (
 	github.com/gabriel-vasile/mimetype v1.4.13 // indirect
 	github.com/geoffgarside/ber v1.2.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
-	github.com/glebarez/sqlite v1.11.0 // indirect
 	github.com/go-chi/chi/v5 v5.2.5 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-jose/go-jose/v3 v3.0.5 // indirect
