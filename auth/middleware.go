@@ -57,6 +57,8 @@ var skipAuthPathPrefixes = []string{
 	"/canary/webhook/",
 	"/playbook/webhook/", // Playbook webhooks handle the authentication themselves
 	"/auth/basic/",
+	"/auth/kratos/error",
+	"/auth/kratos/hooks/",
 	"/oidc/",
 	"/.well-known/",
 	"/oauth/", // Standard OIDC protocol endpoints (mounted at root to match the issuer URL).
@@ -125,6 +127,9 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 		}
 		e.Use(kratosMiddleware.Session)
 		e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(policy.ObjectAuth, policy.ActionUpdate))
+		e.GET("/auth/kratos/error", KratosErrorRedirect)
+		e.POST("/auth/kratos/hooks/registration/before", kratosHandler.BeforeRegistrationWebhook)
+		e.POST("/auth/kratos/hooks/registration/after", kratosHandler.AfterRegistrationWebhook)
 
 		if OIDCEnabled {
 			kratosChecker := NewKratosCredentialChecker(kratosMiddleware)
