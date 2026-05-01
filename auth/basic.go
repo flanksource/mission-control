@@ -3,8 +3,10 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -13,6 +15,8 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	incAPI "github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/auth/basic_static"
+	"github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/tg123/go-htpasswd"
@@ -31,6 +35,8 @@ const basicAuthCookieName = "authorization"
 
 func UseBasic(e *echo.Echo) {
 	logger.Infof("Using basic authentication with htpasswd file: %s", HtpasswdFile)
+	checker = nil
+	localhostOnly = false
 	var err error
 	checker, err = htpasswd.New(HtpasswdFile, htpasswd.DefaultSystems, nil)
 	if err != nil {
@@ -43,8 +49,76 @@ func UseBasic(e *echo.Echo) {
 	}
 
 	e.POST("/auth/login", BasicLogin)
+	e.GET("/auth/basic/login", ShowBasicLoginForm)
+	e.GET("/auth/logout", BasicLogout)
+	e.POST("/auth/logout", BasicLogout)
+
+	// The basic login page references /oidc/static/{tailwind.min.js,logo.svg}.
+	// oidc.MountRoutes only runs when OIDCEnabled=true, so mount the static
+	// assets here too so they're reachable on a plain basic-auth deployment.
+	oidc.RegisterStaticAssets(e)
 
 	e.Use(basicAuthMiddleware)
+}
+
+// ShowBasicLoginForm renders the HTML sign-in page. Safe to call without
+// credentials — it is registered under /auth/basic/ which is skipped from
+// the auth middleware.
+func ShowBasicLoginForm(c echo.Context) error {
+	next := sanitizeNext(c.QueryParam("next"))
+	return c.HTML(http.StatusOK, fmt.Sprintf(basic_static.LoginHTML, html.EscapeString(next), ""))
+}
+
+// BasicLogout clears the auth cookie and redirects HTML clients to the login
+// form; JSON clients receive a 200 message.
+func BasicLogout(c echo.Context) error {
+	c.SetCookie(&http.Cookie{
+		Name:     basicAuthCookieName,
+		Value:    "",
+		Path:     "/",
+		MaxAge:   -1,
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	})
+	if wantsHTML(c) {
+		return c.Redirect(http.StatusFound, "/auth/basic/login")
+	}
+	return c.JSON(http.StatusOK, map[string]string{"message": "logged out"})
+}
+
+// wantsHTML reports whether the client prefers an HTML response — used to
+// decide between rendering the login page and returning 401 JSON.
+func wantsHTML(c echo.Context) bool {
+	accept := c.Request().Header.Get("Accept")
+	if accept == "" {
+		return false
+	}
+	for _, part := range strings.Split(accept, ",") {
+		ct := strings.TrimSpace(part)
+		if i := strings.IndexByte(ct, ';'); i >= 0 {
+			ct = ct[:i]
+		}
+		if ct == "text/html" {
+			return true
+		}
+	}
+	return false
+}
+
+// sanitizeNext strips dangerous redirect targets (external URLs, schemes) and
+// returns a safe relative path. Falls back to /ui when the input is empty or
+// rejected.
+func sanitizeNext(raw string) string {
+	if raw == "" {
+		return "/ui"
+	}
+	if !strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, "//") {
+		return "/ui"
+	}
+	if _, err := url.Parse(raw); err != nil {
+		return "/ui"
+	}
+	return raw
 }
 
 func isLocalhostRequest(c echo.Context) bool {
@@ -127,9 +201,22 @@ func validateBasicAuth(c echo.Context, user, pass string) (bool, error) {
 // setWWWAuthenticate adds the WWW-Authenticate header pointing to the OAuth
 // Protected Resource Metadata endpoint so that MCP clients can discover the
 // OIDC provider and initiate the authorization flow.
+// rejectUnauthenticated sends the right unauthenticated response for the
+// caller. Browsers (Accept: text/html) are redirected to the login form with
+// ?next= pointing back at the original URL so they resume where they left
+// off; JSON/API clients get a 401 as before.
+func rejectUnauthenticated(c echo.Context) error {
+	if wantsHTML(c) {
+		next := c.Request().URL.RequestURI()
+		return c.Redirect(http.StatusFound, "/auth/basic/login?next="+url.QueryEscape(next))
+	}
+	setWWWAuthenticate(c)
+	return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+}
+
 func setWWWAuthenticate(c echo.Context) {
 	if OIDCEnabled {
-		resourceMetadataURL := strings.TrimRight(incAPI.FrontendURL, "/") + "/.well-known/oauth-protected-resource"
+		resourceMetadataURL := strings.TrimRight(incAPI.PublicURL, "/") + "/.well-known/oauth-protected-resource"
 		c.Response().Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer resource_metadata="%s"`, resourceMetadataURL))
 	}
 }
@@ -165,14 +252,12 @@ func basicAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 					}
 				}
 			}
-			setWWWAuthenticate(c)
-			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+			return rejectUnauthenticated(c)
 		}
 
 		user, pass, ok := c.Request().BasicAuth()
 		if !ok {
-			setWWWAuthenticate(c)
-			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+			return rejectUnauthenticated(c)
 		}
 
 		if valid, err := validateBasicAuth(c, user, pass); err != nil {
@@ -238,23 +323,34 @@ func BasicLogin(c echo.Context) error {
 		return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "basic login is unavailable when htpasswd file is not configured"})
 	}
 
+	next := sanitizeNext(c.FormValue("next"))
+
+	loginErr := func(status int, msg string) error {
+		if wantsHTML(c) {
+			return c.HTML(status, fmt.Sprintf(basic_static.LoginHTML,
+				html.EscapeString(next),
+				`<p class="mt-3 text-sm text-red-600">`+html.EscapeString(msg)+`</p>`))
+		}
+		return c.JSON(status, map[string]string{"error": msg})
+	}
+
 	username, password, ok := extractBasicLoginCredentials(c)
 	if !ok {
-		return c.JSON(http.StatusBadRequest, map[string]string{"error": "credentials required"})
+		return loginErr(http.StatusBadRequest, "credentials required")
 	}
 
 	if !checker.Match(username, password) {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
+		return loginErr(http.StatusUnauthorized, "invalid credentials")
 	}
 
 	person, err := lookupPerson(ctx, username)
 	if err != nil {
-		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "user not found in database"})
+		return loginErr(http.StatusUnauthorized, "user not found in database")
 	}
 
 	token, err := GetOrCreateJWTToken(ctx, person, "")
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
+		return loginErr(http.StatusInternalServerError, "failed to generate token")
 	}
 
 	c.SetCookie(&http.Cookie{
@@ -266,6 +362,10 @@ func BasicLogin(c echo.Context) error {
 	})
 
 	AddLoginContext(c, person)
+
+	if wantsHTML(c) {
+		return c.Redirect(http.StatusFound, next)
+	}
 	return c.JSON(http.StatusOK, map[string]string{"message": "logged in"})
 }
 

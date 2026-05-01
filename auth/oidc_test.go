@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +23,9 @@ import (
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	oidclib "github.com/zitadel/oidc/v3/pkg/oidc"
+	"golang.org/x/crypto/bcrypt"
+
+	"github.com/flanksource/incident-commander/vars"
 )
 
 var _ = ginkgo.Describe("OIDC", func() {
@@ -517,6 +521,71 @@ var _ = ginkgo.Describe("OIDC", func() {
 			defer resp.Body.Close()
 			Expect(resp.StatusCode).To(Equal(http.StatusUnauthorized))
 		})
+
+		ginkgo.It("skips auth for well-known discovery routes", func() {
+			e := newEchoInstance(DefaultContext)
+			e.Use(basicAuthMiddleware)
+			e.GET("/.well-known/openid-configuration", func(c echo.Context) error {
+				return c.JSON(http.StatusOK, map[string]string{"issuer": "http://localhost:8080"})
+			})
+
+			req := httptest.NewRequest(http.MethodGet, "/.well-known/openid-configuration", nil)
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			Expect(rec.Code).To(Equal(http.StatusOK))
+			Expect(rec.Body.String()).To(ContainSubstring("issuer"))
+		})
+	})
+
+	ginkgo.It("mounts basic-auth OIDC discovery with the public endpoint issuer", func() {
+		oldAuthMode := vars.AuthMode
+		oldOIDCEnabled := OIDCEnabled
+		oldOIDCSigningKeyPath := OIDCSigningKeyPath
+		oldHtpasswdFile := HtpasswdFile
+		oldFrontendURL := api.FrontendURL
+		oldPublicURL := api.PublicURL
+		oldSystemUserID := api.SystemUserID
+		oldLocalhostOnly := localhostOnly
+		oldChecker := checker
+		defer func() {
+			vars.AuthMode = oldAuthMode
+			OIDCEnabled = oldOIDCEnabled
+			OIDCSigningKeyPath = oldOIDCSigningKeyPath
+			HtpasswdFile = oldHtpasswdFile
+			api.FrontendURL = oldFrontendURL
+			api.PublicURL = oldPublicURL
+			api.SystemUserID = oldSystemUserID
+			localhostOnly = oldLocalhostOnly
+			checker = oldChecker
+		}()
+
+		hash, err := bcrypt.GenerateFromPassword([]byte("admin"), bcrypt.DefaultCost)
+		Expect(err).ToNot(HaveOccurred())
+		htpasswdPath := ginkgo.GinkgoT().TempDir() + "/htpasswd"
+		Expect(os.WriteFile(htpasswdPath, fmt.Appendf(nil, "admin:%s\n", string(hash)), 0600)).To(Succeed())
+
+		vars.AuthMode = Basic
+		OIDCEnabled = true
+		OIDCSigningKeyPath = keyPath
+		HtpasswdFile = htpasswdPath
+		api.FrontendURL = "http://localhost:3000"
+		api.PublicURL = "http://localhost:8080"
+		systemUserID := uuid.New()
+		api.SystemUserID = &systemUserID
+
+		e := newEchoInstance(DefaultContext)
+		Expect(Middleware(DefaultContext, e)).To(Succeed())
+
+		req := httptest.NewRequest(http.MethodGet, "/.well-known/openid-configuration", nil)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		Expect(rec.Code).To(Equal(http.StatusOK))
+		var discovery map[string]any
+		Expect(json.Unmarshal(rec.Body.Bytes(), &discovery)).To(Succeed())
+		Expect(discovery).To(HaveKeyWithValue("issuer", "http://localhost:8080"))
+		Expect(discovery["authorization_endpoint"]).To(ContainSubstring("http://localhost:8080"))
 	})
 })
 

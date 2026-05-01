@@ -65,6 +65,10 @@ var skipAuthPathPrefixes = []string{
 var skipAuthPathsExact = []string{
 	"/health",
 
+	// Basic auth endpoints — they handle credentials themselves.
+	"/auth/login",
+	"/auth/logout",
+
 	// --start:: Standard OIDC protocol endpoints (mounted at root to match the issuer URL).
 	"/authorize",
 	"/authorize/callback",
@@ -72,7 +76,7 @@ var skipAuthPathsExact = []string{
 	"/keys",
 	"/revoke",
 	"/device_authorization",
-	"/endsession",
+	"/end_session",
 	// --end:: Standard OIDC endpoints
 }
 
@@ -109,7 +113,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 				if err := oidc.MountRoutes(e, ctx, api.FrontendURL, OIDCSigningKeyPath, htpasswdChecker, nil, LookupPersonByUsername); err != nil {
 					return fmt.Errorf("failed to mount OIDC routes: %w", err)
 				}
-				logger.Infof("OIDC provider enabled at %s", api.FrontendURL)
+				logger.Infof("OIDC provider enabled at %s", api.PublicURL)
 			}
 		}
 	case Kratos:
@@ -131,7 +135,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 			if err := oidc.MountRoutes(e, ctx, api.FrontendURL, OIDCSigningKeyPath, nil, kratosChecker, nil); err != nil {
 				return fmt.Errorf("failed to mount OIDC routes: %w", err)
 			}
-			logger.Infof("OIDC provider enabled at %s (Kratos auth)", api.FrontendURL)
+			logger.Infof("OIDC provider enabled at %s (Kratos auth)", api.PublicURL)
 		}
 
 	case Clerk:
@@ -169,20 +173,21 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 
 // TODO: Use regex supported path matching
 func canSkipAuth(c echo.Context) bool {
-	// use c.Request().URL.Path for exact matches instead of c.Path() which may contain path parameters (e.g. /playbook/webhook/:id)
-	// Example: URL.PATH = /authorize/callback whereas c.Path() = /authorize/*
-	if slices.Contains(skipAuthPathsExact, c.Request().URL.Path) {
+	requestPath := c.Request().URL.Path
+	// Use the request path instead of c.Path(), which can be empty or contain route
+	// patterns while global middleware is evaluating a request.
+	if slices.Contains(skipAuthPathsExact, requestPath) {
 		return true
 	}
 
 	for _, p := range skipAuthPathPrefixes {
-		if strings.HasPrefix(c.Path(), p) {
+		if strings.HasPrefix(requestPath, p) {
 			return true
 		}
 	}
 
 	// /metrics requires auth by default, unless metrics.auth.disabled is true
-	if c.Path() == "/metrics" && properties.On(false, "metrics.auth.disabled") {
+	if requestPath == "/metrics" && properties.On(false, "metrics.auth.disabled") {
 		return true
 	}
 

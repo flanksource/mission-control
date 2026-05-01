@@ -1,6 +1,7 @@
 package oidcclient
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -11,6 +12,9 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	commonshttp "github.com/flanksource/commons/http"
+	"github.com/flanksource/incident-commander/pkg/httpobservability"
 )
 
 type Tokens struct {
@@ -26,10 +30,17 @@ type Discovery struct {
 	UserinfoEndpoint      string `json:"userinfo_endpoint"`
 }
 
-var HTTPClient = &http.Client{Timeout: 30 * time.Second}
+var HTTPClient = NewHTTPClient()
+
+func NewHTTPClient() *commonshttp.Client {
+	return httpobservability.Apply(commonshttp.NewClient().
+		Timeout(30*time.Second).
+		Header("Accept", "application/json").
+		UserAgent("mission-control-cli"))
+}
 
 func Discover(discoveryURL string) (*Discovery, error) {
-	resp, err := HTTPClient.Get(discoveryURL)
+	resp, err := HTTPClient.R(context.Background()).Get(discoveryURL)
 	if err != nil {
 		return nil, err
 	}
@@ -62,12 +73,12 @@ func GeneratePKCE() (verifier, challenge string, err error) {
 	return
 }
 
-func RandomBase64(n int) (string, error) {
+func RandomBase64(n int) string {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
-		return "", err
+		panic("crypto/rand failed: " + err.Error())
 	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
+	return base64.RawURLEncoding.EncodeToString(b)
 }
 
 func ExchangeCode(tokenEndpoint, code, redirectURI, verifier string) (*Tokens, error) {
@@ -79,7 +90,9 @@ func ExchangeCode(tokenEndpoint, code, redirectURI, verifier string) (*Tokens, e
 		"code_verifier": {verifier},
 	}
 
-	resp, err := HTTPClient.PostForm(tokenEndpoint, form)
+	resp, err := HTTPClient.R(context.Background()).
+		Header("Content-Type", "application/x-www-form-urlencoded").
+		Post(tokenEndpoint, form.Encode())
 	if err != nil {
 		return nil, err
 	}
@@ -114,7 +127,9 @@ func RefreshToken(tokenEndpoint, refreshToken string) (*Tokens, error) {
 		"client_id":     {"mc-cli"},
 	}
 
-	resp, err := HTTPClient.PostForm(tokenEndpoint, form)
+	resp, err := HTTPClient.R(context.Background()).
+		Header("Content-Type", "application/x-www-form-urlencoded").
+		Post(tokenEndpoint, form.Encode())
 	if err != nil {
 		return nil, err
 	}
