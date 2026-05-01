@@ -64,6 +64,29 @@ func looksLikeHTML(contentType, body string) bool {
 	return strings.HasPrefix(strings.TrimLeft(body, " \t\r\n"), "<")
 }
 
+// decodeJSON parses a response body as JSON, returning ErrHTMLResponse if the
+// body looks like HTML (frontend served instead of backend JSON).
+func decodeJSON(r *http.Response, out any) error {
+	body, err := r.AsString()
+	if err != nil {
+		return err
+	}
+	if looksLikeHTML(r.Header.Get("Content-Type"), body) {
+		return ErrHTMLResponse
+	}
+	if err := json.Unmarshal([]byte(body), out); err != nil {
+		return fmt.Errorf("failed to decode JSON response: %w", err)
+	}
+	return nil
+}
+
+func looksLikeHTML(contentType, body string) bool {
+	if strings.Contains(strings.ToLower(contentType), "text/html") {
+		return true
+	}
+	return strings.HasPrefix(strings.TrimLeft(body, " \t\r\n"), "<")
+}
+
 func (c *Client) GetConnection(name, namespace string) (*models.Connection, error) {
 	var connections []models.Connection
 	r, err := c.R(context.Background()).
