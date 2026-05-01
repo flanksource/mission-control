@@ -670,12 +670,16 @@ type FacetPDFOptions struct {
 }
 
 type FacetOptions struct {
-	Connection   string           `json:"connection,omitempty" yaml:"connection,omitempty" template:"true"`
-	URL          string           `json:"url,omitempty" yaml:"url,omitempty" template:"true"`
-	PDFOptions   *FacetPDFOptions `json:"pdfOptions,omitempty" yaml:"pdfOptions,omitempty"`
-	Header       string           `json:"header,omitempty" yaml:"header,omitempty" template:"true"`
-	Footer       string           `json:"footer,omitempty" yaml:"footer,omitempty" template:"true"`
-	TimestampURL string           `json:"timestampUrl,omitempty" yaml:"timestampUrl,omitempty" template:"true"`
+	Connection         string `json:"connection,omitempty" yaml:"connection,omitempty" template:"true"`
+	URL                string `json:"url,omitempty" yaml:"url,omitempty" template:"true"`
+	FacetRenderOptions `json:",inline" yaml:",inline"`
+}
+
+type FacetRenderOptions struct {
+	*FacetPDFOptions `json:",inline" yaml:",inline"`
+	Header           string `json:"header,omitempty" yaml:"header,omitempty" template:"true"`
+	Footer           string `json:"footer,omitempty" yaml:"footer,omitempty" template:"true"`
+	TimestampURL     string `json:"timestampUrl,omitempty" yaml:"timestampUrl,omitempty" template:"true"`
 }
 
 // CatalogAction creates a config item in the catalog.

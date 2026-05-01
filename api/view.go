@@ -66,8 +66,10 @@ type ViewSection struct {
 // +kubebuilder:object:generate=true
 // UIRef references a native Flanksource UI component (changes or configs)
 type UIRef struct {
-	Changes *ChangesUIFilters `json:"changes,omitempty"`
-	Configs *ConfigsUIFilters `json:"configs,omitempty"`
+	Changes    *ChangesUIFilters    `json:"changes,omitempty"`
+	Configs    *ConfigsUIFilters    `json:"configs,omitempty"`
+	Access     *AccessUIFilters     `json:"access,omitempty"`
+	AccessLogs *AccessLogsUIFilters `json:"accessLogs,omitempty"`
 }
 
 // +kubebuilder:object:generate=true
@@ -96,6 +98,24 @@ type ConfigsUIFilters struct {
 	Labels     string `json:"labels,omitempty"`     // e.g. "app=nginx,!team=dev" (Kubernetes style)
 	Status     string `json:"status,omitempty"`     // e.g. "Running,-Stopped"
 	Health     string `json:"health,omitempty"`     // e.g. "-healthy,warning"
+}
+
+// +kubebuilder:object:generate=true
+type AccessUIFilters struct {
+	Search      string `json:"search,omitempty"`      // maps to ResourceSelector.Search for scoping configs
+	ConfigTypes string `json:"configTypes,omitempty"` // e.g. "AWS::IAM::Role,-Kubernetes::Pod"
+	Role        string `json:"role,omitempty"`        // e.g. "Owner,-Reader"
+	UserType    string `json:"userType,omitempty"`    // e.g. "Member,-Guest"
+	Stale       string `json:"stale,omitempty"`       // duration threshold, e.g. "2160h" (90 days)
+}
+
+// +kubebuilder:object:generate=true
+type AccessLogsUIFilters struct {
+	Search      string `json:"search,omitempty"`      // maps to ResourceSelector.Search for scoping configs
+	ConfigTypes string `json:"configTypes,omitempty"` // e.g. "AWS::IAM::Role"
+	From        string `json:"from,omitempty"`        // e.g. "720h" (30 days)
+	To          string `json:"to,omitempty"`
+	MFA         string `json:"mfa,omitempty"` // "true" or "false"
 }
 
 type SerializedView struct {
