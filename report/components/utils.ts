@@ -12,12 +12,60 @@ export function formatDateTime(iso: string): string {
 }
 
 export function formatRelative(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  return formatMonthDay(iso);
+}
+
+export function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+export function formatMonthDay(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  if (d.getFullYear() !== now.getFullYear()) {
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+export type TimeBucketFormat = 'time' | 'monthDay';
+
+export interface TimeBucket {
+  key: string;
+  label: string;
+  dateFormat: TimeBucketFormat;
+}
+
+export function getTimeBucket(iso: string): TimeBucket {
+  const d = new Date(iso);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.floor((startOfToday.getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86400000);
+
+  if (diffDays <= 0) {
+    return { key: 'today', label: formatDayLabel(d), dateFormat: 'time' };
+  }
+  if (diffDays <= 6) {
+    return { key: `day-${diffDays}`, label: formatDayLabel(d), dateFormat: 'time' };
+  }
+  if (diffDays <= 30) {
+    const weekStart = new Date(d);
+    weekStart.setDate(d.getDate() - d.getDay() + 1);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 4);
+    const fmt = (dt: Date) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return { key: `week-${fmt(weekStart)}`, label: `${fmt(weekStart)} – ${fmt(weekEnd)}`, dateFormat: 'monthDay' };
+  }
+  const monthLabel = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  return { key: `month-${d.getFullYear()}-${d.getMonth()}`, label: monthLabel, dateFormat: 'monthDay' };
+}
+
+function formatDayLabel(d: Date): string {
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+export function formatEntryDate(iso: string, fmt: TimeBucketFormat): string {
+  return fmt === 'time' ? formatTime(iso) : formatMonthDay(iso);
 }
 
 export function formatBytes(bytes: number): string {
@@ -25,6 +73,38 @@ export function formatBytes(bytes: number): string {
   if (bytes >= 1e6) return `${(bytes / 1e6).toFixed(1)} MB`;
   if (bytes >= 1e3) return `${(bytes / 1e3).toFixed(1)} KB`;
   return `${bytes} B`;
+}
+
+const SIZE_WITH_UNIT_RE = /^\s*(\d+(?:\.\d+)?)\s*([KMGTP]i?B|B|bytes?)\s*$/i;
+const UNIT_CANONICAL: Record<string, string> = {
+  B: 'B', BYTE: 'B', BYTES: 'B',
+  KB: 'KB', MB: 'MB', GB: 'GB', TB: 'TB', PB: 'PB',
+  KIB: 'KiB', MIB: 'MiB', GIB: 'GiB', TIB: 'TiB', PIB: 'PiB',
+};
+
+export function humanizeSize(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined;
+
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return formatBytes(value);
+  }
+
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+
+  if (/^-?\d+(\.\d+)?$/.test(trimmed)) {
+    const n = Number(trimmed);
+    return Number.isFinite(n) ? formatBytes(n) : undefined;
+  }
+
+  const m = trimmed.match(SIZE_WITH_UNIT_RE);
+  if (m) {
+    const unit = UNIT_CANONICAL[m[2].toUpperCase()] ?? m[2];
+    return `${m[1]} ${unit}`;
+  }
+
+  return undefined;
 }
 
 /**

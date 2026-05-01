@@ -1,6 +1,9 @@
 import React from 'react';
-import { Section, CompactTable } from '@flanksource/facet';
+import { Badge, Section, CompactTable } from '@flanksource/facet';
 import type { ApplicationSection, ViewColumnType } from '../types.ts';
+import ConfigChangesSection from './ConfigChangesSection.tsx';
+import { defaultConfigChangesExtensions } from './config-changes-builtin-extensions.tsx';
+import { applicationChangeToConfigChange } from './change-section-utils.ts';
 import {
   formatDate,
   formatRelative,
@@ -22,19 +25,26 @@ const HEALTH_CLASSES: Record<string, string> = {
   unknown:   'bg-gray-400',
 };
 
-const REFRESH_CLASSES: Record<string, string> = {
-  fresh: 'bg-green-100 text-green-800',
-  cache: 'bg-yellow-100 text-yellow-800',
+const REFRESH_STYLES: Record<string, { color: string; textColor: string; borderColor: string }> = {
+  fresh: { color: 'bg-green-100', textColor: 'text-green-800', borderColor: 'border-green-200' },
+  cache: { color: 'bg-yellow-100', textColor: 'text-yellow-800', borderColor: 'border-yellow-200' },
 };
 
 function TagBadges({ value }: { value: Record<string, string> }) {
   return (
     <span className="inline-flex flex-wrap gap-[0.5mm]">
       {Object.entries(value).map(([k, v]) => (
-        <span key={k} className="inline-flex items-center border border-blue-200 rounded overflow-hidden text-[6pt]" style={{ whiteSpace: 'nowrap' }}>
-          <span className="px-[1.5mm] py-[0.3mm] font-medium" style={{ backgroundColor: '#DBEAFE', color: '#475569' }}>{k}</span>
-          <span className="px-[1.5mm] py-[0.3mm]" style={{ backgroundColor: '#FFFFFF', color: '#0F172A' }}>{v}</span>
-        </span>
+        <Badge
+          key={k}
+          variant="label"
+          size="xs"
+          shape="rounded"
+          label={k}
+          value={String(v)}
+          color="bg-blue-50"
+          textColor="text-slate-600"
+          className="bg-white"
+        />
       ))}
     </span>
   );
@@ -83,9 +93,7 @@ function SeverityBadge({ severity }: { severity: string }) {
   const color = SEVERITY_COLORS[key] ?? '#6B7280';
   const bg = SEVERITY_BG[key] ?? '#F3F4F6';
   return (
-    <span style={{ color, backgroundColor: bg }} className="px-[1.5mm] py-[0.3mm] rounded text-[7pt] font-medium">
-      {severity}
-    </span>
+    <Badge variant="custom" size="xs" shape="rounded" label={severity} color={bg} textColor={color} borderColor={bg} />
   );
 }
 
@@ -96,8 +104,8 @@ function ViewSection({ section }: { section: ApplicationSection }) {
   const visibleCols = view.columns.filter((c) => !c.hidden);
   const headers = visibleCols.map((c) => c.name.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()));
 
-  const refreshClass = view.refreshStatus
-    ? (REFRESH_CLASSES[view.refreshStatus] ?? 'bg-red-100 text-red-800')
+  const refreshStyle = view.refreshStatus
+    ? (REFRESH_STYLES[view.refreshStatus] ?? { color: 'bg-red-100', textColor: 'text-red-800', borderColor: 'border-red-200' })
     : null;
 
   const rows = view.rows.map((row) => {
@@ -114,9 +122,16 @@ function ViewSection({ section }: { section: ApplicationSection }) {
     <div>
       <div className="flex items-center mb-[2mm]">
         {view.refreshStatus && (
-          <span className={`text-[7pt] px-[1.5mm] py-[0.5mm] rounded font-medium ${refreshClass}`}>
-            {view.refreshStatus}
-          </span>
+          <Badge
+            variant="custom"
+            size="xs"
+            shape="rounded"
+            label={view.refreshStatus}
+            color={refreshStyle?.color}
+            textColor={refreshStyle?.textColor}
+            borderColor={refreshStyle?.borderColor}
+            className="font-medium"
+          />
         )}
         {view.lastRefreshedAt && (
           <span className="text-[8pt] text-gray-400 ml-[2mm]">
@@ -130,14 +145,17 @@ function ViewSection({ section }: { section: ApplicationSection }) {
 }
 
 function ChangesSection({ section }: { section: ApplicationSection }) {
-  const rows = (section.changes ?? []).map((c) => [
-    formatRelative(c.date),
-    c.changeType ?? '-',
-    <SeverityBadge severity={c.status} />,
-    c.createdBy || c.source || '-',
-    c.description,
-  ]);
-  return <CompactTable variant="reference" columns={['Age', 'Type', 'Severity', 'Source', 'Description']} data={rows} />;
+  const changes = section.changes ?? [];
+  if (!changes.length) return null;
+
+  const configChanges = changes.map((c) => applicationChangeToConfigChange(c));
+  return (
+    <ConfigChangesSection
+      changes={configChanges}
+      extensions={defaultConfigChangesExtensions}
+      hideConfigName
+    />
+  );
 }
 
 function ConfigsSection({ section }: { section: ApplicationSection }) {
@@ -152,11 +170,27 @@ function ConfigsSection({ section }: { section: ApplicationSection }) {
 }
 
 export default function DynamicSection({ section }: Props) {
+  if (section.type === 'changes' && !(section.changes ?? []).length) {
+    return null;
+  }
+
+  let content: React.ReactNode = null;
+
+  if (section.type === 'view') {
+    content = <ViewSection section={section} />;
+  } else if (section.type === 'changes') {
+    content = <ChangesSection section={section} />;
+  } else if (section.type === 'configs') {
+    content = <ConfigsSection section={section} />;
+  }
+
+  if (!content) {
+    return null;
+  }
+
   return (
     <Section variant="hero" title={section.title} size="md">
-      {section.type === 'view' && <ViewSection section={section} />}
-      {section.type === 'changes' && <ChangesSection section={section} />}
-      {section.type === 'configs' && <ConfigsSection section={section} />}
+      {content}
     </Section>
   );
 }
