@@ -37,7 +37,7 @@ func searchCatalogAccessMappingHandler(goctx gocontext.Context, req mcp.CallTool
 
 	var rows []db.RBACAccessRow
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
-		rows, err = db.GetRBACAccess(rlsCtx, []types.ResourceSelector{{Search: q}})
+		rows, err = db.GetRBACAccess(rlsCtx, []types.ResourceSelector{{Search: q}}, false)
 		return err
 	})
 	if err != nil {
