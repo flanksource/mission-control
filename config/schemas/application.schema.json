@@ -3,6 +3,48 @@
   "$id": "https://github.com/flanksource/incident-commander/api/v1/application",
   "$ref": "#/$defs/Application",
   "$defs": {
+    "AccessLogsUIFilters": {
+      "properties": {
+        "search": {
+          "type": "string"
+        },
+        "configTypes": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "mfa": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AccessUIFilters": {
+      "properties": {
+        "search": {
+          "type": "string"
+        },
+        "configTypes": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "userType": {
+          "type": "string"
+        },
+        "stale": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "Application": {
       "properties": {
         "kind": {
@@ -582,6 +624,12 @@
         },
         "configs": {
           "$ref": "#/$defs/ConfigsUIFilters"
+        },
+        "access": {
+          "$ref": "#/$defs/AccessUIFilters"
+        },
+        "accessLogs": {
+          "$ref": "#/$defs/AccessLogsUIFilters"
         }
       },
       "additionalProperties": false,
