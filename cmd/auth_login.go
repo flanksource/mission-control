@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -25,42 +26,49 @@ var authLoginCmd = &cobra.Command{
 	RunE:  runAuthLogin,
 }
 
-var (
-	loginServer     string
-	loginPrintToken bool
-)
+var loginServer string
 
 func init() {
 	authLoginCmd.Flags().StringVar(&loginServer, "server", "", "Mission Control server URL (required)")
-	authLoginCmd.Flags().BoolVar(&loginPrintToken, "print-token", false, "Print access and refresh tokens to stdout")
 	_ = authLoginCmd.MarkFlagRequired("server")
 	Auth.AddCommand(authLoginCmd)
 }
 
 func runAuthLogin(cmd *cobra.Command, _ []string) error {
 	serverURL := strings.TrimRight(loginServer, "/")
+	tokens, tokenPath, err := performOIDCLogin(cmd, serverURL, cmd.OutOrStdout())
+	if err != nil {
+		return err
+	}
 
+	fmt.Fprintf(cmd.OutOrStdout(), "\nLogin successful!\n\n")
+	fmt.Fprintf(cmd.OutOrStdout(), "Tokens saved to: %s\n", tokenPath)
+	fmt.Fprintf(cmd.OutOrStdout(), "Access token expires: %s\n", tokens.ExpiresAt.Format(time.RFC3339))
+
+	return nil
+}
+
+var oidcLogin = performOIDCLogin
+
+func performOIDCLogin(cmd *cobra.Command, serverURL string, status io.Writer) (*oidcclient.Tokens, string, error) {
+	if status == nil {
+		status = io.Discard
+	}
 	endpoints, err := oidcclient.Discover(serverURL + "/.well-known/openid-configuration")
 	if err != nil {
-		return fmt.Errorf("OIDC discovery failed: %w", err)
+		return nil, "", fmt.Errorf("OIDC discovery failed: %w", err)
 	}
 
 	verifier, challenge, err := oidcclient.GeneratePKCE()
 	if err != nil {
-		return fmt.Errorf("PKCE generation failed: %w", err)
+		return nil, "", fmt.Errorf("PKCE generation failed: %w", err)
 	}
-	state, err := oidcclient.RandomBase64(16)
-	if err != nil {
-		return fmt.Errorf("state generation failed: %w", err)
-	}
-	nonce, err := oidcclient.RandomBase64(16)
-	if err != nil {
-		return fmt.Errorf("nonce generation failed: %w", err)
-	}
+	state := oidcclient.RandomBase64(16)
+	nonce := oidcclient.RandomBase64(16)
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return fmt.Errorf("failed to start local server: %w", err)
+		return nil, "", fmt.Errorf("failed to start local server: %w", err)
 	}
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", listener.Addr().(*net.TCPAddr).Port)
 
@@ -114,85 +122,44 @@ func runAuthLogin(cmd *cobra.Command, _ []string) error {
 		url.QueryEscape(challenge),
 	)
 
-	fmt.Fprintf(cmd.OutOrStdout(), "Opening browser for login...\n%s\n\n", authURL)
-	openBrowser(authURL)
+	fmt.Fprintf(status, "Opening browser for login...\n%s\n\n", authURL)
+	if err := openBrowser(authURL); err != nil {
+		fmt.Fprintf(status, "Failed to open browser: %v\nOpen the URL manually.\n\n", err)
+	}
 
 	var code string
 	select {
 	case code = <-codeCh:
 	case err = <-errCh:
-		return err
+		return nil, "", err
 	case <-time.After(5 * time.Minute):
-		return fmt.Errorf("login timed out")
+		return nil, "", fmt.Errorf("login timed out")
 	}
 
 	tokens, err := oidcclient.ExchangeCode(endpoints.TokenEndpoint, code, redirectURI, verifier)
 	if err != nil {
-		return fmt.Errorf("token exchange failed: %w", err)
+		return nil, "", fmt.Errorf("token exchange failed: %w", err)
 	}
 
 	if err := oidcclient.ValidateNonce(tokens.IDToken, nonce); err != nil {
-		return fmt.Errorf("nonce validation failed: %w", err)
+		return nil, "", fmt.Errorf("nonce validation failed: %w", err)
 	}
 
 	tokenPath, err := storeTokens(serverURL, tokens)
 	if err != nil {
-		return fmt.Errorf("failed to save tokens: %w", err)
+		return nil, "", fmt.Errorf("failed to save tokens: %w", err)
 	}
-
-	if err := saveContextFromLogin(serverURL, tokens.AccessToken); err != nil {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to save context: %v\n", err)
-	}
-
-	fmt.Fprintf(cmd.OutOrStdout(), "\nLogin successful!\n\n")
-	fmt.Fprintf(cmd.OutOrStdout(), "Tokens saved to: %s\n\n", tokenPath)
-
-	if loginPrintToken {
-		fmt.Fprintf(cmd.OutOrStdout(), "Access token (expires %s):\n%s\n\n", tokens.ExpiresAt.Format("15:04:05"), tokens.AccessToken)
-		fmt.Fprintf(cmd.OutOrStdout(), "Refresh token:\n%s\n\n", tokens.RefreshToken)
-		fmt.Fprintf(cmd.OutOrStdout(), "curl -H 'Authorization: Bearer %s' %s/whoami\n\n", tokens.AccessToken, serverURL)
-	} else {
-		fmt.Fprintf(cmd.OutOrStdout(), "Use --print-token to print tokens to stdout.\n")
-		fmt.Fprintf(cmd.OutOrStdout(), "curl -H 'Authorization: Bearer <ACCESS_TOKEN>' %s/whoami\n\n", serverURL)
-	}
-
-	return nil
-}
-
-func saveContextFromLogin(serverURL, accessToken string) error {
-	cfg, err := LoadConfig()
-	if err != nil {
-		return err
-	}
-	name := ServerToContextName(serverURL)
-	existing := cfg.GetContext(name)
-	ctx := MCContext{
-		Name:   name,
-		Server: serverURL,
-		Token:  accessToken,
-	}
-	if existing != nil {
-		ctx.DB = existing.DB
-		ctx.Properties = existing.Properties
-	}
-	cfg.SetContext(ctx)
-	cfg.CurrentContext = name
-	return SaveConfig(cfg)
+	return tokens, tokenPath, nil
 }
 
 func storeTokens(serverURL string, tokens *oidcclient.Tokens) (string, error) {
-	dir, err := os.UserConfigDir()
+	path, err := tokenPath(serverURL)
 	if err != nil {
 		return "", err
 	}
-	dir = filepath.Join(dir, "mission-control")
-	if err := os.MkdirAll(dir, 0700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return "", err
 	}
-
-	host := strings.NewReplacer("://", "_", "/", "_", ":", "_").Replace(serverURL)
-	path := filepath.Join(dir, fmt.Sprintf("tokens_%s.json", host))
-
 	data, err := json.MarshalIndent(tokens, "", "  ")
 	if err != nil {
 		return "", err
@@ -200,19 +167,38 @@ func storeTokens(serverURL string, tokens *oidcclient.Tokens) (string, error) {
 	return path, os.WriteFile(path, data, 0600)
 }
 
-func openBrowser(url string) {
-	var cmd string
-	var args []string
+func tokenPath(serverURL string) (string, error) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", err
+	}
+	host := strings.NewReplacer("://", "_", "/", "_", ":", "_").Replace(serverURL)
+	return filepath.Join(dir, "mission-control", fmt.Sprintf("tokens_%s.json", host)), nil
+}
+
+func loadStoredTokens(serverURL string) (*oidcclient.Tokens, error) {
+	path, err := tokenPath(serverURL)
+	if err != nil {
+		return nil, err
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var tokens oidcclient.Tokens
+	if err := json.Unmarshal(data, &tokens); err != nil {
+		return nil, err
+	}
+	return &tokens, nil
+}
+
+func openBrowser(url string) error {
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = "open"
-		args = []string{url}
+		return exec.Command("open", url).Start()
 	case "windows":
-		cmd = "cmd"
-		args = []string{"/c", "start", url}
+		return exec.Command("cmd", "/c", "start", "", url).Start()
 	default:
-		cmd = "xdg-open"
-		args = []string{url}
+		return exec.Command("xdg-open", url).Start()
 	}
-	_ = exec.Command(cmd, args...).Start()
 }
