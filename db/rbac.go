@@ -5,26 +5,32 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/context"
+	dutyQuery "github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
+	"github.com/lib/pq"
 
 	"github.com/flanksource/incident-commander/api"
 )
 
 type RBACAccessRow struct {
-	ConfigID       uuid.UUID  `gorm:"column:config_id"`
-	ConfigName     string     `gorm:"column:config_name"`
-	ConfigType     string     `gorm:"column:config_type"`
-	UserID         uuid.UUID  `gorm:"column:external_user_id"`
-	UserName       string     `gorm:"column:user"`
-	Email          string     `gorm:"column:email"`
-	Role           string     `gorm:"column:role"`
-	UserType       string     `gorm:"column:user_type"`
-	GroupName      *string    `gorm:"column:group_name"`
-	CreatedAt      time.Time  `gorm:"column:created_at"`
-	LastSignedInAt *time.Time `gorm:"column:last_signed_in_at"`
-	LastReviewedAt *time.Time `gorm:"column:last_reviewed_at"`
+	ConfigID        uuid.UUID      `gorm:"column:config_id"`
+	ConfigName      string         `gorm:"column:config_name"`
+	ConfigType      string         `gorm:"column:config_type"`
+	UserID          uuid.UUID      `gorm:"column:external_user_id"`
+	UserName        string         `gorm:"column:user"`
+	Email           string         `gorm:"column:email"`
+	Role            string         `gorm:"column:role"`
+	RoleExternalIDs pq.StringArray `gorm:"column:role_external_ids;type:[]text"`
+	UserType        string         `gorm:"column:user_type"`
+	GroupName       *string        `gorm:"column:group_name"`
+	CreatedAt       time.Time      `gorm:"column:created_at"`
+	LastSignedInAt  *time.Time     `gorm:"column:last_signed_in_at"`
+	LastReviewedAt  *time.Time     `gorm:"column:last_reviewed_at"`
+}
+
+func (r RBACAccessRow) QueryLogSummary() string {
+	return r.ConfigType
 }
 
 func (r RBACAccessRow) RoleSource() string {
@@ -34,8 +40,15 @@ func (r RBACAccessRow) RoleSource() string {
 	return "direct"
 }
 
-func GetRBACAccess(ctx context.Context, selectors []types.ResourceSelector) ([]RBACAccessRow, error) {
-	query := ctx.DB().
+func GetRBACAccessByConfigIDs(ctx context.Context, configIDs []uuid.UUID) ([]RBACAccessRow, error) {
+	return GetRBACAccess(ctx, nil, false, configIDs...)
+}
+
+func GetRBACAccess(ctx context.Context, selectors []types.ResourceSelector, recursive bool, configIDs ...uuid.UUID) (results []RBACAccessRow, err error) {
+	timer := dutyQuery.NewQueryLogger(ctx).Start("RBACAccess").Arg("configIDs", len(configIDs)).Arg("selectors", len(selectors))
+	defer timer.End(&err)
+
+	q := ctx.DB().
 		Table("config_access_summary").
 		Select(`config_access_summary.config_id,
 			config_access_summary.config_name,
@@ -44,6 +57,7 @@ func GetRBACAccess(ctx context.Context, selectors []types.ResourceSelector) ([]R
 			config_access_summary."user",
 			config_access_summary.email,
 			config_access_summary.role,
+			config_access_summary.role_external_ids,
 			config_access_summary.user_type,
 			external_groups.name AS group_name,
 			config_access_summary.created_at,
@@ -51,40 +65,108 @@ func GetRBACAccess(ctx context.Context, selectors []types.ResourceSelector) ([]R
 			config_access_summary.last_reviewed_at`).
 		Joins("LEFT JOIN external_groups ON config_access_summary.external_group_id = external_groups.id")
 
-	query = applyAccessSelectors(query, selectors)
+	if len(selectors) > 0 {
+		resolved, err := dutyQuery.FindConfigIDsByResourceSelector(ctx, 0, selectors...)
+		if err != nil {
+			return nil, ctx.Oops().Wrapf(err, "failed to resolve config selectors")
+		}
+		if len(resolved) == 0 {
+			return nil, nil
+		}
+		if recursive {
+			resolved, err = ExpandConfigChildren(ctx, resolved)
+			if err != nil {
+				return nil, ctx.Oops().Wrapf(err, "failed to expand children")
+			}
+		}
+		configIDs = append(configIDs, resolved...)
+	}
 
-	var rows []RBACAccessRow
-	if err := query.
+	if len(configIDs) > 0 {
+		q = q.Where("config_access_summary.config_id IN (?)", configIDs)
+	}
+
+	if err = q.
 		Order("config_access_summary.config_name, config_access_summary.\"user\"").
-		Find(&rows).Error; err != nil {
+		Find(&results).Error; err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to query RBAC access")
 	}
-
-	return rows, nil
+	timer.Results(results)
+	return results, nil
 }
 
-func applyAccessSelectors(query *gorm.DB, selectors []types.ResourceSelector) *gorm.DB {
-	if len(selectors) == 0 {
-		return query
+func ExpandConfigChildren(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error) {
+	return dutyQuery.ExpandConfigChildren(ctx, ids)
+}
+
+// GroupMemberRow represents one (group, user) pair — the membership of an
+// external user in an external group. Used by the catalog report audit page
+// to enumerate who is in each group that grants access to reported configs.
+type GroupMemberRow struct {
+	GroupID             uuid.UUID  `gorm:"column:external_group_id"`
+	GroupName           string     `gorm:"column:group_name"`
+	GroupType           string     `gorm:"column:group_type"`
+	UserID              uuid.UUID  `gorm:"column:external_user_id"`
+	UserName            string     `gorm:"column:user_name"`
+	Email               string     `gorm:"column:email"`
+	UserType            string     `gorm:"column:user_type"`
+	LastSignedInAt      *time.Time `gorm:"column:last_signed_in_at"`
+	MembershipAddedAt   time.Time  `gorm:"column:membership_created_at"`
+	MembershipDeletedAt *time.Time `gorm:"column:membership_deleted_at"`
+}
+
+func (r GroupMemberRow) QueryLogSummary() string {
+	return r.GroupName
+}
+
+// GetGroupMembersForConfigs returns the members of every external group that
+// is referenced by an active config_access row on any of the given configs.
+// Both active and soft-deleted group memberships are returned so that audit
+// reviewers can see users who were recently removed from a group.
+func GetGroupMembersForConfigs(ctx context.Context, configIDs []uuid.UUID) (results []GroupMemberRow, err error) {
+	timer := dutyQuery.NewQueryLogger(ctx).Start("GroupMembers").Arg("configIDs", len(configIDs))
+	defer timer.End(&err)
+
+	if len(configIDs) == 0 {
+		return nil, nil
 	}
 
-	for _, s := range selectors {
-		if s.ID != "" {
-			query = query.Where("config_access_summary.config_id = ?", s.ID)
-		}
-		if len(s.Types) > 0 {
-			query = query.Where("config_access_summary.config_type IN (?)", s.Types)
-		}
-		if s.Name != "" {
-			query = query.Where("config_access_summary.config_name ILIKE ?", s.Name)
-		}
-		if s.Search != "" {
-			pattern := "%" + s.Search + "%"
-			query = query.Where("(config_access_summary.config_name ILIKE ? OR config_access_summary.config_type ILIKE ?)", pattern, pattern)
-		}
-	}
+	sql := `
+		SELECT
+			eg.id AS external_group_id,
+			eg.name AS group_name,
+			eg.group_type AS group_type,
+			eu.id AS external_user_id,
+			eu.name AS user_name,
+			COALESCE(eu.email, '') AS email,
+			eu.user_type AS user_type,
+			last_sign_in.last_signed_in_at AS last_signed_in_at,
+			eug.created_at AS membership_created_at,
+			eug.deleted_at AS membership_deleted_at
+		FROM external_user_groups eug
+		JOIN external_groups eg ON eug.external_group_id = eg.id
+		JOIN external_users eu ON eug.external_user_id = eu.id
+		LEFT JOIN (
+			SELECT external_user_id, MAX(created_at) AS last_signed_in_at
+			FROM config_access_logs
+			GROUP BY external_user_id
+		) last_sign_in ON last_sign_in.external_user_id = eu.id
+		WHERE eug.external_group_id IN (
+			SELECT DISTINCT external_group_id
+			FROM config_access
+			WHERE config_id IN (?)
+				AND external_group_id IS NOT NULL
+				AND deleted_at IS NULL
+		)
+		ORDER BY eg.name ASC,
+			(eug.deleted_at IS NOT NULL) ASC,
+			eu.name ASC`
 
-	return query
+	if err = ctx.DB().Raw(sql, configIDs).Scan(&results).Error; err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to query group members for configs")
+	}
+	timer.Results(results)
+	return results, nil
 }
 
 func GetRBACChangelog(ctx context.Context, configIDs []uuid.UUID, since time.Time) ([]api.RBACChangeEntry, error) {
