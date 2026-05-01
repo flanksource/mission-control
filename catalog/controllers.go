@@ -29,6 +29,8 @@ func RegisterRoutes(e *echo.Echo) {
 	apiGroup.POST("/changes", SearchCatalogChanges, echoSrv.RLSMiddleware)
 	// Deprecated. Use POST
 	apiGroup.GET("/changes", SearchCatalogChanges, echoSrv.RLSMiddleware)
+	apiGroup.POST("/report/preview", PreviewCatalogReport, echoSrv.RLSMiddleware)
+	apiGroup.POST("/report", GenerateCatalogReport, echoSrv.RLSMiddleware)
 	apiGroup.GET("/:id/relationships", GetConfigRelationships, echoSrv.RLSMiddleware)
 
 	deleteGroup := e.Group("/catalog", rbac.Catalog(policy.ActionDelete))
