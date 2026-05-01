@@ -448,6 +448,32 @@ spec:
                       description: UIRef references a native Flanksource UI component
                         (changes or configs)
                       properties:
+                        access:
+                          properties:
+                            configTypes:
+                              type: string
+                            role:
+                              type: string
+                            search:
+                              type: string
+                            stale:
+                              type: string
+                            userType:
+                              type: string
+                          type: object
+                        accessLogs:
+                          properties:
+                            configTypes:
+                              type: string
+                            from:
+                              type: string
+                            mfa:
+                              type: string
+                            search:
+                              type: string
+                            to:
+                              type: string
+                          type: object
                         changes:
                           description: |-
                             ChangesUIFilters defines filters for the native Changes UI component.
