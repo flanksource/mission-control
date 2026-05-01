@@ -50,7 +50,7 @@ require (
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6
 	github.com/emersion/go-smtp v0.24.0
 	github.com/flanksource/artifacts v1.0.24
-	github.com/flanksource/clicky v1.21.4
+	github.com/flanksource/clicky v1.21.8
 	github.com/flanksource/commons-test v0.1.13
 	github.com/fluxcd/pkg/gittestserver v0.26.0
 	github.com/glebarez/sqlite v1.11.0
