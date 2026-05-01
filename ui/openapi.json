@@ -1,0 +1,83 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Mission Control",
+    "version": "0.1.0",
+    "description": "Runtime API surface consumed by the embedded catalog explorer at /ui."
+  },
+  "x-clicky": {
+    "surfaces": [
+      {
+        "key": "catalog",
+        "title": "Catalog",
+        "description": "Search and inspect configuration items."
+      }
+    ]
+  },
+  "paths": {
+    "/resources/search": {
+      "post": {
+        "operationId": "searchResources",
+        "summary": "Search resources",
+        "description": "Query the catalog for configs, components, checks, canaries, changes, playbooks, and connections matching the supplied resource selectors.",
+        "x-clicky": { "surface": "catalog", "kind": "list" },
+        "parameters": [
+          {
+            "name": "config_type",
+            "in": "query",
+            "description": "Filter to a single config_type (convenience wrapper around configs[].types).",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Max rows to return (default 100).",
+            "schema": { "type": "integer", "default": 100 }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "type": "object" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": { "schema": { "type": "object" } },
+              "application/json+clicky": { "schema": { "type": "object" } }
+            }
+          }
+        }
+      }
+    },
+    "/resources/{id}": {
+      "get": {
+        "operationId": "getResource",
+        "summary": "Get a resource by ID",
+        "description": "Fetch a single catalog item by its UUID.",
+        "x-clicky": { "surface": "catalog", "kind": "detail" },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Resource detail",
+            "content": {
+              "application/json": { "schema": { "type": "object" } },
+              "application/json+clicky": { "schema": { "type": "object" } }
+            }
+          },
+          "404": { "description": "Not found" }
+        }
+      }
+    }
+  }
+}
