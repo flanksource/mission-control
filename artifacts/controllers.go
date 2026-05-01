@@ -6,10 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flanksource/artifacts"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/api"
-	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -17,7 +15,6 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/flanksource/duty/rbac/policy"
-	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
 )
@@ -32,6 +29,7 @@ func RegisterRoutes(e *echo.Echo) {
 	g := e.Group(fmt.Sprintf("/%s", "artifacts"), rbac.Authorization(policy.ObjectArtifact, policy.ActionRead))
 	g.GET("/list/check/:id/:check_time", ListArtifacts)
 	g.GET("/list/playbook_run/:id", ListArtifacts)
+	g.GET("/list/config_change/:id", ListArtifacts)
 	g.GET("/download/:id", DownloadArtifact)
 
 }
@@ -45,19 +43,24 @@ func ListArtifacts(c echo.Context) error {
 		return api.WriteError(c, api.Errorf(api.EINVALID, "invalid id(%s). must be a uuid. %v", _id, err))
 	}
 
-	_checkTime := c.Param("check_time")
-	checkTime, err := time.Parse(time.RFC3339, _checkTime)
-	if err != nil {
-		return api.WriteError(c, api.Errorf(api.EINVALID, "invalid check_time(%s). must be in RFC3339", _checkTime))
-	}
-
 	var artifacts []models.Artifact
-	if strings.Contains(c.Path(), "/list/check/") {
+	switch {
+	case strings.Contains(c.Path(), "/list/check/"):
+		_checkTime := c.Param("check_time")
+		checkTime, err := time.Parse(time.RFC3339, _checkTime)
+		if err != nil {
+			return api.WriteError(c, api.Errorf(api.EINVALID, "invalid check_time(%s). must be in RFC3339", _checkTime))
+		}
 		artifacts, err = query.ArtifactsByCheck(ctx, id, checkTime)
 		if err != nil {
 			return api.WriteError(c, err)
 		}
-	} else {
+	case strings.Contains(c.Path(), "/list/config_change/"):
+		artifacts, err = query.ArtifactsByConfigChange(ctx, id)
+		if err != nil {
+			return api.WriteError(c, err)
+		}
+	default:
 		artifacts, err = query.ArtifactsByPlaybookRun(ctx, id)
 		if err != nil {
 			return api.WriteError(c, err)
@@ -70,38 +73,29 @@ func ListArtifacts(c echo.Context) error {
 func DownloadArtifact(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
-	_id := c.Param("id")
-	artifactID, err := uuid.Parse(_id)
+	artifactID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		return api.WriteError(c, api.Errorf(api.EINVALID, "invalid id(%s). must be a uuid. %v", _id, err))
+		return api.WriteError(c, api.Errorf(api.EINVALID, "invalid id: %v", err))
 	}
 
-	artifact, err := db.FindArtifact(ctx, artifactID)
-	if err != nil {
-		return api.WriteError(c, err)
-	} else if artifact == nil {
-		return api.WriteError(c, api.Errorf(api.ENOTFOUND, "artifact(%s) was not found", artifactID))
-	}
-
-	conn, err := pkgConnection.Get(ctx, artifact.ConnectionID.String())
-	if err != nil {
-		return api.WriteError(c, err)
-	} else if conn == nil {
-		return api.WriteError(c, api.Errorf(api.ENOTFOUND, "artifact's connection was not found"))
-	}
-
-	// TODO: Pool connection to the underlying filesystem
-	fs, err := artifacts.GetFSForConnection(ctx, *conn)
+	blobs, err := ctx.Blobs()
 	if err != nil {
 		return api.WriteError(c, err)
 	}
-	defer fs.Close()
+	defer blobs.Close()
 
-	file, err := fs.Read(ctx, artifact.Path)
+	data, err := blobs.Read(artifactID)
 	if err != nil {
 		return api.WriteError(c, err)
 	}
-	defer file.Close()
+	defer data.Content.Close()
 
-	return c.Stream(http.StatusOK, artifact.ContentType, file)
+	c.Response().Header().Set("Content-Type", data.ContentType)
+	if data.ContentLength > 0 {
+		c.Response().Header().Set("Content-Length", fmt.Sprintf("%d", data.ContentLength))
+	}
+	if filename := c.QueryParam("filename"); filename != "" {
+		c.Response().Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+	}
+	return c.Stream(http.StatusOK, data.ContentType, data.Content)
 }

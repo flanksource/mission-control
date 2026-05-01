@@ -43,6 +43,7 @@ import (
 	"github.com/flanksource/incident-commander/logs"
 	mcMiddleware "github.com/flanksource/incident-commander/middleware"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/ui"
 	"github.com/flanksource/incident-commander/utils"
 )
 
@@ -60,6 +61,11 @@ var (
 		".png",
 	}
 	AllowedCORS []string
+
+	// UIEnabled, when true, mounts the catalog explorer UI at /ui/*.
+	UIEnabled bool
+	// UIDevProxyTarget, when set, proxies /ui/* to a local Vite dev server.
+	UIDevProxyTarget string
 )
 
 var otelShutdown func(gocontext.Context) error
@@ -142,6 +148,7 @@ func New(ctx context.Context) *echov4.Echo {
 
 	e.GET("/properties", dutyEcho.Properties)
 	e.POST("/resources/search", SearchResources, rbac.Authorization(policy.ObjectCatalog, policy.ActionRead), RLSMiddleware)
+	e.GET("/resources/:id", GetResource, rbac.Authorization(policy.ObjectCatalog, policy.ActionRead), RLSMiddleware)
 
 	e.GET("/metrics", echoprometheus.NewHandlerWithConfig(echoprometheus.HandlerConfig{
 		Gatherer: prom.DefaultGatherer,
@@ -199,6 +206,12 @@ func New(ctx context.Context) *echov4.Echo {
 		logger.Fatalf("Error creating schema fileserver: %v", err)
 	}
 	e.GET("/schemas/*", echov4.WrapHandler(http.StripPrefix("/schemas/", schemaServer)))
+
+	if UIEnabled {
+		ui.RegisterRoutes(e, ui.Options{
+			DevProxyTarget: UIDevProxyTarget,
+		})
+	}
 
 	ctx.Infof("Registering %d handlers", len(handlers))
 	for _, fn := range handlers {
@@ -370,7 +383,9 @@ func proxyMiddleware(e *echov4.Echo, prefix, target string, opts *ForwardOptions
 // ServerCache middleware adds a `Cache Control` header to the response.
 func ServerCache(next echov4.HandlerFunc) echov4.HandlerFunc {
 	return func(c echov4.Context) error {
-		if suffixesInItem(c.Request().RequestURI, cacheSuffixes) {
+		if UIDevProxyTarget != "" && strings.HasPrefix(c.Request().URL.Path, "/ui") {
+			c.Response().Header().Set(HeaderCacheControl, "no-store")
+		} else if suffixesInItem(c.Request().RequestURI, cacheSuffixes) {
 			c.Response().Header().Set(HeaderCacheControl, CacheControlValue)
 		}
 		return next(c)

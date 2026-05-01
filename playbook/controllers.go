@@ -50,6 +50,7 @@ func RegisterRoutes(e *echo.Echo) {
 
 	runGroup := playbookGroup.Group("/run")
 	runGroup.POST("", HandlePlaybookRun)
+	runGroup.GET("/:id/status", HandleGetPlaybookRunStatus, rbac.Playbook(policy.ActionRead))
 	runGroup.GET("/:id", HandleGetPlaybookRun, rbac.Playbook(policy.ActionRead))
 	runGroup.POST("/approve/:run_id", HandlePlaybookRunApproval)
 	runGroup.POST("/cancel/:run_id", HandlePlaybookRunCancel, rbac.Playbook(policy.ActionUpdate))
@@ -183,6 +184,23 @@ func HandleGetPlaybookRun(c echo.Context) error {
 	return c.JSON(http.StatusOK, run)
 }
 
+func HandleGetPlaybookRunStatus(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+	id := c.Param("id")
+
+	runID, err := uuid.Parse(id)
+	if err != nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid run id: %v", err))
+	}
+
+	summary, err := GetPlaybookStatus(ctx, runID)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	}
+
+	return c.JSON(http.StatusOK, summary)
+}
+
 // Takes config id or component id as a query param
 // and returns all the available playbook that supports
 // the given component or config.
@@ -194,9 +212,8 @@ func HandlePlaybookList(c echo.Context) error {
 		checkID     = c.QueryParam("check_id")
 		componentID = c.QueryParam("component_id")
 	)
-
-	if configID == "" && componentID == "" && checkID == "" {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "provide exactly one of: config_id, check_id or component_id"))
+	if targetCount(configID, componentID, checkID) > 1 {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "provide at most one of: config_id, check_id or component_id"))
 	}
 
 	var playbooks []api.PlaybookListItem
@@ -216,9 +233,24 @@ func HandlePlaybookList(c echo.Context) error {
 		if err != nil {
 			return dutyAPI.WriteError(c, err)
 		}
+	} else {
+		playbooks, err = db.ListPlaybooks(ctx)
+		if err != nil {
+			return dutyAPI.WriteError(c, err)
+		}
 	}
 
 	return c.JSON(http.StatusOK, playbooks)
+}
+
+func targetCount(values ...string) int {
+	count := 0
+	for _, value := range values {
+		if value != "" {
+			count++
+		}
+	}
+	return count
 }
 
 func HandlePlaybookRunCancel(c echo.Context) error {
