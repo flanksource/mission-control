@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Badge,
@@ -126,6 +126,10 @@ export function PlaybookBrowser({ mode, runId }: PlaybookBrowserProps) {
     return <PlaybookRunsPage />;
   }
   return <PlaybooksListPage />;
+}
+
+export function stepOutputMaxHeight(stepCount: number): CSSProperties {
+  return { maxHeight: `min(20vh, calc((100vh - 200px) / ${Math.max(1, stepCount)}))` };
 }
 
 export function ConfigPlaybooksTab({ config }: { config: ConfigItem }) {
@@ -768,16 +772,19 @@ function RunStepRibbon({ actions }: { actions: PlaybookRunAction[] }) {
     <div className="min-w-0 overflow-x-auto pb-1">
       <div className="flex min-w-max items-center">
         {actions.map((action, index) => {
-          const visual = statusVisual(action.status);
+          const status = actionDisplayStatus(action);
+          const visual = statusVisual(status);
           return (
             <div key={action.id} className="flex items-center">
               <div className="flex min-w-[12rem] items-center gap-3">
-                <StepCircle status={action.status} index={index} />
+                <StepCircle status={status} index={index} />
                 <div className="min-w-0">
                   <div className="truncate text-sm font-semibold">{action.name}</div>
-                  <div className={["truncate text-xs font-bold uppercase tracking-widest", toneTextClass(visual.tone)].join(" ")}>
-                    {visual.label}
-                  </div>
+                  {status && (
+                    <div className={["truncate text-xs font-bold uppercase tracking-widest", toneTextClass(visual.tone)].join(" ")}>
+                      {visual.label}
+                    </div>
+                  )}
                 </div>
               </div>
               {index < actions.length - 1 && (
@@ -833,35 +840,69 @@ function ActionTimeline({ actions, actionDetailsError }: { actions: PlaybookRunA
       </div>
       <div className="relative">
         {actions.map((action, index) => (
-          <ActionTimelineItem key={action.id} action={action} index={index} last={index === actions.length - 1} actionDetailsError={actionDetailsError} />
+          <ActionTimelineItem
+            key={action.id}
+            action={action}
+            index={index}
+            last={index === actions.length - 1}
+            stepCount={actions.length}
+            actionDetailsError={actionDetailsError}
+          />
         ))}
       </div>
     </section>
   );
 }
 
-function ActionTimelineItem({ action, index, last, actionDetailsError }: { action: PlaybookRunAction; index: number; last: boolean; actionDetailsError?: string }) {
-  const visual = statusVisual(action.status);
+function ActionTimelineItem({
+  action,
+  index,
+  last,
+  stepCount,
+  actionDetailsError,
+}: {
+  action: PlaybookRunAction;
+  index: number;
+  last: boolean;
+  stepCount: number;
+  actionDetailsError?: string;
+}) {
+  const status = actionDisplayStatus(action);
+  const visual = statusVisual(status);
   const hasBody = Boolean(action.result || action.error || (action.artifacts?.length ?? 0) > 0);
   const hasDetailWarning = Boolean(actionDetailsError && action.status === "failed" && !hasBody);
-  const compact = !hasBody && !hasDetailWarning && action.status !== "running";
+  const compact = !hasBody && !hasDetailWarning && status !== "running";
   const progressText = actionProgressText(action);
   const progressPercent = actionProgressPercent(action);
-  const timeRange = actionTimeRange(action);
+  const startTime = actionStartTime(action);
   const duration = actionDuration(action);
 
   return (
     <article className={["relative grid min-w-0 grid-cols-[4.5rem_minmax(0,1fr)] gap-0 border-b border-border last:border-b-0", compact ? "py-4" : "py-5"].join(" ")}>
       {!last && <div className="absolute bottom-0 left-[2.18rem] top-10 w-px bg-border" />}
       <div className="z-[1] flex justify-center">
-        <StepCircle status={action.status} index={index} />
+        <StepCircle status={status} index={index} />
       </div>
       <div className="min-w-0 pr-4">
-        <div className="flex min-w-0 flex-wrap items-baseline gap-2">
-          <h3 className="truncate text-base font-semibold">{action.name}</h3>
-          <span className={["text-xs font-bold uppercase tracking-widest", toneTextClass(visual.tone)].join(" ")}>{visual.label}</span>
-          {timeRange !== "-" && <span className="font-mono text-sm text-muted-foreground">{timeRange}</span>}
-          {duration !== "-" && <span className="font-mono text-sm text-muted-foreground">· {duration}</span>}
+        <div className="flex min-w-0 flex-wrap items-baseline justify-between gap-2">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-2">
+            <h3 className="truncate text-base font-semibold">{action.name}</h3>
+            {status && (
+              <span className={["text-xs font-bold uppercase tracking-widest", toneTextClass(visual.tone)].join(" ")}>{visual.label}</span>
+            )}
+          </div>
+          {(startTime !== "-" || duration !== "-") && (
+            <div className="ml-auto flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
+              {startTime !== "-" && <span className="font-mono">{startTime}</span>}
+              {startTime !== "-" && duration !== "-" && <span>-</span>}
+              {duration !== "-" && (
+                <span className="inline-flex items-center gap-1 font-mono">
+                  <Icon name="lucide:clock" className="h-3.5 w-3.5" />
+                  {duration}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         {progressText && <div className="mt-2 text-sm font-medium text-muted-foreground">{progressText}</div>}
         {progressPercent !== null && (
@@ -872,15 +913,18 @@ function ActionTimelineItem({ action, index, last, actionDetailsError }: { actio
             <span className="font-mono text-xs text-muted-foreground">{progressPercent}%</span>
           </div>
         )}
-        {(hasBody || hasDetailWarning) && <RunStepOutput action={action} actionDetailsError={hasDetailWarning ? actionDetailsError : undefined} />}
+        {(hasBody || hasDetailWarning) && (
+          <RunStepOutput action={action} stepCount={stepCount} actionDetailsError={hasDetailWarning ? actionDetailsError : undefined} />
+        )}
       </div>
     </article>
   );
 }
 
-function RunStepOutput({ action, actionDetailsError }: { action: PlaybookRunAction; actionDetailsError?: string }) {
+function RunStepOutput({ action, stepCount, actionDetailsError }: { action: PlaybookRunAction; stepCount: number; actionDetailsError?: string }) {
   const output = primaryActionOutput(action);
   const diagnostics = errorDiagnosticsFromAction(action);
+  const maxHeight = stepOutputMaxHeight(stepCount);
   const [menuOpen, setMenuOpen] = useState(false);
   const [detailView, setDetailView] = useState<OutputDetailView | null>(null);
   return (
@@ -888,8 +932,8 @@ function RunStepOutput({ action, actionDetailsError }: { action: PlaybookRunActi
       {diagnostics && <ErrorDetails diagnostics={diagnostics} />}
       {output ? (
         <div className="relative">
-          <pre className="max-h-72 overflow-auto rounded-md bg-slate-950 p-4 pr-12 font-mono text-sm leading-6 text-slate-200 shadow-inner">{output}</pre>
-          <OutputOverflowButton
+          <OutputTextBlock output={output} style={maxHeight} />
+          <OutputToolbar
             action={action}
             output={output}
             open={menuOpen}
@@ -899,8 +943,10 @@ function RunStepOutput({ action, actionDetailsError }: { action: PlaybookRunActi
         </div>
       ) : action.result && !diagnostics ? (
         <div className="relative overflow-hidden rounded-md border border-border">
-          <JsonView data={action.result} defaultOpenDepth={1} />
-          <OutputOverflowButton
+          <div className="overflow-auto" style={maxHeight}>
+            <JsonView data={action.result} defaultOpenDepth={1} />
+          </div>
+          <OutputToolbar
             action={action}
             output={output}
             open={menuOpen}
@@ -925,9 +971,29 @@ function RunStepOutput({ action, actionDetailsError }: { action: PlaybookRunActi
   );
 }
 
-type OutputDetailView = "raw" | "fields";
+type OutputDetailView = "expanded" | "raw" | "fields";
 
-function OutputOverflowButton({
+function OutputTextBlock({ output, className = "", style }: { output: string; className?: string; style?: CSSProperties }) {
+  const mode = outputTextMode(output);
+  const table = mode === "table";
+  const segments = ansiSegments(output);
+  return (
+    <div className={["overflow-auto rounded-md bg-slate-950 shadow-inner", className].filter(Boolean).join(" ")} style={style}>
+      <pre
+        className={[
+          "p-4 pr-20 font-mono text-sm leading-6 text-slate-200",
+          table ? "min-w-max whitespace-pre" : "whitespace-pre-wrap break-words [overflow-wrap:anywhere]",
+        ].join(" ")}
+      >
+        {segments.map((segment, index) => (
+          <span key={index} style={segment.style}>{segment.text}</span>
+        ))}
+      </pre>
+    </div>
+  );
+}
+
+function OutputToolbar({
   action,
   output,
   open,
@@ -945,7 +1011,16 @@ function OutputOverflowButton({
   const hasResult = Boolean(action.result);
   const hasError = Boolean(action.error);
   return (
-    <div className="absolute right-2 top-2 z-10">
+    <div className="absolute right-2 top-2 z-10 flex items-center gap-1">
+      <button
+        type="button"
+        onClick={() => onDetailView("expanded")}
+        className="flex h-7 w-7 items-center justify-center rounded-md border border-white/10 bg-black/40 text-slate-300 backdrop-blur hover:bg-black/70 hover:text-white"
+        aria-label="Expand output"
+        title="Expand output"
+      >
+        <Icon name="lucide:expand" />
+      </button>
       <button
         type="button"
         onClick={() => onOpenChange(!open)}
@@ -1012,18 +1087,35 @@ function OutputDetailDialog({
   onClose: () => void;
 }) {
   const data = view === "raw" ? action.result : actionDetailData(action, output);
+  const title = view === "expanded" ? "Action output" : view === "raw" ? "Raw result" : "Action result fields";
   return (
     <Modal
       open
       onClose={onClose}
-      size="lg"
-      className="max-h-[88vh] overflow-hidden"
-      headerSlot={<span className="truncate text-sm font-semibold">{view === "raw" ? "Raw result" : "Action result fields"}</span>}
+      size={view === "expanded" ? "full" : "lg"}
+      className={view === "expanded" ? "h-[95vh] overflow-hidden" : "max-h-[88vh] overflow-hidden"}
+      headerSlot={<span className="min-w-0 flex-1 truncate text-sm font-semibold">{title}</span>}
     >
-      <div className="max-h-[72vh] overflow-auto rounded-md border border-border bg-background p-3">
-        {data ? <JsonView data={data} defaultOpenDepth={2} /> : <DetailEmptyState icon="lucide:file-question" label="No result" />}
-      </div>
+      {view === "expanded" ? (
+        <ExpandedOutputBody action={action} output={output} />
+      ) : (
+        <div className="max-h-[72vh] overflow-auto rounded-md border border-border bg-background p-3">
+          {data ? <JsonView data={data} defaultOpenDepth={2} /> : <DetailEmptyState icon="lucide:file-question" label="No result" />}
+        </div>
+      )}
     </Modal>
+  );
+}
+
+function ExpandedOutputBody({ action, output }: { action: PlaybookRunAction; output: string | null }) {
+  if (output) {
+    return <OutputTextBlock output={output} className="h-[calc(95vh-8rem)]" />;
+  }
+  const data = action.result ?? actionDetailData(action, output);
+  return (
+    <div className="h-[calc(95vh-8rem)] overflow-auto rounded-md border border-border bg-background p-3">
+      {data ? <JsonView data={data} defaultOpenDepth={2} /> : <DetailEmptyState icon="lucide:file-question" label="No result" />}
+    </div>
   );
 }
 
@@ -1037,6 +1129,10 @@ function actionDetailData(action: PlaybookRunAction, output: string | null) {
 }
 
 function ErrorDetails({ diagnostics }: { diagnostics: ErrorDiagnostics }) {
+  const scalarContext = diagnostics.context.filter(([, value]) => !parseInlineJsonContextValue(value));
+  const jsonContext = diagnostics.context
+    .map(([label, value]) => ({ label, value, data: parseInlineJsonContextValue(value) }))
+    .filter((entry): entry is { label: string; value: string; data: unknown } => entry.data !== null);
   return (
     <details className="group rounded-md border border-destructive/30 bg-destructive/5">
       <summary className="flex cursor-pointer list-none items-start gap-2 p-3">
@@ -1064,11 +1160,20 @@ function ErrorDetails({ diagnostics }: { diagnostics: ErrorDiagnostics }) {
         {diagnostics.context.length > 0 && (
           <div className="min-w-0">
             <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Context</div>
-            <div className="flex flex-wrap gap-1.5">
-              {diagnostics.context.map(([label, value]) => (
-                <CopyBadge key={`${label}:${value}`} label={label} value={value} />
-              ))}
-            </div>
+            {scalarContext.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {scalarContext.map(([label, value]) => (
+                  <CopyBadge key={`${label}:${value}`} label={label} value={value} />
+                ))}
+              </div>
+            )}
+            {jsonContext.length > 0 && (
+              <div className="mt-2 grid gap-2">
+                {jsonContext.map(({ label, value, data }) => (
+                  <JsonContextValue key={`${label}:${value}`} label={label} value={value} data={data} lines={3} />
+                ))}
+              </div>
+            )}
           </div>
         )}
         {diagnostics.stacktrace && (
@@ -1172,6 +1277,143 @@ function CopyBadge({ label, value, className = "" }: { label: string; value: str
   );
 }
 
+function JsonContextValue({
+  label,
+  value,
+  data,
+  lines,
+}: {
+  label: string;
+  value: string;
+  data: unknown;
+  lines: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const canExpand = jsonLineCount(data) > lines;
+  const formatted = JSON.stringify(data, null, 2);
+  return (
+    <div className="relative min-w-[18rem] max-w-full overflow-hidden rounded-md border border-border bg-background/80 text-xs">
+      <div className="flex min-w-0 items-center justify-between gap-2 bg-muted px-2 py-1">
+        <span className="min-w-0 truncate font-mono font-semibold text-muted-foreground">{label}</span>
+        <JsonValueToolbar
+          label={label}
+          rawValue={value}
+          formattedValue={formatted}
+          open={menuOpen}
+          onOpenChange={setMenuOpen}
+          onExpand={() => setDialogOpen(true)}
+        />
+      </div>
+      <div
+        className="overflow-hidden px-2 py-1.5"
+        style={expanded ? undefined : { maxHeight: `${lines * 1.5}rem` }}
+      >
+        <JsonView data={data} defaultOpenDepth={2} />
+      </div>
+      {canExpand && (
+        <button
+          type="button"
+          onClick={() => setExpanded((current) => !current)}
+          className="flex w-full items-center justify-center gap-1 border-t border-border px-2 py-1 text-xs font-medium text-muted-foreground hover:bg-accent/40 hover:text-foreground"
+        >
+          <span>{expanded ? "less" : "more"}</span>
+          <Icon name={expanded ? "lucide:chevron-up" : "lucide:chevron-down"} className="h-3 w-3" />
+        </button>
+      )}
+      {dialogOpen && (
+        <JsonValueDialog label={label} data={data} onClose={() => setDialogOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+function JsonValueToolbar({
+  label,
+  rawValue,
+  formattedValue,
+  open,
+  onOpenChange,
+  onExpand,
+}: {
+  label: string;
+  rawValue: string;
+  formattedValue: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onExpand: () => void;
+}) {
+  const itemClass = "flex h-8 w-full items-center gap-2 px-3 text-left text-xs hover:bg-accent/50";
+  return (
+    <div className="relative z-10 flex shrink-0 items-center gap-1">
+      <button
+        type="button"
+        onClick={onExpand}
+        className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground"
+        aria-label={`Expand ${label}`}
+        title={`Expand ${label}`}
+      >
+        <Icon name="lucide:expand" className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        onClick={() => onOpenChange(!open)}
+        className="flex h-6 w-6 items-center justify-center rounded-md text-muted-foreground hover:bg-background hover:text-foreground"
+        aria-label={`${label} actions`}
+        aria-expanded={open}
+      >
+        <Icon name="lucide:ellipsis" className="h-3.5 w-3.5" />
+      </button>
+      {open && (
+        <div className="absolute right-0 top-7 z-20 w-40 overflow-hidden rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-lg">
+          <button type="button" className={itemClass} onClick={() => {
+            copyText(formattedValue);
+            onOpenChange(false);
+          }}>
+            <Icon name="lucide:copy" />
+            Copy JSON
+          </button>
+          <button type="button" className={itemClass} onClick={() => {
+            copyText(rawValue);
+            onOpenChange(false);
+          }}>
+            <Icon name="lucide:clipboard" />
+            Copy raw
+          </button>
+          <button type="button" className={itemClass} onClick={() => {
+            downloadText(formattedValue, `${safeFilename(label)}.json`);
+            onOpenChange(false);
+          }}>
+            <Icon name="lucide:download" />
+            Download JSON
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function JsonValueDialog({ label, data, onClose }: { label: string; data: unknown; onClose: () => void }) {
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      size="full"
+      className="h-[95vh] overflow-hidden"
+      headerSlot={<span className="min-w-0 flex-1 truncate text-sm font-semibold">{label}</span>}
+    >
+      <div className="h-[calc(95vh-8rem)] overflow-auto rounded-md border border-border bg-background p-3">
+        <JsonView data={data} defaultOpenDepth={2} />
+      </div>
+    </Modal>
+  );
+}
+
+function safeFilename(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-|-$/g, "") || "value";
+}
+
 function RunSideRail({
   run,
   actions,
@@ -1183,7 +1425,6 @@ function RunSideRail({
 }) {
   const artifacts = flattenArtifacts(actions);
   const parameterGroups = stepParameterGroups(run, actions);
-  const timelineEvents = runTimelineEvents(run, actions);
   const runDiagnostics = errorDiagnosticsFromRun(run);
   return (
     <aside className="grid min-w-0 gap-4 xl:self-start">
@@ -1202,9 +1443,6 @@ function RunSideRail({
         ) : undefined}
       >
         <StepParameterGroups groups={parameterGroups} />
-      </RailPanel>
-      <RailPanel title="Timeline" icon="add-clock">
-        <RunTimeline events={timelineEvents} />
       </RailPanel>
       {runDiagnostics && (
         <RailPanel title="Run error" icon="scorecard-fail">
@@ -2222,16 +2460,13 @@ export function parseDiagnosticsStackTrace(stacktrace: string): ParsedStackTrace
 function actionDuration(action: PlaybookRunAction) {
   const start = parseDate(action.start_time ?? action.scheduled_time);
   if (!start) return "-";
-  const end = parseDate(action.end_time) ?? (isFinalActionStatus(action.status) ? null : new Date());
+  const end = actionTerminalDate(action) ?? (isFinalActionStatus(action.status) ? null : new Date());
   if (!end) return "-";
   return formatDuration(end.getTime() - start.getTime());
 }
 
-function actionTimeRange(action: PlaybookRunAction) {
-  const start = formatClockTime(action.start_time ?? action.scheduled_time);
-  const end = formatClockTime(action.end_time);
-  if (start === "-") return "-";
-  return end === "-" ? start : `${start} -> ${end}`;
+function actionStartTime(action: PlaybookRunAction) {
+  return formatClockTime(action.start_time ?? action.scheduled_time);
 }
 
 function actionProgressText(action: PlaybookRunAction) {
@@ -2269,8 +2504,193 @@ export function primaryActionOutput(action: PlaybookRunAction) {
   return action.error?.trim() || null;
 }
 
+export function actionDisplayStatus(action: PlaybookRunAction) {
+  if (isFinalActionStatus(action.status)) return action.status;
+  if (actionStartedWithoutTerminalDate(action)) return "running";
+  return action.status;
+}
+
+export function outputTextMode(output: string): "table" | "text" {
+  const lines = output.split(/\r?\n/).filter((line) => line.trim().length > 0);
+  if (lines.length < 2) return "text";
+  const tableLines = lines.filter((line) => {
+    const trimmed = line.trim();
+    const pipeCount = (trimmed.match(/\|/g) ?? []).length;
+    if (pipeCount >= 2) return true;
+    if (/^[+\-|=\s]+$/.test(trimmed) && /[-=]{3,}/.test(trimmed)) return true;
+    return /\S+\s{2,}\S+\s{2,}\S+/.test(trimmed);
+  });
+  return tableLines.length >= 2 ? "table" : "text";
+}
+
+type AnsiSegment = {
+  text: string;
+  style?: CSSProperties;
+};
+
+type AnsiStyleState = {
+  bold?: boolean;
+  dim?: boolean;
+  underline?: boolean;
+  inverse?: boolean;
+  color?: string;
+  backgroundColor?: string;
+};
+
+const ANSI_COLOR_MAP: Record<number, string> = {
+  30: "#475569",
+  31: "#f87171",
+  32: "#4ade80",
+  33: "#facc15",
+  34: "#60a5fa",
+  35: "#c084fc",
+  36: "#22d3ee",
+  37: "#e2e8f0",
+  90: "#64748b",
+  91: "#fca5a5",
+  92: "#86efac",
+  93: "#fde047",
+  94: "#93c5fd",
+  95: "#d8b4fe",
+  96: "#67e8f9",
+  97: "#f8fafc",
+};
+
+const ANSI_ESCAPE_RE = /\x1b\[((?:\d|;)*?)m/g;
+
+export function ansiSegments(output: string): AnsiSegment[] {
+  const segments: AnsiSegment[] = [];
+  const state: AnsiStyleState = {};
+  let cursor = 0;
+  for (const match of output.matchAll(ANSI_ESCAPE_RE)) {
+    const index = match.index ?? 0;
+    if (index > cursor) {
+      segments.push({ text: output.slice(cursor, index), style: ansiStyle(state) });
+    }
+    applyAnsiCodes(state, parseAnsiCodes(match[1]));
+    cursor = index + match[0].length;
+  }
+  if (cursor < output.length) {
+    segments.push({ text: output.slice(cursor), style: ansiStyle(state) });
+  }
+  return segments.length > 0 ? segments : [{ text: output }];
+}
+
+function parseAnsiCodes(value: string): number[] {
+  if (!value) return [0];
+  return value.split(";").map((part) => Number(part || "0")).filter((code) => Number.isFinite(code));
+}
+
+function applyAnsiCodes(state: AnsiStyleState, codes: number[]) {
+  for (let index = 0; index < codes.length; index += 1) {
+    const code = codes[index];
+    if (code === 0) {
+      resetAnsiStyle(state);
+    } else if (code === 1) {
+      state.bold = true;
+      state.dim = false;
+    } else if (code === 2) {
+      state.dim = true;
+      state.bold = false;
+    } else if (code === 4) {
+      state.underline = true;
+    } else if (code === 7) {
+      state.inverse = true;
+    } else if (code === 22) {
+      state.bold = false;
+      state.dim = false;
+    } else if (code === 24) {
+      state.underline = false;
+    } else if (code === 27) {
+      state.inverse = false;
+    } else if (code === 39) {
+      delete state.color;
+    } else if (code === 49) {
+      delete state.backgroundColor;
+    } else if ((code >= 30 && code <= 37) || (code >= 90 && code <= 97)) {
+      state.color = ANSI_COLOR_MAP[code];
+    } else if ((code >= 40 && code <= 47) || (code >= 100 && code <= 107)) {
+      state.backgroundColor = ANSI_COLOR_MAP[code - 10] ?? ANSI_COLOR_MAP[code - 60];
+    } else if (code === 38 || code === 48) {
+      const color = parseExtendedAnsiColor(codes, index);
+      if (color) {
+        if (code === 38) state.color = color.value;
+        else state.backgroundColor = color.value;
+        index = color.nextIndex;
+      }
+    }
+  }
+}
+
+function parseExtendedAnsiColor(codes: number[], index: number): { value: string; nextIndex: number } | null {
+  const mode = codes[index + 1];
+  if (mode === 2 && codes.length > index + 4) {
+    const [red, green, blue] = codes.slice(index + 2, index + 5).map(clampAnsiColorChannel);
+    return { value: `rgb(${red}, ${green}, ${blue})`, nextIndex: index + 4 };
+  }
+  if (mode === 5 && codes.length > index + 2) {
+    return { value: ansi256Color(codes[index + 2]), nextIndex: index + 2 };
+  }
+  return null;
+}
+
+function ansi256Color(code: number) {
+  const value = Math.max(0, Math.min(255, code));
+  if (value < 16) return ANSI_COLOR_MAP[value >= 8 ? value + 82 : value + 30] ?? "#e2e8f0";
+  if (value >= 232) {
+    const channel = 8 + (value - 232) * 10;
+    return `rgb(${channel}, ${channel}, ${channel})`;
+  }
+  const offset = value - 16;
+  const red = Math.floor(offset / 36);
+  const green = Math.floor((offset % 36) / 6);
+  const blue = offset % 6;
+  const channel = (part: number) => part === 0 ? 0 : 55 + part * 40;
+  return `rgb(${channel(red)}, ${channel(green)}, ${channel(blue)})`;
+}
+
+function ansiStyle(state: AnsiStyleState): CSSProperties | undefined {
+  const color = state.inverse ? state.backgroundColor : state.color;
+  const backgroundColor = state.inverse ? state.color : state.backgroundColor;
+  const style: CSSProperties = {};
+  if (color) style.color = color;
+  if (backgroundColor) style.backgroundColor = backgroundColor;
+  if (state.bold) style.fontWeight = 700;
+  if (state.dim) style.opacity = 0.72;
+  if (state.underline) style.textDecoration = "underline";
+  return Object.keys(style).length > 0 ? style : undefined;
+}
+
+function resetAnsiStyle(state: AnsiStyleState) {
+  delete state.bold;
+  delete state.dim;
+  delete state.underline;
+  delete state.inverse;
+  delete state.color;
+  delete state.backgroundColor;
+}
+
+function clampAnsiColorChannel(value: number) {
+  return Math.max(0, Math.min(255, value));
+}
+
 function isFinalActionStatus(status?: string | null) {
-  return status === "completed" || status === "failed" || status === "skipped";
+  return status === "completed" || status === "failed" || status === "skipped" || status === "cancelled" || status === "canceled";
+}
+
+function actionStartedWithoutTerminalDate(action: PlaybookRunAction) {
+  return Boolean(parseDate(action.start_time ?? action.scheduled_time) && !actionTerminalDate(action));
+}
+
+function actionTerminalDate(action: PlaybookRunAction) {
+  const record = action as PlaybookRunAction & Record<string, unknown>;
+  return parseDate(action.end_time)
+    ?? parseDate(record.cancelled_at)
+    ?? parseDate(record.canceled_at)
+    ?? parseDate(record.cancelled_time)
+    ?? parseDate(record.canceled_time)
+    ?? parseDate(record.cancelled_date)
+    ?? parseDate(record.canceled_date);
 }
 
 function formatDuration(ms: number) {
@@ -2485,8 +2905,38 @@ function contextEntries(value: unknown): Array<[string, string]> {
   const record = objectRecord(value);
   if (!record) return [];
   return Object.entries(record)
-    .filter(([, entryValue]) => entryValue !== undefined && entryValue !== null && entryValue !== "")
+    .filter(([key, entryValue]) => !isNativeActionOutputField(key) && entryValue !== undefined && entryValue !== null && entryValue !== "")
     .map(([key, entryValue]) => [key, stringifyValue(entryValue)]);
+}
+
+const NATIVE_ACTION_OUTPUT_CONTEXT_FIELDS = new Set([
+  "stdout",
+  "stdOut",
+  "out",
+  "output",
+  "logs",
+  "log",
+  "stderr",
+  "stdErr",
+  "err",
+]);
+
+function isNativeActionOutputField(key: string) {
+  return NATIVE_ACTION_OUTPUT_CONTEXT_FIELDS.has(key);
+}
+
+function parseInlineJsonContextValue(value: string): unknown | null {
+  const trimmed = value.trim();
+  if (!trimmed || !/^[{[]/.test(trimmed)) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
+}
+
+function jsonLineCount(value: unknown) {
+  return JSON.stringify(value, null, 2).split("\n").length;
 }
 
 function actionParameters(action: PlaybookRunAction) {
