@@ -1106,6 +1106,10 @@ function actionDetailData(action: PlaybookRunAction, output: string | null) {
 // rendering inline JSON context with the rich JsonContextValue (Modal+JsonView)
 // instead of the default CopyBadge fallback.
 function ErrorDetails({ diagnostics }: { diagnostics: ErrorDiagnostics }) {
+  const scalarContext = diagnostics.context.filter(([, value]) => !parseInlineJsonContextValue(value));
+  const jsonContext = diagnostics.context
+    .map(([label, value]) => ({ label, value, data: parseInlineJsonContextValue(value) }))
+    .filter((entry): entry is { label: string; value: string; data: unknown } => entry.data !== null);
   return (
     <BaseErrorDetails
       diagnostics={diagnostics}
@@ -2698,6 +2702,36 @@ const NATIVE_ACTION_OUTPUT_CONTEXT_FIELDS = new Set([
 function objectRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
+}
+
+function jsonLineCount(value: unknown) {
+  return JSON.stringify(value, null, 2).split("\n").length;
+}
+
+const NATIVE_ACTION_OUTPUT_CONTEXT_FIELDS = new Set([
+  "stdout",
+  "stdOut",
+  "out",
+  "output",
+  "logs",
+  "log",
+  "stderr",
+  "stdErr",
+  "err",
+]);
+
+function isNativeActionOutputField(key: string) {
+  return NATIVE_ACTION_OUTPUT_CONTEXT_FIELDS.has(key);
+}
+
+function parseInlineJsonContextValue(value: string): unknown | null {
+  const trimmed = value.trim();
+  if (!trimmed || !/^[{[]/.test(trimmed)) return null;
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+    return null;
+  }
 }
 
 function jsonLineCount(value: unknown) {

@@ -13,7 +13,7 @@ reason = "Not exploitable - S3 crypto functions not used by our code."
 
 [[IgnoredVulns]]
 id = "GO-2022-0646"
-# CBC padding oracle issue in AWS S3 Crypto SDK
+# CBC padding vulnerability in AWS S3 Crypto SDK
 # Reason: Not called by our codebase (verified with govulncheck)
 # Module: github.com/aws/aws-sdk-go (indirect dependency only)
 # Review Date: 2025-10-29
