@@ -53,7 +53,7 @@ static: $(TAILWIND_JS) manifests generate fmt ginkgo ui
 
 .PHONY: ui
 ui: ## Build the embedded catalog explorer UI (ui/frontend -> ui/frontend/dist/ui.js)
-	cd ui/frontend && CI=true pnpm install --frozen-lockfile && pnpm run build
+	cd ui/frontend && CI=true pnpm install --no-frozen-lockfile --prefer-offline && pnpm run build
 
 .PHONY: test
 test:

@@ -264,7 +264,6 @@ function syntheticPlaybookRunAction(run: PlaybookRun, name: string, index: numbe
     id: `spec:${run.id}:${index}`,
     name,
     playbook_run_id: run.id,
-    status: "scheduled",
     synthetic: true,
     spec_index: index,
   };

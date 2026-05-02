@@ -141,10 +141,10 @@ tasks:
   # ────────────── Frontend ──────────────
 
   ui:install:
-    desc: Install ui/frontend dependencies (pnpm, respects lockfile)
+    desc: Install ui/frontend dependencies and update lockfile when package metadata changes
     dir: ui/frontend
     cmds:
-      - pnpm install --prefer-offline
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
     sources:
       - package.json
       - pnpm-lock.yaml

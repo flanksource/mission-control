@@ -1,7 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import {
   DensitySwitcher,
-  EntityExplorerApp,
   Icon,
   ThemeSwitcher,
   useHistoryRoute,
@@ -10,6 +9,7 @@ import {
   type RenderLink,
   type UseHistoryRouteOptions,
 } from "@flanksource/clicky-ui";
+import { EntityExplorerApp } from "@flanksource/clicky-ui/api-explorer";
 import { MissionControlLogo } from "@flanksource/icons/mi";
 import { apiClient } from "./api";
 import { CatalogSidebar } from "./CatalogSidebar";

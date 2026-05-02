@@ -1,16 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
+  actionDisplayStatus,
+  ansiSegments,
   buildSubmitPayload,
   errorDiagnosticsFromAction,
   errorDiagnosticsFromRun,
   normalizePlaybookParams,
   parseDiagnosticsStackTrace,
+  outputTextMode,
   playbookRunDuration,
   playbookStatusTone,
   primaryActionOutput,
   runElapsed,
   runTimelineEvents,
   shortRunId,
+  stepOutputMaxHeight,
   stepParameterGroups,
 } from "./PlaybookBrowser";
 import {
@@ -19,7 +23,7 @@ import {
   statusVisual,
   targetSummaryFromRun,
 } from "./playbook-ui-helpers";
-import type { Playbook, PlaybookParameter, PlaybookRun } from "../api/types";
+import type { Playbook, PlaybookParameter, PlaybookRun, PlaybookRunAction } from "../api/types";
 
 describe("playbook UI helpers", () => {
   it("normalizes parameter defaults to backend string params", () => {
@@ -68,6 +72,43 @@ describe("playbook UI helpers", () => {
       start_time: "2026-04-27T10:00:00Z",
       end_time: "2026-04-27T10:02:05Z",
     })).toBe("00:02:05");
+  });
+
+  it("infers running only after a step starts without a terminal date", () => {
+    expect(actionDisplayStatus({
+      id: "spec:run-1:1",
+      name: "Future",
+      playbook_run_id: "run-1",
+      synthetic: true,
+    })).toBeUndefined();
+    expect(actionDisplayStatus({
+      id: "action-1",
+      name: "Apply",
+      playbook_run_id: "run-1",
+      start_time: "2026-04-27T10:00:00Z",
+    })).toBe("running");
+    expect(actionDisplayStatus({
+      id: "action-2",
+      name: "Apply",
+      playbook_run_id: "run-1",
+      status: "scheduled",
+      start_time: "2026-04-27T10:00:00Z",
+    })).toBe("running");
+    expect(actionDisplayStatus({
+      id: "action-3",
+      name: "Apply",
+      playbook_run_id: "run-1",
+      status: "completed",
+      start_time: "2026-04-27T10:00:00Z",
+    })).toBe("completed");
+    const cancelledAction: PlaybookRunAction & { cancelled_at: string } = {
+      id: "action-4",
+      name: "Apply",
+      playbook_run_id: "run-1",
+      start_time: "2026-04-27T10:00:00Z",
+      cancelled_at: "2026-04-27T10:00:10Z",
+    };
+    expect(actionDisplayStatus(cancelledAction)).toBeUndefined();
   });
 
   it("groups run and step parameters for the side rail", () => {
@@ -154,6 +195,33 @@ describe("playbook UI helpers", () => {
     });
   });
 
+  it("keeps JSON context fields and omits native output fields from diagnostics context", () => {
+    const diagnostics = errorDiagnosticsFromAction({
+      id: "action-1",
+      name: "HTTP",
+      playbook_run_id: "run-1",
+      status: "failed",
+      result: {
+        stdout: "response body",
+        stderr: "warning",
+        error: {
+          message: "request failed",
+          context: {
+            args: { method: "GET", url: "http://localhost:8080" },
+            connection: "{\"type\":\"http\",\"name\":\"local\"}",
+            stdout: "response body",
+            stderr: "warning",
+          },
+        },
+      },
+    });
+
+    expect(diagnostics?.context).toEqual([
+      ["args", "{\"method\":\"GET\",\"url\":\"http://localhost:8080\"}"],
+      ["connection", "{\"type\":\"http\",\"name\":\"local\"}"],
+    ]);
+  });
+
   it("uses primary action output before falling back to action error", () => {
     expect(primaryActionOutput({
       id: "action-1",
@@ -175,6 +243,36 @@ describe("playbook UI helpers", () => {
       result: null,
       error: "db timeout",
     })).toBe("db timeout");
+  });
+
+  it("classifies log output for wrapping and tables for horizontal scroll", () => {
+    expect(outputTextMode("stdout: this-is-a-very-long-token-without-spaces-that-should-wrap")).toBe("text");
+    expect(outputTextMode([
+      "NAME                                      READY   STATUS",
+      "checkout-api-6f8b7d9d7c-x4pqp            1/1     Running",
+      "checkout-worker-66dcbf8d8c-n2k3p         1/1     Running",
+    ].join("\n"))).toBe("table");
+    expect(outputTextMode([
+      "| name | namespace | status |",
+      "| --- | --- | --- |",
+      "| checkout-api | prod | Running |",
+    ].join("\n"))).toBe("table");
+  });
+
+  it("sizes step output from viewport and step count", () => {
+    expect(stepOutputMaxHeight(4)).toEqual({ maxHeight: "min(20vh, calc((100vh - 200px) / 4))" });
+    expect(stepOutputMaxHeight(0)).toEqual({ maxHeight: "min(20vh, calc((100vh - 200px) / 1))" });
+  });
+
+  it("parses ANSI stdout/stderr colors for rendering", () => {
+    expect(ansiSegments("ok \u001b[31mfailed\u001b[0m done")).toEqual([
+      { text: "ok " },
+      { text: "failed", style: { color: "#f87171" } },
+      { text: " done" },
+    ]);
+    expect(ansiSegments("\u001b[1;38;2;1;2;3mstrong\u001b[0m")).toEqual([
+      { text: "strong", style: { color: "rgb(1, 2, 3)", fontWeight: 700 } },
+    ]);
   });
 
   it("extracts run error diagnostics from the run record", () => {

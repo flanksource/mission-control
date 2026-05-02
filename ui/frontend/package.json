@@ -13,6 +13,7 @@
     "@flanksource/clicky-ui": "workspace:*",
     "@flanksource/icons": "^1.0.57",
     "@iconify/react": "^5.2.1",
+    "@scalar/api-reference-react": "^0.9.32",
     "@tanstack/react-query": "^5.80.7",
     "iconify-icon": "^3.0.0",
     "react": "^18.3.1",
