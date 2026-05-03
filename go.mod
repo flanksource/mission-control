@@ -9,9 +9,9 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.41.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.34.0 // indirect
-	github.com/flanksource/commons v1.51.1
-	github.com/flanksource/duty v1.0.1293
-	github.com/flanksource/gomplate/v3 v3.24.77
+	github.com/flanksource/commons v1.51.3
+	github.com/flanksource/duty v1.0.1298
+	github.com/flanksource/gomplate/v3 v3.24.78
 	github.com/flanksource/kopper v1.0.21
 	github.com/gomarkdown/markdown v0.0.0-20260411013819-759bbc3e3207
 	github.com/google/cel-go v0.28.0
@@ -254,13 +254,6 @@ require (
 	github.com/hirochachacha/go-smb2 v1.1.0 // indirect
 	github.com/itchyny/gojq v0.12.19 // indirect
 	github.com/itchyny/timefmt-go v0.1.8 // indirect
-	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
-	github.com/jackc/pgconn v1.14.3 // indirect
-	github.com/jackc/pgio v1.0.0 // indirect
-	github.com/jackc/pgproto3/v2 v2.3.3 // indirect
-	github.com/jackc/pgtype v1.14.4 // indirect
-	github.com/jackc/pgx/v4 v4.18.3 // indirect
-	github.com/jackc/puddle v1.3.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jeremywohl/flatten v1.0.1 // indirect
