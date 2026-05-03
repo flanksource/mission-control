@@ -410,6 +410,7 @@ var configQueryResultSchema = map[string]models.ColumnType{
 	"updated_at":        models.ColumnTypeString,
 	"deleted_at":        models.ColumnTypeString,
 	"delete_reason":     models.ColumnTypeString,
+	"inserted_at":       models.ColumnTypeString,
 	"properties_values": models.ColumnTypeJSONB,
 	"changes":           models.ColumnTypeInteger,
 	"analysis":          models.ColumnTypeJSONB,
