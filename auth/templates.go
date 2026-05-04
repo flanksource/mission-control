@@ -14,7 +14,7 @@ func init() {
 <b>Welcome to Mission Control</b>
 <br><br>
 Hello {{.firstName}},<br>
-Please visit <a href="{{.link}}">{{.link}}</a> to complete registration and use the code: <code>{{.code}}</code>`)
+Please visit <a href="{{.link}}">{{.link}}</a> to complete registration{{if .code}} and use the code: <code>{{.code}}</code>{{end}}.`)
 	if err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to parse invitation email template: %v", err))
 	}

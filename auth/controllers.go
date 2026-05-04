@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"slices"
-	"strings"
 	"time"
 
 	"github.com/flanksource/commons/duration"
@@ -47,31 +46,14 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
 	}
 
-	identity, err := k.createUser(ctx, reqData.FirstName, reqData.LastName, reqData.Email)
+	invite, err := k.createInvite(ctx, reqData)
 	if err != nil {
-		// User already exists
-		if strings.Contains(err.Error(), http.StatusText(http.StatusConflict)) {
-			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ECONFLICT, "user already exists"))
-		}
-
-		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error creating user"))
-	}
-
-	if reqData.Role != "" {
-		if err := rbac.AddRoleForUser(identity.Id, reqData.Role); err != nil {
-			ctx.Logger.Errorf("failed to add role to user: %v", err)
-		}
-	}
-
-	recoveryCode, recoveryLink, err := k.createRecoveryLink(ctx, identity.Id)
-	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error creating recovery link"))
+		return dutyAPI.WriteError(c, err)
 	}
 
 	data := map[string]string{
 		"firstName": reqData.FirstName,
-		"link":      recoveryLink,
-		"code":      recoveryCode,
+		"link":      registrationLink(invite.ID.String()),
 	}
 
 	var body bytes.Buffer
