@@ -75,7 +75,7 @@ jobs:
           echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags | sed -e 's/^v//')" >> $GITHUB_ENV
 
       - name: Publish to Registry
-        uses: elgohr/Publish-Docker-Github-Action@bd5abbb5b131e78b0790675b767a367fcd6e71e2 # v5
+        uses: elgohr/Publish-Docker-Github-Action@9c315307d4addfcc3f922312151226b512f85670 # v5
         with:
           name: flanksource/incident-commander
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -93,7 +93,7 @@ jobs:
 
       - name: Login to Amazon ECR Public
         id: login-ecr-public
-        uses: aws-actions/amazon-ecr-login@376925c9d111252e87ae59691e5a442dd100ef6a # v2
+        uses: aws-actions/amazon-ecr-login@19d944daaa35f0fa1d3f7f8af1d3f2e5de25c5b7 # v2
         with:
           registry-type: public
 
@@ -126,11 +126,11 @@ jobs:
           token: ${{ secrets.FLANKBOT }}
           path: ./incident-commander-chart
       - name: Update image tags in chart
-        uses: mikefarah/yq@602586d8fdb5b93f92b7e374a2e3086a4e8625df # master
+        uses: mikefarah/yq@cb9793555487aafb501e1a9d85c28b812aeadfab # master
         with:
           cmd: yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' incident-commander-chart/chart/values.yaml
       - name: Update image tags in agent chart
-        uses: mikefarah/yq@602586d8fdb5b93f92b7e374a2e3086a4e8625df # master
+        uses: mikefarah/yq@cb9793555487aafb501e1a9d85c28b812aeadfab # master
         with:
           cmd: yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' incident-commander-chart/agent-chart/values.yaml
       - name: Update CRDs
