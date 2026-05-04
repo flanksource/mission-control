@@ -1,18 +1,25 @@
 package cmd
 
 import (
-	"encoding/base64"
+	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
+	osExec "os/exec"
+	"path/filepath"
 	"strings"
+	"time"
 
-	"github.com/flanksource/incident-commander/sdk"
+	dutyContext "github.com/flanksource/duty/context"
+	goplugin "github.com/hashicorp/go-plugin"
 	"github.com/spf13/cobra"
+
+	icplugin "github.com/flanksource/incident-commander/plugin"
+	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	"github.com/flanksource/incident-commander/plugin/registry"
 )
 
-// pluginParams accumulates repeated --param key=value flags.
+// pluginParams accumulates --param k=v repeats.
 type pluginParams struct {
 	values map[string]string
 }
@@ -31,7 +38,7 @@ func (p *pluginParams) Set(v string) error {
 	}
 	idx := strings.IndexByte(v, '=')
 	if idx <= 0 {
-		return fmt.Errorf("expected key=value, got %q", v)
+		return fmt.Errorf("expected k=v, got %q", v)
 	}
 	p.values[v[:idx]] = v[idx+1:]
 	return nil
@@ -39,107 +46,148 @@ func (p *pluginParams) Set(v string) error {
 
 func (p *pluginParams) Type() string { return "key=value" }
 
-type pluginOptions struct {
-	ConfigID string
-	RawJSON  bool
-	Params   pluginParams
-}
+var (
+	pluginConfigID string
+	pluginRawJSON  bool
+	pluginParamSet pluginParams
+)
 
-var pluginOpts pluginOptions
-
-// PluginCmd invokes operations exposed by plugins running in Mission Control.
+// PluginCmd is the parent for plugin operations: `mission-control plugin <name> <op>`.
 var PluginCmd = &cobra.Command{
-	Use:               "plugin <name> <operation>",
-	Short:             "Invoke an operation exposed by a Mission Control plugin",
-	Long:              "Invoke an operation exposed by a plugin through the running Mission Control HTTP API. Uses the current CLI context for the server. Auth uses the context token, or PLUGIN_SERVER_AUTH for basic auth when set.",
-	Args:              cobra.ExactArgs(2),
-	SilenceUsage:      true,
-	DisableAutoGenTag: true,
-	RunE:              runPluginOp,
+	Use:   "plugin <name> <operation>",
+	Short: "Invoke an operation exposed by a Mission Control plugin",
+	Long: `Spawn a plugin binary (discovered on $MISSION_CONTROL_PLUGIN_PATH) and
+invoke one of its operations directly. Mission-control does not need to be
+running — the CLI talks to the plugin via the same gRPC contract used by the
+host process.`,
+	Args: cobra.MinimumNArgs(2),
+	RunE: runPluginOp,
 }
 
 func init() {
-	PluginCmd.Flags().StringVar(&pluginOpts.ConfigID, "config-id", "", "Catalog/config item id passed to the operation")
-	PluginCmd.Flags().BoolVar(&pluginOpts.RawJSON, "json", false, "Emit raw response instead of pretty-printing JSON")
-	PluginCmd.Flags().Var(&pluginOpts.Params, "param", "Key=value parameters (repeatable)")
+	PluginCmd.Flags().StringVar(&pluginConfigID, "config-id", "", "Catalog/config item id passed to the operation")
+	PluginCmd.Flags().BoolVar(&pluginRawJSON, "json", false, "Emit raw application/clicky+json instead of pretty-printing")
+	PluginCmd.Flags().Var(&pluginParamSet, "param", "Key=value parameters (repeatable)")
 	Root.AddCommand(PluginCmd)
 }
 
-func runPluginOp(cmd *cobra.Command, args []string) error {
-	server, authHeader, err := pluginServerAndAuth()
+func runPluginOp(_ *cobra.Command, args []string) error {
+	name, op := args[0], args[1]
+
+	binPath, err := findPluginBinary(name)
 	if err != nil {
 		return err
 	}
 
-	params := pluginOpts.Params.values
-	if params == nil {
-		params = map[string]string{}
+	cli, pluginCli, err := dialPlugin(binPath)
+	if err != nil {
+		return err
 	}
-	body, err := json.Marshal(params)
+	defer cli.Kill()
+
+	manifestCtx, manifestCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer manifestCancel()
+
+	if _, err := pluginCli.Service.RegisterPlugin(manifestCtx, &pluginpb.RegisterRequest{
+		HostProtocolVersion: uint32(icplugin.ProtocolVersion),
+	}); err != nil {
+		return fmt.Errorf("plugin RegisterPlugin: %w", err)
+	}
+
+	params, err := json.Marshal(pluginParamSet.values)
 	if err != nil {
 		return err
 	}
 
-	client := sdk.NewWithAuthHeader(server, authHeader)
-	respBody, err := client.InvokePluginOperation(args[0], args[1], pluginOpts.ConfigID, body)
+	invokeCtx, invokeCancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer invokeCancel()
+
+	resp, err := pluginCli.Service.Invoke(invokeCtx, &pluginpb.InvokeRequest{
+		Operation:    op,
+		ParamsJson:   params,
+		ConfigItemId: pluginConfigID,
+	})
 	if err != nil {
+		return fmt.Errorf("invoke %s/%s: %w", name, op, err)
+	}
+	if resp.ErrorMessage != "" {
+		return fmt.Errorf("plugin error: %s (%s)", resp.ErrorMessage, resp.ErrorCode)
+	}
+
+	if pluginRawJSON {
+		_, err := os.Stdout.Write(resp.Result)
 		return err
 	}
 
-	if pluginOpts.RawJSON {
-		_, err = cmd.OutOrStdout().Write(respBody)
-		return err
-	}
-
+	// Best-effort pretty-print: pass JSON through indenter. Real clicky
+	// rendering happens automatically when the embedded UI consumes
+	// application/clicky+json over HTTP — for the CLI we settle for
+	// human-readable JSON until we wire the clicky CLI renderer.
 	var pretty any
-	if err := json.Unmarshal(respBody, &pretty); err == nil {
-		out, err := json.MarshalIndent(pretty, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(cmd.OutOrStdout(), string(out))
+	if err := json.Unmarshal(resp.Result, &pretty); err == nil {
+		out, _ := json.MarshalIndent(pretty, "", "  ")
+		fmt.Println(string(out))
 		return nil
 	}
-
-	_, err = cmd.OutOrStdout().Write(respBody)
+	_, err = os.Stdout.Write(resp.Result)
 	return err
 }
 
-func pluginServerAndAuth() (string, string, error) {
-	cfg, err := LoadConfig()
+// findPluginBinary scans MISSION_CONTROL_PLUGIN_PATH for a binary matching
+// `name`. If multiple binaries match (e.g. name and name-darwin-arm64) it
+// prefers the exact match.
+func findPluginBinary(name string) (string, error) {
+	dir := registry.PluginPath()
+	exact := filepath.Join(dir, name)
+	if info, err := os.Stat(exact); err == nil && !info.IsDir() {
+		return exact, nil
+	}
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return "", "", err
+		return "", fmt.Errorf("scan %s: %w", dir, err)
 	}
-
-	mcCtx := cfg.CurrentMCContext()
-	if mcCtx == nil || mcCtx.Server == "" {
-		return "", "", fmt.Errorf("no Mission Control server configured; select a context with server")
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if strings.HasPrefix(e.Name(), name) {
+			return filepath.Join(dir, e.Name()), nil
+		}
 	}
-	server := mcCtx.Server
-
-	if _, err := url.ParseRequestURI(server); err != nil {
-		return "", "", fmt.Errorf("invalid Mission Control server URL %q: %w", server, err)
-	}
-
-	if mcCtx.Token != "" {
-		return server, "Bearer " + mcCtx.Token, nil
-	}
-
-	basicAuth := strings.TrimSpace(os.Getenv("PLUGIN_SERVER_AUTH"))
-	if strings.HasPrefix(strings.ToLower(basicAuth), "basic ") {
-		basicAuth = strings.TrimSpace(basicAuth[len("basic "):])
-	}
-	if basicAuth == "" {
-		return server, "", nil
-	}
-
-	decoded, err := base64.StdEncoding.DecodeString(basicAuth)
-	if err != nil {
-		return "", "", fmt.Errorf("PLUGIN_SERVER_AUTH must be base64(username:password): %w", err)
-	}
-	if !strings.Contains(string(decoded), ":") {
-		return "", "", fmt.Errorf("PLUGIN_SERVER_AUTH must decode to username:password")
-	}
-
-	return server, "Basic " + basicAuth, nil
+	return "", fmt.Errorf("plugin %q not found in %s", name, dir)
 }
+
+func dialPlugin(binPath string) (*goplugin.Client, *icplugin.Client, error) {
+	cmd := osExec.Command(binPath)
+	cmd.Env = append(os.Environ(),
+		fmt.Sprintf("%s=%s", icplugin.Handshake.MagicCookieKey, icplugin.Handshake.MagicCookieValue),
+	)
+	cli := goplugin.NewClient(&goplugin.ClientConfig{
+		HandshakeConfig:  icplugin.Handshake,
+		Plugins:          icplugin.PluginMap,
+		Cmd:              cmd,
+		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolGRPC},
+		Managed:          true,
+	})
+
+	rpcClient, err := cli.Client()
+	if err != nil {
+		cli.Kill()
+		return nil, nil, fmt.Errorf("plugin rpc: %w", err)
+	}
+	raw, err := rpcClient.Dispense(icplugin.PluginName)
+	if err != nil {
+		cli.Kill()
+		return nil, nil, fmt.Errorf("plugin dispense: %w", err)
+	}
+	pluginCli, ok := raw.(*icplugin.Client)
+	if !ok {
+		cli.Kill()
+		return nil, nil, fmt.Errorf("plugin: unexpected dispense type %T", raw)
+	}
+	return cli, pluginCli, nil
+}
+
+// _ keeps duty/context imported — useful when the CLI later needs to share
+// resolution helpers with the server (e.g. local connection lookup).
+var _ dutyContext.Context

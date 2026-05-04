@@ -36,8 +36,16 @@ message PluginManifest {
   string description       = 3;
   uint32 protocol_version  = 4;
   repeated string capabilities = 5;
-  repeated OperationDef operations = 6;
-  uint32 ui_port = 7;
+  repeated TabSpec tabs       = 6;
+  repeated OperationDef operations = 7;
+  uint32 ui_port = 8;
+}
+
+message TabSpec {
+  string name = 1;
+  string icon = 2;
+  string path = 3;
+  string scope = 4;
 }
 
 message OperationDef {
@@ -65,9 +73,10 @@ message ConfigureResponse { repeated string warnings = 1; }
 
 message CallerContext {
   string user_id              = 1;
-  repeated string permissions = 2;
-  string trace_id             = 3;
-  string request_id           = 4;
+  string user_email           = 2;
+  repeated string permissions = 3;
+  string trace_id             = 4;
+  string request_id           = 5;
 }
 
 message InvokeRequest {
@@ -110,40 +119,21 @@ message ConfigItemList {
 
 message GetConfigItemRequest { string id = 1; }
 
-message ResourceSelector {
-  string agent          = 1;
-  string scope          = 2;
-  string cache          = 3;
-  string search         = 4;
-  int32 limit           = 5;
-  bool include_deleted  = 6;
-  string id             = 7;
-  string name           = 8;
-  string namespace      = 9;
-  string tag_selector   = 10;
-  string label_selector = 11;
-  string field_selector = 12;
-  string health         = 13;
-  repeated string types = 14;
-  repeated string statuses = 15;
-}
-
 message ListConfigsRequest {
-  ResourceSelector selector = 1;
-  int32 limit               = 2;
-  string cursor             = 3;
+  // Selector is the JSON-encoded duty/types.ResourceSelector.
+  string selector_json = 1;
+  int32 limit          = 2;
+  string cursor        = 3;
 }
 
-// GetConnectionRequest asks the host to resolve a connection by one of three
-// supported lookups: type, config item, or plugin-defined label. Type and label
-// lookups use spec.connections mappings from the Plugin CRD. Config lookups use
-// the scraper that created the config item.
+// GetConnectionRequest asks the host to resolve a connection by type.
+// The host looks up the matching field in the Plugin CRD's
+// connection.ExecConnections (Kubernetes/AWS/GCP/Azure) and resolves it
+// using the same SetupConnection() pipeline that playbook exec actions use.
+// If config_item_id is set, fromConfigItem-style resolution is used.
 message GetConnectionRequest {
-  oneof lookup {
-    string type           = 1; // e.g. "sql", "aws", "kubernetes", "gcp", "azure"
-    string config_item_id = 2; // resolve the connection used by this config item's scraper
-    string label          = 3; // resolve a plugin-defined connection label mapping
-  }
+  string type           = 1; // "aws" | "kubernetes" | "gcp" | "azure"
+  string config_item_id = 2; // optional: resolve credentials from this config item
 }
 
 message ResolvedConnection {

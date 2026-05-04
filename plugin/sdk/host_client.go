@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/flanksource/duty/types"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/structpb"
 
@@ -15,32 +14,43 @@ import (
 // HostClient is the plugin-side handle to call back into the mission-control
 // host. It is created by the SDK after the host opens the reverse-channel
 // during RegisterPlugin and made available on every InvokeCtx.
+//
+// All methods enforce the Plugin CRD's connection allowlist on the host side —
+// if a plugin requests a connection type it didn't declare, the host returns
+// an error.
 type HostClient interface {
-	// GetConfigItem fetches a single config item by id.
+	// GetConfigItem fetches a single config item by id. The host validates
+	// that the calling user has read access before returning.
 	GetConfigItem(ctx context.Context, id string) (*pluginpb.ConfigItem, error)
 
-	// ListConfigs returns config items matching the given ResourceSelector.
-	ListConfigs(ctx context.Context, selector types.ResourceSelector, limit int) (*pluginpb.ConfigItemList, error)
+	// ListConfigs returns config items matching the given duty
+	// ResourceSelector. selectorJSON is the JSON encoding of
+	// types.ResourceSelector (the SDK passes it opaquely so plugin authors
+	// don't need to import duty just to build a selector — they can
+	// json.Marshal a map).
+	ListConfigs(ctx context.Context, selectorJSON []byte) (*pluginpb.ConfigItemList, error)
 
-	// GetConnectionByType resolves a connection using spec.connections.types.
-	GetConnectionByType(ctx context.Context, typ ConnectionType) (*pluginpb.ResolvedConnection, error)
+	// GetConnection resolves a connection of the given type. typ is one of
+	// "aws", "kubernetes", "gcp", "azure". If configItemID is set, the host
+	// derives credentials from that config item using the same
+	// SetupConnection() pipeline that powers playbook exec actions.
+	GetConnection(ctx context.Context, typ, configItemID string) (*pluginpb.ResolvedConnection, error)
 
-	// GetConnectionForConfig resolves the connection used by the scraper that created the config item.
-	GetConnectionForConfig(ctx context.Context, configItemID string) (*pluginpb.ResolvedConnection, error)
-
-	// GetConnectionByLabel resolves a connection using spec.connections.labels.
-	GetConnectionByLabel(ctx context.Context, label string) (*pluginpb.ResolvedConnection, error)
-
-	// Log forwards a structured log entry to the host's logger.
+	// Log forwards a structured log entry to the host's logger. Plugins
+	// should use this for cross-cutting events (audit trail, errors); regular
+	// debug logging can go to stderr.
 	Log(ctx context.Context, level, message string, fields map[string]string) error
 
-	// WriteArtifact persists raw bytes via the host's artifact store and returns a reference.
+	// WriteArtifact persists raw bytes via the host's artifact store and
+	// returns a reference plugins can store and resolve later via
+	// ReadArtifact.
 	WriteArtifact(ctx context.Context, a *pluginpb.Artifact) (*pluginpb.ArtifactRef, error)
 
 	// ReadArtifact retrieves an artifact previously written via the host.
 	ReadArtifact(ctx context.Context, ref *pluginpb.ArtifactRef) (*pluginpb.Artifact, error)
 }
 
+// hostClient is the gRPC implementation of HostClient.
 type hostClient struct {
 	c pluginpb.HostServiceClient
 }
@@ -53,23 +63,12 @@ func (h *hostClient) GetConfigItem(ctx context.Context, id string) (*pluginpb.Co
 	return h.c.GetConfigItem(ctx, &pluginpb.GetConfigItemRequest{Id: id})
 }
 
-func (h *hostClient) ListConfigs(ctx context.Context, selector types.ResourceSelector, limit int) (*pluginpb.ConfigItemList, error) {
-	return h.c.ListConfigs(ctx, &pluginpb.ListConfigsRequest{
-		Selector: pluginpb.ResourceSelectorFromDuty(selector),
-		Limit:    int32(limit),
-	})
+func (h *hostClient) ListConfigs(ctx context.Context, selectorJSON []byte) (*pluginpb.ConfigItemList, error) {
+	return h.c.ListConfigs(ctx, &pluginpb.ListConfigsRequest{SelectorJson: string(selectorJSON)})
 }
 
-func (h *hostClient) GetConnectionByType(ctx context.Context, typ ConnectionType) (*pluginpb.ResolvedConnection, error) {
-	return h.c.GetConnection(ctx, &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_Type{Type: string(typ)}})
-}
-
-func (h *hostClient) GetConnectionForConfig(ctx context.Context, configItemID string) (*pluginpb.ResolvedConnection, error) {
-	return h.c.GetConnection(ctx, &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_ConfigItemId{ConfigItemId: configItemID}})
-}
-
-func (h *hostClient) GetConnectionByLabel(ctx context.Context, label string) (*pluginpb.ResolvedConnection, error) {
-	return h.c.GetConnection(ctx, &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_Label{Label: label}})
+func (h *hostClient) GetConnection(ctx context.Context, typ, configItemID string) (*pluginpb.ResolvedConnection, error) {
+	return h.c.GetConnection(ctx, &pluginpb.GetConnectionRequest{Type: typ, ConfigItemId: configItemID})
 }
 
 func (h *hostClient) Log(ctx context.Context, level, message string, fields map[string]string) error {

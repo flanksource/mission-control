@@ -7,7 +7,7 @@ import (
 	dutyContext "github.com/flanksource/duty/context"
 	goplugin "github.com/hashicorp/go-plugin"
 
-	"github.com/flanksource/incident-commander/plugin/adapter"
+	icplugin "github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/host"
 	"github.com/flanksource/incident-commander/plugin/registry"
 )
@@ -19,13 +19,13 @@ var (
 	active = map[string]*Supervisor{}
 )
 
-// Wire installs the supervisor as the registry's start/stop hook.
+// WireSupervisor installs the supervisor as the registry's start/stop hook.
 // Must be called once at startup before the kopper reconciler is registered.
 //
 // The reconciler in plugin/registry stores plugin specs but does not import
 // the supervisor package (that would create an import cycle); this function
 // injects the start/stop callbacks at boot.
-func Wire(ctx dutyContext.Context) {
+func WireSupervisor(ctx dutyContext.Context) {
 	registry.SupervisorStarter = func(c dutyContext.Context, name string) error {
 		return startPlugin(c, name)
 	}
@@ -50,7 +50,7 @@ func startPlugin(ctx dutyContext.Context, name string) error {
 				ctx.Logger.Errorf("plugin %s: host broker accept: %v", name, err)
 				return
 			}
-			s := adapter.GRPCServerFactory(nil)
+			s := icplugin.GRPCServerFactory(nil)
 			svc.Register(s)
 			if err := s.Serve(lis); err != nil {
 				ctx.Logger.Debugf("plugin %s: host server stopped: %v", name, err)
@@ -59,24 +59,14 @@ func startPlugin(ctx dutyContext.Context, name string) error {
 		return id, nil
 	}
 
-	mu.Lock()
-	if active[name] != nil {
-		mu.Unlock()
-		return nil
-	}
 	sup := New(name, binPath)
-	active[name] = sup
-	mu.Unlock()
-
 	if err := sup.Start(ctx, startHost); err != nil {
-		mu.Lock()
-		if active[name] == sup {
-			delete(active, name)
-		}
-		mu.Unlock()
 		return fmt.Errorf("plugin %s: start supervisor: %w", name, err)
 	}
 
+	mu.Lock()
+	active[name] = sup
+	mu.Unlock()
 	return nil
 }
 

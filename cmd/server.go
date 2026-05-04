@@ -33,6 +33,7 @@ import (
 	"github.com/flanksource/incident-commander/metrics"
 	"github.com/flanksource/incident-commander/notification"
 	pluginregistry "github.com/flanksource/incident-commander/plugin/registry"
+	pluginsupervisor "github.com/flanksource/incident-commander/plugin/supervisor"
 	echov4 "github.com/labstack/echo/v4"
 
 	// register event handlers & echo routers
@@ -157,6 +158,7 @@ func launchKopper(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Team: %v", err))
 	}
 
+	pluginsupervisor.WireSupervisor(ctx)
 	if _, err := kopper.SetupReconciler(ctx, mgr,
 		pluginregistry.PersistPluginFromCRD,
 		pluginregistry.DeletePlugin,
