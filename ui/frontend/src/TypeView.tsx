@@ -4,6 +4,7 @@ import {
   Badge,
   DataTable,
   DetailEmptyState,
+  ErrorDetails,
   FilterBar,
   Section,
   type DataTableColumn,
@@ -11,6 +12,7 @@ import {
   type FilterBarMultiFilterMode,
   type MultiSelectOption,
 } from "@flanksource/clicky-ui";
+import { errorDiagnosticsFromUnknown } from "./api/http";
 import { ConfigIcon } from "./ConfigIcon";
 import type { ConfigItem } from "./api/types";
 import {
@@ -210,11 +212,10 @@ export function TypeView({ configType }: TypeViewProps) {
           {listQuery.isLoading && (
             <div className="text-sm text-muted-foreground">Loading...</div>
           )}
-          {listQuery.error && (
-            <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
-              {listQuery.error instanceof Error ? listQuery.error.message : String(listQuery.error)}
-            </div>
-          )}
+          {listQuery.error && (() => {
+            const diagnostics = errorDiagnosticsFromUnknown(listQuery.error) ?? { message: "Failed to load config items", context: [] };
+            return <ErrorDetails diagnostics={diagnostics} />;
+          })()}
           {!listQuery.isLoading && !listQuery.error && rows.length === 0 && (
             <DetailEmptyState label="No matching config items" />
           )}

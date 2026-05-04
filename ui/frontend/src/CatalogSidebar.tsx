@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Icon, Tree } from "@flanksource/clicky-ui";
+import { ErrorDetails, Icon, Tree } from "@flanksource/clicky-ui";
 import { fetchCatalogSummary } from "./api";
+import { errorDiagnosticsFromUnknown } from "./api/http";
 import { buildTypeTree, type TypeNode } from "./buildTree";
 import { ConfigIcon } from "./ConfigIcon";
 
@@ -28,9 +29,10 @@ export function CatalogSidebar({ selected }: CatalogSidebarProps) {
   }
 
   if (error) {
+    const diagnostics = errorDiagnosticsFromUnknown(error) ?? { message: "Failed to load catalog", context: [] };
     return (
-      <div className="p-4 text-xs text-destructive">
-        Failed to load catalog: {error instanceof Error ? error.message : String(error)}
+      <div className="p-4">
+        <ErrorDetails diagnostics={diagnostics} />
       </div>
     );
   }

@@ -1,7 +1,52 @@
+import { normalizeErrorDiagnostics, type ErrorDiagnostics } from "@flanksource/clicky-ui";
+
 export type PaginatedResult<T> = {
   data: T;
   total?: number;
 };
+
+// ApiError preserves the structured oops payload returned by the backend
+// (`{error, code, time, trace, context, stacktrace, ...}`) alongside the
+// plain message, so call sites can render `<ErrorDetails>` from any caught
+// error without re-parsing the response body.
+export class ApiError extends Error {
+  readonly status: number;
+  readonly diagnostics: ErrorDiagnostics;
+  readonly body?: unknown;
+
+  constructor(message: string, status: number, diagnostics: ErrorDiagnostics, body?: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.diagnostics = diagnostics;
+    this.body = body;
+  }
+}
+
+export function errorDiagnosticsFromUnknown(error: unknown): ErrorDiagnostics | null {
+  if (!error) return null;
+  if (error instanceof ApiError) return error.diagnostics;
+  if (error instanceof Error) {
+    return normalizeErrorDiagnostics(error.message) ?? { message: error.message, context: [] };
+  }
+  return normalizeErrorDiagnostics(error);
+}
+
+async function failResponse(method: string, path: string, response: Response): Promise<never> {
+  const fallback = `${method} ${path} failed with ${response.status}: ${response.statusText || "request failed"}`;
+  let body: unknown;
+  let diagnostics: ErrorDiagnostics | null = null;
+  try {
+    body = await response.clone().json();
+    diagnostics = normalizeErrorDiagnostics(body, fallback);
+  } catch {
+    const text = await response.text().catch(() => "");
+    body = text;
+    diagnostics = text.trim() ? { message: text.trim(), context: [] } : null;
+  }
+  const finalDiagnostics: ErrorDiagnostics = diagnostics ?? { message: fallback, context: [] };
+  throw new ApiError(finalDiagnostics.message, response.status, finalDiagnostics, body);
+}
 
 export async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -14,8 +59,7 @@ export async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T>
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`${init?.method ?? "GET"} ${path} failed with ${response.status}: ${text || response.statusText}`);
+    await failResponse(init?.method ?? "GET", path, response);
   }
 
   if (response.status === 204) {
@@ -34,8 +78,7 @@ export async function fetchPostgrest<T>(path: string): Promise<PaginatedResult<T
   });
 
   if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`GET ${path} failed with ${response.status}: ${text || response.statusText}`);
+    await failResponse("GET", path, response);
   }
 
   return {

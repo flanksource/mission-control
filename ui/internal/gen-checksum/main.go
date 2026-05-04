@@ -1,11 +1,11 @@
-// gen-checksum hashes the UI bundle (ui.js + bundle CSS) and writes the
-// result into ui/bundle_checksum.go. Invoked by `go generate ./ui/...`
-// (see ui/assets.go's //go:generate directive) and by the Taskfile's
-// go:build dependency chain.
+// gen-checksum hashes every file in ui/frontend/dist (the vite build output)
+// and writes the result into ui/bundle_checksum.go. Invoked by
+// `go generate ./ui/...` (see ui/assets.go's //go:generate directive) and by
+// the Taskfile's go:build dependency chain.
 //
-// The checksum is embedded as a constant so the Go server can use it as
-// an ETag on /ui responses: any rebuild of the frontend produces a new
-// hash, which invalidates browser caches without changing the HTTP path.
+// The checksum becomes the ETag on the SPA shell so any change to any asset
+// invalidates the browser cache for index.html, even though the hashed
+// filenames inside assets/ already invalidate themselves.
 package main
 
 import (
@@ -14,18 +14,34 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
+	"sort"
+	"strings"
 )
 
-const outputPath = "bundle_checksum.go"
-
-var inputs = []string{
-	"frontend/dist/ui.js",
-	"frontend/dist/incident-commander-ui.css",
-}
+const (
+	outputPath = "bundle_checksum.go"
+	distRoot   = "frontend/dist"
+)
 
 func main() {
+	files, err := collectFiles(distRoot)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "gen-checksum: walk %s: %v\n", distRoot, err)
+		os.Exit(1)
+	}
+	if len(files) == 0 {
+		fmt.Fprintf(os.Stderr, "gen-checksum: no files under %s\n", distRoot)
+		os.Exit(1)
+	}
+
 	hasher := sha256.New()
-	for _, path := range inputs {
+	for _, path := range files {
+		// Mix the relative path in so renames change the checksum even if the
+		// file body is identical.
+		rel, _ := filepath.Rel(distRoot, path)
+		fmt.Fprintln(hasher, filepath.ToSlash(rel))
+
 		f, err := os.Open(path)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "gen-checksum: open %s: %v\n", path, err)
@@ -45,7 +61,7 @@ func main() {
 
 package ui
 
-// BundleChecksum is the sha256 of the embedded UI bundle (ui.js + css).
+// BundleChecksum is the sha256 of every file under ui/frontend/dist.
 // Regenerated on every `+"`task go:build`"+` or `+"`go generate ./ui/...`"+`.
 const BundleChecksum = %q
 `, sum)
@@ -54,4 +70,29 @@ const BundleChecksum = %q
 		fmt.Fprintf(os.Stderr, "gen-checksum: write %s: %v\n", outputPath, err)
 		os.Exit(1)
 	}
+}
+
+func collectFiles(root string) ([]string, error) {
+	var files []string
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		// Skip source maps so dev/release builds with differing sourcemap
+		// content don't churn the checksum unnecessarily — the JS/CSS hash
+		// is what actually matters for cache busting.
+		if strings.HasSuffix(path, ".map") {
+			return nil
+		}
+		files = append(files, path)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	sort.Strings(files)
+	return files, nil
 }

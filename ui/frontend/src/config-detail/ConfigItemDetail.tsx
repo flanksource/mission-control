@@ -4,6 +4,7 @@ import {
   Badge,
   DataTable,
   DetailEmptyState,
+  ErrorDetails,
   Icon,
   JsonView,
   KeyValueList,
@@ -14,6 +15,7 @@ import {
   type KeyValueListItem,
   type MatrixTableRow,
 } from "@flanksource/clicky-ui";
+import { errorDiagnosticsFromUnknown } from "../api/http";
 import { ConfigIcon } from "../ConfigIcon";
 import {
   useConfigAccess,
@@ -62,8 +64,10 @@ import type {
   ConfigSeverity as UIConfigSeverity,
   ConfigTypedChange,
 } from "./config-changes/types";
+import { PluginTab } from "./PluginTab";
+import { pluginTabKey, usePluginTabs } from "./use-plugin-tabs";
 
-type TabKey = "overview" | "relationships" | "changes" | "insights" | "access" | "playbooks" | "json";
+type TabKey = "overview" | "relationships" | "changes" | "insights" | "access" | "playbooks" | "json" | string;
 
 export type ConfigItemDetailProps = {
   id: string;
@@ -85,6 +89,7 @@ export function ConfigItemDetail({ id }: ConfigItemDetailProps) {
   const insights = insightsQuery.data ?? [];
   const access = accessQuery.data?.summary ?? [];
   const parents = parentsQuery.data ?? [];
+  const { plugins: pluginListings } = usePluginTabs(id);
 
   if (configQuery.isLoading) {
     return <LoadingState label="Loading config item" />;
@@ -116,6 +121,27 @@ export function ConfigItemDetail({ id }: ConfigItemDetailProps) {
     { key: "playbooks", label: "Playbooks", icon: "lucide:play-square" },
     { key: "json", label: "JSON", icon: "lucide:braces" },
   ];
+
+  for (const plugin of pluginListings) {
+    for (const t of plugin.tabs ?? []) {
+      tabs.push({
+        key: pluginTabKey(plugin.name, t.name),
+        label: t.name,
+        icon: t.icon || "lucide:puzzle",
+      });
+    }
+  }
+
+  const activePluginTab = (() => {
+    if (typeof activeTab !== "string" || !activeTab.startsWith("plugin:")) {
+      return null;
+    }
+    const [, pluginName, tabName] = activeTab.split(":");
+    const plugin = pluginListings.find((p) => p.name === pluginName);
+    const tab = plugin?.tabs?.find((t) => t.name === tabName);
+    if (!plugin || !tab) return null;
+    return { pluginName, tabPath: tab.path };
+  })();
 
   const tabBar = (
     <div className="border-b border-border pb-2">
@@ -171,6 +197,13 @@ export function ConfigItemDetail({ id }: ConfigItemDetailProps) {
             )}
             {activeTab === "playbooks" && <ConfigPlaybooksTab config={config} />}
             {activeTab === "json" && <JsonTab config={config} />}
+            {activePluginTab && (
+              <PluginTab
+                pluginName={activePluginTab.pluginName}
+                tabPath={activePluginTab.tabPath}
+                configId={id}
+              />
+            )}
           </div>
         }
       />
@@ -1316,9 +1349,17 @@ function LoadingState({ label }: { label: string }) {
 }
 
 function ErrorState({ error }: { error: unknown }) {
+  const diagnostics = errorDiagnosticsFromUnknown(error);
+  if (!diagnostics) {
+    return (
+      <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
+        Unknown error
+      </div>
+    );
+  }
   return (
-    <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
-      {error instanceof Error ? error.message : String(error)}
+    <div className="p-4">
+      <ErrorDetails diagnostics={diagnostics} />
     </div>
   );
 }

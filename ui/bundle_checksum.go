@@ -2,6 +2,6 @@
 
 package ui
 
-// BundleChecksum is the sha256 of the embedded UI bundle (ui.js + css).
+// BundleChecksum is the sha256 of every file under ui/frontend/dist.
 // Regenerated on every `task go:build` or `go generate ./ui/...`.
-const BundleChecksum = "9b7c62bd47231916a32efb2a46d1c743fea5a4a67f84737b6df00bbd921e291f"
+const BundleChecksum = "4b336bc60dfd493ff4dc147d035ac328015de58b619a13f149104af4a2356219"
