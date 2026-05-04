@@ -150,9 +150,11 @@ tasks:
       - pnpm-lock.yaml
       - pnpm-workspace.yaml
     status:
-      # Reinstall if node_modules is missing or older than the lockfile.
-      - test -d node_modules
-      - test node_modules -nt pnpm-lock.yaml
+      # `.modules.yaml` is only written after a successful install — a stale
+      # `node_modules/` containing only `.pnpm/` (broken install) won't pass.
+      - test -f node_modules/.modules.yaml
+      - test node_modules/.modules.yaml -nt pnpm-lock.yaml
+      - test node_modules/.modules.yaml -nt package.json
 
   ui:build:
     desc: Build the embedded UI bundle (tsc --noEmit + vite) into ui/frontend/dist
@@ -173,8 +175,8 @@ tasks:
       - ../../../clicky-ui/packages/ui/dist/index.mjs
       - ../../../clicky-ui/packages/ui/src/styles/**/*.css
     generates:
-      - dist/ui.js
-      - dist/incident-commander-ui.css
+      - dist/index.html
+      - dist/assets/**
 
   ui:test:
     desc: Run frontend unit tests (vitest)
@@ -194,8 +196,8 @@ tasks:
     cmds:
       - go generate ./ui/...
     sources:
-      - ui/frontend/dist/ui.js
-      - ui/frontend/dist/incident-commander-ui.css
+      - ui/frontend/dist/index.html
+      - ui/frontend/dist/assets/**
       - ui/internal/gen-checksum/main.go
     generates:
       - ui/bundle_checksum.go
@@ -235,14 +237,157 @@ tasks:
       - "**/*.go"
       - go.mod
       - go.sum
-      - ui/frontend/dist/ui.js
-      - ui/frontend/dist/incident-commander-ui.css
+      - ui/frontend/dist/index.html
+      - ui/frontend/dist/assets/**
       - ui/bundle_checksum.go
       - exclude: ui/frontend/node_modules/**
       - exclude: .bin/**
       - exclude: .task/**
     generates:
       - "{{.BINARY}}"
+
+  # ────────────── Plugins ──────────────
+
+  ui:install:plugin:kubernetes-logs:
+    desc: Install pnpm deps for the kubernetes-logs plugin UI workspace
+    dir: plugins/kubernetes-logs/ui-src
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+    sources:
+      - package.json
+      - pnpm-workspace.yaml
+    status:
+      # `.modules.yaml` only exists after a successful install — guards
+      # against a half-populated node_modules/ that contains only `.pnpm/`.
+      - test -f node_modules/.modules.yaml
+      - test node_modules/.modules.yaml -nt package.json
+
+  ui:build:plugin:kubernetes-logs:
+    desc: Build the kubernetes-logs plugin UI bundle into plugins/kubernetes-logs/ui
+    dir: plugins/kubernetes-logs/ui-src
+    deps: [ui:install:plugin:kubernetes-logs]
+    env:
+      PLUGIN_VERSION: "{{.VERSION}}"
+      PLUGIN_BUILD_DATE: "{{.BUILD_DATE}}"
+    cmds:
+      - pnpm run build
+    sources:
+      - src/**/*.ts
+      - src/**/*.tsx
+      - src/**/*.css
+      - index.html
+      - package.json
+      - tsconfig.json
+      - vite.config.ts
+      # Rebuild when clicky-ui dist or its style tokens change.
+      - ../../../../clicky-ui/packages/ui/dist/index.mjs
+      - ../../../../clicky-ui/packages/ui/src/styles/**/*.css
+    generates:
+      - ../ui/index.html
+
+  generate:plugin:kubernetes-logs:
+    desc: Regenerate ui_checksum.go (sha256 of the embedded UI bundle)
+    deps: [ui:build:plugin:kubernetes-logs]
+    cmds:
+      - go generate ./plugins/kubernetes-logs/...
+    sources:
+      - plugins/kubernetes-logs/ui/**
+      - plugins/kubernetes-logs/internal/gen-checksum/main.go
+    generates:
+      - plugins/kubernetes-logs/ui_checksum.go
+
+  build:plugin:kubernetes-logs:
+    desc: Build the kubernetes-logs reference plugin (UI + checksum + Go binary) into $MISSION_CONTROL_PLUGIN_PATH
+    deps: [generate:plugin:kubernetes-logs]
+    vars:
+      PLUGIN_NAME: kubernetes-logs
+      PLUGIN_DIR: "{{.ROOT_DIR}}/plugins/kubernetes-logs"
+      PLUGIN_PATH:
+        sh: echo "${MISSION_CONTROL_PLUGIN_PATH:-$HOME/.mission-control/plugins}"
+    cmds:
+      - mkdir -p {{.PLUGIN_PATH}}
+      - >-
+        go build -o {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}
+        -ldflags "-X 'main.Version={{.VERSION}}' -X 'main.BuildDate={{.BUILD_DATE}}'"
+        ./plugins/{{.PLUGIN_NAME}}
+      - echo "Installed {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}} version={{.VERSION}} built={{.BUILD_DATE}}"
+    sources:
+      - plugins/kubernetes-logs/**/*.go
+      - plugins/kubernetes-logs/ui/**
+      - plugins/kubernetes-logs/ui_checksum.go
+      - plugin/**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}"
+
+  ui:install:plugin:sql-server:
+    desc: Install pnpm deps for the sql-server plugin UI workspace
+    dir: plugins/sql-server/ui-src
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+    sources:
+      - package.json
+    status:
+      # `.modules.yaml` only exists after a successful install — guards
+      # against a half-populated node_modules/ that contains only `.pnpm/`.
+      - test -f node_modules/.modules.yaml
+      - test node_modules/.modules.yaml -nt package.json
+
+  ui:build:plugin:sql-server:
+    desc: Build the sql-server plugin UI bundle into plugins/sql-server/ui
+    dir: plugins/sql-server/ui-src
+    deps: [ui:install:plugin:sql-server]
+    env:
+      PLUGIN_VERSION: "{{.VERSION}}"
+      PLUGIN_BUILD_DATE: "{{.BUILD_DATE}}"
+    cmds:
+      - pnpm run build
+    sources:
+      - src/**/*.ts
+      - src/**/*.tsx
+      - index.html
+      - package.json
+      - tsconfig.json
+      - vite.config.ts
+    generates:
+      - ../ui/index.html
+
+  generate:plugin:sql-server:
+    desc: Regenerate ui_checksum.go (sha256 of the embedded UI bundle)
+    deps: [ui:build:plugin:sql-server]
+    cmds:
+      - go generate ./plugins/sql-server/...
+    sources:
+      - plugins/sql-server/ui/**
+      - plugins/sql-server/internal/gen-checksum/main.go
+    generates:
+      - plugins/sql-server/ui_checksum.go
+
+  build:plugin:sql-server:
+    desc: Build the sql-server plugin (UI + checksum + Go binary) into $MISSION_CONTROL_PLUGIN_PATH
+    deps: [generate:plugin:sql-server]
+    vars:
+      PLUGIN_NAME: sql-server
+      PLUGIN_DIR: "{{.ROOT_DIR}}/plugins/sql-server"
+      PLUGIN_PATH:
+        sh: echo "${MISSION_CONTROL_PLUGIN_PATH:-$HOME/.mission-control/plugins}"
+    cmds:
+      - mkdir -p {{.PLUGIN_PATH}}
+      - >-
+        go build -o {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}
+        -ldflags "-X 'main.Version={{.VERSION}}' -X 'main.BuildDate={{.BUILD_DATE}}'"
+        ./plugins/{{.PLUGIN_NAME}}
+      - echo "Installed {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}} version={{.VERSION}} built={{.BUILD_DATE}}"
+    sources:
+      - plugins/sql-server/**/*.go
+      - plugins/sql-server/ui/**
+      - plugins/sql-server/ui_checksum.go
+      - plugin/**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}"
 
   # ────────────── Developer loops ──────────────
 

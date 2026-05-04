@@ -7,7 +7,6 @@ import (
 	"github.com/flanksource/clicky/api"
 	"github.com/flanksource/clicky/api/icons"
 	clickyfmt "github.com/flanksource/clicky/formatters"
-	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 )
 
@@ -71,7 +70,7 @@ func (r resourceRow) Row() map[string]any {
 		"Name":      clicky.LinkCommand("getResource").WithArgs(r.ID).Append(r.Name, "text-sky-700 underline"),
 		"Type":      r.Type,
 		"Namespace": r.Namespace,
-		"Health":    models.Health(r.Health).Badge(),
+		"Health":    "", // TODO: restore once duty exposes Health on SelectedResource
 		"Tags":      tagsBadges(r.Tags),
 		"Agent":     r.Agent,
 		"ID":        r.ID,

@@ -219,3 +219,14 @@ report/kitchen-sink.json: report/build-kitchen-sink.ts report/testdata/kitchen-s
 .PHONY: lint
 lint: golangci-lint
 	$(GOLANGCI_LINT) run ./...
+
+.PHONY: proto
+proto: ## Regenerate plugin gRPC stubs from plugin/proto/plugin.proto
+	@command -v protoc >/dev/null || (echo "protoc not installed"; exit 1)
+	@command -v protoc-gen-go >/dev/null || go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	@command -v protoc-gen-go-grpc >/dev/null || go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+	protoc \
+		--proto_path=plugin/proto \
+		--go_out=plugin/proto --go_opt=paths=source_relative \
+		--go-grpc_out=plugin/proto --go-grpc_opt=paths=source_relative \
+		plugin/proto/plugin.proto
