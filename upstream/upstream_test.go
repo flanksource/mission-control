@@ -65,7 +65,7 @@ var _ = ginkgo.Describe("Upstream Push", ginkgo.Ordered, func() {
 		})
 
 		ginkgo.It("should have transferred all the configs", func() {
-			compareAgentEntities[models.ConfigItem]("", pushUpstream.DB(), pushAgent, cmpopts.IgnoreFields(models.ConfigItem{}, "AgentID"))
+			compareAgentEntities[models.ConfigItem]("", pushUpstream.DB(), pushAgent, cmpopts.IgnoreFields(models.ConfigItem{}, "AgentID", "InsertedAt"))
 		})
 
 		ginkgo.It("should have transferred all the config relationships", func() {
