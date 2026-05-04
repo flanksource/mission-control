@@ -32,6 +32,8 @@ import (
 	"github.com/flanksource/incident-commander/mcp"
 	"github.com/flanksource/incident-commander/metrics"
 	"github.com/flanksource/incident-commander/notification"
+	pluginregistry "github.com/flanksource/incident-commander/plugin/registry"
+	pluginsupervisor "github.com/flanksource/incident-commander/plugin/supervisor"
 	echov4 "github.com/labstack/echo/v4"
 
 	// register event handlers & echo routers
@@ -39,6 +41,7 @@ import (
 	_ "github.com/flanksource/incident-commander/catalog"
 	_ "github.com/flanksource/incident-commander/connection"
 	_ "github.com/flanksource/incident-commander/playbook"
+	_ "github.com/flanksource/incident-commander/plugin/controller"
 	_ "github.com/flanksource/incident-commander/shorturl"
 	_ "github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/teams"
@@ -153,6 +156,16 @@ func launchKopper(ctx context.Context) {
 		"team.mission-control.flanksource.com",
 	); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Team: %v", err))
+	}
+
+	pluginsupervisor.WireSupervisor(ctx)
+	if _, err := kopper.SetupReconciler(ctx, mgr,
+		pluginregistry.PersistPluginFromCRD,
+		pluginregistry.DeletePlugin,
+		pluginregistry.DeleteStalePlugin,
+		"plugin.mission-control.flanksource.com",
+	); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Plugin: %v", err))
 	}
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
