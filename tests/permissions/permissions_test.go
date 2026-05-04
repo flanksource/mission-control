@@ -280,7 +280,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload.View).To(BeEmpty(), "view scope should be empty for guest user with no permissions")
 		})
 
-		It("should not include deny permissions with object selectors in RLS payload", func() {
+		It("should mark deny permissions with object selectors in RLS payload", func() {
 			denyOnlyUser := setup.CreateUserWithRole(DefaultContext, "Deny Only User", "deny-only@test.com", policy.RoleGuest)
 			DeferCleanup(func() {
 				auth.InvalidateRLSCacheForUser(denyOnlyUser.ID.String())
@@ -306,7 +306,8 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(payload).ToNot(BeNil())
 			Expect(payload.Disable).To(BeFalse())
-			Expect(payload.Playbook).To(BeEmpty(), "deny permissions must not become allowed RLS playbook scopes")
+			Expect(payload.Playbook).To(ContainElement(rls.Scope{Names: []string{"echo-config"}, Deny: true}), "deny permissions must be marked as deny RLS playbook scopes")
+			Expect(payload.Playbook).ToNot(ContainElement(rls.Scope{Names: []string{"echo-config"}}), "deny permissions must not become unmarked allowed RLS playbook scopes")
 		})
 
 		It("should include direct ID-based permissions in RLS payload", func() {

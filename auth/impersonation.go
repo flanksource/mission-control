@@ -78,6 +78,7 @@ func intersectScope(a, b rls.Scope) (rls.Scope, bool) {
 		}
 	}
 
+	result.Deny = a.Deny || b.Deny
 	return result, true
 }
 
@@ -100,15 +101,36 @@ func intersectScopeList(real, impersonated []rls.Scope) []rls.Scope {
 	return result
 }
 
+func splitScopeList(scopes []rls.Scope) (allow, deny []rls.Scope) {
+	for _, scope := range scopes {
+		if scope.Deny {
+			deny = append(deny, scope)
+		} else {
+			allow = append(allow, scope)
+		}
+	}
+	return allow, deny
+}
+
+func intersectPermissionedScopeList(real, impersonated []rls.Scope) []rls.Scope {
+	realAllow, realDeny := splitScopeList(real)
+	impersonatedAllow, impersonatedDeny := splitScopeList(impersonated)
+
+	result := intersectScopeList(realAllow, impersonatedAllow)
+	result = append(result, realDeny...)
+	result = append(result, impersonatedDeny...)
+	return result
+}
+
 // intersectPayload computes the intersection of two RLS payloads across all
 // resource types.
 func intersectPayload(real, impersonated *rls.Payload) *rls.Payload {
 	result := &rls.Payload{
-		Config:    intersectScopeList(real.Config, impersonated.Config),
-		Component: intersectScopeList(real.Component, impersonated.Component),
-		Playbook:  intersectScopeList(real.Playbook, impersonated.Playbook),
-		Canary:    intersectScopeList(real.Canary, impersonated.Canary),
-		View:      intersectScopeList(real.View, impersonated.View),
+		Config:    intersectPermissionedScopeList(real.Config, impersonated.Config),
+		Component: intersectPermissionedScopeList(real.Component, impersonated.Component),
+		Playbook:  intersectPermissionedScopeList(real.Playbook, impersonated.Playbook),
+		Canary:    intersectPermissionedScopeList(real.Canary, impersonated.Canary),
+		View:      intersectPermissionedScopeList(real.View, impersonated.View),
 		Scopes:    lo.Intersect(real.Scopes, impersonated.Scopes),
 	}
 	return result
