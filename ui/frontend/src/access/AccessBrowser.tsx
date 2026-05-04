@@ -3,6 +3,7 @@ import {
   Badge,
   DataTable,
   DetailEmptyState,
+  ErrorDetails,
   FilterBar,
   KeyValueList,
   MatrixTable,
@@ -12,6 +13,7 @@ import {
   type KeyValueListItem,
   type MatrixTableRow,
 } from "@flanksource/clicky-ui";
+import { errorDiagnosticsFromUnknown } from "../api/http";
 import { ResourceIcon } from "@flanksource/icons/icon";
 import { ConfigIcon } from "../ConfigIcon";
 import {
@@ -346,11 +348,8 @@ function QueryState({
     return <div className="text-sm text-muted-foreground">Loading...</div>;
   }
   if (query.error) {
-    return (
-      <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
-        {query.error instanceof Error ? query.error.message : String(query.error)}
-      </div>
-    );
+    const diagnostics = errorDiagnosticsFromUnknown(query.error) ?? { message: "Failed to load", context: [] };
+    return <ErrorDetails diagnostics={diagnostics} />;
   }
   if (Array.isArray(query.data) && query.data.length === 0) {
     return <DetailEmptyState icon={emptyIcon} label={emptyLabel} />;

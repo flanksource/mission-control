@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Badge,
   DetailEmptyState,
+  ErrorDetails,
   Icon,
   JsonView,
   KeyValueList,
@@ -10,6 +11,7 @@ import {
   Section,
   type KeyValueListItem,
 } from "@flanksource/clicky-ui";
+import { errorDiagnosticsFromUnknown } from "../api/http";
 import { ConfigIcon } from "../ConfigIcon";
 import {
   bulkDeleteConfigItems,
@@ -346,11 +348,10 @@ function BulkConfigItemDeleteDialog({
             {success}
           </div>
         )}
-        {mutation.error && (
-          <div className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-            {mutation.error instanceof Error ? mutation.error.message : String(mutation.error)}
-          </div>
-        )}
+        {mutation.error && (() => {
+          const diagnostics = errorDiagnosticsFromUnknown(mutation.error) ?? { message: "Action failed", context: [] };
+          return <ErrorDetails diagnostics={diagnostics} />;
+        })()}
         <div className="flex justify-end gap-2">
           <button
             type="button"
@@ -443,11 +444,8 @@ function ScraperTable({ rows }: { rows: ConfigScraper[] }) {
 function ScraperStatsSection({ query }: { query: { isLoading: boolean; error: unknown; data?: ScraperStats } }) {
   if (query.isLoading) return <div className="text-sm text-muted-foreground">Loading stats...</div>;
   if (query.error) {
-    return (
-      <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
-        {query.error instanceof Error ? query.error.message : String(query.error)}
-      </div>
-    );
+    const diagnostics = errorDiagnosticsFromUnknown(query.error) ?? { message: "Failed to load", context: [] };
+    return <ErrorDetails diagnostics={diagnostics} />;
   }
   if (!query.data) return null;
   const stats = query.data;
@@ -525,11 +523,10 @@ function ScraperHistorySection({
     <Section title="History" icon="lucide:history" defaultOpen summary={history.length ? `${history.length} runs` : undefined}>
       {loading ? (
         <div className="text-sm text-muted-foreground">Loading history...</div>
-      ) : error ? (
-        <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
-          {error instanceof Error ? error.message : String(error)}
-        </div>
-      ) : history.length === 0 ? (
+      ) : error ? (() => {
+        const diagnostics = errorDiagnosticsFromUnknown(error) ?? { message: "Failed to load history", context: [] };
+        return <ErrorDetails diagnostics={diagnostics} />;
+      })() : history.length === 0 ? (
         <DetailEmptyState icon="lucide:history" label="No scraper history" />
       ) : (
         <div className="overflow-hidden rounded-md border border-border">
@@ -663,11 +660,8 @@ function QueryState({
 }) {
   if (query.isLoading) return <div className="text-sm text-muted-foreground">Loading...</div>;
   if (query.error) {
-    return (
-      <div className="rounded-md border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive">
-        {query.error instanceof Error ? query.error.message : String(query.error)}
-      </div>
-    );
+    const diagnostics = errorDiagnosticsFromUnknown(query.error) ?? { message: "Failed to load", context: [] };
+    return <ErrorDetails diagnostics={diagnostics} />;
   }
   if (Array.isArray(query.data) && query.data.length === 0) {
     return <DetailEmptyState icon={emptyIcon} label={emptyLabel} />;

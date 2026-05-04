@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseDiagnosticsStackTrace } from "@flanksource/clicky-ui";
 import {
   actionDisplayStatus,
   ansiSegments,
@@ -6,7 +7,6 @@ import {
   errorDiagnosticsFromAction,
   errorDiagnosticsFromRun,
   normalizePlaybookParams,
-  parseDiagnosticsStackTrace,
   outputTextMode,
   playbookRunDuration,
   playbookStatusTone,

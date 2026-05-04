@@ -6,13 +6,60 @@ import { defineConfig } from "vite";
 // Proxy API calls during `vite dev` to a running mission-control backend.
 const apiTarget = process.env.INCIDENT_COMMANDER_API_URL || "http://localhost:8080";
 
+// Vendor chunk groups — each maps a friendly chunk name to a list of
+// substrings matched against the module path. Each group must be a complete
+// dependency-closed unit; any shared transitive dep falls back to the
+// catch-all `vendor` chunk, which Rollup warns about with circular-chunk
+// errors when the split isn't clean.
+const vendorChunks: Record<string, string[]> = {
+  "vendor-react": ["/react/", "/react-dom/", "/scheduler/"],
+  "vendor-query": ["/@tanstack/"],
+  "vendor-clicky": ["/@flanksource/clicky-ui/", "/@flanksource/icons/"],
+  "vendor-iconify": ["/@iconify/", "/iconify-icon/"],
+  "vendor-radix": ["/@radix-ui/"],
+  // Scalar's API reference + everything it transitively imports (Vue,
+  // CodeMirror, Lezer grammars, floating-ui, headless-ui, ai-sdk, vueuse,
+  // markdown/HAST pipeline, shiki + grammars). These all share utility
+  // packages, so splitting them produces circular chunks. Keep the whole
+  // graph in one bucket — the routes that need any of it pull in everything.
+  "vendor-scalar": [
+    "/shiki/",
+    "/@shikijs/",
+    "/@scalar/",
+    "/@codemirror/",
+    "/@lezer/",
+    "/@marijn/",
+    "/@floating-ui/",
+    "/@headlessui/",
+    "/@vue/",
+    "/vue/",
+    "/@vueuse/",
+    "/@unhead/",
+    "/@ai-sdk/",
+    "/@replit/",
+    "/@ungap/",
+    "/remark-",
+    "/rehype-",
+    "/hast-util-",
+    "/mdast-util-",
+    "/micromark",
+    "/unified/",
+    "/unist-util-",
+    "/property-information/",
+    "/stringify-entities/",
+    "/character-entities",
+    "/space-separated-tokens/",
+    "/comma-separated-tokens/",
+    "/zwitch/",
+    "/html-void-elements/",
+    "/ccount/",
+  ],
+};
+
 export default defineConfig({
   base: "/ui/",
   plugins: [tailwindcss(), react()],
   // React and many libraries check `process.env.NODE_ENV` at runtime.
-  // Vite only rewrites these when minifying; with minify=false the
-  // references leak and the browser throws ReferenceError. Replace them
-  // at bundle time so the shipped code is self-contained.
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
     "process.env": "{}",
@@ -36,25 +83,24 @@ export default defineConfig({
   build: {
     outDir: "dist",
     emptyOutDir: true,
-    // Readable stack traces + clickable source locations in Chrome DevTools
-    // when stepping through the bundled app. Flip these off for a production
-    // tree-shake/minify pass (add INCIDENT_COMMANDER_UI_RELEASE=1).
     minify: process.env.INCIDENT_COMMANDER_UI_RELEASE === "1",
-    // Inline the sourcemap as a data:// URI comment so it survives the
-    // <script> inlining in ui/page.go — browsers extract it from the script
-    // itself when there's no separate .map URL.
-    sourcemap: process.env.INCIDENT_COMMANDER_UI_RELEASE === "1" ? true : "inline",
-    // Single-file IIFE so the Go server can //go:embed one bundle and inline
-    // it into the HTML shell. Matches ui/page.go's <script>{bundleJS}</script>.
-    lib: {
-      entry: path.resolve(__dirname, "src/main.tsx"),
-      name: "IncidentCommanderUI",
-      formats: ["iife"],
-      fileName: () => "ui.js",
-    },
+    sourcemap: true,
+    // Cap inline-asset size at 4KB; anything larger gets a separate file
+    // (the Go server embeds the whole dist tree, so extra files are free).
+    assetsInlineLimit: 4096,
     rollupOptions: {
       output: {
-        inlineDynamicImports: true,
+        // Heaviest groups first so the explicit match wins. Anything in
+        // node_modules that doesn't match falls into vendor-scalar — almost
+        // every leftover dep is a scalar transitive (ai-sdk, vfile, radix-vue,
+        // etc) and bundling them together avoids circular-chunk warnings.
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return undefined;
+          for (const [chunkName, patterns] of Object.entries(vendorChunks)) {
+            if (patterns.some((p) => id.includes(p))) return chunkName;
+          }
+          return "vendor-scalar";
+        },
       },
     },
   },
