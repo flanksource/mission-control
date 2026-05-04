@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/kopper"
 	"github.com/google/go-cmp/cmp"
@@ -9,18 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// PluginConnectionMappings maps plugin connection requests to Mission Control connections.
-type PluginConnectionMappings struct {
-	// Types maps a connection type requested by the plugin to the Mission Control
-	// connection that should satisfy that request.
-	//+kubebuilder:validation:Optional
-	Types map[string]string `json:"types,omitempty"`
-
-	// Labels maps plugin-defined connection labels to Mission Control connections.
-	//+kubebuilder:validation:Optional
-	Labels map[string]string `json:"labels,omitempty"`
-}
 
 // PluginSpec configures a binary-backed Mission Control plugin.
 //
@@ -39,6 +28,10 @@ type PluginSpec struct {
 	// (e.g. a semver tag, "latest", or a git ref the deps package supports).
 	Version string `json:"version,omitempty"`
 
+	// Checksum optionally pins the downloaded binary to a known good hash.
+	// When set, deps refuses to install a binary with a different checksum.
+	Checksum string `json:"checksum,omitempty"`
+
 	// Selector decides which catalog (config) items this plugin's tabs
 	// attach to. The same ResourceSelector semantics used by Playbook.Configs
 	// apply: filter by config type, labels, tags, agent, namespace, name.
@@ -46,12 +39,24 @@ type PluginSpec struct {
 	//+kubebuilder:validation:Optional
 	Selector types.ResourceSelector `json:"selector,omitempty"`
 
-	// Connections defines mappings from plugin connection requests to
-	// Mission Control connections. Types maps connection types such as
-	// "sql" or "aws" to a connection URI, while Labels maps plugin-defined
-	// labels such as "artifactProd" or "sqlDev" to a connection URI.
+	// Connections is the set of connections the plugin may request at
+	// runtime. Reuses the same shape as Playbook actions[].exec.connections:
+	// typed fields per connection type (kubernetes/aws/gcp/azure) plus
+	// fromConfigItem, eksPodIdentity and serviceAccount flags. The plugin
+	// asks the host for a connection by type; the host resolves it from the
+	// matching field here (or the catalog item being viewed when
+	// fromConfigItem is set), and refuses any type the plugin didn't declare.
 	//+kubebuilder:validation:Optional
-	Connections PluginConnectionMappings `json:"connections,omitempty"`
+	Connections connection.ExecConnections `json:"connections,omitempty"`
+
+	// SQLConnection lets a Plugin pin a single SQL database to talk to
+	// (sql_server / postgres / mysql). When set, host.GetConnection("sql", ...)
+	// resolves to this connection regardless of which config item the iframe
+	// is showing. When unset, the host falls back to the ScrapeConfig that
+	// produced the current config item and reads `spec.sql[].connection`
+	// from there.
+	//+kubebuilder:validation:Optional
+	SQLConnection *connection.SQLConnection `json:"sqlConnection,omitempty"`
 
 	// Properties are arbitrary key/value settings forwarded to the plugin
 	// via the Configure() RPC at startup. Use this for plugin-specific

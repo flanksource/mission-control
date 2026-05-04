@@ -176,9 +176,9 @@ func runCatalogTree(ctx context.Context, args []string) (*CatalogTreeResults, er
 		}
 	}
 
-	merged := query.MergeConfigTrees(trees)
-	roots := make([]CatalogTreeResult, len(merged))
-	for i, t := range merged {
+	// TODO: restore once duty re-exposes MergeConfigTrees.
+	roots := make([]CatalogTreeResult, len(trees))
+	for i, t := range trees {
 		roots[i] = CatalogTreeResult{ConfigTreeNode: t}
 	}
 	return &CatalogTreeResults{Roots: roots, MatchedCount: len(configs)}, nil
