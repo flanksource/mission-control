@@ -325,17 +325,16 @@ type CatalogReportAccess struct {
 
 func NewCatalogReportAccess(a models.ConfigAccessSummary) CatalogReportAccess {
 	r := CatalogReportAccess{
-		ConfigID:        a.ConfigID.String(),
-		ConfigName:      a.ConfigName,
-		ConfigType:      a.ConfigType,
-		Permalink:       ConfigPermalink(a.ConfigID.String()),
-		UserID:          a.ExternalUserID.String(),
-		UserName:        a.User,
-		Email:           a.Email,
-		Role:            a.Role,
-		RoleExternalIDs: []string(a.RoleExternalIDs),
-		UserType:        a.UserType,
-		CreatedAt:       a.CreatedAt.Format(time.RFC3339),
+		ConfigID:   a.ConfigID.String(),
+		ConfigName: a.ConfigName,
+		ConfigType: a.ConfigType,
+		Permalink:  ConfigPermalink(a.ConfigID.String()),
+		UserID:     a.ExternalUserID.String(),
+		UserName:   a.User,
+		Email:      a.Email,
+		Role:       a.Role,
+		UserType:   a.UserType,
+		CreatedAt:  a.CreatedAt.Format(time.RFC3339),
 	}
 	if a.LastSignedInAt != nil {
 		s := a.LastSignedInAt.Format(time.RFC3339)
