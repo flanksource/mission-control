@@ -400,7 +400,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 
 	ginkgo.Describe("LoginHandler", func() {
 		ginkgo.It("renders login form with auth_request_id", func() {
-			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{}, mockLookup, "http://localhost:8080")
+			login := oidc.NewPasswordLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{}, mockLookup, "http://localhost:8080")
 			e := newEchoInstance(DefaultContext)
 			req := httptest.NewRequest(http.MethodGet, "/oidc/login?auth_request_id=test-123", nil)
 			req = req.WithContext(DefaultContext.Wrap(req.Context()))
@@ -414,7 +414,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 		})
 
 		ginkgo.It("returns 400 when auth_request_id is missing", func() {
-			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{}, mockLookup, "http://localhost:8080")
+			login := oidc.NewPasswordLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{}, mockLookup, "http://localhost:8080")
 			e := newEchoInstance(DefaultContext)
 			req := httptest.NewRequest(http.MethodGet, "/oidc/login", nil)
 			req = req.WithContext(DefaultContext.Wrap(req.Context()))
@@ -426,7 +426,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 		})
 
 		ginkgo.It("redirects to external login when checker supports login redirect", func() {
-			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &redirectChecker{}, mockLookup, "http://localhost:8080")
+			login := oidc.NewExternalLoginHandler(provider.Storage, provider.OpenIDProvider, &redirectChecker{}, "http://localhost:8080")
 			e := newEchoInstance(DefaultContext)
 			req := httptest.NewRequest(http.MethodGet, "/oidc/login?auth_request_id=req-123", nil)
 			req = req.WithContext(DefaultContext.Wrap(req.Context()))
@@ -448,7 +448,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 			ar, err := provider.Storage.CreateAuthRequest(gocontext.TODO(), req, "")
 			Expect(err).ToNot(HaveOccurred())
 
-			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &callbackChecker{subjectID: person.ID.String()}, mockLookup, "http://localhost:8080")
+			login := oidc.NewExternalLoginHandler(provider.Storage, provider.OpenIDProvider, &callbackChecker{subjectID: person.ID.String()}, "http://localhost:8080")
 			e := newEchoInstance(DefaultContext)
 			httpReq := httptest.NewRequest(http.MethodGet, "/oidc/kratos/callback?auth_request_id="+ar.GetID(), nil)
 			httpReq = httpReq.WithContext(DefaultContext.Wrap(httpReq.Context()))
@@ -465,7 +465,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 		})
 
 		ginkgo.It("rejects invalid credentials", func() {
-			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{valid: false}, mockLookup, "http://localhost:8080")
+			login := oidc.NewPasswordLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{valid: false}, mockLookup, "http://localhost:8080")
 			e := newEchoInstance(DefaultContext)
 
 			form := url.Values{
@@ -595,20 +595,20 @@ func (m *mockChecker) Match(_ dutyContext.Context, _, _ string) error {
 
 type redirectChecker struct{}
 
-func (r *redirectChecker) Match(_ dutyContext.Context, _, _ string) error {
-	return nil
-}
-
 func (r *redirectChecker) LoginRedirectURL(authRequestID string) (string, error) {
 	return "http://localhost:3000/login?return_to=%2Foidc%2Fkratos%2Fcallback%3Fauth_request_id%3D" + authRequestID, nil
+}
+
+func (r *redirectChecker) CallbackSubject(_ echo.Context) (string, error) {
+	return "", nil
 }
 
 type callbackChecker struct {
 	subjectID string
 }
 
-func (r *callbackChecker) Match(_ dutyContext.Context, _, _ string) error {
-	return nil
+func (r *callbackChecker) LoginRedirectURL(string) (string, error) {
+	return "", nil
 }
 
 func (r *callbackChecker) CallbackSubject(_ echo.Context) (string, error) {

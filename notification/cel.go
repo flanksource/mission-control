@@ -3,6 +3,7 @@ package notification
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"slices"
 	"time"
 
@@ -59,6 +60,28 @@ func (t *celVariables) SetSilenceURL(frontendURL string) {
 	case t.Canary != nil:
 		t.SilenceURL = fmt.Sprintf("%s?canary_id=%s", baseURL, t.Canary.ID.String())
 	}
+}
+
+func (t celVariables) WithNotificationRef(notificationID string) celVariables {
+	t.Permalink = appendRefNotification(t.Permalink, notificationID)
+	return t
+}
+
+func appendRefNotification(rawURL string, notificationID string) string {
+	if rawURL == "" || notificationID == "" {
+		return rawURL
+	}
+
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL
+	}
+
+	query := u.Query()
+	query.Set("refNotification", notificationID)
+	u.RawQuery = query.Encode()
+
+	return u.String()
 }
 
 type ResourceHealthRow struct {
@@ -132,11 +155,31 @@ func (t *celVariables) AsMap(ctx context.Context, opts ...celAsMapOption) map[st
 	resourceContext := duty.GetResourceContext(ctx, t.SelectableResource())
 	if ctx.DB() != nil && slices.Contains(opts, celVarGetLatestHealthStatus) {
 		if r, err := t.GetResourceCurrentHealthStatus(ctx); err == nil {
-			resourceContext["health"] = r.Health
-			resourceContext["status"] = r.Status
+			t.setResourceCurrentHealthStatus(resourceContext, output, r)
 		}
 	}
 	return collections.MergeMap(resourceContext, output)
+}
+
+func (t *celVariables) setResourceCurrentHealthStatus(resourceContext, output map[string]any, r ResourceHealthRow) {
+	resourceContext["health"] = r.Health
+	resourceContext["status"] = r.Status
+
+	switch {
+	case t.ConfigItem != nil:
+		setResourceMapCurrentHealthStatus(output, "config", r)
+	case t.Component != nil:
+		setResourceMapCurrentHealthStatus(output, "component", r)
+	case t.Check != nil:
+		setResourceMapCurrentHealthStatus(output, "check", r)
+	}
+}
+
+func setResourceMapCurrentHealthStatus(output map[string]any, key string, r ResourceHealthRow) {
+	if resourceMap, ok := output[key].(map[string]any); ok {
+		resourceMap["health"] = r.Health
+		resourceMap["status"] = r.Status
+	}
 }
 
 func (t *celVariables) SelectableResource() types.ResourceSelectable {

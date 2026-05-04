@@ -169,7 +169,8 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	}
 
 	for _, id := range notificationIDs {
-		if err := addNotificationEvent(ctx, id, celEnv, event, matchingSilences); err != nil {
+		notificationEnv := celEnv.WithNotificationRef(id)
+		if err := addNotificationEvent(ctx, id, &notificationEnv, event, matchingSilences); err != nil {
 			return ctx.Oops().Wrapf(err, "failed to add notification.send event for event=%s notification=%s", event.Name, id)
 		}
 	}
@@ -487,6 +488,28 @@ func processNotificationConstraints(ctx context.Context,
 	return nil, nil
 }
 
+func shouldSkipNotificationDueToFilter(ctx context.Context, notif NotificationWithSpec, currentHistory models.NotificationSendHistory, celEnv *celVariables) (bool, error) {
+	if notif.Filter == "" {
+		return false, nil
+	}
+
+	valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: notif.Filter}, celEnv.AsMap(ctx, celVarGetLatestHealthStatus))
+	if err != nil {
+		return false, ctx.Oops().Wrapf(err, "failed to validate notification filter for notification:%s", notif.ID)
+	}
+
+	if valid {
+		return false, nil
+	}
+
+	traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] Filter no longer matches, skipping", notif.ID, currentHistory.ID, currentHistory.SourceEvent, currentHistory.ResourceID)
+	if err := db.SkipNotificationSendHistory(ctx, currentHistory.ID); err != nil {
+		return false, fmt.Errorf("failed to skip notification send history (%s): %w", currentHistory.ID, err)
+	}
+
+	return true, nil
+}
+
 func checkInhibition(ctx context.Context, notif NotificationWithSpec, resource types.ResourceSelectable) (*uuid.UUID, error) {
 	// Note: we use the repeat interval as the inhibition window.
 	inhibitionWindow := notif.RepeatInterval
@@ -749,17 +772,17 @@ func _sendNotification(ctx *Context, payload NotificationEventPayload) error {
 		return ErrStaleResourceEvent
 	}
 
-	originalEvent := payload.ParentEvent()
-	if len(payload.Properties) > 0 {
-		if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
-			return fmt.Errorf("failed to unmarshal properties: %w", err)
-		}
+	originalEvent, err := payload.originalEvent()
+	if err != nil {
+		return err
 	}
 
 	celEnv, err := GetEnvForEvent(ctx.Context, originalEvent)
 	if err != nil {
 		return fmt.Errorf("failed to get cel env: %w", err)
 	}
+	notificationEnv := celEnv.WithNotificationRef(payload.NotificationID.String())
+	celEnv = &notificationEnv
 
 	if payload.GroupID != nil {
 		celEnv.GroupedResources, err = db.GetGroupedResources(ctx.Context, *payload.GroupID, payload.ResourceID.String())
@@ -825,6 +848,7 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 		} else if check == nil {
 			return nil, fmt.Errorf("check(id=%s) not found", checkID)
 		}
+		check = new(check.Clone())
 
 		canary, err := query.FindCachedCanary(ctx, check.CanaryID.String())
 		if err != nil {
@@ -940,6 +964,7 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 		} else if component == nil {
 			return nil, fmt.Errorf("component(id=%s) not found", componentID)
 		}
+		component = new(component.Clone())
 
 		agent, err := query.FindCachedAgent(ctx, component.AgentID.String())
 		if err != nil {
@@ -969,6 +994,7 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 		} else if config == nil {
 			return nil, fmt.Errorf("config(id=%s) not found", configID)
 		}
+		config = new(config.Clone())
 
 		agent, err := query.FindCachedAgent(ctx, config.AgentID.String())
 		if err != nil {

@@ -12,34 +12,41 @@ import (
 )
 
 type LoginHandler struct {
-	storage      *Storage
-	provider     op.OpenIDProvider
-	checker      CredentialChecker
-	PersonLookup PersonLookup
-	issuerURL    string
+	storage               *Storage
+	provider              op.OpenIDProvider
+	passwordLoginChecker  PasswordLoginChecker
+	externalLoginProvider ExternalLoginProvider
+	PersonLookup          PersonLookup
+	issuerURL             string
 }
 
-type CredentialChecker interface {
+type PasswordLoginChecker interface {
 	Match(ctx context.Context, user, pass string) error
 }
 
-type LoginRedirector interface {
+type ExternalLoginProvider interface {
 	LoginRedirectURL(authRequestID string) (string, error)
-}
-
-type CallbackSubjectResolver interface {
 	CallbackSubject(c echo.Context) (string, error)
 }
 
 type PersonLookup func(ctx context.Context, user string) (personID string, err error)
 
-func NewLoginHandler(storage *Storage, provider op.OpenIDProvider, checker CredentialChecker, lookup PersonLookup, issuerURL string) *LoginHandler {
+func NewPasswordLoginHandler(storage *Storage, provider op.OpenIDProvider, checker PasswordLoginChecker, lookup PersonLookup, issuerURL string) *LoginHandler {
 	return &LoginHandler{
-		storage:      storage,
-		provider:     provider,
-		checker:      checker,
-		PersonLookup: lookup,
-		issuerURL:    issuerURL,
+		storage:              storage,
+		provider:             provider,
+		passwordLoginChecker: checker,
+		PersonLookup:         lookup,
+		issuerURL:            issuerURL,
+	}
+}
+
+func NewExternalLoginHandler(storage *Storage, provider op.OpenIDProvider, loginProvider ExternalLoginProvider, issuerURL string) *LoginHandler {
+	return &LoginHandler{
+		storage:               storage,
+		provider:              provider,
+		externalLoginProvider: loginProvider,
+		issuerURL:             issuerURL,
 	}
 }
 
@@ -49,12 +56,16 @@ func (h *LoginHandler) ShowForm(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "missing auth_request_id")
 	}
 
-	if redirector, ok := h.checker.(LoginRedirector); ok {
-		redirectURL, err := redirector.LoginRedirectURL(id)
+	if h.externalLoginProvider != nil {
+		redirectURL, err := h.externalLoginProvider.LoginRedirectURL(id)
 		if err != nil {
 			return c.String(http.StatusInternalServerError, "failed to build login redirect")
 		}
 		return c.Redirect(http.StatusFound, redirectURL)
+	}
+
+	if h.passwordLoginChecker == nil {
+		return c.String(http.StatusNotFound, "password login is not configured")
 	}
 
 	return c.HTML(http.StatusOK, fmt.Sprintf(static.LoginHTML, html.EscapeString(id), ""))
@@ -76,7 +87,11 @@ func (h *LoginHandler) HandleSubmit(c echo.Context) error {
 		return renderForm("All fields required")
 	}
 
-	if err := h.checker.Match(ctx, username, password); err != nil {
+	if h.passwordLoginChecker == nil || h.PersonLookup == nil {
+		return c.String(http.StatusNotFound, "password login is not configured")
+	}
+
+	if err := h.passwordLoginChecker.Match(ctx, username, password); err != nil {
 		return renderForm(fmt.Sprintf("Invalid credentials: %v", err))
 	}
 
@@ -100,12 +115,11 @@ func (h *LoginHandler) HandleExternalCallback(c echo.Context) error {
 		return c.String(http.StatusBadRequest, "missing auth_request_id")
 	}
 
-	resolver, ok := h.checker.(CallbackSubjectResolver)
-	if !ok {
+	if h.externalLoginProvider == nil {
 		return c.String(http.StatusNotFound, "external callback is not configured")
 	}
 
-	personID, err := resolver.CallbackSubject(c)
+	personID, err := h.externalLoginProvider.CallbackSubject(c)
 	if err != nil {
 		return c.String(http.StatusUnauthorized, "authorization failed")
 	}

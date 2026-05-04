@@ -195,7 +195,7 @@ func LookupPersonByUsername(ctx context.Context, username string) (string, error
 	return person.ID.String(), nil
 }
 
-// HtpasswdChecker wraps htpasswd.File to implement oidc.CredentialChecker.
+// HtpasswdChecker wraps htpasswd.File for password-based OIDC login.
 type HtpasswdChecker struct {
 	file *htpasswd.File
 }

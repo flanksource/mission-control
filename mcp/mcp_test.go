@@ -24,7 +24,7 @@ import (
 	k8sTypes "k8s.io/apimachinery/pkg/types"
 )
 
-var jsonHeader = http.Header{echo.HeaderContentType: []string{echo.MIMEApplicationJSON}}
+var jsonHeader = http.Header{echo.HeaderAccept: []string{echo.MIMEApplicationJSON}}
 
 func checkResultInMCPResponse(toolResult any, results []string) {
 	Expect(toolResult).ToNot(BeNil())

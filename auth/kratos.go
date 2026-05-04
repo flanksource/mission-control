@@ -14,6 +14,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	incAPI "github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -231,19 +232,15 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-// KratosCredentialChecker validates credentials via Kratos API,
-// implementing oidc.CredentialChecker for the OIDC login flow.
+var _ oidc.ExternalLoginProvider = (*KratosCredentialChecker)(nil)
+
+// KratosCredentialChecker validates Kratos browser sessions for the OIDC login flow.
 type KratosCredentialChecker struct {
 	middleware *kratosMiddleware
 }
 
 func NewKratosCredentialChecker(m *kratosMiddleware) *KratosCredentialChecker {
 	return &KratosCredentialChecker{middleware: m}
-}
-
-func (k *KratosCredentialChecker) Match(ctx context.Context, user, pass string) error {
-	_, err := k.middleware.kratosLoginWithCache(ctx, user, pass)
-	return err
 }
 
 func (k *KratosCredentialChecker) LoginRedirectURL(authRequestID string) (string, error) {
