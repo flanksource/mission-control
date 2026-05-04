@@ -980,6 +980,50 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(count).To(Equal(totalPlaybooks), "admin user should see all playbooks")
 		})
 
+		It("should apply deny playbook selector over wildcard allow in RLS filtering", func() {
+			user := setup.CreateUserWithRole(DefaultContext, "Allow All Deny Echo User", "allow-all-deny-echo@test.com", policy.RoleGuest)
+			DeferCleanup(func() {
+				auth.InvalidateRLSCacheForUser(user.ID.String())
+				Expect(DefaultContext.DB().Delete(user).Error).ToNot(HaveOccurred())
+			})
+
+			allowAll := &models.Permission{
+				ID:             uuid.New(),
+				Name:           "allow-all-playbooks-read",
+				Namespace:      "default",
+				Action:         policy.ActionRead,
+				Subject:        user.ID.String(),
+				SubjectType:    models.PermissionSubjectTypePerson,
+				ObjectSelector: []byte(`{"playbooks":[{"name":"*"}]}`),
+			}
+			denyEcho := &models.Permission{
+				ID:             uuid.New(),
+				Name:           "deny-echo-config-playbook-read",
+				Namespace:      "default",
+				Action:         policy.ActionRead,
+				Subject:        user.ID.String(),
+				SubjectType:    models.PermissionSubjectTypePerson,
+				Deny:           true,
+				ObjectSelector: []byte(`{"playbooks":[{"name":"echo-config","namespace":"mc"}]}`),
+			}
+			Expect(DefaultContext.DB().Create([]*models.Permission{allowAll, denyEcho}).Error).ToNot(HaveOccurred())
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Delete([]*models.Permission{allowAll, denyEcho}).Error).ToNot(HaveOccurred())
+			})
+
+			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(user))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var echoCount int64
+			Expect(tx.Model(&models.Playbook{}).Where("id = ?", dummy.EchoConfig.ID).Count(&echoCount).Error).To(BeNil())
+			Expect(echoCount).To(Equal(int64(0)), "deny selector should hide echo-config despite wildcard allow")
+
+			var restartCount int64
+			Expect(tx.Model(&models.Playbook{}).Where("id = ?", dummy.RestartPod.ID).Count(&restartCount).Error).To(BeNil())
+			Expect(restartCount).To(Equal(int64(1)), "wildcard allow should still permit non-denied playbooks")
+		})
+
 		// Direct ID permissions tests
 		It("should include direct ID-based playbook permission in RLS filtering", func() {
 			ctx := DefaultContext.WithUser(guestUserDirectPerms)
