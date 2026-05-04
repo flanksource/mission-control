@@ -9,9 +9,9 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.41.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.34.0 // indirect
-	github.com/flanksource/commons v1.51.1
-	github.com/flanksource/duty v1.0.1293
-	github.com/flanksource/gomplate/v3 v3.24.77
+	github.com/flanksource/commons v1.51.3
+	github.com/flanksource/duty v1.0.1299-0.20260504045751-53b50dca5b0b
+	github.com/flanksource/gomplate/v3 v3.24.78
 	github.com/flanksource/kopper v1.0.21
 	github.com/gomarkdown/markdown v0.0.0-20260411013819-759bbc3e3207
 	github.com/google/cel-go v0.28.0

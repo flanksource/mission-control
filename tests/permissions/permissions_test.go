@@ -280,6 +280,36 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload.View).To(BeEmpty(), "view scope should be empty for guest user with no permissions")
 		})
 
+		It("should mark deny permissions with object selectors in RLS payload", func() {
+			denyOnlyUser := setup.CreateUserWithRole(DefaultContext, "Deny Only User", "deny-only@test.com", policy.RoleGuest)
+			DeferCleanup(func() {
+				auth.InvalidateRLSCacheForUser(denyOnlyUser.ID.String())
+				Expect(DefaultContext.DB().Delete(denyOnlyUser).Error).ToNot(HaveOccurred())
+			})
+
+			denyPermission := &models.Permission{
+				ID:             uuid.New(),
+				Name:           "deny-only-echo-config-playbook-read",
+				Namespace:      "default",
+				Action:         policy.ActionRead,
+				Subject:        denyOnlyUser.ID.String(),
+				SubjectType:    models.PermissionSubjectTypePerson,
+				Deny:           true,
+				ObjectSelector: []byte(`{"playbooks":[{"name":"echo-config","namespace":"mc"}]}`),
+			}
+			Expect(DefaultContext.DB().Create(denyPermission).Error).ToNot(HaveOccurred())
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Delete(denyPermission).Error).ToNot(HaveOccurred())
+			})
+
+			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(denyOnlyUser))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload).ToNot(BeNil())
+			Expect(payload.Disable).To(BeFalse())
+			Expect(payload.Playbook).To(ContainElement(rls.Scope{Names: []string{"echo-config"}, Deny: true}), "deny permissions must be marked as deny RLS playbook scopes")
+			Expect(payload.Playbook).ToNot(ContainElement(rls.Scope{Names: []string{"echo-config"}}), "deny permissions must not become unmarked allowed RLS playbook scopes")
+		})
+
 		It("should include direct ID-based permissions in RLS payload", func() {
 			ctx := DefaultContext.WithUser(guestUserDirectPerms)
 
@@ -949,6 +979,50 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			var count int64
 			Expect(tx.Model(&models.Playbook{}).Count(&count).Error).To(BeNil())
 			Expect(count).To(Equal(totalPlaybooks), "admin user should see all playbooks")
+		})
+
+		It("should apply deny playbook selector over wildcard allow in RLS filtering", func() {
+			user := setup.CreateUserWithRole(DefaultContext, "Allow All Deny Echo User", "allow-all-deny-echo@test.com", policy.RoleGuest)
+			DeferCleanup(func() {
+				auth.InvalidateRLSCacheForUser(user.ID.String())
+				Expect(DefaultContext.DB().Delete(user).Error).ToNot(HaveOccurred())
+			})
+
+			allowAll := &models.Permission{
+				ID:             uuid.New(),
+				Name:           "allow-all-playbooks-read",
+				Namespace:      "default",
+				Action:         policy.ActionRead,
+				Subject:        user.ID.String(),
+				SubjectType:    models.PermissionSubjectTypePerson,
+				ObjectSelector: []byte(`{"playbooks":[{"name":"*"}]}`),
+			}
+			denyEcho := &models.Permission{
+				ID:             uuid.New(),
+				Name:           "deny-echo-config-playbook-read",
+				Namespace:      "default",
+				Action:         policy.ActionRead,
+				Subject:        user.ID.String(),
+				SubjectType:    models.PermissionSubjectTypePerson,
+				Deny:           true,
+				ObjectSelector: []byte(`{"playbooks":[{"name":"echo-config","namespace":"mc"}]}`),
+			}
+			Expect(DefaultContext.DB().Create([]*models.Permission{allowAll, denyEcho}).Error).ToNot(HaveOccurred())
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Delete([]*models.Permission{allowAll, denyEcho}).Error).ToNot(HaveOccurred())
+			})
+
+			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(user))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var echoCount int64
+			Expect(tx.Model(&models.Playbook{}).Where("id = ?", dummy.EchoConfig.ID).Count(&echoCount).Error).To(BeNil())
+			Expect(echoCount).To(Equal(int64(0)), "deny selector should hide echo-config despite wildcard allow")
+
+			var restartCount int64
+			Expect(tx.Model(&models.Playbook{}).Where("id = ?", dummy.RestartPod.ID).Count(&restartCount).Error).To(BeNil())
+			Expect(restartCount).To(Equal(int64(1)), "wildcard allow should still permit non-denied playbooks")
 		})
 
 		// Direct ID permissions tests
