@@ -1,7 +1,6 @@
 package oidc
 
 import (
-	"database/sql/driver"
 	"time"
 
 	"github.com/lib/pq"
@@ -11,34 +10,23 @@ import (
 
 const ClientID = "mc-cli"
 
-// StringList is a PostgreSQL text[] compatible type.
-type StringList pq.StringArray
-
-func (s StringList) Value() (driver.Value, error) {
-	return pq.StringArray(s).Value()
-}
-
-func (s *StringList) Scan(src any) error {
-	return (*pq.StringArray)(s).Scan(src)
-}
-
 // AuthRequest implements op.AuthRequest backed by the oidc_auth_requests table.
 type AuthRequest struct {
-	ID                  string     `gorm:"primaryKey;column:id"`
-	ClientID            string     `gorm:"column:client_id;not null"`
-	RedirectURI         string     `gorm:"column:redirect_uri;not null"`
-	Scopes              StringList `gorm:"column:scopes;type:text[]"`
-	State               string     `gorm:"column:state"`
-	Nonce               string     `gorm:"column:nonce"`
-	ResponseType        string     `gorm:"column:response_type;not null"`
-	CodeChallenge       string     `gorm:"column:code_challenge"`
-	CodeChallengeMethod string     `gorm:"column:code_challenge_method"`
-	Subject             string     `gorm:"column:subject"`
-	AuthTime            *time.Time `gorm:"column:auth_time"`
-	Code                *string    `gorm:"column:code"`
-	IsDone              bool       `gorm:"column:done;default:false"`
-	CreatedAt           time.Time  `gorm:"column:created_at"`
-	ExpiresAt           time.Time  `gorm:"column:expires_at"`
+	ID                  string         `gorm:"primaryKey;column:id"`
+	ClientID            string         `gorm:"column:client_id;not null"`
+	RedirectURI         string         `gorm:"column:redirect_uri;not null"`
+	Scopes              pq.StringArray `gorm:"column:scopes;type:text[]"`
+	State               string         `gorm:"column:state"`
+	Nonce               string         `gorm:"column:nonce"`
+	ResponseType        string         `gorm:"column:response_type;not null"`
+	CodeChallenge       string         `gorm:"column:code_challenge"`
+	CodeChallengeMethod string         `gorm:"column:code_challenge_method"`
+	Subject             string         `gorm:"column:subject"`
+	AuthTime            *time.Time     `gorm:"column:auth_time"`
+	Code                *string        `gorm:"column:code"`
+	IsDone              bool           `gorm:"column:done;default:false"`
+	CreatedAt           time.Time      `gorm:"column:created_at"`
+	ExpiresAt           time.Time      `gorm:"column:expires_at"`
 }
 
 func (AuthRequest) TableName() string { return "oidc_auth_requests" }
@@ -76,15 +64,15 @@ func (a *AuthRequest) Done() bool                         { return a.IsDone }
 
 // RefreshToken is backed by the oidc_refresh_tokens table.
 type RefreshToken struct {
-	ID         string     `gorm:"primaryKey;column:id"`
-	Token      string     `gorm:"column:token;not null;uniqueIndex"`
-	ClientID   string     `gorm:"column:client_id;not null"`
-	Subject    string     `gorm:"column:subject;not null"`
-	Scopes     StringList `gorm:"column:scopes;type:text[]"`
-	AuthTime   time.Time  `gorm:"column:auth_time;not null"`
-	RotationID string     `gorm:"column:rotation_id;not null"`
-	CreatedAt  time.Time  `gorm:"column:created_at"`
-	ExpiresAt  time.Time  `gorm:"column:expires_at"`
+	ID         string         `gorm:"primaryKey;column:id"`
+	Token      string         `gorm:"column:token;not null;uniqueIndex"`
+	ClientID   string         `gorm:"column:client_id;not null"`
+	Subject    string         `gorm:"column:subject;not null"`
+	Scopes     pq.StringArray `gorm:"column:scopes;type:text[]"`
+	AuthTime   time.Time      `gorm:"column:auth_time;not null"`
+	RotationID string         `gorm:"column:rotation_id;not null"`
+	CreatedAt  time.Time      `gorm:"column:created_at"`
+	ExpiresAt  time.Time      `gorm:"column:expires_at"`
 }
 
 func (RefreshToken) TableName() string { return "oidc_refresh_tokens" }
@@ -96,7 +84,7 @@ func (r *RefreshToken) GetClientID() string    { return r.ClientID }
 func (r *RefreshToken) GetScopes() []string    { return []string(r.Scopes) }
 func (r *RefreshToken) GetSubject() string     { return r.Subject }
 func (r *RefreshToken) SetCurrentScopes(scopes []string) {
-	r.Scopes = StringList(scopes)
+	r.Scopes = pq.StringArray(scopes)
 }
 
 // PublicKey is backed by the oidc_public_keys table.

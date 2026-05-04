@@ -16,6 +16,7 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/rbac_report"
+	"github.com/flanksource/incident-commander/report"
 )
 
 var RBACCmd = &cobra.Command{
@@ -29,7 +30,7 @@ var (
 	rbacReviewDays int
 	rbacSince      string
 	rbacTitle      string
-	rbacByUser     bool
+	rbacView       string
 )
 
 var ExportRBAC = &cobra.Command{
@@ -98,7 +99,7 @@ func buildRBACOptions(args []string) rbac_report.Options {
 		Title:             rbacTitle,
 		StaleDays:         rbacStaleDays,
 		ReviewOverdueDays: rbacReviewDays,
-		ByUser:            rbacByUser,
+		View:              rbacView,
 	}
 
 	if rbacSince != "" {
@@ -160,10 +161,11 @@ func selectorsFromAppYAML(path string) []types.ResourceSelector {
 func init() {
 	ExportRBAC.Flags().StringVarP(&rbacFormat, "format", "f", "json", "Output format: json, csv, facet-html, facet-pdf")
 	ExportRBAC.Flags().StringVarP(&rbacOutFile, "out-file", "o", "", "Write output to file instead of stdout")
-	ExportRBAC.Flags().IntVar(&rbacStaleDays, "stale-days", 90, "Days without sign-in before access is flagged stale")
-	ExportRBAC.Flags().IntVar(&rbacReviewDays, "review-days", 90, "Days without review before access is flagged overdue")
+	ExportRBAC.Flags().IntVar(&rbacStaleDays, "stale-days", 0, "Days without sign-in before access is flagged stale (0 = disabled)")
+	ExportRBAC.Flags().IntVar(&rbacReviewDays, "review-days", 0, "Days without review before access is flagged overdue (0 = disabled)")
 	ExportRBAC.Flags().StringVar(&rbacSince, "since", "2160h", "Changelog time range (Go duration, default 90 days)")
 	ExportRBAC.Flags().StringVar(&rbacTitle, "title", "", "Report title (default auto-generated)")
-	ExportRBAC.Flags().BoolVar(&rbacByUser, "by-user", false, "Group report by user instead of resource")
+	ExportRBAC.Flags().StringVar(&rbacView, "view", "resource", "Report view: resource, user, or matrix")
+	ExportRBAC.Flags().StringVar(&report.SourceDir, "report-source", "", "Local directory or TSX file for report rendering (overrides embedded reports)")
 	RBACCmd.AddCommand(ExportRBAC)
 }

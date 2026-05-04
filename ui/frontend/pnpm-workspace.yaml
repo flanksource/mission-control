@@ -1,0 +1,37 @@
+# clicky-ui's package.json declares its dependencies with the `catalog:`
+# protocol. This file mirrors clicky-ui's root pnpm-workspace.yaml catalog
+# entries so our `file:` dep resolves cleanly.
+packages:
+  - .
+  # clicky-ui is linked via `file:` and must be part of this workspace so
+  # the `catalog:` refs in its package.json resolve against our catalog.
+  - ../../../clicky-ui/packages/ui
+
+catalog:
+  "@iconify/react": ^5.0.2
+  "@radix-ui/react-compose-refs": ^1.1.2
+  "@radix-ui/react-slot": ^1.1.1
+  "@scalar/api-reference-react": ^0.9.31
+  "@shikijs/transformers": ^1.24.0
+  "@storybook/react": ^8.6.18
+  "@storybook/react-vite": ^8.6.18
+  "@storybook/test": ^8.6.18
+  "@tanstack/react-query": ^5.66.8
+  "@testing-library/jest-dom": ^6.6.3
+  "@testing-library/react": ^16.1.0
+  "@types/react": ^18.3.12
+  "@types/react-dom": ^18.3.1
+  class-variance-authority: ^0.7.1
+  clsx: ^2.1.1
+  jsdom: ^26.0.0
+  lucide-react: ^0.469.0
+  react: ^18.3.1
+  react-dom: ^18.3.1
+  shiki: ^1.24.0
+  tailwind-merge: ^2.6.0
+  tailwindcss: ^3.4.17
+  typescript: ^5.7.2
+  vite: ^6.0.3
+  vite-plugin-dts: ^4.3.0
+  vite-plus: ^0.1.18
+  vitest: ^3.0.5

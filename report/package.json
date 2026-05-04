@@ -11,7 +11,28 @@
   "dependencies": {
     "@flanksource/facet": "^0.1.39",
     "@flanksource/icons": "^1.0.53",
-    "js-yaml": "^4.1.0"
+    "@radix-ui/react-compose-refs": "^1.1.2",
+    "@radix-ui/react-slot": "^1.2.3",
+    "@tanstack/query-core": "^5.100.1",
+    "@tanstack/react-query": "^5.100.1",
+    "@iconify-json/carbon": "^1.2.0",
+    "@iconify-json/fluent": "^1.2.0",
+    "@iconify-json/iconoir": "^1.2.0",
+    "@iconify-json/lucide": "^1.2.0",
+    "@iconify-json/mdi": "^1.2.0",
+    "@iconify-json/ph": "^1.2.0",
+    "@iconify-json/ri": "^1.2.0",
+    "@iconify-json/tabler": "^1.2.0",
+    "@iconify-json/vscode-icons": "^1.2.45",
+    "@iconify/react": "^5.1.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "js-yaml": "^4.1.0",
+    "lucide-react": "^0.468.0",
+    "marked": "^15.0.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
@@ -20,5 +41,25 @@
     "tsx": "^4.0.0",
     "typescript": "^5.0.0",
     "vite": ">=7.3.2"
+  },
+  "pnpm": {
+    "overrides": {
+      "@flanksource/facet": "link:../../facet",
+      "@flanksource/clicky-ui": "link:../../clicky-ui/packages/ui"
+    }
+  },
+  "optionalDependencies": {
+    "@esbuild/darwin-arm64": "^0.27.7",
+    "@esbuild/darwin-x64": "^0.27.7",
+    "@esbuild/linux-arm64": "^0.27.7",
+    "@esbuild/linux-x64": "^0.27.7",
+    "@rolldown/binding-darwin-arm64": "^1.0.0-rc.17",
+    "@rolldown/binding-darwin-x64": "^1.0.0-rc.17",
+    "@rolldown/binding-linux-arm64-gnu": "^1.0.0-rc.17",
+    "@rolldown/binding-linux-x64-gnu": "^1.0.0-rc.17",
+    "lightningcss-darwin-arm64": "^1.32.0",
+    "lightningcss-darwin-x64": "^1.32.0",
+    "lightningcss-linux-arm64-gnu": "^1.32.0",
+    "lightningcss-linux-x64-gnu": "^1.32.0"
   }
 }

@@ -20,7 +20,8 @@ endif
 
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/.bin
-export PATH := $(LOCALBIN):$(PATH)
+HOMEBREW_NODE_PATHS := /usr/local/opt/node/bin /opt/homebrew/opt/node/bin /opt/homebrew/opt/node@24/bin
+export PATH := $(LOCALBIN):$(foreach p,$(HOMEBREW_NODE_PATHS),$(if $(wildcard $(p)/node),$(p):))$(PATH)
 $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
 
@@ -48,7 +49,11 @@ help: ## Display this help.
 
 
 .PHONY: static
-static: $(TAILWIND_JS) manifests generate fmt ginkgo
+static: $(TAILWIND_JS) manifests generate fmt ginkgo ui
+
+.PHONY: ui
+ui: ## Build the embedded catalog explorer UI (ui/frontend -> ui/frontend/dist/ui.js)
+	cd ui/frontend && CI=true pnpm install --no-frozen-lockfile --prefer-offline && pnpm run build
 
 .PHONY: test
 test:
@@ -58,8 +63,9 @@ test:
 		--succinct --label-filter='!ignore_local'
 
 .PHONY: ci-test
-ci-test:
-	ginkgo -r -p --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct
+ci-test: $(TAILWIND_JS) $(LOCALBIN)
+	go build -o ./.bin/$(NAME) main.go
+	ginkgo -r --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct
 
 .PHONY: e2e
 e2e: $(TAILWIND_JS)
@@ -133,6 +139,9 @@ gen-schemas:
 	if grep -v "^//" ../../go.mod | grep -q "replace.*github.com/flanksource/duty.*=>"; then \
 		go mod edit -replace=github.com/flanksource/duty=../../../duty; \
 	fi && \
+	if grep -v "^//" ../../go.mod | grep -q "replace.*github.com/flanksource/clicky.*=>"; then \
+		go mod edit -replace=github.com/flanksource/clicky=../../../clicky; \
+	fi && \
 	go mod tidy && \
 	go run ./main.go
 
@@ -149,7 +158,7 @@ build: static
 	go build -o ./.bin/$(NAME) -ldflags "-X \"main.version=$(VERSION_TAG) built at $(DATE)\""  main.go
 
 .PHONY: dev
-dev:
+dev: static
  	# Disabling CGO because of slow build times in apple silicon (just experimenting)
 	CGO_ENABLED=0 go build -v -o ./.bin/$(NAME) -gcflags="all=-N -l" main.go
 
@@ -188,15 +197,15 @@ ginkgo:
 
 .PHONY: controller-gen
 controller-gen: install-deps $(LOCALBIN)
-	$(LOCALBIN)/deps install controller-gen@$(CONTROLLER_TOOLS_VERSION) --bin-dir $(LOCALBIN)
+	deps install controller-gen@$(CONTROLLER_TOOLS_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: golangci-lint
 golangci-lint: install-deps $(LOCALBIN)
-	$(LOCALBIN)/deps install golangci/golangci-lint@v$(GOLANGCI_LINT_VERSION) --bin-dir $(LOCALBIN)
+	deps install golangci/golangci-lint@v$(GOLANGCI_LINT_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: kustomize
 kustomize: install-deps $(LOCALBIN)
-	$(LOCALBIN)/deps install kubernetes-sigs/kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
+	deps install kubernetes-sigs/kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: docs\:mcp
 docs\:mcp: ## Generate MCP tools reference documentation
@@ -204,6 +213,20 @@ docs\:mcp: ## Generate MCP tools reference documentation
 	go run ./hack/gen-mcp-docs > docs/mcp-tools.md
 	@echo "Generated docs/mcp-tools.md"
 
+report/kitchen-sink.json: report/build-kitchen-sink.ts report/testdata/kitchen-sink.yaml
+	cd report && ./node_modules/.bin/tsx build-kitchen-sink.ts
+
 .PHONY: lint
 lint: golangci-lint
 	$(GOLANGCI_LINT) run ./...
+
+.PHONY: proto
+proto: ## Regenerate plugin gRPC stubs from plugin/proto/plugin.proto
+	@command -v protoc >/dev/null || (echo "protoc not installed"; exit 1)
+	@command -v protoc-gen-go >/dev/null || go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+	@command -v protoc-gen-go-grpc >/dev/null || go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+	protoc \
+		--proto_path=plugin/proto \
+		--go_out=plugin/proto --go_opt=paths=source_relative \
+		--go-grpc_out=plugin/proto --go-grpc_opt=paths=source_relative \
+		plugin/proto/plugin.proto

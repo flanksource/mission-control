@@ -1,0 +1,23 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Plugin
+metadata:
+  name: kubernetes-logs
+spec:
+  source: kubernetes-logs
+  version: "0.1.0"
+  selector:
+    types:
+      - Kubernetes::Pod
+      - Kubernetes::Deployment
+      - Kubernetes::StatefulSet
+      - Kubernetes::DaemonSet
+      - Kubernetes::ReplicaSet
+      - Kubernetes::Job
+      - Kubernetes::CronJob
+  connections:
+    # When set, the host will use this connection to resolve a kubeconfig the
+    # plugin uses for its API calls. fromConfigItem causes the host to derive
+    # the kubeconfig from the catalog item being viewed (e.g. an EKS Cluster
+    # config item yields its own credentials).
+    fromConfigItem: ""
+    kubernetes: {}

@@ -1,0 +1,34 @@
+filters:
+  - "type!=Kubernetes::ConfigMap"
+  - "type!=Kubernetes::Secret"
+  - "type!=Kubernetes::Event"
+
+thresholds:
+  staleDays: 0
+  reviewOverdueDays: 0
+
+categoryMappings:
+  - category: rbac.granted
+    filter: 'changeType == "PermissionGranted" || changeType == "PermissionAdded" || changeType == "IAMRoleAdded"'
+  - category: rbac.revoked
+    filter: 'changeType == "PermissionRevoked" || changeType == "PermissionRemoved" || changeType == "IAMRoleRemoved"'
+  - category: backup.success
+    filter: 'changeType == "BackupCompleted" || changeType == "BackupSuccessful" || (changeType == "BACKUP_DB" && severity == "low") || (("kind" in details && details["kind"] == "Backup/v1") && ("status" in details && (details["status"] == "success" || details["status"] == "successful" || details["status"] == "completed")))'
+  - category: backup.failed
+    filter: 'changeType == "BackupFailed" || (changeType == "BACKUP_DB" && severity == "high") || (("kind" in details && details["kind"] == "Backup/v1") && ("status" in details && (details["status"] == "failed" || details["status"] == "error")))'
+  - category: backup.success
+    filter: 'changeType == "BACKUP_DB" && severity != "high"'
+  - category: backup.progress
+    filter: 'changeType == "BackupStarted" || changeType == "BackupRunning" || changeType == "BackupEnqueued" || (("kind" in details && details["kind"] == "Backup/v1") && ("status" in details && (details["status"] == "started" || details["status"] == "running" || details["status"] == "enqueued" || details["status"] == "progress")))'
+  - category: backup.restore
+    filter: 'changeType == "BackupRestored" || changeType == "RestoreCompleted" || (("kind" in details && details["kind"] == "Backup/v1") && ("status" in details && (details["status"] == "restored" || details["status"] == "restore_completed")))'
+  - category: deployment.spec
+    filter: 'changeType == "diff" || ("kind" in details && details["kind"] == "Deployment/v1")'
+  - category: deployment.success
+    filter: 'changeType == "CodeDeployment" && severity == "info"'
+  - category: deployment.failed
+    filter: 'changeType == "CodeDeployment" && severity != "info"'
+  - category: deployment.scale
+    filter: 'changeType == "ScalingReplicaSet" || ("kind" in details && details["kind"] == "Scaling/v1")'
+  - category: deployment.policy
+    filter: 'changeType == "PolicyUpdate"'

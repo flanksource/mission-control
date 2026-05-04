@@ -3,23 +3,29 @@ package api
 import (
 	"time"
 
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 )
 
 type RBACReport struct {
-	Title       string            `json:"title"`
-	Query       string            `json:"query,omitempty"`
-	GeneratedAt time.Time         `json:"generatedAt"`
-	Resources   []RBACResource    `json:"resources"`
-	Changelog   []RBACChangeEntry `json:"changelog"`
-	Summary     RBACSummary       `json:"summary"`
-	Users       []RBACUserReport  `json:"users,omitempty"`
+	Title       string              `json:"title"`
+	Query       string              `json:"query,omitempty"`
+	GeneratedAt time.Time           `json:"generatedAt"`
+	Subject     *models.ConfigItem  `json:"subject,omitempty"`
+	Parents     []models.ConfigItem `json:"parents,omitempty"`
+	Resources   []RBACResource      `json:"resources"`
+	Changelog   []RBACChangeEntry   `json:"changelog"`
+	Summary     RBACSummary         `json:"summary"`
+	Users       []RBACUserReport    `json:"users,omitempty"`
 }
 
 type RBACResource struct {
 	ConfigID        string                `json:"configId"`
 	ConfigName      string                `json:"configName"`
 	ConfigType      string                `json:"configType"`
+	ConfigClass     string                `json:"configClass,omitempty"`
+	ParentID        string                `json:"parentId,omitempty"`
+	Path            string                `json:"path,omitempty"`
 	Status          string                `json:"status,omitempty"`
 	Health          string                `json:"health,omitempty"`
 	Description     string                `json:"description,omitempty"`
@@ -47,6 +53,7 @@ type RBACUserRole struct {
 	UserName        string     `json:"userName"`
 	Email           string     `json:"email"`
 	Role            string     `json:"role"`
+	RoleExternalIDs []string   `json:"roleExternalIds,omitempty"`
 	RoleSource      string     `json:"roleSource"`
 	SourceSystem    string     `json:"sourceSystem"`
 	CreatedAt       time.Time  `json:"createdAt"`
@@ -71,7 +78,10 @@ type RBACUserResource struct {
 	ConfigID        string              `json:"configId"`
 	ConfigName      string              `json:"configName"`
 	ConfigType      string              `json:"configType"`
+	ConfigClass     string              `json:"configClass,omitempty"`
+	Path            string              `json:"path,omitempty"`
 	Role            string              `json:"role"`
+	RoleExternalIDs []string            `json:"roleExternalIds,omitempty"`
 	RoleSource      string              `json:"roleSource"`
 	CreatedAt       time.Time           `json:"createdAt"`
 	LastSignedInAt  *time.Time          `json:"lastSignedInAt,omitempty"`

@@ -184,6 +184,32 @@ func buildSection(ctx context.Context, section api.ViewSection) (api.Application
 		return appSection, nil
 	}
 
+	if section.UIRef.Access != nil {
+		appSection.Type = api.SectionTypeAccess
+		access, err := db.GetAccessForUIRef(ctx, section.UIRef.Access)
+		if err != nil {
+			return appSection, ctx.Oops().Errorf("failed to get access for section %q: %w", section.Title, err)
+		}
+		if access == nil {
+			access = []api.AccessItem{}
+		}
+		appSection.Access = access
+		return appSection, nil
+	}
+
+	if section.UIRef.AccessLogs != nil {
+		appSection.Type = api.SectionTypeAccessLogs
+		logs, err := db.GetAccessLogsForUIRef(ctx, section.UIRef.AccessLogs)
+		if err != nil {
+			return appSection, ctx.Oops().Errorf("failed to get access logs for section %q: %w", section.Title, err)
+		}
+		if logs == nil {
+			logs = []api.AccessLogItem{}
+		}
+		appSection.AccessLogs = logs
+		return appSection, nil
+	}
+
 	return appSection, nil
 }
 

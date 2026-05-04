@@ -30,6 +30,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/playbook/sdk"
 	"github.com/flanksource/incident-commander/playbook/testdata"
@@ -322,6 +323,25 @@ var _ = Describe("Playbook", Ordered, func() {
 		})
 
 		Context("api | list playbooks ", func() {
+			It("Should fetch all playbooks without a target", func() {
+				playbooks, err := db.ListPlaybooks(DefaultContext)
+				Expect(err).To(BeNil())
+				Expect(playbookListIDs(playbooks)).To(ContainElements(
+					playbookID(configPlaybook),
+					playbookID(checkPlaybook),
+					playbookID(componentPlaybook),
+					playbookID(agentAllPlaybook),
+				))
+
+				configItem, found := lo.Find(playbooks, func(playbook api.PlaybookListItem) bool {
+					return playbook.ID == configPlaybook.ID
+				})
+				Expect(found).To(BeTrue())
+				Expect(configItem.Source).To(Equal(models.SourceConfigFile))
+				Expect(configItem.Spec).ToNot(BeEmpty())
+				Expect(string(configItem.Parameters)).To(ContainSubstring(`"name":"path"`))
+			})
+
 			It("Should fetch the suitable playbook for checks", func() {
 				playbooks, err := ListPlaybooksForCheck(DefaultContext, dummy.LogisticsAPIHealthHTTPCheck.ID.String())
 				ExpectPlaybook(playbooks, err, checkPlaybook)
@@ -1120,6 +1140,16 @@ func ExpectPlaybook(list []api.PlaybookListItem, err error, playbooks ...models.
 		return l.ID.String() + "/" + l.Name
 	})).
 		To(ConsistOf(lo.Map(playbooks, func(p models.Playbook, _ int) string { return p.ID.String() + "/" + p.Name })))
+}
+
+func playbookListIDs(list []api.PlaybookListItem) []string {
+	return lo.Map(list, func(l api.PlaybookListItem, _ int) string {
+		return l.ID.String() + "/" + l.Name
+	})
+}
+
+func playbookID(playbook models.Playbook) string {
+	return playbook.ID.String() + "/" + playbook.Name
 }
 
 func ExpectOKResponse(response *http.Response) {

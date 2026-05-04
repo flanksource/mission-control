@@ -1,0 +1,167 @@
+syntax = "proto3";
+
+package missioncontrol.plugin.v1;
+
+option go_package = "github.com/flanksource/incident-commander/plugin/proto;pluginpb";
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+message Empty {}
+
+// PluginService is implemented by the plugin and called by the host.
+service PluginService {
+  rpc RegisterPlugin (RegisterRequest)  returns (PluginManifest);
+  rpc Configure      (ConfigureRequest) returns (ConfigureResponse);
+  rpc ListOperations (Empty)            returns (OperationList);
+  rpc Invoke         (InvokeRequest)    returns (InvokeResponse);
+  rpc Health         (Empty)            returns (HealthStatus);
+  rpc Shutdown       (Empty)            returns (Empty);
+}
+
+// HostService is implemented by the host and called by the plugin
+// over the go-plugin GRPCBroker reverse channel.
+service HostService {
+  rpc GetConfigItem  (GetConfigItemRequest) returns (ConfigItem);
+  rpc ListConfigs    (ListConfigsRequest)   returns (ConfigItemList);
+  rpc GetConnection  (GetConnectionRequest) returns (ResolvedConnection);
+  rpc Log            (LogEntry)             returns (Empty);
+  rpc WriteArtifact  (Artifact)             returns (ArtifactRef);
+  rpc ReadArtifact   (ArtifactRef)          returns (Artifact);
+}
+
+message PluginManifest {
+  string name              = 1;
+  string version           = 2;
+  string description       = 3;
+  uint32 protocol_version  = 4;
+  repeated string capabilities = 5;
+  repeated TabSpec tabs       = 6;
+  repeated OperationDef operations = 7;
+  uint32 ui_port = 8;
+}
+
+message TabSpec {
+  string name = 1;
+  string icon = 2;
+  string path = 3;
+  string scope = 4;
+}
+
+message OperationDef {
+  string name              = 1;
+  string description       = 2;
+  google.protobuf.Struct params_schema = 3;
+  string result_mime       = 4;
+  string scope             = 5;
+  bool   destructive       = 6;
+  repeated string required_permissions = 7;
+}
+
+message RegisterRequest {
+  uint32 host_protocol_version = 1;
+  string host_version          = 2;
+  uint32 host_broker_id        = 3;
+  map<string,string> env       = 4;
+}
+
+message ConfigureRequest {
+  google.protobuf.Struct settings = 1;
+}
+
+message ConfigureResponse { repeated string warnings = 1; }
+
+message CallerContext {
+  string user_id              = 1;
+  string user_email           = 2;
+  repeated string permissions = 3;
+  string trace_id             = 4;
+  string request_id           = 5;
+}
+
+message InvokeRequest {
+  string operation     = 1;
+  bytes  params_json   = 2;
+  string config_item_id = 3;
+  CallerContext caller = 4;
+  google.protobuf.Timestamp deadline = 5;
+}
+
+message InvokeResponse {
+  bytes  result        = 1;
+  string mime          = 2;
+  string error_message = 3;
+  string error_code    = 4;
+  repeated LogEntry logs = 5;
+}
+
+message OperationList { repeated OperationDef operations = 1; }
+message HealthStatus  { bool ok = 1; string message = 2; }
+
+message ConfigItem {
+  string id        = 1;
+  string name      = 2;
+  string type      = 3;
+  string namespace = 4;
+  string agent_id  = 5;
+  google.protobuf.Struct properties = 6;
+  google.protobuf.Struct config     = 7;
+  map<string,string> labels = 8;
+  map<string,string> tags   = 9;
+  string health = 10;
+  string status = 11;
+}
+
+message ConfigItemList {
+  repeated ConfigItem items = 1;
+  string next_cursor = 2;
+}
+
+message GetConfigItemRequest { string id = 1; }
+
+message ListConfigsRequest {
+  // Selector is the JSON-encoded duty/types.ResourceSelector.
+  string selector_json = 1;
+  int32 limit          = 2;
+  string cursor        = 3;
+}
+
+// GetConnectionRequest asks the host to resolve a connection by type.
+// The host looks up the matching field in the Plugin CRD's
+// connection.ExecConnections (Kubernetes/AWS/GCP/Azure) and resolves it
+// using the same SetupConnection() pipeline that playbook exec actions use.
+// If config_item_id is set, fromConfigItem-style resolution is used.
+message GetConnectionRequest {
+  string type           = 1; // "aws" | "kubernetes" | "gcp" | "azure"
+  string config_item_id = 2; // optional: resolve credentials from this config item
+}
+
+message ResolvedConnection {
+  string type        = 1;
+  string url         = 2;
+  string username    = 3;
+  string password    = 4;
+  string certificate = 5;
+  string token       = 6;
+  google.protobuf.Struct properties = 7;
+  google.protobuf.Timestamp expires_at = 8;
+}
+
+message LogEntry {
+  string level   = 1; // debug|info|warn|error
+  string message = 2;
+  map<string,string> fields = 3;
+  google.protobuf.Timestamp ts = 4;
+}
+
+message Artifact {
+  string name         = 1;
+  string content_type = 2;
+  bytes  data         = 3;
+  map<string,string> metadata = 4;
+}
+
+message ArtifactRef {
+  string id  = 1;
+  string url = 2;
+}
