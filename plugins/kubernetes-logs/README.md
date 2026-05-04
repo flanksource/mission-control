@@ -1,14 +1,18 @@
 # Kubernetes Logs Plugin
 
-Reference plugin: returns logs from a Pod, Deployment, StatefulSet, DaemonSet,
+Reference plugin: streams logs from a Pod, Deployment, StatefulSet, DaemonSet,
 ReplicaSet, Job, or CronJob, walking owner references to fan out across every
 matching pod.
 
 ## What it shows the SDK author
 
-- Reading the catalog item via `Host.GetConfigItem` to learn `kind / namespace / name`.
-- Resolving a Kubernetes connection via `Host.GetConnectionForConfig`.
-- Exposing operation handlers over the gRPC plugin contract (`tail`, `list-pods`).
+- Reading the catalog item (`Host.GetConfigItem`) to learn `kind / namespace / name`.
+- Resolving a Kubernetes connection by type (`Host.GetConnection(ctx, "kubernetes", configID)`).
+- An iframe UI that calls back into the host's operation API for `list-pods`,
+  then opens a Server-Sent Events stream against the plugin's own HTTP server
+  for follow-mode log tailing.
+- Both the gRPC operation contract (`tail`, `list-pods`) and a non-trivial HTTP
+  contract (`/api/logs` SSE) coexisting on the same plugin port.
 
 ## Build & install
 
@@ -39,8 +43,15 @@ curl -X POST -d '{"tailLines":50}' \
 
 Returns `application/clicky+json` rows of `{pod, container, line}`.
 
+## Iframe UI
+
+Open any matching catalog item — the **Logs** tab opens an embedded terminal-style
+viewer with pod/container selectors and follow-mode streaming.
+
 ## Connection resolution
 
-The plugin asks Mission Control for the connection used by the scraper that
-created the config item. If Mission Control cannot resolve one, the plugin falls
-back to its own in-cluster service account.
+The plugin's `connections.kubernetes` field is the same shape as the
+`exec` action's: it can be a kubeconfig env-var, a named `Connection`,
+`fromConfigItem` (derive credentials from the catalog item being viewed —
+the natural choice for an EKS / GKE / Kubernetes cluster config item), or
+left empty so the plugin falls back to its own in-cluster service account.

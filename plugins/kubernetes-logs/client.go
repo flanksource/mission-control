@@ -9,7 +9,6 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/sdk"
 )
 
@@ -21,21 +20,22 @@ type clientCache struct {
 }
 
 // For returns a kubernetes client appropriate for the given context. The
-// host-resolved connection is preferred. When the host is unavailable or the
-// connection didn't yield a kubeconfig, falls back to in-cluster.
-func (c *clientCache) For(ctx context.Context, host sdk.HostClient, configItemID string) (kubernetes.Interface, error) {
+// host's GetConnection is preferred (the Plugin CRD's connection.kubernetes
+// is the source of truth). When the host is unavailable (e.g. CLI smoke tests)
+// or the connection didn't yield a kubeconfig, falls back to in-cluster.
+func (c *clientCache) For(ctx context.Context, host sdk.HostClient) (kubernetes.Interface, error) {
 	c.mu.Lock()
 	if c.entries == nil {
 		c.entries = map[string]kubernetes.Interface{}
 	}
 	c.mu.Unlock()
 
-	cacheKey := configItemID
+	cacheKey := "default"
 	if existing, ok := c.lookup(cacheKey); ok {
 		return existing, nil
 	}
 
-	cfg, err := buildRestConfig(ctx, host, configItemID)
+	cfg, err := buildRestConfig(ctx, host)
 	if err != nil {
 		return nil, err
 	}
@@ -63,15 +63,9 @@ func (c *clientCache) store(k string, v kubernetes.Interface) {
 // buildRestConfig prefers the host-resolved kubernetes connection; when it's
 // not available, falls back to in-cluster (so the plugin still works as a
 // sidecar in the same cluster).
-func buildRestConfig(ctx context.Context, host sdk.HostClient, configItemID string) (*rest.Config, error) {
+func buildRestConfig(ctx context.Context, host sdk.HostClient) (*rest.Config, error) {
 	if host != nil {
-		var conn *pluginpb.ResolvedConnection
-		var err error
-		if configItemID != "" {
-			conn, err = host.GetConnectionForConfig(ctx, configItemID)
-		} else {
-			conn, err = host.GetConnectionByType(ctx, sdk.ConnectionTypeKubernetes)
-		}
+		conn, err := host.GetConnection(ctx, "kubernetes", "")
 		if err == nil && conn != nil && conn.Properties != nil {
 			if kc, ok := conn.Properties.AsMap()["kubeconfig"].(string); ok && kc != "" {
 				cfg, err := clientcmd.RESTConfigFromKubeConfig([]byte(kc))
