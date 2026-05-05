@@ -17,7 +17,9 @@ var _ = ginkgo.Describe("context token resolution", func() {
 
 	ginkgo.BeforeEach(func() {
 		oldOIDCLogin = oidcLogin
-		ginkgo.GinkgoT().Setenv("HOME", ginkgo.GinkgoT().TempDir())
+		configDir := ginkgo.GinkgoT().TempDir()
+		ginkgo.GinkgoT().Setenv("HOME", configDir)
+		ginkgo.GinkgoT().Setenv("XDG_CONFIG_HOME", configDir)
 	})
 
 	ginkgo.AfterEach(func() {

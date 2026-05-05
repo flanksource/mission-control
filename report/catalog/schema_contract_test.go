@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"sort"
 
+	dutyopenapi "github.com/flanksource/duty/schema/openapi"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -32,8 +33,7 @@ func repoRelativePath(parts ...string) string {
 }
 
 func loadSchemaExampleKinds() ([]string, error) {
-	schemaPath := repoRelativePath("..", "..", "..", "duty", "schema", "openapi", "change-types.schema.json")
-	raw, err := os.ReadFile(schemaPath)
+	raw, err := dutyopenapi.Schemas.ReadFile("change-types.schema.json")
 	if err != nil {
 		return nil, err
 	}

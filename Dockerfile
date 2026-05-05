@@ -1,8 +1,4 @@
-FROM node:24.11.0-bookworm-slim@sha256:76d0ed0ed93bed4f4376211e9d8fddac4d8b3fbdb54cc45955696001a3c91152 AS node
-
 FROM golang:1.26.1-bookworm@sha256:ab3d6955bbc813a0f3fdf220c1d817dd89c0b3f283777db8ece4a32fe7858edd AS builder
-COPY --from=node /usr/local/ /usr/local/
-RUN npm install -g pnpm@10.33.0
 WORKDIR /app
 
 ARG VERSION

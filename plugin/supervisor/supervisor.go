@@ -6,7 +6,6 @@
 package supervisor
 
 import (
-	"context"
 	gocontext "context"
 	"errors"
 	"fmt"
@@ -338,7 +337,7 @@ func (s *Supervisor) UIPort() uint32 {
 }
 
 // Invoke calls the plugin's Invoke RPC.
-func (s *Supervisor) Invoke(ctx context.Context, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
+func (s *Supervisor) Invoke(ctx gocontext.Context, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
 	s.mu.Lock()
 	pluginCli := s.pluginCli
 	s.mu.Unlock()
@@ -349,7 +348,7 @@ func (s *Supervisor) Invoke(ctx context.Context, req *pluginpb.InvokeRequest) (*
 }
 
 // ListOperations calls the plugin's ListOperations RPC.
-func (s *Supervisor) ListOperations(ctx context.Context) (*pluginpb.OperationList, error) {
+func (s *Supervisor) ListOperations(ctx gocontext.Context) (*pluginpb.OperationList, error) {
 	s.mu.Lock()
 	pluginCli := s.pluginCli
 	s.mu.Unlock()
