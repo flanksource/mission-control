@@ -2,7 +2,6 @@ package controller
 
 import (
 	"fmt"
-	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
@@ -55,26 +54,26 @@ func uiProxy(c echo.Context) error {
 	}
 	prefix := "/api/plugins/" + name + "/ui"
 
-	rp := httputil.NewSingleHostReverseProxy(target)
-	originalDirector := rp.Director
-	rp.Director = func(r *http.Request) {
-		originalDirector(r)
-		r.URL.Path = strings.TrimPrefix(r.URL.Path, prefix)
-		if r.URL.Path == "" {
-			r.URL.Path = "/"
-		}
-		r.URL.RawPath = ""
-		// Forward caller identity + the catalog id from the query string so
-		// the plugin doesn't need to re-derive them.
-		if u := ctx.User(); u != nil {
-			r.Header.Set("X-Mission-Control-User", u.ID.String())
-			if u.Email != "" {
-				r.Header.Set("X-Mission-Control-User-Email", u.Email)
+	rp := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(target)
+			pr.Out.URL.Path = strings.TrimPrefix(pr.In.URL.Path, prefix)
+			if pr.Out.URL.Path == "" {
+				pr.Out.URL.Path = "/"
 			}
-		}
-		if cfg := c.QueryParam("config_id"); cfg != "" {
-			r.Header.Set("X-Mission-Control-Config-Id", cfg)
-		}
+			pr.Out.URL.RawPath = ""
+			// Forward caller identity + the catalog id from the query string so
+			// the plugin doesn't need to re-derive them.
+			if u := ctx.User(); u != nil {
+				pr.Out.Header.Set("X-Mission-Control-User", u.ID.String())
+				if u.Email != "" {
+					pr.Out.Header.Set("X-Mission-Control-User-Email", u.Email)
+				}
+			}
+			if cfg := c.QueryParam("config_id"); cfg != "" {
+				pr.Out.Header.Set("X-Mission-Control-Config-Id", cfg)
+			}
+		},
 	}
 
 	rp.ServeHTTP(c.Response().Writer, c.Request())

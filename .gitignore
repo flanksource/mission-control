@@ -57,7 +57,7 @@ report/*.pdf
 *.png
 .playwright-mcp/
 out.*
-.*/
+.task/
 dist/
 node_modules/
 plugin-smoke
