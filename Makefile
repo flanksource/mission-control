@@ -63,12 +63,12 @@ test:
 		--succinct --label-filter='!ignore_local'
 
 .PHONY: ci-test
-ci-test: $(TAILWIND_JS) $(LOCALBIN)
+ci-test: $(TAILWIND_JS) $(LOCALBIN) ui
 	go build -o ./.bin/$(NAME) main.go
 	ginkgo -r --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct
 
 .PHONY: e2e
-e2e: $(TAILWIND_JS)
+e2e: $(TAILWIND_JS) ui
 	go build -o ./.bin/$(NAME) main.go
 	ginkgo -r --keep-going  ./tests/e2e/...
 
