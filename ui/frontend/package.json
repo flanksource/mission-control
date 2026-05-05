@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@flanksource/clicky-ui": "workspace:*",
+    "@flanksource/clicky-ui": "^0.2.1",
     "@flanksource/icons": "^1.0.57",
     "@iconify/react": "^5.2.1",
     "@scalar/api-reference-react": "^0.9.32",
