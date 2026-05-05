@@ -133,19 +133,19 @@ func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {
 
 	for _, perm := range permissions {
 		if perm.ConfigID != nil {
-			payload.Config = append(payload.Config, rls.Scope{ID: perm.ConfigID.String()})
+			addConfigScope(payload, rls.Scope{ID: perm.ConfigID.String()}, perm.Deny)
 		}
 
 		if perm.ComponentID != nil {
-			payload.Component = append(payload.Component, rls.Scope{ID: perm.ComponentID.String()})
+			addComponentScope(payload, rls.Scope{ID: perm.ComponentID.String()}, perm.Deny)
 		}
 
 		if perm.PlaybookID != nil {
-			payload.Playbook = append(payload.Playbook, rls.Scope{ID: perm.PlaybookID.String()})
+			addPlaybookScope(payload, rls.Scope{ID: perm.PlaybookID.String()}, perm.Deny)
 		}
 
 		if perm.CanaryID != nil {
-			payload.Canary = append(payload.Canary, rls.Scope{ID: perm.CanaryID.String()})
+			addCanaryScope(payload, rls.Scope{ID: perm.CanaryID.String()}, perm.Deny)
 		}
 
 		if len(perm.ObjectSelector) == 0 {
@@ -160,7 +160,7 @@ func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {
 
 		// Process scope references (indirect permissions)
 		if len(selectors.Scopes) > 0 {
-			if err := processScopeRefs(ctx, selectors.Scopes, payload); err != nil {
+			if err := processScopeRefs(ctx, selectors.Scopes, payload, perm.Deny); err != nil {
 				return nil, err
 			}
 		}
@@ -169,25 +169,25 @@ func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {
 		// Only use tags, name, and agent_id as per requirements
 		if len(selectors.Configs) > 0 {
 			for _, selector := range selectors.Configs {
-				payload.Config = append(payload.Config, convertResourceSelectorToRLSScope(selector))
+				addConfigScope(payload, convertResourceSelectorToRLSScope(selector), perm.Deny)
 			}
 		}
 
 		if len(selectors.Components) > 0 {
 			for _, selector := range selectors.Components {
-				payload.Component = append(payload.Component, convertResourceSelectorToRLSScope(selector))
+				addComponentScope(payload, convertResourceSelectorToRLSScope(selector), perm.Deny)
 			}
 		}
 
 		if len(selectors.Playbooks) > 0 {
 			for _, selector := range selectors.Playbooks {
-				payload.Playbook = append(payload.Playbook, convertResourceSelectorToRLSScope(selector))
+				addPlaybookScope(payload, convertResourceSelectorToRLSScope(selector), perm.Deny)
 			}
 		}
 
 		if len(selectors.Views) > 0 {
 			for _, viewRef := range selectors.Views {
-				payload.View = append(payload.View, convertViewScopeRefToRLSScope(viewRef))
+				addViewScope(payload, convertViewScopeRefToRLSScope(viewRef), perm.Deny)
 			}
 		}
 
@@ -202,8 +202,33 @@ func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {
 	return payload, nil
 }
 
+func addConfigScope(payload *rls.Payload, scope rls.Scope, deny bool) {
+	scope.Deny = deny
+	payload.Config = append(payload.Config, scope)
+}
+
+func addComponentScope(payload *rls.Payload, scope rls.Scope, deny bool) {
+	scope.Deny = deny
+	payload.Component = append(payload.Component, scope)
+}
+
+func addPlaybookScope(payload *rls.Payload, scope rls.Scope, deny bool) {
+	scope.Deny = deny
+	payload.Playbook = append(payload.Playbook, scope)
+}
+
+func addCanaryScope(payload *rls.Payload, scope rls.Scope, deny bool) {
+	scope.Deny = deny
+	payload.Canary = append(payload.Canary, scope)
+}
+
+func addViewScope(payload *rls.Payload, scope rls.Scope, deny bool) {
+	scope.Deny = deny
+	payload.View = append(payload.View, scope)
+}
+
 // processScopeRefs fetches scopes from database and adds their targets to the payload
-func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSelector, payload *rls.Payload) error {
+func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSelector, payload *rls.Payload, deny bool) error {
 	for _, ref := range scopeRefs {
 		var scope models.Scope
 		err := ctx.DB().
@@ -218,7 +243,9 @@ func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameID
 		}
 
 		// Add scope UUID for view row-level grants
-		payload.Scopes = append(payload.Scopes, scope.ID.String())
+		if !deny {
+			payload.Scopes = append(payload.Scopes, scope.ID.String())
+		}
 
 		var targets []v1.ScopeTarget
 		if err := json.Unmarshal([]byte(scope.Targets), &targets); err != nil {
@@ -228,32 +255,27 @@ func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameID
 
 		for _, target := range targets {
 			if target.Config != nil {
-				rlsScope := convertToRLSScope(target.Config)
-				payload.Config = append(payload.Config, rlsScope)
+				addConfigScope(payload, convertToRLSScope(target.Config), deny)
 			}
 			if target.Component != nil {
-				rlsScope := convertToRLSScope(target.Component)
-				payload.Component = append(payload.Component, rlsScope)
+				addComponentScope(payload, convertToRLSScope(target.Component), deny)
 			}
 			if target.Playbook != nil {
-				rlsScope := convertToRLSScope(target.Playbook)
-				payload.Playbook = append(payload.Playbook, rlsScope)
+				addPlaybookScope(payload, convertToRLSScope(target.Playbook), deny)
 			}
 			if target.Canary != nil {
-				rlsScope := convertToRLSScope(target.Canary)
-				payload.Canary = append(payload.Canary, rlsScope)
+				addCanaryScope(payload, convertToRLSScope(target.Canary), deny)
 			}
 			if target.View != nil {
-				rlsScope := convertToRLSScope(target.View)
-				payload.View = append(payload.View, rlsScope)
+				addViewScope(payload, convertToRLSScope(target.View), deny)
 			}
 			if target.Global != nil {
 				rlsScope := convertToRLSScope(target.Global)
-				payload.Config = append(payload.Config, rlsScope)
-				payload.Component = append(payload.Component, rlsScope)
-				payload.Playbook = append(payload.Playbook, rlsScope)
-				payload.Canary = append(payload.Canary, rlsScope)
-				payload.View = append(payload.View, rlsScope)
+				addConfigScope(payload, rlsScope, deny)
+				addComponentScope(payload, rlsScope, deny)
+				addPlaybookScope(payload, rlsScope, deny)
+				addCanaryScope(payload, rlsScope, deny)
+				addViewScope(payload, rlsScope, deny)
 			}
 		}
 	}
