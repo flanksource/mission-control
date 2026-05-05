@@ -181,6 +181,19 @@ tasks:
       - test node_modules/.modules.yaml -nt pnpm-lock.yaml
       - test node_modules/.modules.yaml -nt package.json
 
+  ui:install:local:
+    desc: |
+      Reinstall ui/frontend with @flanksource/clicky-ui linked to the sibling
+      ../clicky-ui checkout. Used by `task dev`. No caching — runs every time
+      so the link is fresh. Restores pnpm-lock.yaml afterwards so the
+      committed lockfile keeps its registry-resolved entries.
+    dir: ui/frontend
+    env:
+      CLICKY_UI_LOCAL: "1"
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+      - git restore pnpm-lock.yaml
+
   ui:build:
     desc: Build the embedded UI bundle (tsc --noEmit + vite) into ui/frontend/dist
     dir: ui/frontend
@@ -288,6 +301,18 @@ tasks:
       - test -f node_modules/.modules.yaml
       - test node_modules/.modules.yaml -nt package.json
 
+  ui:install:plugin:kubernetes-logs:local:
+    desc: |
+      Reinstall the kubernetes-logs plugin UI with @flanksource/clicky-ui
+      linked to the sibling ../clicky-ui checkout. Used by `task dev:plugins`.
+      No caching; restores pnpm-lock.yaml afterwards.
+    dir: plugins/kubernetes-logs/ui-src
+    env:
+      CLICKY_UI_LOCAL: "1"
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+      - git restore pnpm-lock.yaml
+
   ui:build:plugin:kubernetes-logs:
     desc: Build the kubernetes-logs plugin UI bundle into plugins/kubernetes-logs/ui
     dir: plugins/kubernetes-logs/ui-src
@@ -360,6 +385,18 @@ tasks:
       - test -f node_modules/.modules.yaml
       - test node_modules/.modules.yaml -nt package.json
 
+  ui:install:plugin:sql-server:local:
+    desc: |
+      Reinstall the sql-server plugin UI with @flanksource/clicky-ui linked
+      to the sibling ../clicky-ui checkout. Used by `task dev:plugins`.
+      No caching; restores pnpm-lock.yaml afterwards.
+    dir: plugins/sql-server/ui-src
+    env:
+      CLICKY_UI_LOCAL: "1"
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+      - git restore pnpm-lock.yaml
+
   ui:build:plugin:sql-server:
     desc: Build the sql-server plugin UI bundle into plugins/sql-server/ui
     dir: plugins/sql-server/ui-src
@@ -376,6 +413,9 @@ tasks:
       - package.json
       - tsconfig.json
       - vite.config.ts
+      # Rebuild when locally-linked clicky-ui dist or its style tokens change.
+      - ../../../../clicky-ui/packages/ui/dist/index.mjs
+      - ../../../../clicky-ui/packages/ui/src/styles/**/*.css
     generates:
       - ../ui/index.html
 
@@ -442,16 +482,32 @@ tasks:
 
   dev:
     desc: |
-      Rebuild clicky-ui + incident-commander UI + the Go binary, then start
-      `serve --ui --dev` with a local htpasswd. The Go server proxies /ui to
-      Vite so frontend changes are served from Vite watch mode instead of the
-      embedded bundle.
-    deps: [clicky-ui:build, ui:build, go:build-fast]
+      Rebuild clicky-ui + incident-commander UI (linked to local clicky-ui)
+      + the Go binary, then start `serve --ui --dev` with a local htpasswd.
+      The Go server proxies /ui to Vite so frontend changes are served from
+      Vite watch mode instead of the embedded bundle.
     env:
       PGRST_VERSION: any
     cmds:
+      # Order matters: build clicky-ui dist, link it into ui/frontend, then
+      # build the embedded bundle + Go binary that consume the linked dist.
+      - task: clicky-ui:build
+      - task: ui:install:local
+      - task: go:build-fast
       # secret is hardcoded for dev purposes and is save to
       - "{{.BINARY}} serve --htpasswd-file .htpasswd --disable-operators -vv      --postgrest-uri http://localhost:0  --ui --dev  {{.CLI_ARGS}}"
+
+  dev:plugins:
+    desc: |
+      Build the sql-server and kubernetes-logs plugin binaries with their
+      UIs linked to the sibling ../clicky-ui checkout. Use this loop when
+      iterating on clicky-ui changes that need to surface in the plugin UIs.
+    cmds:
+      - task: clicky-ui:build
+      - task: ui:install:plugin:kubernetes-logs:local
+      - task: ui:install:plugin:sql-server:local
+      - task: build:plugin:kubernetes-logs
+      - task: build:plugin:sql-server
 
   test:
     desc: Run Ginkgo tests (skips e2e)
