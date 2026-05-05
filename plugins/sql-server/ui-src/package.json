@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@flanksource/clicky-ui": "workspace:*",
+    "@flanksource/clicky-ui": "^0.2.1",
     "@monaco-editor/react": "^4.7.0",
     "@tanstack/react-query": "^5.80.7",
     "lucide-react": "^0.545.0",

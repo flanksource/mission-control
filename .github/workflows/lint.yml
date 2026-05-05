@@ -20,6 +20,15 @@ jobs:
         with:
           go-version: 1.26.x
           cache: false
+      - name: Install Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24.11.0
+      - name: Install pnpm
+        run: |
+          npm install -g pnpm@10.33.0
+          sudo ln -sf "$(npm config get prefix)/bin/pnpm" /usr/local/bin/pnpm
+          pnpm --version
       - run: make -B manifests
       - run: make auth/oidc/static/tailwind.min.js
       - run: make ui
