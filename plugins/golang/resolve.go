@@ -15,12 +15,13 @@ import (
 )
 
 type RunningPod struct {
-	Namespace  string   `json:"namespace"`
-	Name       string   `json:"name"`
-	Node       string   `json:"node,omitempty"`
-	Containers []string `json:"containers"`
-	OwnerKind  string   `json:"ownerKind,omitempty"`
-	OwnerName  string   `json:"ownerName,omitempty"`
+	Namespace      string           `json:"namespace"`
+	Name           string           `json:"name"`
+	Node           string           `json:"node,omitempty"`
+	Containers     []string         `json:"containers"`
+	ContainerPorts map[string][]int `json:"containerPorts,omitempty"`
+	OwnerKind      string           `json:"ownerKind,omitempty"`
+	OwnerName      string           `json:"ownerName,omitempty"`
 }
 
 type TargetRef struct {
@@ -75,10 +76,11 @@ func listRunningPodsForTarget(ctx context.Context, cli kubernetes.Interface, tar
 			continue
 		}
 		row := RunningPod{
-			Namespace:  p.Namespace,
-			Name:       p.Name,
-			Node:       p.Spec.NodeName,
-			Containers: containerNames(p),
+			Namespace:      p.Namespace,
+			Name:           p.Name,
+			Node:           p.Spec.NodeName,
+			Containers:     containerNames(p),
+			ContainerPorts: containerPorts(p),
 		}
 		if owner := controllerOwner(p); owner != "" {
 			kind, name, _ := strings.Cut(owner, "/")
@@ -184,6 +186,21 @@ func containerNames(p corev1.Pod) []string {
 		names = append(names, c.Name)
 	}
 	return names
+}
+
+func containerPorts(p corev1.Pod) map[string][]int {
+	out := map[string][]int{}
+	for _, c := range p.Spec.Containers {
+		for _, port := range c.Ports {
+			if port.ContainerPort > 0 {
+				out[c.Name] = append(out[c.Name], int(port.ContainerPort))
+			}
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func controllerOwner(p corev1.Pod) string {

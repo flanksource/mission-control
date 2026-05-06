@@ -10,8 +10,42 @@ vars:
     sh: echo "${MISSION_CONTROL_PLUGIN_PATH:-$HOME/.mission-control/plugins}"
 
 tasks:
+  ui:install:
+    desc: Install pnpm deps for the plugin UI workspace
+    dir: ui-src
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+    sources:
+      - package.json
+    status:
+      - test -f node_modules/.modules.yaml
+      - test node_modules/.modules.yaml -nt package.json
+
+  ui:build:
+    desc: Build the plugin UI bundle into ./ui
+    dir: ui-src
+    deps: [ui:install]
+    env:
+      PLUGIN_VERSION: "{{.VERSION}}"
+      PLUGIN_BUILD_DATE: "{{.BUILD_DATE}}"
+    cmds:
+      - pnpm run build
+    sources:
+      - src/**/*.ts
+      - src/**/*.tsx
+      - src/**/*.css
+      - index.html
+      - package.json
+      - tsconfig.json
+      - vite.config.ts
+      - ../../../../clicky-ui/packages/ui/dist/index.mjs
+      - ../../../../clicky-ui/packages/ui/src/styles/**/*.css
+    generates:
+      - ../ui/index.html
+
   generate:
     desc: Regenerate ui_checksum.go from the embedded UI bundle
+    deps: [ui:build]
     cmds:
       - go generate .
     sources:

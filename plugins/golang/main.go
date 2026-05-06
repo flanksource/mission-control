@@ -22,6 +22,10 @@ const (
 	OpRuntimeSnapshot = "runtime-snapshot"
 	OpGoroutines      = "goroutines"
 	OpProfileCollect  = "profile-collect"
+	OpProfileStart    = "profile-start"
+	OpProfileStatus   = "profile-status"
+	OpProfileStop     = "profile-stop"
+	OpProfileRunsList = "profile-runs-list"
 	pluginName        = "golang"
 )
 
@@ -46,11 +50,13 @@ func main() {
 type GolangPlugin struct {
 	clients  clientCache
 	sessions *SessionRegistry
+	profiles *ProfileRegistry
 	settings PluginSettings
 }
 
 type PluginSettings struct {
 	DefaultGopsPort  int      `json:"defaultGopsPort,omitempty"`
+	DefaultGopsPorts []int    `json:"defaultGopsPorts,omitempty"`
 	DefaultPprofPort int      `json:"defaultPprofPort,omitempty"`
 	PprofBasePath    string   `json:"pprofBasePath,omitempty"`
 	GopsConfigDirs   []string `json:"gopsConfigDirs,omitempty"`
@@ -60,16 +66,18 @@ type PluginSettings struct {
 
 func defaultSettings() PluginSettings {
 	return PluginSettings{
-		PprofBasePath:  "/debug/pprof",
-		GopsConfigDirs: []string{"/tmp/gops", "/root/.config/gops", "/home/*/.config/gops"},
-		MaxSessions:    5,
-		MaxProfileSec:  30,
+		DefaultGopsPorts: []int{6061},
+		PprofBasePath:    "/debug/pprof",
+		GopsConfigDirs:   []string{"/tmp/gops", "/root/.config/gops", "/home/*/.config/gops"},
+		MaxSessions:      5,
+		MaxProfileSec:    30,
 	}
 }
 
 func newPlugin() *GolangPlugin {
 	return &GolangPlugin{
 		sessions: NewSessionRegistry(),
+		profiles: NewProfileRegistry(),
 		settings: defaultSettings(),
 	}
 }
@@ -91,6 +99,9 @@ func (p *GolangPlugin) Configure(_ context.Context, settings map[string]any) err
 	next := p.settings
 	if v, ok := numberSetting(settings, "defaultGopsPort"); ok && v > 0 {
 		next.DefaultGopsPort = v
+	}
+	if v, ok := intSliceSetting(settings, "defaultGopsPorts"); ok {
+		next.DefaultGopsPorts = v
 	}
 	if v, ok := numberSetting(settings, "defaultPprofPort"); ok && v > 0 {
 		next.DefaultPprofPort = v
@@ -120,6 +131,10 @@ func (p *GolangPlugin) Operations() []sdk.Operation {
 		OpRuntimeSnapshot: p.runtimeSnapshot,
 		OpGoroutines:      p.goroutines,
 		OpProfileCollect:  p.profileCollect,
+		OpProfileStart:    p.profileStart,
+		OpProfileStatus:   p.profileStatus,
+		OpProfileStop:     p.profileStop,
+		OpProfileRunsList: p.profileRunsList,
 	}
 	defs := operationDefs()
 	out := make([]sdk.Operation, 0, len(defs))
@@ -143,6 +158,10 @@ func operationDefs() []*pluginpb.OperationDef {
 		mk(OpRuntimeSnapshot, "Read Go version, runtime stats, and memory stats."),
 		mk(OpGoroutines, "Read the current goroutine stack dump."),
 		mk(OpProfileCollect, "Collect a heap, CPU, or execution trace profile."),
+		mk(OpProfileStart, "Start a profile run and track it in process-local history."),
+		mk(OpProfileStatus, "Read a profile run status."),
+		mk(OpProfileStop, "Stop a running profile run."),
+		mk(OpProfileRunsList, "List recent profile runs for a diagnostics session."),
 	}
 }
 
@@ -156,6 +175,32 @@ func numberSetting(settings map[string]any, key string) (int, bool) {
 		return int(v), true
 	default:
 		return 0, false
+	}
+}
+
+func intSliceSetting(settings map[string]any, key string) ([]int, bool) {
+	raw, ok := settings[key]
+	if !ok {
+		return nil, false
+	}
+	switch v := raw.(type) {
+	case []int:
+		return uniquePositiveInts(v...), true
+	case []any:
+		out := make([]int, 0, len(v))
+		for _, item := range v {
+			switch n := item.(type) {
+			case int:
+				out = append(out, n)
+			case int64:
+				out = append(out, int(n))
+			case float64:
+				out = append(out, int(n))
+			}
+		}
+		return uniquePositiveInts(out...), len(out) > 0
+	default:
+		return nil, false
 	}
 }
 

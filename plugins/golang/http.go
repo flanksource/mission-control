@@ -55,10 +55,9 @@ func (p *GolangPlugin) httpProxyPprof(w http.ResponseWriter, r *http.Request) {
 
 func (p *GolangPlugin) httpProfile(w http.ResponseWriter, r *http.Request) {
 	rest := strings.TrimPrefix(r.URL.Path, "/profiles/")
-	id, kind, _ := strings.Cut(rest, "/")
-	kind = normalizeProfileKind(kind)
-	if id == "" || kind == "" {
-		http.Error(w, "expected /profiles/{sessionID}/{heap|cpu|trace}", http.StatusBadRequest)
+	id, tail, _ := strings.Cut(rest, "/")
+	if id == "" || tail == "" {
+		http.Error(w, "expected /profiles/{sessionID}/{runID|heap|cpu|trace}", http.StatusBadRequest)
 		return
 	}
 	sess, ok := p.sessions.Get(id)
@@ -66,12 +65,41 @@ func (p *GolangPlugin) httpProfile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "session not found", http.StatusNotFound)
 		return
 	}
+
+	if run, ok := p.profiles.Get(tail); ok {
+		if run.SessionID != sess.ID {
+			http.Error(w, "profile run does not belong to session", http.StatusForbidden)
+			return
+		}
+		snapshot := run.Snapshot()
+		if snapshot.State != "completed" {
+			http.Error(w, "profile run is not completed", http.StatusConflict)
+			return
+		}
+		data := run.Data()
+		if len(data) == 0 {
+			http.Error(w, "profile run has no data", http.StatusNotFound)
+			return
+		}
+		writeProfileDownload(w, sess.ID, run.ID, snapshot.Kind, snapshot.Source, data)
+		return
+	}
+
+	kind := normalizeProfileKind(tail)
+	if kind == "" {
+		http.Error(w, "expected /profiles/{sessionID}/{runID|heap|cpu|trace}", http.StatusBadRequest)
+		return
+	}
 	data, source, err := collectProfile(r.Context(), sess, kind, p.settings.MaxProfileSec)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
-	filename := fmt.Sprintf("%s-%s.%s", pluginName, id, profileExtension(kind))
+	writeProfileDownload(w, sess.ID, kind, kind, source, data)
+}
+
+func writeProfileDownload(w http.ResponseWriter, sessionID, name, kind, source string, data []byte) {
+	filename := fmt.Sprintf("%s-%s-%s.%s", pluginName, sessionID, name, profileExtension(kind))
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename=%q`, filename))
 	w.Header().Set("X-Diagnostics-Source", source)
 	w.Header().Set("Content-Type", profileContentType(kind))
