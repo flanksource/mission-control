@@ -211,7 +211,7 @@ pnpm: $(LOCALBIN)/pnpm
 
 .PHONY: ginkgo
 ginkgo:
-	go install github.com/onsi/ginkgo/v2/ginkgo
+	GOBIN=$(LOCALBIN) go install github.com/onsi/ginkgo/v2/ginkgo
 
 .PHONY: controller-gen
 controller-gen: install-deps $(LOCALBIN)
