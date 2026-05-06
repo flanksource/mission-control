@@ -8,6 +8,8 @@ import { toastManager } from "@/components/ui/toast";
 import { callOp, configIDFromURL, pluginURL } from "@/lib/api";
 import { ArthasDashboardTab } from "./ArthasDashboardTab";
 import { ArthasMBeanTab } from "./ArthasMBeanTab";
+import { ArthasOgnlTab } from "./ArthasOgnlTab";
+import { ArthasProfilerTab } from "./ArthasProfilerTab";
 
 interface ArthasSession {
   id: string;
@@ -323,8 +325,10 @@ function SessionDetail({
       <div className="m-2 flex items-center justify-between gap-2">
         <TabsList className="w-fit">
           <TabsTrigger value="console">Web Console</TabsTrigger>
+          <TabsTrigger value="ognl">OGNL</TabsTrigger>
           <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
           <TabsTrigger value="mbeans">MBeans</TabsTrigger>
+          <TabsTrigger value="profiler">Profiler</TabsTrigger>
           {session.mcpEnabled ? <TabsTrigger value="mcp">MCP</TabsTrigger> : <TabsTrigger value="api">HTTP API</TabsTrigger>}
           <TabsTrigger value="info">Info</TabsTrigger>
         </TabsList>
@@ -336,8 +340,14 @@ function SessionDetail({
       <TabsContent value="dashboard" className="min-h-0 flex-1 overflow-hidden p-0">
         <ArthasDashboardTab sessionId={session.id} />
       </TabsContent>
+      <TabsContent value="ognl" className="min-h-0 flex-1 overflow-hidden p-0">
+        <ArthasOgnlTab sessionId={session.id} />
+      </TabsContent>
       <TabsContent value="mbeans" className="min-h-0 flex-1 overflow-hidden p-0">
         <ArthasMBeanTab sessionId={session.id} />
+      </TabsContent>
+      <TabsContent value="profiler" className="min-h-0 flex-1 overflow-hidden p-0">
+        <ArthasProfilerTab sessionId={session.id} />
       </TabsContent>
       <TabsContent value="api" className="flex-1 overflow-auto p-4">
         <HttpApiInstructions session={session} />
