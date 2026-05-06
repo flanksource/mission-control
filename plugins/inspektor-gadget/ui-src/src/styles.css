@@ -1,3 +1,4 @@
+@import "tailwindcss";
 @import "@flanksource/clicky-ui/styles.css";
 
 :root {
@@ -76,13 +77,7 @@ body {
   margin-left: auto;
 }
 
-.header-actions button,
-.status-strip button,
-.dialog-footer button,
-.icon-button,
-.export,
-.gadget-card,
-.session-stop {
+.gadget-card {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -99,11 +94,6 @@ body {
 
 .session-main {
   cursor: pointer;
-}
-
-.icon-button {
-  width: 32px;
-  padding: 0;
 }
 
 .secondary {
@@ -214,27 +204,6 @@ body {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
-}
-
-.duration-presets button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 28px;
-  border: 1px solid #cbd5e1;
-  border-radius: 6px;
-  border-color: #cbd5e1;
-  background: #ffffff;
-  color: #172033;
-  padding: 0 6px;
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.duration-presets button.selected {
-  border-color: #2563eb;
-  background: #eff6ff;
-  color: #1d4ed8;
 }
 
 .hint, .empty {
@@ -352,28 +321,6 @@ body {
   font-weight: 400;
 }
 
-.kv {
-  display: grid;
-  grid-template-columns: 78px minmax(0, 1fr);
-  gap: 6px;
-  align-items: baseline;
-  font-size: 12px;
-}
-
-.kv span {
-  color: #64748b;
-}
-
-.kv code {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.kv .plain {
-  font-family: inherit;
-}
-
 .sessions {
   display: flex;
   flex-direction: column;
@@ -453,14 +400,15 @@ body {
 }
 
 .session-main {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 66px 72px 80px;
-  min-height: 34px;
-  justify-content: stretch;
+  display: flex;
+  min-height: 42px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
   border: 0;
   background: transparent;
   color: inherit;
-  padding: 0 8px;
+  padding: 5px 8px;
   text-align: left;
 }
 
@@ -470,16 +418,50 @@ body {
   white-space: nowrap;
 }
 
+.session-title-row {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.session-name {
+  font-weight: 600;
+}
+
 .session-state {
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #475569;
+  padding: 1px 6px;
+  font-size: 11px;
   text-transform: capitalize;
 }
 
 .session-state.running {
+  background: #dcfce7;
   color: #15803d;
 }
 
 .session-state.failed {
+  background: #fee2e2;
   color: #b91c1c;
+}
+
+.session-state.completed {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.session-count {
+  min-width: 22px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #334155;
+  padding: 1px 7px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
 }
 
 .session-countdown {
@@ -487,6 +469,8 @@ body {
   align-items: center;
   gap: 4px;
   color: #64748b;
+  padding-left: 22px;
+  font-size: 11px;
 }
 
 .session-stop {
@@ -569,82 +553,11 @@ code {
   white-space: pre-wrap;
 }
 
-.dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 50;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgb(15 23 42 / 42%);
-  padding: 18px;
-}
-
-.dialog-panel {
-  display: flex;
-  width: min(980px, 100%);
-  max-height: calc(100vh - 36px);
-  flex-direction: column;
-  overflow: hidden;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #ffffff;
-  box-shadow: 0 24px 72px rgb(15 23 42 / 24%);
-}
-
-.dialog-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  border-bottom: 1px solid #e2e8f0;
-  padding: 14px 16px 12px;
-}
-
-.dialog-header h2 {
-  margin: 0 0 4px;
-  font-size: 18px;
-  line-height: 1.2;
-}
-
-.dialog-header span {
-  display: block;
-  max-width: 760px;
-  overflow: hidden;
-  color: #64748b;
-  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dialog-body {
-  display: grid;
-  min-height: 0;
-  grid-template-columns: minmax(300px, 1.15fr) minmax(280px, 0.85fr);
-  gap: 16px;
-  overflow: auto;
-  padding: 14px 16px 16px;
-}
-
 .dialog-form {
   display: flex;
   min-width: 0;
   flex-direction: column;
   gap: 10px;
-}
-
-.dialog-picker {
-  max-height: calc(100vh - 230px);
-}
-
-.dialog-footer {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  border-top: 1px solid #e2e8f0;
-  padding: 12px 16px;
 }
 
 .spin {
@@ -680,11 +593,4 @@ code {
     display: none;
   }
 
-  .dialog-body {
-    grid-template-columns: 1fr;
-  }
-
-  .dialog-picker {
-    max-height: 36vh;
-  }
 }

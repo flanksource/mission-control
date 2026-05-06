@@ -94,4 +94,41 @@ var _ = ginkgo.Describe("gadget parameters", func() {
 	ginkgo.It("serializes selectors deterministically", func() {
 		Expect(labelsParam(map[string]string{"tier": "api", "app": "shop"})).To(Equal("app=shop,tier=api"))
 	})
+
+	ginkgo.It("attaches event table schemas to every supported gadget", func() {
+		for _, gadget := range supportedGadgets(defaultIGTag) {
+			Expect(gadget.EventSchema).ToNot(BeNil(), gadget.ID)
+			Expect(gadget.EventSchema.SourceStruct).ToNot(BeEmpty(), gadget.ID)
+		}
+	})
+
+	ginkgo.It("copies representative event table struct fields", func() {
+		traceOpen := eventSchemaForGadget("trace_open")
+		Expect(traceOpen.SourceStruct).To(Equal("traceOpenEvent"))
+		Expect(columnPaths(traceOpen.Columns)).To(ContainElements("proc", "fd", "error", "flags", "mode", "fname", "fpath"))
+
+		traceExec := eventSchemaForGadget("trace_exec")
+		Expect(traceExec.SourceStruct).To(Equal("traceExecEvent"))
+		Expect(columnPaths(traceExec.Columns)).To(ContainElements("proc", "error", "args", "exepath", "file", "cwd"))
+
+		traceTCP := eventSchemaForGadget("trace_tcp")
+		Expect(traceTCP.SourceStruct).To(Equal("traceTCPEvent"))
+		Expect(columnPaths(traceTCP.Columns)).To(ContainElements("proc", "src", "dst", "type", "error", "fd", "accept_fd"))
+
+		traceDNS := eventSchemaForGadget("trace_dns")
+		Expect(traceDNS.SourceStruct).To(Equal("traceDNSEvent"))
+		Expect(columnPaths(traceDNS.Columns)).To(ContainElements("proc", "src", "dst", "qtype", "rcode", "qr", "name", "addresses"))
+
+		topProcess := eventSchemaForGadget("top_process")
+		Expect(topProcess.SourceStruct).To(Equal("topProcessEntry"))
+		Expect(columnPaths(topProcess.Columns)).To(ContainElements("pid", "comm", "cpuUsage", "memoryRSS", "state"))
+	})
 })
+
+func columnPaths(columns []EventColumn) []string {
+	paths := make([]string, 0, len(columns))
+	for _, column := range columns {
+		paths = append(paths, column.Path)
+	}
+	return paths
+}
