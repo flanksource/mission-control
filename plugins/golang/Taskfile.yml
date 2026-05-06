@@ -1,0 +1,47 @@
+version: "3"
+
+vars:
+  PLUGIN_NAME: golang
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo dev
+  BUILD_DATE:
+    sh: date -u "+%Y-%m-%d %H:%M:%S"
+  PLUGIN_PATH:
+    sh: echo "${MISSION_CONTROL_PLUGIN_PATH:-$HOME/.mission-control/plugins}"
+
+tasks:
+  generate:
+    desc: Regenerate ui_checksum.go from the embedded UI bundle
+    cmds:
+      - go generate .
+    sources:
+      - ui/**
+      - internal/gen-checksum/main.go
+    generates:
+      - ui_checksum.go
+
+  test:
+    desc: Run the plugin's Ginkgo unit tests
+    cmds:
+      - go run github.com/onsi/ginkgo/v2/ginkgo --label-filter='!ignore_local' .
+
+  build:
+    desc: Build and install the plugin binary into $MISSION_CONTROL_PLUGIN_PATH
+    deps: [generate]
+    cmds:
+      - mkdir -p {{.PLUGIN_PATH}}
+      - >-
+        go build -o {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}
+        -ldflags "-X 'main.Version={{.VERSION}}' -X 'main.BuildDate={{.BUILD_DATE}}'"
+        .
+      - echo "Installed {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}} version={{.VERSION}} built={{.BUILD_DATE}}"
+    sources:
+      - ./*.go
+      - internal/**/*.go
+      - ui/**
+      - ui_checksum.go
+      - ../../plugin/**/*.go
+      - ../../go.mod
+      - ../../go.sum
+    generates:
+      - "{{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}"

@@ -1,0 +1,18 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Plugin
+metadata:
+  name: golang
+spec:
+  source: golang
+  version: "0.1.0"
+  selector:
+    types:
+      - Kubernetes::Pod
+      - Kubernetes::Deployment
+      - Kubernetes::StatefulSet
+      - Kubernetes::DaemonSet
+      - Kubernetes::ReplicaSet
+      - Kubernetes::Job
+      - Kubernetes::CronJob
+  connections:
+    kubernetes: {}

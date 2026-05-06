@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Golang Diagnostics</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #f7f8fa;
+        --panel: #ffffff;
+        --text: #172033;
+        --muted: #5f6b7a;
+        --border: #d9dee7;
+        --accent: #0f766e;
+        --accent-soft: #dff5f1;
+        --danger: #b42318;
+        --code: #101828;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #111827;
+          --panel: #182230;
+          --text: #edf2f7;
+          --muted: #a8b3c2;
+          --border: #344054;
+          --accent: #2dd4bf;
+          --accent-soft: #143f3a;
+          --danger: #f97066;
+          --code: #f2f4f7;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font: 13px/1.4 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      button,
+      input,
+      select {
+        font: inherit;
+      }
+      .app {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+        height: 100vh;
+      }
+      header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        border-bottom: 1px solid var(--border);
+        background: var(--panel);
+        padding: 10px 14px;
+      }
+      .brand {
+        display: flex;
+        min-width: 0;
+        align-items: center;
+        gap: 10px;
+        font-weight: 650;
+      }
+      .brand svg {
+        color: var(--accent);
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      main {
+        display: grid;
+        grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+        min-height: 0;
+        gap: 12px;
+        padding: 12px;
+      }
+      section {
+        min-height: 0;
+        border: 1px solid var(--border);
+        background: var(--panel);
+      }
+      .sidebar {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+      .content {
+        display: grid;
+        grid-template-rows: auto minmax(0, 1fr);
+      }
+      .section-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        border-bottom: 1px solid var(--border);
+        padding: 9px 10px;
+        font-weight: 650;
+      }
+      .list {
+        min-height: 0;
+        overflow: auto;
+        padding: 6px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+        width: 100%;
+        border: 0;
+        border-radius: 6px;
+        background: transparent;
+        color: inherit;
+        padding: 8px;
+        text-align: left;
+      }
+      .row:hover,
+      .row.selected {
+        background: var(--accent-soft);
+      }
+      .row-title {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: 600;
+      }
+      .row-sub {
+        overflow: hidden;
+        color: var(--muted);
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .pill {
+        align-self: start;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--muted);
+        padding: 1px 7px;
+        font-size: 11px;
+      }
+      .tabs {
+        display: flex;
+        gap: 4px;
+        border-bottom: 1px solid var(--border);
+        padding: 6px;
+      }
+      .tab {
+        border: 1px solid transparent;
+        border-radius: 6px;
+        background: transparent;
+        color: var(--muted);
+        padding: 6px 9px;
+      }
+      .tab.active {
+        border-color: var(--border);
+        background: var(--accent-soft);
+        color: var(--text);
+      }
+      .pane {
+        min-height: 0;
+        overflow: auto;
+        padding: 12px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 10px;
+      }
+      .metric {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 10px;
+      }
+      .label {
+        color: var(--muted);
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+      .value {
+        margin-top: 4px;
+        overflow-wrap: anywhere;
+        font-weight: 650;
+      }
+      .stack {
+        min-height: 360px;
+        overflow: auto;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--bg);
+        color: var(--code);
+        padding: 10px;
+        white-space: pre-wrap;
+      }
+      .form {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+        gap: 8px;
+        width: min(720px, 100%);
+      }
+      label {
+        display: grid;
+        gap: 3px;
+        color: var(--muted);
+        font-size: 11px;
+      }
+      input,
+      select {
+        min-width: 0;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--text);
+        padding: 6px 8px;
+      }
+      button.primary {
+        border: 1px solid var(--accent);
+        border-radius: 6px;
+        background: var(--accent);
+        color: white;
+        padding: 7px 10px;
+      }
+      button.secondary {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        background: var(--panel);
+        color: var(--text);
+        padding: 7px 10px;
+      }
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 10px;
+      }
+      .error {
+        color: var(--danger);
+      }
+      .empty {
+        color: var(--muted);
+        padding: 18px;
+      }
+      a {
+        color: var(--accent);
+      }
+      @media (max-width: 760px) {
+        main {
+          grid-template-columns: 1fr;
+          grid-template-rows: minmax(220px, 34vh) minmax(0, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <header>
+        <div class="brand">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M4 14a8 8 0 1 1 16 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <path d="M12 14l4-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+            <path d="M6 18h12" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+          </svg>
+          <span>Golang Diagnostics</span>
+        </div>
+        <div class="toolbar">
+          <button class="secondary" id="refresh">Refresh</button>
+          <button class="primary" id="start">Start Session</button>
+        </div>
+      </header>
+      <main>
+        <section class="sidebar">
+          <div class="section-head">
+            <span>Targets</span>
+            <span class="pill" id="target-count">0</span>
+          </div>
+          <div class="list" id="targets"></div>
+        </section>
+        <section class="content">
+          <div class="section-head">
+            <span id="session-title">No session</span>
+            <button class="secondary" id="delete-session" disabled>Stop</button>
+          </div>
+          <div class="tabs">
+            <button class="tab active" data-tab="overview">Overview</button>
+            <button class="tab" data-tab="goroutines">Goroutines</button>
+            <button class="tab" data-tab="profiles">Profiles</button>
+            <button class="tab" data-tab="pprof">Pprof</button>
+          </div>
+          <div class="pane" id="pane"></div>
+        </section>
+      </main>
+    </div>
+    <script>
+      const state = {
+        pods: [],
+        sessions: [],
+        selectedTarget: null,
+        selectedSession: null,
+        tab: "overview",
+        runtime: null,
+        goroutines: null,
+        error: "",
+      };
+
+      function configID() {
+        return new URLSearchParams(window.location.search).get("config_id") || "";
+      }
+      function basePath() {
+        return window.location.pathname.replace(/\/ui\/.*$/, "");
+      }
+      function opURL(op) {
+        const url = new URL(`${basePath()}/operations/${op}`, window.location.origin);
+        const id = configID();
+        if (id) url.searchParams.set("config_id", id);
+        return url;
+      }
+      function pluginURL(path) {
+        return new URL(path.replace(/^\//, ""), window.location.href).toString();
+      }
+      async function callOp(op, body = {}) {
+        const res = await fetch(opURL(op), {
+          method: "POST",
+          credentials: "same-origin",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) throw new Error(await res.text() || res.statusText);
+        return res.json();
+      }
+      async function load() {
+        state.error = "";
+        try {
+          const [pods, sessions] = await Promise.all([
+            configID() ? callOp("pods-list") : Promise.resolve([]),
+            callOp("sessions-list"),
+          ]);
+          state.pods = pods;
+          state.sessions = sessions;
+          if (!state.selectedSession && sessions.length) state.selectedSession = sessions[0].id;
+          render();
+          await loadRuntime();
+        } catch (err) {
+          state.error = String(err.message || err);
+          render();
+        }
+      }
+      function selectedSession() {
+        return state.sessions.find((s) => s.id === state.selectedSession) || null;
+      }
+      async function startSession() {
+        const t = state.selectedTarget || firstTarget();
+        if (!t) return;
+        state.error = "";
+        render();
+        try {
+          const session = await callOp("session-create", { pod: t.pod, container: t.container, namespace: t.namespace });
+          state.selectedSession = session.id;
+          state.runtime = null;
+          state.goroutines = null;
+          await load();
+        } catch (err) {
+          state.error = String(err.message || err);
+          render();
+        }
+      }
+      async function stopSession() {
+        const s = selectedSession();
+        if (!s) return;
+        await callOp("session-delete", { id: s.id });
+        state.selectedSession = null;
+        state.runtime = null;
+        state.goroutines = null;
+        await load();
+      }
+      async function loadRuntime() {
+        const s = selectedSession();
+        if (!s || !s.gopsAvailable) {
+          state.runtime = null;
+          render();
+          return;
+        }
+        try {
+          state.runtime = await callOp("runtime-snapshot", { sessionId: s.id });
+        } catch (err) {
+          state.runtime = { error: String(err.message || err) };
+        }
+        render();
+      }
+      async function loadGoroutines() {
+        const s = selectedSession();
+        if (!s) return;
+        state.tab = "goroutines";
+        state.goroutines = { dump: "Loading..." };
+        render();
+        try {
+          state.goroutines = await callOp("goroutines", { sessionId: s.id });
+        } catch (err) {
+          state.goroutines = { dump: String(err.message || err) };
+        }
+        render();
+      }
+      function firstTarget() {
+        for (const pod of state.pods) {
+          for (const container of pod.containers || []) {
+            return { namespace: pod.namespace, pod: pod.name, container };
+          }
+        }
+        return null;
+      }
+      function targets() {
+        const out = [];
+        for (const pod of state.pods) {
+          for (const container of pod.containers || []) {
+            out.push({ namespace: pod.namespace, pod: pod.name, container, owner: pod.ownerKind ? `${pod.ownerKind}/${pod.ownerName}` : "pod" });
+          }
+        }
+        return out;
+      }
+      function render() {
+        renderTargets();
+        renderTabs();
+        const s = selectedSession();
+        document.getElementById("session-title").textContent = s ? `${s.pod} / ${s.container}` : "No session";
+        document.getElementById("delete-session").disabled = !s;
+        if (state.error) {
+          document.getElementById("pane").innerHTML = `<div class="error">${escapeHTML(state.error)}</div>`;
+          return;
+        }
+        if (state.tab === "overview") renderOverview();
+        if (state.tab === "goroutines") renderGoroutines();
+        if (state.tab === "profiles") renderProfiles();
+        if (state.tab === "pprof") renderPprof();
+      }
+      function renderTargets() {
+        const list = document.getElementById("targets");
+        const ts = targets();
+        document.getElementById("target-count").textContent = String(ts.length);
+        if (!configID()) {
+          list.innerHTML = `<div class="empty">No config_id in the iframe URL.</div>`;
+          return;
+        }
+        if (!ts.length) {
+          list.innerHTML = `<div class="empty">No ready pods resolved for this resource.</div>`;
+          return;
+        }
+        list.innerHTML = ts.map((t, i) => {
+          const selected = state.selectedTarget && state.selectedTarget.pod === t.pod && state.selectedTarget.container === t.container;
+          return `<button class="row ${selected ? "selected" : ""}" data-target="${i}">
+            <span><span class="row-title">${escapeHTML(t.pod)}</span><span class="row-sub">${escapeHTML(t.owner)} / ${escapeHTML(t.container)}</span></span>
+            <span class="pill">${escapeHTML(t.namespace)}</span>
+          </button>`;
+        }).join("");
+        list.querySelectorAll("[data-target]").forEach((el) => {
+          el.addEventListener("click", () => {
+            state.selectedTarget = ts[Number(el.dataset.target)];
+            render();
+          });
+        });
+      }
+      function renderTabs() {
+        document.querySelectorAll(".tab").forEach((tab) => {
+          tab.classList.toggle("active", tab.dataset.tab === state.tab);
+        });
+      }
+      function renderOverview() {
+        const s = selectedSession();
+        if (!s) {
+          document.getElementById("pane").innerHTML = `<div class="empty">Select a target and start a session.</div>`;
+          return;
+        }
+        const version = (state.runtime?.version || "").trim() || "unknown";
+        document.getElementById("pane").innerHTML = `
+          <div class="grid">
+            ${metric("Gops", s.gopsAvailable ? `127.0.0.1:${s.gopsRemotePort}` : "unavailable")}
+            ${metric("Pprof", s.pprofAvailable ? `127.0.0.1:${s.pprofRemotePort}${s.pprofBasePath}` : "unavailable")}
+            ${metric("PID", s.pid || "unknown")}
+            ${metric("Go Version", version)}
+          </div>
+          ${s.diagnostics?.length ? `<h3>Diagnostics</h3><pre class="stack">${escapeHTML(s.diagnostics.join("\n"))}</pre>` : ""}
+          ${state.runtime?.stats ? `<h3>Stats</h3><pre class="stack">${escapeHTML(state.runtime.stats + "\n" + (state.runtime.memstats || ""))}</pre>` : ""}
+        `;
+      }
+      function renderGoroutines() {
+        const s = selectedSession();
+        if (!s) {
+          document.getElementById("pane").innerHTML = `<div class="empty">No active session.</div>`;
+          return;
+        }
+        const dump = state.goroutines?.dump || "";
+        document.getElementById("pane").innerHTML = `
+          <div class="actions"><button class="primary" id="load-goroutines">Load Goroutines</button></div>
+          <pre class="stack">${escapeHTML(dump || "No goroutine dump loaded.")}</pre>
+        `;
+        document.getElementById("load-goroutines").addEventListener("click", loadGoroutines);
+      }
+      function renderProfiles() {
+        const s = selectedSession();
+        if (!s) {
+          document.getElementById("pane").innerHTML = `<div class="empty">No active session.</div>`;
+          return;
+        }
+        document.getElementById("pane").innerHTML = `
+          <div class="grid">
+            ${profileCard(s, "heap", "Heap")}
+            ${profileCard(s, "cpu", "CPU")}
+            ${profileCard(s, "trace", "Trace")}
+          </div>
+        `;
+      }
+      function renderPprof() {
+        const s = selectedSession();
+        if (!s || !s.pprofAvailable) {
+          document.getElementById("pane").innerHTML = `<div class="empty">Pprof is not available for this session.</div>`;
+          return;
+        }
+        const url = pluginURL(`pprof/${s.id}/`);
+        document.getElementById("pane").innerHTML = `<p><a href="${url}" target="_blank" rel="noreferrer">Open pprof index</a></p><iframe src="${url}" style="width:100%;height:70vh;border:1px solid var(--border);"></iframe>`;
+      }
+      function metric(label, value) {
+        return `<div class="metric"><div class="label">${escapeHTML(label)}</div><div class="value">${escapeHTML(String(value))}</div></div>`;
+      }
+      function profileCard(s, kind, label) {
+        return `<div class="metric"><div class="label">${label}</div><div class="value"><a href="${pluginURL(`profiles/${s.id}/${kind}`)}">Download ${kind}</a></div></div>`;
+      }
+      function escapeHTML(value) {
+        return String(value).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+      }
+      document.getElementById("refresh").addEventListener("click", load);
+      document.getElementById("start").addEventListener("click", startSession);
+      document.getElementById("delete-session").addEventListener("click", stopSession);
+      document.querySelectorAll(".tab").forEach((tab) => {
+        tab.addEventListener("click", () => {
+          state.tab = tab.dataset.tab;
+          if (state.tab === "goroutines" && !state.goroutines) loadGoroutines();
+          else render();
+        });
+      });
+      load();
+      window.parent?.postMessage({ type: "mc.tab.ready" }, "*");
+    </script>
+  </body>
+</html>
