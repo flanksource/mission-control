@@ -9,12 +9,38 @@ import (
 
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
+	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
 
+	"github.com/flanksource/duty/models"
+
 	"github.com/flanksource/incident-commander/plugin/supervisor"
-	"github.com/flanksource/incident-commander/rbac"
 )
+
+// rewriteProxiedRequest mutates r in place so the plugin sees a clean path
+// (the host's /api/plugins/<name>/ui prefix stripped) and so it knows the
+// outward-facing prefix (X-Forwarded-Prefix) plus the calling user/catalog id.
+//
+// Extracted from the uiProxy closure so the rewrite can be unit-tested without
+// spinning up a supervisor or RBAC enforcer.
+func rewriteProxiedRequest(r *http.Request, prefix string, user *models.Person, configID string) {
+	r.URL.Path = strings.TrimPrefix(r.URL.Path, prefix)
+	if r.URL.Path == "" {
+		r.URL.Path = "/"
+	}
+	r.URL.RawPath = ""
+	r.Header.Set("X-Forwarded-Prefix", prefix)
+	if user != nil {
+		r.Header.Set("X-Mission-Control-User", user.ID.String())
+		if user.Email != "" {
+			r.Header.Set("X-Mission-Control-User-Email", user.Email)
+		}
+	}
+	if configID != "" {
+		r.Header.Set("X-Mission-Control-Config-Id", configID)
+	}
+}
 
 // init registers the UI proxy alongside the operations routes.
 func init() {
@@ -26,9 +52,7 @@ func init() {
 // routes; this keeps the route registration in one file (controller.go)
 // while letting us split the proxy implementation here.
 func registerProxyRoutes(e *echo.Echo) {
-	g := e.Group("/api/plugins/:name/ui",
-		rbac.Authorization(policy.ObjectCatalog, policy.ActionRead),
-	)
+	g := e.Group("/api/plugins/:name/ui")
 	g.Any("", uiProxy)
 	g.Any("/*", uiProxy)
 }
@@ -38,6 +62,9 @@ func registerProxyRoutes(e *echo.Echo) {
 // It strips the prefix so the plugin's HTTPHandler sees a clean path.
 func uiProxy(c echo.Context) error {
 	ctx := c.Request().Context().(dutyContext.Context)
+	if err := authorizePluginUI(c, ctx); err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
 	name := c.Param("name")
 
 	sup := supervisor.LookupSupervisor(name)
@@ -59,24 +86,44 @@ func uiProxy(c echo.Context) error {
 	originalDirector := rp.Director
 	rp.Director = func(r *http.Request) {
 		originalDirector(r)
-		r.URL.Path = strings.TrimPrefix(r.URL.Path, prefix)
-		if r.URL.Path == "" {
-			r.URL.Path = "/"
-		}
-		r.URL.RawPath = ""
-		// Forward caller identity + the catalog id from the query string so
-		// the plugin doesn't need to re-derive them.
-		if u := ctx.User(); u != nil {
-			r.Header.Set("X-Mission-Control-User", u.ID.String())
-			if u.Email != "" {
-				r.Header.Set("X-Mission-Control-User-Email", u.Email)
-			}
-		}
-		if cfg := c.QueryParam("config_id"); cfg != "" {
-			r.Header.Set("X-Mission-Control-Config-Id", cfg)
-		}
+		rewriteProxiedRequest(r, prefix, ctx.User(), c.QueryParam("config_id"))
+	}
+	rp.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+		ctx.Logger.Warnf("plugin %s ui proxy: %s %s: %v", name, r.Method, r.URL.Path, err)
+		http.Error(w, "plugin UI proxy error", http.StatusBadGateway)
 	}
 
 	rp.ServeHTTP(c.Response().Writer, c.Request())
 	return nil
+}
+
+func authorizePluginUI(c echo.Context, ctx dutyContext.Context) error {
+	if dutyRBAC.Enforcer() == nil {
+		return nil
+	}
+	action := policy.ActionRead
+	if methodRequiresPluginUpdate(c.Request()) {
+		action = policy.ActionUpdate
+	}
+	if !dutyRBAC.CheckContext(ctx, policy.ObjectCatalog, action) {
+		if u := ctx.User(); u != nil {
+			c.Response().Header().Add("X-Rbac-Subject", u.ID.String())
+		}
+		c.Response().Header().Add("X-Rbac-Object", policy.ObjectCatalog)
+		c.Response().Header().Add("X-Rbac-Action", action)
+		return ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin UI requires catalog %s", action)
+	}
+	return nil
+}
+
+func methodRequiresPluginUpdate(r *http.Request) bool {
+	if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
+		return true
+	}
+	switch r.Method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		return false
+	default:
+		return true
+	}
 }
