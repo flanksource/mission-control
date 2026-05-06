@@ -27,6 +27,10 @@ agent.Listen(agent.Options{
 For pprof, mount the standard handlers on a localhost-only admin listener, for
 example `127.0.0.1:6060/debug/pprof`.
 
+If no explicit ports are provided, the plugin tries readable gops port files,
+then configured/default gops ports. It also probes `/debug/pprof/` on declared
+Kubernetes `containerPort` values for the selected container.
+
 The plugin reaches these localhost-only ports with Kubernetes pod port-forward,
 so the target process does not need to bind to `0.0.0.0`.
 

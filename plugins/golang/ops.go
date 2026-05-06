@@ -40,6 +40,19 @@ type ProfileCollectParams struct {
 	SessionID string `json:"sessionId"`
 	Kind      string `json:"kind"`
 	Seconds   int    `json:"seconds,omitempty"`
+	Source    string `json:"source,omitempty"`
+}
+
+type ProfileRunParams struct {
+	SessionID string `json:"sessionId"`
+	Kind      string `json:"kind"`
+	Seconds   int    `json:"seconds,omitempty"`
+	Source    string `json:"source,omitempty"`
+}
+
+type ProfileRunIDParams struct {
+	SessionID string `json:"sessionId,omitempty"`
+	RunID     string `json:"runId"`
 }
 
 type RuntimeSnapshot struct {
@@ -58,11 +71,18 @@ type GoroutineSnapshot struct {
 
 type ProfileResult struct {
 	SessionID string `json:"sessionId"`
+	RunID     string `json:"runId,omitempty"`
 	Kind      string `json:"kind"`
 	Source    string `json:"source"`
 	Bytes     int    `json:"bytes"`
 	URL       string `json:"url"`
 	Seconds   int    `json:"seconds,omitempty"`
+}
+
+type portCandidate struct {
+	Remote int
+	Local  int
+	Source string
 }
 
 func (p *GolangPlugin) podsList(ctx context.Context, req sdk.InvokeCtx) (any, error) {
@@ -119,9 +139,6 @@ func (p *GolangPlugin) sessionCreate(ctx context.Context, req sdk.InvokeCtx) (an
 	if params.GopsConfigDir != "" {
 		dirs = append([]string{params.GopsConfigDir}, dirs...)
 	}
-	if gopsPort == 0 && p.settings.DefaultGopsPort > 0 {
-		gopsPort = p.settings.DefaultGopsPort
-	}
 	if gopsPort == 0 {
 		discoverCtx, cancel := context.WithTimeout(ctx, 15*time.Second)
 		defer cancel()
@@ -138,35 +155,50 @@ func (p *GolangPlugin) sessionCreate(ctx context.Context, req sdk.InvokeCtx) (an
 			diagnostics = append(diagnostics, "no gops port file found")
 		}
 	}
+	gopsPorts := gopsCandidatePorts(gopsPort, p.settings.DefaultGopsPort, p.settings.DefaultGopsPorts)
+	if gopsPort == 0 && len(gopsPorts) > 0 {
+		diagnostics = append(diagnostics, fmt.Sprintf("trying default gops ports: %s", formatPorts(gopsPorts)))
+	}
 
 	pprofPort := params.PprofPort
-	if pprofPort == 0 && p.settings.DefaultPprofPort > 0 {
-		pprofPort = p.settings.DefaultPprofPort
-	}
 	pprofBase := p.settings.PprofBasePath
 	if params.PprofBasePath != "" {
 		pprofBase = normalizePprofBase(params.PprofBasePath)
 	}
+	pprofPorts := pprofCandidatePorts(pprofPort, p.settings.DefaultPprofPort, pod.ContainerPorts[container])
+	if pprofPort == 0 && len(pod.ContainerPorts[container]) > 0 {
+		diagnostics = append(diagnostics, fmt.Sprintf("trying %s on declared container ports: %s", pprofBase, formatPorts(pod.ContainerPorts[container])))
+	}
 
 	var mappings []golangk8s.PortMapping
-	localGops := 0
-	if gopsPort > 0 {
-		localGops, err = pickLocalPort(params.LocalGops)
+	var gopsCandidates []portCandidate
+	for i, remote := range gopsPorts {
+		preferred := 0
+		if i == 0 {
+			preferred = params.LocalGops
+		}
+		local, err := pickLocalPort(preferred)
 		if err != nil {
 			return nil, err
 		}
-		mappings = append(mappings, golangk8s.PortMapping{LocalPort: localGops, RemotePort: gopsPort})
+		gopsCandidates = append(gopsCandidates, portCandidate{Remote: remote, Local: local, Source: "gops"})
+		mappings = append(mappings, golangk8s.PortMapping{LocalPort: local, RemotePort: remote})
 	}
-	localPprof := 0
-	if pprofPort > 0 {
-		localPprof, err = pickLocalPort(params.LocalPprof)
+	var pprofCandidates []portCandidate
+	for i, remote := range pprofPorts {
+		preferred := 0
+		if i == 0 {
+			preferred = params.LocalPprof
+		}
+		local, err := pickLocalPort(preferred)
 		if err != nil {
 			return nil, err
 		}
-		mappings = append(mappings, golangk8s.PortMapping{LocalPort: localPprof, RemotePort: pprofPort})
+		pprofCandidates = append(pprofCandidates, portCandidate{Remote: remote, Local: local, Source: "pprof"})
+		mappings = append(mappings, golangk8s.PortMapping{LocalPort: local, RemotePort: remote})
 	}
 	if len(mappings) == 0 {
-		return nil, fmt.Errorf("no diagnostics endpoint found; configure gopsPort, pprofPort, default plugin ports, or a readable gopsConfigDir")
+		return nil, fmt.Errorf("no diagnostics endpoint candidates found; configure gopsPort, pprofPort, default plugin ports, a readable gopsConfigDir, or containerPorts")
 	}
 
 	startCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -181,19 +213,27 @@ func (p *GolangPlugin) sessionCreate(ctx context.Context, req sdk.InvokeCtx) (an
 	}
 	sess := NewSession(pod.Namespace, target.Kind, target.Name, pod.Name, container, func() error { return fwd.Close() })
 	sess.PID = pid
-	sess.GopsRemote = gopsPort
-	sess.GopsLocal = localGops
-	sess.PprofRemote = pprofPort
-	sess.PprofLocal = localPprof
-	sess.PprofBasePath = pprofBase
-	sess.GopsAvailable = localGops > 0 && probeGops(ctx, localGops)
-	sess.PprofAvailable = localPprof > 0 && probePprof(ctx, localPprof, pprofBase)
-	sess.Diagnostics = diagnostics
-	if localGops > 0 && !sess.GopsAvailable {
-		sess.Diagnostics = append(sess.Diagnostics, "gops port-forward opened but the gops agent did not respond")
+	if match, ok := firstWorkingGops(ctx, gopsCandidates); ok {
+		sess.GopsRemote = match.Remote
+		sess.GopsLocal = match.Local
+		sess.GopsAvailable = true
 	}
-	if localPprof > 0 && !sess.PprofAvailable {
-		sess.Diagnostics = append(sess.Diagnostics, "pprof port-forward opened but pprof index did not respond")
+	if match, ok := firstWorkingPprof(ctx, pprofCandidates, pprofBase); ok {
+		sess.PprofRemote = match.Remote
+		sess.PprofLocal = match.Local
+		sess.PprofAvailable = true
+	}
+	sess.PprofBasePath = pprofBase
+	sess.Diagnostics = diagnostics
+	if len(gopsCandidates) > 0 && !sess.GopsAvailable {
+		sess.Diagnostics = append(sess.Diagnostics, fmt.Sprintf("no gops agent responded on candidate ports: %s", formatCandidatePorts(gopsCandidates)))
+	}
+	if len(pprofCandidates) > 0 && !sess.PprofAvailable {
+		sess.Diagnostics = append(sess.Diagnostics, fmt.Sprintf("no pprof index responded at %s on candidate ports: %s", pprofBase, formatCandidatePorts(pprofCandidates)))
+	}
+	if !sess.GopsAvailable && !sess.PprofAvailable {
+		_ = fwd.Close()
+		return nil, fmt.Errorf("no diagnostics endpoint responded; %s", strings.Join(sess.Diagnostics, "; "))
 	}
 	p.sessions.Add(sess)
 	return sess.Snapshot(), nil
@@ -240,6 +280,7 @@ func (p *GolangPlugin) sessionDelete(_ context.Context, req sdk.InvokeCtx) (any,
 	if !removed {
 		return nil, fmt.Errorf("session %q not found", params.ID)
 	}
+	p.profiles.RemoveSession(params.ID)
 	return map[string]any{"deleted": true, "id": params.ID}, err
 }
 
@@ -297,22 +338,111 @@ func (p *GolangPlugin) profileCollect(ctx context.Context, req sdk.InvokeCtx) (a
 	if kind == "" {
 		return nil, fmt.Errorf("profile kind must be heap, cpu, or trace")
 	}
+	preference := normalizeProfileSource(params.Source)
 	seconds := params.Seconds
 	if seconds <= 0 || seconds > p.settings.MaxProfileSec {
 		seconds = p.settings.MaxProfileSec
 	}
-	data, source, err := collectProfile(ctx, sess, kind, seconds)
+	data, source, err := collectProfileWithSource(ctx, sess, kind, seconds, preference)
 	if err != nil {
 		return nil, err
 	}
+	run, _ := NewProfileRun(sess.ID, kind, preference, seconds)
+	run.MarkDone(data, source, nil)
+	p.profiles.Add(run)
 	return ProfileResult{
 		SessionID: sess.ID,
+		RunID:     run.ID,
 		Kind:      kind,
 		Source:    source,
 		Bytes:     len(data),
-		URL:       fmt.Sprintf("profiles/%s/%s", sess.ID, kind),
+		URL:       fmt.Sprintf("profiles/%s/%s", sess.ID, run.ID),
 		Seconds:   seconds,
 	}, nil
+}
+
+func (p *GolangPlugin) profileStart(_ context.Context, req sdk.InvokeCtx) (any, error) {
+	var params ProfileRunParams
+	if err := json.Unmarshal(req.ParamsJSON, &params); err != nil {
+		return nil, fmt.Errorf("decode params: %w", err)
+	}
+	sess, ok := p.sessions.Get(params.SessionID)
+	if !ok {
+		return nil, fmt.Errorf("session %q not found", params.SessionID)
+	}
+	kind := normalizeProfileKind(params.Kind)
+	if kind == "" {
+		return nil, fmt.Errorf("profile kind must be heap, cpu, or trace")
+	}
+	preference := normalizeProfileSource(params.Source)
+	seconds := params.Seconds
+	if seconds <= 0 || seconds > p.settings.MaxProfileSec {
+		seconds = p.settings.MaxProfileSec
+	}
+	run, runCtx := NewProfileRun(sess.ID, kind, preference, seconds)
+	p.profiles.Add(run)
+	go func() {
+		timeout := time.Duration(seconds+15) * time.Second
+		if timeout < 45*time.Second {
+			timeout = 45 * time.Second
+		}
+		ctx, cancel := context.WithTimeout(runCtx, timeout)
+		defer cancel()
+		data, source, err := collectProfileWithSource(ctx, sess, kind, seconds, preference)
+		run.MarkDone(data, source, err)
+	}()
+	return run.Snapshot(), nil
+}
+
+func (p *GolangPlugin) profileStatus(_ context.Context, req sdk.InvokeCtx) (any, error) {
+	var params ProfileRunIDParams
+	if err := json.Unmarshal(req.ParamsJSON, &params); err != nil {
+		return nil, fmt.Errorf("decode params: %w", err)
+	}
+	if params.RunID == "" {
+		return nil, fmt.Errorf("runId is required")
+	}
+	run, ok := p.profiles.Get(params.RunID)
+	if !ok {
+		return nil, fmt.Errorf("profile run %q not found", params.RunID)
+	}
+	if params.SessionID != "" && run.SessionID != params.SessionID {
+		return nil, fmt.Errorf("profile run %q does not belong to session %q", params.RunID, params.SessionID)
+	}
+	return run.Snapshot(), nil
+}
+
+func (p *GolangPlugin) profileStop(_ context.Context, req sdk.InvokeCtx) (any, error) {
+	var params ProfileRunIDParams
+	if err := json.Unmarshal(req.ParamsJSON, &params); err != nil {
+		return nil, fmt.Errorf("decode params: %w", err)
+	}
+	if params.RunID == "" {
+		return nil, fmt.Errorf("runId is required")
+	}
+	run, ok := p.profiles.Get(params.RunID)
+	if !ok {
+		return nil, fmt.Errorf("profile run %q not found", params.RunID)
+	}
+	if params.SessionID != "" && run.SessionID != params.SessionID {
+		return nil, fmt.Errorf("profile run %q does not belong to session %q", params.RunID, params.SessionID)
+	}
+	run.Stop()
+	return run.Snapshot(), nil
+}
+
+func (p *GolangPlugin) profileRunsList(_ context.Context, req sdk.InvokeCtx) (any, error) {
+	var params SessionIDParams
+	if err := json.Unmarshal(req.ParamsJSON, &params); err != nil {
+		return nil, fmt.Errorf("decode params: %w", err)
+	}
+	if params.SessionID == "" {
+		return nil, fmt.Errorf("sessionId is required")
+	}
+	if _, ok := p.sessions.Get(params.SessionID); !ok {
+		return nil, fmt.Errorf("session %q not found", params.SessionID)
+	}
+	return p.profiles.List(params.SessionID), nil
 }
 
 func (p *GolangPlugin) sessionFromRequest(raw []byte) (*Session, error) {
@@ -376,18 +506,48 @@ func probePprof(ctx context.Context, port int, base string) bool {
 	return resp.StatusCode >= 200 && resp.StatusCode < 400
 }
 
+func firstWorkingGops(ctx context.Context, candidates []portCandidate) (portCandidate, bool) {
+	for _, candidate := range candidates {
+		if probeGops(ctx, candidate.Local) {
+			return candidate, true
+		}
+	}
+	return portCandidate{}, false
+}
+
+func firstWorkingPprof(ctx context.Context, candidates []portCandidate, base string) (portCandidate, bool) {
+	for _, candidate := range candidates {
+		if probePprof(ctx, candidate.Local, base) {
+			return candidate, true
+		}
+	}
+	return portCandidate{}, false
+}
+
 func collectProfile(ctx context.Context, sess *Session, kind string, seconds int) ([]byte, string, error) {
+	return collectProfileWithSource(ctx, sess, kind, seconds, "auto")
+}
+
+func collectProfileWithSource(ctx context.Context, sess *Session, kind string, seconds int, preference string) ([]byte, string, error) {
+	if preference == "" {
+		preference = "auto"
+	}
+	if preference == "pprof" {
+		if !sess.PprofAvailable {
+			return nil, "", fmt.Errorf("pprof is not available for session %s", sess.ID)
+		}
+		return collectPprofProfile(ctx, sess, kind, seconds)
+	}
+	if preference == "gops" {
+		if !sess.GopsAvailable {
+			return nil, "", fmt.Errorf("gops is not available for session %s", sess.ID)
+		}
+		return collectGopsProfile(ctx, sess, kind)
+	}
 	if sess.PprofAvailable {
-		path := kind
-		if kind == "cpu" {
-			path = fmt.Sprintf("profile?seconds=%d", seconds)
-		}
-		if kind == "trace" {
-			path = fmt.Sprintf("trace?seconds=%d", seconds)
-		}
-		data, err := getPprof(ctx, sess, path)
+		data, source, err := collectPprofProfile(ctx, sess, kind, seconds)
 		if err == nil {
-			return data, "pprof", nil
+			return data, source, nil
 		}
 		if !sess.GopsAvailable {
 			return nil, "", err
@@ -396,6 +556,22 @@ func collectProfile(ctx context.Context, sess *Session, kind string, seconds int
 	if !sess.GopsAvailable {
 		return nil, "", fmt.Errorf("session %s has neither pprof nor gops available", sess.ID)
 	}
+	return collectGopsProfile(ctx, sess, kind)
+}
+
+func collectPprofProfile(ctx context.Context, sess *Session, kind string, seconds int) ([]byte, string, error) {
+	path := kind
+	if kind == "cpu" {
+		path = fmt.Sprintf("profile?seconds=%d", seconds)
+	}
+	if kind == "trace" {
+		path = fmt.Sprintf("trace?seconds=%d", seconds)
+	}
+	data, err := getPprof(ctx, sess, path)
+	return data, "pprof", err
+}
+
+func collectGopsProfile(ctx context.Context, sess *Session, kind string) ([]byte, string, error) {
 	client := GopsClient{Addr: gopsAddr(sess), Timeout: 45 * time.Second}
 	switch kind {
 	case "heap":
@@ -455,4 +631,70 @@ func normalizeProfileKind(kind string) string {
 	default:
 		return ""
 	}
+}
+
+func normalizeProfileSource(source string) string {
+	switch strings.ToLower(strings.TrimSpace(source)) {
+	case "", "auto":
+		return "auto"
+	case "pprof":
+		return "pprof"
+	case "gops":
+		return "gops"
+	default:
+		return "auto"
+	}
+}
+
+func gopsCandidatePorts(discovered, configured int, defaults []int) []int {
+	if discovered > 0 {
+		return []int{discovered}
+	}
+	out := []int{}
+	if configured > 0 {
+		out = append(out, configured)
+	}
+	out = append(out, defaults...)
+	return uniquePositiveInts(out...)
+}
+
+func pprofCandidatePorts(explicit, configured int, containerPorts []int) []int {
+	if explicit > 0 {
+		return []int{explicit}
+	}
+	out := []int{}
+	if configured > 0 {
+		out = append(out, configured)
+	}
+	out = append(out, containerPorts...)
+	return uniquePositiveInts(out...)
+}
+
+func uniquePositiveInts(values ...int) []int {
+	seen := map[int]bool{}
+	out := make([]int, 0, len(values))
+	for _, value := range values {
+		if value <= 0 || seen[value] {
+			continue
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	return out
+}
+
+func formatPorts(ports []int) string {
+	parts := make([]string, 0, len(ports))
+	for _, port := range uniquePositiveInts(ports...) {
+		parts = append(parts, fmt.Sprint(port))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func formatCandidatePorts(candidates []portCandidate) string {
+	ports := make([]int, 0, len(candidates))
+	for _, candidate := range candidates {
+		ports = append(ports, candidate.Remote)
+	}
+	return formatPorts(ports)
 }
