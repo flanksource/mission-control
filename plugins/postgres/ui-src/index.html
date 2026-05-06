@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light" data-density="compact">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Postgres</title>
+    <style>
+      .mc-bootstrap-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 1rem;
+        text-align: center;
+        font: 0.875rem/1.4 system-ui, sans-serif;
+        color: rgb(100 116 139);
+        background: var(--background, #fff);
+        padding: 2rem;
+      }
+      .mc-bootstrap-loader__title {
+        font-size: 1rem;
+        font-weight: 600;
+        color: rgb(30 41 59);
+      }
+      .mc-bootstrap-loader__hint {
+        max-width: 28rem;
+        color: rgb(100 116 139);
+      }
+    </style>
+  </head>
+  <body class="bg-background text-foreground">
+    <div id="root">
+      <div class="mc-bootstrap-loader" data-bootstrap-loader>
+        <svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 24 24"><rect width="10" height="10" x="1" y="1" fill="#484747" rx="1" stroke-width="0.5" stroke="#484747"><animate id="SVG7WybndBt" fill="freeze" attributeName="x" begin="0;SVGo3aOUHlJ.end" dur="0.2s" values="1;13"/><animate id="SVGVoKldbWM" fill="freeze" attributeName="y" begin="SVGFpk9ncYc.end" dur="0.2s" values="1;13"/><animate id="SVGKsXgPbui" fill="freeze" attributeName="x" begin="SVGaI8owdNK.end" dur="0.2s" values="13;1"/><animate id="SVG7JzAfdGT" fill="freeze" attributeName="y" begin="SVG28A4To9L.end" dur="0.2s" values="13;1"/></rect><rect width="10" height="10" x="1" y="13" fill="#484747" rx="1" stroke-width="0.5" stroke="#484747"><animate id="SVGUiS2jeZq" fill="freeze" attributeName="y" begin="SVG7WybndBt.end" dur="0.2s" values="13;1"/><animate id="SVGU0vu2GEM" fill="freeze" attributeName="x" begin="SVGVoKldbWM.end" dur="0.2s" values="1;13"/><animate id="SVGOIboFeLf" fill="freeze" attributeName="y" begin="SVGKsXgPbui.end" dur="0.2s" values="1;13"/><animate id="SVG14lAaeuv" fill="freeze" attributeName="x" begin="SVG7JzAfdGT.end" dur="0.2s" values="13;1"/></rect><rect width="10" height="10" x="13" y="13" fill="#484747" rx="1" stroke-width="0.5" stroke="#484747"><animate id="SVGFpk9ncYc" fill="freeze" attributeName="x" begin="SVGUiS2jeZq.end" dur="0.2s" values="13;1"/><animate id="SVGaI8owdNK" fill="freeze" attributeName="y" begin="SVGU0vu2GEM.end" dur="0.2s" values="13;1"/><animate id="SVG28A4To9L" fill="freeze" attributeName="x" begin="SVGOIboFeLf.end" dur="0.2s" values="1;13"/><animate id="SVGo3aOUHlJ" fill="freeze" attributeName="y" begin="SVG14lAaeuv.end" dur="0.2s" values="1;13"/></rect></svg>
+        <div class="mc-bootstrap-loader__title">Loading Postgres plugin</div>
+        <div class="mc-bootstrap-loader__hint">Fetching JavaScript and styles from the host. This usually takes a moment on first load — subsequent visits load from your browser cache.</div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

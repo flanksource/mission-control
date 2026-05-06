@@ -1,0 +1,26 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Plugin
+metadata:
+  name: postgres
+spec:
+  source: postgres
+  version: "0.1.0"
+  selector:
+    types:
+      - MissionControl::Connection
+      - PostgreSQL::Server
+      - PostgreSQL::Database
+  sqlConnection:
+     connection: connection://mission-control/moshe
+
+  # SQL connection resolution:
+  #   - If `sqlConnection` is set, every operation talks to that Postgres
+  #     connection regardless of which catalog item the iframe is on.
+  #
+  #       sqlConnection:
+  #         connection: connection://default/my-postgres
+  #
+  #   - If `sqlConnection` is unset, the host walks from the current config
+  #     item to its owning ScrapeConfig and uses the first spec.sql[].connection.
+  #   - If the selected catalog item is PostgreSQL::Database, operations are
+  #     bound to that database by opening a database-specific connection.
