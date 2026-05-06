@@ -145,7 +145,6 @@ func splitTopLevelArgs(s string) ([]string, bool) {
 			if c == 'N' {
 				cur.WriteByte('N')
 				i++
-				c = s[i]
 			}
 			cur.WriteByte('\'')
 			i++
