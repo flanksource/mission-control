@@ -583,10 +583,6 @@ func waitForRemotePlaybookRun(stderr io.Writer, client *sdk.Client, runID string
 	}
 }
 
-func saveOutput(object any, file string, format string) {
-	_ = saveOutputToWriter(os.Stdout, object, file, format)
-}
-
 func saveOutputToWriter(w io.Writer, object any, file string, format string) error {
 	var out string
 	if format == "yaml" {
