@@ -28,89 +28,85 @@ func PluginPath() string {
 	return filepath.Join(home, ".mission-control", "plugins")
 }
 
-// PersistPluginFromCRD is the kopper persist callback. It installs (or
-// re-installs) the plugin's binary, registers the spec, and asks the
-// supervisor to (re)start the process.
-//
 // SupervisorStarter is injected by the cmd/server wiring at boot to break
 // the import cycle between registry and supervisor.
 var SupervisorStarter func(ctx context.Context, name string) error
-
-func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
-	if p == nil {
-		return fmt.Errorf("nil Plugin")
-	}
-	if p.Spec.Source == "" {
-		return fmt.Errorf("plugin %s: spec.source is required", p.Name)
-	}
-
-	binDir := PluginPath()
-	if err := os.MkdirAll(binDir, 0o755); err != nil {
-		return fmt.Errorf("create plugin dir %s: %w", binDir, err)
-	}
-
-	binPath := filepath.Join(binDir, p.Name)
-	if info, err := os.Stat(binPath); err == nil && !info.IsDir() && p.Spec.Checksum == "" {
-		ctx.Logger.V(3).Infof("plugin %s: using existing binary at %s, skipping install", p.Name, binPath)
-	} else {
-		res, err := deps.InstallWithContext(ctx,
-			p.Spec.Source,
-			p.Spec.Version,
-			deps.WithBinDir(binDir),
-		)
-		if err != nil {
-			return fmt.Errorf("install plugin %s: %w", p.Name, err)
-		}
-		if res != nil && res.Error != nil {
-			return fmt.Errorf("install plugin %s: %w", p.Name, res.Error)
-		}
-	}
-
-	Default.Upsert(p.Name, p.Spec)
-
-	if SupervisorStarter != nil {
-		return SupervisorStarter(ctx, p.Name)
-	}
-	return nil
-}
 
 // SupervisorStopper is injected by the cmd/server wiring (same reason as
 // SupervisorStarter).
 var SupervisorStopper func(name string) error
 
-// DeletePlugin is the kopper delete callback. It stops the supervised
-// process and drops the registry entry. The binary is left on disk —
-// re-creating the CRD won't re-download a binary that already exists.
-func DeletePlugin(ctx context.Context, id string) error {
-	for _, e := range Default.List() {
-		if e.Manifest != nil && e.Manifest.Name == id {
-			id = e.Manifest.Name
-			break
+// ApplyToRegistry installs (or re-installs) the binary, upserts the registry
+// entry, and asks the supervisor to (re)start. Called by the DB-side kopper
+// callbacks after persistence succeeds, and by the cold-start replay that
+// rehydrates the registry from the plugins table on boot.
+func ApplyToRegistry(ctx context.Context, name string, spec v1.PluginSpec) (string, error) {
+	if name == "" {
+		return "", fmt.Errorf("plugin name is required")
+	}
+	if spec.Source == "" {
+		return "", fmt.Errorf("plugin %s: spec.source is required", name)
+	}
+
+	binDir := PluginPath()
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		return "", fmt.Errorf("create plugin dir %s: %w", binDir, err)
+	}
+
+	binPath := filepath.Join(binDir, name)
+	if info, err := os.Stat(binPath); err == nil && !info.IsDir() && spec.Checksum == "" {
+		ctx.Logger.V(3).Infof("plugin %s: using existing binary at %s, skipping install", name, binPath)
+	} else {
+		res, err := deps.InstallWithContext(ctx,
+			spec.Source,
+			spec.Version,
+			deps.WithBinDir(binDir),
+		)
+		if err != nil {
+			return "", fmt.Errorf("install plugin %s: %w", name, err)
+		}
+		if res != nil && res.Error != nil {
+			return "", fmt.Errorf("install plugin %s: %w", name, res.Error)
 		}
 	}
-	if SupervisorStopper != nil {
-		_ = SupervisorStopper(id)
+
+	Default.Upsert(name, spec)
+
+	if SupervisorStarter != nil {
+		if err := SupervisorStarter(ctx, name); err != nil {
+			return binPath, err
+		}
 	}
-	Default.Remove(id)
-	return nil
+	return binPath, nil
 }
 
-// DeleteStalePlugin removes registry entries for plugins whose CRD has been
-// renamed or replaced.
-func DeleteStalePlugin(ctx context.Context, newer *v1.Plugin) error {
+// RemoveFromRegistry stops the supervised process and drops the registry
+// entry for the given plugin name. The binary is left on disk.
+func RemoveFromRegistry(name string) {
+	if name == "" {
+		return
+	}
+	if SupervisorStopper != nil {
+		_ = SupervisorStopper(name)
+	}
+	Default.Remove(name)
+}
+
+// StaleFromRegistry drops registry entries whose Plugin CRD has been
+// renamed or replaced. Currently a no-op when there is nothing to clean —
+// kept as a parity point with DeleteStale callbacks for other CRDs.
+func StaleFromRegistry(newer *v1.Plugin) {
 	if newer == nil {
-		return nil
+		return
 	}
 	for _, e := range Default.List() {
-		if e.Manifest != nil && e.Manifest.Name != newer.Name {
+		if e.Manifest == nil || e.Manifest.Name == newer.Name {
 			continue
 		}
-		// Same name and same UID is not stale.
 		if e.Spec.Source == newer.Spec.Source && e.Spec.Version == newer.Spec.Version {
 			continue
 		}
 	}
-	return nil
 }
 
 // BinaryPathFor returns the on-disk path for a plugin's binary. The

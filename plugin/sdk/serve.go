@@ -1,6 +1,7 @@
 package sdk
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"io/fs"
@@ -170,6 +171,16 @@ func (b *bufferedResponse) Flush() {
 	if f, ok := b.passthru.(http.Flusher); ok {
 		f.Flush()
 	}
+}
+
+func (b *bufferedResponse) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	h, ok := b.target.(http.Hijacker)
+	if !ok {
+		return nil, nil, http.ErrNotSupported
+	}
+	b.committed = true
+	b.passthru = b.target
+	return h.Hijack()
 }
 
 func (b *bufferedResponse) Header() http.Header {
