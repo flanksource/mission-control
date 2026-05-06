@@ -7,16 +7,17 @@ import (
 )
 
 type GadgetSpec struct {
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Image       string   `json:"image"`
-	Description string   `json:"description"`
-	Kind        string   `json:"kind"`
-	Category    string   `json:"category"`
-	Icon        string   `json:"icon"`
-	DocsURL     string   `json:"docsUrl"`
-	Streaming   bool     `json:"streaming"`
-	Options     []Option `json:"options,omitempty"`
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	Image       string       `json:"image"`
+	Description string       `json:"description"`
+	Kind        string       `json:"kind"`
+	Category    string       `json:"category"`
+	Icon        string       `json:"icon"`
+	DocsURL     string       `json:"docsUrl"`
+	Streaming   bool         `json:"streaming"`
+	Options     []Option     `json:"options,omitempty"`
+	EventSchema *EventSchema `json:"eventSchema,omitempty"`
 }
 
 type Option struct {
@@ -102,6 +103,9 @@ func supportedGadgets(tag string) []GadgetSpec {
 		}
 		return out[i].Category < out[j].Category
 	})
+	for i := range out {
+		out[i].EventSchema = eventSchemaForGadget(out[i].ID)
+	}
 	return out
 }
 
