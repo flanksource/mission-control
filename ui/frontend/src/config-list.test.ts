@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   buildConfigListQuery,
   buildLabelAndTagClause,
+  filterConfigItems,
+  searchConfigItems,
   groupConfigItems,
   parseConfigListFilters,
   parseTriStateParam,
@@ -11,6 +13,10 @@ import {
 import type { ConfigItem } from "./api/types";
 
 describe("config-list filters", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("parses URL filters using the route config type", () => {
     const filters = parseConfigListFilters(
       new URLSearchParams(
@@ -80,6 +86,57 @@ describe("config-list filters", () => {
       ["No changes / dev", ["3"]],
       ["No changes / prod", ["2"]],
     ]);
+  });
+
+  it("searches configs via the authenticated resources API", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({
+      configs: [
+        { id: "1", name: "AcmExpiryNotifier", type: "AWS::Lambda::Function", tags: { account: "123456789012" }, health: "unknown" },
+      ],
+    }), { status: 200 }));
+
+    const rows = await searchConfigItems({
+      configType: "AWS::Lambda::Function",
+      search: "",
+      labels: {},
+      status: {},
+      health: {},
+      groupBy: [],
+      showDeleted: false,
+      limit: 500,
+    });
+
+    expect(rows).toEqual([
+      expect.objectContaining({
+        id: "1",
+        name: "AcmExpiryNotifier",
+        type: "AWS::Lambda::Function",
+        tags: { account: "123456789012" },
+      }),
+    ]);
+    expect(fetchMock).toHaveBeenCalledWith("/resources/search", expect.objectContaining({
+      credentials: "same-origin",
+      method: "POST",
+      body: JSON.stringify({ limit: 500, configs: [{ types: ["AWS::Lambda::Function"] }] }),
+    }));
+  });
+
+  it("filters searched configs client-side", () => {
+    const rows = [
+      config({ id: "1", name: "api", status: "Ready", health: "healthy", tags: { env: "prod" } }),
+      config({ id: "2", name: "worker", status: "Ready", health: "unknown", tags: { env: "dev" } }),
+    ];
+
+    expect(filterConfigItems(rows, {
+      configType: "Kubernetes::Deployment",
+      search: "api",
+      labels: { env____prod: "include" },
+      status: { Ready: "include" },
+      health: { unknown: "exclude" },
+      groupBy: [],
+      showDeleted: false,
+      limit: 500,
+    }).map((row) => row.id)).toEqual(["1"]);
   });
 });
 

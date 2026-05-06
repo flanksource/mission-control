@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { fetchAllPostgrest } from "./http";
+import { fetchAllPostgrest, fetchJSON, fetchPostgrest } from "./http";
 
 describe("PostgREST API helpers", () => {
   afterEach(() => {
@@ -36,6 +36,26 @@ describe("PostgREST API helpers", () => {
       "/db/config_access_summary?select=id&limit=2&offset=2",
       "/db/config_access_summary?select=id&limit=2&offset=4",
     ]);
+  });
+
+  it("sends browser credentials on PostgREST requests", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("[]", { status: 200 }));
+
+    await fetchPostgrest("/db/config_detail?select=id");
+
+    expect(fetchMock).toHaveBeenCalledWith("/db/config_detail?select=id", expect.objectContaining({
+      credentials: "same-origin",
+    }));
+  });
+
+  it("sends browser credentials on JSON requests by default", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 200 }));
+
+    await fetchJSON("/db/playbooks?id=eq.pb-1");
+
+    expect(fetchMock).toHaveBeenCalledWith("/db/playbooks?id=eq.pb-1", expect.objectContaining({
+      credentials: "same-origin",
+    }));
   });
 
   it("stops on a short page when the total is not reported", async () => {
