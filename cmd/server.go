@@ -32,7 +32,6 @@ import (
 	"github.com/flanksource/incident-commander/mcp"
 	"github.com/flanksource/incident-commander/metrics"
 	"github.com/flanksource/incident-commander/notification"
-	pluginregistry "github.com/flanksource/incident-commander/plugin/registry"
 	pluginsupervisor "github.com/flanksource/incident-commander/plugin/supervisor"
 	echov4 "github.com/labstack/echo/v4"
 
@@ -160,12 +159,16 @@ func launchKopper(ctx context.Context) {
 
 	pluginsupervisor.WireSupervisor(ctx)
 	if _, err := kopper.SetupReconciler(ctx, mgr,
-		pluginregistry.PersistPluginFromCRD,
-		pluginregistry.DeletePlugin,
-		pluginregistry.DeleteStalePlugin,
+		db.PersistPluginFromCRD,
+		db.DeletePlugin,
+		db.DeleteStalePlugin,
 		"plugin.mission-control.flanksource.com",
 	); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Plugin: %v", err))
+	}
+
+	if err := db.ReplayPlugins(ctx); err != nil {
+		ctx.Logger.Errorf("plugin replay from DB failed: %v", err)
 	}
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
