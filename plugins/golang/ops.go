@@ -281,6 +281,9 @@ func (p *GolangPlugin) sessionDelete(_ context.Context, req sdk.InvokeCtx) (any,
 		return nil, fmt.Errorf("session %q not found", params.ID)
 	}
 	p.profiles.RemoveSession(params.ID)
+	if p.viewers != nil {
+		p.viewers.RemoveSession(params.ID)
+	}
 	return map[string]any{"deleted": true, "id": params.ID}, err
 }
 

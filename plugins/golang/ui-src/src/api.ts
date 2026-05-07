@@ -80,7 +80,8 @@ function operationURL(op: string): string {
 }
 
 export function pluginURL(path: string): string {
-  return new URL(path.replace(/^\//, ""), window.location.href).toString();
+  const base = window.location.pathname.replace(/\/ui\/.*$/, "");
+  return new URL(base + "/" + path.replace(/^\//, ""), window.location.origin).toString();
 }
 
 export async function callOp<T>(op: string, params: Record<string, unknown> = {}): Promise<T> {

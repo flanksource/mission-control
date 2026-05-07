@@ -66,7 +66,8 @@ func (p *GolangPlugin) httpProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if run, ok := p.profiles.Get(tail); ok {
+	runIDOrKind, subPath, _ := strings.Cut(tail, "/")
+	if run, ok := p.profiles.Get(runIDOrKind); ok {
 		if run.SessionID != sess.ID {
 			http.Error(w, "profile run does not belong to session", http.StatusForbidden)
 			return
@@ -74,6 +75,10 @@ func (p *GolangPlugin) httpProfile(w http.ResponseWriter, r *http.Request) {
 		snapshot := run.Snapshot()
 		if snapshot.State != "completed" {
 			http.Error(w, "profile run is not completed", http.StatusConflict)
+			return
+		}
+		if subPath != "" {
+			p.proxyProfileViewer(w, r, sess, run, subPath)
 			return
 		}
 		data := run.Data()
@@ -85,7 +90,7 @@ func (p *GolangPlugin) httpProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	kind := normalizeProfileKind(tail)
+	kind := normalizeProfileKind(runIDOrKind)
 	if kind == "" {
 		http.Error(w, "expected /profiles/{sessionID}/{runID|heap|cpu|trace}", http.StatusBadRequest)
 		return
@@ -96,6 +101,24 @@ func (p *GolangPlugin) httpProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeProfileDownload(w, sess.ID, kind, kind, source, data)
+}
+
+func (p *GolangPlugin) proxyProfileViewer(w http.ResponseWriter, r *http.Request, _ *Session, run *ProfileRun, subPath string) {
+	if p.viewers == nil {
+		http.Error(w, "profile viewer registry is not initialised", http.StatusInternalServerError)
+		return
+	}
+	addr, err := p.viewers.Get(r.Context(), run)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	target, _ := url.Parse("http://" + addr)
+	proxy := httputil.NewSingleHostReverseProxy(target)
+	proxy.ErrorLog = log.New(os.Stderr, "[WARN] golang profile viewer: ", 0)
+	r.URL.Path = "/" + strings.TrimLeft(subPath, "/")
+	r.URL.RawPath = ""
+	proxy.ServeHTTP(w, r)
 }
 
 func writeProfileDownload(w http.ResponseWriter, sessionID, name, kind, source string, data []byte) {

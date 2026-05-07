@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "preact/hooks";
 import type { ComponentChildren } from "preact";
 import { useMutation, useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { Activity, Download, FileText, Flame, Play, RefreshCw, Square, Trash2 } from "lucide-react";
+import { Activity, Download, ExternalLink, FileText, Flame, Play, RefreshCw, Square, TerminalSquare, Trash2 } from "lucide-react";
 import {
   Badge,
   Button,
@@ -343,7 +343,9 @@ function GoroutinesTab({ session }: { session: GolangSession }) {
   const goroutinesQ = useQuery({
     queryKey: ["golang", session.id, "goroutines"],
     queryFn: () => callOp<GoroutineSnapshot>("goroutines", { sessionId: session.id }),
-    enabled: false,
+    enabled: true,
+    refetchInterval: 5_000,
+    refetchIntervalInBackground: false,
   });
   const dump = goroutinesQ.data?.dump ?? "";
   const parsed = useMemo(() => parseGoroutineDump(dump), [dump]);
@@ -361,7 +363,7 @@ function GoroutinesTab({ session }: { session: GolangSession }) {
         </div>
         <Button size="sm" loading={goroutinesQ.isFetching} onClick={() => goroutinesQ.refetch()}>
           <RefreshCw className="h-4 w-4" />
-          Load
+          Refresh
         </Button>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -508,55 +510,194 @@ function ProfilerTab({ session }: { session: GolangSession }) {
     </section>
   );
 
-  const output = (
-    <section className="flex h-full min-h-0 flex-col gap-3 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-1 rounded-md border p-1 text-xs">
-          <span className="inline-flex items-center gap-1 rounded bg-primary px-2 py-1 text-primary-foreground">
-            <Flame className="h-3 w-3" />
-            Profile
-          </span>
-          <span className="inline-flex items-center gap-1 px-2 py-1 text-muted-foreground">
-            <FileText className="h-3 w-3" />
-            Binary
-          </span>
-        </div>
-        {selected?.url && selected.state === "completed" && (
-          <Button asChild size="sm" variant="outline">
-            <a href={pluginURL(selected.url)}>
-              <Download className="h-4 w-4" />
-              Download
-            </a>
-          </Button>
-        )}
-      </div>
-      {selected ? (
-        <div className="min-h-0 flex-1 overflow-auto">
-          <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
-            <InfoCard title="Run">
-              <KV k="Kind" v={selected.kind} />
-              <KV k="State" v={selected.state} />
-              <KV k="Source" v={selected.source || selected.preference || "auto"} />
-              <KV k="Bytes" v={fmtBytes(selected.bytes)} />
-              <KV k="Elapsed" v={fmtDuration(selected.elapsedMs)} />
-            </InfoCard>
-            <InfoCard title="Timing">
-              <KV k="Started" v={new Date(selected.startedAt).toLocaleString()} />
-              <KV k="Completed" v={selected.completedAt ? new Date(selected.completedAt).toLocaleString() : "running"} />
-              <KV k="Duration" v={selected.seconds ? `${selected.seconds}s` : "default"} />
-            </InfoCard>
-          </div>
-          <pre className="mt-3 min-h-60 overflow-auto rounded-md border bg-muted/30 p-3 font-mono text-xs">
-            {selected.error || profileHelp(selected)}
-          </pre>
-        </div>
-      ) : (
-        <Empty>No profile run selected.</Empty>
-      )}
-    </section>
-  );
+  const output = <ProfilerOutputView session={session} run={selected} />;
 
   return <SplitPane left={controls} right={output} defaultSplit={38} minLeft={28} minRight={36} />;
+}
+
+type ProfilerView = "flamegraph" | "top" | "raw";
+
+function ProfilerOutputView({ session, run }: { session: GolangSession; run: ProfileRun | null }) {
+  const renderable = !!run && run.state === "completed" && run.kind !== "trace";
+  const [view, setView] = useState<ProfilerView>(renderable ? "flamegraph" : "raw");
+
+  useEffect(() => {
+    if (!renderable && view !== "raw") setView("raw");
+  }, [renderable, view]);
+
+  if (!run) {
+    return (
+      <section className="flex h-full min-h-0 flex-col gap-3 p-3">
+        <Empty>No profile run selected.</Empty>
+      </section>
+    );
+  }
+
+  const downloadName = profileDownloadName(session, run);
+  const renderURL = (path: string) => pluginURL(`profiles/${session.id}/${run.id}/${path}`);
+  const downloadURL = pluginURL(`profiles/${session.id}/${run.id}`);
+
+  return (
+    <section className="flex h-full min-h-0 flex-col gap-2 p-3">
+      <div className="flex items-center justify-between gap-2">
+        <ProfilerOutputSwitch value={view} onChange={setView} disabled={!renderable} kind={run.kind} />
+        <div className="flex items-center gap-1">
+          {renderable && (
+            <a
+              className="inline-flex h-7 items-center gap-1 rounded-md border px-2 text-xs hover:bg-accent"
+              href={renderURL("flamegraph")}
+              target="_blank"
+              rel="noreferrer"
+              title="Open pprof viewer in a new tab"
+            >
+              <ExternalLink className="h-3 w-3" />
+              Open viewer
+            </a>
+          )}
+          {run.state === "completed" && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => downloadBlob(downloadURL, downloadName).catch((err) => alert(errorMessage(err)))}
+            >
+              <Download className="h-4 w-4" />
+              Download
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-hidden rounded-md border bg-background">
+        {view === "flamegraph" && renderable ? (
+          <iframe
+            key={`flame-${run.id}`}
+            title="Profile flamegraph"
+            src={renderURL("flamegraph")}
+            className="h-full w-full border-0"
+          />
+        ) : view === "top" && renderable ? (
+          <iframe
+            key={`top-${run.id}`}
+            title="Profile top functions"
+            src={renderURL("top")}
+            className="h-full w-full border-0"
+          />
+        ) : (
+          <ProfilerRawView run={run} />
+        )}
+      </div>
+    </section>
+  );
+}
+
+function ProfilerRawView({ run }: { run: ProfileRun }) {
+  return (
+    <div className="flex h-full min-h-0 flex-col gap-3 overflow-auto p-3">
+      <div className="grid grid-cols-1 gap-2 lg:grid-cols-2">
+        <InfoCard title="Run">
+          <KV k="Kind" v={run.kind} />
+          <KV k="State" v={run.state} />
+          <KV k="Source" v={run.source || run.preference || "auto"} />
+          <KV k="Bytes" v={fmtBytes(run.bytes)} />
+          <KV k="Elapsed" v={fmtDuration(run.elapsedMs)} />
+        </InfoCard>
+        <InfoCard title="Timing">
+          <KV k="Started" v={new Date(run.startedAt).toLocaleString()} />
+          <KV k="Completed" v={run.completedAt ? new Date(run.completedAt).toLocaleString() : "running"} />
+          <KV k="Duration" v={run.seconds ? `${run.seconds}s` : "default"} />
+        </InfoCard>
+      </div>
+      <pre className="min-h-40 flex-1 overflow-auto rounded-md border bg-muted/30 p-3 font-mono text-xs">
+        {run.error || profileHelp(run)}
+      </pre>
+    </div>
+  );
+}
+
+function ProfilerOutputSwitch({
+  value,
+  onChange,
+  disabled,
+  kind,
+}: {
+  value: ProfilerView;
+  onChange: (value: ProfilerView) => void;
+  disabled: boolean;
+  kind: string;
+}) {
+  return (
+    <div className="inline-flex items-center gap-1 rounded-md bg-muted p-1" role="tablist" aria-label="Profiler output">
+      <ProfilerOutputOption value="flamegraph" current={value} onChange={onChange} disabled={disabled} icon={<Flame className="h-3 w-3" />} label="Flamegraph" />
+      <ProfilerOutputOption value="top" current={value} onChange={onChange} disabled={disabled} icon={<FileText className="h-3 w-3" />} label="Top" />
+      <ProfilerOutputOption value="raw" current={value} onChange={onChange} disabled={false} icon={<TerminalSquare className="h-3 w-3" />} label={kind === "trace" ? "Trace" : "Raw"} />
+    </div>
+  );
+}
+
+function ProfilerOutputOption({
+  value,
+  current,
+  onChange,
+  disabled,
+  icon,
+  label,
+}: {
+  value: ProfilerView;
+  current: ProfilerView;
+  onChange: (value: ProfilerView) => void;
+  disabled: boolean;
+  icon: ComponentChildren;
+  label: string;
+}) {
+  const checked = value === current;
+  const className = `inline-flex h-6 items-center gap-1 rounded px-2 text-xs font-medium ${
+    checked ? "bg-background text-foreground shadow" : "text-muted-foreground hover:text-foreground"
+  } ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer"}`;
+  return (
+    <button
+      type="button"
+      role="tab"
+      aria-selected={checked}
+      disabled={disabled}
+      onClick={() => onChange(value)}
+      className={className}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+async function downloadBlob(url: string, fallbackName: string): Promise<void> {
+  const res = await fetch(url, { credentials: "same-origin" });
+  if (!res.ok) throw new Error((await res.text()) || res.statusText);
+  const filename = parseContentDispositionFilename(res.headers.get("Content-Disposition")) ?? fallbackName;
+  const blob = await res.blob();
+  const objectURL = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = objectURL;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(objectURL), 1000);
+}
+
+function parseContentDispositionFilename(header: string | null): string | undefined {
+  if (!header) return undefined;
+  const utf8 = header.match(/filename\*\s*=\s*UTF-8''([^;]+)/i);
+  if (utf8?.[1]) {
+    try { return decodeURIComponent(utf8[1].trim()); } catch { /* fallthrough */ }
+  }
+  const quoted = header.match(/filename\s*=\s*"([^"]+)"/i);
+  if (quoted?.[1]) return quoted[1];
+  const bare = header.match(/filename\s*=\s*([^;]+)/i);
+  return bare?.[1]?.trim();
+}
+
+function profileDownloadName(session: GolangSession, run: ProfileRun): string {
+  const ext = run.kind === "trace" ? "trace" : "pprof";
+  return `golang-${session.id}-${run.id}.${ext}`;
 }
 
 function PprofTab({ session }: { session: GolangSession }) {
