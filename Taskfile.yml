@@ -589,8 +589,54 @@ tasks:
     generates:
       - "{{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}"
 
+  ui:install:plugin:golang:
+    desc: Install pnpm deps for the golang plugin UI workspace
+    dir: plugins/golang/ui-src
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+    sources:
+      - package.json
+    status:
+      - test -f node_modules/.modules.yaml
+      - test node_modules/.modules.yaml -nt package.json
+
+  ui:install:plugin:golang:local:
+    desc: |
+      Reinstall the golang plugin UI with @flanksource/clicky-ui linked
+      to the sibling ../clicky-ui checkout. Used by `task dev:plugins`.
+      No caching; restores pnpm-lock.yaml afterwards.
+    dir: plugins/golang/ui-src
+    env:
+      CLICKY_UI_LOCAL: "1"
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+      - git restore pnpm-lock.yaml
+
+  ui:build:plugin:golang:
+    desc: Build the golang plugin UI bundle into plugins/golang/ui
+    dir: plugins/golang/ui-src
+    deps: [ui:install:plugin:golang]
+    env:
+      PLUGIN_VERSION: "{{.VERSION}}"
+      PLUGIN_BUILD_DATE: "{{.BUILD_DATE}}"
+    cmds:
+      - pnpm run build
+    sources:
+      - src/**/*.ts
+      - src/**/*.tsx
+      - src/**/*.css
+      - index.html
+      - package.json
+      - tsconfig.json
+      - vite.config.ts
+      - ../../../../clicky-ui/packages/ui/dist/index.mjs
+      - ../../../../clicky-ui/packages/ui/src/styles/**/*.css
+    generates:
+      - ../ui/index.html
+
   generate:plugin:golang:
     desc: Regenerate ui_checksum.go for the golang plugin
+    deps: [ui:build:plugin:golang]
     cmds:
       - go generate ./plugins/golang/...
     sources:
@@ -676,10 +722,12 @@ tasks:
       - task: ui:install:plugin:sql-server:local
       - task: ui:install:plugin:postgres:local
       - task: ui:install:plugin:arthas:local
+      - task: ui:install:plugin:golang:local
       - task: build:plugin:kubernetes-logs
       - task: build:plugin:sql-server
       - task: build:plugin:postgres
       - task: build:plugin:arthas
+      - task: build:plugin:golang
 
   test:
     desc: Run Ginkgo tests (skips e2e)

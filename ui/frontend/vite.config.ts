@@ -78,6 +78,7 @@ export default defineConfig({
       "/config": apiTarget,
       "/db": apiTarget,
       "/playbook": apiTarget,
+      "/auth": apiTarget,
     },
   },
   build: {

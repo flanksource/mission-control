@@ -19,6 +19,7 @@ import { AccessBrowser, type AccessBrowserMode } from "./access/AccessBrowser";
 import { CommandPalette, CommandPaletteButton } from "./CommandPalette";
 import { PlaybookBrowser } from "./playbooks/PlaybookBrowser";
 import { SettingsBrowser, type SettingsMode } from "./settings/SettingsBrowser";
+import { LandingPage } from "./landing/LandingPage";
 
 export type Route =
   | { kind: "type"; configType: string }
@@ -208,11 +209,7 @@ export function App() {
       </aside>
 
       <main className="min-h-0 min-w-0 flex-1 overflow-auto">
-        {route.kind === "home" && (
-          <div className="p-8 text-sm text-muted-foreground">
-            Select a resource type from the sidebar, or open the API Explorer.
-          </div>
-        )}
+        {route.kind === "home" && <LandingPage />}
         {route.kind === "type" && (
           <TypeView configType={route.configType} />
         )}

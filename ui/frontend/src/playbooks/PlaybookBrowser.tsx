@@ -14,6 +14,7 @@ import {
   type ErrorDiagnostics,
 } from "@flanksource/clicky-ui";
 import { errorDiagnosticsFromUnknown } from "../api/http";
+import { addRecent } from "../lib/recents";
 import { ConfigIcon } from "../ConfigIcon";
 import {
   DetailPageLayout,
@@ -265,6 +266,21 @@ function PlaybookRunDetailPage({ runId }: { runId: string }) {
   const runDiagnostics = run ? errorDiagnosticsFromRun(run) : null;
   const runStateData = !runId ? null : query.data ? run ?? null : query.data;
   const queryClient = useQueryClient();
+
+  const playbookId = run?.playbooks?.id;
+  const playbookName = run?.playbooks ? displayPlaybookName(run.playbooks) : "";
+  const playbookIcon = run?.playbooks?.icon ?? undefined;
+  useEffect(() => {
+    if (!playbookId) return;
+    addRecent({
+      kind: "playbook",
+      id: playbookId,
+      name: playbookName,
+      icon: playbookIcon,
+      href: `/ui/playbooks/runs/${encodeURIComponent(runId)}`,
+    });
+  }, [playbookId, playbookName, playbookIcon, runId]);
+
   const [rerun, setRerun] = useState<RunDialogSelection | null>(null);
   const approveMutation = useMutation({
     mutationFn: () => approvePlaybookRun(runId),
