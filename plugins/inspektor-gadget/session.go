@@ -30,21 +30,22 @@ type TraceEvent struct {
 }
 
 type TraceSession struct {
-	ID          string            `json:"id"`
-	GadgetID    string            `json:"gadgetId"`
-	GadgetName  string            `json:"gadgetName"`
-	GadgetKind  string            `json:"gadgetKind"`
-	GadgetImage string            `json:"gadgetImage"`
-	GadgetTag   string            `json:"gadgetTag"`
-	DocsURL     string            `json:"docsUrl,omitempty"`
-	Target      TraceTarget       `json:"target"`
-	Params      map[string]string `json:"params,omitempty"`
-	Diagnostics TraceDiagnostics  `json:"diagnostics"`
-	State       string            `json:"state"`
-	StartedAt   time.Time         `json:"startedAt"`
-	StoppedAt   *time.Time        `json:"stoppedAt,omitempty"`
-	Error       string            `json:"error,omitempty"`
-	EventCount  int64             `json:"eventCount"`
+	ID           string            `json:"id"`
+	GadgetID     string            `json:"gadgetId"`
+	GadgetName   string            `json:"gadgetName"`
+	GadgetKind   string            `json:"gadgetKind"`
+	GadgetWidget string            `json:"gadgetWidget"`
+	GadgetImage  string            `json:"gadgetImage"`
+	GadgetTag    string            `json:"gadgetTag"`
+	DocsURL      string            `json:"docsUrl,omitempty"`
+	Target       TraceTarget       `json:"target"`
+	Params       map[string]string `json:"params,omitempty"`
+	Diagnostics  TraceDiagnostics  `json:"diagnostics"`
+	State        string            `json:"state"`
+	StartedAt    time.Time         `json:"startedAt"`
+	StoppedAt    *time.Time        `json:"stoppedAt,omitempty"`
+	Error        string            `json:"error,omitempty"`
+	EventCount   int64             `json:"eventCount"`
 
 	cancel context.CancelFunc
 	events chan TraceEvent
@@ -57,6 +58,7 @@ type TraceSession struct {
 type TraceDiagnostics struct {
 	Runtime         string            `json:"runtime"`
 	Connection      string            `json:"connection"`
+	GadgetWidget    string            `json:"gadgetWidget,omitempty"`
 	GadgetImage     string            `json:"gadgetImage"`
 	GadgetTag       string            `json:"gadgetTag"`
 	GadgetDocsURL   string            `json:"gadgetDocsUrl,omitempty"`
@@ -77,27 +79,29 @@ func newTraceSession(gadget GadgetSpec, target TraceTarget, params map[string]st
 		maxEvents = 10000
 	}
 	diagnostics.GadgetImage = gadget.Image
+	diagnostics.GadgetWidget = gadget.Widget
 	diagnostics.GadgetTag = tagFromImage(gadget.Image)
 	diagnostics.GadgetDocsURL = gadget.DocsURL
 	diagnostics.ResolvedTarget = target
 	diagnostics.RuntimeParams = params
 	diagnostics.MaxEvents = maxEvents
 	return &TraceSession{
-		ID:          newID(),
-		GadgetID:    gadget.ID,
-		GadgetName:  gadget.Name,
-		GadgetKind:  gadget.Kind,
-		GadgetImage: gadget.Image,
-		GadgetTag:   diagnostics.GadgetTag,
-		DocsURL:     gadget.DocsURL,
-		Target:      target,
-		Params:      params,
-		Diagnostics: diagnostics,
-		State:       "starting",
-		StartedAt:   time.Now(),
-		cancel:      cancel,
-		events:      make(chan TraceEvent, 256),
-		max:         maxEvents,
+		ID:           newID(),
+		GadgetID:     gadget.ID,
+		GadgetName:   gadget.Name,
+		GadgetKind:   gadget.Kind,
+		GadgetWidget: gadget.Widget,
+		GadgetImage:  gadget.Image,
+		GadgetTag:    diagnostics.GadgetTag,
+		DocsURL:      gadget.DocsURL,
+		Target:       target,
+		Params:       params,
+		Diagnostics:  diagnostics,
+		State:        "starting",
+		StartedAt:    time.Now(),
+		cancel:       cancel,
+		events:       make(chan TraceEvent, 256),
+		max:          maxEvents,
 	}, ctx
 }
 

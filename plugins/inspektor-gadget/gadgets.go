@@ -12,6 +12,7 @@ type GadgetSpec struct {
 	Image       string       `json:"image"`
 	Description string       `json:"description"`
 	Kind        string       `json:"kind"`
+	Widget      string       `json:"widget"`
 	Category    string       `json:"category"`
 	Icon        string       `json:"icon"`
 	DocsURL     string       `json:"docsUrl"`
@@ -41,6 +42,7 @@ func supportedGadgets(tag string) []GadgetSpec {
 			Image:       image(id),
 			Description: desc,
 			Kind:        kind,
+			Widget:      widgetForKind(kind),
 			Category:    category,
 			Icon:        icon,
 			DocsURL:     "https://inspektor-gadget.io/docs/latest/gadgets/" + id + "/",
@@ -107,6 +109,23 @@ func supportedGadgets(tag string) []GadgetSpec {
 		out[i].EventSchema = eventSchemaForGadget(out[i].ID)
 	}
 	return out
+}
+
+func widgetForKind(kind string) string {
+	switch kind {
+	case "top":
+		return "top"
+	case "snapshot":
+		return "snapshot"
+	case "profile":
+		return "profile"
+	case "advise":
+		return "report"
+	case "audit", "trace":
+		return "trace"
+	default:
+		return "table"
+	}
 }
 
 func legacyCoreGadgetsForTests(tag string) []GadgetSpec {

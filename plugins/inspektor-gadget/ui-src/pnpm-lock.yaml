@@ -11,6 +11,9 @@ importers:
       '@flanksource/clicky-ui':
         specifier: ^0.2.1
         version: 0.2.1(@tanstack/react-query@5.100.9(react@19.2.5))(@types/react@19.2.14)(@vue/compiler-sfc@3.5.33)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(tailwindcss@4.2.4)(typescript@5.9.3)
+      '@flanksource/icons':
+        specifier: ^1.0.56
+        version: 1.0.58(react@19.2.5)
       '@tanstack/react-query':
         specifier: ^5.90.11
         version: 5.100.9(react@19.2.5)
@@ -364,6 +367,11 @@ packages:
         optional: true
       shiki:
         optional: true
+
+  '@flanksource/icons@1.0.58':
+    resolution: {integrity: sha512-LZDNCbusV2p12Cfo6Ix59Q8EGAT+BaZNuwA1BFc0LEeB0fcywnB04RqviaMaZ2F/cigj8BwXIECrA7V58hvIng==}
+    peerDependencies:
+      react: '*'
 
   '@floating-ui/core@1.7.5':
     resolution: {integrity: sha512-1Ih4WTWyw0+lKyFMcBHGbb5U5FtuHJuujoyyr5zTaWS5EYMeT6Jb2AuDeftsCsEuchO+mM2ij5+q9crhydzLhQ==}
@@ -2370,6 +2378,10 @@ snapshots:
       - supports-color
       - typescript
       - universal-cookie
+
+  '@flanksource/icons@1.0.58(react@19.2.5)':
+    dependencies:
+      react: 19.2.5
 
   '@floating-ui/core@1.7.5':
     dependencies:

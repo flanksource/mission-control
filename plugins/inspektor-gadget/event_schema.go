@@ -35,6 +35,10 @@ func procCol() EventColumn {
 	return col("proc", "Process", "process")
 }
 
+func percentCol(path, label string) EventColumn {
+	return col(path, label, "percent")
+}
+
 var eventSchemas = map[string]EventSchema{
 	"audit_seccomp": {
 		SourceStruct: "auditSeccompEvent",
@@ -98,6 +102,36 @@ var eventSchemas = map[string]EventSchema{
 			hidden("fa_f_flags", "Fanotify F Flags", "text"),
 		},
 	},
+	"profile_cpu": {
+		SourceStruct: "profileCPUEntry",
+		Columns: []EventColumn{
+			col("proc.comm", "Command", "text"),
+			col("samples", "Samples", "number"),
+			col("user_stack", "User Stack", "json"),
+			col("kern_stack", "Kernel Stack", "json"),
+		},
+	},
+	"profile_cuda": {
+		SourceStruct: "profileCUDAEntry",
+		Columns: []EventColumn{
+			col("proc.comm", "Command", "text"),
+			col("count", "Count", "number"),
+			col("size", "Size", "bytes"),
+			col("ustack_raw.symbols", "User Stack", "json"),
+		},
+	},
+	"profile_blockio": {
+		SourceStruct: "profileBlockIOEntry",
+		Columns: []EventColumn{
+			col("latency", "Latency", "number"),
+		},
+	},
+	"profile_tcprtt": {
+		SourceStruct: "profileTCPRTTEntry",
+		Columns: []EventColumn{
+			col("latency", "Latency", "number"),
+		},
+	},
 	"snapshot_file": {
 		SourceStruct: "ExpectedSnapshotFileEvent",
 		Columns: []EventColumn{
@@ -106,6 +140,17 @@ var eventSchemas = map[string]EventSchema{
 			col("tid", "TID", "number"),
 			col("type", "Type", "text"),
 			col("path", "Path", "text"),
+			hidden("mntns_id", "MntNS", "number"),
+		},
+	},
+	"snapshot_process": {
+		SourceStruct: "snapshotProcessEntry",
+		Columns: []EventColumn{
+			col("comm", "Process", "command"),
+			hidden("pid", "PID", "number"),
+			col("tid", "TID", "number"),
+			col("uid", "UID", "number"),
+			col("gid", "GID", "number"),
 			hidden("mntns_id", "MntNS", "number"),
 		},
 	},
@@ -154,20 +199,35 @@ var eventSchemas = map[string]EventSchema{
 	"top_process": {
 		SourceStruct: "topProcessEntry",
 		Columns: []EventColumn{
-			col("comm", "Command", "text"),
-			col("pid", "PID", "number"),
+			col("comm", "Process", "command"),
+			hidden("pid", "PID", "number"),
 			col("uid", "UID", "number"),
 			col("state", "State", "text"),
-			col("cpuUsage", "CPU", "number"),
-			col("cpuUsageRelative", "CPU %", "number"),
+			percentCol("cpuUsage", "CPU"),
+			percentCol("cpuUsageRelative", "Rel CPU"),
 			col("cpuTimeStr", "CPU Time", "text"),
 			col("memoryRSS", "RSS", "bytes"),
 			col("memoryVirtual", "Virtual", "bytes"),
 			col("memoryShared", "Shared", "bytes"),
-			col("memoryRelative", "Memory %", "number"),
+			percentCol("memoryRelative", "Memory"),
 			col("threadCount", "Threads", "number"),
 			hidden("priority", "Priority", "number"),
 			hidden("nice", "Nice", "number"),
+		},
+	},
+	"top_cpu_throttle": {
+		SourceStruct: "topCPUThrottleEntry",
+		Columns: []EventColumn{
+			col("cgroupPath", "Cgroup", "text"),
+			col("nrPeriods", "Periods", "number"),
+			col("nrThrottled", "Throttled", "number"),
+			col("throttledTime", "Throttled Time", "text"),
+			percentCol("throttleRatio", "Throttled"),
+			col("cpuQuota", "Quota", "number"),
+			col("cpuPeriod", "Period", "number"),
+			col("cpuLimitCores", "Limit", "number"),
+			percentCol("psiSomeAvg10", "PSI 10s"),
+			percentCol("psiSomeAvg60", "PSI 60s"),
 		},
 	},
 	"top_tcp": {

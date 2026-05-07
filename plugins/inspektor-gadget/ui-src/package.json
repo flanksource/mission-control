@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@flanksource/clicky-ui": "^0.2.1",
+    "@flanksource/icons": "^1.0.56",
     "@tanstack/react-query": "^5.90.11",
     "@vitejs/plugin-react": "^5.1.0",
     "lucide-react": "^0.553.0",

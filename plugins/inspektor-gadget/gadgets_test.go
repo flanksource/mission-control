@@ -13,6 +13,7 @@ var _ = ginkgo.Describe("gadget parameters", func() {
 			ids = append(ids, gadget.ID)
 			Expect(gadget.Image).To(ContainSubstring("/gadget/" + gadget.ID + ":" + defaultIGTag))
 			Expect(gadget.Icon).ToNot(BeEmpty())
+			Expect(gadget.Widget).ToNot(BeEmpty())
 			Expect(gadget.DocsURL).To(ContainSubstring("/docs/latest/gadgets/" + gadget.ID + "/"))
 		}
 		Expect(ids).To(ConsistOf(
@@ -122,6 +123,12 @@ var _ = ginkgo.Describe("gadget parameters", func() {
 		topProcess := eventSchemaForGadget("top_process")
 		Expect(topProcess.SourceStruct).To(Equal("topProcessEntry"))
 		Expect(columnPaths(topProcess.Columns)).To(ContainElements("pid", "comm", "cpuUsage", "memoryRSS", "state"))
+		Expect(columnKind(topProcess.Columns, "cpuUsage")).To(Equal("percent"))
+		Expect(columnKind(topProcess.Columns, "memoryRelative")).To(Equal("percent"))
+
+		topCPUThrottle := eventSchemaForGadget("top_cpu_throttle")
+		Expect(topCPUThrottle.SourceStruct).To(Equal("topCPUThrottleEntry"))
+		Expect(columnPaths(topCPUThrottle.Columns)).To(ContainElements("nrPeriods", "nrThrottled", "throttleRatio", "psiSomeAvg10"))
 	})
 })
 
@@ -131,4 +138,13 @@ func columnPaths(columns []EventColumn) []string {
 		paths = append(paths, column.Path)
 	}
 	return paths
+}
+
+func columnKind(columns []EventColumn, path string) string {
+	for _, column := range columns {
+		if column.Path == path {
+			return column.Kind
+		}
+	}
+	return ""
 }
