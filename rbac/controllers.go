@@ -5,7 +5,6 @@ import (
 
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/db"
@@ -82,8 +81,6 @@ func GetPermissionsForToken(c echo.Context) error {
 	})
 }
 
-const maxSubjectAccessReviewSubjects = 500
-
 type SubjectAccessReviewResponse struct {
 	Resource SubjectAccessReviewResource `json:"resource"`
 	Action   string                      `json:"action"`
@@ -102,7 +99,7 @@ func SubjectAccessReviews(c echo.Context) error {
 		return api.WriteError(c, err)
 	}
 
-	results, err := runSubjectAccessReview(ctx, req)
+	results, err := rbac.RunSubjectAccessReview(ctx, req)
 	if err != nil {
 		return api.WriteError(c, err)
 	}
@@ -122,111 +119,12 @@ func SubjectAccessSearch(c echo.Context) error {
 		return api.WriteError(c, api.Errorf(api.EINVALID, "invalid request body: %v", err))
 	}
 
-	if err := req.Validate(); err != nil {
+	response, err := rbac.RunSubjectAccessSearch(ctx, req)
+	if err != nil {
 		return api.WriteError(c, err)
 	}
 
-	results := make([]SubjectAccessSearchResult, 0)
-
-	for _, resourceType := range req.ResourceTypes {
-		switch resourceType {
-		case "playbook":
-			var playbooks []models.Playbook
-			query := ctx.DB().Select("id").Model(&models.Playbook{}).Where("deleted_at IS NULL")
-			if err := query.Order("COALESCE(title, name) ASC").Find(&playbooks).Error; err != nil {
-				return api.WriteError(c, ctx.Oops().Wrapf(err, "failed to list playbooks for subject access search"))
-			}
-
-			for _, playbook := range playbooks {
-				r, err := runSubjectAccessReview(ctx, SubjectAccessReviewRequest{
-					Subjects: []string{req.Subject},
-					Action:   req.Action,
-					Resource: SubjectAccessReviewResource{
-						Playbook: playbook.ID.String(),
-					},
-				})
-				if err != nil {
-					return api.WriteError(c, err)
-				}
-
-				for _, x := range r {
-					if x.Allowed {
-						results = append(results, SubjectAccessSearchResult{
-							ResourceType: "playbook",
-							ID:           playbook.ID.String(),
-						})
-					}
-				}
-			}
-
-		case "view":
-			var views []models.View
-			query := ctx.DB().Select("id").Model(&models.View{}).Where("deleted_at IS NULL")
-			if err := query.Order("name ASC").Find(&views).Error; err != nil {
-				return api.WriteError(c, ctx.Oops().Wrapf(err, "failed to list views for subject access search"))
-			}
-
-			for _, view := range views {
-				r, err := runSubjectAccessReview(ctx, SubjectAccessReviewRequest{
-					Subjects: []string{req.Subject},
-					Action:   req.Action,
-					Resource: SubjectAccessReviewResource{
-						View: view.ID.String(),
-					},
-				})
-				if err != nil {
-					return api.WriteError(c, err)
-				}
-
-				for _, x := range r {
-					if x.Allowed {
-						results = append(results, SubjectAccessSearchResult{
-							ResourceType: "view",
-							ID:           view.ID.String(),
-						})
-					}
-				}
-			}
-
-		case "connection":
-			var connections []models.Connection
-			query := ctx.DB().Select("id").Model(&models.Connection{}).Where("deleted_at IS NULL")
-			if err := query.Order("name ASC").Find(&connections).Error; err != nil {
-				return api.WriteError(c, ctx.Oops().Wrapf(err, "failed to list connections for subject access search"))
-			}
-
-			for _, connection := range connections {
-				r, err := runSubjectAccessReview(ctx, SubjectAccessReviewRequest{
-					Subjects: []string{req.Subject},
-					Action:   req.Action,
-					Resource: SubjectAccessReviewResource{
-						Connection: connection.ID.String(),
-					},
-				})
-				if err != nil {
-					return api.WriteError(c, err)
-				}
-
-				for _, x := range r {
-					if x.Allowed {
-						results = append(results, SubjectAccessSearchResult{
-							ResourceType: "connection",
-							ID:           connection.ID.String(),
-						})
-					}
-				}
-			}
-
-		}
-	}
-
-	return c.JSON(http.StatusOK, SubjectAccessSearchResponse{
-		Subject:       req.Subject,
-		Action:        req.Action,
-		ResourceTypes: req.ResourceTypes,
-		Total:         len(results),
-		Results:       results,
-	})
+	return c.JSON(http.StatusOK, response)
 }
 
 func Dump(c echo.Context) error {
