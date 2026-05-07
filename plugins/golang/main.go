@@ -51,6 +51,7 @@ type GolangPlugin struct {
 	clients  clientCache
 	sessions *SessionRegistry
 	profiles *ProfileRegistry
+	viewers  *ProfileViewerRegistry
 	settings PluginSettings
 }
 
@@ -75,9 +76,12 @@ func defaultSettings() PluginSettings {
 }
 
 func newPlugin() *GolangPlugin {
+	viewers := NewProfileViewerRegistry()
+	viewers.StartReaper(context.Background())
 	return &GolangPlugin{
 		sessions: NewSessionRegistry(),
 		profiles: NewProfileRegistry(),
+		viewers:  viewers,
 		settings: defaultSettings(),
 	}
 }
