@@ -49,35 +49,6 @@ func newKratosClient(apiURL string) *client.APIClient {
 	return client.NewAPIClient(configuration)
 }
 
-func (k *KratosHandler) createUser(ctx gocontext.Context, firstName, lastName, email string) (*client.Identity, error) {
-	adminCreateIdentityBody := *client.NewCreateIdentityBody(
-		"default",
-		map[string]any{
-			"email": email,
-			"name": map[string]string{
-				"first": firstName,
-				"last":  lastName,
-			},
-		},
-	)
-
-	createdIdentity, _, err := k.adminClient.IdentityAPI.CreateIdentity(ctx).CreateIdentityBody(adminCreateIdentityBody).Execute()
-	return createdIdentity, err
-}
-
-func (k *KratosHandler) createRecoveryLink(ctx gocontext.Context, id string) (string, string, error) {
-	createRecoveryCodeForIdentityBody := client.NewCreateRecoveryCodeForIdentityBody(id)
-	resp, _, err := k.adminClient.IdentityAPI.
-		CreateRecoveryCodeForIdentity(ctx).
-		CreateRecoveryCodeForIdentityBody(*createRecoveryCodeForIdentityBody).
-		Execute()
-	if err != nil {
-		return "", "", err
-	}
-
-	return resp.GetRecoveryCode(), resp.GetRecoveryLink(), nil
-}
-
 func (k *KratosHandler) getIdentityCredentials(password string) client.IdentityWithCredentials {
 	config := *client.NewIdentityWithCredentialsPasswordConfig()
 	config.SetPassword(password)
