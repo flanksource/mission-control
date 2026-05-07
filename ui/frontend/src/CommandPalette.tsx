@@ -3,6 +3,8 @@ import { Badge, Icon, Modal, cn } from "@flanksource/clicky-ui";
 import { ConfigIcon } from "./ConfigIcon";
 import { useQuery } from "@tanstack/react-query";
 import { globalSearch, type GlobalSearchKind, type GlobalSearchResult } from "./api/search";
+import { addRecent, useRecents, type RecentItem } from "./lib/recents";
+import { formatRelativeTime } from "./lib/relative-time";
 
 type CommandPaletteProps = {
   open: boolean;
@@ -59,11 +61,25 @@ export function CommandPalette({ open, onOpenChange, onNavigate }: CommandPalett
     setActiveIndex(0);
   }, [debounced]);
 
+  const recentItems = useRecents();
+  const queryEmpty = query.trim().length < 2;
+  const showRecents = queryEmpty && recentItems.length > 0;
+
   function choose(result: GlobalSearchResult | undefined) {
     if (!result) return;
     onOpenChange(false);
     setQuery("");
+    if (result.kind === "config") {
+      addRecent({ kind: "config", id: stripPrefix(result.id, "config:"), name: result.title, type: result.subtitle, href: result.href });
+    }
     onNavigate(result.href);
+  }
+
+  function chooseRecent(item: RecentItem) {
+    onOpenChange(false);
+    setQuery("");
+    addRecent({ kind: item.kind, id: item.id, name: item.name, type: item.type, icon: item.icon, href: item.href });
+    onNavigate(item.href);
   }
 
   return (
@@ -100,7 +116,9 @@ export function CommandPalette({ open, onOpenChange, onNavigate }: CommandPalett
       }
     >
       <div className="min-h-[18rem]">
-        {query.trim().length < 2 ? (
+        {showRecents ? (
+          <RecentList items={recentItems} onChoose={chooseRecent} />
+        ) : queryEmpty ? (
           <EmptyState icon="lucide:command" label="Type at least 2 characters" />
         ) : searchQuery.isLoading ? (
           <EmptyState icon="lucide:loader-2" label="Searching..." />
@@ -169,6 +187,56 @@ export function CommandPaletteButton({ onClick }: { onClick: () => void }) {
       </span>
     </button>
   );
+}
+
+function RecentList({ items, onChoose }: { items: RecentItem[]; onChoose: (item: RecentItem) => void }) {
+  return (
+    <div className="space-y-3">
+      <div>
+        <div className="mb-1 flex items-center gap-2 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+          <Icon name="lucide:clock" className="text-sm" />
+          <span>Recently used</span>
+        </div>
+        <div className="space-y-1">
+          {items.map((item) => (
+            <button
+              key={`${item.kind}:${item.id}`}
+              type="button"
+              onClick={() => onChoose(item)}
+              className={cn(
+                "flex w-full min-w-0 items-center gap-3 rounded-md px-2 py-2 text-left transition-colors",
+                "hover:bg-accent/50",
+              )}
+            >
+              <RecentIcon item={item} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-sm font-medium">{item.name}</span>
+                {item.type && (
+                  <span className="block truncate text-xs text-muted-foreground">{item.type}</span>
+                )}
+              </span>
+              <span className="shrink-0 text-xs text-muted-foreground">{formatRelativeTime(item.lastUsed)}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RecentIcon({ item }: { item: RecentItem }) {
+  if (item.kind === "config") {
+    return <ConfigIcon primary={item.type} className="h-5 max-w-5 shrink-0 text-muted-foreground" />;
+  }
+  return (
+    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border bg-muted/50">
+      <Icon name={item.icon || "lucide:book-open-check"} className="text-muted-foreground" />
+    </span>
+  );
+}
+
+function stripPrefix(value: string, prefix: string): string {
+  return value.startsWith(prefix) ? value.slice(prefix.length) : value;
 }
 
 function ResultIcon({ result }: { result: GlobalSearchResult }) {
