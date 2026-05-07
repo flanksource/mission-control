@@ -518,6 +518,27 @@ var _ = ginkgo.Describe("OIDC", func() {
 			Expect(resp.StatusCode).To(Equal(http.StatusUnauthorized))
 		})
 	})
+
+	ginkgo.Describe("ClerkCredentialChecker", func() {
+		ginkgo.It("returns to the backend OIDC callback after frontend login", func() {
+			savedFrontendURL := api.FrontendURL
+			savedPublicURL := api.PublicURL
+			api.FrontendURL = "https://app.example.com"
+			api.PublicURL = "https://mc.example.com"
+			defer func() {
+				api.FrontendURL = savedFrontendURL
+				api.PublicURL = savedPublicURL
+			}()
+
+			redirectURL, err := NewClerkCredentialChecker(nil).LoginRedirectURL("req-123")
+			Expect(err).ToNot(HaveOccurred())
+
+			parsed, err := url.Parse(redirectURL)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(parsed.Scheme + "://" + parsed.Host + parsed.Path).To(Equal("https://app.example.com/login"))
+			Expect(parsed.Query().Get("return_to")).To(Equal("https://mc.example.com/oidc/clerk/callback?auth_request_id=req-123"))
+		})
+	})
 })
 
 // ensureOIDCTables creates the OIDC tables if they don't exist.

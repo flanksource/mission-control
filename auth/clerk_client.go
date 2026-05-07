@@ -337,8 +337,17 @@ func (c *ClerkCredentialChecker) LoginRedirectURL(authRequestID string) (string,
 		return "", fmt.Errorf("frontend URL is not configured")
 	}
 
+	publicURL := strings.TrimRight(api.PublicURL, "/")
+	if publicURL == "" {
+		return "", fmt.Errorf("public URL is not configured")
+	}
+
+	// Clerk login happens on the shared frontend, but this OIDC flow was started by the tenant backend.
+	// After the user signs in, we must send the browser back to the backend callback,
+	// not a relative /oidc/... path on app.flanksource.com.
 	q := url.Values{}
-	q.Set("return_to", "/oidc/clerk/callback?auth_request_id="+authRequestID)
+	q.Set("return_to", publicURL+"/oidc/clerk/callback?auth_request_id="+authRequestID)
+
 	return frontendURL + "/login?" + q.Encode(), nil
 }
 
