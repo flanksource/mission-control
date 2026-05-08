@@ -23,5 +23,13 @@ func SearchResources(c echov4.Context) error {
 		return api.WriteError(c, err)
 	}
 
+	if wantsClicky(c.Request().Header.Get("Accept")) {
+		body, err := renderSearchClicky(response)
+		if err != nil {
+			return api.WriteError(c, err)
+		}
+		return c.Blob(http.StatusOK, "application/json+clicky", []byte(body))
+	}
+
 	return c.JSON(http.StatusOK, response)
 }
