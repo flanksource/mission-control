@@ -8,21 +8,24 @@ import (
 )
 
 const (
-	SectionTypeView    = "view"
-	SectionTypeChanges = "changes"
-	SectionTypeConfigs = "configs"
+	SectionTypeView       = "view"
+	SectionTypeChanges    = "changes"
+	SectionTypeConfigs    = "configs"
+	SectionTypeAccess     = "access"
+	SectionTypeAccessLogs = "accessLogs"
 )
 
 // ApplicationSection is a typed section in an application response.
-// The Type field is one of "view", "changes", or "configs".
 // Only the field matching the type is populated.
 type ApplicationSection struct {
-	Type    string                  `json:"type"`
-	Title   string                  `json:"title"`
-	Icon    string                  `json:"icon,omitempty"`
-	View    *ApplicationViewData    `json:"view,omitempty"`
-	Changes []ApplicationChange     `json:"changes,omitempty"`
-	Configs []ApplicationConfigItem `json:"configs,omitempty"`
+	Type       string                  `json:"type"`
+	Title      string                  `json:"title"`
+	Icon       string                  `json:"icon,omitempty"`
+	View       *ApplicationViewData    `json:"view,omitempty"`
+	Changes    []ApplicationChange     `json:"changes,omitempty"`
+	Configs    []ApplicationConfigItem `json:"configs,omitempty"`
+	Access     []AccessItem            `json:"access,omitempty"`
+	AccessLogs []AccessLogItem         `json:"accessLogs,omitempty"`
 }
 
 // ApplicationViewData holds the data-only fields from a resolved ViewRef section.
@@ -45,6 +48,33 @@ type ApplicationConfigItem struct {
 	Status string            `json:"status,omitempty"`
 	Health string            `json:"health,omitempty"`
 	Labels map[string]string `json:"labels,omitempty"`
+}
+
+type AccessItem struct {
+	ConfigID       string     `json:"configId"`
+	ConfigName     string     `json:"configName"`
+	ConfigType     string     `json:"configType"`
+	UserID         string     `json:"userId"`
+	UserName       string     `json:"userName"`
+	Email          string     `json:"email"`
+	Role           string     `json:"role"`
+	UserType       string     `json:"userType"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	LastSignedInAt *time.Time `json:"lastSignedInAt,omitempty"`
+	LastReviewedAt *time.Time `json:"lastReviewedAt,omitempty"`
+	IsStale        bool       `json:"isStale"`
+}
+
+type AccessLogItem struct {
+	ConfigID   string            `json:"configId"`
+	ConfigName string            `json:"configName"`
+	ConfigType string            `json:"configType"`
+	UserID     string            `json:"userId"`
+	UserName   string            `json:"userName"`
+	CreatedAt  time.Time         `json:"createdAt"`
+	MFA        bool              `json:"mfa"`
+	Count      int               `json:"count"`
+	Properties map[string]string `json:"properties,omitempty"`
 }
 
 // Application is the schema that UI uses.
