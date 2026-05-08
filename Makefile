@@ -45,6 +45,8 @@ PROTOC_GEN_GO_VERSION ?= v1.36.11
 PROTOC_GEN_GO_GRPC_VERSION ?= v1.6.0
 PROTOC_OS = $(if $(filter darwin,$(OS)),osx,$(OS))
 PROTOC_ARCH = $(if $(filter amd64,$(ARCH)),x86_64,$(if $(filter arm64,$(ARCH)),aarch_64,$(ARCH)))
+NODE_VERSION ?= 24.11.0
+PNPM_VERSION ?= 10.33.0
 
 NODE_VERSION ?= 24.11.0
 PNPM_VERSION ?= 10.33.0
@@ -70,11 +72,16 @@ $(LOCALBIN)/pnpm: $(LOCALBIN)/node
 pnpm: $(LOCALBIN)/pnpm
 
 .PHONY: static
-static: $(TAILWIND_JS) manifests generate fmt ginkgo ui 
+static: $(TAILWIND_JS) manifests generate fmt ginkgo ui plugins-ui
 
 .PHONY: ui
 ui: $(LOCALBIN)/pnpm ## Build the embedded catalog explorer UI (ui/frontend -> ui/frontend/dist/ui.js)
-	cd ui/frontend && CI=true pnpm install --frozen-lockfile --prefer-offline && pnpm run build
+	cd ui/frontend && CI=true pnpm install --no-frozen-lockfile --prefer-offline && pnpm run build
+
+.PHONY: plugins-ui
+plugins-ui: $(LOCALBIN)/pnpm ## Build embedded plugin UI bundles
+	cd plugins/kubernetes-logs/ui-src && CI=true pnpm install --no-frozen-lockfile --prefer-offline && pnpm run build
+	cd plugins/sql-server/ui-src && CI=true pnpm install --no-frozen-lockfile --prefer-offline && pnpm run build
 
 .PHONY: test
 test:
@@ -84,12 +91,12 @@ test:
 		--succinct --label-filter='!ignore_local'
 
 .PHONY: ci-test
-ci-test: $(TAILWIND_JS) $(LOCALBIN) ui 
+ci-test: $(TAILWIND_JS) $(LOCALBIN) ui plugins-ui
 	go build -o ./.bin/$(NAME) main.go
 	ginkgo -r --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct
 
 .PHONY: e2e
-e2e: $(TAILWIND_JS) ui 
+e2e: $(TAILWIND_JS) ui plugins-ui
 	go build -o ./.bin/$(NAME) main.go
 	ginkgo -r --keep-going  ./tests/e2e/...
 
@@ -179,7 +186,7 @@ build: static
 	go build -o ./.bin/$(NAME) -ldflags "-X \"main.version=$(VERSION_TAG) built at $(DATE)\""  main.go
 
 .PHONY: dev
-dev:
+dev: static
  	# Disabling CGO because of slow build times in apple silicon (just experimenting)
 	CGO_ENABLED=0 go build -v -o ./.bin/$(NAME) -gcflags="all=-N -l" main.go
 
@@ -210,7 +217,18 @@ install-deps: $(LOCALBIN) ## Install the deps CLI if not present
 	which deps 2>/dev/null || test -x $(LOCALBIN)/deps || curl -sSL https://github.com/flanksource/deps/releases/latest/download/deps-$(OS)-$(ARCH).tar.gz | tar -xz -C $(LOCALBIN)
 
 .PHONY: deps
-deps: install-deps ginkgo controller-gen golangci-lint kustomize $(TAILWIND_JS) ## Install all tool dependencies
+deps: install-deps ginkgo controller-gen golangci-lint kustomize $(LOCALBIN)/pnpm $(TAILWIND_JS) ## Install all tool dependencies
+
+$(LOCALBIN)/node: install-deps $(LOCALBIN)
+	deps install node@$(NODE_VERSION) --bin-dir $(LOCALBIN) --app-dir $(LOCALBIN)/apps --tmp-dir $(LOCALBIN)/tmp
+
+$(LOCALBIN)/pnpm: $(LOCALBIN)/node
+	npm install -g pnpm@$(PNPM_VERSION)
+	ln -sf apps/node/bin/pnpm $(LOCALBIN)/pnpm
+	ln -sf apps/node/bin/pnpx $(LOCALBIN)/pnpx
+
+.PHONY: pnpm
+pnpm: $(LOCALBIN)/pnpm
 
 .PHONY: ginkgo
 ginkgo:
@@ -218,21 +236,24 @@ ginkgo:
 
 .PHONY: controller-gen
 controller-gen: install-deps $(LOCALBIN)
-	$(LOCALBIN)/deps install controller-gen@$(CONTROLLER_TOOLS_VERSION) --bin-dir $(LOCALBIN)
+	deps install controller-gen@$(CONTROLLER_TOOLS_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: golangci-lint
 golangci-lint: install-deps $(LOCALBIN)
-	$(LOCALBIN)/deps install golangci/golangci-lint@v$(GOLANGCI_LINT_VERSION) --bin-dir $(LOCALBIN)
+	deps install golangci/golangci-lint@v$(GOLANGCI_LINT_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: kustomize
 kustomize: install-deps $(LOCALBIN)
-	$(LOCALBIN)/deps install kubernetes-sigs/kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
+	deps install kubernetes-sigs/kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: docs\:mcp
 docs\:mcp: ## Generate MCP tools reference documentation
 	@mkdir -p docs
 	go run ./hack/gen-mcp-docs > docs/mcp-tools.md
 	@echo "Generated docs/mcp-tools.md"
+
+report/kitchen-sink.json: report/build-kitchen-sink.ts report/testdata/kitchen-sink.yaml
+	cd report && ./node_modules/.bin/tsx build-kitchen-sink.ts
 
 .PHONY: lint
 lint: golangci-lint

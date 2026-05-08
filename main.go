@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/flanksource/clicky"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/cmd"
 	"github.com/spf13/cobra"
@@ -21,6 +22,7 @@ func main() {
 	}
 
 	api.BuildVersion = version
+	api.BuildCommit = commit
 
 	cmd.Root.AddCommand(&cobra.Command{
 		Use:   "version",
@@ -31,6 +33,11 @@ func main() {
 		},
 	})
 	cmd.Root.SetUsageTemplate(cmd.Root.UsageTemplate() + fmt.Sprintf("\nversion: %s\n ", version))
+
+	clicky.GenerateCLI(cmd.Root)
+	if catalogCmd, _, err := cmd.Root.Find([]string{"catalog"}); err == nil && catalogCmd != nil {
+		clicky.BindAllFlags(catalogCmd.PersistentFlags(), "format")
+	}
 
 	if err := cmd.Root.Execute(); err != nil {
 		os.Exit(1)
