@@ -386,9 +386,7 @@ spec:
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               mcp:
-                description: |-
-                  MCP defines metadata for MCP tool registration, controlling how
-                  this view appears to LLM clients (Claude, Gemini, Codex).
+                description: MCP metadata for tool registration with LLM clients.
                 properties:
                   description:
                     description: Description provides additional context for LLMs
@@ -613,6 +611,34 @@ spec:
                   - message: heatmap config not allowed for this type
                     rule: 'self.type!=''heatmap'' ? !has(self.heatmap) : true'
                 type: array
+              pdf:
+                properties:
+                  connection:
+                    type: string
+                  footer:
+                    type: string
+                  header:
+                    type: string
+                  landscape:
+                    type: boolean
+                  margins:
+                    properties:
+                      bottom:
+                        type: integer
+                      left:
+                        type: integer
+                      right:
+                        type: integer
+                      top:
+                        type: integer
+                    type: object
+                  pageSize:
+                    type: string
+                  timestampUrl:
+                    type: string
+                  url:
+                    type: string
+                type: object
               queries:
                 additionalProperties:
                   properties:
@@ -2153,6 +2179,32 @@ spec:
                       description: UIRef references a native Flanksource UI component
                         (changes or configs)
                       properties:
+                        access:
+                          properties:
+                            configTypes:
+                              type: string
+                            role:
+                              type: string
+                            search:
+                              type: string
+                            stale:
+                              type: string
+                            userType:
+                              type: string
+                          type: object
+                        accessLogs:
+                          properties:
+                            configTypes:
+                              type: string
+                            from:
+                              type: string
+                            mfa:
+                              type: string
+                            search:
+                              type: string
+                            to:
+                              type: string
+                          type: object
                         changes:
                           description: |-
                             ChangesUIFilters defines filters for the native Changes UI component.
