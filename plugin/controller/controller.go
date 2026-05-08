@@ -23,12 +23,14 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/flanksource/clicky/rpc"
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
 
 	echoSrv "github.com/flanksource/incident-commander/echo"
+	"github.com/flanksource/incident-commander/plugin/manifestcache"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
 	"github.com/flanksource/incident-commander/plugin/supervisor"
@@ -64,10 +66,25 @@ type PluginListing struct {
 	Operations  []*pluginpb.OperationDef `json:"operations,omitempty"`
 }
 
+// ClickyRPCListing is the alternative shape returned when the caller asks
+// for `?format=clicky-rpc`. It exposes the plugin's operations as a
+// clicky/rpc.RPCService so the CLI can cache it directly without a
+// translation layer.
+type ClickyRPCListing struct {
+	Name    string         `json:"name"`
+	Service rpc.RPCService `json:"service"`
+}
+
 // ListPlugins returns every running plugin whose CRD selector matches the
 // (optional) config_id query parameter. With no config_id, returns every
 // plugin (useful for global tabs).
+//
+// When `format=clicky-rpc` is set the response is a []ClickyRPCListing
+// instead — the CLI uses this to populate its on-disk schema cache.
 func ListPlugins(c echo.Context) error {
+	if c.QueryParam("format") == "clicky-rpc" {
+		return listPluginsClickyRPC(c)
+	}
 	configID := c.QueryParam("config_id")
 	out := []PluginListing{}
 	for _, e := range registry.Default.List() {
@@ -83,6 +100,24 @@ func ListPlugins(c echo.Context) error {
 			Version:     e.Manifest.Version,
 			Tabs:        e.Manifest.Tabs,
 			Operations:  e.Manifest.Operations,
+		})
+	}
+	return c.JSON(http.StatusOK, out)
+}
+
+func listPluginsClickyRPC(c echo.Context) error {
+	configID := c.QueryParam("config_id")
+	out := []ClickyRPCListing{}
+	for _, e := range registry.Default.List() {
+		if e.Manifest == nil {
+			continue
+		}
+		if configID != "" && !selectorMatches(e, configID) {
+			continue
+		}
+		out = append(out, ClickyRPCListing{
+			Name:    e.Manifest.Name,
+			Service: manifestcache.ManifestToService(e.Manifest),
 		})
 	}
 	return c.JSON(http.StatusOK, out)

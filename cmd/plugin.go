@@ -1,25 +1,18 @@
 package cmd
 
 import (
-	"context"
-	"encoding/json"
+	"errors"
 	"fmt"
-	"os"
-	osExec "os/exec"
-	"path/filepath"
+	"slices"
 	"strings"
-	"time"
 
-	dutyContext "github.com/flanksource/duty/context"
-	goplugin "github.com/hashicorp/go-plugin"
 	"github.com/spf13/cobra"
 
-	icplugin "github.com/flanksource/incident-commander/plugin"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
-	"github.com/flanksource/incident-commander/plugin/registry"
+	"github.com/flanksource/incident-commander/plugin/manifestcache"
 )
 
-// pluginParams accumulates --param k=v repeats.
+// pluginParams accumulates --param k=v repeats. Used by the dynamic
+// per-operation subcommands and by the legacy `plugin <name> <op>` form.
 type pluginParams struct {
 	values map[string]string
 }
@@ -46,148 +39,126 @@ func (p *pluginParams) Set(v string) error {
 
 func (p *pluginParams) Type() string { return "key=value" }
 
-var (
-	pluginConfigID string
-	pluginRawJSON  bool
-	pluginParamSet pluginParams
-)
+// pluginGroupID is the cobra group used to visually separate per-plugin
+// commands from built-in commands in --help output.
+const pluginGroupID = "plugins"
 
-// PluginCmd is the parent for plugin operations: `mission-control plugin <name> <op>`.
+// PluginCmd is the parent for plugin operations under
+// `mission-control plugin <name> ...`. Each cached plugin is also added as
+// a top-level subcommand of Root, so `mission-control <name> <op>` works.
 var PluginCmd = &cobra.Command{
-	Use:   "plugin <name> <operation>",
-	Short: "Invoke an operation exposed by a Mission Control plugin",
-	Long: `Spawn a plugin binary (discovered on $MISSION_CONTROL_PLUGIN_PATH) and
-invoke one of its operations directly. Mission-control does not need to be
-running — the CLI talks to the plugin via the same gRPC contract used by the
-host process.`,
-	Args: cobra.MinimumNArgs(2),
-	RunE: runPluginOp,
+	Use:   "plugin",
+	Short: "Inspect and invoke Mission Control plugins",
+	Long: `Manage and invoke Mission Control plugin operations.
+
+Cached plugin schemas live under the user cache directory and are populated:
+
+  - automatically when the host server registers the plugin, or
+  - on demand via 'mission-control plugin <name> refresh-cache', which
+    in API mode fetches schemas from the configured server and in DB mode
+    spawns the local plugin binary once.
+
+Operations dispatch differently per active context:
+
+  - API mode (server + token): forwards over HTTP, asks for clicky+json,
+    renders the response.
+  - DB / local mode: spawns the local plugin binary on each invocation.`,
+}
+
+// pluginListCmd prints what's in the cache. Useful for debugging which
+// mode a CLI invocation will use.
+var pluginListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List plugins with cached schemas",
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		entries, err := manifestcache.List()
+		if err != nil {
+			return err
+		}
+		if len(entries) == 0 {
+			fmt.Fprintln(cmd.OutOrStdout(), "No plugins cached. Run 'mission-control plugin refresh-cache' to populate.")
+			return nil
+		}
+		for _, e := range entries {
+			origin := string(e.Source)
+			if e.Source == manifestcache.SourceRemoteServer && e.ServerURL != "" {
+				origin = origin + " " + e.ServerURL
+			} else if e.Source == manifestcache.SourceLocalBinary && e.BinaryPath != "" {
+				origin = origin + " " + e.BinaryPath
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "%-20s %-12s %2d ops  %s\n",
+				e.Service.Name, e.Service.Version, len(e.Service.Operations), origin)
+		}
+		return nil
+	},
+}
+
+// pluginRefreshCacheCmd refreshes one or all plugin caches. Without args it
+// refreshes everything reachable in the active mode.
+var pluginRefreshCacheCmd = &cobra.Command{
+	Use:   "refresh-cache [name]",
+	Short: "Re-fetch plugin schemas from the active context",
+	Args:  cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		var only string
+		if len(args) == 1 {
+			only = args[0]
+		}
+		mode, mcCtx, err := resolveMode()
+		if err != nil {
+			return err
+		}
+		switch mode {
+		case modeAPI:
+			names, err := refreshAllFromServer(cmd, mcCtx)
+			if err != nil {
+				return err
+			}
+			if only != "" && !slices.Contains(names, only) {
+				return fmt.Errorf("plugin %q not exposed by %s", only, mcCtx.Server)
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Refreshed %d plugin(s) from %s\n", len(names), mcCtx.Server)
+			return nil
+		case modeLocal:
+			if only == "" {
+				return errors.New("DB / local mode requires a plugin name; usage: refresh-cache <name>")
+			}
+			entry, err := refreshOneFromBinary(cmd, only)
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Refreshed %s (%d ops) from %s\n",
+				entry.Service.Name, len(entry.Service.Operations), entry.BinaryPath)
+			return nil
+		}
+		return fmt.Errorf("unable to determine mode: no API context and no $MISSION_CONTROL_PLUGIN_PATH plugins")
+	},
 }
 
 func init() {
-	PluginCmd.Flags().StringVar(&pluginConfigID, "config-id", "", "Catalog/config item id passed to the operation")
-	PluginCmd.Flags().BoolVar(&pluginRawJSON, "json", false, "Emit raw application/clicky+json instead of pretty-printing")
-	PluginCmd.Flags().Var(&pluginParamSet, "param", "Key=value parameters (repeatable)")
+	Root.AddGroup(&cobra.Group{ID: pluginGroupID, Title: "Plugins:"})
+	PluginCmd.AddGroup(&cobra.Group{ID: pluginGroupID, Title: "Plugins:"})
+
+	registerPluginHARFlag(Root)
+	PluginCmd.AddCommand(pluginListCmd, pluginRefreshCacheCmd)
+	registerCachedPluginCommands()
 	Root.AddCommand(PluginCmd)
 }
 
-func runPluginOp(_ *cobra.Command, args []string) error {
-	name, op := args[0], args[1]
-
-	binPath, err := findPluginBinary(name)
+// registerCachedPluginCommands reads every cached entry and attaches a
+// per-plugin command tree to both PluginCmd and Root. Called once at init().
+// Empty cache → no per-plugin commands; users still get
+// `mission-control plugin {list,refresh-cache}`.
+func registerCachedPluginCommands() {
+	entries, err := manifestcache.List()
 	if err != nil {
-		return err
-	}
-
-	cli, pluginCli, err := dialPlugin(binPath)
-	if err != nil {
-		return err
-	}
-	defer cli.Kill()
-
-	manifestCtx, manifestCancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer manifestCancel()
-
-	if _, err := pluginCli.Service.RegisterPlugin(manifestCtx, &pluginpb.RegisterRequest{
-		HostProtocolVersion: uint32(icplugin.ProtocolVersion),
-	}); err != nil {
-		return fmt.Errorf("plugin RegisterPlugin: %w", err)
-	}
-
-	params, err := json.Marshal(pluginParamSet.values)
-	if err != nil {
-		return err
-	}
-
-	invokeCtx, invokeCancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer invokeCancel()
-
-	resp, err := pluginCli.Service.Invoke(invokeCtx, &pluginpb.InvokeRequest{
-		Operation:    op,
-		ParamsJson:   params,
-		ConfigItemId: pluginConfigID,
-	})
-	if err != nil {
-		return fmt.Errorf("invoke %s/%s: %w", name, op, err)
-	}
-	if resp.ErrorMessage != "" {
-		return fmt.Errorf("plugin error: %s (%s)", resp.ErrorMessage, resp.ErrorCode)
-	}
-
-	if pluginRawJSON {
-		_, err := os.Stdout.Write(resp.Result)
-		return err
-	}
-
-	// Best-effort pretty-print: pass JSON through indenter. Real clicky
-	// rendering happens automatically when the embedded UI consumes
-	// application/clicky+json over HTTP — for the CLI we settle for
-	// human-readable JSON until we wire the clicky CLI renderer.
-	var pretty any
-	if err := json.Unmarshal(resp.Result, &pretty); err == nil {
-		out, _ := json.MarshalIndent(pretty, "", "  ")
-		fmt.Println(string(out))
-		return nil
-	}
-	_, err = os.Stdout.Write(resp.Result)
-	return err
-}
-
-// findPluginBinary scans MISSION_CONTROL_PLUGIN_PATH for a binary matching
-// `name`. If multiple binaries match (e.g. name and name-darwin-arm64) it
-// prefers the exact match.
-func findPluginBinary(name string) (string, error) {
-	dir := registry.PluginPath()
-	exact := filepath.Join(dir, name)
-	if info, err := os.Stat(exact); err == nil && !info.IsDir() {
-		return exact, nil
-	}
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return "", fmt.Errorf("scan %s: %w", dir, err)
+		return
 	}
 	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		if strings.HasPrefix(e.Name(), name) {
-			return filepath.Join(dir, e.Name()), nil
-		}
+		nested, top := buildPluginCommands(*e)
+		nested.GroupID = pluginGroupID
+		top.GroupID = pluginGroupID
+		PluginCmd.AddCommand(nested)
+		Root.AddCommand(top)
 	}
-	return "", fmt.Errorf("plugin %q not found in %s", name, dir)
 }
-
-func dialPlugin(binPath string) (*goplugin.Client, *icplugin.Client, error) {
-	cmd := osExec.Command(binPath)
-	cmd.Env = append(os.Environ(),
-		fmt.Sprintf("%s=%s", icplugin.Handshake.MagicCookieKey, icplugin.Handshake.MagicCookieValue),
-	)
-	cli := goplugin.NewClient(&goplugin.ClientConfig{
-		HandshakeConfig:  icplugin.Handshake,
-		Plugins:          icplugin.PluginMap,
-		Cmd:              cmd,
-		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolGRPC},
-		Managed:          true,
-	})
-
-	rpcClient, err := cli.Client()
-	if err != nil {
-		cli.Kill()
-		return nil, nil, fmt.Errorf("plugin rpc: %w", err)
-	}
-	raw, err := rpcClient.Dispense(icplugin.PluginName)
-	if err != nil {
-		cli.Kill()
-		return nil, nil, fmt.Errorf("plugin dispense: %w", err)
-	}
-	pluginCli, ok := raw.(*icplugin.Client)
-	if !ok {
-		cli.Kill()
-		return nil, nil, fmt.Errorf("plugin: unexpected dispense type %T", raw)
-	}
-	return cli, pluginCli, nil
-}
-
-// _ keeps duty/context imported — useful when the CLI later needs to share
-// resolution helpers with the server (e.g. local connection lookup).
-var _ dutyContext.Context

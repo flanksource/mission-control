@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/plugin/manifestcache"
 	"github.com/flanksource/incident-commander/plugin/registry"
 )
 
@@ -96,6 +97,9 @@ func DeletePlugin(ctx context.Context, id string) error {
 	var row models.Plugin
 	if err := ctx.DB().Where("id = ?", id).First(&row).Error; err == nil {
 		registry.RemoveFromRegistry(row.Name)
+		if err := manifestcache.Delete(row.Name); err != nil {
+			ctx.Logger.V(2).Infof("plugin %s: drop manifest cache: %v", row.Name, err)
+		}
 	} else {
 		ctx.Logger.V(3).Infof("delete plugin %s: no DB row to look up name from: %v", id, err)
 	}
