@@ -111,11 +111,28 @@ message ConfigItemList {
 
 message GetConfigItemRequest { string id = 1; }
 
+message ResourceSelector {
+  string agent          = 1;
+  string scope          = 2;
+  string cache          = 3;
+  string search         = 4;
+  int32 limit           = 5;
+  bool include_deleted  = 6;
+  string id             = 7;
+  string name           = 8;
+  string namespace      = 9;
+  string tag_selector   = 10;
+  string label_selector = 11;
+  string field_selector = 12;
+  string health         = 13;
+  repeated string types = 14;
+  repeated string statuses = 15;
+}
+
 message ListConfigsRequest {
-  // Selector is the JSON-encoded duty/types.ResourceSelector.
-  string selector_json = 1;
-  int32 limit          = 2;
-  string cursor        = 3;
+  ResourceSelector selector = 1;
+  int32 limit               = 2;
+  string cursor             = 3;
 }
 
 // GetConnectionRequest asks the host to resolve a connection by type.

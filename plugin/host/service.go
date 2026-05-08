@@ -18,7 +18,7 @@ import (
 	dutyConn "github.com/flanksource/duty/connection"
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/types"
+	"github.com/flanksource/duty/query"
 	"github.com/google/uuid"
 	lru "github.com/hashicorp/golang-lru/v2/expirable"
 	"google.golang.org/grpc"
@@ -80,38 +80,27 @@ func (s *Service) GetConfigItem(ctx context.Context, req *pluginpb.GetConfigItem
 	if err := s.ctx.DB().WithContext(ctx).Where("id = ?", req.Id).First(&item).Error; err != nil {
 		return nil, fmt.Errorf("config item %s: %w", req.Id, err)
 	}
-	return configItemToProto(&item)
+	return pluginpb.FromConfigItem(&item)
 }
 
 func (s *Service) ListConfigs(ctx context.Context, req *pluginpb.ListConfigsRequest) (*pluginpb.ConfigItemList, error) {
-	var sel types.ResourceSelector
-	if req.SelectorJson != "" {
-		if err := json.Unmarshal([]byte(req.SelectorJson), &sel); err != nil {
-			return nil, fmt.Errorf("decode selector: %w", err)
-		}
-	}
-	q := s.ctx.DB().WithContext(ctx).Model(&models.ConfigItem{})
-	if len(sel.Types) > 0 {
-		q = q.Where("type IN ?", sel.Types)
-	}
-	if sel.Namespace != "" {
-		q = q.Where("? = ANY(tags->>'namespace')", sel.Namespace)
-	}
-	if req.Limit > 0 {
-		q = q.Limit(int(req.Limit))
-	}
-	var items []models.ConfigItem
-	if err := q.Find(&items).Error; err != nil {
+	sel := req.Selector.ToDuty()
+
+	items, err := query.FindConfigsByResourceSelector(s.ctx.Wrap(ctx), int(req.Limit), sel)
+	if err != nil {
 		return nil, err
 	}
+
 	out := &pluginpb.ConfigItemList{}
 	for i := range items {
-		ci, err := configItemToProto(&items[i])
+		ci, err := pluginpb.FromConfigItem(&items[i])
 		if err != nil {
 			return nil, err
 		}
+
 		out.Items = append(out.Items, ci)
 	}
+
 	return out, nil
 }
 
@@ -290,51 +279,6 @@ func resolveConnection(ctx dutyContext.Context, spec v1.PluginSpec, typ, configI
 	default:
 		return nil, fmt.Errorf("unsupported connection type %q", typ)
 	}
-}
-
-func configItemToProto(item *models.ConfigItem) (*pluginpb.ConfigItem, error) {
-	out := &pluginpb.ConfigItem{
-		Id: item.ID.String(),
-	}
-	if item.Name != nil {
-		out.Name = *item.Name
-	}
-	if item.Type != nil {
-		out.Type = *item.Type
-	}
-	if item.AgentID != uuid.Nil {
-		out.AgentId = item.AgentID.String()
-	}
-	if item.Health != nil {
-		out.Health = string(*item.Health)
-	}
-	if item.Status != nil {
-		out.Status = *item.Status
-	}
-	if item.Tags != nil {
-		out.Tags = map[string]string(item.Tags)
-	}
-	if item.Labels != nil {
-		out.Labels = map[string]string(*item.Labels)
-	}
-	if item.Properties != nil {
-		props := map[string]any{}
-		for _, p := range *item.Properties {
-			props[p.Name] = p.Text
-		}
-		s, err := structpb.NewStruct(props)
-		if err == nil {
-			out.Properties = s
-		}
-	}
-	if item.Config != nil && *item.Config != "" {
-		var cfg map[string]any
-		if err := json.Unmarshal([]byte(*item.Config), &cfg); err == nil {
-			s, _ := structpb.NewStruct(cfg)
-			out.Config = s
-		}
-	}
-	return out, nil
 }
 
 // resolveSQLConnection resolves a SQL (sql_server / postgres / mysql)
