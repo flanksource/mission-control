@@ -101,8 +101,11 @@ export interface PanelResult {
   gauge?: GaugeConfig & { unit?: string };
   bargauge?: BarGaugeConfig;
   timeseries?: TimeseriesConfig;
+  heatmap?: { mode?: string };
   rows: Record<string, any>[];
 }
+
+export type HeatmapVariant = 'calendar' | 'compact';
 
 export interface ViewSectionResult {
   title: string;

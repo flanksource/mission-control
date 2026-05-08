@@ -19,19 +19,14 @@ import (
 type Options struct {
 	Title             string
 	Selectors         []types.ResourceSelector
+	Recursive         bool
 	StaleDays         int
 	ReviewOverdueDays int
 	ChangelogSince    time.Duration
-	ByUser            bool
+	View              string
 }
 
 func (o Options) WithDefaults() Options {
-	if o.StaleDays == 0 {
-		o.StaleDays = 90
-	}
-	if o.ReviewOverdueDays == 0 {
-		o.ReviewOverdueDays = 90
-	}
 	if o.ChangelogSince == 0 {
 		o.ChangelogSince = 90 * 24 * time.Hour
 	}
@@ -44,7 +39,7 @@ func (o Options) WithDefaults() Options {
 func BuildReport(ctx context.Context, opts Options) (*api.RBACReport, error) {
 	opts = opts.WithDefaults()
 
-	rows, err := db.GetRBACAccess(ctx, opts.Selectors)
+	rows, err := db.GetRBACAccess(ctx, opts.Selectors, opts.Recursive)
 	if err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to query RBAC access")
 	}
@@ -80,16 +75,20 @@ func BuildReport(ctx context.Context, opts Options) (*api.RBACReport, error) {
 
 	ctx.Logger.V(3).Infof("Changelog: %d entries, temporary access: %d entries", len(changelog), len(tempAccess))
 
+	subject, parents := resolveSubjectAndParents(ctx, configItems, configMap)
+
 	report := &api.RBACReport{
 		Title:       opts.Title,
 		Query:       formatSelectors(opts.Selectors),
 		GeneratedAt: time.Now(),
+		Subject:     subject,
+		Parents:     parents,
 		Resources:   resources,
 		Changelog:   changelog,
 		Summary:     summary,
 	}
 
-	if opts.ByUser {
+	if opts.View == "user" {
 		report.Users = groupByUser(rows, opts, configMap)
 	}
 
@@ -164,14 +163,15 @@ func groupByConfigItem(rows []db.RBACAccessRow, opts Options, configMap map[stri
 			order = append(order, row.ConfigID)
 		}
 
-		isStale := row.LastSignedInAt == nil || row.LastSignedInAt.Before(staleThreshold)
-		isReviewOverdue := row.LastReviewedAt == nil || row.LastReviewedAt.Before(reviewThreshold)
+		isStale := opts.StaleDays > 0 && (row.LastSignedInAt == nil || row.LastSignedInAt.Before(staleThreshold))
+		isReviewOverdue := opts.ReviewOverdueDays > 0 && (row.LastReviewedAt == nil || row.LastReviewedAt.Before(reviewThreshold))
 
 		resource.Users = append(resource.Users, api.RBACUserRole{
 			UserID:          row.UserID.String(),
 			UserName:        row.UserName,
 			Email:           row.Email,
 			Role:            row.Role,
+			RoleExternalIDs: []string(row.RoleExternalIDs),
 			RoleSource:      row.RoleSource(),
 			SourceSystem:    row.UserType,
 			CreatedAt:       row.CreatedAt,
@@ -187,7 +187,43 @@ func groupByConfigItem(rows []db.RBACAccessRow, opts Options, configMap map[stri
 	})
 }
 
+func resolveSubjectAndParents(ctx context.Context, configItems []models.ConfigItem, configMap map[string]models.ConfigItem) (*models.ConfigItem, []models.ConfigItem) {
+	if len(configItems) == 0 {
+		return nil, nil
+	}
+
+	first := configItems[0]
+
+	var parents []models.ConfigItem
+	current := first
+	for current.ParentID != nil {
+		parent, ok := configMap[current.ParentID.String()]
+		if !ok {
+			loaded, err := query.GetConfigsByIDs(ctx, []uuid.UUID{*current.ParentID})
+			if err != nil || len(loaded) == 0 {
+				break
+			}
+			parent = loaded[0]
+			configMap[parent.ID.String()] = parent
+		}
+		parents = append(parents, parent)
+		current = parent
+	}
+
+	// Reverse so root is first
+	for i, j := 0, len(parents)-1; i < j; i, j = i+1, j-1 {
+		parents[i], parents[j] = parents[j], parents[i]
+	}
+
+	return &first, parents
+}
+
 func enrichResourceFromConfigItem(resource *api.RBACResource, ci models.ConfigItem) {
+	resource.ConfigClass = ci.ConfigClass
+	resource.Path = ci.Path
+	if ci.ParentID != nil {
+		resource.ParentID = ci.ParentID.String()
+	}
 	if ci.Status != nil {
 		resource.Status = *ci.Status
 	}
@@ -242,14 +278,15 @@ func groupByUser(rows []db.RBACAccessRow, opts Options, configMap map[string]mod
 			}
 		}
 
-		isStale := row.LastSignedInAt == nil || row.LastSignedInAt.Before(staleThreshold)
-		isReviewOverdue := row.LastReviewedAt == nil || row.LastReviewedAt.Before(reviewThreshold)
+		isStale := opts.StaleDays > 0 && (row.LastSignedInAt == nil || row.LastSignedInAt.Before(staleThreshold))
+		isReviewOverdue := opts.ReviewOverdueDays > 0 && (row.LastReviewedAt == nil || row.LastReviewedAt.Before(reviewThreshold))
 
 		res := api.RBACUserResource{
 			ConfigID:        row.ConfigID.String(),
 			ConfigName:      row.ConfigName,
 			ConfigType:      row.ConfigType,
 			Role:            row.Role,
+			RoleExternalIDs: []string(row.RoleExternalIDs),
 			RoleSource:      row.RoleSource(),
 			CreatedAt:       row.CreatedAt,
 			LastSignedInAt:  row.LastSignedInAt,
@@ -258,6 +295,8 @@ func groupByUser(rows []db.RBACAccessRow, opts Options, configMap map[string]mod
 			IsReviewOverdue: isReviewOverdue,
 		}
 		if ci, found := configMap[row.ConfigID.String()]; found {
+			res.ConfigClass = ci.ConfigClass
+			res.Path = ci.Path
 			if ci.Status != nil {
 				res.Status = *ci.Status
 			}
