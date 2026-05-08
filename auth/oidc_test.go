@@ -541,7 +541,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(returnTo.Path).To(Equal("/oidc/clerk/callback"))
 			Expect(returnTo.Query().Get("auth_request_id")).To(Equal("req-123"))
-			Expect(returnTo.Query().Get("backend_callback")).To(Equal("https://mc.example.com/oidc/clerk/callback"))
+			Expect(returnTo.Query().Get("backend_callback")).To(Equal("https://mc.example.com/oidc/clerk/callback?auth_request_id=req-123"))
 		})
 	})
 })
