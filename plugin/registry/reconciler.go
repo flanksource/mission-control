@@ -50,7 +50,7 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 	}
 
 	binPath := filepath.Join(binDir, p.Name)
-	if info, err := os.Stat(binPath); err == nil && !info.IsDir() && p.Spec.Checksum == "" {
+	if info, err := os.Stat(binPath); err == nil && !info.IsDir() {
 		ctx.Logger.V(3).Infof("plugin %s: using existing binary at %s, skipping install", p.Name, binPath)
 	} else {
 		res, err := deps.InstallWithContext(ctx,

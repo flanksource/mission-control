@@ -28,10 +28,6 @@ type PluginSpec struct {
 	// (e.g. a semver tag, "latest", or a git ref the deps package supports).
 	Version string `json:"version,omitempty"`
 
-	// Checksum optionally pins the downloaded binary to a known good hash.
-	// When set, deps refuses to install a binary with a different checksum.
-	Checksum string `json:"checksum,omitempty"`
-
 	// Selector decides which catalog (config) items this plugin's tabs
 	// attach to. The same ResourceSelector semantics used by Playbook.Configs
 	// apply: filter by config type, labels, tags, agent, namespace, name.
