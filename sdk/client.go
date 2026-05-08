@@ -5,10 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/flanksource/commons/http"
 	"github.com/flanksource/duty/models"
+	"github.com/google/uuid"
+
+	icapi "github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/pkg/httpobservability"
 )
+
+// ErrHTMLResponse is returned when the server responded with HTML on a JSON
+// endpoint — typically because the configured server URL points at the
+// user-facing frontend rather than the /api backend.
+var ErrHTMLResponse = errors.New("server returned HTML instead of JSON (is the backend at /api?)")
 
 type Client struct {
 	*http.Client
@@ -30,6 +40,29 @@ func NewWithAuthHeader(serverURL, authHeader string) *Client {
 	return &Client{Client: client}
 }
 
+// decodeJSON parses a response body as JSON, returning ErrHTMLResponse if the
+// body looks like HTML (frontend served instead of backend JSON).
+func decodeJSON(r *http.Response, out any) error {
+	body, err := r.AsString()
+	if err != nil {
+		return err
+	}
+	if looksLikeHTML(r.Header.Get("Content-Type"), body) {
+		return ErrHTMLResponse
+	}
+	if err := json.Unmarshal([]byte(body), out); err != nil {
+		return fmt.Errorf("failed to decode JSON response: %w", err)
+	}
+	return nil
+}
+
+func looksLikeHTML(contentType, body string) bool {
+	if strings.Contains(strings.ToLower(contentType), "text/html") {
+		return true
+	}
+	return strings.HasPrefix(strings.TrimLeft(body, " \t\r\n"), "<")
+}
+
 func (c *Client) GetConnection(name, namespace string) (*models.Connection, error) {
 	var connections []models.Connection
 	r, err := c.R(context.Background()).
@@ -44,7 +77,7 @@ func (c *Client) GetConnection(name, namespace string) (*models.Connection, erro
 	if !r.IsOK() {
 		return nil, fmt.Errorf("server returned %d", r.StatusCode)
 	}
-	if err := r.Into(&connections); err != nil {
+	if err := decodeJSON(r, &connections); err != nil {
 		return nil, err
 	}
 	if len(connections) == 0 {
@@ -72,6 +105,31 @@ type TestResult struct {
 	Payload any    `json:"payload"`
 }
 
+type PlaybookListOptions struct {
+	ConfigID    string
+	CheckID     string
+	ComponentID string
+}
+
+type PlaybookRunParams struct {
+	ID          uuid.UUID         `json:"id"`
+	ConfigID    *uuid.UUID        `json:"config_id,omitempty"`
+	CheckID     *uuid.UUID        `json:"check_id,omitempty"`
+	ComponentID *uuid.UUID        `json:"component_id,omitempty"`
+	Params      map[string]string `json:"params,omitempty"`
+}
+
+type PlaybookRunResponse struct {
+	RunID    string `json:"run_id"`
+	StartsAt string `json:"starts_at"`
+}
+
+type PlaybookSummary struct {
+	Playbook models.Playbook            `json:"playbook,omitempty"`
+	Run      models.PlaybookRun         `json:"run,omitempty"`
+	Actions  []models.PlaybookRunAction `json:"actions,omitempty"`
+}
+
 func (c *Client) TestConnection(id string) (*TestResult, error) {
 	var result TestResult
 	r, err := c.R(context.Background()).
@@ -81,9 +139,12 @@ func (c *Client) TestConnection(id string) (*TestResult, error) {
 	}
 	if !r.IsOK() {
 		body, _ := r.AsString()
+		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
+			return nil, ErrHTMLResponse
+		}
 		return nil, fmt.Errorf("test failed (%d): %s", r.StatusCode, body)
 	}
-	if err := r.Into(&result); err != nil {
+	if err := decodeJSON(r, &result); err != nil {
 		return &result, err
 	}
 	return &result, nil
