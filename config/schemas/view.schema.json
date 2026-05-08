@@ -36,6 +36,48 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "AccessLogsUIFilters": {
+      "properties": {
+        "search": {
+          "type": "string"
+        },
+        "configTypes": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "mfa": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AccessUIFilters": {
+      "properties": {
+        "search": {
+          "type": "string"
+        },
+        "configTypes": {
+          "type": "string"
+        },
+        "role": {
+          "type": "string"
+        },
+        "userType": {
+          "type": "string"
+        },
+        "stale": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "BadgeConfig": {
       "properties": {
         "color": {
@@ -318,6 +360,54 @@
         },
         "secretKeyRef": {
           "$ref": "#/$defs/SecretKeySelector"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FacetOptions": {
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "pageSize": {
+          "type": "string"
+        },
+        "landscape": {
+          "type": "boolean"
+        },
+        "margins": {
+          "$ref": "#/$defs/FacetPDFMargins"
+        },
+        "header": {
+          "type": "string"
+        },
+        "footer": {
+          "type": "string"
+        },
+        "timestampUrl": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FacetPDFMargins": {
+      "properties": {
+        "top": {
+          "type": "integer"
+        },
+        "bottom": {
+          "type": "integer"
+        },
+        "left": {
+          "type": "integer"
+        },
+        "right": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -1012,6 +1102,12 @@
         },
         "configs": {
           "$ref": "#/$defs/ConfigsUIFilters"
+        },
+        "access": {
+          "$ref": "#/$defs/AccessUIFilters"
+        },
+        "accessLogs": {
+          "$ref": "#/$defs/AccessLogsUIFilters"
         }
       },
       "additionalProperties": false,
@@ -1266,9 +1362,12 @@
           "type": "array",
           "description": "Include other views in the view"
         },
+        "pdf": {
+          "$ref": "#/$defs/FacetOptions"
+        },
         "mcp": {
           "$ref": "#/$defs/MCPMetadata",
-          "description": "MCP defines metadata for MCP tool registration, controlling how\nthis view appears to LLM clients (Claude, Gemini, Codex)."
+          "description": "MCP metadata for tool registration with LLM clients."
         }
       },
       "additionalProperties": false,
