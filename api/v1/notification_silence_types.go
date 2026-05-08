@@ -42,6 +42,10 @@ func (t *NotificationSilence) SetObservedGeneration(generation int64) {
 	t.Status.ObservedGeneration = generation
 }
 
+func (t *NotificationSilence) GetObservedGeneration() int64 {
+	return t.Status.ObservedGeneration
+}
+
 func (t *NotificationSilence) GetStatusConditions() *[]metav1.Condition {
 	return &t.Status.Conditions
 }
