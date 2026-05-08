@@ -47,18 +47,17 @@ func RegisterRoutes(e *echo.Echo) {
 }
 
 // PluginListing is what GET /api/plugins returns: a flat list of plugins
-// applicable to the current config item, with their tabs and operations.
+// applicable to the current config item, with their operations.
 type PluginListing struct {
 	Name        string                   `json:"name"`
 	Description string                   `json:"description,omitempty"`
 	Version     string                   `json:"version,omitempty"`
-	Tabs        []*pluginpb.TabSpec      `json:"tabs,omitempty"`
 	Operations  []*pluginpb.OperationDef `json:"operations,omitempty"`
 }
 
 // ListPlugins returns every running plugin whose CRD selector matches the
 // (optional) config_id query parameter. With no config_id, returns every
-// plugin (useful for global tabs).
+// plugin.
 func ListPlugins(c echo.Context) error {
 	configID := c.QueryParam("config_id")
 	out := []PluginListing{}
@@ -73,7 +72,6 @@ func ListPlugins(c echo.Context) error {
 			Name:        e.Manifest.Name,
 			Description: e.Manifest.Description,
 			Version:     e.Manifest.Version,
-			Tabs:        e.Manifest.Tabs,
 			Operations:  e.Manifest.Operations,
 		})
 	}

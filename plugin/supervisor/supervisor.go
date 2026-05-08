@@ -139,8 +139,8 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 	go s.watchExit(ctx, cli)
 	go s.watchBinary(ctx)
 
-	ctx.Logger.Infof("plugin %s loaded: version=%q tabs=%d ops=%d ui_port=%d",
-		s.Name, manifest.Version, len(manifest.Tabs), len(manifest.Operations), manifest.UiPort)
+	ctx.Logger.Infof("plugin %s loaded: version=%q ops=%d ui_port=%d",
+		s.Name, manifest.Version, len(manifest.Operations), manifest.UiPort)
 	return nil
 }
 
