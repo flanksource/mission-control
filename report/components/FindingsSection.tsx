@@ -10,6 +10,7 @@ interface Props {
 const SEVERITY_ORDER = ['critical', 'high', 'medium', 'low'] as const;
 const FINDING_TYPES = ['security', 'compliance', 'reliability', 'performance'] as const;
 const ACTIVE_STATUSES = new Set(['open', 'in-progress']);
+const NO_BREAK_STYLE = { pageBreakInside: 'avoid' as const, breakInside: 'avoid' as const };
 
 const SEVERITY_COLOR: Record<string, 'red' | 'orange' | 'yellow' | 'blue'> = {
   critical: 'red',
@@ -78,14 +79,15 @@ export default function FindingsSection({ findings }: Props) {
 
   return (
     <Section variant="hero" title="Security Findings" size="md">
-      <div className="grid grid-cols-4 gap-[3mm] mb-[5mm]">
+      <div className="grid grid-cols-4 gap-[3mm] mb-[5mm]" style={NO_BREAK_STYLE}>
         {SEVERITY_ORDER.map((sev) => (
-          <SeverityStatCard
-            key={sev}
-            color={SEVERITY_COLOR[sev]}
-            value={bySeverity[sev]}
-            label={sev.charAt(0).toUpperCase() + sev.slice(1)}
-          />
+          <div key={sev} style={NO_BREAK_STYLE}>
+            <SeverityStatCard
+              color={SEVERITY_COLOR[sev]}
+              value={bySeverity[sev]}
+              label={sev.charAt(0).toUpperCase() + sev.slice(1)}
+            />
+          </div>
         ))}
       </div>
       {findings.length === 0 ? (
