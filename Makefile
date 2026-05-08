@@ -51,7 +51,7 @@ help: ## Display this help.
 
 
 .PHONY: static
-static: $(TAILWIND_JS) manifests generate fmt ginkgo ui plugins-ui
+static: $(TAILWIND_JS) manifests generate fmt ginkgo ui
 
 .PHONY: ui
 ui: $(LOCALBIN)/pnpm ## Build the embedded catalog explorer UI (ui/frontend -> ui/frontend/dist/ui.js)
