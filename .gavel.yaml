@@ -1,0 +1,11 @@
+pre:
+  - run: make build
+
+lint:
+  ignore:
+    - source: betterleaks
+      rule: kubernetes-secret-yaml
+      file: deploy/**/*.yaml
+    - source: betterleaks
+      rule: generic-api-key
+      file: deploy/postgres/postgres.yaml
