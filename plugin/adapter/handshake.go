@@ -1,11 +1,11 @@
-// Package plugin defines the handshake configuration shared between
+// Package adapter defines the handshake configuration shared between
 // the mission-control host and plugin processes.
 //
 // The host launches plugin binaries with the magic-cookie env var set;
 // plugins built with the SDK validate the cookie before starting their
 // gRPC server. This protects against accidentally executing a plugin
 // binary outside of the host (e.g. running a plugin from the shell).
-package plugin
+package adapter
 
 import (
 	goplugin "github.com/hashicorp/go-plugin"

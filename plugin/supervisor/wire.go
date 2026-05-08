@@ -7,7 +7,7 @@ import (
 	dutyContext "github.com/flanksource/duty/context"
 	goplugin "github.com/hashicorp/go-plugin"
 
-	icplugin "github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/adapter"
 	"github.com/flanksource/incident-commander/plugin/host"
 	"github.com/flanksource/incident-commander/plugin/registry"
 )
@@ -50,7 +50,7 @@ func startPlugin(ctx dutyContext.Context, name string) error {
 				ctx.Logger.Errorf("plugin %s: host broker accept: %v", name, err)
 				return
 			}
-			s := icplugin.GRPCServerFactory(nil)
+			s := adapter.GRPCServerFactory(nil)
 			svc.Register(s)
 			if err := s.Serve(lis); err != nil {
 				ctx.Logger.Debugf("plugin %s: host server stopped: %v", name, err)

@@ -18,10 +18,16 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 
 	dutyContext "github.com/flanksource/duty/context"
-	icplugin "github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/adapter"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
 )
+
+// pluginMap is the host-side go-plugin registry used to dispense the
+// mission-control plugin client.
+var pluginMap = map[string]goplugin.Plugin{
+	adapter.PluginName: &adapter.GRPCPlugin{},
+}
 
 // Supervisor owns the lifecycle of one plugin process.
 type Supervisor struct {
@@ -33,7 +39,7 @@ type Supervisor struct {
 
 	mu        sync.Mutex
 	client    *goplugin.Client
-	pluginCli *icplugin.Client
+	pluginCLI *adapter.Client
 	manifest  *pluginpb.PluginManifest
 	hostBrkID uint32
 	startHost func(*goplugin.GRPCBroker) (uint32, error)
@@ -75,12 +81,12 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 
 	cmd := exec.Command(s.BinaryPath)
 	cmd.Env = append(cmd.Env,
-		fmt.Sprintf("%s=%s", icplugin.Handshake.MagicCookieKey, icplugin.Handshake.MagicCookieValue),
+		fmt.Sprintf("%s=%s", adapter.Handshake.MagicCookieKey, adapter.Handshake.MagicCookieValue),
 	)
 
 	cli := goplugin.NewClient(&goplugin.ClientConfig{
-		HandshakeConfig:  icplugin.Handshake,
-		Plugins:          icplugin.PluginMap,
+		HandshakeConfig:  adapter.Handshake,
+		Plugins:          pluginMap,
 		Cmd:              cmd,
 		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolGRPC},
 		Managed:          true,
@@ -95,13 +101,13 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 		return fmt.Errorf("plugin %s rpc client: %w", s.Name, err)
 	}
 
-	raw, err := rpcClient.Dispense(icplugin.PluginName)
+	raw, err := rpcClient.Dispense(adapter.PluginName)
 	if err != nil {
 		cli.Kill()
 		return fmt.Errorf("plugin %s dispense: %w", s.Name, err)
 	}
 
-	pluginCli, ok := raw.(*icplugin.Client)
+	pluginCli, ok := raw.(*adapter.Client)
 	if !ok {
 		cli.Kill()
 		return fmt.Errorf("plugin %s: unexpected dispense type %T", s.Name, raw)
@@ -115,7 +121,7 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 	s.hostBrkID = hostBrkID
 
 	manifest, err := pluginCli.Service.RegisterPlugin(dialCtx, &pluginpb.RegisterRequest{
-		HostProtocolVersion: uint32(icplugin.ProtocolVersion),
+		HostProtocolVersion: uint32(adapter.ProtocolVersion),
 		HostBrokerId:        hostBrkID,
 	})
 	if err != nil {
@@ -124,7 +130,7 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 	}
 
 	s.client = cli
-	s.pluginCli = pluginCli
+	s.pluginCLI = pluginCli
 	s.manifest = manifest
 	s.startHost = startHost
 
@@ -179,7 +185,7 @@ func (s *Supervisor) watchExit(ctx dutyContext.Context, cli *goplugin.Client) {
 		ctx.Logger.Warnf("plugin %s exited unexpectedly; restarting", s.Name)
 		s.mu.Lock()
 		s.client = nil
-		s.pluginCli = nil
+		s.pluginCLI = nil
 		startHost := s.startHost
 		s.mu.Unlock()
 		if err := s.Start(ctx, startHost); err != nil {
@@ -283,7 +289,7 @@ func (s *Supervisor) restart(ctx dutyContext.Context) error {
 	oldCli := s.client
 	startHost := s.startHost
 	s.client = nil
-	s.pluginCli = nil
+	s.pluginCLI = nil
 	s.mu.Unlock()
 	if oldCli != nil {
 		oldCli.Kill()
@@ -337,7 +343,7 @@ func (s *Supervisor) UIPort() uint32 {
 // Invoke calls the plugin's Invoke RPC.
 func (s *Supervisor) Invoke(ctx gocontext.Context, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
 	s.mu.Lock()
-	pluginCli := s.pluginCli
+	pluginCli := s.pluginCLI
 	s.mu.Unlock()
 	if pluginCli == nil {
 		return nil, fmt.Errorf("plugin %s not running", s.Name)
@@ -348,7 +354,7 @@ func (s *Supervisor) Invoke(ctx gocontext.Context, req *pluginpb.InvokeRequest) 
 // ListOperations calls the plugin's ListOperations RPC.
 func (s *Supervisor) ListOperations(ctx gocontext.Context) (*pluginpb.OperationList, error) {
 	s.mu.Lock()
-	pluginCli := s.pluginCli
+	pluginCli := s.pluginCLI
 	s.mu.Unlock()
 	if pluginCli == nil {
 		return nil, fmt.Errorf("plugin %s not running", s.Name)

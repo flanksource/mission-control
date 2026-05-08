@@ -1,4 +1,4 @@
-package plugin
+package adapter
 
 import (
 	"context"
@@ -10,12 +10,6 @@ import (
 )
 
 const maxGRPCMessageSize = 64 * 1024 * 1024 // 64MB
-
-// PluginMap is the map of plugin types served by plugin binaries.
-// There is exactly one plugin type — the bidirectional mission-control plugin.
-var PluginMap = map[string]goplugin.Plugin{
-	PluginName: &GRPCPlugin{},
-}
 
 // PluginServer is the interface that plugin binaries must implement.
 // It mirrors the PluginService gRPC service so plugin authors can implement
