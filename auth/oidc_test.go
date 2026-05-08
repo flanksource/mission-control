@@ -536,7 +536,12 @@ var _ = ginkgo.Describe("OIDC", func() {
 			parsed, err := url.Parse(redirectURL)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(parsed.Scheme + "://" + parsed.Host + parsed.Path).To(Equal("https://app.example.com/login"))
-			Expect(parsed.Query().Get("return_to")).To(Equal("https://mc.example.com/oidc/clerk/callback?auth_request_id=req-123"))
+
+			returnTo, err := url.Parse(parsed.Query().Get("return_to"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(returnTo.Path).To(Equal("/oidc/clerk/callback"))
+			Expect(returnTo.Query().Get("auth_request_id")).To(Equal("req-123"))
+			Expect(returnTo.Query().Get("backend_callback")).To(Equal("https://mc.example.com/oidc/clerk/callback"))
 		})
 	})
 })
