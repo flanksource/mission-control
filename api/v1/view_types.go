@@ -191,6 +191,10 @@ func (v *View) SetObservedGeneration(generation int64) {
 	v.Status.ObservedGeneration = generation
 }
 
+func (v *View) GetObservedGeneration() int64 {
+	return v.Status.ObservedGeneration
+}
+
 func (v *View) GetStatusConditions() *[]metav1.Condition {
 	return &v.Status.Conditions
 }

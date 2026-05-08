@@ -36,6 +36,10 @@ func (t *Team) SetObservedGeneration(generation int64) {
 	t.Status.ObservedGeneration = generation
 }
 
+func (t *Team) GetObservedGeneration() int64 {
+	return t.Status.ObservedGeneration
+}
+
 func (t *Team) GetStatusConditions() *[]metav1.Condition {
 	return &t.Status.Conditions
 }
