@@ -342,19 +342,39 @@ func (c *ClerkCredentialChecker) LoginRedirectURL(authRequestID string) (string,
 		return "", fmt.Errorf("public URL is not configured")
 	}
 
-	// Clerk login happens on the shared frontend, but this OIDC flow was started by the tenant backend.
-	// After the user signs in, we must send the browser back to the backend callback,
-	// not a relative /oidc/... path on app.flanksource.com.
-	q := url.Values{}
-	q.Set("return_to", publicURL+"/oidc/clerk/callback?auth_request_id="+authRequestID)
+	callbackURL, err := url.Parse(publicURL + "/oidc/clerk/callback")
+	if err != nil {
+		return "", fmt.Errorf("invalid public URL: %w", err)
+	}
 
-	return frontendURL + "/login?" + q.Encode(), nil
+	returnTo := url.URL{Path: "/oidc/clerk/callback"}
+	callbackQuery := returnTo.Query()
+	callbackQuery.Set("auth_request_id", authRequestID)
+	callbackQuery.Set("backend_callback", callbackURL.String())
+	returnTo.RawQuery = callbackQuery.Encode()
+
+	loginURL, err := url.Parse(frontendURL + "/login")
+	if err != nil {
+		return "", fmt.Errorf("invalid frontend URL: %w", err)
+	}
+
+	q := loginURL.Query()
+	// Clerk login happens on the shared frontend, but this OIDC flow was started by the tenant backend.
+	// The auth_request_id is stored in the backend's OIDC storage, so after the user signs in the
+	// frontend callback must relay the Clerk session token back to the backend callback.
+	q.Set("return_to", returnTo.String())
+	loginURL.RawQuery = q.Encode()
+
+	return loginURL.String(), nil
 }
 
 func (c *ClerkCredentialChecker) CallbackSubject(ec echo.Context) (string, error) {
 	ctx := ec.Request().Context().(context.Context)
 
 	sessionToken := c.handler.extractSessionToken(ec)
+	if sessionToken == "" {
+		sessionToken = ec.FormValue("clerk_session_token")
+	}
 	if sessionToken == "" {
 		return "", fmt.Errorf("no Clerk session token found")
 	}

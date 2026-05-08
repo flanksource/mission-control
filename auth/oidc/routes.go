@@ -33,6 +33,7 @@ func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL, signingKeyPath st
 	e.POST("/oidc/login", loginHandler.HandleSubmit)
 	e.GET("/oidc/kratos/callback", loginHandler.HandleExternalCallback)
 	e.GET("/oidc/clerk/callback", loginHandler.HandleExternalCallback)
+	e.POST("/oidc/clerk/callback", loginHandler.HandleExternalCallback)
 
 	// MCP Clients need OAuth well-known discovery endpoints (not just OIDC discovery).
 	mountOAuthRoutes(e, oidcIssuer)
