@@ -346,6 +346,9 @@ func (c *ClerkCredentialChecker) LoginRedirectURL(authRequestID string) (string,
 	if err != nil {
 		return "", fmt.Errorf("invalid public URL: %w", err)
 	}
+	backendCallbackQuery := callbackURL.Query()
+	backendCallbackQuery.Set("auth_request_id", authRequestID)
+	callbackURL.RawQuery = backendCallbackQuery.Encode()
 
 	returnTo := url.URL{Path: "/oidc/clerk/callback"}
 	callbackQuery := returnTo.Query()
