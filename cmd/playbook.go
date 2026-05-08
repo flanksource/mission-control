@@ -323,7 +323,7 @@ func playbookAPIClient(cmd *cobra.Command) (*MCContext, *sdk.Client, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return mcCtx, sdk.New(mcCtx.Server, mcCtx.Token), nil
+	return mcCtx, newAPIClient(mcCtx), nil
 }
 
 func listRemotePlaybooks(cmd *cobra.Command, opts sdk.PlaybookListOptions) ([]api.PlaybookListItem, error) {
@@ -335,7 +335,7 @@ func listRemotePlaybooks(cmd *cobra.Command, opts sdk.PlaybookListOptions) ([]ap
 	if upgraded, upgradeErr := retryAfterAPIBaseUpgrade(mcCtx, err); upgradeErr != nil {
 		return nil, upgradeErr
 	} else if upgraded {
-		items, err = sdk.New(mcCtx.Server, mcCtx.Token).ListPlaybooks(opts)
+		items, err = newAPIClient(mcCtx).ListPlaybooks(opts)
 	}
 	return items, err
 }
@@ -354,7 +354,7 @@ func runRemotePlaybook(cmd *cobra.Command, args []string) error {
 	if upgraded, upgradeErr := retryAfterAPIBaseUpgrade(mcCtx, err); upgradeErr != nil {
 		return upgradeErr
 	} else if upgraded {
-		client = sdk.New(mcCtx.Server, mcCtx.Token)
+		client = newAPIClient(mcCtx)
 		playbooks, err = client.ListPlaybooks(sdk.PlaybookListOptions{})
 	}
 	if err != nil {
@@ -375,7 +375,7 @@ func runRemotePlaybook(cmd *cobra.Command, args []string) error {
 	if upgraded, upgradeErr := retryAfterAPIBaseUpgrade(mcCtx, err); upgradeErr != nil {
 		return upgradeErr
 	} else if upgraded {
-		client = sdk.New(mcCtx.Server, mcCtx.Token)
+		client = newAPIClient(mcCtx)
 		response, err = client.RunPlaybook(params)
 	}
 	if err != nil {

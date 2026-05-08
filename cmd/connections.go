@@ -17,7 +17,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/connection"
-	"github.com/flanksource/incident-commander/sdk"
 )
 
 var Connection = &cobra.Command{
@@ -379,7 +378,7 @@ func runConnectionAdd(flags *connectionFlags) error {
 }
 
 func runConnectionAddViaAPI(mcCtx *MCContext, flags *connectionFlags, conn *models.Connection) error {
-	client := sdk.New(mcCtx.Server, mcCtx.Token)
+	client := newAPIClient(mcCtx)
 
 	existing, _ := client.GetConnection(flags.Name, flags.Namespace)
 	if existing != nil {

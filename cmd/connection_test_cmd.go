@@ -118,7 +118,7 @@ func runConnectionTestViaAPI(mcCtx *MCContext, name, namespace string) (any, err
 }
 
 func callConnectionTestAPI(mcCtx *MCContext, name, namespace string) (any, error) {
-	client := sdk.New(mcCtx.Server, mcCtx.Token)
+	client := newAPIClient(mcCtx)
 
 	conn, err := client.GetConnection(name, namespace)
 	if err != nil {
