@@ -66,11 +66,19 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 		}
 	}
 
+	p.Status.InstalledPath = binPath
+
 	Default.Upsert(string(p.UID), p.Name, p.Spec)
 
 	if SupervisorStarter != nil {
-		return SupervisorStarter(ctx, p.Name)
+		if err := SupervisorStarter(ctx, p.Name); err != nil {
+			return err
+		}
 	}
+	if entry := Default.Get(p.Name); entry != nil && entry.Manifest != nil {
+		p.Status.PluginVersion = entry.Manifest.Version
+	}
+
 	return nil
 }
 

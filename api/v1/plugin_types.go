@@ -63,14 +63,14 @@ type PluginSpec struct {
 
 // PluginStatus reflects the supervised state of the plugin process.
 type PluginStatus struct {
-	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
-	Conditions         []metav1.Condition `json:"conditions,omitempty"`
+	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
 
 	// InstalledPath is where deps placed the binary on the host filesystem.
-	InstalledPath string `json:"installedPath,omitempty"`
+	InstalledPath string `json:"installedPath,omitempty" yaml:"installedPath,omitempty"`
 
 	// PluginVersion is the version reported by the plugin in its manifest.
-	PluginVersion string `json:"pluginVersion,omitempty"`
+	PluginVersion string `json:"pluginVersion,omitempty" yaml:"pluginVersion,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -87,11 +87,16 @@ type Plugin struct {
 	Status PluginStatus `json:"status" yaml:"status"`
 }
 
+var _ kopper.StatusPatchGenerator = (*Plugin)(nil)
 var _ kopper.StatusConditioner = (*Plugin)(nil)
 var _ kopper.ObservedGenerationSetter = (*Plugin)(nil)
 
 func (p *Plugin) SetObservedGeneration(generation int64) {
 	p.Status.ObservedGeneration = generation
+}
+
+func (p *Plugin) GetObservedGeneration() int64 {
+	return p.Status.ObservedGeneration
 }
 
 func (p *Plugin) GetStatusConditions() *[]metav1.Condition {
