@@ -50,10 +50,17 @@ func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL, signingKeyPath st
 	e.Any("/endsession", h)
 	e.Any("/.well-known/*", h)
 
-	// Serve embedded static assets (logo, tailwind)
+	RegisterStaticAssets(e)
+
+	return nil
+}
+
+// RegisterStaticAssets mounts /oidc/static/* so that shared login assets
+// (logo.svg, tailwind.min.js) are reachable regardless of whether the full
+// OIDC provider is enabled. Basic auth's login page depends on these too,
+// so it calls this from auth.UseBasic.
+func RegisterStaticAssets(e *echo.Echo) {
 	staticFS, _ := fs.Sub(static.FS, ".")
 	staticHandler := http.StripPrefix("/oidc/static/", http.FileServer(http.FS(staticFS)))
 	e.GET("/oidc/static/*", echo.WrapHandler(staticHandler))
-
-	return nil
 }
