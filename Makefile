@@ -72,7 +72,7 @@ $(LOCALBIN)/pnpm: $(LOCALBIN)/node
 pnpm: $(LOCALBIN)/pnpm
 
 .PHONY: static
-static: $(TAILWIND_JS) manifests generate fmt ginkgo ui plugins-ui
+static: $(TAILWIND_JS) manifests generate fmt ginkgo ui
 
 .PHONY: ui
 ui: $(LOCALBIN)/pnpm ## Build the embedded catalog explorer UI (ui/frontend -> ui/frontend/dist/ui.js)
