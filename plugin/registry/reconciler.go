@@ -66,7 +66,7 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 		}
 	}
 
-	Default.Upsert(p.Name, p.Spec)
+	Default.Upsert(string(p.UID), p.Name, p.Spec)
 
 	if SupervisorStarter != nil {
 		return SupervisorStarter(ctx, p.Name)
@@ -82,16 +82,16 @@ var SupervisorStopper func(name string) error
 // process and drops the registry entry. The binary is left on disk —
 // re-creating the CRD won't re-download a binary that already exists.
 func DeletePlugin(ctx context.Context, id string) error {
-	for _, e := range Default.List() {
-		if e.Manifest != nil && e.Manifest.Name == id {
-			id = e.Manifest.Name
-			break
-		}
+	name := Default.NameForID(id)
+	if name == "" {
+		name = id
 	}
 	if SupervisorStopper != nil {
-		_ = SupervisorStopper(id)
+		if err := SupervisorStopper(name); err != nil {
+			return err
+		}
 	}
-	Default.Remove(id)
+	Default.Remove(name)
 	return nil
 }
 

@@ -20,6 +20,8 @@ import (
 // RegisterPlugin; it is nil while the plugin is starting up or has crashed
 // past the supervisor's restart budget.
 type Entry struct {
+	ID       string
+	Name     string
 	Spec     v1.PluginSpec
 	Manifest *pluginpb.PluginManifest
 	// Supervisor is opaque here; the supervisor package sets it.
@@ -30,6 +32,7 @@ type Entry struct {
 type Registry struct {
 	mu      sync.RWMutex
 	plugins map[string]*Entry
+	ids     map[string]string
 }
 
 // Default is the singleton used by the kopper reconciler and by every echo
@@ -38,22 +41,33 @@ var Default = New()
 
 // New returns a fresh, empty registry. Tests use this; production uses Default.
 func New() *Registry {
-	return &Registry{plugins: map[string]*Entry{}}
+	return &Registry{
+		plugins: map[string]*Entry{},
+		ids:     map[string]string{},
+	}
 }
 
 // Upsert replaces the spec for a plugin (called by the kopper reconciler when
 // a Plugin CRD is created or updated). Existing manifest/supervisor are
 // preserved so an in-flight plugin keeps running across CRD updates that
 // don't change the binary.
-func (r *Registry) Upsert(name string, spec v1.PluginSpec) *Entry {
+func (r *Registry) Upsert(id, name string, spec v1.PluginSpec) *Entry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	e, ok := r.plugins[name]
 	if !ok {
-		e = &Entry{}
+		e = &Entry{Name: name}
 		r.plugins[name] = e
 	}
+	if e.ID != "" && e.ID != id {
+		delete(r.ids, e.ID)
+	}
+	e.ID = id
+	e.Name = name
 	e.Spec = spec
+	if id != "" {
+		r.ids[id] = name
+	}
 	return e
 }
 
@@ -93,11 +107,21 @@ func (r *Registry) Get(name string) *Entry {
 	return nil
 }
 
+// NameForID resolves a Plugin CRD UID/id to the runtime plugin name.
+func (r *Registry) NameForID(id string) string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.ids[id]
+}
+
 // Remove drops a plugin from the registry. Callers are responsible for
 // stopping the supervisor first.
 func (r *Registry) Remove(name string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if e, ok := r.plugins[name]; ok && e.ID != "" {
+		delete(r.ids, e.ID)
+	}
 	delete(r.plugins, name)
 }
 
