@@ -20,6 +20,7 @@ import (
 
 	dutyContext "github.com/flanksource/duty/context"
 	icplugin "github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/manifestcache"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
 )
@@ -140,9 +141,35 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 	go s.watchExit(ctx, cli)
 	go s.watchBinary(ctx)
 
+	s.writeManifestCache(ctx, manifest)
+
 	ctx.Logger.Infof("plugin %s loaded: version=%q tabs=%d ops=%d ui_port=%d",
 		s.Name, manifest.Version, len(manifest.Tabs), len(manifest.Operations), manifest.UiPort)
 	return nil
+}
+
+// writeManifestCache persists the plugin manifest as a sidecar JSON so the
+// CLI can render `mission-control <plugin> --help` without spawning the
+// plugin. Best-effort: a write failure must not break startup.
+func (s *Supervisor) writeManifestCache(ctx dutyContext.Context, manifest *pluginpb.PluginManifest) {
+	checksum, err := manifestcache.SHA256File(s.BinaryPath)
+	if err != nil {
+		ctx.Logger.V(2).Infof("plugin %s: skip manifest cache (hash %s: %v)", s.Name, s.BinaryPath, err)
+		return
+	}
+	service := manifestcache.ManifestToService(manifest)
+	if service.Name == "" {
+		service.Name = s.Name
+	}
+	entry := manifestcache.Entry{
+		Source:         manifestcache.SourceLocalBinary,
+		BinaryPath:     s.BinaryPath,
+		BinaryChecksum: checksum,
+		Service:        service,
+	}
+	if err := manifestcache.Write(entry); err != nil {
+		ctx.Logger.V(2).Infof("plugin %s: write manifest cache: %v", s.Name, err)
+	}
 }
 
 // watchExit polls the goplugin client. If the plugin exits unexpectedly
