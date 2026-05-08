@@ -1,0 +1,60 @@
+version: "3"
+
+vars:
+  BIN_DIR: "{{.ROOT_DIR}}/.bin"
+  CONTROLLER_GEN_VERSION: v0.19.0
+  CONTROLLER_GEN: "{{.BIN_DIR}}/controller-gen"
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  proto:
+    desc: Regenerate plugin gRPC stubs from plugin/proto/plugin.proto
+    cmds:
+      - command -v protoc >/dev/null || (echo "protoc not installed"; exit 1)
+      - command -v protoc-gen-go >/dev/null || go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+      - command -v protoc-gen-go-grpc >/dev/null || go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+      - >-
+        protoc
+        --proto_path=plugin/proto
+        --go_out=plugin/proto --go_opt=paths=source_relative
+        --go-grpc_out=plugin/proto --go-grpc_opt=paths=source_relative
+        plugin/proto/plugin.proto
+    sources:
+      - plugin/proto/plugin.proto
+    generates:
+      - plugin/proto/plugin.pb.go
+      - plugin/proto/plugin_grpc.pb.go
+
+  controller-gen:
+    desc: Install controller-gen into .bin if missing or wrong version
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - GOBIN={{.BIN_DIR}} go install sigs.k8s.io/controller-tools/cmd/controller-gen@{{.CONTROLLER_GEN_VERSION}}
+    generates:
+      - "{{.CONTROLLER_GEN}}"
+    status:
+      - test -x {{.CONTROLLER_GEN}}
+      - '{{.CONTROLLER_GEN}} --version 2>/dev/null | grep -q "{{.CONTROLLER_GEN_VERSION}}"'
+
+  generate:
+    desc: Run controller-gen object codegen for CRD types
+    deps: [controller-gen]
+    cmds:
+      - '{{.CONTROLLER_GEN}} object paths="./api/..." paths="./logs/..."'
+    sources:
+      - api/**/*.go
+      - logs/**/*.go
+
+  manifests:
+    desc: Generate CRD manifests
+    deps: [controller-gen, generate]
+    cmds:
+      - '{{.CONTROLLER_GEN}} crd paths="./api/..." output:crd:artifacts:config=config/crds'
+    sources:
+      - api/**/*.go
+    generates:
+      - config/crds/*.yaml
