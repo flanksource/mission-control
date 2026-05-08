@@ -143,16 +143,59 @@ func findPlaybooksForResourceSelectable(ctx context.Context, selectable types.Re
 		if err != nil {
 			return nil, nil, fmt.Errorf("error marshaling params[%v] to json: %w", spec.Parameters, err)
 		}
-		playbookListItems = append(playbookListItems, api.PlaybookListItem{
-			ID:         pb.ID,
-			Name:       pb.Name,
-			Parameters: params,
-		})
+		playbookListItems = append(playbookListItems, playbookListItem(pb, params))
 
 		matchedPlaybooks = append(matchedPlaybooks, &pb)
 	}
 
 	return playbookListItems, matchedPlaybooks, nil
+}
+
+// ListPlaybooks returns every non-deleted playbook in the catalogue.
+func ListPlaybooks(ctx context.Context) ([]api.PlaybookListItem, error) {
+	var playbooks []models.Playbook
+	if err := ctx.DB().
+		Model(&models.Playbook{}).
+		Where("deleted_at IS NULL").
+		Order("category ASC, name ASC").
+		Find(&playbooks).Error; err != nil {
+		return nil, ctx.Oops("db").Wrap(err)
+	}
+
+	items := make([]api.PlaybookListItem, 0, len(playbooks))
+	for _, playbook := range playbooks {
+		items = append(items, playbookListItem(playbook, playbookParameters(playbook)))
+	}
+	return items, nil
+}
+
+func playbookListItem(playbook models.Playbook, parameters types.JSON) api.PlaybookListItem {
+	createdAt := playbook.CreatedAt
+	return api.PlaybookListItem{
+		ID:          playbook.ID,
+		Namespace:   playbook.Namespace,
+		Name:        playbook.Name,
+		Title:       playbook.Title,
+		Icon:        playbook.Icon,
+		Description: playbook.Description,
+		Source:      playbook.Source,
+		Category:    playbook.Category,
+		CreatedAt:   &createdAt,
+		Parameters:  parameters,
+		Spec:        playbook.Spec,
+	}
+}
+
+func playbookParameters(playbook models.Playbook) types.JSON {
+	var spec v1.PlaybookSpec
+	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
+		return nil
+	}
+	params, err := json.Marshal(spec.Parameters)
+	if err != nil {
+		return nil
+	}
+	return params
 }
 
 // FindPlaybooksForCheck returns all the playbooks that match the given check type and tags.
