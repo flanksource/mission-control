@@ -19,13 +19,13 @@ var (
 	active = map[string]*Supervisor{}
 )
 
-// WireSupervisor installs the supervisor as the registry's start/stop hook.
+// Wire installs the supervisor as the registry's start/stop hook.
 // Must be called once at startup before the kopper reconciler is registered.
 //
 // The reconciler in plugin/registry stores plugin specs but does not import
 // the supervisor package (that would create an import cycle); this function
 // injects the start/stop callbacks at boot.
-func WireSupervisor(ctx dutyContext.Context) {
+func Wire(ctx dutyContext.Context) {
 	registry.SupervisorStarter = func(c dutyContext.Context, name string) error {
 		return startPlugin(c, name)
 	}

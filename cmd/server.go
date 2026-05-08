@@ -157,7 +157,7 @@ func launchKopper(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Team: %v", err))
 	}
 
-	pluginsupervisor.WireSupervisor(ctx)
+	pluginsupervisor.Wire(ctx)
 	if _, err := kopper.SetupReconciler(ctx, mgr,
 		pluginregistry.PersistPluginFromCRD,
 		pluginregistry.DeletePlugin,

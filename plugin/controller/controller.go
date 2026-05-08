@@ -39,19 +39,11 @@ func init() {
 	echoSrv.RegisterRoutes(RegisterRoutes)
 }
 
-// registerUIProxy is set by proxy.go's init so the proxy registration code
-// can stay in its own file without an import cycle.
-var registerUIProxy func(e *echo.Echo)
-
 // RegisterRoutes wires the plugin HTTP API onto the given echo instance.
 func RegisterRoutes(e *echo.Echo) {
 	g := e.Group("/api/plugins")
 	g.GET("", ListPlugins, rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
 	g.POST("/:name/operations/:op", InvokeOperation, rbac.Authorization(policy.ObjectCatalog, policy.ActionUpdate))
-
-	if registerUIProxy != nil {
-		registerUIProxy(e)
-	}
 }
 
 // PluginListing is what GET /api/plugins returns: a flat list of plugins
