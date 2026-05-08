@@ -17,8 +17,6 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -149,15 +147,3 @@ func callerFromCtx(ctx dutyContext.Context) *pluginpb.CallerContext {
 	}
 	return cc
 }
-
-// jsonError is used by the few non-WriteError responses below.
-//
-//nolint:unused
-func jsonError(c echo.Context, status int, msg string) error {
-	body, _ := json.Marshal(map[string]string{"error": msg})
-	return c.Blob(status, echo.MIMEApplicationJSON, body)
-}
-
-// _ retains fmt for the rare debug formatting; the package itself stays
-// minimal so review can focus on the routing and supervisor wiring.
-var _ = fmt.Sprintf
