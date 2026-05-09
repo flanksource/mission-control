@@ -102,7 +102,7 @@ func (r *Registry) Get(name string) *Entry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	if e, ok := r.plugins[name]; ok {
-		return e
+		return snapshotEntry(e)
 	}
 	return nil
 }
@@ -131,7 +131,15 @@ func (r *Registry) List() []*Entry {
 	defer r.mu.RUnlock()
 	out := make([]*Entry, 0, len(r.plugins))
 	for _, e := range r.plugins {
-		out = append(out, e)
+		out = append(out, snapshotEntry(e))
 	}
 	return out
+}
+
+func snapshotEntry(e *Entry) *Entry {
+	if e == nil {
+		return nil
+	}
+	copy := *e
+	return &copy
 }
