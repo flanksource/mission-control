@@ -80,7 +80,7 @@ func (s *Service) GetConfigItem(ctx context.Context, req *pluginpb.GetConfigItem
 	if err := s.ctx.DB().WithContext(ctx).Where("id = ?", req.Id).First(&item).Error; err != nil {
 		return nil, fmt.Errorf("config item %s: %w", req.Id, err)
 	}
-	return pluginpb.FromConfigItem(&item)
+	return pluginpb.FromConfigItem(item)
 }
 
 func (s *Service) ListConfigs(ctx context.Context, req *pluginpb.ListConfigsRequest) (*pluginpb.ConfigItemList, error) {
@@ -93,7 +93,7 @@ func (s *Service) ListConfigs(ctx context.Context, req *pluginpb.ListConfigsRequ
 
 	out := &pluginpb.ConfigItemList{}
 	for i := range items {
-		ci, err := pluginpb.FromConfigItem(&items[i])
+		ci, err := pluginpb.FromConfigItem(items[i])
 		if err != nil {
 			return nil, err
 		}

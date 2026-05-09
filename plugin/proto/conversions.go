@@ -34,7 +34,7 @@ func (x *ResourceSelector) ToDuty() types.ResourceSelector {
 	}
 }
 
-func FromConfigItem(item *models.ConfigItem) (*ConfigItem, error) {
+func FromConfigItem(item models.ConfigItem) (*ConfigItem, error) {
 	out := &ConfigItem{
 		Id: item.ID.String(),
 	}

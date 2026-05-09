@@ -66,8 +66,8 @@ type PluginManifest struct {
 	Description     string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
 	ProtocolVersion uint32                 `protobuf:"varint,4,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"`
 	Capabilities    []string               `protobuf:"bytes,5,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
-	Operations      []*OperationDef        `protobuf:"bytes,7,rep,name=operations,proto3" json:"operations,omitempty"`
-	UiPort          uint32                 `protobuf:"varint,8,opt,name=ui_port,json=uiPort,proto3" json:"ui_port,omitempty"`
+	Operations      []*OperationDef        `protobuf:"bytes,6,rep,name=operations,proto3" json:"operations,omitempty"`
+	UiPort          uint32                 `protobuf:"varint,7,opt,name=ui_port,json=uiPort,proto3" json:"ui_port,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -1517,9 +1517,9 @@ const file_plugin_proto_rawDesc = "" +
 	"\x10protocol_version\x18\x04 \x01(\rR\x0fprotocolVersion\x12\"\n" +
 	"\fcapabilities\x18\x05 \x03(\tR\fcapabilities\x12F\n" +
 	"\n" +
-	"operations\x18\a \x03(\v2&.missioncontrol.plugin.v1.OperationDefR\n" +
+	"operations\x18\x06 \x03(\v2&.missioncontrol.plugin.v1.OperationDefR\n" +
 	"operations\x12\x17\n" +
-	"\aui_port\x18\b \x01(\rR\x06uiPort\"\x8e\x02\n" +
+	"\aui_port\x18\a \x01(\rR\x06uiPort\"\x8e\x02\n" +
 	"\fOperationDef\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12<\n" +
