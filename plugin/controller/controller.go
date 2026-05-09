@@ -23,6 +23,7 @@ import (
 
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
 
@@ -57,13 +58,14 @@ type PluginListing struct {
 // (optional) config_id query parameter. With no config_id, returns every
 // plugin.
 func ListPlugins(c echo.Context) error {
+	ctx := c.Request().Context().(dutyContext.Context)
 	configID := c.QueryParam("config_id")
 	out := []PluginListing{}
 	for _, e := range registry.Default.List() {
 		if e.Manifest == nil {
 			continue
 		}
-		if configID != "" && !selectorMatches(e, configID) {
+		if configID != "" && !selectorMatches(ctx, e, configID) {
 			continue
 		}
 		out = append(out, PluginListing{
@@ -91,7 +93,7 @@ func InvokeOperation(c echo.Context) error {
 	configID := c.QueryParam("config_id")
 	if configID != "" {
 		entry := registry.Default.Get(name)
-		if entry != nil && !selectorMatches(entry, configID) {
+		if entry != nil && !selectorMatches(ctx, entry, configID) {
 			return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", name, configID))
 		}
 	}
@@ -128,15 +130,18 @@ func InvokeOperation(c echo.Context) error {
 
 // selectorMatches returns true when the given config id satisfies the plugin
 // CRD's ResourceSelector. Centralised so all routes apply the same check.
-func selectorMatches(entry *registry.Entry, configID string) bool {
-	// MVP: an empty selector matches everything. Type/label/tag matching is
-	// done by the host service when the plugin asks for a config item; the
-	// frontend gets the same answer via /api/plugins listing because both
-	// paths use this helper. A richer selector evaluation belongs in
-	// duty/query (MatchResourceSelector) — wire it here once the API is
-	// stabilized.
-	_ = configID
-	return true
+func selectorMatches(ctx dutyContext.Context, entry *registry.Entry, configID string) bool {
+	selector := entry.Spec.Selector
+	if selector.IsEmpty() {
+		return true
+	}
+
+	item, err := query.ConfigItemFromCache(ctx, configID)
+	if err != nil {
+		return false
+	}
+
+	return selector.Matches(item)
 }
 
 func callerFromCtx(ctx dutyContext.Context) *pluginpb.CallerContext {
