@@ -120,14 +120,24 @@ func DeleteStalePlugin(ctx context.Context, newer *v1.Plugin) error {
 	if newer == nil {
 		return nil
 	}
+	newerID := string(newer.UID)
 	for _, e := range Default.List() {
-		if e.Manifest != nil && e.Manifest.Name != newer.Name {
+		name := e.Name
+		if e.Manifest != nil && e.Manifest.Name != "" {
+			name = e.Manifest.Name
+		}
+		if name != newer.Name {
 			continue
 		}
-		// Same name and same UID is not stale.
-		if e.Spec.Source == newer.Spec.Source && e.Spec.Version == newer.Spec.Version {
+		if e.ID == newerID && e.Spec.Source == newer.Spec.Source && e.Spec.Version == newer.Spec.Version {
 			continue
 		}
+		if SupervisorStopper != nil {
+			if err := SupervisorStopper(e.Name); err != nil {
+				return err
+			}
+		}
+		Default.Remove(e.Name)
 	}
 	return nil
 }
