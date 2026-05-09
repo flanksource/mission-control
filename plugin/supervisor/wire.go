@@ -59,14 +59,24 @@ func startPlugin(ctx dutyContext.Context, name string) error {
 		return id, nil
 	}
 
+	mu.Lock()
+	if active[name] != nil {
+		mu.Unlock()
+		return nil
+	}
 	sup := New(name, binPath)
+	active[name] = sup
+	mu.Unlock()
+
 	if err := sup.Start(ctx, startHost); err != nil {
+		mu.Lock()
+		if active[name] == sup {
+			delete(active, name)
+		}
+		mu.Unlock()
 		return fmt.Errorf("plugin %s: start supervisor: %w", name, err)
 	}
 
-	mu.Lock()
-	active[name] = sup
-	mu.Unlock()
 	return nil
 }
 
