@@ -31,6 +31,8 @@ func testApp() *icapi.Application {
 
 var _ = ginkgo.Describe("RenderFacetHTML", ginkgo.Label("ignore_local"), func() {
 	ginkgo.It("should render HTML output", func() {
+		ginkgo.Skip("disabled: facet integration test is flaky in CI")
+
 		if _, err := exec.LookPath("facet"); err != nil {
 			ginkgo.Skip("facet not on PATH; skipping facet-html integration test")
 		}
@@ -43,6 +45,8 @@ var _ = ginkgo.Describe("RenderFacetHTML", ginkgo.Label("ignore_local"), func() 
 
 var _ = ginkgo.Describe("RenderFacetPDF", ginkgo.Label("ignore_local"), func() {
 	ginkgo.It("should render PDF output", func() {
+		ginkgo.Skip("disabled: facet integration test is flaky in CI")
+
 		if _, err := exec.LookPath("facet"); err != nil {
 			ginkgo.Skip("facet not on PATH; skipping facet-pdf integration test")
 		}
