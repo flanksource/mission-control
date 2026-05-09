@@ -148,7 +148,6 @@ func callerFromCtx(ctx dutyContext.Context) *pluginpb.CallerContext {
 	cc := &pluginpb.CallerContext{}
 	if u := ctx.User(); u != nil {
 		cc.UserId = u.ID.String()
-		cc.UserEmail = u.Email
 	}
 	return cc
 }

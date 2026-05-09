@@ -65,7 +65,6 @@ message ConfigureResponse { repeated string warnings = 1; }
 
 message CallerContext {
   string user_id              = 1;
-  string user_email           = 2;
   repeated string permissions = 3;
   string trace_id             = 4;
   string request_id           = 5;

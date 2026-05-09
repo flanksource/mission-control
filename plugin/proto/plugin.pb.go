@@ -402,7 +402,6 @@ func (x *ConfigureResponse) GetWarnings() []string {
 type CallerContext struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	UserEmail     string                 `protobuf:"bytes,2,opt,name=user_email,json=userEmail,proto3" json:"user_email,omitempty"`
 	Permissions   []string               `protobuf:"bytes,3,rep,name=permissions,proto3" json:"permissions,omitempty"`
 	TraceId       string                 `protobuf:"bytes,4,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
 	RequestId     string                 `protobuf:"bytes,5,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
@@ -443,13 +442,6 @@ func (*CallerContext) Descriptor() ([]byte, []int) {
 func (x *CallerContext) GetUserId() string {
 	if x != nil {
 		return x.UserId
-	}
-	return ""
-}
-
-func (x *CallerContext) GetUserEmail() string {
-	if x != nil {
-		return x.UserEmail
 	}
 	return ""
 }
@@ -1540,11 +1532,9 @@ const file_plugin_proto_rawDesc = "" +
 	"\x10ConfigureRequest\x123\n" +
 	"\bsettings\x18\x01 \x01(\v2\x17.google.protobuf.StructR\bsettings\"/\n" +
 	"\x11ConfigureResponse\x12\x1a\n" +
-	"\bwarnings\x18\x01 \x03(\tR\bwarnings\"\xa3\x01\n" +
+	"\bwarnings\x18\x01 \x03(\tR\bwarnings\"\x84\x01\n" +
 	"\rCallerContext\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12\x1d\n" +
-	"\n" +
-	"user_email\x18\x02 \x01(\tR\tuserEmail\x12 \n" +
+	"\auser_id\x18\x01 \x01(\tR\x06userId\x12 \n" +
 	"\vpermissions\x18\x03 \x03(\tR\vpermissions\x12\x19\n" +
 	"\btrace_id\x18\x04 \x01(\tR\atraceId\x12\x1d\n" +
 	"\n" +
