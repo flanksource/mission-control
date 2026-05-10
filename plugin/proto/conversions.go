@@ -34,6 +34,27 @@ func (x *ResourceSelector) ToDuty() types.ResourceSelector {
 	}
 }
 
+// ResourceSelectorFromDuty converts duty's ResourceSelector into its protobuf representation.
+func ResourceSelectorFromDuty(selector types.ResourceSelector) *ResourceSelector {
+	return &ResourceSelector{
+		Agent:          selector.Agent,
+		Scope:          selector.Scope,
+		Cache:          selector.Cache,
+		Search:         selector.Search,
+		Limit:          int32(selector.Limit),
+		IncludeDeleted: selector.IncludeDeleted,
+		Id:             selector.ID,
+		Name:           selector.Name,
+		Namespace:      selector.Namespace,
+		TagSelector:    selector.TagSelector,
+		LabelSelector:  selector.LabelSelector,
+		FieldSelector:  selector.FieldSelector,
+		Health:         string(selector.Health),
+		Types:          []string(selector.Types),
+		Statuses:       []string(selector.Statuses),
+	}
+}
+
 func FromConfigItem(item models.ConfigItem) (*ConfigItem, error) {
 	out := &ConfigItem{
 		Id: item.ID.String(),
