@@ -30,11 +30,20 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 MODERNIZE ?= $(LOCALBIN)/modernize
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
+PROTOC ?= $(LOCALBIN)/protoc
+PROTOC_GEN_GO ?= $(LOCALBIN)/protoc-gen-go
+PROTOC_GEN_GO_GRPC ?= $(LOCALBIN)/protoc-gen-go-grpc
+PROTOC_INCLUDE ?= $(LOCALBIN)/include
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= any
 CONTROLLER_TOOLS_VERSION ?= v0.19.0
 GOLANGCI_LINT_VERSION ?= 2.11.4
+PROTOC_VERSION ?= 21.9
+PROTOC_GEN_GO_VERSION ?= v1.36.11
+PROTOC_GEN_GO_GRPC_VERSION ?= v1.6.0
+PROTOC_OS = $(if $(filter darwin,$(OS)),osx,$(OS))
+PROTOC_ARCH = $(if $(filter amd64,$(ARCH)),x86_64,$(if $(filter arm64,$(ARCH)),aarch_64,$(ARCH)))
 
 TAILWIND_VERSION ?= 3.4.17
 TAILWIND_JS = auth/oidc/static/tailwind.min.js
@@ -207,3 +216,33 @@ docs\:mcp: ## Generate MCP tools reference documentation
 .PHONY: lint
 lint: golangci-lint
 	$(GOLANGCI_LINT) run ./...
+
+.PHONY: protoc
+protoc: $(PROTOC) $(PROTOC_INCLUDE)/google/protobuf/struct.proto ## Install protoc into .bin
+
+$(PROTOC) $(PROTOC_INCLUDE)/google/protobuf/struct.proto: $(LOCALBIN)
+	@set -e; \
+	tmp=$$(mktemp -d); \
+	trap 'trash "$$tmp" >/dev/null 2>&1 || true' EXIT; \
+	curl -sSL -o "$$tmp/protoc.zip" "https://github.com/protocolbuffers/protobuf/releases/download/v$(PROTOC_VERSION)/protoc-$(PROTOC_VERSION)-$(PROTOC_OS)-$(PROTOC_ARCH).zip"; \
+	unzip -q "$$tmp/protoc.zip" -d "$$tmp/protoc"; \
+	if [ -f "$(PROTOC)" ]; then chmod u+w "$(PROTOC)"; fi; \
+	cp "$$tmp/protoc/bin/protoc" "$(PROTOC)"; \
+	mkdir -p "$(PROTOC_INCLUDE)"; \
+	cp -R "$$tmp/protoc/include/." "$(PROTOC_INCLUDE)/"; \
+	chmod +x "$(PROTOC)"
+
+$(PROTOC_GEN_GO): $(LOCALBIN)
+	GOBIN=$(LOCALBIN) go install google.golang.org/protobuf/cmd/protoc-gen-go@$(PROTOC_GEN_GO_VERSION)
+
+$(PROTOC_GEN_GO_GRPC): $(LOCALBIN)
+	GOBIN=$(LOCALBIN) go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@$(PROTOC_GEN_GO_GRPC_VERSION)
+
+.PHONY: proto
+proto: protoc $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC) ## Regenerate plugin gRPC stubs from plugin/proto/plugin.proto
+	$(PROTOC) \
+		--proto_path=plugin/proto \
+		--proto_path=$(PROTOC_INCLUDE) \
+		--go_out=plugin/proto --go_opt=paths=source_relative \
+		--go-grpc_out=plugin/proto --go-grpc_opt=paths=source_relative \
+		plugin/proto/plugin.proto
