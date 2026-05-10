@@ -520,14 +520,11 @@ var _ = ginkgo.Describe("OIDC", func() {
 	})
 
 	ginkgo.Describe("ClerkCredentialChecker", func() {
-		ginkgo.It("returns to the backend OIDC callback after frontend login", func() {
+		ginkgo.It("returns to the frontend OIDC callback after frontend login", func() {
 			savedFrontendURL := api.FrontendURL
-			savedPublicURL := api.PublicURL
 			api.FrontendURL = "https://app.example.com"
-			api.PublicURL = "https://mc.example.com"
 			defer func() {
 				api.FrontendURL = savedFrontendURL
-				api.PublicURL = savedPublicURL
 			}()
 
 			redirectURL, err := NewClerkCredentialChecker(nil).LoginRedirectURL("req-123")
@@ -541,7 +538,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(returnTo.Path).To(Equal("/oidc/clerk/callback"))
 			Expect(returnTo.Query().Get("auth_request_id")).To(Equal("req-123"))
-			Expect(returnTo.Query().Get("backend_callback")).To(Equal("https://mc.example.com/oidc/clerk/callback?auth_request_id=req-123"))
+			Expect(returnTo.Query().Has("backend_callback")).To(BeFalse())
 		})
 	})
 })

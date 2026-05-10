@@ -337,23 +337,9 @@ func (c *ClerkCredentialChecker) LoginRedirectURL(authRequestID string) (string,
 		return "", fmt.Errorf("frontend URL is not configured")
 	}
 
-	publicURL := strings.TrimRight(api.PublicURL, "/")
-	if publicURL == "" {
-		return "", fmt.Errorf("public URL is not configured")
-	}
-
-	callbackURL, err := url.Parse(publicURL + "/oidc/clerk/callback")
-	if err != nil {
-		return "", fmt.Errorf("invalid public URL: %w", err)
-	}
-	backendCallbackQuery := callbackURL.Query()
-	backendCallbackQuery.Set("auth_request_id", authRequestID)
-	callbackURL.RawQuery = backendCallbackQuery.Encode()
-
 	returnTo := url.URL{Path: "/oidc/clerk/callback"}
 	callbackQuery := returnTo.Query()
 	callbackQuery.Set("auth_request_id", authRequestID)
-	callbackQuery.Set("backend_callback", callbackURL.String())
 	returnTo.RawQuery = callbackQuery.Encode()
 
 	loginURL, err := url.Parse(frontendURL + "/login")
@@ -364,7 +350,7 @@ func (c *ClerkCredentialChecker) LoginRedirectURL(authRequestID string) (string,
 	q := loginURL.Query()
 	// Clerk login happens on the shared frontend, but this OIDC flow was started by the tenant backend.
 	// The auth_request_id is stored in the backend's OIDC storage, so after the user signs in the
-	// frontend callback must relay the Clerk session token back to the backend callback.
+	// frontend callback relays the Clerk session token to the active org backend from Clerk metadata.
 	q.Set("return_to", returnTo.String())
 	loginURL.RawQuery = q.Encode()
 
