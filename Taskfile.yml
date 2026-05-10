@@ -1,0 +1,466 @@
+version: "3"
+
+# Incremental build pipeline for incident-commander. Each stage tracks its
+# own sources + generates, so `task build` re-runs only the stages whose
+# inputs changed since the last successful run. Checksums live in .task/.
+#
+# Stages (topologically):
+#   tailwind-asset → controller-gen → generate → gen-schemas → manifests
+#                  → fmt → ginkgo → ui:install → ui:build → go:build
+#
+# The Makefile's `make build` still works for CI and parity with existing
+# scripts; this Taskfile is the fast local path.
+
+vars:
+  APP_NAME: incident-commander
+  REGISTRY: '{{.REGISTRY | default "docker.lab"}}'
+  IMAGE: "{{.REGISTRY}}/{{.APP_NAME}}"
+  VERSION:
+    sh: git describe --tags --always --dirty 2>/dev/null || echo "dev"
+
+  # Build locations
+  BIN_DIR: "{{.ROOT_DIR}}/.bin"
+  BINARY: "{{.BIN_DIR}}/{{.APP_NAME}}"
+  TAILWIND_VERSION: 3.4.17
+  TAILWIND_JS: auth/oidc/static/tailwind.min.js
+  CONTROLLER_GEN_VERSION: v0.19.0
+  PGRST_VERSION: v14.1
+  CONTROLLER_GEN: "{{.BIN_DIR}}/controller-gen"
+  VERSION_TAG:
+    sh: git describe --abbrev=0 --tags --exact-match 2>/dev/null || echo latest
+  BUILD_DATE:
+    sh: date "+%Y-%m-%d %H:%M:%S"
+
+tasks:
+  default:
+    desc: Show available tasks
+    cmds:
+      - task --list
+
+  build:
+    desc: Build the full incident-commander binary with embedded UI
+    deps:
+      - go:build
+
+  clean:
+    desc: Remove build artifacts and Task checksums
+    cmds:
+      - rm -rf .task .bin/{{.APP_NAME}} ui/frontend/dist ui/frontend/node_modules
+      - rm -f {{.TAILWIND_JS}}
+
+  # ────────────── Downloaded + vendored assets ──────────────
+
+  tailwind-asset:
+    desc: Download the vendored Tailwind script used by the OIDC static page
+    cmds:
+      - curl -sL "https://cdn.tailwindcss.com/{{.TAILWIND_VERSION}}" -o {{.TAILWIND_JS}}
+    generates:
+      - "{{.TAILWIND_JS}}"
+    status:
+      - test -s {{.TAILWIND_JS}}
+
+  # ────────────── Code generation ──────────────
+
+  controller-gen:
+    desc: Install controller-gen into .bin if missing or wrong version
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - GOBIN={{.BIN_DIR}} go install sigs.k8s.io/controller-tools/cmd/controller-gen@{{.CONTROLLER_GEN_VERSION}}
+    generates:
+      - "{{.CONTROLLER_GEN}}"
+    status:
+      - test -x {{.CONTROLLER_GEN}}
+      - '{{.CONTROLLER_GEN}} --version 2>/dev/null | grep -q "{{.CONTROLLER_GEN_VERSION}}"'
+
+  generate:
+    desc: Run controller-gen object codegen (DeepCopy etc.) for CRD types
+    deps: [controller-gen]
+    cmds:
+      - '{{.CONTROLLER_GEN}} object paths="./api/..." paths="./logs/..."'
+    sources:
+      - api/**/*.go
+      - logs/**/*.go
+
+  gen-schemas:
+    desc: Generate JSON schemas for all CRDs (hack/generate-schemas)
+    deps: [generate]
+    cmds:
+      - |
+        set -e
+        cp go.mod hack/generate-schemas/go.mod
+        cd hack/generate-schemas
+        go mod edit -module=github.com/flanksource/incident-commander/hack/generate-schemas
+        go mod edit -require=github.com/flanksource/incident-commander@v1.0.0
+        go mod edit -replace=github.com/flanksource/incident-commander=../../
+        if grep -v "^//" ../../go.mod | grep -q "replace.*github.com/flanksource/duty.*=>"; then
+          go mod edit -replace=github.com/flanksource/duty=../../../duty
+        fi
+        if grep -v "^//" ../../go.mod | grep -q "replace.*github.com/flanksource/clicky.*=>"; then
+          go mod edit -replace=github.com/flanksource/clicky=../../../clicky
+        fi
+        go mod tidy
+        go run ./main.go
+    sources:
+      - go.mod
+      - go.sum
+      - api/**/*.go
+      - hack/generate-schemas/main.go
+    generates:
+      - config/schemas/*.schema.json
+
+  manifests:
+    desc: Generate CRD manifests
+    deps: [controller-gen, generate]
+    cmds:
+      - '{{.CONTROLLER_GEN}} crd paths="./api/..." output:crd:artifacts:config=config/crds'
+    sources:
+      - api/**/*.go
+    generates:
+      - config/crds/*.yaml
+
+  fmt:
+    desc: Run gofmt across the module
+    cmds:
+      - go fmt ./...
+    sources:
+      - "**/*.go"
+      - exclude: ui/frontend/**
+      - exclude: .bin/**
+      - exclude: node_modules/**
+
+  ginkgo:
+    desc: Install ginkgo v2 into the module
+    cmds:
+      - go install github.com/onsi/ginkgo/v2/ginkgo
+    sources:
+      - go.mod
+      - go.sum
+    status:
+      - command -v ginkgo >/dev/null 2>&1
+
+  # ────────────── Frontend ──────────────
+
+  ui:install:
+    desc: Install ui/frontend dependencies and update lockfile when package metadata changes
+    dir: ui/frontend
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+    sources:
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+    status:
+      # `.modules.yaml` is only written after a successful install — a stale
+      # `node_modules/` containing only `.pnpm/` (broken install) won't pass.
+      - test -f node_modules/.modules.yaml
+      - test node_modules/.modules.yaml -nt pnpm-lock.yaml
+      - test node_modules/.modules.yaml -nt package.json
+
+  ui:build:
+    desc: Build the embedded UI bundle (tsc --noEmit + vite) into ui/frontend/dist
+    dir: ui/frontend
+    deps: [ui:install]
+    cmds:
+      - pnpm run build
+    sources:
+      - src/**/*.ts
+      - src/**/*.tsx
+      - src/**/*.css
+      - index.html
+      - package.json
+      - pnpm-lock.yaml
+      - tsconfig.json
+      - vite.config.ts
+      # Clicky-ui is linked via pnpm workspace; rebuild when its dist changes.
+      - ../../../clicky-ui/packages/ui/dist/index.mjs
+      - ../../../clicky-ui/packages/ui/src/styles/**/*.css
+    generates:
+      - dist/index.html
+      - dist/assets/**
+
+  ui:test:
+    desc: Run frontend unit tests (vitest)
+    dir: ui/frontend
+    deps: [ui:install]
+    cmds:
+      - pnpm test
+    sources:
+      - src/**/*.ts
+      - src/**/*.tsx
+
+  # ────────────── Go build ──────────────
+
+  ui:checksum:
+    desc: Regenerate ui/bundle_checksum.go (sha256 of the embedded bundle)
+    deps: [ui:build]
+    cmds:
+      - go generate ./ui/...
+    sources:
+      - ui/frontend/dist/index.html
+      - ui/frontend/dist/assets/**
+      - ui/internal/gen-checksum/main.go
+    generates:
+      - ui/bundle_checksum.go
+
+  go:build-fast:
+    desc: Build the Go binary without the UI bundle (for fast iteration on Go code)
+    deps:
+      - ui:build
+      - ui:checksum
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - >-
+        go build -o {{.BINARY}} -ldflags "-X \"main.version={{.VERSION_TAG}} built at {{.BUILD_DATE}}\"" main.go
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+
+    generates:
+      - "{{.BINARY}}"
+
+  go:build:
+    desc: Build the Go binary with the embedded UI bundle + tailwind asset
+    deps:
+      - tailwind-asset
+      - manifests
+      - gen-schemas
+      - fmt
+      - ginkgo
+      - ui:build
+      - ui:checksum
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - >-
+        go build -o {{.BINARY}} -ldflags "-X \"main.version={{.VERSION_TAG}} built at {{.BUILD_DATE}}\"" main.go
+    sources:
+      - "**/*.go"
+      - go.mod
+      - go.sum
+      - ui/frontend/dist/index.html
+      - ui/frontend/dist/assets/**
+      - ui/bundle_checksum.go
+      - exclude: ui/frontend/node_modules/**
+      - exclude: .bin/**
+      - exclude: .task/**
+    generates:
+      - "{{.BINARY}}"
+
+  # ────────────── Plugins ──────────────
+
+  ui:install:plugin:kubernetes-logs:
+    desc: Install pnpm deps for the kubernetes-logs plugin UI workspace
+    dir: plugins/kubernetes-logs/ui-src
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+    sources:
+      - package.json
+      - pnpm-workspace.yaml
+    status:
+      # `.modules.yaml` only exists after a successful install — guards
+      # against a half-populated node_modules/ that contains only `.pnpm/`.
+      - test -f node_modules/.modules.yaml
+      - test node_modules/.modules.yaml -nt package.json
+
+  ui:build:plugin:kubernetes-logs:
+    desc: Build the kubernetes-logs plugin UI bundle into plugins/kubernetes-logs/ui
+    dir: plugins/kubernetes-logs/ui-src
+    deps: [ui:install:plugin:kubernetes-logs]
+    env:
+      PLUGIN_VERSION: "{{.VERSION}}"
+      PLUGIN_BUILD_DATE: "{{.BUILD_DATE}}"
+    cmds:
+      - pnpm run build
+    sources:
+      - src/**/*.ts
+      - src/**/*.tsx
+      - src/**/*.css
+      - index.html
+      - package.json
+      - tsconfig.json
+      - vite.config.ts
+      # Rebuild when clicky-ui dist or its style tokens change.
+      - ../../../../clicky-ui/packages/ui/dist/index.mjs
+      - ../../../../clicky-ui/packages/ui/src/styles/**/*.css
+    generates:
+      - ../ui/index.html
+
+  generate:plugin:kubernetes-logs:
+    desc: Regenerate ui_checksum.go (sha256 of the embedded UI bundle)
+    deps: [ui:build:plugin:kubernetes-logs]
+    cmds:
+      - go generate ./plugins/kubernetes-logs/...
+    sources:
+      - plugins/kubernetes-logs/ui/**
+      - plugins/kubernetes-logs/internal/gen-checksum/main.go
+    generates:
+      - plugins/kubernetes-logs/ui_checksum.go
+
+  build:plugin:kubernetes-logs:
+    desc: Build the kubernetes-logs reference plugin (UI + checksum + Go binary) into $MISSION_CONTROL_PLUGIN_PATH
+    deps: [generate:plugin:kubernetes-logs]
+    vars:
+      PLUGIN_NAME: kubernetes-logs
+      PLUGIN_DIR: "{{.ROOT_DIR}}/plugins/kubernetes-logs"
+      PLUGIN_PATH:
+        sh: echo "${MISSION_CONTROL_PLUGIN_PATH:-$HOME/.mission-control/plugins}"
+    cmds:
+      - mkdir -p {{.PLUGIN_PATH}}
+      - >-
+        go build -o {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}
+        -ldflags "-X 'main.Version={{.VERSION}}' -X 'main.BuildDate={{.BUILD_DATE}}'"
+        ./plugins/{{.PLUGIN_NAME}}
+      - echo "Installed {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}} version={{.VERSION}} built={{.BUILD_DATE}}"
+    sources:
+      - plugins/kubernetes-logs/**/*.go
+      - plugins/kubernetes-logs/ui/**
+      - plugins/kubernetes-logs/ui_checksum.go
+      - plugin/**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}"
+
+  ui:install:plugin:sql-server:
+    desc: Install pnpm deps for the sql-server plugin UI workspace
+    dir: plugins/sql-server/ui-src
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+    sources:
+      - package.json
+    status:
+      # `.modules.yaml` only exists after a successful install — guards
+      # against a half-populated node_modules/ that contains only `.pnpm/`.
+      - test -f node_modules/.modules.yaml
+      - test node_modules/.modules.yaml -nt package.json
+
+  ui:build:plugin:sql-server:
+    desc: Build the sql-server plugin UI bundle into plugins/sql-server/ui
+    dir: plugins/sql-server/ui-src
+    deps: [ui:install:plugin:sql-server]
+    env:
+      PLUGIN_VERSION: "{{.VERSION}}"
+      PLUGIN_BUILD_DATE: "{{.BUILD_DATE}}"
+    cmds:
+      - pnpm run build
+    sources:
+      - src/**/*.ts
+      - src/**/*.tsx
+      - index.html
+      - package.json
+      - tsconfig.json
+      - vite.config.ts
+    generates:
+      - ../ui/index.html
+
+  generate:plugin:sql-server:
+    desc: Regenerate ui_checksum.go (sha256 of the embedded UI bundle)
+    deps: [ui:build:plugin:sql-server]
+    cmds:
+      - go generate ./plugins/sql-server/...
+    sources:
+      - plugins/sql-server/ui/**
+      - plugins/sql-server/internal/gen-checksum/main.go
+    generates:
+      - plugins/sql-server/ui_checksum.go
+
+  build:plugin:sql-server:
+    desc: Build the sql-server plugin (UI + checksum + Go binary) into $MISSION_CONTROL_PLUGIN_PATH
+    deps: [generate:plugin:sql-server]
+    vars:
+      PLUGIN_NAME: sql-server
+      PLUGIN_DIR: "{{.ROOT_DIR}}/plugins/sql-server"
+      PLUGIN_PATH:
+        sh: echo "${MISSION_CONTROL_PLUGIN_PATH:-$HOME/.mission-control/plugins}"
+    cmds:
+      - mkdir -p {{.PLUGIN_PATH}}
+      - >-
+        go build -o {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}
+        -ldflags "-X 'main.Version={{.VERSION}}' -X 'main.BuildDate={{.BUILD_DATE}}'"
+        ./plugins/{{.PLUGIN_NAME}}
+      - echo "Installed {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}} version={{.VERSION}} built={{.BUILD_DATE}}"
+    sources:
+      - plugins/sql-server/**/*.go
+      - plugins/sql-server/ui/**
+      - plugins/sql-server/ui_checksum.go
+      - plugin/**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}"
+
+  # ────────────── Developer loops ──────────────
+
+  run:
+    desc: Build + run `serve --ui` on port 8080
+    deps: [build]
+    cmds:
+      - "{{.BINARY}} serve --ui {{.CLI_ARGS}}"
+
+  clicky-ui:build:
+    desc: Rebuild the @flanksource/clicky-ui package only (not the whole clicky-ui monorepo)
+    dir: "{{.ROOT_DIR}}/../clicky-ui/packages/ui"
+    cmds:
+      - pnpm build
+    sources:
+      - src/**/*.ts
+      - src/**/*.tsx
+      - src/**/*.css
+      - package.json
+      - tsconfig.json
+    generates:
+      - dist/index.mjs
+      - dist/index.d.mts
+    env:
+      CI: "true"
+
+  dev:
+    desc: |
+      Rebuild clicky-ui + incident-commander UI + the Go binary, then start
+      `serve --ui --dev` with a local htpasswd. The Go server proxies /ui to
+      Vite so frontend changes are served from Vite watch mode instead of the
+      embedded bundle.
+    deps: [clicky-ui:build, ui:build, go:build-fast]
+    env:
+      PGRST_VERSION: any
+    cmds:
+      # secret is hardcoded for dev purposes and is save to
+      - "{{.BINARY}} serve --htpasswd-file .htpasswd --disable-operators -vv      --postgrest-uri http://localhost:0  --ui --dev  {{.CLI_ARGS}}"
+
+  test:
+    desc: Run Ginkgo tests (skips e2e)
+    deps: [ginkgo]
+    cmds:
+      - >-
+        ginkgo -r --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct --label-filter='!ignore_local'
+
+  # ────────────── Kubernetes lab deploy (existing tasks) ──────────────
+
+  image:lab:
+    desc: "Build and push the incident-commander image to the lab registry. Defaults REGISTRY=docker.lab; override with REGISTRY=docker.example.com."
+    cmds:
+      - docker buildx build --platform linux/amd64 --push . -f Dockerfile -t {{.IMAGE}}:{{.VERSION}} -t {{.IMAGE}}:latest
+
+  deploy:lab:
+    desc: "Build, push, and patch the running incident-commander deployment in the current kubectl context. Defaults REGISTRY=docker.lab."
+    deps: [image:lab]
+    vars:
+      CURRENT_NAMESPACE:
+        sh: kubectl config view --minify --output 'jsonpath={..namespace}' 2>/dev/null || echo "default"
+      DEPLOYMENT:
+        sh: |
+          ns={{.CURRENT_NAMESPACE | default "default"}}
+          name=$(kubectl -n "$ns" get deploy \
+            -l app.kubernetes.io/name={{.APP_NAME}} \
+            -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+          if [ -z "$name" ]; then
+            name=$(kubectl -n "$ns" get deploy \
+              -o jsonpath='{.items[?(@.metadata.name=="{{.APP_NAME}}")].metadata.name}' 2>/dev/null)
+          fi
+          echo "${name:-{{.APP_NAME}}}"
+    cmds:
+      - echo "Patching deploy/{{.DEPLOYMENT}} in namespace {{.CURRENT_NAMESPACE}} -> {{.IMAGE}}:{{.VERSION}}"
+      - >-
+        kubectl -n {{.CURRENT_NAMESPACE}} set image deploy/{{.DEPLOYMENT}} {{.APP_NAME}}={{.IMAGE}}:{{.VERSION}}
+      - kubectl -n {{.CURRENT_NAMESPACE}} rollout restart deploy/{{.DEPLOYMENT}}
+      - kubectl -n {{.CURRENT_NAMESPACE}} rollout status deploy/{{.DEPLOYMENT}} --timeout=300s

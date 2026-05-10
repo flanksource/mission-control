@@ -23,14 +23,14 @@ func Export(ctx context.Context, opts Options, format string) ([]byte, error) {
 
 	switch format {
 	case "csv":
-		if opts.ByUser {
+		if opts.View == "user" {
 			return renderCSVByUser(report)
 		}
 		return renderCSV(report)
-	case "facet-html":
-		return RenderFacetHTML(ctx, report, opts.ByUser)
-	case "facet-pdf":
-		return RenderFacetPDF(ctx, report, opts.ByUser)
+	case "html", "facet-html":
+		return RenderFacetHTML(ctx, report, opts.View)
+	case "pdf", "facet-pdf":
+		return RenderFacetPDF(ctx, report, opts.View)
 	default:
 		return json.MarshalIndent(report, "", "  ")
 	}

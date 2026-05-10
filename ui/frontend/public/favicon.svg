@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30.702999 32" role="img">
+  <title>Mission Control</title>
+  <defs>
+    <linearGradient id="mc-favicon-0" gradientUnits="userSpaceOnUse" x1="250.410004" y1="-315.390015" x2="346.76001" y2="-315.390015" gradientTransform="matrix(0.199751, -0.11482, 0.11482, 0.199751, -9.530623, 124.285422)">
+      <stop offset="0" stop-color="rgb(16.078431%, 50.196078%, 95.294118%)" stop-opacity="1" />
+      <stop offset="1" stop-color="rgb(14.901961%, 32.156863%, 85.098039%)" stop-opacity="1" />
+    </linearGradient>
+    <linearGradient id="mc-favicon-1" gradientUnits="userSpaceOnUse" x1="268.190002" y1="-355.209991" x2="332.809998" y2="-355.209991" gradientTransform="matrix(0.197861, -0.113734, 0.113734, 0.197861, 23.183145, 156.403042)">
+      <stop offset="0" stop-color="rgb(16.078431%, 50.196078%, 95.294118%)" stop-opacity="1" />
+      <stop offset="1" stop-color="rgb(14.901961%, 32.156863%, 85.098039%)" stop-opacity="1" />
+    </linearGradient>
+    <linearGradient id="mc-favicon-2" gradientUnits="userSpaceOnUse" x1="286.929993" y1="-392.730011" x2="320.279999" y2="-392.730011" gradientTransform="matrix(0.197861, -0.113734, 0.113734, 0.197861, 23.183145, 156.403042)">
+      <stop offset="0" stop-color="rgb(16.078431%, 50.196078%, 95.294118%)" stop-opacity="1" />
+      <stop offset="1" stop-color="rgb(14.901961%, 32.156863%, 85.098039%)" stop-opacity="1" />
+    </linearGradient>
+    <linearGradient id="mc-favicon-3" gradientUnits="userSpaceOnUse" x1="8366.580078" y1="2144.550049" x2="8266.30957" y2="2144.550049" gradientTransform="matrix(-0.199751, 0.11482, -0.11482, -0.199751, 1926.358985, -520.889032)">
+      <stop offset="0" stop-color="rgb(16.078431%, 50.196078%, 95.294118%)" stop-opacity="1" />
+      <stop offset="1" stop-color="rgb(14.901961%, 32.156863%, 85.098039%)" stop-opacity="1" />
+    </linearGradient>
+    <linearGradient id="mc-favicon-4" gradientUnits="userSpaceOnUse" x1="8352.459961" y1="2103.860107" x2="8283.620117" y2="2103.860107" gradientTransform="matrix(-0.199751, 0.11482, -0.11482, -0.199751, 1926.358985, -520.889032)">
+      <stop offset="0" stop-color="rgb(16.078431%, 50.196078%, 95.294118%)" stop-opacity="1" />
+      <stop offset="1" stop-color="rgb(14.901961%, 32.156863%, 85.098039%)" stop-opacity="1" />
+    </linearGradient>
+    <linearGradient id="mc-favicon-5" gradientUnits="userSpaceOnUse" x1="8338.519531" y1="2064.090088" x2="8300.280273" y2="2064.090088" gradientTransform="matrix(-0.199751, 0.11482, -0.11482, -0.199751, 1926.358985, -520.889032)">
+      <stop offset="0" stop-color="rgb(16.078431%, 50.196078%, 95.294118%)" stop-opacity="1" />
+      <stop offset="1" stop-color="rgb(14.901961%, 32.156863%, 85.098039%)" stop-opacity="1" />
+    </linearGradient>
+  </defs>
+  <path fill-rule="nonzero" fill="url(#mc-favicon-0)" d="M 21.894531 23.160156 L 24.15625 25.367188 C 24.289062 25.507812 24.289062 25.726562 24.15625 25.863281 C 24.113281 25.902344 24.066406 25.929688 24.011719 25.949219 L 3.589844 32 L 0.75 29.222656 Z M 21.894531 23.160156" />
+  <path fill-rule="nonzero" fill="url(#mc-favicon-1)" d="M 14.113281 16.101562 L 16.382812 18.347656 C 16.449219 18.414062 16.484375 18.5 16.484375 18.59375 C 16.484375 18.683594 16.449219 18.773438 16.382812 18.835938 C 16.339844 18.878906 16.285156 18.910156 16.226562 18.925781 L 2.863281 22.632812 L 0.0703125 19.867188 Z M 14.113281 16.101562" />
+  <path fill-rule="nonzero" fill="url(#mc-favicon-2)" d="M 6.984375 9.320312 L 9.042969 11.394531 C 9.109375 11.460938 9.144531 11.546875 9.144531 11.640625 C 9.144531 11.734375 9.109375 11.820312 9.042969 11.886719 C 8.996094 11.929688 8.941406 11.960938 8.878906 11.980469 L 2.535156 13.628906 L 0 11.066406 Z M 6.984375 9.320312" />
+  <path fill-rule="nonzero" fill="url(#mc-favicon-3)" d="M 7.714844 10.191406 L 3.386719 5.863281 C 3.296875 5.773438 3.265625 5.644531 3.300781 5.523438 C 3.335938 5.402344 3.433594 5.308594 3.554688 5.28125 L 24.714844 0 L 29.320312 4.609375 Z M 7.714844 10.191406" />
+  <path fill-rule="nonzero" fill="url(#mc-favicon-4)" d="M 15.371094 17.449219 L 11.660156 13.691406 C 11.527344 13.550781 11.527344 13.332031 11.660156 13.195312 C 11.707031 13.152344 11.761719 13.121094 11.820312 13.105469 L 25.777344 9.398438 L 29.820312 13.4375 Z M 15.371094 17.449219" />
+  <path fill-rule="nonzero" fill="url(#mc-favicon-5)" d="M 23.4375 24.769531 L 19.445312 20.742188 C 19.378906 20.679688 19.339844 20.589844 19.339844 20.496094 C 19.339844 20.402344 19.378906 20.3125 19.445312 20.25 C 19.484375 20.207031 19.535156 20.179688 19.59375 20.160156 L 26.289062 18.214844 L 30.703125 22.617188 Z M 23.4375 24.769531" />
+</svg>

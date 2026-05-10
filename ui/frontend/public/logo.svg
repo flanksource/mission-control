@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 310 72" role="img" aria-label="Mission Control">
+  <rect width="310" height="72" rx="12" fill="none"/>
+  <g transform="translate(8 8)">
+    <path d="M16 18.5 44 11l7 7-29 7.7-6-7.2Z" fill="#2980f3"/>
+    <path d="M15 31.2 40 24l6.5 6.4-25.8 7.4-5.7-6.6Z" fill="#2768e8"/>
+    <path d="M16.5 44.5 34 39l6.4 6.4-18.5 5.7-5.4-6.6Z" fill="#2652d9"/>
+    <path d="M17 18.5 9 10.5l29-7.4 7 7.2-28 8.2Z" fill="#49a6ff"/>
+    <path d="M16 31.2 9.5 24 33 17.4l6.6 6.5L16 31.2Z" fill="#3a8ff5"/>
+    <path d="M17 44.5 10 37.2l17.5-5.5 6.6 6.6L17 44.5Z" fill="#2f73ee"/>
+  </g>
+  <text x="72" y="31" fill="#111827" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="20" font-weight="700">Mission</text>
+  <text x="72" y="53" fill="#374151" font-family="Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif" font-size="20" font-weight="600">Control</text>
+</svg>
