@@ -402,9 +402,9 @@ func (x *ConfigureResponse) GetWarnings() []string {
 type CallerContext struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Permissions   []string               `protobuf:"bytes,3,rep,name=permissions,proto3" json:"permissions,omitempty"`
-	TraceId       string                 `protobuf:"bytes,4,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
-	RequestId     string                 `protobuf:"bytes,5,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Permissions   []string               `protobuf:"bytes,2,rep,name=permissions,proto3" json:"permissions,omitempty"`
+	TraceId       string                 `protobuf:"bytes,3,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
+	RequestId     string                 `protobuf:"bytes,4,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1535,10 +1535,10 @@ const file_plugin_proto_rawDesc = "" +
 	"\bwarnings\x18\x01 \x03(\tR\bwarnings\"\x84\x01\n" +
 	"\rCallerContext\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\tR\x06userId\x12 \n" +
-	"\vpermissions\x18\x03 \x03(\tR\vpermissions\x12\x19\n" +
-	"\btrace_id\x18\x04 \x01(\tR\atraceId\x12\x1d\n" +
+	"\vpermissions\x18\x02 \x03(\tR\vpermissions\x12\x19\n" +
+	"\btrace_id\x18\x03 \x01(\tR\atraceId\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x05 \x01(\tR\trequestId\"\xed\x01\n" +
+	"request_id\x18\x04 \x01(\tR\trequestId\"\xed\x01\n" +
 	"\rInvokeRequest\x12\x1c\n" +
 	"\toperation\x18\x01 \x01(\tR\toperation\x12\x1f\n" +
 	"\vparams_json\x18\x02 \x01(\fR\n" +
