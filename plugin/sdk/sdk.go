@@ -1,0 +1,53 @@
+// Package sdk is what plugin authors import to build a mission-control plugin.
+//
+// A minimal plugin looks like:
+//
+//	func main() {
+//	    sdk.Serve(&MyPlugin{})
+//	}
+//
+// Plugin authors implement the Plugin interface; the SDK handles the go-plugin
+// handshake, gRPC server setup, operation dispatch, and the reverse channel
+// back to the mission-control host.
+package sdk
+
+import (
+	"context"
+
+	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+)
+
+// Plugin is the interface plugin authors implement. All methods are called by
+// the SDK in response to host RPCs.
+type Plugin interface {
+	// Manifest returns the plugin's static manifest: name, version, and the
+	// operations it exposes. Called once on startup in response to RegisterPlugin.
+	Manifest() *pluginpb.PluginManifest
+
+	// Configure applies host-pushed configuration. settings is the merged CRD
+	// spec.properties + any host-side overrides as a JSON-decoded map.
+	Configure(ctx context.Context, settings map[string]any) error
+
+	// Operations returns the runtime handlers for the operations declared in
+	// Manifest(). The Def field on each Operation should match a name in
+	// Manifest().Operations.
+	Operations() []Operation
+}
+
+// Operation is a runtime handler for a named operation declared in the
+// plugin's manifest. Handler returns either a JSON-serializable value or raw
+// bytes for advanced cases.
+type Operation struct {
+	Def     *pluginpb.OperationDef
+	Handler func(ctx context.Context, req InvokeCtx) (any, error)
+}
+
+// InvokeCtx is passed to operation handlers. It exposes the request payload,
+// the calling user's identity/permissions, and a HostClient for callbacks.
+type InvokeCtx struct {
+	Operation    string
+	ParamsJSON   []byte
+	ConfigItemID string
+	Caller       *pluginpb.CallerContext
+	Host         HostClient
+}

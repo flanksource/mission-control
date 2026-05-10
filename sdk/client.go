@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 
@@ -14,13 +15,19 @@ type Client struct {
 }
 
 func New(serverURL, token string) *Client {
-	return &Client{
-		Client: http.NewClient().
-			BaseURL(serverURL).
-			Header("Authorization", "Bearer "+token).
-			Header("Content-Type", "application/json").
-			UserAgent("mission-control-cli"),
+	return NewWithAuthHeader(serverURL, "Bearer "+token)
+}
+
+// NewWithAuthHeader returns a client using the provided Authorization header.
+func NewWithAuthHeader(serverURL, authHeader string) *Client {
+	client := http.NewClient().
+		BaseURL(serverURL).
+		Header("Content-Type", "application/json").
+		UserAgent("mission-control-cli")
+	if authHeader != "" {
+		client = client.Header("Authorization", authHeader)
 	}
+	return &Client{Client: client}
 }
 
 func (c *Client) GetConnection(name, namespace string) (*models.Connection, error) {
@@ -80,4 +87,26 @@ func (c *Client) TestConnection(id string) (*TestResult, error) {
 		return &result, err
 	}
 	return &result, nil
+}
+
+// InvokePluginOperation invokes a plugin operation through the Mission Control HTTP API.
+func (c *Client) InvokePluginOperation(name, operation, configID string, params json.RawMessage) ([]byte, error) {
+	req := c.R(context.Background())
+	if configID != "" {
+		req = req.QueryParam("config_id", configID)
+	}
+
+	r, err := req.Post("/api/plugins/"+url.PathEscape(name)+"/operations/"+url.PathEscape(operation), params)
+	if err != nil {
+		return nil, err
+	}
+
+	body, err := r.AsString()
+	if err != nil {
+		return nil, err
+	}
+	if !r.IsOK() {
+		return nil, fmt.Errorf("plugin %s/%s failed (%d): %s", name, operation, r.StatusCode, body)
+	}
+	return []byte(body), nil
 }
