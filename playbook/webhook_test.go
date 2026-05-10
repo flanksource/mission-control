@@ -5,6 +5,7 @@ import (
 	gocontext "context"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/types"
@@ -145,22 +146,6 @@ var _ = ginkgo.Describe("Playbook Webhook", func() {
 			},
 			wantErr: true,
 		},
-		// {
-		// 	name: "JWT webhook verification", TODO:
-		// 	args: args{
-		// 		r: &http.Request{
-		// 			Body: io.NopCloser(bytes.NewBuffer([]byte(`{"payload": "test"}`))),
-		// 		},
-		// 		headers: map[string]string{
-		// 			"Authorization": "Bearer eyJhbGciOiJSUzI1NiIsImp3a3NVcmkiOiJodHRwOi8vbG9jYWxob3N0OjIwMTkvandrcy5qc29uIiwia2lkIjoiZ25tQWZ2bWxzaTNrS0gzVmxNMUFKODVQMmhla1E4T05fWHZKcXMzeFBEOCJ9.eyJ0ZXN0IjoiZGF0YSJ9.E4JoQQL-FBvKKldws5RzX3TgYm-xdgVnNMrkL9Z6RrreOoR5aNuKpUQly45rRooi-lgzFKpEJa-I_dQhk-MnOlKj2s6EVThw-y7HZ6tiBAtKsc43LWXAUbttDXflVfu0uKU0HrZWFHqv3AGqmwlIw_m8q9Yndpy-TjvAl8-VoMKN-N7F3_XT9BtlioGBjlpbEjzcXCEr30yTjJ9zkueBFtoNNjj3luLWpMiPQa0PcGF6VGLi2b1QzwutCu7cil19XswBhl8jT1jvJBxcVVHxug1nedWwZgHaKTWp7euIyY11X_lSpwos0GUpy2K51bHJCi4HQ2jyMUN0KrEmY20FqQ",
-		// 		},
-		// 		auth: &v1.PlaybookEventWebhookAuth{
-		// 			JWT: &v1.PlaybookEventWebhookAuthJWT{
-		// 				JWKSURI: "http://localhost:2019/jwks.json",
-		// 			},
-		// 		},
-		// 	},
-		// },
 		{
 			name: "JWT webhook verification | FAIL",
 			args: args{
@@ -168,7 +153,11 @@ var _ = ginkgo.Describe("Playbook Webhook", func() {
 					Body: io.NopCloser(bytes.NewBuffer([]byte(`{"payload": "test"}`))),
 				},
 				headers: map[string]string{
-					"Authorization": "Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.NHVaYe26MbtOYhSKkoKYdFVomg4i8ZJd8_-RU8VNbftc4TSMb4bXP3l3YlNWACwyXPGffz5aXHc6lty1Y2t4SWRqGteragsVdZufDn5BlnJl9pdR_kdVFUsra2rWKEofkZeIC4yWytE58sMIihvo9H1ScmmVwBcQP6XETqYd0aSHp1gOa9RdUPDvoXQ5oqygTqVtxaDr6wUFKrKItgBMzWIdNZ6y7O9E0DhEPTbE9rfBo6KTFsHAZnMg4k68CDp2woYIaXbmYTWcvbzIuHO7_37GT79XdIwkm95QJ7hYC9RiwrV7mesbY4PAahERJawntho0my942XheVLmGwLMBkQ",
+					"Authorization": "Bearer " + strings.Join([]string{
+						"eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9",
+						"eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0",
+						"NHVaYe26MbtOYhSKkoKYdFVomg4i8ZJd8_-RU8VNbftc4TSMb4bXP3l3YlNWACwyXPGffz5aXHc6lty1Y2t4SWRqGteragsVdZufDn5BlnJl9pdR_kdVFUsra2rWKEofkZeIC4yWytE58sMIihvo9H1ScmmVwBcQP6XETqYd0aSHp1gOa9RdUPDvoXQ5oqygTqVtxaDr6wUFKrKItgBMzWIdNZ6y7O9E0DhEPTbE9rfBo6KTFsHAZnMg4k68CDp2woYIaXbmYTWcvbzIuHO7_37GT79XdIwkm95QJ7hYC9RiwrV7mesbY4PAahERJawntho0my942XheVLmGwLMBkQ",
+					}, "."),
 				},
 				auth: &v1.PlaybookEventWebhookAuth{
 					JWT: &v1.PlaybookEventWebhookAuthJWT{
