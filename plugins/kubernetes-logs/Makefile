@@ -1,5 +1,6 @@
 PLUGIN_NAME := kubernetes-logs
 PLUGIN_PATH ?= $(MISSION_CONTROL_PLUGIN_PATH)
+PLUGIN_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 VERSION ?= dev
 BUILD_DATE := $(shell date "+%Y-%m-%d %H:%M:%S")
 
@@ -10,8 +11,8 @@ build:
 	go build \
 		-ldflags "-X 'main.Version=$(VERSION)' -X 'main.BuildDate=$(BUILD_DATE)'" \
 		-o "$(PLUGIN_PATH)/$(PLUGIN_NAME)" \
-		./plugins/kubernetes-logs
+		"$(PLUGIN_DIR)"
 
 .PHONY: install
 install: build
-	kubectl apply -f plugins/kubernetes-logs/Plugin.yaml
+	kubectl apply -f "$(PLUGIN_DIR)/Plugin.yaml"

@@ -134,14 +134,16 @@ message ListConfigsRequest {
   string cursor             = 3;
 }
 
-// GetConnectionRequest asks the host to resolve a connection by type.
-// The host looks up the matching field in the Plugin CRD's
-// connection.ExecConnections (Kubernetes/AWS/GCP/Azure) and resolves it
-// using the same SetupConnection() pipeline that playbook exec actions use.
-// If config_item_id is set, fromConfigItem-style resolution is used.
+// GetConnectionRequest asks the host to resolve a connection by one of three
+// supported lookups: type, config item, or plugin-defined label. Type and label
+// lookups use spec.connections mappings from the Plugin CRD. Config lookups use
+// the scraper that created the config item.
 message GetConnectionRequest {
-  string type           = 1; // "aws" | "kubernetes" | "gcp" | "azure"
-  string config_item_id = 2; // optional: resolve credentials from this config item
+  oneof lookup {
+    string type           = 1; // e.g. "sql", "aws", "kubernetes", "gcp", "azure"
+    string config_item_id = 2; // resolve the connection used by this config item's scraper
+    string label          = 3; // resolve a plugin-defined connection label mapping
+  }
 }
 
 message ResolvedConnection {
