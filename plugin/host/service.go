@@ -29,10 +29,11 @@ import (
 const connectionCacheTTL = 5 * time.Minute
 
 type connKey struct {
-	plugin   string
-	typ      string
-	label    string
-	configID string
+	namespace string
+	plugin    string
+	typ       string
+	label     string
+	configID  string
 }
 
 // Service is the host-side gRPC server. There is one per plugin process —
@@ -45,7 +46,7 @@ type Service struct {
 	ctx        dutyContext.Context
 
 	// connCache memoises GetConnection results across calls within a single
-	// plugin process. Keyed by (plugin, type, label, configID).
+	// plugin process. Keyed by (namespace, plugin, type, label, configID).
 	connCache *lru.LRU[connKey, *pluginpb.ResolvedConnection]
 }
 
@@ -103,17 +104,18 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 		return nil, fmt.Errorf("connection lookup is required")
 	}
 
-	key := connKey{plugin: s.pluginName, typ: req.GetType(), label: req.GetLabel(), configID: req.GetConfigItemId()}
-	if cached, ok := s.connCache.Get(key); ok {
-		return cached, nil
-	}
-
 	entry := registry.Default.Get(s.pluginName)
 	if entry == nil {
 		return nil, fmt.Errorf("plugin %q is not registered", s.pluginName)
 	}
 
-	resolved, err := resolveConnection(s.ctx, entry.Spec, req)
+	key := connKey{namespace: entry.Namespace, plugin: s.pluginName, typ: req.GetType(), label: req.GetLabel(), configID: req.GetConfigItemId()}
+	if cached, ok := s.connCache.Get(key); ok {
+		return cached, nil
+	}
+
+	pluginCtx := s.ctx.Wrap(ctx).WithNamespace(entry.Namespace)
+	resolved, err := resolveConnection(pluginCtx, entry.Spec, req)
 	if err != nil {
 		return nil, err
 	}

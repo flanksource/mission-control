@@ -74,12 +74,12 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 		previous = &copy
 	}
 
-	Default.Upsert(string(p.UID), p.Name, p.Spec)
+	Default.Upsert(string(p.UID), p.Namespace, p.Name, p.Spec)
 
 	if SupervisorStarter != nil {
 		if err := SupervisorStarter(ctx, p.Name); err != nil {
 			if previous != nil {
-				Default.Upsert(previous.ID, previous.Name, previous.Spec)
+				Default.Upsert(previous.ID, previous.Namespace, previous.Name, previous.Spec)
 			} else {
 				Default.Remove(p.Name)
 			}

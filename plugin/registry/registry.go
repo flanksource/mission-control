@@ -20,10 +20,11 @@ import (
 // RegisterPlugin; it is nil while the plugin is starting up or has crashed
 // past the supervisor's restart budget.
 type Entry struct {
-	ID       string
-	Name     string
-	Spec     v1.PluginSpec
-	Manifest *pluginpb.PluginManifest
+	ID        string
+	Name      string
+	Namespace string
+	Spec      v1.PluginSpec
+	Manifest  *pluginpb.PluginManifest
 	// Supervisor is opaque here; the supervisor package sets it.
 	Supervisor any
 }
@@ -51,7 +52,7 @@ func New() *Registry {
 // a Plugin CRD is created or updated). Existing manifest/supervisor are
 // preserved so an in-flight plugin keeps running across CRD updates that
 // don't change the binary.
-func (r *Registry) Upsert(id, name string, spec v1.PluginSpec) *Entry {
+func (r *Registry) Upsert(id, namespace, name string, spec v1.PluginSpec) *Entry {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	e, ok := r.plugins[name]
@@ -64,6 +65,7 @@ func (r *Registry) Upsert(id, name string, spec v1.PluginSpec) *Entry {
 	}
 	e.ID = id
 	e.Name = name
+	e.Namespace = namespace
 	e.Spec = spec
 	if id != "" {
 		r.ids[id] = name
