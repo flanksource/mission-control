@@ -1,7 +1,6 @@
 package cmd
 
 import (
-<<<<<<< HEAD
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -14,27 +13,6 @@ import (
 )
 
 // pluginParams accumulates repeated --param key=value flags.
-=======
-	"context"
-	"encoding/json"
-	"fmt"
-	"os"
-	osExec "os/exec"
-	"path/filepath"
-	"strings"
-	"time"
-
-	dutyContext "github.com/flanksource/duty/context"
-	goplugin "github.com/hashicorp/go-plugin"
-	"github.com/spf13/cobra"
-
-	icplugin "github.com/flanksource/incident-commander/plugin"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
-	"github.com/flanksource/incident-commander/plugin/registry"
-)
-
-// pluginParams accumulates --param k=v repeats.
->>>>>>> 9d3180ed (feat(cli,api,db): add access control and playbook management CLI commands)
 type pluginParams struct {
 	values map[string]string
 }
