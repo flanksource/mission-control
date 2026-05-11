@@ -35,9 +35,14 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		return &rls.Payload{Disable: true}, nil
 	}
 
+	user := ctx.User()
+	if user == nil {
+		return nil, fmt.Errorf("user is required for RLS payload")
+	}
+
 	impersonated := getImpersonatedPayload(ctx)
 
-	cacheKey := getRLSCacheKey(ctx.User().ID.String())
+	cacheKey := getRLSCacheKey(user.ID.String())
 	if impersonated != nil {
 		cacheKey = fmt.Sprintf("%s:%s", cacheKey, impersonated.Fingerprint())
 	}
@@ -91,7 +96,11 @@ func WithRLS(ctx context.Context, fn func(context.Context) error) error {
 	}
 
 	if ctx.Properties().On(false, "rls.debug") {
-		ctx.Logger.WithValues("user", lo.FromPtr(ctx.User()).ID).Infof("RLS payload: %s", logger.Pretty(rlsPayload))
+		userID := ""
+		if user := ctx.User(); user != nil {
+			userID = user.ID.String()
+		}
+		ctx.Logger.WithValues("user", userID).Infof("RLS payload: %s", logger.Pretty(rlsPayload))
 	}
 
 	if rlsPayload.Disable {
