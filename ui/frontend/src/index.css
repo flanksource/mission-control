@@ -1,0 +1,28 @@
+@import "tailwindcss";
+@import "@flanksource/clicky-ui/styles.css";
+@source "../node_modules/@flanksource/clicky-ui/src/**/*.{ts,tsx}";
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family:
+    ui-sans-serif,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
+}
+
+.catalog-compact-tree [role="treeitem"] > div {
+  padding-top: 0.125rem;
+  padding-bottom: 0.125rem;
+}
+
+.config-item-tables tbody a,
+.config-item-tables tbody a * {
+  font-weight: 400;
+}
