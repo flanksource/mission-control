@@ -127,7 +127,7 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 		}
 
 		if name == "email-report" {
-			decorators = append(decorators, ginkgo.Skip("disabled: failing in CI due to email templating/shoutrrr error"))
+			decorators = append(decorators, ginkgo.Pending)
 		}
 
 		decorators = append(decorators, func() {
