@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	goplugin "github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
@@ -18,20 +19,21 @@ type pluginServer struct {
 	pluginpb.UnimplementedPluginServiceServer
 
 	impl    Plugin
+	uiPort  uint32
 	mu      sync.Mutex
 	host    HostClient
 	hostBrk *goplugin.GRPCBroker
 	ops     map[string]Operation
 }
 
-func newPluginServer(impl Plugin) *pluginServer {
+func newPluginServer(impl Plugin, uiPort uint32) *pluginServer {
 	ops := map[string]Operation{}
 	for _, op := range impl.Operations() {
 		if op.Def != nil {
 			ops[op.Def.Name] = op
 		}
 	}
-	return &pluginServer{impl: impl, ops: ops}
+	return &pluginServer{impl: impl, uiPort: uiPort, ops: ops}
 }
 
 func (s *pluginServer) RegisterPlugin(ctx context.Context, req *pluginpb.RegisterRequest) (*pluginpb.PluginManifest, error) {
@@ -55,6 +57,7 @@ func (s *pluginServer) RegisterPlugin(ctx context.Context, req *pluginpb.Registe
 	if manifest.Version == "" {
 		return nil, fmt.Errorf("plugin %s Manifest().Version is required (build with -ldflags '-X main.Version=...')", manifest.Name)
 	}
+	manifest.UiPort = s.uiPort
 	// Materialize operations from the live registry so a plugin doesn't have
 	// to declare them twice.
 	if len(manifest.Operations) == 0 {
@@ -134,6 +137,11 @@ func (s *pluginServer) Health(ctx context.Context, _ *pluginpb.Empty) (*pluginpb
 }
 
 func (s *pluginServer) Shutdown(ctx context.Context, _ *pluginpb.Empty) (*pluginpb.Empty, error) {
+	go func() {
+		// Give the response a moment to flush.
+		time.Sleep(50 * time.Millisecond)
+		shutdownSignal()
+	}()
 	return &pluginpb.Empty{}, nil
 }
 

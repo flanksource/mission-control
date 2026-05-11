@@ -13,6 +13,7 @@ package sdk
 
 import (
 	"context"
+	"net/http"
 
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 )
@@ -32,11 +33,18 @@ type Plugin interface {
 	// Manifest(). The Def field on each Operation should match a name in
 	// Manifest().Operations.
 	Operations() []Operation
+
+	// HTTPHandler is mounted at /api/* on the plugin's HTTP server. The host
+	// reverse-proxies /api/plugins/<name>/ui/api/* to this handler. Plugins
+	// use it to power their own UI (the host neither knows nor cares about
+	// these endpoints).
+	HTTPHandler() http.Handler
 }
 
 // Operation is a runtime handler for a named operation declared in the
-// plugin's manifest. Handler returns either a JSON-serializable value or raw
-// bytes for advanced cases.
+// plugin's manifest. Handler returns either a value implementing the clicky
+// Result interface (preferred — the SDK marshals to application/clicky+json)
+// or raw bytes for advanced cases.
 type Operation struct {
 	Def     *pluginpb.OperationDef
 	Handler func(ctx context.Context, req InvokeCtx) (any, error)
