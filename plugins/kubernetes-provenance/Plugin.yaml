@@ -1,0 +1,18 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Plugin
+metadata:
+  name: kubernetes-provenance
+spec:
+  source: kubernetes-provenance
+  version: "0.1.0"
+  selector:
+    types:
+      - Kubernetes::*
+  connections:
+    fromConfigItem: ""
+    kubernetes:
+      kubeconfig:
+        valueFrom:
+          secretKeyRef:
+            name: homelab-kubeconfig
+            key: config
