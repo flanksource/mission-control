@@ -3,6 +3,7 @@ package sdk
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"strings"
@@ -37,7 +38,7 @@ func NewWithAuthHeader(serverURL, authHeader string) *Client {
 	if authHeader != "" {
 		client = client.Header("Authorization", authHeader)
 	}
-	return &Client{Client: client}
+	return &Client{Client: httpobservability.Apply(client)}
 }
 
 // decodeJSON parses a response body as JSON, returning ErrHTMLResponse if the
@@ -170,4 +171,72 @@ func (c *Client) InvokePluginOperation(name, operation, configID string, params 
 		return nil, fmt.Errorf("plugin %s/%s failed (%d): %s", name, operation, r.StatusCode, body)
 	}
 	return []byte(body), nil
+}
+
+func (c *Client) ListPlaybooks(opts PlaybookListOptions) ([]icapi.PlaybookListItem, error) {
+	var playbooks []icapi.PlaybookListItem
+	req := c.R(context.Background())
+	if opts.ConfigID != "" {
+		req.QueryParam("config_id", opts.ConfigID)
+	}
+	if opts.CheckID != "" {
+		req.QueryParam("check_id", opts.CheckID)
+	}
+	if opts.ComponentID != "" {
+		req.QueryParam("component_id", opts.ComponentID)
+	}
+
+	r, err := req.Get("/playbook/list")
+	if err != nil {
+		return nil, err
+	}
+	if !r.IsOK() {
+		body, _ := r.AsString()
+		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
+			return nil, ErrHTMLResponse
+		}
+		return nil, fmt.Errorf("list playbooks failed (%d): %s", r.StatusCode, body)
+	}
+	if err := decodeJSON(r, &playbooks); err != nil {
+		return nil, err
+	}
+	return playbooks, nil
+}
+
+func (c *Client) RunPlaybook(params PlaybookRunParams) (*PlaybookRunResponse, error) {
+	var response PlaybookRunResponse
+	r, err := c.R(context.Background()).Post("/playbook/run", params)
+	if err != nil {
+		return nil, err
+	}
+	if !r.IsOK() {
+		body, _ := r.AsString()
+		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
+			return nil, ErrHTMLResponse
+		}
+		return nil, fmt.Errorf("run playbook failed (%d): %s", r.StatusCode, body)
+	}
+	if err := decodeJSON(r, &response); err != nil {
+		return nil, err
+	}
+	return &response, nil
+}
+
+func (c *Client) GetPlaybookRunStatus(id string) (*PlaybookSummary, error) {
+	var summary PlaybookSummary
+	r, err := c.R(context.Background()).Get("/playbook/run/" + url.PathEscape(id) + "/status")
+	if err != nil {
+		return nil, err
+	}
+	if !r.IsOK() {
+		body, _ := r.AsString()
+		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
+			return nil, ErrHTMLResponse
+		}
+		return nil, fmt.Errorf("get playbook run status failed (%d): %s", r.StatusCode, body)
+	}
+	if err := decodeJSON(r, &summary); err != nil {
+		return nil, err
+	}
+	return &summary, nil
 }
