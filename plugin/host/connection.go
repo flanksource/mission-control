@@ -1,14 +1,11 @@
 package host
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
-	"time"
 
 	dutyConn "github.com/flanksource/duty/connection"
 	dutyContext "github.com/flanksource/duty/context"
@@ -17,8 +14,6 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/google/uuid"
-	"google.golang.org/protobuf/types/known/structpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // resolveConnection resolves a connection request using one of the plugin
@@ -68,13 +63,13 @@ func connectionFromScraper(ctx dutyContext.Context, scraper *models.ConfigScrape
 	if conn, ok, err := connectionFromKubernetesScraper(ctx, scraper.Spec); err != nil {
 		return nil, fmt.Errorf("connection for scraper %s: %w", scraper.ID, err)
 	} else if ok {
-		return connectionToProto(conn, models.ConnectionTypeKubernetes), nil
+		return pluginpb.ConnectionToProto(conn, models.ConnectionTypeKubernetes), nil
 	}
 
 	if conn, ok, err := connectionFromSQLScraper(ctx, scraper.Spec); err != nil {
 		return nil, fmt.Errorf("connection for scraper %s: %w", scraper.ID, err)
 	} else if ok {
-		return connectionToProto(conn, "sql"), nil
+		return pluginpb.ConnectionToProto(conn, "sql"), nil
 	}
 
 	return nil, fmt.Errorf("connection for scraper %s: unsupported scraper type or no supported connection found", scraper.ID)
@@ -192,7 +187,7 @@ func resolveConnectionRef(ctx dutyContext.Context, ref, requestedType string) (*
 	if requestedType != "" && !connectionTypeMatches(requestedType, conn.Type) {
 		return nil, fmt.Errorf("connection %q is %q, not %q", ref, conn.Type, requestedType)
 	}
-	return connectionToProto(conn, requestedType), nil
+	return pluginpb.ConnectionToProto(conn, requestedType), nil
 }
 
 func connectionTypeMatches(requested, actual string) bool {
@@ -208,91 +203,4 @@ func connectionTypeMatches(requested, actual string) bool {
 		}
 	}
 	return false
-}
-
-func connectionToProto(conn *models.Connection, requestedType string) *pluginpb.ResolvedConnection {
-	props := map[string]any{
-		"type":        conn.Type,
-		"name":        conn.Name,
-		"namespace":   conn.Namespace,
-		"insecureTLS": conn.InsecureTLS,
-	}
-	for k, v := range conn.Properties {
-		props[k] = v
-	}
-	if conn.URL != "" {
-		if _, ok := props["endpoint"]; !ok {
-			props["endpoint"] = conn.URL
-		}
-	}
-	if conn.Certificate != "" && connectionTypeMatches("kubernetes", conn.Type) {
-		props["kubeconfig"] = conn.Certificate
-	}
-	pbProps, _ := structpb.NewStruct(props)
-
-	typ := conn.Type
-	if requestedType != "" {
-		typ = requestedType
-	}
-
-	return &pluginpb.ResolvedConnection{
-		Type:        typ,
-		Url:         conn.URL,
-		Username:    conn.Username,
-		Password:    conn.Password,
-		Certificate: conn.Certificate,
-		Token:       connectionToken(conn),
-		Properties:  pbProps,
-		ExpiresAt:   timestamppb.New(time.Now().Add(connectionCacheTTL)),
-	}
-}
-
-func connectionToken(conn *models.Connection) string {
-	for _, key := range []string{"token", "sessionToken", "session_token"} {
-		if token := conn.Properties[key]; token != "" {
-			return token
-		}
-	}
-	return ""
-}
-
-// connectionRefFromScraperSpec parses a ScrapeConfig spec JSON and returns
-// the first non-empty connection reference used by the scraper.
-func connectionRefFromScraperSpec(specJSON string) (string, error) {
-	var spec any
-	decoder := json.NewDecoder(bytes.NewReader([]byte(specJSON)))
-	decoder.UseNumber()
-	if err := decoder.Decode(&spec); err != nil {
-		return "", fmt.Errorf("decode spec: %w", err)
-	}
-	if ref := firstConnectionRef(spec); ref != "" {
-		return ref, nil
-	}
-	return "", fmt.Errorf("no connection set")
-}
-
-func firstConnectionRef(v any) string {
-	switch x := v.(type) {
-	case map[string]any:
-		if ref, ok := x["connection"].(string); ok && ref != "" {
-			return ref
-		}
-		keys := make([]string, 0, len(x))
-		for k := range x {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			if ref := firstConnectionRef(x[k]); ref != "" {
-				return ref
-			}
-		}
-	case []any:
-		for _, item := range x {
-			if ref := firstConnectionRef(item); ref != "" {
-				return ref
-			}
-		}
-	}
-	return ""
 }

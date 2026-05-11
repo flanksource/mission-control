@@ -2,11 +2,14 @@ package pluginpb
 
 import (
 	"encoding/json"
+	"strings"
+	"time"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	structpb "google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // ToDuty converts the protobuf selector into duty's ResourceSelector.
@@ -53,6 +56,68 @@ func ResourceSelectorFromDuty(selector types.ResourceSelector) *ResourceSelector
 		Types:          []string(selector.Types),
 		Statuses:       []string(selector.Statuses),
 	}
+}
+
+// ConnectionToProto converts a duty connection into its protobuf representation.
+func ConnectionToProto(conn *models.Connection, requestedType string) *ResolvedConnection {
+	props := map[string]any{
+		"type":        conn.Type,
+		"name":        conn.Name,
+		"namespace":   conn.Namespace,
+		"insecureTLS": conn.InsecureTLS,
+	}
+	for k, v := range conn.Properties {
+		props[k] = v
+	}
+	if conn.URL != "" {
+		if _, ok := props["endpoint"]; !ok {
+			props["endpoint"] = conn.URL
+		}
+	}
+	if conn.Certificate != "" && connectionTypeMatches("kubernetes", conn.Type) {
+		props["kubeconfig"] = conn.Certificate
+	}
+	pbProps, _ := structpb.NewStruct(props)
+
+	typ := conn.Type
+	if requestedType != "" {
+		typ = requestedType
+	}
+
+	return &ResolvedConnection{
+		Type:        typ,
+		Url:         conn.URL,
+		Username:    conn.Username,
+		Password:    conn.Password,
+		Certificate: conn.Certificate,
+		Token:       connectionToken(conn),
+		Properties:  pbProps,
+		ExpiresAt:   timestamppb.New(time.Now().Add(5 * time.Minute)),
+	}
+}
+
+func connectionTypeMatches(requested, actual string) bool {
+	requested = strings.ToLower(strings.ReplaceAll(requested, "-", "_"))
+	actual = strings.ToLower(strings.ReplaceAll(actual, "-", "_"))
+	if requested == actual {
+		return true
+	}
+	if requested == "sql" {
+		switch actual {
+		case "postgres", "postgresql", "mysql", "mssql", "sql_server", "sqlserver":
+			return true
+		}
+	}
+	return false
+}
+
+func connectionToken(conn *models.Connection) string {
+	for _, key := range []string{"token", "sessionToken", "session_token"} {
+		if token := conn.Properties[key]; token != "" {
+			return token
+		}
+	}
+	return ""
 }
 
 func FromConfigItem(item models.ConfigItem) (*ConfigItem, error) {
