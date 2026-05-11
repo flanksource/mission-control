@@ -20,7 +20,8 @@ endif
 
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/.bin
-export PATH := $(LOCALBIN):$(PATH)
+HOMEBREW_NODE_PATHS := /usr/local/opt/node/bin /opt/homebrew/opt/node/bin /opt/homebrew/opt/node@24/bin
+export PATH := $(LOCALBIN):$(foreach p,$(HOMEBREW_NODE_PATHS),$(if $(wildcard $(p)/node),$(p):))$(PATH)
 $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
 
@@ -45,6 +46,8 @@ PROTOC_GEN_GO_GRPC_VERSION ?= v1.6.0
 PROTOC_OS = $(if $(filter darwin,$(OS)),osx,$(OS))
 PROTOC_ARCH = $(if $(filter amd64,$(ARCH)),x86_64,$(if $(filter arm64,$(ARCH)),aarch_64,$(ARCH)))
 
+NODE_VERSION ?= 24.11.0
+PNPM_VERSION ?= 10.33.0
 TAILWIND_VERSION ?= 3.4.17
 TAILWIND_JS = auth/oidc/static/tailwind.min.js
 
@@ -55,9 +58,23 @@ $(TAILWIND_JS):
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
+$(LOCALBIN)/node: install-deps $(LOCALBIN)
+	deps install node@$(NODE_VERSION) --bin-dir $(LOCALBIN) --app-dir $(LOCALBIN)/apps --tmp-dir $(LOCALBIN)/tmp
+
+$(LOCALBIN)/pnpm: $(LOCALBIN)/node
+	npm install -g pnpm@$(PNPM_VERSION)
+	ln -sf apps/node/bin/pnpm $(LOCALBIN)/pnpm
+	ln -sf apps/node/bin/pnpx $(LOCALBIN)/pnpx
+
+.PHONY: pnpm
+pnpm: $(LOCALBIN)/pnpm
 
 .PHONY: static
-static: $(TAILWIND_JS) manifests generate fmt ginkgo
+static: $(TAILWIND_JS) manifests generate fmt ginkgo ui 
+
+.PHONY: ui
+ui: $(LOCALBIN)/pnpm ## Build the embedded catalog explorer UI (ui/frontend -> ui/frontend/dist/ui.js)
+	cd ui/frontend && CI=true pnpm install --frozen-lockfile --prefer-offline && pnpm run build
 
 .PHONY: test
 test:
@@ -67,11 +84,12 @@ test:
 		--succinct --label-filter='!ignore_local'
 
 .PHONY: ci-test
-ci-test:
-	ginkgo -r -p --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct
+ci-test: $(TAILWIND_JS) $(LOCALBIN) ui 
+	go build -o ./.bin/$(NAME) main.go
+	ginkgo -r --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct
 
 .PHONY: e2e
-e2e: $(TAILWIND_JS)
+e2e: $(TAILWIND_JS) ui 
 	go build -o ./.bin/$(NAME) main.go
 	ginkgo -r --keep-going  ./tests/e2e/...
 
@@ -142,6 +160,9 @@ gen-schemas:
 	if grep -v "^//" ../../go.mod | grep -q "replace.*github.com/flanksource/duty.*=>"; then \
 		go mod edit -replace=github.com/flanksource/duty=../../../duty; \
 	fi && \
+	if grep -v "^//" ../../go.mod | grep -q "replace.*github.com/flanksource/clicky.*=>"; then \
+		go mod edit -replace=github.com/flanksource/clicky=../../../clicky; \
+	fi && \
 	go mod tidy && \
 	go run ./main.go
 
@@ -193,7 +214,7 @@ deps: install-deps ginkgo controller-gen golangci-lint kustomize $(TAILWIND_JS) 
 
 .PHONY: ginkgo
 ginkgo:
-	go install github.com/onsi/ginkgo/v2/ginkgo
+	GOBIN=$(LOCALBIN) go install github.com/onsi/ginkgo/v2/ginkgo
 
 .PHONY: controller-gen
 controller-gen: install-deps $(LOCALBIN)
