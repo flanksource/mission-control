@@ -106,7 +106,12 @@ func (s *pluginServer) Invoke(ctx context.Context, req *pluginpb.InvokeRequest) 
 	host := s.host
 	s.mu.Unlock()
 
-	res, err := op.Handler(ctx, InvokeCtx{
+	handlerCtx := ctx
+	if req.Caller != nil {
+		handlerCtx = withCallerUserID(handlerCtx, req.Caller.UserId)
+	}
+
+	res, err := op.Handler(handlerCtx, InvokeCtx{
 		Operation:    req.Operation,
 		ParamsJSON:   req.ParamsJson,
 		ConfigItemID: req.ConfigItemId,

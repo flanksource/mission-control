@@ -50,39 +50,39 @@ func newHostClient(conn *grpc.ClientConn) HostClient {
 }
 
 func (h *hostClient) GetConfigItem(ctx context.Context, id string) (*pluginpb.ConfigItem, error) {
-	return h.c.GetConfigItem(ctx, &pluginpb.GetConfigItemRequest{Id: id})
+	return h.c.GetConfigItem(withCallerMetadata(ctx), &pluginpb.GetConfigItemRequest{Id: id})
 }
 
 func (h *hostClient) ListConfigs(ctx context.Context, selector types.ResourceSelector, limit int) (*pluginpb.ConfigItemList, error) {
-	return h.c.ListConfigs(ctx, &pluginpb.ListConfigsRequest{
+	return h.c.ListConfigs(withCallerMetadata(ctx), &pluginpb.ListConfigsRequest{
 		Selector: pluginpb.ResourceSelectorFromDuty(selector),
 		Limit:    int32(limit),
 	})
 }
 
 func (h *hostClient) GetConnectionByType(ctx context.Context, typ ConnectionType) (*pluginpb.ResolvedConnection, error) {
-	return h.c.GetConnection(ctx, &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_Type{Type: string(typ)}})
+	return h.c.GetConnection(withCallerMetadata(ctx), &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_Type{Type: string(typ)}})
 }
 
 func (h *hostClient) GetConnectionForConfig(ctx context.Context, configItemID string) (*pluginpb.ResolvedConnection, error) {
-	return h.c.GetConnection(ctx, &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_ConfigItemId{ConfigItemId: configItemID}})
+	return h.c.GetConnection(withCallerMetadata(ctx), &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_ConfigItemId{ConfigItemId: configItemID}})
 }
 
 func (h *hostClient) GetConnectionByLabel(ctx context.Context, label string) (*pluginpb.ResolvedConnection, error) {
-	return h.c.GetConnection(ctx, &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_Label{Label: label}})
+	return h.c.GetConnection(withCallerMetadata(ctx), &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_Label{Label: label}})
 }
 
 func (h *hostClient) Log(ctx context.Context, level, message string, fields map[string]string) error {
-	_, err := h.c.Log(ctx, &pluginpb.LogEntry{Level: level, Message: message, Fields: fields})
+	_, err := h.c.Log(withCallerMetadata(ctx), &pluginpb.LogEntry{Level: level, Message: message, Fields: fields})
 	return err
 }
 
 func (h *hostClient) WriteArtifact(ctx context.Context, a *pluginpb.Artifact) (*pluginpb.ArtifactRef, error) {
-	return h.c.WriteArtifact(ctx, a)
+	return h.c.WriteArtifact(withCallerMetadata(ctx), a)
 }
 
 func (h *hostClient) ReadArtifact(ctx context.Context, ref *pluginpb.ArtifactRef) (*pluginpb.Artifact, error) {
-	return h.c.ReadArtifact(ctx, ref)
+	return h.c.ReadArtifact(withCallerMetadata(ctx), ref)
 }
 
 // settingsFromStruct decodes a *structpb.Struct into a JSON-shaped map[string]any.
