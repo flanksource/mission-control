@@ -60,6 +60,7 @@ type TemplateEnv struct {
 	Config    *models.ConfigItem        `json:"config,omitempty"`
 	Component *models.Component         `json:"component,omitempty"`
 	Check     *models.Check             `json:"check,omitempty"`
+	Canary    *models.Canary            `json:"canary,omitempty"`
 	Playbook  models.Playbook           `json:"playbook"`
 	Run       models.PlaybookRun        `json:"run"`
 	Action    *models.PlaybookRunAction `json:"action,omitempty"`
@@ -78,6 +79,7 @@ type TemplateEnv struct {
 func (t *TemplateEnv) AsMap(ctx context.Context) map[string]any {
 	output := map[string]any{
 		"check":     lo.FromPtr(t.Check).AsMap(),
+		"canary":    lo.FromPtr(t.Canary).AsMap(),
 		"component": lo.ToPtr(lo.FromPtr(t.Component)).AsMap(),
 		"config":    lo.FromPtr(t.Config).AsMap(),
 		"user":      lo.FromPtr(t.User).AsMap(),
@@ -114,6 +116,9 @@ func (t *TemplateEnv) SelectableResource() types.ResourceSelectable {
 	if t.Check != nil {
 		return t.Check
 	}
+	if t.Canary != nil {
+		return t.Canary
+	}
 	return nil
 }
 
@@ -124,6 +129,9 @@ func (t *TemplateEnv) ABACAttributes() *models.ABACAttribute {
 	}
 	if t.Check != nil {
 		output.Check = *t.Check
+	}
+	if t.Canary != nil {
+		output.Canary = *t.Canary
 	}
 	if t.Config != nil {
 		output.Config = *t.Config
