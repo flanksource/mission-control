@@ -57,7 +57,16 @@ help: ## Display this help.
 
 
 .PHONY: static
-static: $(TAILWIND_JS) manifests generate fmt ginkgo
+static: $(TAILWIND_JS) manifests generate fmt ginkgo ui plugins-ui
+
+.PHONY: ui
+ui: $(LOCALBIN)/pnpm ## Build the embedded catalog explorer UI (ui/frontend -> ui/frontend/dist/ui.js)
+	cd ui/frontend && CI=true pnpm install --no-frozen-lockfile --prefer-offline && pnpm run build
+
+.PHONY: plugins-ui
+plugins-ui: $(LOCALBIN)/pnpm ## Build embedded plugin UI bundles
+	cd plugins/kubernetes-logs/ui-src && CI=true pnpm install --no-frozen-lockfile --prefer-offline && pnpm run build
+	cd plugins/sql-server/ui-src && CI=true pnpm install --no-frozen-lockfile --prefer-offline && pnpm run build
 
 .PHONY: test
 test:
@@ -67,11 +76,12 @@ test:
 		--succinct --label-filter='!ignore_local'
 
 .PHONY: ci-test
-ci-test:
-	ginkgo -r -p --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct
+ci-test: $(TAILWIND_JS) $(LOCALBIN) ui plugins-ui
+	go build -o ./.bin/$(NAME) main.go
+	ginkgo -r --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct
 
 .PHONY: e2e
-e2e: $(TAILWIND_JS)
+e2e: $(TAILWIND_JS) ui plugins-ui
 	go build -o ./.bin/$(NAME) main.go
 	ginkgo -r --keep-going  ./tests/e2e/...
 
@@ -142,6 +152,9 @@ gen-schemas:
 	if grep -v "^//" ../../go.mod | grep -q "replace.*github.com/flanksource/duty.*=>"; then \
 		go mod edit -replace=github.com/flanksource/duty=../../../duty; \
 	fi && \
+	if grep -v "^//" ../../go.mod | grep -q "replace.*github.com/flanksource/clicky.*=>"; then \
+		go mod edit -replace=github.com/flanksource/clicky=../../../clicky; \
+	fi && \
 	go mod tidy && \
 	go run ./main.go
 
@@ -193,7 +206,7 @@ deps: install-deps ginkgo controller-gen golangci-lint kustomize $(TAILWIND_JS) 
 
 .PHONY: ginkgo
 ginkgo:
-	go install github.com/onsi/ginkgo/v2/ginkgo
+	GOBIN=$(LOCALBIN) go install github.com/onsi/ginkgo/v2/ginkgo
 
 .PHONY: controller-gen
 controller-gen: install-deps $(LOCALBIN)
