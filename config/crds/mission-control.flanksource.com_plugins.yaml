@@ -45,6 +45,11 @@ spec:
               iframed into the catalog detail page, and operations that are exposed
               over the HTTP API and as CLI subcommands.
             properties:
+              checksum:
+                description: |-
+                  Checksum optionally pins the downloaded binary to a known good hash.
+                  When set, deps refuses to install a binary with a different checksum.
+                type: string
               connections:
                 description: |-
                   Connections defines mappings from plugin connection requests to
