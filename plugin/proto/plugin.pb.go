@@ -1151,15 +1151,18 @@ func (x *ListConfigsRequest) GetCursor() string {
 	return ""
 }
 
-// GetConnectionRequest asks the host to resolve a connection by type.
-// The host looks up the matching field in the Plugin CRD's
-// connection.ExecConnections (Kubernetes/AWS/GCP/Azure) and resolves it
-// using the same SetupConnection() pipeline that playbook exec actions use.
-// If config_item_id is set, fromConfigItem-style resolution is used.
+// GetConnectionRequest asks the host to resolve a connection by one of three
+// supported lookups: type, config item, or plugin-defined label. Type and label
+// lookups use spec.connections mappings from the Plugin CRD. Config lookups use
+// the scraper that created the config item.
 type GetConnectionRequest struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Type          string                 `protobuf:"bytes,1,opt,name=type,proto3" json:"type,omitempty"`                                       // "aws" | "kubernetes" | "gcp" | "azure"
-	ConfigItemId  string                 `protobuf:"bytes,2,opt,name=config_item_id,json=configItemId,proto3" json:"config_item_id,omitempty"` // optional: resolve credentials from this config item
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Lookup:
+	//
+	//	*GetConnectionRequest_Type
+	//	*GetConnectionRequest_ConfigItemId
+	//	*GetConnectionRequest_Label
+	Lookup        isGetConnectionRequest_Lookup `protobuf_oneof:"lookup"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1194,19 +1197,61 @@ func (*GetConnectionRequest) Descriptor() ([]byte, []int) {
 	return file_plugin_proto_rawDescGZIP(), []int{16}
 }
 
+func (x *GetConnectionRequest) GetLookup() isGetConnectionRequest_Lookup {
+	if x != nil {
+		return x.Lookup
+	}
+	return nil
+}
+
 func (x *GetConnectionRequest) GetType() string {
 	if x != nil {
-		return x.Type
+		if x, ok := x.Lookup.(*GetConnectionRequest_Type); ok {
+			return x.Type
+		}
 	}
 	return ""
 }
 
 func (x *GetConnectionRequest) GetConfigItemId() string {
 	if x != nil {
-		return x.ConfigItemId
+		if x, ok := x.Lookup.(*GetConnectionRequest_ConfigItemId); ok {
+			return x.ConfigItemId
+		}
 	}
 	return ""
 }
+
+func (x *GetConnectionRequest) GetLabel() string {
+	if x != nil {
+		if x, ok := x.Lookup.(*GetConnectionRequest_Label); ok {
+			return x.Label
+		}
+	}
+	return ""
+}
+
+type isGetConnectionRequest_Lookup interface {
+	isGetConnectionRequest_Lookup()
+}
+
+type GetConnectionRequest_Type struct {
+	Type string `protobuf:"bytes,1,opt,name=type,proto3,oneof"` // e.g. "sql", "aws", "kubernetes", "gcp", "azure"
+}
+
+type GetConnectionRequest_ConfigItemId struct {
+	ConfigItemId string `protobuf:"bytes,2,opt,name=config_item_id,json=configItemId,proto3,oneof"` // resolve the connection used by this config item's scraper
+}
+
+type GetConnectionRequest_Label struct {
+	Label string `protobuf:"bytes,3,opt,name=label,proto3,oneof"` // resolve a plugin-defined connection label mapping
+}
+
+func (*GetConnectionRequest_Type) isGetConnectionRequest_Lookup() {}
+
+func (*GetConnectionRequest_ConfigItemId) isGetConnectionRequest_Lookup() {}
+
+func (*GetConnectionRequest_Label) isGetConnectionRequest_Lookup() {}
 
 type ResolvedConnection struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1608,10 +1653,12 @@ const file_plugin_proto_rawDesc = "" +
 	"\x12ListConfigsRequest\x12F\n" +
 	"\bselector\x18\x01 \x01(\v2*.missioncontrol.plugin.v1.ResourceSelectorR\bselector\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
-	"\x06cursor\x18\x03 \x01(\tR\x06cursor\"P\n" +
-	"\x14GetConnectionRequest\x12\x12\n" +
-	"\x04type\x18\x01 \x01(\tR\x04type\x12$\n" +
-	"\x0econfig_item_id\x18\x02 \x01(\tR\fconfigItemId\"\x9e\x02\n" +
+	"\x06cursor\x18\x03 \x01(\tR\x06cursor\"v\n" +
+	"\x14GetConnectionRequest\x12\x14\n" +
+	"\x04type\x18\x01 \x01(\tH\x00R\x04type\x12&\n" +
+	"\x0econfig_item_id\x18\x02 \x01(\tH\x00R\fconfigItemId\x12\x16\n" +
+	"\x05label\x18\x03 \x01(\tH\x00R\x05labelB\b\n" +
+	"\x06lookup\"\x9e\x02\n" +
 	"\x12ResolvedConnection\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x10\n" +
 	"\x03url\x18\x02 \x01(\tR\x03url\x12\x1a\n" +
@@ -1756,6 +1803,11 @@ func init() { file_plugin_proto_init() }
 func file_plugin_proto_init() {
 	if File_plugin_proto != nil {
 		return
+	}
+	file_plugin_proto_msgTypes[16].OneofWrappers = []any{
+		(*GetConnectionRequest_Type)(nil),
+		(*GetConnectionRequest_ConfigItemId)(nil),
+		(*GetConnectionRequest_Label)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

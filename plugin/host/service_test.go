@@ -28,19 +28,24 @@ var _ = ginkgo.Describe("connectionRefFromScraperSpec", func() {
 			want: "de349d14-9e24-c79f-e817-6f05caa211f7",
 		},
 		{
-			name:    "missing sql block",
+			name: "non-sql connection ref is returned",
+			spec: `{"kubernetes":[{"connection":"connection://default/k8s","selector":"namespace=default"}]}`,
+			want: "connection://default/k8s",
+		},
+		{
+			name:    "missing connection field",
 			spec:    `{"kubernetes":[{"selector":"namespace=default"}]}`,
-			wantErr: "no sql.connection set",
+			wantErr: "no connection set",
 		},
 		{
 			name:    "empty sql block",
 			spec:    `{"sql":[]}`,
-			wantErr: "no sql.connection set",
+			wantErr: "no connection set",
 		},
 		{
 			name:    "sql entry without a connection ref",
 			spec:    `{"sql":[{"query":"select 1"}]}`,
-			wantErr: "no sql.connection set",
+			wantErr: "no connection set",
 		},
 		{
 			name:    "malformed json surfaces decode error",
