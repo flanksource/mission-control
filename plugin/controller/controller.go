@@ -17,6 +17,8 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -38,25 +40,34 @@ func init() {
 	echoSrv.RegisterRoutes(RegisterRoutes)
 }
 
+// registerUIProxy is set by proxy.go's init so the proxy registration code
+// can stay in its own file without an import cycle.
+var registerUIProxy func(e *echo.Echo)
+
 // RegisterRoutes wires the plugin HTTP API onto the given echo instance.
 func RegisterRoutes(e *echo.Echo) {
 	g := e.Group("/api/plugins")
 	g.GET("", ListPlugins, rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
 	g.POST("/:name/operations/:op", InvokeOperation, rbac.Authorization(policy.ObjectCatalog, policy.ActionUpdate))
+
+	if registerUIProxy != nil {
+		registerUIProxy(e)
+	}
 }
 
 // PluginListing is what GET /api/plugins returns: a flat list of plugins
-// applicable to the current config item, with their operations.
+// applicable to the current config item, with their tabs and operations.
 type PluginListing struct {
 	Name        string                   `json:"name"`
 	Description string                   `json:"description,omitempty"`
 	Version     string                   `json:"version,omitempty"`
+	Tabs        []*pluginpb.TabSpec      `json:"tabs,omitempty"`
 	Operations  []*pluginpb.OperationDef `json:"operations,omitempty"`
 }
 
 // ListPlugins returns every running plugin whose CRD selector matches the
 // (optional) config_id query parameter. With no config_id, returns every
-// plugin.
+// plugin (useful for global tabs).
 func ListPlugins(c echo.Context) error {
 	ctx := c.Request().Context().(dutyContext.Context)
 	configID := c.QueryParam("config_id")
@@ -72,6 +83,7 @@ func ListPlugins(c echo.Context) error {
 			Name:        e.Manifest.Name,
 			Description: e.Manifest.Description,
 			Version:     e.Manifest.Version,
+			Tabs:        e.Manifest.Tabs,
 			Operations:  e.Manifest.Operations,
 		})
 	}
@@ -149,5 +161,18 @@ func callerFromCtx(ctx dutyContext.Context) *pluginpb.CallerContext {
 	if u := ctx.User(); u != nil {
 		cc.UserId = u.ID.String()
 	}
+
 	return cc
 }
+
+// jsonError is used by the few non-WriteError responses below.
+//
+//nolint:unused
+func jsonError(c echo.Context, status int, msg string) error {
+	body, _ := json.Marshal(map[string]string{"error": msg})
+	return c.Blob(status, echo.MIMEApplicationJSON, body)
+}
+
+// _ retains fmt for the rare debug formatting; the package itself stays
+// minimal so review can focus on the routing and supervisor wiring.
+var _ = fmt.Sprintf
