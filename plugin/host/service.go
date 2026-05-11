@@ -11,6 +11,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -20,6 +22,7 @@ import (
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	lru "github.com/hashicorp/golang-lru/v2/expirable"
 	"google.golang.org/grpc"
@@ -200,11 +203,128 @@ func resolveConnectionForConfig(ctx dutyContext.Context, configItemID string) (*
 	if err != nil {
 		return nil, fmt.Errorf("connection for config: find scraper for config %s: %w", configItemID, err)
 	}
-	ref, err := connectionRefFromScraperSpec(scraper.Spec)
-	if err != nil {
-		return nil, fmt.Errorf("connection for config: scraper %s: %w", scraper.ID, err)
+	return connectionFromScraper(ctx, scraper)
+}
+
+func connectionFromScraper(ctx dutyContext.Context, scraper *models.ConfigScraper) (*pluginpb.ResolvedConnection, error) {
+	ctx = ctx.WithObject(scraper).WithNamespace(scraper.Namespace)
+	if conn, ok, err := connectionFromKubernetesScraper(ctx, scraper.Spec); err != nil {
+		return nil, fmt.Errorf("connection for scraper %s: %w", scraper.ID, err)
+	} else if ok {
+		return connectionToProto(conn, models.ConnectionTypeKubernetes), nil
 	}
-	return resolveConnectionRef(ctx, ref, "")
+
+	if conn, ok, err := connectionFromSQLScraper(ctx, scraper.Spec); err != nil {
+		return nil, fmt.Errorf("connection for scraper %s: %w", scraper.ID, err)
+	} else if ok {
+		return connectionToProto(conn, "sql"), nil
+	}
+
+	return nil, fmt.Errorf("connection for scraper %s: unsupported scraper type or no supported connection found", scraper.ID)
+}
+
+func connectionFromKubernetesScraper(ctx dutyContext.Context, specJSON string) (*models.Connection, bool, error) {
+	var spec struct {
+		Kubernetes []dutyConn.KubernetesConnection `json:"kubernetes"`
+	}
+	if err := json.Unmarshal([]byte(specJSON), &spec); err != nil {
+		return nil, false, fmt.Errorf("decode kubernetes scraper spec: %w", err)
+	}
+	if len(spec.Kubernetes) == 0 {
+		return nil, false, nil
+	}
+
+	conn := spec.Kubernetes[0]
+	if conn.ConnectionName != "" || conn.Kubeconfig != nil && !conn.Kubeconfig.IsEmpty() {
+		if _, _, err := conn.Populate(ctx, true); err != nil {
+			return nil, true, fmt.Errorf("hydrate kubernetes connection: %w", err)
+		}
+	}
+
+	kubeconfig := ""
+	if conn.Kubeconfig != nil {
+		kubeconfig = conn.Kubeconfig.ValueStatic
+	}
+	if kubeconfig == "" {
+		var err error
+		kubeconfig, err = readDefaultKubeconfig()
+		if err != nil {
+			return nil, true, fmt.Errorf("resolve kubeconfig: %w", err)
+		}
+	}
+
+	return &models.Connection{
+		Name:        "scraper-kubernetes",
+		Type:        models.ConnectionTypeKubernetes,
+		Certificate: kubeconfig,
+	}, true, nil
+}
+
+func connectionFromSQLScraper(ctx dutyContext.Context, specJSON string) (*models.Connection, bool, error) {
+	var spec struct {
+		SQL []struct {
+			Connection     string `json:"connection"`
+			Authentication struct {
+				Username types.EnvVar `json:"username"`
+				Password types.EnvVar `json:"password"`
+			} `json:"auth"`
+		} `json:"sql"`
+	}
+	if err := json.Unmarshal([]byte(specJSON), &spec); err != nil {
+		return nil, false, fmt.Errorf("decode sql scraper spec: %w", err)
+	}
+	if len(spec.SQL) == 0 {
+		return nil, false, nil
+	}
+
+	for _, sql := range spec.SQL {
+		if sql.Connection == "" {
+			continue
+		}
+		conn, err := ctx.HydrateConnectionByURL(sql.Connection)
+		if err != nil {
+			return nil, true, fmt.Errorf("hydrate sql connection %q: %w", sql.Connection, err)
+		}
+		if conn == nil {
+			return nil, true, fmt.Errorf("sql connection %q not found", sql.Connection)
+		}
+		if username, err := ctx.GetEnvValueFromCache(sql.Authentication.Username, ctx.GetNamespace()); err != nil {
+			return nil, true, fmt.Errorf("hydrate sql username: %w", err)
+		} else if username != "" {
+			conn.Username = username
+		}
+		if password, err := ctx.GetEnvValueFromCache(sql.Authentication.Password, ctx.GetNamespace()); err != nil {
+			return nil, true, fmt.Errorf("hydrate sql password: %w", err)
+		} else if password != "" {
+			conn.Password = password
+		}
+		if conn.Type == "" {
+			conn.Type = "sql"
+		}
+		return conn, true, nil
+	}
+
+	return nil, true, fmt.Errorf("no sql.connection set")
+}
+
+func readDefaultKubeconfig() (string, error) {
+	var candidates []string
+	if v := os.Getenv("KUBECONFIG"); v != "" {
+		candidates = append(candidates, filepath.SplitList(v)...)
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		candidates = append(candidates, filepath.Join(home, ".kube", "config"))
+	}
+	for _, p := range candidates {
+		b, err := os.ReadFile(p)
+		if err == nil {
+			return string(b), nil
+		}
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("read %s: %w", p, err)
+		}
+	}
+	return "", fmt.Errorf("no default kubeconfig found")
 }
 
 func resolveConnectionRef(ctx dutyContext.Context, ref, requestedType string) (*pluginpb.ResolvedConnection, error) {
