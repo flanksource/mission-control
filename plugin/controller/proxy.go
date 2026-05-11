@@ -62,6 +62,9 @@ func uiProxy(c echo.Context) error {
 				pr.Out.URL.Path = "/"
 			}
 			pr.Out.URL.RawPath = ""
+			pr.Out.Header.Del("X-Mission-Control-User")
+			pr.Out.Header.Del("X-Mission-Control-User-Email")
+			pr.Out.Header.Del("X-Mission-Control-Config-Id")
 			// Forward caller identity + the catalog id from the query string so
 			// the plugin doesn't need to re-derive them.
 			if u := ctx.User(); u != nil {

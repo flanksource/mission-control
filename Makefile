@@ -35,6 +35,7 @@ PROTOC ?= $(LOCALBIN)/protoc
 PROTOC_GEN_GO ?= $(LOCALBIN)/protoc-gen-go
 PROTOC_GEN_GO_GRPC ?= $(LOCALBIN)/protoc-gen-go-grpc
 PROTOC_INCLUDE ?= $(LOCALBIN)/include
+DEPS ?= $(LOCALBIN)/deps
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= any
@@ -47,9 +48,6 @@ PROTOC_OS = $(if $(filter darwin,$(OS)),osx,$(OS))
 PROTOC_ARCH = $(if $(filter amd64,$(ARCH)),x86_64,$(if $(filter arm64,$(ARCH)),aarch_64,$(ARCH)))
 NODE_VERSION ?= 24.11.0
 PNPM_VERSION ?= 10.33.0
-
-NODE_VERSION ?= 24.11.0
-PNPM_VERSION ?= 10.33.0
 TAILWIND_VERSION ?= 3.4.17
 TAILWIND_JS = auth/oidc/static/tailwind.min.js
 
@@ -60,29 +58,12 @@ $(TAILWIND_JS):
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
-$(LOCALBIN)/node: install-deps $(LOCALBIN)
-	$(LOCALBIN)/deps install node@$(NODE_VERSION) --bin-dir $(LOCALBIN) --app-dir $(LOCALBIN)/apps --tmp-dir $(LOCALBIN)/tmp
-
-$(LOCALBIN)/pnpm: $(LOCALBIN)/node
-	npm install -g pnpm@$(PNPM_VERSION)
-	ln -sf apps/node/bin/pnpm $(LOCALBIN)/pnpm
-	ln -sf apps/node/bin/pnpx $(LOCALBIN)/pnpx
-
-.PHONY: pnpm
-pnpm: $(LOCALBIN)/pnpm
-
 .PHONY: static
 static: $(TAILWIND_JS) manifests generate fmt ginkgo ui
 
 .PHONY: ui
 ui: $(LOCALBIN)/pnpm ## Build the embedded catalog explorer UI (ui/frontend -> ui/frontend/dist/ui.js)
 	cd ui/frontend && CI=true pnpm install --no-frozen-lockfile --prefer-offline && pnpm run build
-
-.PHONY: plugins-ui
-plugins-ui: $(LOCALBIN)/pnpm ## Build embedded plugin UI bundles
-	# TODO(Yash): Remove when plugins are merged
-	# cd plugins/kubernetes-logs/ui-src && CI=true pnpm install --no-frozen-lockfile --prefer-offline && pnpm run build
-	# cd plugins/sql-server/ui-src && CI=true pnpm install --no-frozen-lockfile --prefer-offline && pnpm run build
 
 .PHONY: plugins-ui
 plugins-ui: $(LOCALBIN)/pnpm ## Build embedded plugin UI bundles
@@ -222,14 +203,22 @@ test-e2e: bin
 
 
 .PHONY: install-deps
-install-deps: $(LOCALBIN) ## Install the deps CLI if not present
-	which deps 2>/dev/null || test -x $(LOCALBIN)/deps || curl -sSL https://github.com/flanksource/deps/releases/latest/download/deps-$(OS)-$(ARCH).tar.gz | tar -xz -C $(LOCALBIN)
+install-deps: $(DEPS) ## Install the deps CLI if not present
+
+$(DEPS): | $(LOCALBIN)
+	@if [ -x "$(DEPS)" ]; then \
+		exit 0; \
+	elif command -v deps >/dev/null 2>&1; then \
+		ln -sf "$$(command -v deps)" "$(DEPS)"; \
+	else \
+		curl -sSL https://github.com/flanksource/deps/releases/latest/download/deps-$(OS)-$(ARCH).tar.gz | tar -xz -C $(LOCALBIN); \
+	fi
 
 .PHONY: deps
 deps: install-deps ginkgo controller-gen golangci-lint kustomize $(LOCALBIN)/pnpm $(TAILWIND_JS) ## Install all tool dependencies
 
-$(LOCALBIN)/node: install-deps $(LOCALBIN)
-	deps install node@$(NODE_VERSION) --bin-dir $(LOCALBIN) --app-dir $(LOCALBIN)/apps --tmp-dir $(LOCALBIN)/tmp
+$(LOCALBIN)/node: $(DEPS) | $(LOCALBIN)
+	$(DEPS) install node@$(NODE_VERSION) --bin-dir $(LOCALBIN) --app-dir $(LOCALBIN)/apps --tmp-dir $(LOCALBIN)/tmp
 
 $(LOCALBIN)/pnpm: $(LOCALBIN)/node
 	npm install -g pnpm@$(PNPM_VERSION)
@@ -244,16 +233,16 @@ ginkgo:
 	GOBIN=$(LOCALBIN) go install github.com/onsi/ginkgo/v2/ginkgo
 
 .PHONY: controller-gen
-controller-gen: install-deps $(LOCALBIN)
-	deps install controller-gen@$(CONTROLLER_TOOLS_VERSION) --bin-dir $(LOCALBIN)
+controller-gen: $(DEPS) | $(LOCALBIN)
+	$(DEPS) install controller-gen@$(CONTROLLER_TOOLS_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: golangci-lint
-golangci-lint: install-deps $(LOCALBIN)
-	deps install golangci/golangci-lint@v$(GOLANGCI_LINT_VERSION) --bin-dir $(LOCALBIN)
+golangci-lint: $(DEPS) | $(LOCALBIN)
+	$(DEPS) install golangci/golangci-lint@v$(GOLANGCI_LINT_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: kustomize
-kustomize: install-deps $(LOCALBIN)
-	deps install kubernetes-sigs/kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
+kustomize: $(DEPS) | $(LOCALBIN)
+	$(DEPS) install kubernetes-sigs/kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: docs\:mcp
 docs\:mcp: ## Generate MCP tools reference documentation

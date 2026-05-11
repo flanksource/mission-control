@@ -1,7 +1,9 @@
 package sdk
 
 import (
+	"bufio"
 	"bytes"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net"
@@ -170,6 +172,20 @@ func (b *bufferedResponse) Flush() {
 	if f, ok := b.passthru.(http.Flusher); ok {
 		f.Flush()
 	}
+}
+
+// Hijack implements http.Hijacker. Calling Hijack is the plugin signalling a
+// protocol upgrade; we commit the buffered prelude and delegate to the real
+// ResponseWriter.
+func (b *bufferedResponse) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if !b.committed {
+		b.commit(b.target)
+	}
+	h, ok := b.passthru.(http.Hijacker)
+	if !ok {
+		return nil, nil, errors.New("plugin sdk: underlying ResponseWriter does not support hijacking")
+	}
+	return h.Hijack()
 }
 
 func (b *bufferedResponse) Header() http.Header {

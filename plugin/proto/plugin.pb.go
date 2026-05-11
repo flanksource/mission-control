@@ -66,9 +66,9 @@ type PluginManifest struct {
 	Description     string                 `protobuf:"bytes,3,opt,name=description,proto3" json:"description,omitempty"`
 	ProtocolVersion uint32                 `protobuf:"varint,4,opt,name=protocol_version,json=protocolVersion,proto3" json:"protocol_version,omitempty"`
 	Capabilities    []string               `protobuf:"bytes,5,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
-	Tabs            []*TabSpec             `protobuf:"bytes,6,rep,name=tabs,proto3" json:"tabs,omitempty"`
-	Operations      []*OperationDef        `protobuf:"bytes,7,rep,name=operations,proto3" json:"operations,omitempty"`
-	UiPort          uint32                 `protobuf:"varint,8,opt,name=ui_port,json=uiPort,proto3" json:"ui_port,omitempty"`
+	Operations      []*OperationDef        `protobuf:"bytes,6,rep,name=operations,proto3" json:"operations,omitempty"`
+	UiPort          uint32                 `protobuf:"varint,7,opt,name=ui_port,json=uiPort,proto3" json:"ui_port,omitempty"`
+	Tabs            []*TabSpec             `protobuf:"bytes,8,rep,name=tabs,proto3" json:"tabs,omitempty"`
 	unknownFields   protoimpl.UnknownFields
 	sizeCache       protoimpl.SizeCache
 }
@@ -138,13 +138,6 @@ func (x *PluginManifest) GetCapabilities() []string {
 	return nil
 }
 
-func (x *PluginManifest) GetTabs() []*TabSpec {
-	if x != nil {
-		return x.Tabs
-	}
-	return nil
-}
-
 func (x *PluginManifest) GetOperations() []*OperationDef {
 	if x != nil {
 		return x.Operations
@@ -157,6 +150,13 @@ func (x *PluginManifest) GetUiPort() uint32 {
 		return x.UiPort
 	}
 	return 0
+}
+
+func (x *PluginManifest) GetTabs() []*TabSpec {
+	if x != nil {
+		return x.Tabs
+	}
+	return nil
 }
 
 type TabSpec struct {
@@ -1628,12 +1628,12 @@ const file_plugin_proto_rawDesc = "" +
 	"\aversion\x18\x02 \x01(\tR\aversion\x12 \n" +
 	"\vdescription\x18\x03 \x01(\tR\vdescription\x12)\n" +
 	"\x10protocol_version\x18\x04 \x01(\rR\x0fprotocolVersion\x12\"\n" +
-	"\fcapabilities\x18\x05 \x03(\tR\fcapabilities\x125\n" +
-	"\x04tabs\x18\x06 \x03(\v2!.missioncontrol.plugin.v1.TabSpecR\x04tabs\x12F\n" +
+	"\fcapabilities\x18\x05 \x03(\tR\fcapabilities\x12F\n" +
 	"\n" +
-	"operations\x18\a \x03(\v2&.missioncontrol.plugin.v1.OperationDefR\n" +
+	"operations\x18\x06 \x03(\v2&.missioncontrol.plugin.v1.OperationDefR\n" +
 	"operations\x12\x17\n" +
-	"\aui_port\x18\b \x01(\rR\x06uiPort\"[\n" +
+	"\aui_port\x18\a \x01(\rR\x06uiPort\x125\n" +
+	"\x04tabs\x18\b \x03(\v2!.missioncontrol.plugin.v1.TabSpecR\x04tabs\"[\n" +
 	"\aTabSpec\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04icon\x18\x02 \x01(\tR\x04icon\x12\x12\n" +
@@ -1832,8 +1832,8 @@ var file_plugin_proto_goTypes = []any{
 	(*timestamppb.Timestamp)(nil), // 28: google.protobuf.Timestamp
 }
 var file_plugin_proto_depIdxs = []int32{
-	2,  // 0: missioncontrol.plugin.v1.PluginManifest.tabs:type_name -> missioncontrol.plugin.v1.TabSpec
-	3,  // 1: missioncontrol.plugin.v1.PluginManifest.operations:type_name -> missioncontrol.plugin.v1.OperationDef
+	3,  // 0: missioncontrol.plugin.v1.PluginManifest.operations:type_name -> missioncontrol.plugin.v1.OperationDef
+	2,  // 1: missioncontrol.plugin.v1.PluginManifest.tabs:type_name -> missioncontrol.plugin.v1.TabSpec
 	27, // 2: missioncontrol.plugin.v1.OperationDef.params_schema:type_name -> google.protobuf.Struct
 	22, // 3: missioncontrol.plugin.v1.RegisterRequest.env:type_name -> missioncontrol.plugin.v1.RegisterRequest.EnvEntry
 	27, // 4: missioncontrol.plugin.v1.ConfigureRequest.settings:type_name -> google.protobuf.Struct
