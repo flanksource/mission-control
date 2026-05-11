@@ -70,7 +70,7 @@ func buildRestConfig(ctx context.Context, host sdk.HostClient, configItemID stri
 		if configItemID != "" {
 			conn, err = host.GetConnectionForConfig(ctx, configItemID)
 		} else {
-			conn, err = host.GetConnectionByType(ctx, "kubernetes")
+			conn, err = host.GetConnectionByType(ctx, sdk.ConnectionTypeKubernetes)
 		}
 		if err == nil && conn != nil && conn.Properties != nil {
 			if kc, ok := conn.Properties.AsMap()["kubeconfig"].(string); ok && kc != "" {

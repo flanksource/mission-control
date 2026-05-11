@@ -23,7 +23,7 @@ type HostClient interface {
 	ListConfigs(ctx context.Context, selector types.ResourceSelector, limit int) (*pluginpb.ConfigItemList, error)
 
 	// GetConnectionByType resolves a connection using spec.connections.types.
-	GetConnectionByType(ctx context.Context, typ string) (*pluginpb.ResolvedConnection, error)
+	GetConnectionByType(ctx context.Context, typ ConnectionType) (*pluginpb.ResolvedConnection, error)
 
 	// GetConnectionForConfig resolves the connection used by the scraper that created the config item.
 	GetConnectionForConfig(ctx context.Context, configItemID string) (*pluginpb.ResolvedConnection, error)
@@ -60,8 +60,8 @@ func (h *hostClient) ListConfigs(ctx context.Context, selector types.ResourceSel
 	})
 }
 
-func (h *hostClient) GetConnectionByType(ctx context.Context, typ string) (*pluginpb.ResolvedConnection, error) {
-	return h.c.GetConnection(ctx, &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_Type{Type: typ}})
+func (h *hostClient) GetConnectionByType(ctx context.Context, typ ConnectionType) (*pluginpb.ResolvedConnection, error) {
+	return h.c.GetConnection(ctx, &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_Type{Type: string(typ)}})
 }
 
 func (h *hostClient) GetConnectionForConfig(ctx context.Context, configItemID string) (*pluginpb.ResolvedConnection, error) {
