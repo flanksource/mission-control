@@ -9,6 +9,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
+	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/sdk"
 )
 
@@ -20,9 +21,8 @@ type clientCache struct {
 }
 
 // For returns a kubernetes client appropriate for the given context. The
-// host's GetConnection is preferred (the Plugin CRD's connection.kubernetes
-// is the source of truth). When the host is unavailable (e.g. CLI smoke tests)
-// or the connection didn't yield a kubeconfig, falls back to in-cluster.
+// host-resolved connection is preferred. When the host is unavailable or the
+// connection didn't yield a kubeconfig, falls back to in-cluster.
 func (c *clientCache) For(ctx context.Context, host sdk.HostClient, configItemID string) (kubernetes.Interface, error) {
 	c.mu.Lock()
 	if c.entries == nil {
@@ -65,7 +65,13 @@ func (c *clientCache) store(k string, v kubernetes.Interface) {
 // sidecar in the same cluster).
 func buildRestConfig(ctx context.Context, host sdk.HostClient, configItemID string) (*rest.Config, error) {
 	if host != nil {
-		conn, err := host.GetConnection(ctx, "kubernetes", configItemID)
+		var conn *pluginpb.ResolvedConnection
+		var err error
+		if configItemID != "" {
+			conn, err = host.GetConnectionForConfig(ctx, configItemID)
+		} else {
+			conn, err = host.GetConnectionByType(ctx, "kubernetes")
+		}
 		if err == nil && conn != nil && conn.Properties != nil {
 			if kc, ok := conn.Properties.AsMap()["kubeconfig"].(string); ok && kc != "" {
 				cfg, err := clientcmd.RESTConfigFromKubeConfig([]byte(kc))

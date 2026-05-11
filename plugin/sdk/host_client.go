@@ -22,9 +22,14 @@ type HostClient interface {
 	// ListConfigs returns config items matching the given ResourceSelector.
 	ListConfigs(ctx context.Context, selector types.ResourceSelector, limit int) (*pluginpb.ConfigItemList, error)
 
-	// GetConnection resolves a connection of the given type. typ is one of
-	// "aws", "kubernetes", "gcp", "azure", or "sql".
-	GetConnection(ctx context.Context, typ, configItemID string) (*pluginpb.ResolvedConnection, error)
+	// GetConnectionByType resolves a connection using spec.connections.types.
+	GetConnectionByType(ctx context.Context, typ string) (*pluginpb.ResolvedConnection, error)
+
+	// GetConnectionForConfig resolves the connection used by the scraper that created the config item.
+	GetConnectionForConfig(ctx context.Context, configItemID string) (*pluginpb.ResolvedConnection, error)
+
+	// GetConnectionByLabel resolves a connection using spec.connections.labels.
+	GetConnectionByLabel(ctx context.Context, label string) (*pluginpb.ResolvedConnection, error)
 
 	// Log forwards a structured log entry to the host's logger.
 	Log(ctx context.Context, level, message string, fields map[string]string) error
@@ -55,8 +60,16 @@ func (h *hostClient) ListConfigs(ctx context.Context, selector types.ResourceSel
 	})
 }
 
-func (h *hostClient) GetConnection(ctx context.Context, typ, configItemID string) (*pluginpb.ResolvedConnection, error) {
-	return h.c.GetConnection(ctx, &pluginpb.GetConnectionRequest{Type: typ, ConfigItemId: configItemID})
+func (h *hostClient) GetConnectionByType(ctx context.Context, typ string) (*pluginpb.ResolvedConnection, error) {
+	return h.c.GetConnection(ctx, &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_Type{Type: typ}})
+}
+
+func (h *hostClient) GetConnectionForConfig(ctx context.Context, configItemID string) (*pluginpb.ResolvedConnection, error) {
+	return h.c.GetConnection(ctx, &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_ConfigItemId{ConfigItemId: configItemID}})
+}
+
+func (h *hostClient) GetConnectionByLabel(ctx context.Context, label string) (*pluginpb.ResolvedConnection, error) {
+	return h.c.GetConnection(ctx, &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_Label{Label: label}})
 }
 
 func (h *hostClient) Log(ctx context.Context, level, message string, fields map[string]string) error {
