@@ -50,7 +50,7 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 	}
 
 	binPath := filepath.Join(binDir, p.Name)
-	if info, err := os.Stat(binPath); err == nil && !info.IsDir() {
+	if info, err := os.Stat(binPath); err == nil && !info.IsDir() && p.Spec.Checksum == "" {
 		ctx.Logger.V(3).Infof("plugin %s: using existing binary at %s, skipping install", p.Name, binPath)
 	} else {
 		res, err := deps.InstallWithContext(ctx,
@@ -66,30 +66,11 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 		}
 	}
 
-	p.Status.InstalledPath = binPath
-
-	var previous *Entry
-	if entry := Default.Get(p.Name); entry != nil {
-		copy := *entry
-		previous = &copy
-	}
-
-	Default.Upsert(string(p.UID), p.Name, p.Spec)
+	Default.Upsert(p.Name, p.Spec)
 
 	if SupervisorStarter != nil {
-		if err := SupervisorStarter(ctx, p.Name); err != nil {
-			if previous != nil {
-				Default.Upsert(previous.ID, previous.Name, previous.Spec)
-			} else {
-				Default.Remove(p.Name)
-			}
-			return err
-		}
+		return SupervisorStarter(ctx, p.Name)
 	}
-	if entry := Default.Get(p.Name); entry != nil && entry.Manifest != nil {
-		p.Status.PluginVersion = entry.Manifest.Version
-	}
-
 	return nil
 }
 
@@ -101,16 +82,16 @@ var SupervisorStopper func(name string) error
 // process and drops the registry entry. The binary is left on disk —
 // re-creating the CRD won't re-download a binary that already exists.
 func DeletePlugin(ctx context.Context, id string) error {
-	name := Default.NameForID(id)
-	if name == "" {
-		name = id
-	}
-	if SupervisorStopper != nil {
-		if err := SupervisorStopper(name); err != nil {
-			return err
+	for _, e := range Default.List() {
+		if e.Manifest != nil && e.Manifest.Name == id {
+			id = e.Manifest.Name
+			break
 		}
 	}
-	Default.Remove(name)
+	if SupervisorStopper != nil {
+		_ = SupervisorStopper(id)
+	}
+	Default.Remove(id)
 	return nil
 }
 
@@ -120,24 +101,14 @@ func DeleteStalePlugin(ctx context.Context, newer *v1.Plugin) error {
 	if newer == nil {
 		return nil
 	}
-	newerID := string(newer.UID)
 	for _, e := range Default.List() {
-		name := e.Name
-		if e.Manifest != nil && e.Manifest.Name != "" {
-			name = e.Manifest.Name
-		}
-		if name != newer.Name {
+		if e.Manifest != nil && e.Manifest.Name != newer.Name {
 			continue
 		}
-		if e.ID == newerID && e.Spec.Source == newer.Spec.Source && e.Spec.Version == newer.Spec.Version {
+		// Same name and same UID is not stale.
+		if e.Spec.Source == newer.Spec.Source && e.Spec.Version == newer.Spec.Version {
 			continue
 		}
-		if SupervisorStopper != nil {
-			if err := SupervisorStopper(e.Name); err != nil {
-				return err
-			}
-		}
-		Default.Remove(e.Name)
 	}
 	return nil
 }

@@ -108,7 +108,7 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 
 	// Fixtures that are flaky in CI and need multiple attempts.
 	flakyFixtures := map[string]int{
-		// "email-report": 5,
+		"email-report": 5,
 	}
 
 	for _, fixturePath := range fixtures {

@@ -94,10 +94,6 @@ func (t *Scope) SetObservedGeneration(generation int64) {
 	t.Status.ObservedGeneration = generation
 }
 
-func (t *Scope) GetObservedGeneration() int64 {
-	return t.Status.ObservedGeneration
-}
-
 func (t *Scope) GetStatusConditions() *[]metav1.Condition {
 	return &t.Status.Conditions
 }

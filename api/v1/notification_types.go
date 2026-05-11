@@ -178,10 +178,6 @@ func (t *Notification) SetObservedGeneration(generation int64) {
 	t.Status.ObservedGeneration = generation
 }
 
-func (t *Notification) GetObservedGeneration() int64 {
-	return t.Status.ObservedGeneration
-}
-
 func (t *Notification) GetStatusConditions() *[]metav1.Condition {
 	return &t.Status.Conditions
 }

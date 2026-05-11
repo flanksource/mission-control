@@ -1,0 +1,3899 @@
+{
+  "configItem": {
+    "id": "cfg-eks-001",
+    "name": "prod-eks-cluster",
+    "type": "AWS::EKS::Cluster",
+    "configClass": "Cluster",
+    "status": "Active",
+    "health": "healthy",
+    "description": "Production EKS cluster running Mission Control workloads in us-east-1",
+    "labels": {
+      "env": "production",
+      "team": "platform",
+      "region": "us-east-1"
+    },
+    "costTotal30d": 4280.5,
+    "createdAt": "2025-03-15T09:00:00Z",
+    "updatedAt": "2026-03-28T12:00:00Z"
+  },
+  "categoryMappings": [
+    {
+      "category": "rbac.granted",
+      "filter": "changeType == \"PermissionGranted\" || changeType == \"PermissionAdded\" || changeType == \"IAMRoleAdded\""
+    },
+    {
+      "category": "rbac.revoked",
+      "filter": "changeType == \"PermissionRevoked\" || changeType == \"PermissionRemoved\" || changeType == \"IAMRoleRemoved\""
+    },
+    {
+      "category": "backup.success",
+      "filter": "changeType == \"BackupCompleted\" || changeType == \"BackupSuccessful\""
+    },
+    {
+      "category": "backup.failed",
+      "filter": "changeType == \"BackupFailed\""
+    },
+    {
+      "category": "backup.progress",
+      "filter": "changeType == \"BackupStarted\" || changeType == \"BackupRunning\" || changeType == \"BackupEnqueued\""
+    },
+    {
+      "category": "backup.restore",
+      "filter": "changeType == \"BackupRestored\" || changeType == \"RestoreCompleted\""
+    },
+    {
+      "category": "deployment.spec",
+      "filter": "changeType == \"diff\""
+    },
+    {
+      "category": "deployment.scale",
+      "filter": "changeType == \"ScalingReplicaSet\""
+    },
+    {
+      "category": "deployment.policy",
+      "filter": "changeType == \"PolicyUpdate\""
+    }
+  ],
+  "changes": [
+    {
+      "id": "chg-001",
+      "configID": "cfg-eks-001",
+      "changeType": "diff",
+      "category": "deployment.spec",
+      "severity": "info",
+      "source": "kubernetes",
+      "summary": "Node pool autoscaler adjusted desired count from 3 to 5",
+      "createdBy": "cluster-autoscaler",
+      "createdAt": "2026-03-30T08:15:00Z",
+      "count": 1
+    },
+    {
+      "id": "chg-002",
+      "configID": "cfg-eks-001",
+      "changeType": "Pulled",
+      "severity": "info",
+      "source": "kubernetes",
+      "summary": "Image flanksource/incident-commander:v1.4.200 pulled on node ip-10-0-1-42",
+      "createdAt": "2026-03-30T07:30:00Z",
+      "count": 3
+    },
+    {
+      "id": "chg-003",
+      "configID": "cfg-eks-001",
+      "changeType": "ScalingReplicaSet",
+      "category": "deployment.scale",
+      "severity": "low",
+      "source": "kubernetes",
+      "summary": "Deployment incident-commander scaled from 2 to 3 replicas",
+      "externalCreatedBy": "hpa-controller",
+      "createdAt": "2026-03-29T22:00:00Z"
+    },
+    {
+      "id": "chg-004",
+      "configID": "cfg-eks-001",
+      "changeType": "diff",
+      "category": "deployment.spec",
+      "severity": "medium",
+      "source": "terraform",
+      "summary": "EKS cluster version upgraded from 1.28 to 1.29",
+      "createdBy": "alice@flanksource.com",
+      "createdAt": "2026-03-29T14:00:00Z"
+    },
+    {
+      "id": "chg-005",
+      "configID": "cfg-eks-001",
+      "changeType": "PolicyUpdate",
+      "category": "deployment.policy",
+      "severity": "high",
+      "source": "argocd",
+      "summary": "Network policy updated: restricted egress to 10.0.0.0/8 for namespace mc",
+      "createdBy": "bob@flanksource.com",
+      "createdAt": "2026-03-28T16:00:00Z"
+    },
+    {
+      "id": "chg-006",
+      "configID": "cfg-eks-001",
+      "changeType": "diff",
+      "category": "deployment.spec",
+      "severity": "critical",
+      "source": "aws-config",
+      "summary": "IAM role policy detached: eks-admin-access removed from cluster role",
+      "createdBy": "security-automation",
+      "createdAt": "2026-03-28T10:00:00Z"
+    },
+    {
+      "id": "chg-007",
+      "configID": "cfg-eks-001",
+      "changeType": "FieldsV1",
+      "severity": "info",
+      "source": "kubernetes",
+      "summary": "ConfigMap kube-proxy updated with new CIDR ranges",
+      "createdAt": "2026-03-27T18:00:00Z",
+      "count": 2
+    },
+    {
+      "id": "chg-008",
+      "configID": "cfg-eks-001",
+      "changeType": "diff",
+      "severity": "low",
+      "source": "terraform",
+      "summary": "Added tag cost-center=platform-engineering to cluster",
+      "createdBy": "carol@flanksource.com",
+      "createdAt": "2026-03-27T09:00:00Z"
+    },
+    {
+      "id": "chg-009",
+      "configID": "cfg-eks-001",
+      "changeType": "ScalingReplicaSet",
+      "category": "deployment.scale",
+      "severity": "info",
+      "source": "kubernetes",
+      "summary": "Deployment canary-checker scaled from 1 to 2 replicas",
+      "externalCreatedBy": "hpa-controller",
+      "createdAt": "2026-03-26T20:00:00Z"
+    },
+    {
+      "id": "chg-010",
+      "configID": "cfg-eks-001",
+      "changeType": "diff",
+      "category": "deployment.spec",
+      "severity": "medium",
+      "source": "argocd",
+      "summary": "Helm release cert-manager upgraded from v1.13.3 to v1.14.1",
+      "createdBy": "alice@flanksource.com",
+      "createdAt": "2026-03-26T11:00:00Z"
+    },
+    {
+      "id": "chg-011",
+      "configID": "cfg-eks-001",
+      "changeType": "Pulled",
+      "severity": "info",
+      "source": "kubernetes",
+      "summary": "Image flanksource/canary-checker:v1.0.350 pulled",
+      "createdAt": "2026-03-25T15:00:00Z",
+      "count": 5
+    },
+    {
+      "id": "chg-012",
+      "configID": "cfg-eks-001",
+      "changeType": "PolicyUpdate",
+      "category": "deployment.policy",
+      "severity": "high",
+      "source": "aws-config",
+      "summary": "Security group sg-0abc123 ingress rule added: allow 443 from 0.0.0.0/0",
+      "createdBy": "terraform",
+      "createdAt": "2026-03-25T10:00:00Z"
+    },
+    {
+      "id": "chg-013",
+      "configID": "cfg-eks-001",
+      "changeType": "diff",
+      "category": "deployment.spec",
+      "severity": "low",
+      "source": "kubernetes",
+      "summary": "PodDisruptionBudget added for incident-commander (minAvailable: 2)",
+      "createdBy": "bob@flanksource.com",
+      "createdAt": "2026-03-24T14:00:00Z"
+    },
+    {
+      "id": "chg-014",
+      "configID": "cfg-eks-001",
+      "changeType": "PermissionGranted",
+      "category": "rbac.granted",
+      "severity": "info",
+      "source": "okta",
+      "summary": "Granted db_owner to alice@flanksource.com on prod-rds-01",
+      "createdBy": "admin@flanksource.com",
+      "createdAt": "2026-03-28T09:00:00Z",
+      "details": {
+        "permission": {
+          "user": "alice@flanksource.com",
+          "role": "db_owner"
+        }
+      }
+    },
+    {
+      "id": "chg-015",
+      "configID": "cfg-eks-001",
+      "changeType": "PermissionRevoked",
+      "category": "rbac.revoked",
+      "severity": "info",
+      "source": "okta",
+      "summary": "Revoked Secrets Reader access for bob@flanksource.com on prod-eks-cluster",
+      "createdBy": "admin@flanksource.com",
+      "createdAt": "2026-03-27T15:00:00Z",
+      "details": {
+        "permission": {
+          "user": "bob@flanksource.com",
+          "role": "Secrets Reader"
+        }
+      }
+    },
+    {
+      "id": "chg-016",
+      "configID": "cfg-eks-001",
+      "changeType": "BackupCompleted",
+      "category": "backup.success",
+      "severity": "info",
+      "source": "velero",
+      "summary": "Full cluster backup completed successfully (2.4 GiB)",
+      "createdAt": "2026-03-29T03:00:00Z"
+    },
+    {
+      "id": "chg-017",
+      "configID": "cfg-eks-001",
+      "changeType": "BackupFailed",
+      "category": "backup.failed",
+      "severity": "high",
+      "source": "velero",
+      "summary": "Incremental backup failed: PVC snapshot timeout after 300s",
+      "createdAt": "2026-03-28T03:00:00Z"
+    },
+    {
+      "id": "chg-018",
+      "configID": "cfg-eks-001",
+      "changeType": "BackupStarted",
+      "category": "backup.progress",
+      "severity": "info",
+      "source": "velero",
+      "summary": "Scheduled backup initiated for prod-eks-cluster",
+      "createdAt": "2026-03-30T03:00:00Z"
+    },
+    {
+      "id": "chg-019",
+      "configID": "cfg-eks-001",
+      "changeType": "UserCreated",
+      "severity": "info",
+      "source": "okta",
+      "createdAt": "2026-03-24T11:30:00Z",
+      "typedChange": {
+        "kind": "UserChange/v1",
+        "user_name": "alice",
+        "user_email": "alice@flanksource.com",
+        "user_type": "human",
+        "group_name": "platform-admins",
+        "tenant": "production"
+      }
+    },
+    {
+      "id": "chg-020",
+      "configID": "cfg-eks-001",
+      "changeType": "Screenshot",
+      "severity": "info",
+      "source": "synthetics",
+      "createdAt": "2026-03-24T10:15:00Z",
+      "typedChange": {
+        "kind": "Screenshot/v1",
+        "artifact_id": "art-001",
+        "content_type": "image/png",
+        "width": 1440,
+        "height": 900,
+        "url": "https://prod-eks-cluster.example.com/login"
+      }
+    },
+    {
+      "id": "chg-021",
+      "configID": "cfg-eks-001",
+      "changeType": "PermissionSync",
+      "severity": "low",
+      "source": "iam-reconciler",
+      "createdAt": "2026-03-24T09:45:00Z",
+      "typedChange": {
+        "kind": "PermissionChange/v1",
+        "user_name": "jane@flanksource.com",
+        "role_name": "cluster-admin",
+        "scope": "namespace/mc"
+      }
+    },
+    {
+      "id": "chg-022",
+      "configID": "cfg-eks-001",
+      "changeType": "Deployment",
+      "severity": "info",
+      "source": "argocd",
+      "createdAt": "2026-03-24T09:00:00Z",
+      "typedChange": {
+        "kind": "Deployment/v1",
+        "previous_image": "flanksource/incident-commander:v1.4.190",
+        "new_image": "flanksource/incident-commander:v1.4.200",
+        "container": "incident-commander",
+        "namespace": "mc",
+        "strategy": "rolling"
+      }
+    },
+    {
+      "id": "chg-023",
+      "configID": "cfg-eks-001",
+      "changeType": "Promotion",
+      "severity": "info",
+      "source": "release-bot",
+      "createdAt": "2026-03-24T08:30:00Z",
+      "typedChange": {
+        "kind": "Promotion/v1",
+        "from_environment": "development",
+        "to_environment": "staging",
+        "version": "v1.4.200",
+        "artifact": "incident-commander",
+        "approvals": [
+          {
+            "kind": "Approval/v1",
+            "stage": "PreDeployment",
+            "status": "Approved",
+            "approver": {
+              "kind": "Identity/v1",
+              "name": "qa-lead@flanksource.com",
+              "type": "User"
+            }
+          },
+          {
+            "kind": "Approval/v1",
+            "stage": "PostDeployment",
+            "status": "Approved",
+            "approver": {
+              "kind": "Identity/v1",
+              "name": "canary-bot",
+              "type": "System:Auto"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chg-023b",
+      "configID": "cfg-eks-001",
+      "changeType": "Promotion",
+      "severity": "info",
+      "source": "release-bot",
+      "createdAt": "2026-03-24T08:20:00Z",
+      "typedChange": {
+        "kind": "Promotion/v1",
+        "from_environment": "staging",
+        "to_environment": "production",
+        "version": "v1.4.200",
+        "artifact": "incident-commander",
+        "approvals": [
+          {
+            "kind": "Approval/v1",
+            "stage": "PreDeployment",
+            "status": "Approved",
+            "approver": {
+              "kind": "Identity/v1",
+              "name": "ops-lead@flanksource.com",
+              "type": "User"
+            }
+          },
+          {
+            "kind": "Approval/v1",
+            "stage": "PostDeployment",
+            "status": "Approved",
+            "approver": {
+              "kind": "Identity/v1",
+              "name": "sre-oncall@flanksource.com",
+              "type": "User"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "chg-024",
+      "configID": "cfg-eks-001",
+      "changeType": "Approved",
+      "severity": "info",
+      "source": "playbooks",
+      "createdAt": "2026-03-24T08:00:00Z",
+      "typedChange": {
+        "kind": "Approval/v1",
+        "playbook_id": "pb-001",
+        "run_id": "run-approve-001",
+        "approved_by": "ops-lead@flanksource.com",
+        "reason": "Change window approved"
+      }
+    },
+    {
+      "id": "chg-025",
+      "configID": "cfg-eks-001",
+      "changeType": "Rollback",
+      "severity": "high",
+      "source": "argocd",
+      "createdAt": "2026-03-24T07:30:00Z",
+      "typedChange": {
+        "kind": "Rollback/v1",
+        "from_version": "v1.4.200",
+        "to_version": "v1.4.190",
+        "trigger": "health-check",
+        "reason": "Elevated error rate"
+      }
+    },
+    {
+      "id": "chg-026",
+      "configID": "cfg-eks-001",
+      "changeType": "BackupArchived",
+      "severity": "info",
+      "source": "velero",
+      "createdAt": "2026-03-24T07:00:00Z",
+      "typedChange": {
+        "kind": "Backup/v1",
+        "status": "completed",
+        "backup_type": "full",
+        "size": "2.4 GiB",
+        "duration": "4m12s",
+        "target": "s3://velero-prod",
+        "snapshot_id": "snap-019"
+      }
+    },
+    {
+      "id": "chg-027",
+      "configID": "cfg-eks-001",
+      "changeType": "PlaybookCompleted",
+      "severity": "info",
+      "source": "playbooks",
+      "createdAt": "2026-03-24T06:30:00Z",
+      "typedChange": {
+        "kind": "PlaybookExecution/v1",
+        "playbook_name": "Restart Incident Commander",
+        "run_id": "pb-run-019",
+        "status": "completed",
+        "duration": "2m11s"
+      }
+    },
+    {
+      "id": "chg-028",
+      "configID": "cfg-eks-001",
+      "changeType": "Scaling",
+      "severity": "low",
+      "source": "keda",
+      "createdAt": "2026-03-24T06:00:00Z",
+      "typedChange": {
+        "kind": "Scaling/v1",
+        "from_replicas": 2,
+        "to_replicas": 4,
+        "resource_type": "Deployment",
+        "trigger": "queue-depth"
+      }
+    },
+    {
+      "id": "chg-029",
+      "configID": "cfg-eks-001",
+      "changeType": "CertificateRenewed",
+      "severity": "info",
+      "source": "cert-manager",
+      "createdAt": "2026-03-24T05:30:00Z",
+      "typedChange": {
+        "kind": "Certificate/v1",
+        "subject": "prod-eks-cluster.internal",
+        "issuer": "letsencrypt-prod",
+        "not_after": "2026-06-22T00:00:00Z",
+        "serial": "09AF23",
+        "dns_names": "prod-eks-cluster.internal,api.prod.example.com"
+      }
+    },
+    {
+      "id": "chg-030",
+      "configID": "cfg-eks-001",
+      "changeType": "CostChange",
+      "severity": "medium",
+      "source": "cost-analyzer",
+      "createdAt": "2026-03-24T05:00:00Z",
+      "typedChange": {
+        "kind": "CostChange/v1",
+        "previous_cost": 4280.5,
+        "new_cost": 4631.25,
+        "currency": "USD",
+        "period": "30d",
+        "reason": "Node group scale-out"
+      }
+    },
+    {
+      "id": "chg-031",
+      "configID": "cfg-eks-001",
+      "changeType": "PipelineRunCompleted",
+      "severity": "info",
+      "source": "github-actions",
+      "createdAt": "2026-03-24T04:30:00Z",
+      "typedChange": {
+        "kind": "PipelineRun/v1",
+        "pipeline_name": "deploy-incident-commander",
+        "run_number": 841,
+        "branch": "main",
+        "status": "completed",
+        "duration": "9m31s"
+      }
+    },
+    {
+      "id": "chg-032",
+      "configID": "cfg-sql-001",
+      "configName": "prod-sql-primary",
+      "configType": "MSSQL::Database",
+      "changeType": "PermissionAdded",
+      "category": "rbac.granted",
+      "severity": "info",
+      "source": "azure-entra",
+      "createdBy": "alice@flanksource.com",
+      "summary": "PermissionAdded: user alice@flanksource.com, role db_owner, group incident-responders",
+      "createdAt": "2026-03-30T09:12:00Z",
+      "details": {
+        "permission": {
+          "user": "alice@flanksource.com",
+          "role": "db_owner",
+          "group": "incident-responders"
+        }
+      }
+    },
+    {
+      "id": "chg-033",
+      "configID": "cfg-sql-001",
+      "configName": "prod-sql-primary",
+      "configType": "MSSQL::Database",
+      "changeType": "PermissionRemoved",
+      "category": "rbac.revoked",
+      "severity": "info",
+      "source": "azure-entra",
+      "createdBy": "security-automation",
+      "summary": "PermissionRemoved: user contractor-temp, role db_datareader",
+      "createdAt": "2026-03-29T18:40:00Z",
+      "details": {
+        "permission": {
+          "user": "contractor-temp",
+          "role": "db_datareader"
+        }
+      }
+    },
+    {
+      "id": "chg-034",
+      "configID": "cfg-sql-001",
+      "configName": "prod-sql-primary",
+      "configType": "MSSQL::Database",
+      "changeType": "AccessReviewed",
+      "severity": "info",
+      "source": "access-review-job",
+      "createdBy": "governance-bot",
+      "summary": "Quarterly review completed for production database roles",
+      "createdAt": "2026-03-29T16:00:00Z"
+    },
+    {
+      "id": "chg-035",
+      "configID": "cfg-keyvault-001",
+      "configName": "prod-keyvault",
+      "configType": "Azure::KeyVault",
+      "changeType": "PermissionAdded",
+      "category": "rbac.granted",
+      "severity": "info",
+      "source": "okta",
+      "summary": "PermissionAdded: role Secrets Officer, group break-glass-admins",
+      "createdAt": "2026-03-27T07:20:00Z",
+      "details": {
+        "permission": {
+          "group": "break-glass-admins",
+          "role": "Secrets Officer"
+        }
+      }
+    },
+    {
+      "id": "chg-036",
+      "configID": "cfg-ic-db-001",
+      "changeType": "BackupStarted",
+      "category": "backup.progress",
+      "severity": "info",
+      "source": "aws-backup",
+      "summary": "Nightly snapshot started for incident-commander-db",
+      "createdAt": "2026-03-30T02:00:00Z",
+      "typedChange": {
+        "kind": "Backup/v1",
+        "id": "evt-backup-030",
+        "backup_type": "incremental",
+        "target": "s3://ic-prod-backups"
+      }
+    },
+    {
+      "id": "chg-037",
+      "configID": "cfg-ic-db-001",
+      "changeType": "BackupCompleted",
+      "category": "backup.success",
+      "severity": "info",
+      "source": "aws-backup",
+      "summary": "Nightly snapshot completed for incident-commander-db (4.3 GB)",
+      "createdAt": "2026-03-30T02:08:00Z",
+      "typedChange": {
+        "kind": "Backup/v1",
+        "id": "evt-backup-030",
+        "backup_type": "incremental",
+        "target": "s3://ic-prod-backups",
+        "snapshot_id": "snap-ic-030"
+      }
+    },
+    {
+      "id": "chg-038",
+      "configID": "cfg-ic-db-001",
+      "changeType": "BackupFailed",
+      "category": "backup.failed",
+      "severity": "high",
+      "source": "aws-backup",
+      "summary": "Snapshot failed for incident-commander-db after storage timeout",
+      "createdAt": "2026-03-29T02:01:00Z",
+      "typedChange": {
+        "kind": "Backup/v1",
+        "id": "evt-backup-029",
+        "backup_type": "incremental",
+        "target": "s3://ic-prod-backups"
+      }
+    },
+    {
+      "id": "chg-039",
+      "configID": "cfg-ic-db-001",
+      "changeType": "BackupRestored",
+      "category": "backup.restore",
+      "severity": "info",
+      "source": "drill-playbook",
+      "createdBy": "platform-oncall",
+      "summary": "Restored staging copy from nightly snapshot for disaster recovery drill",
+      "createdAt": "2026-03-28T12:10:00Z",
+      "typedChange": {
+        "kind": "Restore/v1",
+        "id": "evt-restore-028",
+        "snapshot_id": "snap-ic-028",
+        "run_id": "pb-run-dr-028"
+      }
+    },
+    {
+      "id": "chg-040",
+      "configID": "cfg-archive-postgres",
+      "changeType": "BackupEnqueued",
+      "category": "backup.progress",
+      "severity": "info",
+      "source": "aws-backup",
+      "summary": "Queued backup job for archive-postgres",
+      "createdAt": "2026-03-27T02:00:00Z",
+      "typedChange": {
+        "kind": "Backup/v1",
+        "id": "evt-backup-027",
+        "target": "s3://archive-postgres-backups"
+      }
+    },
+    {
+      "id": "chg-041",
+      "configID": "cfg-eks-001",
+      "changeType": "Rollback",
+      "category": "deployment.spec",
+      "severity": "high",
+      "source": "terraform",
+      "createdBy": "carol@flanksource.com",
+      "summary": "Deployment incident-commander rolled back from v1.4.200 to v1.4.199 after error budget breach",
+      "createdAt": "2026-03-27T09:00:00Z",
+      "typedChange": {
+        "kind": "Rollback/v1",
+        "from_version": "v1.4.200",
+        "to_version": "v1.4.199",
+        "trigger": "error-budget",
+        "reason": "Canary regression exceeded threshold"
+      }
+    },
+    {
+      "id": "schema-example-001",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "UserChange",
+      "severity": "low",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:59:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "group_id": "g-42",
+        "group_name": "platform",
+        "kind": "UserChange/v1",
+        "tenant": "acme",
+        "user_email": "alice@example.com",
+        "user_id": "u-1138",
+        "user_name": "alice",
+        "user_type": "User"
+      }
+    },
+    {
+      "id": "schema-example-002",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Screenshot",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:58:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "artifact_id": "artifact-1",
+        "content_type": "image/png",
+        "height": 1080,
+        "kind": "Screenshot/v1",
+        "url": "https://artifacts.example.com/screenshots/artifact-1.png",
+        "width": 1920
+      }
+    },
+    {
+      "id": "schema-example-003",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "PermissionChange",
+      "severity": "low",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:57:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "group_id": "g-42",
+        "group_name": "platform",
+        "kind": "PermissionChange/v1",
+        "role_id": "r-7",
+        "role_name": "catalog.editor",
+        "role_type": "Cluster",
+        "scope": "namespace/default",
+        "user_id": "u-1138",
+        "user_name": "alice"
+      }
+    },
+    {
+      "id": "schema-example-004",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "GroupMembership",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:56:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "action": "Added",
+        "group": {
+          "id": "g-42",
+          "kind": "Identity/v1",
+          "name": "platform",
+          "type": "Group"
+        },
+        "kind": "GroupMembership/v1",
+        "member": {
+          "id": "u-1138",
+          "kind": "Identity/v1",
+          "name": "alice",
+          "type": "User"
+        },
+        "tenant": "acme"
+      }
+    },
+    {
+      "id": "schema-example-005",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Identity",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:55:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "comment": "Primary on-call engineer",
+        "id": "u-1138",
+        "kind": "Identity/v1",
+        "name": "alice",
+        "type": "User"
+      }
+    },
+    {
+      "id": "schema-example-006",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Approved",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:54:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "approver": {
+          "id": "u-2277",
+          "kind": "Identity/v1",
+          "name": "bob",
+          "type": "User"
+        },
+        "id": "evt-approval-1",
+        "kind": "Approval/v1",
+        "stage": "PreDeployment",
+        "status": "Approved",
+        "submitted_by": {
+          "id": "u-1138",
+          "kind": "Identity/v1",
+          "name": "alice",
+          "type": "User"
+        },
+        "timestamp": "2026-04-15T10:00:00Z",
+        "url": "https://ci.example.com/approvals/evt-approval-1"
+      }
+    },
+    {
+      "id": "schema-example-007",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "GitSource",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:53:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "branch": "main",
+        "commit_sha": "e935f3fabc0123456789abcdef0123456789abcd",
+        "kind": "GitSource/v1",
+        "tags": "release,stable",
+        "url": "https://github.com/flanksource/duty.git",
+        "version": "v1.0.1260"
+      }
+    },
+    {
+      "id": "schema-example-008",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "HelmSource",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:52:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "chart_name": "mission-control",
+        "chart_version": "0.12.3",
+        "kind": "HelmSource/v1",
+        "repo_url": "https://flanksource.github.io/charts"
+      }
+    },
+    {
+      "id": "schema-example-009",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "ImageSource",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:51:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "image": "flanksource/duty",
+        "kind": "ImageSource/v1",
+        "registry": "docker.io",
+        "sha": "sha256:abc123def456",
+        "version": "v1.0.1260"
+      }
+    },
+    {
+      "id": "schema-example-010",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "DatabaseSource",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:50:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "endpoint": "db.cluster-123.us-east-1.rds.amazonaws.com:5432",
+        "kind": "DatabaseSource/v1",
+        "name": "mission_control",
+        "schema": "public",
+        "type": "PostgreSQL",
+        "version": "15.3"
+      }
+    },
+    {
+      "id": "schema-example-011",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Source",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:49:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "git": {
+          "branch": "main",
+          "commit_sha": "e935f3fabc0123456789abcdef0123456789abcd",
+          "kind": "GitSource/v1",
+          "url": "https://github.com/flanksource/duty.git"
+        },
+        "kind": "Source/v1",
+        "path": "config/production"
+      }
+    },
+    {
+      "id": "schema-example-012",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Environment",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:48:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "description": "Primary production environment",
+        "identifier": "cluster/prod-us-east-1",
+        "kind": "Environment/v1",
+        "name": "prod-us-east",
+        "stage": "Production",
+        "tags": {
+          "cost-center": "eng-1001",
+          "team": "platform"
+        },
+        "type": "Kubernetes"
+      }
+    },
+    {
+      "id": "schema-example-013",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Event",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:47:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "id": "evt-generic-1",
+        "kind": "Event/v1",
+        "properties": {
+          "workflow": "deploy"
+        },
+        "tags": {
+          "source": "github-actions"
+        },
+        "timestamp": "2026-04-15T10:00:00Z",
+        "url": "https://ci.example.com/events/evt-generic-1"
+      }
+    },
+    {
+      "id": "schema-example-014",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Test",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:46:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "description": "Verifies Config change details roundtrip via JSON",
+        "id": "evt-test-1",
+        "kind": "Test/v1",
+        "name": "TestConfigChangeRoundtrip",
+        "result": "Passed",
+        "status": "Passed",
+        "timestamp": "2026-04-15T10:05:00Z",
+        "type": "Integration",
+        "url": "https://ci.example.com/tests/evt-test-1"
+      }
+    },
+    {
+      "id": "schema-example-015",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Promotion",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:45:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "artifact": "flanksource/duty:v1.0.1260",
+        "from": {
+          "kind": "Environment/v1",
+          "name": "staging",
+          "stage": "Staging"
+        },
+        "id": "evt-promo-1",
+        "kind": "Promotion/v1",
+        "source": {
+          "image": {
+            "image": "flanksource/duty",
+            "kind": "ImageSource/v1",
+            "registry": "docker.io",
+            "version": "v1.0.1260"
+          },
+          "kind": "Source/v1"
+        },
+        "timestamp": "2026-04-15T10:10:00Z",
+        "to": {
+          "kind": "Environment/v1",
+          "name": "prod-us-east",
+          "stage": "Production"
+        },
+        "url": "https://ci.example.com/promotions/evt-promo-1",
+        "version": "v1.0.1260"
+      }
+    },
+    {
+      "id": "schema-example-016",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "PipelineRun",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:44:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "environment": {
+          "kind": "Environment/v1",
+          "name": "prod-us-east",
+          "stage": "Production"
+        },
+        "id": "evt-pipeline-1",
+        "kind": "PipelineRun/v1",
+        "status": "Completed",
+        "timestamp": "2026-04-15T10:15:00Z",
+        "url": "https://ci.example.com/pipelines/evt-pipeline-1"
+      }
+    },
+    {
+      "id": "schema-example-017",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Change",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:43:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "from": {
+          "value": 3
+        },
+        "kind": "Change/v1",
+        "path": "spec.replicas",
+        "to": {
+          "value": 5
+        },
+        "type": "UPDATE"
+      }
+    },
+    {
+      "id": "schema-example-018",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "diff",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:42:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "author": {
+          "id": "u-1138",
+          "kind": "Identity/v1",
+          "name": "alice",
+          "type": "User"
+        },
+        "changes": [
+          {
+            "from": {
+              "value": 3
+            },
+            "kind": "Change/v1",
+            "path": "spec.replicas",
+            "to": {
+              "value": 5
+            },
+            "type": "UPDATE"
+          }
+        ],
+        "environment": {
+          "kind": "Environment/v1",
+          "name": "prod-us-east",
+          "stage": "Production"
+        },
+        "id": "evt-config-1",
+        "kind": "ConfigChange/v1",
+        "timestamp": "2026-04-15T10:20:00Z",
+        "url": "https://ci.example.com/configs/evt-config-1"
+      }
+    },
+    {
+      "id": "schema-example-019",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "RestoreCompleted",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:41:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "from": {
+          "kind": "Environment/v1",
+          "name": "backup-vault",
+          "stage": "Production"
+        },
+        "id": "evt-restore-1",
+        "kind": "Restore/v1",
+        "status": "Completed",
+        "timestamp": "2026-04-15T10:25:00Z",
+        "to": {
+          "kind": "Environment/v1",
+          "name": "prod-us-east",
+          "stage": "Production"
+        },
+        "url": "https://ci.example.com/restores/evt-restore-1"
+      }
+    },
+    {
+      "id": "schema-example-020",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "BackupCompleted",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:40:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "backup_type": "Snapshot",
+        "created_by": {
+          "id": "svc-backup",
+          "kind": "Identity/v1",
+          "name": "backup-bot",
+          "type": "System:Auto"
+        },
+        "delta": "140MB",
+        "end": "2026-04-15T10:35:00Z",
+        "environment": {
+          "kind": "Environment/v1",
+          "name": "prod-us-east",
+          "stage": "Production"
+        },
+        "id": "evt-backup-1",
+        "kind": "Backup/v1",
+        "size": "12GB",
+        "status": "Completed",
+        "timestamp": "2026-04-15T10:30:00Z",
+        "url": "https://ci.example.com/backups/evt-backup-1"
+      }
+    },
+    {
+      "id": "schema-example-021",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Dimension",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:39:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "desired": "5",
+        "kind": "Dimension/v1",
+        "max": "10",
+        "min": "1"
+      }
+    },
+    {
+      "id": "schema-example-022",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Scaling",
+      "severity": "low",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:38:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "dimension": "Replicas",
+        "kind": "Scale/v1",
+        "previous_value": {
+          "desired": "3",
+          "kind": "Dimension/v1",
+          "max": "10",
+          "min": "1"
+        },
+        "value": {
+          "desired": "5",
+          "kind": "Dimension/v1",
+          "max": "10",
+          "min": "1"
+        }
+      }
+    },
+    {
+      "id": "schema-example-023",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Approved",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:37:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "approver": {
+          "id": "u-2277",
+          "kind": "Identity/v1",
+          "name": "bob",
+          "type": "User"
+        },
+        "id": "evt-approval-1",
+        "kind": "Approval/v1",
+        "stage": "PreDeployment",
+        "status": "Approved",
+        "submitted_by": {
+          "id": "u-1138",
+          "kind": "Identity/v1",
+          "name": "alice",
+          "type": "User"
+        },
+        "timestamp": "2026-04-15T10:00:00Z",
+        "url": "https://ci.example.com/approvals/evt-approval-1"
+      }
+    },
+    {
+      "id": "schema-example-024",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "BackupCompleted",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:36:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "backup_type": "Snapshot",
+        "created_by": {
+          "id": "svc-backup",
+          "kind": "Identity/v1",
+          "name": "backup-bot",
+          "type": "System:Auto"
+        },
+        "delta": "140MB",
+        "end": "2026-04-15T10:35:00Z",
+        "environment": {
+          "kind": "Environment/v1",
+          "name": "prod-us-east",
+          "stage": "Production"
+        },
+        "id": "evt-backup-1",
+        "kind": "Backup/v1",
+        "size": "12GB",
+        "status": "Completed",
+        "timestamp": "2026-04-15T10:30:00Z",
+        "url": "https://ci.example.com/backups/evt-backup-1"
+      }
+    },
+    {
+      "id": "schema-example-025",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Change",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:35:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "from": {
+          "value": 3
+        },
+        "kind": "Change/v1",
+        "path": "spec.replicas",
+        "to": {
+          "value": 5
+        },
+        "type": "UPDATE"
+      }
+    },
+    {
+      "id": "schema-example-026",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "diff",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:34:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "author": {
+          "id": "u-1138",
+          "kind": "Identity/v1",
+          "name": "alice",
+          "type": "User"
+        },
+        "changes": [
+          {
+            "from": {
+              "value": 3
+            },
+            "kind": "Change/v1",
+            "path": "spec.replicas",
+            "to": {
+              "value": 5
+            },
+            "type": "UPDATE"
+          }
+        ],
+        "environment": {
+          "kind": "Environment/v1",
+          "name": "prod-us-east",
+          "stage": "Production"
+        },
+        "id": "evt-config-1",
+        "kind": "ConfigChange/v1",
+        "timestamp": "2026-04-15T10:20:00Z",
+        "url": "https://ci.example.com/configs/evt-config-1"
+      }
+    },
+    {
+      "id": "schema-example-027",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "DatabaseSource",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:33:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "endpoint": "db.cluster-123.us-east-1.rds.amazonaws.com:5432",
+        "kind": "DatabaseSource/v1",
+        "name": "mission_control",
+        "schema": "public",
+        "type": "PostgreSQL",
+        "version": "15.3"
+      }
+    },
+    {
+      "id": "schema-example-028",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Dimension",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:32:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "desired": "5",
+        "kind": "Dimension/v1",
+        "max": "10",
+        "min": "1"
+      }
+    },
+    {
+      "id": "schema-example-029",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Environment",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:31:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "description": "Primary production environment",
+        "identifier": "cluster/prod-us-east-1",
+        "kind": "Environment/v1",
+        "name": "prod-us-east",
+        "stage": "Production",
+        "tags": {
+          "cost-center": "eng-1001",
+          "team": "platform"
+        },
+        "type": "Kubernetes"
+      }
+    },
+    {
+      "id": "schema-example-030",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Event",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:30:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "id": "evt-generic-1",
+        "kind": "Event/v1",
+        "properties": {
+          "workflow": "deploy"
+        },
+        "tags": {
+          "source": "github-actions"
+        },
+        "timestamp": "2026-04-15T10:00:00Z",
+        "url": "https://ci.example.com/events/evt-generic-1"
+      }
+    },
+    {
+      "id": "schema-example-031",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "GitSource",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:29:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "branch": "main",
+        "commit_sha": "e935f3fabc0123456789abcdef0123456789abcd",
+        "kind": "GitSource/v1",
+        "tags": "release,stable",
+        "url": "https://github.com/flanksource/duty.git",
+        "version": "v1.0.1260"
+      }
+    },
+    {
+      "id": "schema-example-032",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "GroupMembership",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:28:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "action": "Added",
+        "group": {
+          "id": "g-42",
+          "kind": "Identity/v1",
+          "name": "platform",
+          "type": "Group"
+        },
+        "kind": "GroupMembership/v1",
+        "member": {
+          "id": "u-1138",
+          "kind": "Identity/v1",
+          "name": "alice",
+          "type": "User"
+        },
+        "tenant": "acme"
+      }
+    },
+    {
+      "id": "schema-example-033",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "HelmSource",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:27:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "chart_name": "mission-control",
+        "chart_version": "0.12.3",
+        "kind": "HelmSource/v1",
+        "repo_url": "https://flanksource.github.io/charts"
+      }
+    },
+    {
+      "id": "schema-example-034",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Identity",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:26:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "comment": "Primary on-call engineer",
+        "id": "u-1138",
+        "kind": "Identity/v1",
+        "name": "alice",
+        "type": "User"
+      }
+    },
+    {
+      "id": "schema-example-035",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "ImageSource",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:25:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "image": "flanksource/duty",
+        "kind": "ImageSource/v1",
+        "registry": "docker.io",
+        "sha": "sha256:abc123def456",
+        "version": "v1.0.1260"
+      }
+    },
+    {
+      "id": "schema-example-036",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "PermissionChange",
+      "severity": "low",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:24:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "group_id": "g-42",
+        "group_name": "platform",
+        "kind": "PermissionChange/v1",
+        "role_id": "r-7",
+        "role_name": "catalog.editor",
+        "role_type": "Cluster",
+        "scope": "namespace/default",
+        "user_id": "u-1138",
+        "user_name": "alice"
+      }
+    },
+    {
+      "id": "schema-example-037",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "PipelineRun",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:23:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "environment": {
+          "kind": "Environment/v1",
+          "name": "prod-us-east",
+          "stage": "Production"
+        },
+        "id": "evt-pipeline-1",
+        "kind": "PipelineRun/v1",
+        "status": "Completed",
+        "timestamp": "2026-04-15T10:15:00Z",
+        "url": "https://ci.example.com/pipelines/evt-pipeline-1"
+      }
+    },
+    {
+      "id": "schema-example-038",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Promotion",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:22:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "artifact": "flanksource/duty:v1.0.1260",
+        "from": {
+          "kind": "Environment/v1",
+          "name": "staging",
+          "stage": "Staging"
+        },
+        "id": "evt-promo-1",
+        "kind": "Promotion/v1",
+        "source": {
+          "image": {
+            "image": "flanksource/duty",
+            "kind": "ImageSource/v1",
+            "registry": "docker.io",
+            "version": "v1.0.1260"
+          },
+          "kind": "Source/v1"
+        },
+        "timestamp": "2026-04-15T10:10:00Z",
+        "to": {
+          "kind": "Environment/v1",
+          "name": "prod-us-east",
+          "stage": "Production"
+        },
+        "url": "https://ci.example.com/promotions/evt-promo-1",
+        "version": "v1.0.1260"
+      }
+    },
+    {
+      "id": "schema-example-039",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "RestoreCompleted",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:21:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "from": {
+          "kind": "Environment/v1",
+          "name": "backup-vault",
+          "stage": "Production"
+        },
+        "id": "evt-restore-1",
+        "kind": "Restore/v1",
+        "status": "Completed",
+        "timestamp": "2026-04-15T10:25:00Z",
+        "to": {
+          "kind": "Environment/v1",
+          "name": "prod-us-east",
+          "stage": "Production"
+        },
+        "url": "https://ci.example.com/restores/evt-restore-1"
+      }
+    },
+    {
+      "id": "schema-example-040",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Scaling",
+      "severity": "low",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:20:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "dimension": "Replicas",
+        "kind": "Scale/v1",
+        "previous_value": {
+          "desired": "3",
+          "kind": "Dimension/v1",
+          "max": "10",
+          "min": "1"
+        },
+        "value": {
+          "desired": "5",
+          "kind": "Dimension/v1",
+          "max": "10",
+          "min": "1"
+        }
+      }
+    },
+    {
+      "id": "schema-example-041",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Screenshot",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:19:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "artifact_id": "artifact-1",
+        "content_type": "image/png",
+        "height": 1080,
+        "kind": "Screenshot/v1",
+        "url": "https://artifacts.example.com/screenshots/artifact-1.png",
+        "width": 1920
+      }
+    },
+    {
+      "id": "schema-example-042",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Source",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:18:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "git": {
+          "branch": "main",
+          "commit_sha": "e935f3fabc0123456789abcdef0123456789abcd",
+          "kind": "GitSource/v1",
+          "url": "https://github.com/flanksource/duty.git"
+        },
+        "kind": "Source/v1",
+        "path": "config/production"
+      }
+    },
+    {
+      "id": "schema-example-043",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "Test",
+      "severity": "info",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:17:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "description": "Verifies Config change details roundtrip via JSON",
+        "id": "evt-test-1",
+        "kind": "Test/v1",
+        "name": "TestConfigChangeRoundtrip",
+        "result": "Passed",
+        "status": "Passed",
+        "timestamp": "2026-04-15T10:05:00Z",
+        "type": "Integration",
+        "url": "https://ci.example.com/tests/evt-test-1"
+      }
+    },
+    {
+      "id": "schema-example-044",
+      "configID": "schema-example-catalog",
+      "configName": "Schema Example Catalog",
+      "configType": "Schema::Example",
+      "changeType": "UserChange",
+      "severity": "low",
+      "source": "schema-examples",
+      "createdBy": "schema-generator",
+      "createdAt": "2026-04-10T23:16:00.000Z",
+      "count": 1,
+      "typedChange": {
+        "group_id": "g-42",
+        "group_name": "platform",
+        "kind": "UserChange/v1",
+        "tenant": "acme",
+        "user_email": "alice@example.com",
+        "user_id": "u-1138",
+        "user_name": "alice",
+        "user_type": "User"
+      }
+    }
+  ],
+  "analyses": [
+    {
+      "id": "ana-001",
+      "configID": "cfg-eks-001",
+      "analyzer": "Trivy",
+      "message": "Container image flanksource/incident-commander:v1.4.200 has 3 high CVEs (CVE-2026-1234, CVE-2026-1235, CVE-2026-1236)",
+      "status": "open",
+      "severity": "high",
+      "analysisType": "security",
+      "source": "trivy-operator",
+      "firstObserved": "2026-03-28T09:00:00Z",
+      "lastObserved": "2026-03-30T09:00:00Z"
+    },
+    {
+      "id": "ana-002",
+      "configID": "cfg-eks-001",
+      "analyzer": "Trivy",
+      "message": "Base image golang:1.23-alpine has known vulnerability in libcrypto (CVE-2026-0891)",
+      "status": "open",
+      "severity": "critical",
+      "analysisType": "security",
+      "source": "trivy-operator",
+      "firstObserved": "2026-03-25T09:00:00Z",
+      "lastObserved": "2026-03-30T09:00:00Z"
+    },
+    {
+      "id": "ana-003",
+      "configID": "cfg-eks-001",
+      "analyzer": "OPA/Gatekeeper",
+      "message": "Pod incident-commander-7f8b9c running as root user in namespace mc",
+      "status": "open",
+      "severity": "medium",
+      "analysisType": "compliance",
+      "source": "gatekeeper",
+      "firstObserved": "2026-03-20T09:00:00Z",
+      "lastObserved": "2026-03-30T09:00:00Z"
+    },
+    {
+      "id": "ana-004",
+      "configID": "cfg-eks-001",
+      "analyzer": "OPA/Gatekeeper",
+      "message": "Namespace mc missing required label: data-classification",
+      "status": "silenced",
+      "severity": "low",
+      "analysisType": "compliance",
+      "source": "gatekeeper",
+      "firstObserved": "2026-03-15T09:00:00Z",
+      "lastObserved": "2026-03-30T09:00:00Z"
+    },
+    {
+      "id": "ana-005",
+      "configID": "cfg-eks-001",
+      "analyzer": "AWS Cost Optimizer",
+      "message": "EKS node group i3.xlarge instances are underutilized (avg CPU 18%). Consider downsizing to i3.large.",
+      "status": "open",
+      "severity": "medium",
+      "analysisType": "cost",
+      "source": "aws-cost-explorer",
+      "firstObserved": "2026-03-01T09:00:00Z",
+      "lastObserved": "2026-03-30T09:00:00Z"
+    },
+    {
+      "id": "ana-006",
+      "configID": "cfg-eks-001",
+      "analyzer": "AWS Cost Optimizer",
+      "message": "NAT Gateway data processing charges are 40% above baseline ($320/mo). Review egress traffic patterns.",
+      "status": "open",
+      "severity": "low",
+      "analysisType": "cost",
+      "source": "aws-cost-explorer",
+      "firstObserved": "2026-03-10T09:00:00Z",
+      "lastObserved": "2026-03-30T09:00:00Z"
+    },
+    {
+      "id": "ana-007",
+      "configID": "cfg-eks-001",
+      "analyzer": "Prometheus Advisor",
+      "message": "P99 API response latency exceeded 500ms threshold 12 times in the last 7 days",
+      "status": "open",
+      "severity": "high",
+      "analysisType": "performance",
+      "source": "prometheus",
+      "firstObserved": "2026-03-23T09:00:00Z",
+      "lastObserved": "2026-03-30T09:00:00Z"
+    },
+    {
+      "id": "ana-008",
+      "configID": "cfg-eks-001",
+      "analyzer": "AWS Best Practices",
+      "message": "EKS cluster running version 1.29 - version 1.30 is available with security patches",
+      "status": "open",
+      "severity": "info",
+      "analysisType": "recommendation",
+      "source": "aws-advisor",
+      "firstObserved": "2026-03-28T09:00:00Z",
+      "lastObserved": "2026-03-30T09:00:00Z"
+    },
+    {
+      "id": "ana-009",
+      "configID": "cfg-eks-001",
+      "analyzer": "AWS Best Practices",
+      "message": "Enable EKS control plane logging for audit, authenticator, and scheduler components",
+      "status": "resolved",
+      "severity": "medium",
+      "analysisType": "reliability",
+      "source": "aws-advisor",
+      "firstObserved": "2026-02-15T09:00:00Z",
+      "lastObserved": "2026-03-20T09:00:00Z"
+    },
+    {
+      "id": "ana-010",
+      "configID": "cfg-eks-001",
+      "analyzer": "Prometheus Advisor",
+      "message": "Node ip-10-0-2-18 memory utilization consistently above 85% - risk of OOM kills",
+      "status": "open",
+      "severity": "high",
+      "analysisType": "reliability",
+      "source": "prometheus",
+      "firstObserved": "2026-03-26T09:00:00Z",
+      "lastObserved": "2026-03-30T09:00:00Z"
+    },
+    {
+      "id": "ana-011",
+      "configID": "cfg-eks-001",
+      "analyzer": "Trivy",
+      "message": "Resolved: CVE-2025-9999 in nginx ingress controller patched in v1.10.1",
+      "status": "resolved",
+      "severity": "high",
+      "analysisType": "security",
+      "source": "trivy-operator",
+      "firstObserved": "2026-02-01T09:00:00Z",
+      "lastObserved": "2026-03-15T09:00:00Z"
+    }
+  ],
+  "relationships": [
+    {
+      "configID": "cfg-eks-001",
+      "relatedID": "cfg-vpc-001",
+      "relation": "RunsIn",
+      "direction": "outgoing"
+    },
+    {
+      "configID": "cfg-eks-001",
+      "relatedID": "cfg-iam-001",
+      "relation": "ManagedBy",
+      "direction": "outgoing"
+    },
+    {
+      "configID": "cfg-eks-001",
+      "relatedID": "cfg-sg-001",
+      "relation": "DependsOn",
+      "direction": "outgoing"
+    },
+    {
+      "configID": "cfg-eks-001",
+      "relatedID": "cfg-rds-001",
+      "relation": "DependsOn",
+      "direction": "outgoing"
+    },
+    {
+      "configID": "cfg-deploy-001",
+      "relatedID": "cfg-eks-001",
+      "relation": "RunsOn",
+      "direction": "incoming"
+    },
+    {
+      "configID": "cfg-deploy-002",
+      "relatedID": "cfg-eks-001",
+      "relation": "RunsOn",
+      "direction": "incoming"
+    },
+    {
+      "configID": "cfg-deploy-003",
+      "relatedID": "cfg-eks-001",
+      "relation": "RunsOn",
+      "direction": "incoming"
+    },
+    {
+      "configID": "cfg-ns-001",
+      "relatedID": "cfg-eks-001",
+      "relation": "ChildOf",
+      "direction": "incoming"
+    },
+    {
+      "configID": "cfg-node-001",
+      "relatedID": "cfg-eks-001",
+      "relation": "ChildOf",
+      "direction": "incoming"
+    },
+    {
+      "configID": "cfg-node-002",
+      "relatedID": "cfg-eks-001",
+      "relation": "ChildOf",
+      "direction": "incoming"
+    }
+  ],
+  "relatedConfigs": [
+    {
+      "id": "cfg-vpc-001",
+      "name": "prod-vpc",
+      "type": "AWS::EC2::VPC",
+      "configClass": "Network",
+      "status": "available",
+      "health": "healthy",
+      "labels": {
+        "env": "production"
+      }
+    },
+    {
+      "id": "cfg-iam-001",
+      "name": "eks-cluster-role",
+      "type": "AWS::IAM::Role",
+      "configClass": "IAM",
+      "status": "active",
+      "health": "healthy"
+    },
+    {
+      "id": "cfg-sg-001",
+      "name": "eks-cluster-sg",
+      "type": "AWS::EC2::SecurityGroup",
+      "configClass": "Network",
+      "status": "active",
+      "health": "warning",
+      "labels": {
+        "env": "production"
+      }
+    },
+    {
+      "id": "cfg-rds-001",
+      "name": "mission-control-db",
+      "type": "AWS::RDS::Instance",
+      "configClass": "Database",
+      "status": "available",
+      "health": "healthy",
+      "labels": {
+        "env": "production",
+        "engine": "postgresql"
+      }
+    },
+    {
+      "id": "cfg-deploy-001",
+      "name": "incident-commander",
+      "type": "Kubernetes::Deployment",
+      "configClass": "Deployment",
+      "status": "Running",
+      "health": "healthy",
+      "labels": {
+        "app": "incident-commander"
+      }
+    },
+    {
+      "id": "cfg-deploy-002",
+      "name": "canary-checker",
+      "type": "Kubernetes::Deployment",
+      "configClass": "Deployment",
+      "status": "Running",
+      "health": "healthy",
+      "labels": {
+        "app": "canary-checker"
+      }
+    },
+    {
+      "id": "cfg-deploy-003",
+      "name": "config-db",
+      "type": "Kubernetes::Deployment",
+      "configClass": "Deployment",
+      "status": "Running",
+      "health": "unhealthy",
+      "labels": {
+        "app": "config-db"
+      }
+    },
+    {
+      "id": "cfg-ns-001",
+      "name": "mc",
+      "type": "Kubernetes::Namespace",
+      "configClass": "Namespace",
+      "status": "Active",
+      "health": "healthy"
+    },
+    {
+      "id": "cfg-node-001",
+      "name": "ip-10-0-1-42",
+      "type": "Kubernetes::Node",
+      "configClass": "Node",
+      "status": "Ready",
+      "health": "healthy"
+    },
+    {
+      "id": "cfg-node-002",
+      "name": "ip-10-0-2-18",
+      "type": "Kubernetes::Node",
+      "configClass": "Node",
+      "status": "Ready",
+      "health": "warning",
+      "labels": {
+        "instance-type": "i3.xlarge"
+      }
+    }
+  ],
+  "scrapers": [
+    {
+      "id": "scr-001",
+      "name": "mc/aws-production",
+      "namespace": "mc",
+      "source": "KubernetesCRD",
+      "types": [
+        "aws",
+        "kubernetes"
+      ],
+      "specHash": "a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6abcd",
+      "createdBy": "alice@flanksource.com",
+      "createdAt": "2025-06-10T09:00:00Z",
+      "updatedAt": "2026-03-28T14:30:00Z",
+      "gitops": {
+        "git": {
+          "url": "https://github.com/flanksource/mission-control-demo",
+          "branch": "main",
+          "file": "clusters/prod/scrapers/aws.yaml",
+          "dir": "clusters/prod/scrapers",
+          "link": "https://github.com/flanksource/mission-control-demo/tree/main/clusters/prod/scrapers/aws.yaml"
+        },
+        "kustomize": {
+          "path": "clusters/prod/scrapers",
+          "file": "clusters/prod/scrapers/kustomization.yaml"
+        }
+      }
+    },
+    {
+      "id": "scr-002",
+      "name": "mc/azure-entra",
+      "namespace": "mc",
+      "source": "KubernetesCRD",
+      "types": [
+        "azure"
+      ],
+      "specHash": "ff00aa11bb22cc33dd44ee55ff00aa11bb22cc33dd44ee55ff00aa11bb22cc33",
+      "createdAt": "2025-09-01T10:00:00Z",
+      "updatedAt": "2026-03-30T08:00:00Z"
+    },
+    {
+      "id": "scr-003",
+      "name": "local-file-scraper",
+      "source": "ConfigFile",
+      "types": [
+        "file",
+        "sql"
+      ],
+      "specHash": "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+      "createdBy": "bob@flanksource.com",
+      "createdAt": "2026-01-15T11:00:00Z"
+    }
+  ],
+  "genericChangesSection": {
+    "type": "changes",
+    "title": "Recent Infrastructure Changes",
+    "changes": [
+      {
+        "id": "gen-001",
+        "date": "2026-03-30T10:00:00Z",
+        "changeType": "ConfigUpdate",
+        "source": "terraform",
+        "createdBy": "alice@flanksource.com",
+        "description": "Updated VPC CIDR block from 10.0.0.0/16 to 10.0.0.0/12",
+        "status": "medium",
+        "createdAt": "2026-03-30T10:00:00Z"
+      },
+      {
+        "id": "gen-002",
+        "date": "2026-03-29T15:00:00Z",
+        "changeType": "TagUpdate",
+        "source": "aws-config",
+        "description": "Added cost-center tag to 14 resources in us-east-1",
+        "status": "info",
+        "createdAt": "2026-03-29T15:00:00Z"
+      },
+      {
+        "id": "gen-003",
+        "date": "2026-03-28T09:00:00Z",
+        "changeType": "SecurityGroupChange",
+        "source": "aws-config",
+        "createdBy": "security-automation",
+        "description": "Removed unused ingress rule on sg-0abc123 (port 8080)",
+        "status": "low",
+        "createdAt": "2026-03-28T09:00:00Z"
+      },
+      {
+        "id": "gen-004",
+        "date": "2026-03-27T14:00:00Z",
+        "changeType": "DNSUpdate",
+        "source": "route53",
+        "createdBy": "bob@flanksource.com",
+        "description": "Added CNAME record api-v2.flanksource.com -> prod-alb.us-east-1.elb.amazonaws.com",
+        "status": "info",
+        "createdAt": "2026-03-27T14:00:00Z"
+      }
+    ]
+  },
+  "dynamicViewSection": {
+    "type": "view",
+    "title": "Cluster Nodes",
+    "view": {
+      "columns": [
+        {
+          "name": "node",
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "type": "status"
+        },
+        {
+          "name": "health",
+          "type": "health"
+        },
+        {
+          "name": "cpu_used",
+          "type": "gauge",
+          "gauge": {
+            "thresholds": [
+              {
+                "percent": 0,
+                "color": "#22C55E"
+              },
+              {
+                "percent": 70,
+                "color": "#EAB308"
+              },
+              {
+                "percent": 90,
+                "color": "#EF4444"
+              }
+            ]
+          }
+        },
+        {
+          "name": "memory",
+          "type": "bytes"
+        }
+      ],
+      "rows": [
+        [
+          "ip-10-0-1-42",
+          "Ready",
+          "healthy",
+          45.2,
+          8589934592
+        ],
+        [
+          "ip-10-0-2-18",
+          "Ready",
+          "warning",
+          87.3,
+          14495514624
+        ],
+        [
+          "ip-10-0-3-7",
+          "NotReady",
+          "unhealthy",
+          0,
+          0
+        ]
+      ]
+    }
+  },
+  "dynamicConfigsSection": {
+    "type": "configs",
+    "title": "Related Databases",
+    "configs": [
+      {
+        "id": "db-001",
+        "name": "mission-control-db",
+        "type": "AWS::RDS::Instance",
+        "status": "available",
+        "health": "healthy",
+        "labels": {
+          "engine": "postgresql",
+          "env": "production"
+        }
+      },
+      {
+        "id": "db-002",
+        "name": "analytics-db",
+        "type": "AWS::RDS::Instance",
+        "status": "available",
+        "health": "warning",
+        "labels": {
+          "engine": "postgresql",
+          "env": "production"
+        }
+      },
+      {
+        "id": "db-003",
+        "name": "archive-db",
+        "type": "AWS::RDS::Instance",
+        "status": "stopped",
+        "health": "unknown",
+        "labels": {
+          "engine": "postgresql",
+          "env": "staging"
+        }
+      }
+    ]
+  },
+  "application": {
+    "id": "app-001",
+    "name": "Mission Control",
+    "type": "WebApplication",
+    "namespace": "mc",
+    "description": "Internal developer platform for Kubernetes fleet management",
+    "properties": [
+      {
+        "name": "uptime",
+        "label": "Uptime",
+        "value": 99.97,
+        "unit": "percentage",
+        "order": 1
+      },
+      {
+        "name": "latency",
+        "label": "P99 Latency",
+        "value": 245,
+        "unit": "milliseconds",
+        "order": 2
+      },
+      {
+        "name": "requests",
+        "label": "Requests/s",
+        "value": 1240,
+        "order": 3
+      },
+      {
+        "name": "error_rate",
+        "label": "Error Rate",
+        "value": 0.03,
+        "unit": "percentage",
+        "order": 4
+      }
+    ],
+    "accessControl": {
+      "users": [
+        {
+          "id": "u-001",
+          "name": "Alice Johnson",
+          "email": "alice@flanksource.com",
+          "role": "admin",
+          "authType": "SSO",
+          "created": "2025-01-15T09:00:00Z",
+          "lastLogin": "2026-03-30T08:00:00Z",
+          "lastAccessReview": "2026-03-15T10:00:00Z"
+        },
+        {
+          "id": "u-002",
+          "name": "Bob Smith",
+          "email": "bob@flanksource.com",
+          "role": "editor",
+          "authType": "SSO",
+          "created": "2025-06-01T09:00:00Z",
+          "lastLogin": "2026-03-28T14:00:00Z",
+          "lastAccessReview": "2026-02-01T10:00:00Z"
+        },
+        {
+          "id": "u-003",
+          "name": "Carol Davis",
+          "email": "carol@flanksource.com",
+          "role": "viewer",
+          "authType": "API Key",
+          "created": "2026-01-10T09:00:00Z",
+          "lastLogin": null,
+          "lastAccessReview": null
+        }
+      ],
+      "authentication": [
+        {
+          "name": "Azure AD SSO",
+          "type": "SAML",
+          "mfa": {
+            "type": "TOTP",
+            "enforced": "true"
+          },
+          "properties": {
+            "tenant": "flanksource.onmicrosoft.com"
+          }
+        },
+        {
+          "name": "API Key Auth",
+          "type": "Bearer",
+          "mfa": {
+            "type": "none",
+            "enforced": "false"
+          },
+          "properties": {
+            "rotation": "90 days"
+          }
+        }
+      ]
+    },
+    "incidents": [
+      {
+        "id": "inc-001",
+        "date": "2026-03-28T03:15:00Z",
+        "severity": "critical",
+        "description": "Database connection pool exhausted causing 503 errors across all API endpoints",
+        "status": "resolved",
+        "resolvedDate": "2026-03-28T04:45:00Z"
+      },
+      {
+        "id": "inc-002",
+        "date": "2026-03-25T14:00:00Z",
+        "severity": "high",
+        "description": "Config scraper failing to sync AWS resources due to expired IAM credentials",
+        "status": "resolved",
+        "resolvedDate": "2026-03-25T15:30:00Z"
+      },
+      {
+        "id": "inc-003",
+        "date": "2026-03-22T09:30:00Z",
+        "severity": "medium",
+        "description": "Notification delivery delayed by 15+ minutes due to queue backlog",
+        "status": "resolved",
+        "resolvedDate": "2026-03-22T11:00:00Z"
+      },
+      {
+        "id": "inc-004",
+        "date": "2026-03-30T06:00:00Z",
+        "severity": "low",
+        "description": "Health check dashboard showing stale data for canary-checker pods",
+        "status": "open"
+      },
+      {
+        "id": "inc-005",
+        "date": "2026-03-29T20:00:00Z",
+        "severity": "high",
+        "description": "Memory leak in event processor causing gradual degradation",
+        "status": "open"
+      }
+    ],
+    "locations": [
+      {
+        "account": "flanksource-prod",
+        "name": "us-east-1-primary",
+        "type": "EKS Cluster",
+        "purpose": "primary",
+        "region": "us-east-1",
+        "provider": "AWS",
+        "resourceCount": 142
+      },
+      {
+        "account": "flanksource-prod",
+        "name": "eu-west-1-backup",
+        "type": "EKS Cluster",
+        "purpose": "backup",
+        "region": "eu-west-1",
+        "provider": "AWS",
+        "resourceCount": 38
+      },
+      {
+        "account": "flanksource-dr",
+        "name": "us-west-2-dr",
+        "type": "EKS Cluster",
+        "purpose": "dr",
+        "region": "us-west-2",
+        "provider": "AWS",
+        "resourceCount": 15
+      }
+    ],
+    "backups": [
+      {
+        "id": "bkp-001",
+        "database": "mission-control-db",
+        "type": "snapshot",
+        "source": "aws-backup",
+        "date": "2026-03-30T02:00:00Z",
+        "size": "4.3 GB",
+        "status": "success"
+      },
+      {
+        "id": "bkp-002",
+        "database": "mission-control-db",
+        "type": "snapshot",
+        "source": "aws-backup",
+        "date": "2026-03-29T02:00:00Z",
+        "size": "4.2 GB",
+        "status": "failed"
+      },
+      {
+        "id": "bkp-003",
+        "database": "mission-control-db",
+        "type": "snapshot",
+        "source": "aws-backup",
+        "date": "2026-03-28T02:00:00Z",
+        "size": "4.1 GB",
+        "status": "success"
+      },
+      {
+        "id": "bkp-004",
+        "database": "analytics-db",
+        "type": "logical",
+        "source": "pg_dump",
+        "date": "2026-03-30T03:00:00Z",
+        "size": "1.8 GB",
+        "status": "success"
+      },
+      {
+        "id": "bkp-005",
+        "database": "analytics-db",
+        "type": "logical",
+        "source": "pg_dump",
+        "date": "2026-03-29T03:00:00Z",
+        "size": "1.7 GB",
+        "status": "in-progress"
+      }
+    ],
+    "restores": [
+      {
+        "id": "rst-001",
+        "database": "mission-control-db",
+        "date": "2026-03-28T12:00:00Z",
+        "source": "aws-backup",
+        "status": "success",
+        "completedAt": "2026-03-28T12:18:00Z"
+      },
+      {
+        "id": "rst-002",
+        "database": "analytics-db",
+        "date": "2026-03-15T09:00:00Z",
+        "source": "pg_dump",
+        "status": "success",
+        "completedAt": "2026-03-15T09:35:00Z"
+      }
+    ],
+    "findings": [
+      {
+        "id": "find-001",
+        "type": "security",
+        "severity": "critical",
+        "title": "CVE-2026-0891 in libcrypto",
+        "description": "Critical vulnerability in OpenSSL library",
+        "date": "2026-03-25T09:00:00Z",
+        "lastObserved": "2026-03-30T09:00:00Z",
+        "status": "open",
+        "remediation": "Upgrade base image to golang:1.23.1-alpine"
+      },
+      {
+        "id": "find-002",
+        "type": "security",
+        "severity": "high",
+        "title": "Container running as root",
+        "description": "incident-commander pod runs as UID 0",
+        "date": "2026-03-20T09:00:00Z",
+        "lastObserved": "2026-03-30T09:00:00Z",
+        "status": "open",
+        "remediation": "Add securityContext.runAsNonRoot to deployment spec"
+      },
+      {
+        "id": "find-003",
+        "type": "compliance",
+        "severity": "medium",
+        "title": "Missing data-classification label",
+        "description": "Namespace mc missing required label",
+        "date": "2026-03-15T09:00:00Z",
+        "lastObserved": "2026-03-30T09:00:00Z",
+        "status": "open",
+        "remediation": "Add label data-classification=internal to namespace"
+      },
+      {
+        "id": "find-004",
+        "type": "compliance",
+        "severity": "low",
+        "title": "Pod disruption budget missing",
+        "description": "canary-checker deployment has no PDB",
+        "date": "2026-03-10T09:00:00Z",
+        "lastObserved": "2026-03-30T09:00:00Z",
+        "status": "accepted"
+      },
+      {
+        "id": "find-005",
+        "type": "reliability",
+        "severity": "high",
+        "title": "Node memory pressure",
+        "description": "ip-10-0-2-18 consistently above 85% memory",
+        "date": "2026-03-26T09:00:00Z",
+        "lastObserved": "2026-03-30T09:00:00Z",
+        "status": "open",
+        "remediation": "Scale node group or add memory limits to workloads"
+      },
+      {
+        "id": "find-006",
+        "type": "reliability",
+        "severity": "medium",
+        "title": "Single replica deployment",
+        "description": "config-db running with 1 replica",
+        "date": "2026-03-01T09:00:00Z",
+        "lastObserved": "2026-03-30T09:00:00Z",
+        "status": "resolved"
+      },
+      {
+        "id": "find-007",
+        "type": "performance",
+        "severity": "high",
+        "title": "API latency above threshold",
+        "description": "P99 latency exceeded 500ms 12 times in 7 days",
+        "date": "2026-03-23T09:00:00Z",
+        "lastObserved": "2026-03-30T09:00:00Z",
+        "status": "in-progress",
+        "remediation": "Investigate slow queries and add connection pooling"
+      },
+      {
+        "id": "find-008",
+        "type": "performance",
+        "severity": "low",
+        "title": "Slow config scraper sync",
+        "description": "AWS scraper taking >10min per cycle",
+        "date": "2026-03-18T09:00:00Z",
+        "lastObserved": "2026-03-30T09:00:00Z",
+        "status": "open"
+      }
+    ],
+    "sections": []
+  },
+  "rbacReport": {
+    "title": "prod-sql-primary",
+    "query": "type=MSSQL::Database AND name=prod-sql-primary",
+    "generatedAt": "2026-03-30T12:00:00Z",
+    "subject": {
+      "id": "cfg-sql-001",
+      "name": "prod-sql-primary",
+      "type": "MSSQL::Database",
+      "config_class": "Database",
+      "status": "Online",
+      "health": "healthy",
+      "description": "Primary SQL Server database for production workloads",
+      "tags": {
+        "env": "production",
+        "team": "data-platform"
+      }
+    },
+    "parents": [
+      {
+        "id": "cfg-sql-server-001",
+        "name": "sql-prod-east",
+        "type": "MSSQL::Server"
+      },
+      {
+        "id": "cfg-rg-001",
+        "name": "rg-prod-data",
+        "type": "Azure::ResourceGroup"
+      }
+    ],
+    "summary": {
+      "totalUsers": 8,
+      "totalResources": 2,
+      "staleAccessCount": 2,
+      "overdueReviews": 1,
+      "directAssignments": 6,
+      "groupAssignments": 4
+    },
+    "resources": [
+      {
+        "configId": "cfg-sql-001",
+        "configName": "prod-sql-primary",
+        "configType": "MSSQL::Database",
+        "configClass": "Database",
+        "path": "rg-prod-data.sql-prod-east.prod-sql-primary",
+        "status": "Online",
+        "health": "healthy",
+        "tags": {
+          "env": "production"
+        },
+        "labels": {
+          "team": "data-platform"
+        },
+        "users": [
+          {
+            "userId": "u-alice",
+            "userName": "alice@flanksource.com",
+            "email": "alice@flanksource.com",
+            "role": "db_owner",
+            "roleSource": "direct",
+            "sourceSystem": "azure-entra",
+            "createdAt": "2025-01-15T09:00:00Z",
+            "lastSignedInAt": "2026-03-30T08:00:00Z",
+            "lastReviewedAt": "2026-03-15T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          },
+          {
+            "userId": "u-bob",
+            "userName": "bob@flanksource.com",
+            "email": "bob@flanksource.com",
+            "role": "db_datareader",
+            "roleSource": "direct",
+            "sourceSystem": "azure-entra",
+            "createdAt": "2025-06-01T09:00:00Z",
+            "lastSignedInAt": "2026-03-28T14:00:00Z",
+            "lastReviewedAt": "2026-02-01T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          },
+          {
+            "userId": "u-bob",
+            "userName": "bob@flanksource.com",
+            "email": "bob@flanksource.com",
+            "role": "db_datawriter",
+            "roleSource": "group:SG-DataEngineers",
+            "sourceSystem": "azure-entra",
+            "createdAt": "2025-06-01T09:00:00Z",
+            "lastSignedInAt": "2026-03-28T14:00:00Z",
+            "lastReviewedAt": "2026-02-01T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          },
+          {
+            "userId": "u-carol",
+            "userName": "carol@flanksource.com",
+            "email": "carol@flanksource.com",
+            "role": "db_datareader",
+            "roleSource": "group:SG-Analytics",
+            "sourceSystem": "azure-entra",
+            "createdAt": "2026-01-10T09:00:00Z",
+            "lastSignedInAt": null,
+            "lastReviewedAt": null,
+            "isStale": true,
+            "isReviewOverdue": true
+          },
+          {
+            "userId": "u-deploy-bot",
+            "userName": "deploy-bot",
+            "email": "deploy-bot@flanksource.com",
+            "role": "db_ddladmin",
+            "roleSource": "direct",
+            "sourceSystem": "azure-entra",
+            "createdAt": "2025-08-01T09:00:00Z",
+            "lastSignedInAt": "2026-03-30T06:00:00Z",
+            "lastReviewedAt": "2026-03-01T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          },
+          {
+            "userId": "u-contractor",
+            "userName": "contractor-temp",
+            "email": "contractor@external.com",
+            "role": "db_datareader",
+            "roleSource": "direct",
+            "sourceSystem": "okta",
+            "createdAt": "2025-12-01T09:00:00Z",
+            "lastSignedInAt": "2025-12-15T10:00:00Z",
+            "lastReviewedAt": null,
+            "isStale": true,
+            "isReviewOverdue": true
+          }
+        ],
+        "changelog": [
+          {
+            "configId": "cfg-sql-001",
+            "date": "2026-03-30T09:12:00Z",
+            "changeType": "PermissionGranted",
+            "user": "alice@flanksource.com",
+            "role": "db_owner",
+            "configName": "prod-sql-primary",
+            "source": "azure-entra",
+            "description": "Granted during oncall rotation"
+          },
+          {
+            "configId": "cfg-sql-001",
+            "date": "2026-03-29T18:40:00Z",
+            "changeType": "PermissionRevoked",
+            "user": "contractor-temp",
+            "role": "db_datareader",
+            "configName": "prod-sql-primary",
+            "source": "azure-entra",
+            "description": "Contract ended"
+          }
+        ]
+      },
+      {
+        "configId": "cfg-iam-matrix-long",
+        "configName": "platform-iam-policies",
+        "configType": "AWS::IAM::Role",
+        "configClass": "Role",
+        "path": "aws-prod.iam.platform-iam-policies",
+        "status": "Active",
+        "health": "healthy",
+        "tags": {
+          "env": "production"
+        },
+        "labels": {
+          "team": "platform-security"
+        },
+        "users": [
+          {
+            "userId": "u-alice",
+            "userName": "alice@flanksource.com",
+            "email": "alice@flanksource.com",
+            "role": "AmazonEKSClusterPolicyAdministratorFullAccess",
+            "roleSource": "direct",
+            "sourceSystem": "aws-iam",
+            "createdAt": "2025-01-15T09:00:00Z",
+            "lastSignedInAt": "2026-03-30T08:00:00Z",
+            "lastReviewedAt": "2026-03-15T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          },
+          {
+            "userId": "u-alice",
+            "userName": "alice@flanksource.com",
+            "email": "alice@flanksource.com",
+            "role": "SecretsManagerReadWriteForIncidentCommanderWorkloads",
+            "roleSource": "group:platform-admins",
+            "sourceSystem": "aws-iam",
+            "createdAt": "2025-01-15T09:00:00Z",
+            "lastSignedInAt": "2026-03-30T08:00:00Z",
+            "lastReviewedAt": "2026-03-15T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          },
+          {
+            "userId": "u-bob",
+            "userName": "bob@flanksource.com",
+            "email": "bob@flanksource.com",
+            "role": "CloudWatchLogsReadOnlyAccessForAuditAndComplianceOperators",
+            "roleSource": "direct",
+            "sourceSystem": "aws-iam",
+            "createdAt": "2025-06-01T09:00:00Z",
+            "lastSignedInAt": "2026-03-28T14:00:00Z",
+            "lastReviewedAt": "2026-02-01T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          },
+          {
+            "userId": "u-bob",
+            "userName": "bob@flanksource.com",
+            "email": "bob@flanksource.com",
+            "role": "AmazonRDSFullAccessWithCrossAccountBackupRestorePermissions",
+            "roleSource": "group:SG-DataEngineers",
+            "sourceSystem": "aws-iam",
+            "createdAt": "2025-06-01T09:00:00Z",
+            "lastSignedInAt": "2026-03-28T14:00:00Z",
+            "lastReviewedAt": "2026-02-01T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          },
+          {
+            "userId": "u-deploy-bot",
+            "userName": "deploy-bot",
+            "email": "deploy-bot@flanksource.com",
+            "role": "AmazonEKSClusterPolicyAdministratorFullAccess",
+            "roleSource": "direct",
+            "sourceSystem": "aws-iam",
+            "createdAt": "2025-08-01T09:00:00Z",
+            "lastSignedInAt": "2026-03-30T06:00:00Z",
+            "lastReviewedAt": "2026-03-01T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          },
+          {
+            "userId": "u-deploy-bot",
+            "userName": "deploy-bot",
+            "email": "deploy-bot@flanksource.com",
+            "role": "ElasticContainerRegistryPushPullAccessForCIPipelines",
+            "roleSource": "direct",
+            "sourceSystem": "aws-iam",
+            "createdAt": "2025-08-01T09:00:00Z",
+            "lastSignedInAt": "2026-03-30T06:00:00Z",
+            "lastReviewedAt": "2026-03-01T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          },
+          {
+            "userId": "u-carol",
+            "userName": "carol@flanksource.com",
+            "email": "carol@flanksource.com",
+            "role": "CloudWatchLogsReadOnlyAccessForAuditAndComplianceOperators",
+            "roleSource": "group:SG-Analytics",
+            "sourceSystem": "aws-iam",
+            "createdAt": "2026-01-10T09:00:00Z",
+            "lastSignedInAt": null,
+            "lastReviewedAt": null,
+            "isStale": true,
+            "isReviewOverdue": true
+          },
+          {
+            "userId": "00000000-0000-0000-0000-000000000000",
+            "userName": "SG-IncidentCommanderBreakGlassOperators",
+            "email": "",
+            "role": "AmazonEKSClusterPolicyAdministratorFullAccess",
+            "roleSource": "group:SG-IncidentCommanderBreakGlassOperators",
+            "sourceSystem": "aws-iam",
+            "createdAt": "2025-03-01T09:00:00Z",
+            "lastSignedInAt": null,
+            "lastReviewedAt": "2026-01-15T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          },
+          {
+            "userId": "00000000-0000-0000-0000-000000000000",
+            "userName": "SG-IncidentCommanderBreakGlassOperators",
+            "email": "",
+            "role": "SecretsManagerReadWriteForIncidentCommanderWorkloads",
+            "roleSource": "group:SG-IncidentCommanderBreakGlassOperators",
+            "sourceSystem": "aws-iam",
+            "createdAt": "2025-03-01T09:00:00Z",
+            "lastSignedInAt": null,
+            "lastReviewedAt": "2026-01-15T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          }
+        ],
+        "changelog": [
+          {
+            "configId": "cfg-iam-matrix-long",
+            "date": "2026-03-30T09:12:00Z",
+            "changeType": "PermissionGranted",
+            "user": "alice@flanksource.com",
+            "role": "AmazonEKSClusterPolicyAdministratorFullAccess",
+            "configName": "platform-iam-policies",
+            "source": "aws-iam",
+            "description": "Granted during cluster upgrade rotation"
+          }
+        ]
+      }
+    ],
+    "changelog": [
+      {
+        "configId": "cfg-sql-001",
+        "date": "2026-03-30T09:12:00Z",
+        "changeType": "PermissionGranted",
+        "user": "alice@flanksource.com",
+        "role": "db_owner",
+        "configName": "prod-sql-primary",
+        "source": "azure-entra",
+        "description": "Granted during oncall rotation"
+      },
+      {
+        "configId": "cfg-sql-001",
+        "date": "2026-03-29T18:40:00Z",
+        "changeType": "PermissionRevoked",
+        "user": "contractor-temp",
+        "role": "db_datareader",
+        "configName": "prod-sql-primary",
+        "source": "azure-entra",
+        "description": "Contract ended"
+      },
+      {
+        "configId": "cfg-sql-001",
+        "date": "2026-03-29T16:00:00Z",
+        "changeType": "AccessReviewed",
+        "user": "governance-bot",
+        "role": "all",
+        "configName": "prod-sql-primary",
+        "source": "access-review-job",
+        "description": "Quarterly review completed"
+      },
+      {
+        "configId": "cfg-sql-001",
+        "date": "2026-03-28T13:05:00Z",
+        "changeType": "PermissionGranted",
+        "user": "deploy-bot",
+        "role": "db_ddladmin",
+        "configName": "prod-sql-primary",
+        "source": "azure-entra",
+        "description": "Automated pipeline access"
+      },
+      {
+        "configId": "cfg-sql-001",
+        "date": "2026-03-15T10:00:00Z",
+        "changeType": "PermissionGranted",
+        "user": "bob@flanksource.com",
+        "role": "db_datawriter",
+        "configName": "prod-sql-primary",
+        "source": "azure-entra",
+        "description": "Added via SG-DataEngineers group"
+      },
+      {
+        "configId": "cfg-sql-001",
+        "date": "2026-03-01T09:00:00Z",
+        "changeType": "PermissionRevoked",
+        "user": "intern-2025",
+        "role": "db_datareader",
+        "configName": "prod-sql-primary",
+        "source": "okta",
+        "description": "Internship ended"
+      }
+    ],
+    "users": [
+      {
+        "userId": "u-alice",
+        "userName": "alice@flanksource.com",
+        "email": "alice@flanksource.com",
+        "sourceSystem": "azure-entra",
+        "lastSignedInAt": "2026-03-30T08:00:00Z",
+        "resources": [
+          {
+            "configId": "cfg-sql-001",
+            "configName": "prod-sql-primary",
+            "configType": "MSSQL::Database",
+            "configClass": "Database",
+            "role": "db_owner",
+            "roleSource": "direct",
+            "createdAt": "2025-01-15T09:00:00Z",
+            "lastSignedInAt": "2026-03-30T08:00:00Z",
+            "lastReviewedAt": "2026-03-15T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          },
+          {
+            "configId": "cfg-sql-002",
+            "configName": "analytics-db",
+            "configType": "MSSQL::Database",
+            "configClass": "Database",
+            "role": "db_datareader",
+            "roleSource": "group:SG-Analytics",
+            "createdAt": "2025-03-01T09:00:00Z",
+            "lastSignedInAt": "2026-03-28T14:00:00Z",
+            "lastReviewedAt": "2026-03-15T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          }
+        ]
+      },
+      {
+        "userId": "u-bob",
+        "userName": "bob@flanksource.com",
+        "email": "bob@flanksource.com",
+        "sourceSystem": "azure-entra",
+        "lastSignedInAt": "2026-03-28T14:00:00Z",
+        "resources": [
+          {
+            "configId": "cfg-sql-001",
+            "configName": "prod-sql-primary",
+            "configType": "MSSQL::Database",
+            "configClass": "Database",
+            "role": "db_datareader",
+            "roleSource": "direct",
+            "createdAt": "2025-06-01T09:00:00Z",
+            "lastSignedInAt": "2026-03-28T14:00:00Z",
+            "lastReviewedAt": "2026-02-01T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          },
+          {
+            "configId": "cfg-sql-001",
+            "configName": "prod-sql-primary",
+            "configType": "MSSQL::Database",
+            "configClass": "Database",
+            "role": "db_datawriter",
+            "roleSource": "group:SG-DataEngineers",
+            "createdAt": "2025-06-01T09:00:00Z",
+            "lastSignedInAt": "2026-03-28T14:00:00Z",
+            "lastReviewedAt": "2026-02-01T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          },
+          {
+            "configId": "cfg-kv-001",
+            "configName": "prod-keyvault",
+            "configType": "Azure::KeyVault",
+            "configClass": "Security",
+            "role": "Secrets Reader",
+            "roleSource": "direct",
+            "createdAt": "2025-09-01T09:00:00Z",
+            "lastSignedInAt": "2026-03-25T10:00:00Z",
+            "lastReviewedAt": "2026-01-15T10:00:00Z",
+            "isStale": false,
+            "isReviewOverdue": false
+          }
+        ]
+      }
+    ]
+  },
+  "catalogReport": {
+    "relationshipTree": {
+      "id": "cfg-eks-001",
+      "name": "prod-eks-cluster",
+      "type": "AWS::EKS::Cluster",
+      "edgeType": "target",
+      "children": [
+        {
+          "id": "cfg-vpc-001",
+          "name": "prod-vpc",
+          "type": "AWS::EC2::VPC",
+          "edgeType": "parent",
+          "relation": "RunsIn",
+          "children": [
+            {
+              "id": "cfg-subnet-001",
+              "name": "private-subnet-1a",
+              "type": "AWS::EC2::Subnet",
+              "edgeType": "child"
+            },
+            {
+              "id": "cfg-subnet-002",
+              "name": "private-subnet-1b",
+              "type": "AWS::EC2::Subnet",
+              "edgeType": "child"
+            }
+          ]
+        },
+        {
+          "id": "cfg-ns-001",
+          "name": "mc",
+          "type": "Kubernetes::Namespace",
+          "edgeType": "child",
+          "relation": "ChildOf",
+          "children": [
+            {
+              "id": "cfg-deploy-001",
+              "name": "incident-commander",
+              "type": "Kubernetes::Deployment",
+              "edgeType": "child"
+            },
+            {
+              "id": "cfg-deploy-002",
+              "name": "canary-checker",
+              "type": "Kubernetes::Deployment",
+              "edgeType": "child"
+            }
+          ]
+        },
+        {
+          "id": "cfg-rds-001",
+          "name": "mission-control-db",
+          "type": "AWS::RDS::Instance",
+          "edgeType": "related",
+          "relation": "DependsOn"
+        }
+      ]
+    },
+    "access": [
+      {
+        "userId": "u-alice",
+        "userName": "Alice Johnson",
+        "email": "alice@flanksource.com",
+        "role": "admin",
+        "userType": "User",
+        "createdAt": "2025-01-15T09:00:00Z",
+        "lastSignedInAt": "2026-03-30T08:00:00Z",
+        "lastReviewedAt": "2026-03-15T10:00:00Z"
+      },
+      {
+        "userId": "u-bob",
+        "userName": "Bob Smith",
+        "email": "bob@flanksource.com",
+        "role": "editor",
+        "userType": "User",
+        "createdAt": "2025-06-01T09:00:00Z",
+        "lastSignedInAt": "2026-03-28T14:00:00Z",
+        "lastReviewedAt": "2026-02-01T10:00:00Z"
+      },
+      {
+        "userId": "u-carol",
+        "userName": "Carol Davis",
+        "email": "carol@flanksource.com",
+        "role": "viewer",
+        "userType": "User",
+        "createdAt": "2026-01-10T09:00:00Z",
+        "lastSignedInAt": null
+      },
+      {
+        "userId": "u-deploy-bot",
+        "userName": "deploy-bot",
+        "email": "deploy-bot@flanksource.com",
+        "role": "editor",
+        "userType": "ServiceAccount",
+        "createdAt": "2025-08-01T09:00:00Z",
+        "lastSignedInAt": "2026-03-30T06:00:00Z",
+        "lastReviewedAt": "2026-03-01T10:00:00Z"
+      },
+      {
+        "userId": "u-stale",
+        "userName": "Former Employee",
+        "email": "former@flanksource.com",
+        "role": "viewer",
+        "userType": "User",
+        "createdAt": "2024-06-01T09:00:00Z",
+        "lastSignedInAt": "2025-06-15T10:00:00Z"
+      }
+    ],
+    "accessLogs": [
+      {
+        "userId": "u-alice",
+        "userName": "Alice Johnson",
+        "configName": "prod-eks-cluster",
+        "configType": "AWS::EKS::Cluster",
+        "createdAt": "2026-03-30T08:15:00Z",
+        "mfa": true,
+        "count": 3,
+        "properties": {
+          "action": "describe-cluster",
+          "source": "kubectl"
+        }
+      },
+      {
+        "userId": "u-bob",
+        "userName": "Bob Smith",
+        "configName": "prod-eks-cluster",
+        "configType": "AWS::EKS::Cluster",
+        "createdAt": "2026-03-29T14:30:00Z",
+        "mfa": true,
+        "count": 1
+      },
+      {
+        "userId": "u-deploy-bot",
+        "userName": "deploy-bot",
+        "configName": "prod-eks-cluster",
+        "configType": "AWS::EKS::Cluster",
+        "createdAt": "2026-03-30T06:00:00Z",
+        "mfa": false,
+        "count": 12,
+        "properties": {
+          "action": "apply",
+          "source": "argocd"
+        }
+      },
+      {
+        "userId": "u-carol",
+        "userName": "Carol Davis",
+        "configName": "prod-eks-cluster",
+        "configType": "AWS::EKS::Cluster",
+        "createdAt": "2026-03-25T11:00:00Z",
+        "mfa": false,
+        "count": 1
+      },
+      {
+        "userId": "u-alice",
+        "userName": "Alice Johnson",
+        "configName": "mission-control-db",
+        "configType": "AWS::RDS::Instance",
+        "createdAt": "2026-03-30T09:00:00Z",
+        "mfa": true,
+        "count": 2,
+        "properties": {
+          "action": "connect",
+          "source": "psql"
+        }
+      },
+      {
+        "userId": "u-stale",
+        "userName": "Former Employee",
+        "configName": "prod-eks-cluster",
+        "configType": "AWS::EKS::Cluster",
+        "createdAt": "2025-06-15T10:00:00Z",
+        "mfa": false,
+        "count": 1
+      }
+    ],
+    "entries": [
+      {
+        "configItem": {
+          "id": "cfg-deploy-001",
+          "name": "incident-commander",
+          "type": "Kubernetes::Deployment",
+          "status": "Running",
+          "health": "healthy"
+        },
+        "changeCount": 5,
+        "insightCount": 3,
+        "accessCount": 2,
+        "changes": [],
+        "analyses": [],
+        "access": [],
+        "accessLogs": []
+      },
+      {
+        "configItem": {
+          "id": "cfg-deploy-002",
+          "name": "canary-checker",
+          "type": "Kubernetes::Deployment",
+          "status": "Running",
+          "health": "healthy"
+        },
+        "changeCount": 2,
+        "insightCount": 1,
+        "accessCount": 1,
+        "changes": [],
+        "analyses": [],
+        "access": [],
+        "accessLogs": []
+      },
+      {
+        "configItem": {
+          "id": "cfg-deploy-003",
+          "name": "config-db",
+          "type": "Kubernetes::Deployment",
+          "status": "Running",
+          "health": "unhealthy"
+        },
+        "changeCount": 1,
+        "insightCount": 2,
+        "accessCount": 0,
+        "changes": [],
+        "analyses": [],
+        "access": [],
+        "accessLogs": []
+      }
+    ],
+    "changes": [
+      {
+        "id": "art-001",
+        "configID": "cfg-deploy-001",
+        "configName": "incident-commander",
+        "configType": "Kubernetes::Deployment",
+        "changeType": "diff",
+        "severity": "medium",
+        "source": "argocd",
+        "summary": "Deployment spec updated with new resource limits",
+        "createdAt": "2026-03-30T08:15:00Z",
+        "artifacts": [
+          {
+            "id": "a-001",
+            "filename": "diff-screenshot.png",
+            "contentType": "image/png",
+            "size": 45000,
+            "dataUri": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
+          }
+        ]
+      },
+      {
+        "id": "art-002",
+        "configID": "cfg-deploy-001",
+        "configName": "incident-commander",
+        "configType": "Kubernetes::Deployment",
+        "changeType": "PolicyUpdate",
+        "severity": "high",
+        "source": "argocd",
+        "summary": "Network policy tightened for egress",
+        "createdAt": "2026-03-29T14:00:00Z",
+        "artifacts": [
+          {
+            "id": "a-002",
+            "filename": "policy-diff.yaml",
+            "contentType": "text/yaml",
+            "size": 1200
+          }
+        ]
+      }
+    ],
+    "audit": {
+      "buildCommit": "3b3a1a0f",
+      "buildVersion": "v1.47.0",
+      "gitStatus": " M report/catalog/report.go\n M db/rbac.go",
+      "options": {
+        "title": "Production EKS Cluster Report",
+        "since": "720h",
+        "sections": {
+          "changes": true,
+          "insights": true,
+          "relationships": true,
+          "access": true,
+          "accessLogs": true,
+          "configJSON": false
+        },
+        "recursive": true,
+        "groupBy": "type",
+        "changeArtifacts": true,
+        "thresholds": {
+          "staleDays": 90,
+          "reviewOverdueDays": 180
+        },
+        "filters": [
+          "type=AWS::EKS::Cluster",
+          "namespace=mc"
+        ]
+      },
+      "scrapers": [],
+      "queries": [
+        {
+          "name": "RBACAccess",
+          "args": "configIDs=1 selectors=0",
+          "count": 42,
+          "duration": 128,
+          "pretty": "SELECT ... FROM config_access_summary WHERE config_id IN (?)"
+        },
+        {
+          "name": "GroupMembers",
+          "args": "configIDs=1",
+          "count": 5,
+          "duration": 34,
+          "pretty": "SELECT ... FROM external_user_groups eug JOIN external_groups eg ..."
+        }
+      ],
+      "groups": [
+        {
+          "id": "grp-admins",
+          "name": "mission-control-admins",
+          "groupType": "group",
+          "members": [
+            {
+              "userId": "u-alice",
+              "name": "Alice Johnson",
+              "email": "alice@flanksource.com",
+              "userType": "user",
+              "lastSignedInAt": "2026-03-30T08:00:00Z",
+              "membershipAddedAt": "2025-01-10T09:00:00Z"
+            },
+            {
+              "userId": "u-bob",
+              "name": "Bob Smith",
+              "email": "bob@flanksource.com",
+              "userType": "user",
+              "lastSignedInAt": "2026-03-28T14:00:00Z",
+              "membershipAddedAt": "2025-06-01T09:00:00Z"
+            },
+            {
+              "userId": "u-stale",
+              "name": "Former Employee",
+              "email": "former@flanksource.com",
+              "userType": "user",
+              "lastSignedInAt": "2025-06-15T10:00:00Z",
+              "membershipAddedAt": "2024-06-01T09:00:00Z",
+              "membershipDeletedAt": "2025-07-01T09:00:00Z"
+            }
+          ]
+        },
+        {
+          "id": "grp-readers",
+          "name": "mission-control-readers",
+          "groupType": "group",
+          "members": [
+            {
+              "userId": "u-carol",
+              "name": "Carol Davis",
+              "email": "carol@flanksource.com",
+              "userType": "user",
+              "membershipAddedAt": "2026-01-10T09:00:00Z"
+            },
+            {
+              "userId": "u-deploy-bot",
+              "name": "deploy-bot",
+              "email": "deploy-bot@flanksource.com",
+              "userType": "service_account",
+              "lastSignedInAt": "2026-03-30T06:00:00Z",
+              "membershipAddedAt": "2025-08-01T09:00:00Z"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "viewReport": {
+    "name": "cluster-overview",
+    "title": "Cluster Overview",
+    "icon": "AWS::EKS::Cluster",
+    "columns": [
+      {
+        "name": "name",
+        "type": "string"
+      },
+      {
+        "name": "type",
+        "type": "string"
+      },
+      {
+        "name": "health",
+        "type": "health"
+      },
+      {
+        "name": "status",
+        "type": "status"
+      },
+      {
+        "name": "cpu",
+        "type": "gauge",
+        "gauge": {
+          "thresholds": [
+            {
+              "percent": 0,
+              "color": "#22C55E"
+            },
+            {
+              "percent": 70,
+              "color": "#EAB308"
+            },
+            {
+              "percent": 90,
+              "color": "#EF4444"
+            }
+          ]
+        }
+      },
+      {
+        "name": "memory",
+        "type": "bytes"
+      },
+      {
+        "name": "uptime",
+        "type": "duration"
+      },
+      {
+        "name": "requests",
+        "type": "number",
+        "unit": "req/s"
+      },
+      {
+        "name": "ready",
+        "type": "boolean"
+      },
+      {
+        "name": "last_seen",
+        "type": "datetime"
+      },
+      {
+        "name": "labels",
+        "type": "labels"
+      }
+    ],
+    "rows": [
+      [
+        "incident-commander",
+        "Deployment",
+        "healthy",
+        "Running",
+        42.5,
+        536870912,
+        86400000000000,
+        1240,
+        true,
+        "2026-03-30T08:00:00Z",
+        {
+          "app": "incident-commander",
+          "env": "production"
+        }
+      ],
+      [
+        "canary-checker",
+        "Deployment",
+        "healthy",
+        "Running",
+        18.3,
+        268435456,
+        172800000000000,
+        450,
+        true,
+        "2026-03-30T08:00:00Z",
+        {
+          "app": "canary-checker",
+          "env": "production"
+        }
+      ],
+      [
+        "config-db",
+        "Deployment",
+        "unhealthy",
+        "CrashLoopBackOff",
+        92.1,
+        1073741824,
+        3600000000000,
+        0,
+        false,
+        "2026-03-30T07:45:00Z",
+        {
+          "app": "config-db",
+          "env": "production"
+        }
+      ],
+      [
+        "cert-manager",
+        "Deployment",
+        "healthy",
+        "Running",
+        5.2,
+        134217728,
+        604800000000000,
+        12,
+        true,
+        "2026-03-30T08:00:00Z",
+        {
+          "app": "cert-manager"
+        }
+      ],
+      [
+        "nginx-ingress",
+        "Deployment",
+        "warning",
+        "Running",
+        78.9,
+        805306368,
+        259200000000000,
+        3200,
+        true,
+        "2026-03-30T08:00:00Z",
+        {
+          "app": "nginx-ingress",
+          "env": "production"
+        }
+      ]
+    ],
+    "panels": [
+      {
+        "name": "Total Requests",
+        "type": "number",
+        "number": {
+          "unit": "req/s"
+        },
+        "rows": [
+          {
+            "value": 4902
+          }
+        ]
+      },
+      {
+        "name": "CPU Utilization",
+        "type": "gauge",
+        "gauge": {
+          "unit": "%",
+          "thresholds": [
+            {
+              "percent": 0,
+              "color": "#22C55E"
+            },
+            {
+              "percent": 70,
+              "color": "#EAB308"
+            },
+            {
+              "percent": 90,
+              "color": "#EF4444"
+            }
+          ]
+        },
+        "rows": [
+          {
+            "value": 47.4
+          }
+        ]
+      },
+      {
+        "name": "Pod Distribution",
+        "type": "piechart",
+        "piechart": {
+          "showLabels": true,
+          "colors": {
+            "healthy": "#22C55E",
+            "warning": "#EAB308",
+            "unhealthy": "#EF4444"
+          }
+        },
+        "rows": [
+          {
+            "name": "healthy",
+            "value": 12
+          },
+          {
+            "name": "warning",
+            "value": 3
+          },
+          {
+            "name": "unhealthy",
+            "value": 1
+          }
+        ]
+      },
+      {
+        "name": "Memory by Service",
+        "type": "bargauge",
+        "bargauge": {
+          "unit": "bytes",
+          "max": 2147483648,
+          "thresholds": [
+            {
+              "percent": 0,
+              "color": "#3B82F6"
+            },
+            {
+              "percent": 70,
+              "color": "#EAB308"
+            },
+            {
+              "percent": 90,
+              "color": "#EF4444"
+            }
+          ]
+        },
+        "rows": [
+          {
+            "name": "incident-commander",
+            "value": 536870912
+          },
+          {
+            "name": "config-db",
+            "value": 1073741824
+          },
+          {
+            "name": "nginx-ingress",
+            "value": 805306368
+          },
+          {
+            "name": "canary-checker",
+            "value": 268435456
+          }
+        ]
+      },
+      {
+        "name": "Cluster Status",
+        "type": "text",
+        "rows": [
+          {
+            "value": "All critical services operational. config-db pod in CrashLoopBackOff - investigating OOM kills."
+          }
+        ]
+      },
+      {
+        "name": "Recent Deployments",
+        "type": "table",
+        "rows": [
+          {
+            "service": "incident-commander",
+            "version": "v1.4.200",
+            "deployed": "2026-03-30T08:15:00Z",
+            "status": "success"
+          },
+          {
+            "service": "canary-checker",
+            "version": "v1.0.350",
+            "deployed": "2026-03-29T12:00:00Z",
+            "status": "success"
+          },
+          {
+            "service": "config-db",
+            "version": "v2.1.0",
+            "deployed": "2026-03-30T07:30:00Z",
+            "status": "failed"
+          }
+        ]
+      }
+    ]
+  },
+  "dynamicSections": [
+    {
+      "type": "changes",
+      "title": "Permissions Added / Removed",
+      "changes": [
+        {
+          "id": "rbac-001",
+          "date": "2026-03-30T09:12:00Z",
+          "changeType": "PermissionAdded",
+          "source": "azure-entra",
+          "createdBy": "alice@flanksource.com",
+          "configId": "cfg-sql-001",
+          "configName": "prod-sql-primary",
+          "configType": "MSSQL::Database",
+          "permission": {
+            "user": "alice@flanksource.com",
+            "role": "db_owner",
+            "group": "incident-responders"
+          },
+          "description": "PermissionAdded: user alice@flanksource.com, role db_owner, group incident-responders",
+          "status": "info",
+          "createdAt": "2026-03-30T09:12:00Z"
+        },
+        {
+          "id": "rbac-002",
+          "date": "2026-03-29T18:40:00Z",
+          "changeType": "PermissionRemoved",
+          "source": "azure-entra",
+          "createdBy": "security-automation",
+          "configId": "cfg-sql-001",
+          "configName": "prod-sql-primary",
+          "configType": "MSSQL::Database",
+          "permission": {
+            "user": "contractor-temp",
+            "role": "db_datareader"
+          },
+          "description": "PermissionRemoved: user contractor-temp, role db_datareader",
+          "status": "info",
+          "createdAt": "2026-03-29T18:40:00Z"
+        },
+        {
+          "id": "rbac-006",
+          "date": "2026-03-29T11:15:00Z",
+          "changeType": "PermissionAdded",
+          "source": "okta",
+          "createdBy": "governance-bot",
+          "configId": "cfg-keyvault-001",
+          "configName": "prod-keyvault",
+          "configType": "Azure::KeyVault",
+          "permission": {
+            "user": "ops-auditor",
+            "role": "Secrets Reader"
+          },
+          "description": "PermissionAdded: user ops-auditor, role Secrets Reader",
+          "status": "info",
+          "createdAt": "2026-03-29T11:15:00Z"
+        },
+        {
+          "id": "rbac-004",
+          "date": "2026-03-28T13:05:00Z",
+          "changeType": "PermissionGranted",
+          "source": "okta",
+          "createdBy": "bob@flanksource.com",
+          "configId": "cfg-analytics-001",
+          "configName": "analytics-db",
+          "configType": "MSSQL::Database",
+          "description": "Granted db_ddladmin to deploy-bot on analytics-db",
+          "status": "info",
+          "createdAt": "2026-03-28T13:05:00Z"
+        },
+        {
+          "id": "rbac-005",
+          "date": "2026-03-27T07:20:00Z",
+          "changeType": "PermissionAdded",
+          "source": "okta",
+          "configId": "cfg-keyvault-001",
+          "configName": "prod-keyvault",
+          "configType": "Azure::KeyVault",
+          "permission": {
+            "group": "break-glass-admins",
+            "role": "Secrets Officer"
+          },
+          "description": "PermissionAdded: role Secrets Officer, group break-glass-admins",
+          "status": "info",
+          "createdAt": "2026-03-27T07:20:00Z"
+        }
+      ]
+    },
+    {
+      "type": "changes",
+      "title": "Backup Activity",
+      "changes": [
+        {
+          "id": "bak-001",
+          "configId": "cfg-ic-db-001",
+          "date": "2026-03-30T02:00:00Z",
+          "changeType": "BackupStarted",
+          "source": "aws-backup",
+          "description": "Nightly snapshot started for incident-commander-db",
+          "status": "info",
+          "createdAt": "2026-03-30T02:00:00Z",
+          "typedChange": {
+            "kind": "Backup/v1",
+            "id": "evt-backup-030",
+            "target": "s3://ic-prod-backups"
+          }
+        },
+        {
+          "id": "bak-002",
+          "configId": "cfg-ic-db-001",
+          "date": "2026-03-30T02:08:00Z",
+          "changeType": "BackupCompleted",
+          "source": "aws-backup",
+          "description": "Nightly snapshot completed for incident-commander-db (4.3 GB)",
+          "status": "info",
+          "createdAt": "2026-03-30T02:08:00Z",
+          "typedChange": {
+            "kind": "Backup/v1",
+            "id": "evt-backup-030",
+            "snapshot_id": "snap-ic-030",
+            "target": "s3://ic-prod-backups"
+          }
+        },
+        {
+          "id": "bak-003",
+          "configId": "cfg-ic-db-001",
+          "date": "2026-03-29T02:01:00Z",
+          "changeType": "BackupFailed",
+          "source": "aws-backup",
+          "description": "Snapshot failed for incident-commander-db after storage timeout",
+          "status": "high",
+          "createdAt": "2026-03-29T02:01:00Z",
+          "typedChange": {
+            "kind": "Backup/v1",
+            "id": "evt-backup-029",
+            "target": "s3://ic-prod-backups"
+          }
+        }
+      ]
+    },
+    {
+      "type": "changes",
+      "title": "Deployment Changes",
+      "changes": [
+        {
+          "id": "dep-001",
+          "date": "2026-03-30T08:15:00Z",
+          "changeType": "diff",
+          "source": "argocd",
+          "createdBy": "deploy-bot",
+          "description": "Deployment incident-commander image updated: v1.4.199 -> v1.4.200",
+          "status": "low",
+          "createdAt": "2026-03-30T08:15:00Z"
+        },
+        {
+          "id": "dep-002",
+          "date": "2026-03-30T07:30:00Z",
+          "changeType": "Pulled",
+          "source": "kubernetes",
+          "description": "Image flanksource/incident-commander:v1.4.200 pulled on node ip-10-0-1-42",
+          "status": "info",
+          "createdAt": "2026-03-30T07:30:00Z"
+        },
+        {
+          "id": "dep-003",
+          "date": "2026-03-29T22:00:00Z",
+          "changeType": "ScalingReplicaSet",
+          "source": "kubernetes",
+          "createdBy": "cluster-autoscaler",
+          "description": "Deployment incident-commander scaled from 2 to 4 replicas",
+          "status": "low",
+          "createdAt": "2026-03-29T22:00:00Z"
+        }
+      ]
+    }
+  ]
+}

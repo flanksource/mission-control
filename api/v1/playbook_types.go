@@ -284,10 +284,6 @@ func (t *Playbook) SetObservedGeneration(generation int64) {
 	t.Status.ObservedGeneration = generation
 }
 
-func (t *Playbook) GetObservedGeneration() int64 {
-	return t.Status.ObservedGeneration
-}
-
 func (t *Playbook) GetStatusConditions() *[]metav1.Condition {
 	return &t.Status.Conditions
 }

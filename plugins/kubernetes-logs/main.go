@@ -8,8 +8,11 @@ package main
 
 import (
 	"context"
+	"embed"
 	"encoding/json"
 	"fmt"
+	"io/fs"
+	"net/http"
 
 	dutyContext "github.com/flanksource/duty/context"
 	dutylogs "github.com/flanksource/duty/logs"
@@ -17,6 +20,11 @@ import (
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/sdk"
 )
+
+//go:generate go run ./internal/gen-checksum
+
+//go:embed all:ui
+var uiAssets embed.FS
 
 // Version and BuildDate are injected at link time via the Taskfile's
 // build:plugin:kubernetes-logs target. Empty values trip the SDK's
@@ -27,7 +35,11 @@ var (
 )
 
 func main() {
-	sdk.Serve(&KubernetesLogsPlugin{})
+	sub, err := fs.Sub(uiAssets, "ui")
+	if err != nil {
+		panic(err)
+	}
+	sdk.Serve(&KubernetesLogsPlugin{}, sdk.WithStaticAssets(sub))
 }
 
 type KubernetesLogsPlugin struct {
@@ -35,11 +47,17 @@ type KubernetesLogsPlugin struct {
 }
 
 func (p *KubernetesLogsPlugin) Manifest() *pluginpb.PluginManifest {
+	// Suffix the UI bundle checksum onto the version so the host can detect
+	// a UI rebuild and the iframe URL the frontend constructs changes
+	// (`?config_id=…&_v=<sha>`), forcing browsers to bypass any stale cache.
 	return &pluginpb.PluginManifest{
 		Name:         "kubernetes-logs",
-		Version:      sdk.FormatVersion(Version, BuildDate),
+		Version:      sdk.FormatVersion(Version, BuildDate, uiChecksum),
 		Description:  "Stream logs from a Pod or any of its workload ancestors (Deployment / StatefulSet / DaemonSet / Job).",
-		Capabilities: []string{"operations"},
+		Capabilities: []string{"tabs", "operations"},
+		Tabs: []*pluginpb.TabSpec{
+			{Name: "Logs", Icon: "lucide:scroll-text", Path: "/", Scope: "config"},
+		},
 	}
 }
 
@@ -70,6 +88,21 @@ func (p *KubernetesLogsPlugin) Operations() []sdk.Operation {
 	}
 }
 
+// HTTPHandler powers the iframe UI: GET /api/pods?config_id=… and
+// GET /api/logs?pod=…&namespace=…&tailLines=N stream-as-NDJSON.
+func (p *KubernetesLogsPlugin) HTTPHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/pods", p.httpPods)
+	mux.HandleFunc("/logs", p.httpLogs)
+	mux.Handle("/version", sdk.VersionHandler(sdk.BuildInfo{
+		Name:       "kubernetes-logs",
+		Version:    Version,
+		BuildDate:  BuildDate,
+		UIChecksum: uiChecksum,
+	}))
+	return mux
+}
+
 // TailParams is the input shape for the `tail` operation. The CLI sends
 // these as JSON via --param/--json; the iframe sends them through the
 // `tail` button. PostProcess mirrors the playbook `logs` action shape so
@@ -92,7 +125,7 @@ func (p *KubernetesLogsPlugin) tail(ctx context.Context, req sdk.InvokeCtx) (any
 		params.TailLines = 200
 	}
 
-	cli, err := p.clients.For(ctx, req.Host, req.ConfigItemID)
+	cli, err := p.clients.For(ctx, req.Host)
 	if err != nil {
 		return nil, err
 	}
@@ -117,7 +150,7 @@ func (p *KubernetesLogsPlugin) tail(ctx context.Context, req sdk.InvokeCtx) (any
 }
 
 func (p *KubernetesLogsPlugin) listPods(ctx context.Context, req sdk.InvokeCtx) (any, error) {
-	cli, err := p.clients.For(ctx, req.Host, req.ConfigItemID)
+	cli, err := p.clients.For(ctx, req.Host)
 	if err != nil {
 		return nil, err
 	}

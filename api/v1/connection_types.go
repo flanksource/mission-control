@@ -397,10 +397,6 @@ func (t *Connection) SetObservedGeneration(generation int64) {
 	t.Status.ObservedGeneration = generation
 }
 
-func (t *Connection) GetObservedGeneration() int64 {
-	return t.Status.ObservedGeneration
-}
-
 func (t *Connection) GetStatusConditions() *[]metav1.Condition {
 	return &t.Status.Conditions
 }

@@ -1,3 +1,5 @@
+import type { ConfigTypedChange } from './config-types.ts';
+
 // TypeScript interfaces mirroring api/application-data.yaml
 
 export interface ApplicationProperty {
@@ -127,12 +129,25 @@ export interface ApplicationViewData {
   columnOptions?: Record<string, ColumnFilterOptions>;
 }
 
+export interface ApplicationPermissionChange {
+  user?: string;
+  role?: string;
+  group?: string;
+}
+
 export interface ApplicationChange {
   id: string;
   date: string;
   changeType?: string;
+  category?: string;
   source?: string;
   createdBy?: string;
+  configId?: string;
+  configName?: string;
+  configType?: string;
+  permission?: ApplicationPermissionChange;
+  details?: Record<string, any>;
+  typedChange?: ConfigTypedChange;
   description: string;
   status: string;
   createdAt: string;

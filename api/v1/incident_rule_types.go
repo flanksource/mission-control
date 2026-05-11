@@ -23,10 +23,6 @@ func (t *IncidentRule) SetObservedGeneration(generation int64) {
 	t.Status.ObservedGeneration = generation
 }
 
-func (t *IncidentRule) GetObservedGeneration() int64 {
-	return t.Status.ObservedGeneration
-}
-
 func (t *IncidentRule) GetStatusConditions() *[]metav1.Condition {
 	return &t.Status.Conditions
 }

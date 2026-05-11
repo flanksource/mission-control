@@ -64,7 +64,6 @@ var (
 
 	// UIEnabled, when true, mounts the catalog explorer UI at /ui/*.
 	UIEnabled bool
-
 	// UIDevProxyTarget, when set, proxies /ui/* to a local Vite dev server.
 	UIDevProxyTarget string
 )

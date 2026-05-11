@@ -420,7 +420,7 @@ paths:
     get:
       tags: [Playbooks]
       summary: List playbooks
-      description: List playbooks available for a config, check, or component
+      description: List all playbooks, or playbooks available for a config, check, or component
       parameters:
         - name: config_id
           in: query
@@ -1401,6 +1401,8 @@ components:
         id:
           type: string
           format: uuid
+        namespace:
+          type: string
         name:
           type: string
         title:
@@ -1409,8 +1411,21 @@ components:
           type: string
         description:
           type: string
+        source:
+          type: string
         category:
           type: string
+        created_at:
+          type: string
+          format: date-time
+        parameters:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        spec:
+          type: object
+          additionalProperties: true
 
     RunParams:
       type: object

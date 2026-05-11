@@ -39,10 +39,6 @@ func (t *Permission) SetObservedGeneration(generation int64) {
 	t.Status.ObservedGeneration = generation
 }
 
-func (t *Permission) GetObservedGeneration() int64 {
-	return t.Status.ObservedGeneration
-}
-
 func (t *Permission) GetStatusConditions() *[]metav1.Condition {
 	return &t.Status.Conditions
 }

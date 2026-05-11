@@ -291,7 +291,6 @@ function BulkConfigItemDeleteDialog({
 
   useEffect(() => {
     if (!open) {
-      setItems([]);
       setConfirming(false);
       setSuccess(null);
       mutation.reset();
@@ -579,19 +578,10 @@ function ScrapePluginTable({
             <tr
               key={row.id}
               className={[
-                "cursor-pointer border-b border-border last:border-b-0 hover:bg-accent/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring",
+                "cursor-pointer border-b border-border last:border-b-0 hover:bg-accent/40",
                 row.id === selectedId ? "bg-accent/60" : "",
               ].join(" ")}
-              tabIndex={0}
-              role="button"
-              aria-pressed={row.id === selectedId}
               onClick={() => onSelect(row.id)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" || e.key === " ") {
-                  e.preventDefault();
-                  onSelect(row.id);
-                }
-              }}
             >
               <td className="px-3 py-2">
                 <div className="flex min-w-0 items-center gap-2">

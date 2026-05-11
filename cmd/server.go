@@ -33,6 +33,7 @@ import (
 	"github.com/flanksource/incident-commander/metrics"
 	"github.com/flanksource/incident-commander/notification"
 	pluginregistry "github.com/flanksource/incident-commander/plugin/registry"
+	pluginsupervisor "github.com/flanksource/incident-commander/plugin/supervisor"
 	echov4 "github.com/labstack/echo/v4"
 
 	// register event handlers & echo routers
@@ -157,6 +158,7 @@ func launchKopper(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Team: %v", err))
 	}
 
+	pluginsupervisor.WireSupervisor(ctx)
 	if _, err := kopper.SetupReconciler(ctx, mgr,
 		pluginregistry.PersistPluginFromCRD,
 		pluginregistry.DeletePlugin,
@@ -175,6 +177,7 @@ var Serve = &cobra.Command{
 	Use: "serve",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		PreRun(cmd, args)
+		ensureLocalJWTSecret()
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		var dutyArgs []duty.StartOption
@@ -213,10 +216,6 @@ var Serve = &cobra.Command{
 				shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to start UI dev server: %v", err))
 			}
 			echo.UIDevProxyTarget = devServer.URL
-			shutdown.AddHookWithPriority("ui-dev-server", shutdown.PriorityIngress, func() {
-				devServer.Stop()
-				echo.UIDevProxyTarget = ""
-			})
 			logger.Infof("Proxying /ui to Vite dev server at %s", devServer.URL)
 		} else {
 			echo.UIDevProxyTarget = ""
