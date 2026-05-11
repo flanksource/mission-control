@@ -70,6 +70,7 @@ require (
 	github.com/jenkins-x/go-scm v1.15.21
 	github.com/mark3labs/mcp-go v0.52.0
 	github.com/oklog/ulid/v2 v2.1.1
+	github.com/pb33f/ordered-map/v2 v2.3.1
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.67.5
 	github.com/redis/go-redis/v9 v9.19.0
@@ -82,7 +83,6 @@ require (
 	github.com/tg123/go-htpasswd v1.2.4
 	github.com/timberio/go-datemath v0.1.0
 	github.com/tmc/langchaingo v0.1.14
-	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/xeipuuv/gojsonschema v1.2.0
 	github.com/zitadel/oidc/v3 v3.47.5
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.68.0
@@ -271,7 +271,6 @@ require (
 	github.com/lrita/cmap v0.0.0-20231108122212-cb084a67f554 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20251013123823-9fd1530e3ec3 // indirect
-	github.com/mailru/easyjson v0.9.1 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
 	github.com/mattn/go-runewidth v0.0.21 // indirect
 	github.com/microsoft/go-mssqldb v1.9.8 // indirect
@@ -295,7 +294,6 @@ require (
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opensearch-project/opensearch-go/v2 v2.3.0 // indirect
 	github.com/orcaman/concurrent-map/v2 v2.0.1 // indirect
-	github.com/pb33f/ordered-map/v2 v2.3.1 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pjbgf/sha1cd v0.6.0 // indirect
 	github.com/pkg/sftp v1.13.10 // indirect
