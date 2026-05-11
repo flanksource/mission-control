@@ -12,8 +12,6 @@ import (
 	"sync"
 	"syscall"
 	"time"
-
-	"github.com/flanksource/duty/shutdown"
 )
 
 const viteHost = "127.0.0.1"
@@ -69,8 +67,6 @@ func StartDevServer(ctx gocontext.Context, opts DevServerOptions) (*DevServer, e
 		process: cmd.Process,
 		wait:    wait,
 	}
-	shutdown.AddHookWithPriority("ui-dev-server", shutdown.PriorityIngress, srv.Stop)
-
 	if err := waitForVite(srv.URL, 20*time.Second, wait); err != nil {
 		srv.Stop()
 		return nil, err

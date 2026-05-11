@@ -213,6 +213,10 @@ var Serve = &cobra.Command{
 				shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to start UI dev server: %v", err))
 			}
 			echo.UIDevProxyTarget = devServer.URL
+			shutdown.AddHookWithPriority("ui-dev-server", shutdown.PriorityIngress, func() {
+				devServer.Stop()
+				echo.UIDevProxyTarget = ""
+			})
 			logger.Infof("Proxying /ui to Vite dev server at %s", devServer.URL)
 		} else {
 			echo.UIDevProxyTarget = ""

@@ -53,8 +53,6 @@ auth/oidc/static/tailwind.min.js
 **/*.key
 report/*.png
 report/*.pdf
-*.pdf
-*.png
 .playwright-mcp/
 out.*
 .task/
