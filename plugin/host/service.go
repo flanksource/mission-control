@@ -18,6 +18,11 @@ import (
 	"github.com/google/uuid"
 	lru "github.com/hashicorp/golang-lru/v2/expirable"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/structpb"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
@@ -65,6 +70,56 @@ func New(ctx dutyContext.Context, pluginID uuid.UUID) *Service {
 // Register exposes the service on the given gRPC server.
 func (s *Service) Register(g *grpc.Server) {
 	pluginpb.RegisterHostServiceServer(g, s)
+}
+
+func (s *Service) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
+	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+		if !requiresCaller(info.FullMethod) {
+			return handler(ctx, req)
+		}
+
+		callerCtx, err := s.contextWithCaller(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return handler(callerCtx, req)
+	}
+}
+
+func requiresCaller(method string) bool {
+	switch method {
+	case pluginpb.HostService_GetConfigItem_FullMethodName,
+		pluginpb.HostService_ListConfigs_FullMethodName,
+		pluginpb.HostService_GetConnection_FullMethodName:
+		return true
+	default:
+		return false
+	}
+}
+
+func (s *Service) contextWithCaller(ctx context.Context) (context.Context, error) {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return nil, status.Error(codes.Unauthenticated, "caller metadata is required")
+	}
+
+	values := md.Get(pluginpb.CallerUserIDMetadataKey)
+	if len(values) == 0 || values[0] == "" {
+		return nil, status.Error(codes.Unauthenticated, "caller user id is required")
+	}
+
+	userID := values[0]
+	if _, err := uuid.Parse(userID); err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "invalid caller user id %q", userID)
+	}
+
+	baseCtx := s.ctx.Wrap(ctx)
+	var person models.Person
+	if err := baseCtx.DB().WithContext(ctx).Where("id = ?", userID).First(&person).Error; err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "caller %s: %v", userID, err)
+	}
+
+	return baseCtx.WithUser(&person), nil
 }
 
 func (s *Service) GetConfigItem(ctx context.Context, req *pluginpb.GetConfigItemRequest) (*pluginpb.ConfigItem, error) {
