@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/fsnotify/fsnotify"
+	"github.com/google/uuid"
 	goplugin "github.com/hashicorp/go-plugin"
 
 	dutyContext "github.com/flanksource/duty/context"
@@ -31,6 +32,7 @@ var pluginMap = map[string]goplugin.Plugin{
 
 // Supervisor owns the lifecycle of one plugin process.
 type Supervisor struct {
+	ID         uuid.UUID
 	Name       string
 	BinaryPath string
 
@@ -60,8 +62,8 @@ const (
 )
 
 // New creates a Supervisor for a plugin binary.
-func New(name, binaryPath string) *Supervisor {
-	return &Supervisor{Name: name, BinaryPath: binaryPath}
+func New(id uuid.UUID, binaryPath string) *Supervisor {
+	return &Supervisor{ID: id, Name: id.String(), BinaryPath: binaryPath}
 }
 
 // Start launches the plugin process and completes the RegisterPlugin
@@ -134,11 +136,11 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 	s.manifest = manifest
 	s.startHost = startHost
 
-	if err := registry.Default.SetManifest(s.Name, manifest); err != nil {
+	if err := registry.Default.SetManifest(s.ID, manifest); err != nil {
 		// Not fatal — the registry might have been recreated, but the supervisor still works.
 		ctx.Logger.Warnf("plugin %s: register manifest: %v", s.Name, err)
 	}
-	if err := registry.Default.SetSupervisor(s.Name, s); err != nil {
+	if err := registry.Default.SetSupervisor(s.ID, s); err != nil {
 		ctx.Logger.Warnf("plugin %s: register supervisor: %v", s.Name, err)
 	}
 
