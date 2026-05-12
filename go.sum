@@ -408,8 +408,8 @@ github.com/fergusstrange/embedded-postgres v1.34.0 h1:c6RKhPKFsLVU+Tdxsx8q0UxCHs
 github.com/fergusstrange/embedded-postgres v1.34.0/go.mod h1:w0YvnCgf19o6tskInrOOACtnqfVlOvluz3hlNLY7tRk=
 github.com/flanksource/artifacts v1.0.24 h1:cv6DV3aOWngXlrJ6XsOMVFNXg4G/I0EyobuxiSFMMPE=
 github.com/flanksource/artifacts v1.0.24/go.mod h1:AmQ1JxsnL+7/7FrjhCNdcd/PCBsM5xZ1kRJu2UoFw7g=
-github.com/flanksource/clicky v1.21.8 h1:dy8+ZFp25ko4p9r42XkfPNPpyiQBbqvYPGIUtVSupgg=
-github.com/flanksource/clicky v1.21.8/go.mod h1:GUNz90seR8wSaMh7ApYtrLALHp4utBAsm0QPzDI/hZc=
+github.com/flanksource/clicky v1.21.9 h1:ZLkU3ElgnQLcG6CIFalZYBVkwrsAQzhc+LFQGLKQWnk=
+github.com/flanksource/clicky v1.21.9/go.mod h1:6U3WuoWqo1J7LKGxcFmQClKhtt5L8GvGtWF2fgrpMAE=
 github.com/flanksource/commons v1.51.4 h1:ys3O4g0exWoz/viKf9vwTUItTkP/RgP1jORooheibZo=
 github.com/flanksource/commons v1.51.4/go.mod h1:XXLA39QGuFUyqIK19W5oDCIZDinLzFyFcGj83ZkyOfo=
 github.com/flanksource/commons-test v0.1.13 h1:DLb3q1a7d+BpfxZDy2bdY8ZA5z1+UTYFEO9DYd15bw4=
@@ -745,8 +745,8 @@ github.com/jcmturner/gofork v1.7.6/go.mod h1:1622LH6i/EZqLloHfE7IeZ0uEJwMSUyQ/nD
 github.com/jcmturner/goidentity/v6 v6.0.1/go.mod h1:X1YW3bgtvwAXju7V3LCIMpY0Gbxyjn/mY9zx4tFonSg=
 github.com/jcmturner/gokrb5/v8 v8.4.4/go.mod h1:1btQEpgT6k+unzCwX1KdWMEwPPkkgBtP+F6aCACiMrs=
 github.com/jcmturner/rpc/v2 v2.0.3/go.mod h1:VUJYCIDm3PVOEHw8sgt091/20OJjskO/YJki3ELg/Hc=
-github.com/jenkins-x/go-scm v1.15.21 h1:5ptUERtkN7m/n9VYCmLNurpT8UBjHm+pHgFElyNObOw=
-github.com/jenkins-x/go-scm v1.15.21/go.mod h1:ZjvrCiwfE9WghwjVSLP7+6kZFFblBqUSaAeHpmuNwM0=
+github.com/jenkins-x/go-scm v1.15.22 h1:+SmZ59MZ6eQfVKe35qyCvSxgPsgJAamyrAChMlDE9oE=
+github.com/jenkins-x/go-scm v1.15.22/go.mod h1:ZjvrCiwfE9WghwjVSLP7+6kZFFblBqUSaAeHpmuNwM0=
 github.com/jeremywohl/flatten v1.0.1 h1:LrsxmB3hfwJuE+ptGOijix1PIfOoKLJ3Uee/mzbgtrs=
 github.com/jeremywohl/flatten v1.0.1/go.mod h1:4AmD/VxjWcI5SRB0n6szE2A6s2fsNHDLO0nAlMHgfLQ=
 github.com/jhump/protoreflect v1.17.0 h1:qOEr613fac2lOuTgWN4tPAtLL7fUSbuJL5X5XumQh94=
@@ -823,8 +823,8 @@ github.com/lucasb-eyer/go-colorful v1.3.0 h1:2/yBRLdWBZKrf7gB40FoiKfAWYQ0lqNcbuQ
 github.com/lucasb-eyer/go-colorful v1.3.0/go.mod h1:R4dSotOR9KMtayYi1e77YzuveK+i7ruzyGqttikkLy0=
 github.com/lufia/plan9stats v0.0.0-20251013123823-9fd1530e3ec3 h1:PwQumkgq4/acIiZhtifTV5OUqqiP82UAl0h87xj/l9k=
 github.com/lufia/plan9stats v0.0.0-20251013123823-9fd1530e3ec3/go.mod h1:autxFIvghDt3jPTLoqZ9OZ7s9qTGNAWmYCjVFWPX/zg=
-github.com/mark3labs/mcp-go v0.52.0 h1:uRSzupNSUyPGDpF4owY5X4zEpACPwBnlM3FAFuXN6gQ=
-github.com/mark3labs/mcp-go v0.52.0/go.mod h1:Zg9cB2HdwdMMVgY0xtTzq3KvYIOJQDsaut+jWjwDaQY=
+github.com/mark3labs/mcp-go v0.53.0 h1:nzjUi/L448XxwrfmVjiZ03vWgYOWVBrJK0wkZH7fVWo=
+github.com/mark3labs/mcp-go v0.53.0/go.mod h1:Zg9cB2HdwdMMVgY0xtTzq3KvYIOJQDsaut+jWjwDaQY=
 github.com/maruel/natural v1.1.1 h1:Hja7XhhmvEFhcByqDoHz9QZbkWey+COd9xWfCfn1ioo=
 github.com/maruel/natural v1.1.1/go.mod h1:v+Rfd79xlw1AgVBjbO0BEQmptqb5HvL/k9GRHB7ZKEg=
 github.com/mattn/go-colorable v0.1.9/go.mod h1:u6P/XSegPjTcexA+o6vUJrdnUu04hMope9wVRipJSqc=
@@ -913,8 +913,8 @@ github.com/orcaman/concurrent-map/v2 v2.0.1 h1:jOJ5Pg2w1oeB6PeDurIYf6k9PQ+aTITr/
 github.com/orcaman/concurrent-map/v2 v2.0.1/go.mod h1:9Eq3TG2oBe5FirmYWQfYO5iH1q0Jv47PLaNK++uCdOM=
 github.com/orisano/pixelmatch v0.0.0-20230914042517-fa304d1dc785 h1:J1//5K/6QF10cZ59zLcVNFGmBfiSrH8Cho/lNrViK9s=
 github.com/orisano/pixelmatch v0.0.0-20230914042517-fa304d1dc785/go.mod h1:nZgzbfBr3hhjoZnS66nKrHmduYNpc34ny7RK4z5/HM0=
-github.com/ory/client-go v1.22.38 h1:MuC+nTzaJy5/arV4tTBc+b2JT0tlv1fwnJ9l1InmONQ=
-github.com/ory/client-go v1.22.38/go.mod h1:G1f+5+m/PJVvl40bsRn0QuyVIcXe7EHiWeM7iWpIDjw=
+github.com/ory/client-go v1.22.39 h1:Rq74BWbDICYoOunBnc/JBl3E86Ktqh/XN6RQXoOF2aU=
+github.com/ory/client-go v1.22.39/go.mod h1:G1f+5+m/PJVvl40bsRn0QuyVIcXe7EHiWeM7iWpIDjw=
 github.com/patrickmn/go-cache v2.1.0+incompatible h1:HRMgzkcYKYpi3C8ajMPV8OFXaaRUnok+kx1WdO15EQc=
 github.com/patrickmn/go-cache v2.1.0+incompatible/go.mod h1:3Qf8kWWT7OJRJbdiICTKqZju1ZixQ/KpMGzzAfe6+WQ=
 github.com/pb33f/ordered-map/v2 v2.3.1 h1:5319HDO0aw4DA4gzi+zv4FXU9UlSs3xGZ40wcP1nBjY=

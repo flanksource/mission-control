@@ -23,7 +23,7 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/onsi/ginkgo/v2 v2.28.3
 	github.com/onsi/gomega v1.40.0
-	github.com/ory/client-go v1.22.38
+	github.com/ory/client-go v1.22.39
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
@@ -50,7 +50,7 @@ require (
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6
 	github.com/emersion/go-smtp v0.24.0
 	github.com/flanksource/artifacts v1.0.24
-	github.com/flanksource/clicky v1.21.8
+	github.com/flanksource/clicky v1.21.9
 	github.com/flanksource/commons-test v0.1.13
 	github.com/flanksource/deps v1.0.28
 	github.com/fluxcd/pkg/gittestserver v0.28.0
@@ -67,8 +67,8 @@ require (
 	github.com/henvic/httpretty v0.1.4
 	github.com/invopop/jsonschema v0.14.0
 	github.com/jackc/pgerrcode v0.0.0-20250907135507-afb5586c32a6
-	github.com/jenkins-x/go-scm v1.15.21
-	github.com/mark3labs/mcp-go v0.52.0
+	github.com/jenkins-x/go-scm v1.15.22
+	github.com/mark3labs/mcp-go v0.53.0
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/pb33f/ordered-map/v2 v2.3.1
 	github.com/prometheus/client_model v0.6.2
