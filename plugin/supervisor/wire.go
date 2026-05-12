@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	dutyContext "github.com/flanksource/duty/context"
+	"github.com/google/uuid"
 	goplugin "github.com/hashicorp/go-plugin"
 
 	"github.com/flanksource/incident-commander/plugin/adapter"
@@ -16,7 +17,7 @@ import (
 // on CRD delete.
 var (
 	mu     sync.Mutex
-	active = map[string]*Supervisor{}
+	active = map[uuid.UUID]*Supervisor{}
 )
 
 // Wire installs the supervisor as the registry's start/stop hook.
@@ -26,15 +27,15 @@ var (
 // the supervisor package (that would create an import cycle); this function
 // injects the start/stop callbacks at boot.
 func Wire(ctx dutyContext.Context) {
-	registry.SupervisorStarter = func(c dutyContext.Context, id string) error {
+	registry.SupervisorStarter = func(c dutyContext.Context, id uuid.UUID) error {
 		return startPlugin(c, id)
 	}
-	registry.SupervisorStopper = func(id string) error {
+	registry.SupervisorStopper = func(id uuid.UUID) error {
 		return stopPlugin(id)
 	}
 }
 
-func startPlugin(ctx dutyContext.Context, id string) error {
+func startPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 	entry := registry.Default.Get(id)
 	if entry == nil {
 		return fmt.Errorf("plugin %s: not registered", id)
@@ -84,7 +85,7 @@ func startPlugin(ctx dutyContext.Context, id string) error {
 	return nil
 }
 
-func stopPlugin(id string) error {
+func stopPlugin(id uuid.UUID) error {
 	mu.Lock()
 	sup := active[id]
 	delete(active, id)
@@ -97,7 +98,7 @@ func stopPlugin(id string) error {
 
 // LookupSupervisor returns the running supervisor for a plugin id, or nil if
 // the plugin is not running. Used by the echo handlers and CLI.
-func LookupSupervisor(id string) *Supervisor {
+func LookupSupervisor(id uuid.UUID) *Supervisor {
 	mu.Lock()
 	defer mu.Unlock()
 	return active[id]

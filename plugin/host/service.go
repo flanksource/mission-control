@@ -15,6 +15,7 @@ import (
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/google/uuid"
 	lru "github.com/hashicorp/golang-lru/v2/expirable"
 	"google.golang.org/grpc"
 
@@ -29,7 +30,7 @@ import (
 const connectionCacheTTL = 5 * time.Minute
 
 type connKey struct {
-	pluginID string
+	pluginID uuid.UUID
 	typ      string
 	label    string
 	configID string
@@ -41,7 +42,7 @@ type connKey struct {
 type Service struct {
 	pluginpb.UnimplementedHostServiceServer
 
-	pluginID string
+	pluginID uuid.UUID
 	ctx      dutyContext.Context
 
 	// connCache memoises GetConnection results across calls within a single
@@ -52,7 +53,7 @@ type Service struct {
 // New creates a host Service for one plugin id. Multiple plugins running
 // concurrently get separate Services so the connection allowlist (read off
 // the Plugin CRD via the registry) is enforced per-plugin.
-func New(ctx dutyContext.Context, pluginID string) *Service {
+func New(ctx dutyContext.Context, pluginID uuid.UUID) *Service {
 	cache := lru.NewLRU[connKey, *pluginpb.ResolvedConnection](256, nil, connectionCacheTTL)
 	return &Service{
 		pluginID:  pluginID,
@@ -105,7 +106,7 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 
 	entry := registry.Default.Get(s.pluginID)
 	if entry == nil {
-		return nil, fmt.Errorf("plugin %q is not registered", s.pluginID)
+		return nil, fmt.Errorf("plugin %s is not registered", s.pluginID)
 	}
 
 	key := connKey{pluginID: s.pluginID, typ: req.GetType(), label: req.GetLabel(), configID: req.GetConfigItemId()}
