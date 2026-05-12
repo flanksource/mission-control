@@ -544,15 +544,14 @@ func (x *CallerContext) GetRequestId() string {
 }
 
 type InvokeRequest struct {
-	state           protoimpl.MessageState `protogen:"open.v1"`
-	Operation       string                 `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
-	ParamsJson      []byte                 `protobuf:"bytes,2,opt,name=params_json,json=paramsJson,proto3" json:"params_json,omitempty"`
-	ConfigItemId    string                 `protobuf:"bytes,3,opt,name=config_item_id,json=configItemId,proto3" json:"config_item_id,omitempty"`
-	Caller          *CallerContext         `protobuf:"bytes,4,opt,name=caller,proto3" json:"caller,omitempty"`
-	Deadline        *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=deadline,proto3" json:"deadline,omitempty"`
-	InvocationToken string                 `protobuf:"bytes,6,opt,name=invocation_token,json=invocationToken,proto3" json:"invocation_token,omitempty"`
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Operation     string                 `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
+	ParamsJson    []byte                 `protobuf:"bytes,2,opt,name=params_json,json=paramsJson,proto3" json:"params_json,omitempty"`
+	ConfigItemId  string                 `protobuf:"bytes,3,opt,name=config_item_id,json=configItemId,proto3" json:"config_item_id,omitempty"`
+	Caller        *CallerContext         `protobuf:"bytes,4,opt,name=caller,proto3" json:"caller,omitempty"`
+	Deadline      *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=deadline,proto3" json:"deadline,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *InvokeRequest) Reset() {
@@ -618,13 +617,6 @@ func (x *InvokeRequest) GetDeadline() *timestamppb.Timestamp {
 		return x.Deadline
 	}
 	return nil
-}
-
-func (x *InvokeRequest) GetInvocationToken() string {
-	if x != nil {
-		return x.InvocationToken
-	}
-	return ""
 }
 
 type InvokeResponse struct {
@@ -1673,15 +1665,14 @@ const file_plugin_proto_rawDesc = "" +
 	"\vpermissions\x18\x02 \x03(\tR\vpermissions\x12\x19\n" +
 	"\btrace_id\x18\x03 \x01(\tR\atraceId\x12\x1d\n" +
 	"\n" +
-	"request_id\x18\x04 \x01(\tR\trequestId\"\x98\x02\n" +
+	"request_id\x18\x04 \x01(\tR\trequestId\"\xed\x01\n" +
 	"\rInvokeRequest\x12\x1c\n" +
 	"\toperation\x18\x01 \x01(\tR\toperation\x12\x1f\n" +
 	"\vparams_json\x18\x02 \x01(\fR\n" +
 	"paramsJson\x12$\n" +
 	"\x0econfig_item_id\x18\x03 \x01(\tR\fconfigItemId\x12?\n" +
 	"\x06caller\x18\x04 \x01(\v2'.missioncontrol.plugin.v1.CallerContextR\x06caller\x126\n" +
-	"\bdeadline\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\bdeadline\x12)\n" +
-	"\x10invocation_token\x18\x06 \x01(\tR\x0finvocationToken\"\xb8\x01\n" +
+	"\bdeadline\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\bdeadline\"\xb8\x01\n" +
 	"\x0eInvokeResponse\x12\x16\n" +
 	"\x06result\x18\x01 \x01(\fR\x06result\x12\x12\n" +
 	"\x04mime\x18\x02 \x01(\tR\x04mime\x12#\n" +

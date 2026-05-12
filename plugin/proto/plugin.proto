@@ -84,7 +84,6 @@ message InvokeRequest {
   string config_item_id = 3;
   CallerContext caller = 4;
   google.protobuf.Timestamp deadline = 5;
-  string invocation_token = 6;
 }
 
 message InvokeResponse {

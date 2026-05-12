@@ -27,6 +27,7 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
+	"google.golang.org/grpc/metadata"
 
 	"github.com/flanksource/incident-commander/auth"
 	echoSrv "github.com/flanksource/incident-commander/echo"
@@ -117,12 +118,7 @@ func InvokeOperation(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "read request body"))
 	}
 
-	user := ctx.User()
-	if user == nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("user is required"))
-	}
-
-	invocationToken, err := auth.MintPluginInvocationToken(user, entry.ID.String())
+	invocationToken, err := auth.MintPluginInvocationToken(ctx.User(), entry.ID.String())
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 	}
@@ -131,12 +127,13 @@ func InvokeOperation(c echo.Context) error {
 	invokeCtx, cancel := context.WithTimeout(c.Request().Context(), 60*time.Second)
 	defer cancel()
 
+	invokeCtx = metadata.AppendToOutgoingContext(invokeCtx, pluginpb.PluginInvocationTokenMetadataKey, invocationToken)
+
 	resp, err := sup.Invoke(invokeCtx, &pluginpb.InvokeRequest{
-		Operation:       op,
-		ParamsJson:      body,
-		ConfigItemId:    configID,
-		Caller:          caller,
-		InvocationToken: invocationToken,
+		Operation:    op,
+		ParamsJson:   body,
+		ConfigItemId: configID,
+		Caller:       caller,
 	})
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "plugin %s/%s", pluginRef, op))

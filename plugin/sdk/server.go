@@ -108,7 +108,7 @@ func (s *pluginServer) Invoke(ctx context.Context, req *pluginpb.InvokeRequest) 
 
 	var invokeHost HostClient
 	if host != nil {
-		invokeHost = host.withInvocationToken(req.InvocationToken)
+		invokeHost = host.withInvocationToken(invocationTokenFromIncomingContext(ctx))
 	}
 
 	res, err := op.Handler(ctx, InvokeCtx{
