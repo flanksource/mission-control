@@ -10,14 +10,15 @@ import (
 )
 
 const (
-	PluginInvocationTokenTTL      = 2 * time.Minute
 	pluginInvocationTokenIssuer   = "mission-control"
 	pluginInvocationTokenAudience = "mission-control-plugin-host"
 	pluginInvocationTokenType     = "plugin-invocation"
 )
 
-// JWT secret used to sign plugin invocation tokens
-var PluginJWTSecret string
+var (
+	PluginJWTTTL = 5 * time.Minute
+	PluginJWTSecret          string
+)
 
 type PluginInvocationClaims struct {
 	Plugin uuid.UUID `json:"pluginID"`
@@ -36,7 +37,7 @@ func MintPluginInvocationToken(user models.Person, pluginID uuid.UUID) (string, 
 			Audience:  jwt.ClaimStrings{pluginInvocationTokenAudience},
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
-			ExpiresAt: jwt.NewNumericDate(now.Add(PluginInvocationTokenTTL)),
+			ExpiresAt: jwt.NewNumericDate(now.Add(PluginJWTTTL)),
 		},
 	}
 
@@ -55,7 +56,7 @@ func VerifyPluginInvocationToken(tokenString string, pluginID uuid.UUID) (*Plugi
 
 	claims := &PluginInvocationClaims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (any, error) {
-		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+		if t.Method != jwt.SigningMethodHS256 {
 			return nil, fmt.Errorf("unexpected signing method %s", t.Header["alg"])
 		}
 		return key, nil
