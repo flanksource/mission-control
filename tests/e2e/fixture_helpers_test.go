@@ -152,6 +152,9 @@ func resolveParams(params map[string]string, vars map[string]string) map[string]
 
 func fixtureToPlaybook(f playbookFixture) v1.Playbook {
 	name := strings.ToLower(strings.ReplaceAll(f.Playbook.Title, " ", "-"))
+	namespace := "default"
+	uid := uuid.NewSHA1(uuid.NameSpaceURL, []byte(fmt.Sprintf("playbook-fixture:%s/%s/%s", namespace, name, f.Playbook.Category)))
+
 	return v1.Playbook{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "mission-control.flanksource.com/v1",
@@ -159,8 +162,8 @@ func fixtureToPlaybook(f playbookFixture) v1.Playbook {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: "default",
-			UID:       types.UID(uuid.NewString()),
+			Namespace: namespace,
+			UID:       types.UID(uid.String()),
 		},
 		Spec: f.Playbook,
 	}

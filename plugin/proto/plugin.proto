@@ -38,6 +38,14 @@ message PluginManifest {
   repeated string capabilities = 5;
   repeated OperationDef operations = 6;
   uint32 ui_port = 7;
+  repeated TabSpec tabs = 8;
+}
+
+message TabSpec {
+  string name = 1;
+  string icon = 2;
+  string path = 3;
+  string scope = 4;
 }
 
 message OperationDef {
