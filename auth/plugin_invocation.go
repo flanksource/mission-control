@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/models"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
@@ -16,6 +15,9 @@ const (
 	pluginInvocationTokenAudience = "mission-control-plugin-host"
 	pluginInvocationTokenType     = "plugin-invocation"
 )
+
+// JWT secret used to sign plugin invocation tokens
+var PluginJWTSecret string
 
 type PluginInvocationClaims struct {
 	Plugin uuid.UUID `json:"pluginID"`
@@ -78,8 +80,9 @@ func VerifyPluginInvocationToken(tokenString string, pluginID uuid.UUID) (*Plugi
 }
 
 func pluginInvocationSigningKey() ([]byte, error) {
-	if api.DefaultConfig.Postgrest.JWTSecret == "" {
-		return nil, fmt.Errorf("postgrest jwt secret is required for plugin invocation tokens")
+	if PluginJWTSecret == "" {
+		return nil, fmt.Errorf("plugin invocation jwt secret is required")
 	}
-	return []byte("plugin-invocation:" + api.DefaultConfig.Postgrest.JWTSecret), nil
+
+	return []byte(PluginJWTSecret), nil
 }

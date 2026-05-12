@@ -124,8 +124,6 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 		return nil, fmt.Errorf("connection lookup is required")
 	}
 
-	baseCtx := s.ctx.Wrap(ctx)
-
 	entry := registry.Default.Get(s.pluginID)
 	if entry == nil {
 		return nil, fmt.Errorf("plugin %s is not registered", s.pluginID)
@@ -136,7 +134,8 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 		return cached, nil
 	}
 
-	resolved, err := resolveConnection(baseCtx, entry.Spec, req)
+	pluginCtx := s.ctx.Wrap(ctx).WithNamespace(entry.Namespace)
+	resolved, err := resolveConnection(pluginCtx, entry.Spec, req)
 	if err != nil {
 		return nil, err
 	}
