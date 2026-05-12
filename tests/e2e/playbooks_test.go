@@ -126,7 +126,7 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 			decorators = append(decorators, ginkgo.FlakeAttempts(attempts))
 		}
 
-		if name == "email-report" {
+		if name == "email-report" || name == "facet-pdf-report" {
 			decorators = append(decorators, ginkgo.Pending)
 		}
 

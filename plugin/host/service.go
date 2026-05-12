@@ -20,6 +20,7 @@ import (
 	"google.golang.org/grpc"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/auth"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
 )
@@ -46,7 +47,7 @@ type Service struct {
 	ctx      dutyContext.Context
 
 	// connCache memoises GetConnection results across calls within a single
-	// plugin process. Keyed by (plugin id, type, label, configID).
+	// plugin process. Keyed by (plugin, type, label, configID).
 	connCache *lru.LRU[connKey, *pluginpb.ResolvedConnection]
 }
 
@@ -71,29 +72,48 @@ func (s *Service) GetConfigItem(ctx context.Context, req *pluginpb.GetConfigItem
 	if req.Id == "" {
 		return nil, fmt.Errorf("id is required")
 	}
-	var item models.ConfigItem
-	if err := s.ctx.DB().WithContext(ctx).Where("id = ?", req.Id).First(&item).Error; err != nil {
-		return nil, fmt.Errorf("config item %s: %w", req.Id, err)
+
+	var out *pluginpb.ConfigItem
+	err := auth.WithRLS(s.ctx.Wrap(ctx), func(rlsCtx dutyContext.Context) error {
+		var item models.ConfigItem
+		if err := rlsCtx.DB().WithContext(ctx).Where("id = ?", req.Id).First(&item).Error; err != nil {
+			return fmt.Errorf("config item %s: %w", req.Id, err)
+		}
+
+		var err error
+		out, err = pluginpb.FromConfigItem(item)
+		return err
+	})
+	if err != nil {
+		return nil, err
 	}
-	return pluginpb.FromConfigItem(item)
+
+	return out, nil
 }
 
 func (s *Service) ListConfigs(ctx context.Context, req *pluginpb.ListConfigsRequest) (*pluginpb.ConfigItemList, error) {
 	sel := req.Selector.ToDuty()
 
-	items, err := query.FindConfigsByResourceSelector(s.ctx.Wrap(ctx), int(req.Limit), sel)
-	if err != nil {
-		return nil, err
-	}
-
 	out := &pluginpb.ConfigItemList{}
-	for i := range items {
-		ci, err := pluginpb.FromConfigItem(items[i])
+	err := auth.WithRLS(s.ctx.Wrap(ctx), func(rlsCtx dutyContext.Context) error {
+		items, err := query.FindConfigsByResourceSelector(rlsCtx, int(req.Limit), sel)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		out.Items = append(out.Items, ci)
+		for i := range items {
+			ci, err := pluginpb.FromConfigItem(items[i])
+			if err != nil {
+				return err
+			}
+
+			out.Items = append(out.Items, ci)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return out, nil

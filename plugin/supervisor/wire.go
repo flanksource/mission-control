@@ -7,6 +7,7 @@ import (
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/google/uuid"
 	goplugin "github.com/hashicorp/go-plugin"
+	"google.golang.org/grpc"
 
 	"github.com/flanksource/incident-commander/plugin/adapter"
 	"github.com/flanksource/incident-commander/plugin/host"
@@ -55,9 +56,11 @@ func startPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 				ctx.Logger.Errorf("plugin %s: host broker accept: %v", id, err)
 				return
 			}
-			s := adapter.GRPCServerFactory(nil)
-			svc.Register(s)
-			if err := s.Serve(lis); err != nil {
+			grpcServer := adapter.GRPCServerFactory([]grpc.ServerOption{
+				grpc.UnaryInterceptor(svc.UnaryServerInterceptor()),
+			})
+			svc.Register(grpcServer)
+			if err := grpcServer.Serve(lis); err != nil {
 				ctx.Logger.Debugf("plugin %s: host server stopped: %v", id, err)
 			}
 		}()

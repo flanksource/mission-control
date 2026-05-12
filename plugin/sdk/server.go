@@ -21,9 +21,11 @@ type pluginServer struct {
 	impl    Plugin
 	uiPort  uint32
 	mu      sync.Mutex
-	host    HostClient
 	hostBrk *goplugin.GRPCBroker
 	ops     map[string]Operation
+
+	// a connection back to the mission-control gRPC server
+	mcgPRCConn *grpc.ClientConn
 }
 
 func newPluginServer(impl Plugin, uiPort uint32) *pluginServer {
@@ -42,8 +44,9 @@ func (s *pluginServer) RegisterPlugin(ctx context.Context, req *pluginpb.Registe
 		if err != nil {
 			return nil, fmt.Errorf("dial host broker: %w", err)
 		}
+
 		s.mu.Lock()
-		s.host = newHostClient(conn)
+		s.mcgPRCConn = conn
 		s.mu.Unlock()
 	}
 
@@ -103,7 +106,7 @@ func (s *pluginServer) Invoke(ctx context.Context, req *pluginpb.InvokeRequest) 
 	}
 
 	s.mu.Lock()
-	host := s.host
+	host := newHostClient(s.mcgPRCConn, invocationTokenFromIncomingContext(ctx))
 	s.mu.Unlock()
 
 	res, err := op.Handler(ctx, InvokeCtx{
