@@ -8,42 +8,57 @@
 package registry
 
 import (
+	"errors"
 	"fmt"
+	"sort"
+	"strings"
 	"sync"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	"github.com/google/uuid"
 )
+
+var ErrAmbiguousPlugin = errors.New("ambiguous plugin reference")
 
 // Entry is everything the host needs to route a request to one plugin.
 // Manifest is populated by the supervisor once the plugin completes
 // RegisterPlugin; it is nil while the plugin is starting up or has crashed
 // past the supervisor's restart budget.
 type Entry struct {
-	ID       string
-	Name     string
-	Spec     v1.PluginSpec
-	Manifest *pluginpb.PluginManifest
+	ID        uuid.UUID
+	Name      string
+	Namespace string
+	Spec      v1.PluginSpec
+	Manifest  *pluginpb.PluginManifest
 	// Supervisor is opaque here; the supervisor package sets it.
 	Supervisor any
 }
 
-// Registry is the host-side in-memory store of plugins keyed by name.
+// Registry is the host-side in-memory store of plugins.
 type Registry struct {
-	mu      sync.RWMutex
-	plugins map[string]*Entry
-	ids     map[string]string
+	mu sync.RWMutex
+
+	// plugins is the authoritative store keyed by plugin ID/UID. All runtime
+	// routing uses this key after a user-facing reference is resolved.
+	plugins map[uuid.UUID]*Entry
+
+	// refs maps exact plugin references to plugin IDs. The reference format is
+	// "namespace/name" for namespaced plugins and "/name" for plugins without a
+	// namespace. Bare-name lookups are resolved by scanning plugins so duplicate
+	// names can be reported as ambiguous instead of stored in this index.
+	refs map[string]uuid.UUID
 }
 
 // Default is the singleton used by the kopper reconciler and by every echo
-// handler that needs to look up a plugin by name.
+// handler that needs to look up a plugin.
 var Default = New()
 
 // New returns a fresh, empty registry. Tests use this; production uses Default.
 func New() *Registry {
 	return &Registry{
-		plugins: map[string]*Entry{},
-		ids:     map[string]string{},
+		plugins: map[uuid.UUID]*Entry{},
+		refs:    map[string]uuid.UUID{},
 	}
 }
 
@@ -51,78 +66,128 @@ func New() *Registry {
 // a Plugin CRD is created or updated). Existing manifest/supervisor are
 // preserved so an in-flight plugin keeps running across CRD updates that
 // don't change the binary.
-func (r *Registry) Upsert(id, name string, spec v1.PluginSpec) *Entry {
+func (r *Registry) Upsert(id uuid.UUID, namespace, name string, spec v1.PluginSpec) (*Entry, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	e, ok := r.plugins[name]
-	if !ok {
-		e = &Entry{Name: name}
-		r.plugins[name] = e
+
+	if id == uuid.Nil {
+		return nil, fmt.Errorf("plugin id is required")
 	}
-	if e.ID != "" && e.ID != id {
-		delete(r.ids, e.ID)
+	name = strings.TrimSpace(name)
+	namespace = strings.TrimSpace(namespace)
+
+	ref := namespacedName(namespace, name)
+	if existingID := r.refs[ref]; existingID != uuid.Nil && existingID != id {
+		return nil, fmt.Errorf("plugin %s is already registered with id %s", ref, existingID)
+	}
+
+	if existing := r.plugins[id]; existing != nil {
+		r.removeIndexes(existing)
+	}
+
+	e := r.plugins[id]
+	if e == nil {
+		e = &Entry{ID: id}
+		r.plugins[id] = e
 	}
 	e.ID = id
 	e.Name = name
+	e.Namespace = namespace
 	e.Spec = spec
-	if id != "" {
-		r.ids[id] = name
-	}
-	return e
+	r.addIndexes(e)
+	return e, nil
 }
 
 // SetSupervisor attaches a running supervisor to an existing entry. The
 // supervisor type is opaque here to avoid an import cycle.
-func (r *Registry) SetSupervisor(name string, sup any) error {
+func (r *Registry) SetSupervisor(id uuid.UUID, sup any) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	e, ok := r.plugins[name]
+	e, ok := r.plugins[id]
 	if !ok {
-		return fmt.Errorf("plugin %q not registered", name)
+		return fmt.Errorf("plugin %s not registered", id)
 	}
 	e.Supervisor = sup
 	return nil
 }
 
 // SetManifest stores the manifest a plugin returned from RegisterPlugin.
-func (r *Registry) SetManifest(name string, m *pluginpb.PluginManifest) error {
+func (r *Registry) SetManifest(id uuid.UUID, m *pluginpb.PluginManifest) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	e, ok := r.plugins[name]
+	e, ok := r.plugins[id]
 	if !ok {
-		return fmt.Errorf("plugin %q not registered", name)
+		return fmt.Errorf("plugin %s not registered", id)
 	}
 	e.Manifest = m
 	return nil
 }
 
-// Get returns the entry for the given plugin name, or nil if no plugin by
-// that name is registered.
-func (r *Registry) Get(name string) *Entry {
+// Get returns the entry for the given plugin id, or nil if no plugin by that
+// id is registered.
+func (r *Registry) Get(id uuid.UUID) *Entry {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	if e, ok := r.plugins[name]; ok {
+	if e, ok := r.plugins[id]; ok {
 		return snapshotEntry(e)
 	}
 	return nil
 }
 
-// NameForID resolves a Plugin CRD UID/id to the runtime plugin name.
-func (r *Registry) NameForID(id string) string {
+// Resolve accepts a plugin id, namespace/name, or unqualified name. Name-based
+// references are resolved to ids internally; unqualified names must be unique.
+func (r *Registry) Resolve(ref string) (*Entry, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
-	return r.ids[id]
+
+	ref = strings.TrimSpace(ref)
+	if ref == "" {
+		return nil, nil
+	}
+
+	if id, err := uuid.Parse(ref); err == nil {
+		if e, ok := r.plugins[id]; ok {
+			return snapshotEntry(e), nil
+		}
+		return nil, nil
+	}
+
+	if strings.Contains(ref, "/") {
+		if id := r.refs[ref]; id != uuid.Nil {
+			return snapshotEntry(r.plugins[id]), nil
+		}
+		return nil, nil
+	}
+
+	matches := make([]*Entry, 0, 1)
+	for _, e := range r.plugins {
+		if e.Name == ref {
+			matches = append(matches, e)
+		}
+	}
+	if len(matches) == 0 {
+		return nil, nil
+	}
+	if len(matches) > 1 {
+		refs := make([]string, 0, len(matches))
+		for _, e := range matches {
+			refs = append(refs, displayRef(e))
+		}
+		sort.Strings(refs)
+		return nil, fmt.Errorf("%w %q; use plugin id or namespace/name, matches: %s", ErrAmbiguousPlugin, ref, strings.Join(refs, ", "))
+	}
+	return snapshotEntry(matches[0]), nil
 }
 
 // Remove drops a plugin from the registry. Callers are responsible for
 // stopping the supervisor first.
-func (r *Registry) Remove(name string) {
+func (r *Registry) Remove(id uuid.UUID) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if e, ok := r.plugins[name]; ok && e.ID != "" {
-		delete(r.ids, e.ID)
+	if e, ok := r.plugins[id]; ok {
+		r.removeIndexes(e)
 	}
-	delete(r.plugins, name)
+	delete(r.plugins, id)
 }
 
 // List returns a snapshot of all registered plugins.
@@ -134,6 +199,35 @@ func (r *Registry) List() []*Entry {
 		out = append(out, snapshotEntry(e))
 	}
 	return out
+}
+
+func (r *Registry) addIndexes(e *Entry) {
+	if e.Name == "" {
+		return
+	}
+	r.refs[namespacedName(e.Namespace, e.Name)] = e.ID
+}
+
+func (r *Registry) removeIndexes(e *Entry) {
+	if e.Name == "" {
+		return
+	}
+	ref := namespacedName(e.Namespace, e.Name)
+	if r.refs[ref] == e.ID {
+		delete(r.refs, ref)
+	}
+}
+
+func namespacedName(namespace, name string) string {
+	return namespace + "/" + name
+}
+
+func displayRef(e *Entry) string {
+	ref := namespacedName(e.Namespace, e.Name)
+	if ref == "" {
+		return e.ID.String()
+	}
+	return ref
 }
 
 func snapshotEntry(e *Entry) *Entry {

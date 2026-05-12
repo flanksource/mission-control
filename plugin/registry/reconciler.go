@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/duty/context"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/google/uuid"
 )
 
 // EnvPluginPath is the env var that controls where plugin binaries are
@@ -34,7 +35,7 @@ func PluginPath() string {
 //
 // SupervisorStarter is injected by the cmd/server wiring at boot to break
 // the import cycle between registry and supervisor.
-var SupervisorStarter func(ctx context.Context, name string) error
+var SupervisorStarter func(ctx context.Context, id uuid.UUID) error
 
 func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 	if p == nil {
@@ -68,25 +69,34 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 
 	p.Status.InstalledPath = binPath
 
+	id, err := parsePluginID(string(p.UID))
+	if err != nil {
+		return err
+	}
+
 	var previous *Entry
-	if entry := Default.Get(p.Name); entry != nil {
+	if entry := Default.Get(id); entry != nil {
 		copy := *entry
 		previous = &copy
 	}
 
-	Default.Upsert(string(p.UID), p.Name, p.Spec)
+	if _, err := Default.Upsert(id, p.Namespace, p.Name, p.Spec); err != nil {
+		return err
+	}
 
 	if SupervisorStarter != nil {
-		if err := SupervisorStarter(ctx, p.Name); err != nil {
+		if err := SupervisorStarter(ctx, id); err != nil {
 			if previous != nil {
-				Default.Upsert(previous.ID, previous.Name, previous.Spec)
+				if _, rollbackErr := Default.Upsert(previous.ID, previous.Namespace, previous.Name, previous.Spec); rollbackErr != nil {
+					ctx.Logger.Errorf("plugin %s: rollback registry entry: %v", id, rollbackErr)
+				}
 			} else {
-				Default.Remove(p.Name)
+				Default.Remove(id)
 			}
 			return err
 		}
 	}
-	if entry := Default.Get(p.Name); entry != nil && entry.Manifest != nil {
+	if entry := Default.Get(id); entry != nil && entry.Manifest != nil {
 		p.Status.PluginVersion = entry.Manifest.Version
 	}
 
@@ -95,22 +105,38 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 
 // SupervisorStopper is injected by the cmd/server wiring (same reason as
 // SupervisorStarter).
-var SupervisorStopper func(name string) error
+var SupervisorStopper func(id uuid.UUID) error
 
 // DeletePlugin is the kopper delete callback. It stops the supervised
 // process and drops the registry entry. The binary is left on disk —
 // re-creating the CRD won't re-download a binary that already exists.
 func DeletePlugin(ctx context.Context, id string) error {
-	name := Default.NameForID(id)
-	if name == "" {
-		name = id
+	pluginID, err := parsePluginID(id)
+	if err != nil {
+		entry, resolveErr := Default.Resolve(id)
+		if resolveErr != nil {
+			return resolveErr
+		}
+		if entry == nil {
+			return err
+		}
+		pluginID = entry.ID
+	}
+	if Default.Get(pluginID) == nil {
+		entry, err := Default.Resolve(id)
+		if err != nil {
+			return err
+		}
+		if entry != nil {
+			pluginID = entry.ID
+		}
 	}
 	if SupervisorStopper != nil {
-		if err := SupervisorStopper(name); err != nil {
+		if err := SupervisorStopper(pluginID); err != nil {
 			return err
 		}
 	}
-	Default.Remove(name)
+	Default.Remove(pluginID)
 	return nil
 }
 
@@ -120,26 +146,33 @@ func DeleteStalePlugin(ctx context.Context, newer *v1.Plugin) error {
 	if newer == nil {
 		return nil
 	}
-	newerID := string(newer.UID)
+	newerID, err := parsePluginID(string(newer.UID))
+	if err != nil {
+		return err
+	}
 	for _, e := range Default.List() {
-		name := e.Name
-		if e.Manifest != nil && e.Manifest.Name != "" {
-			name = e.Manifest.Name
-		}
-		if name != newer.Name {
+		if e.Name != newer.Name || e.Namespace != newer.Namespace {
 			continue
 		}
 		if e.ID == newerID && e.Spec.Source == newer.Spec.Source && e.Spec.Version == newer.Spec.Version {
 			continue
 		}
 		if SupervisorStopper != nil {
-			if err := SupervisorStopper(e.Name); err != nil {
+			if err := SupervisorStopper(e.ID); err != nil {
 				return err
 			}
 		}
-		Default.Remove(e.Name)
+		Default.Remove(e.ID)
 	}
 	return nil
+}
+
+func parsePluginID(id string) (uuid.UUID, error) {
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return uuid.Nil, fmt.Errorf("plugin id %q is not a UUID: %w", id, err)
+	}
+	return parsed, nil
 }
 
 // BinaryPathFor returns the on-disk path for a plugin's binary. The

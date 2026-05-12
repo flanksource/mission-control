@@ -37,23 +37,26 @@ func registerProxyRoutes(e *echo.Echo) {
 // It strips the prefix so the plugin's HTTPHandler sees a clean path.
 func uiProxy(c echo.Context) error {
 	ctx := c.Request().Context().(dutyContext.Context)
-	name := c.Param("name")
+	pluginRef := c.Param("name")
+	entry, err := resolvePlugin(ctx, pluginRef)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
 
-	sup := supervisor.LookupSupervisor(name)
+	sup := supervisor.LookupSupervisor(entry.ID)
 	if sup == nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", name))
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", pluginRef))
 	}
 	port := sup.UIPort()
 	if port == 0 {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINTERNAL).Errorf("plugin %q did not advertise a UI port", name))
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINTERNAL).Errorf("plugin %q did not advertise a UI port", pluginRef))
 	}
 
 	target, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "parse plugin url"))
 	}
-	prefix := "/api/plugins/" + name + "/ui"
-
+	prefix := "/api/plugins/" + pluginRef + "/ui"
 	rp := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
