@@ -26,64 +26,68 @@ var (
 // the supervisor package (that would create an import cycle); this function
 // injects the start/stop callbacks at boot.
 func Wire(ctx dutyContext.Context) {
-	registry.SupervisorStarter = func(c dutyContext.Context, name string) error {
-		return startPlugin(c, name)
+	registry.SupervisorStarter = func(c dutyContext.Context, id string) error {
+		return startPlugin(c, id)
 	}
-	registry.SupervisorStopper = func(name string) error {
-		return stopPlugin(name)
+	registry.SupervisorStopper = func(id string) error {
+		return stopPlugin(id)
 	}
 }
 
-func startPlugin(ctx dutyContext.Context, name string) error {
-	binPath := registry.BinaryPathFor(name)
-	svc := host.New(ctx, name)
+func startPlugin(ctx dutyContext.Context, id string) error {
+	entry := registry.Default.Get(id)
+	if entry == nil {
+		return fmt.Errorf("plugin %s: not registered", id)
+	}
+	binPath := registry.BinaryPathFor(entry.Name)
+	svc := host.New(ctx, id)
 
 	// startHost is invoked after Dispense() so the broker is live. It opens
 	// a listener on the broker, starts a gRPC server for this plugin's
 	// HostService, and returns the broker id so the supervisor can pass it
 	// to the plugin in RegisterPlugin.
 	startHost := func(broker *goplugin.GRPCBroker) (uint32, error) {
-		id := broker.NextId()
+		brokerID := broker.NextId()
 		go func() {
-			lis, err := broker.Accept(id)
+			lis, err := broker.Accept(brokerID)
 			if err != nil {
-				ctx.Logger.Errorf("plugin %s: host broker accept: %v", name, err)
+				ctx.Logger.Errorf("plugin %s: host broker accept: %v", id, err)
 				return
 			}
 			s := adapter.GRPCServerFactory(nil)
 			svc.Register(s)
 			if err := s.Serve(lis); err != nil {
-				ctx.Logger.Debugf("plugin %s: host server stopped: %v", name, err)
+				ctx.Logger.Debugf("plugin %s: host server stopped: %v", id, err)
 			}
 		}()
-		return id, nil
+		return brokerID, nil
 	}
 
 	mu.Lock()
-	if active[name] != nil {
+	if active[id] != nil {
 		mu.Unlock()
 		return nil
 	}
-	sup := New(name, binPath)
-	active[name] = sup
+	sup := New(id, binPath)
+	active[id] = sup
 	mu.Unlock()
 
 	if err := sup.Start(ctx, startHost); err != nil {
 		mu.Lock()
-		if active[name] == sup {
-			delete(active, name)
+		if active[id] == sup {
+			delete(active, id)
 		}
 		mu.Unlock()
-		return fmt.Errorf("plugin %s: start supervisor: %w", name, err)
+		return fmt.Errorf("plugin %s: start supervisor: %w", id, err)
 	}
 
 	return nil
 }
 
-func stopPlugin(name string) error {
+func stopPlugin(id string) error {
 	mu.Lock()
-	sup := active[name]
-	delete(active, name)
+	sup := active[id]
+	delete(active, id)
 	mu.Unlock()
 	if sup != nil {
 		sup.Stop()
@@ -91,10 +95,10 @@ func stopPlugin(name string) error {
 	return nil
 }
 
-// LookupSupervisor returns the running supervisor for a named plugin, or
-// nil if the plugin is not running. Used by the echo handlers and CLI.
-func LookupSupervisor(name string) *Supervisor {
+// LookupSupervisor returns the running supervisor for a plugin id, or nil if
+// the plugin is not running. Used by the echo handlers and CLI.
+func LookupSupervisor(id string) *Supervisor {
 	mu.Lock()
 	defer mu.Unlock()
-	return active[name]
+	return active[id]
 }

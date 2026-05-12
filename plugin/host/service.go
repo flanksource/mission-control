@@ -29,36 +29,35 @@ import (
 const connectionCacheTTL = 5 * time.Minute
 
 type connKey struct {
-	namespace string
-	plugin    string
-	typ       string
-	label     string
-	configID  string
+	pluginID string
+	typ      string
+	label    string
+	configID string
 }
 
 // Service is the host-side gRPC server. There is one per plugin process —
 // the supervisor instantiates it during Start() so it can stamp the plugin
-// name into requests for allowlist enforcement and caching.
+// id into requests for allowlist enforcement and caching.
 type Service struct {
 	pluginpb.UnimplementedHostServiceServer
 
-	pluginName string
-	ctx        dutyContext.Context
+	pluginID string
+	ctx      dutyContext.Context
 
 	// connCache memoises GetConnection results across calls within a single
-	// plugin process. Keyed by (namespace, plugin, type, label, configID).
+	// plugin process. Keyed by (plugin id, type, label, configID).
 	connCache *lru.LRU[connKey, *pluginpb.ResolvedConnection]
 }
 
-// New creates a host Service for one named plugin. Multiple plugins running
+// New creates a host Service for one plugin id. Multiple plugins running
 // concurrently get separate Services so the connection allowlist (read off
 // the Plugin CRD via the registry) is enforced per-plugin.
-func New(ctx dutyContext.Context, pluginName string) *Service {
+func New(ctx dutyContext.Context, pluginID string) *Service {
 	cache := lru.NewLRU[connKey, *pluginpb.ResolvedConnection](256, nil, connectionCacheTTL)
 	return &Service{
-		pluginName: pluginName,
-		ctx:        ctx,
-		connCache:  cache,
+		pluginID:  pluginID,
+		ctx:       ctx,
+		connCache: cache,
 	}
 }
 
@@ -104,12 +103,12 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 		return nil, fmt.Errorf("connection lookup is required")
 	}
 
-	entry := registry.Default.Get(s.pluginName)
+	entry := registry.Default.Get(s.pluginID)
 	if entry == nil {
-		return nil, fmt.Errorf("plugin %q is not registered", s.pluginName)
+		return nil, fmt.Errorf("plugin %q is not registered", s.pluginID)
 	}
 
-	key := connKey{namespace: entry.Namespace, plugin: s.pluginName, typ: req.GetType(), label: req.GetLabel(), configID: req.GetConfigItemId()}
+	key := connKey{pluginID: s.pluginID, typ: req.GetType(), label: req.GetLabel(), configID: req.GetConfigItemId()}
 	if cached, ok := s.connCache.Get(key); ok {
 		return cached, nil
 	}
@@ -130,7 +129,7 @@ func (s *Service) Log(ctx context.Context, e *pluginpb.LogEntry) (*pluginpb.Empt
 	for k, v := range e.Fields {
 		args = append(args, k, v)
 	}
-	prefix := fmt.Sprintf("[plugin %s] %s", s.pluginName, e.Message)
+	prefix := fmt.Sprintf("[plugin %s] %s", s.pluginID, e.Message)
 	switch e.Level {
 	case "debug":
 		logger.Debugf(prefix, args...)
