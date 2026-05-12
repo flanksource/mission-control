@@ -21,10 +21,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"google.golang.org/protobuf/types/known/structpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/auth"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
 )
@@ -35,10 +34,11 @@ import (
 const connectionCacheTTL = 5 * time.Minute
 
 type connKey struct {
-	pluginID uuid.UUID
-	typ      string
-	label    string
-	configID string
+	pluginID       uuid.UUID
+	typ            string
+	label          string
+	configID       string
+	rlsFingerprint string
 }
 
 // Service is the host-side gRPC server. There is one per plugin process —
@@ -51,7 +51,7 @@ type Service struct {
 	ctx      dutyContext.Context
 
 	// connCache memoises GetConnection results across calls within a single
-	// plugin process. Keyed by (plugin id, type, label, configID).
+	// plugin process. Keyed by (plugin, type, label, configID).
 	connCache *lru.LRU[connKey, *pluginpb.ResolvedConnection]
 }
 
@@ -126,29 +126,48 @@ func (s *Service) GetConfigItem(ctx context.Context, req *pluginpb.GetConfigItem
 	if req.Id == "" {
 		return nil, fmt.Errorf("id is required")
 	}
-	var item models.ConfigItem
-	if err := s.ctx.DB().WithContext(ctx).Where("id = ?", req.Id).First(&item).Error; err != nil {
-		return nil, fmt.Errorf("config item %s: %w", req.Id, err)
+
+	var out *pluginpb.ConfigItem
+	err := auth.WithRLS(s.ctx.Wrap(ctx), func(rlsCtx dutyContext.Context) error {
+		var item models.ConfigItem
+		if err := rlsCtx.DB().WithContext(ctx).Where("id = ?", req.Id).First(&item).Error; err != nil {
+			return fmt.Errorf("config item %s: %w", req.Id, err)
+		}
+
+		var err error
+		out, err = pluginpb.FromConfigItem(item)
+		return err
+	})
+	if err != nil {
+		return nil, err
 	}
-	return pluginpb.FromConfigItem(item)
+
+	return out, nil
 }
 
 func (s *Service) ListConfigs(ctx context.Context, req *pluginpb.ListConfigsRequest) (*pluginpb.ConfigItemList, error) {
 	sel := req.Selector.ToDuty()
 
-	items, err := query.FindConfigsByResourceSelector(s.ctx.Wrap(ctx), int(req.Limit), sel)
-	if err != nil {
-		return nil, err
-	}
-
 	out := &pluginpb.ConfigItemList{}
-	for i := range items {
-		ci, err := pluginpb.FromConfigItem(items[i])
+	err := auth.WithRLS(s.ctx.Wrap(ctx), func(rlsCtx dutyContext.Context) error {
+		items, err := query.FindConfigsByResourceSelector(rlsCtx, int(req.Limit), sel)
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		out.Items = append(out.Items, ci)
+		for i := range items {
+			ci, err := pluginpb.FromConfigItem(items[i])
+			if err != nil {
+				return err
+			}
+
+			out.Items = append(out.Items, ci)
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
 
 	return out, nil
@@ -159,18 +178,23 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 		return nil, fmt.Errorf("connection lookup is required")
 	}
 
+	baseCtx := s.ctx.Wrap(ctx)
+	rlsPayload, err := auth.GetRLSPayload(baseCtx)
+	if err != nil {
+		return nil, err
+	}
+
 	entry := registry.Default.Get(s.pluginID)
 	if entry == nil {
 		return nil, fmt.Errorf("plugin %s is not registered", s.pluginID)
 	}
 
-	key := connKey{pluginID: s.pluginID, typ: req.GetType(), label: req.GetLabel(), configID: req.GetConfigItemId()}
+	key := connKey{pluginID: s.pluginID, typ: req.GetType(), label: req.GetLabel(), configID: req.GetConfigItemId(), rlsFingerprint: rlsPayload.Fingerprint()}
 	if cached, ok := s.connCache.Get(key); ok {
 		return cached, nil
 	}
 
-	pluginCtx := s.ctx.Wrap(ctx).WithNamespace(entry.Namespace)
-	resolved, err := resolveConnection(pluginCtx, entry.Spec, req)
+	resolved, err := resolveConnection(s.ctx, entry.Spec, req)
 	if err != nil {
 		return nil, err
 	}
