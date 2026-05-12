@@ -34,11 +34,10 @@ import (
 const connectionCacheTTL = 5 * time.Minute
 
 type connKey struct {
-	pluginID       uuid.UUID
-	typ            string
-	label          string
-	configID       string
-	rlsFingerprint string
+	pluginID uuid.UUID
+	typ      string
+	label    string
+	configID string
 }
 
 // Service is the host-side gRPC server. There is one per plugin process —
@@ -179,27 +178,18 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 	}
 
 	baseCtx := s.ctx.Wrap(ctx)
-	rlsPayload, err := auth.GetRLSPayload(baseCtx)
-	if err != nil {
-		return nil, err
-	}
 
 	entry := registry.Default.Get(s.pluginID)
 	if entry == nil {
 		return nil, fmt.Errorf("plugin %s is not registered", s.pluginID)
 	}
 
-	key := connKey{pluginID: s.pluginID, typ: req.GetType(), label: req.GetLabel(), configID: req.GetConfigItemId(), rlsFingerprint: rlsPayload.Fingerprint()}
+	key := connKey{pluginID: s.pluginID, typ: req.GetType(), label: req.GetLabel(), configID: req.GetConfigItemId()}
 	if cached, ok := s.connCache.Get(key); ok {
 		return cached, nil
 	}
 
-	var resolved *pluginpb.ResolvedConnection
-	err = auth.WithRLS(baseCtx, func(rlsCtx dutyContext.Context) error {
-		var err error
-		resolved, err = resolveConnection(rlsCtx, entry.Spec, req)
-		return err
-	})
+	resolved, err := resolveConnection(baseCtx, entry.Spec, req)
 	if err != nil {
 		return nil, err
 	}

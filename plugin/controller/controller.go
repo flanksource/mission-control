@@ -127,6 +127,9 @@ func InvokeOperation(c echo.Context) error {
 	invokeCtx, cancel := context.WithTimeout(c.Request().Context(), 60*time.Second)
 	defer cancel()
 
+	// Like Set-Cookie in HTTP, Mission Control issues a short-lived invocation
+	// token to the plugin over gRPC metadata. The plugin SDK presents the same
+	// token on HostService callbacks so Mission Control can verify the actor.
 	invokeCtx = metadata.AppendToOutgoingContext(invokeCtx, pluginpb.PluginInvocationTokenMetadataKey, invocationToken)
 
 	resp, err := sup.Invoke(invokeCtx, &pluginpb.InvokeRequest{
