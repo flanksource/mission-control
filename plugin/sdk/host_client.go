@@ -46,15 +46,8 @@ type hostClient struct {
 	invocationToken string
 }
 
-func newHostClient(conn *grpc.ClientConn) *hostClient {
-	return &hostClient{c: pluginpb.NewHostServiceClient(conn)}
-}
-
-func (h *hostClient) withInvocationToken(token string) *hostClient {
-	if h == nil {
-		return nil
-	}
-	return &hostClient{c: h.c, invocationToken: token}
+func newHostClient(conn *grpc.ClientConn, token string) *hostClient {
+	return &hostClient{c: pluginpb.NewHostServiceClient(conn), invocationToken: token}
 }
 
 func (h *hostClient) authContext(ctx context.Context) context.Context {
