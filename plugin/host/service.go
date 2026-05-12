@@ -74,19 +74,19 @@ func (s *Service) Register(g *grpc.Server) {
 
 func (s *Service) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if !requiresCaller(info.FullMethod) {
+		if !requiresInvocation(info.FullMethod) {
 			return handler(ctx, req)
 		}
 
-		callerCtx, err := s.contextWithCaller(ctx)
+		invocationCtx, err := s.contextWithInvocation(ctx)
 		if err != nil {
 			return nil, err
 		}
-		return handler(callerCtx, req)
+		return handler(invocationCtx, req)
 	}
 }
 
-func requiresCaller(method string) bool {
+func requiresInvocation(method string) bool {
 	switch method {
 	case pluginpb.HostService_GetConfigItem_FullMethodName,
 		pluginpb.HostService_ListConfigs_FullMethodName,
@@ -97,26 +97,26 @@ func requiresCaller(method string) bool {
 	}
 }
 
-func (s *Service) contextWithCaller(ctx context.Context) (context.Context, error) {
+func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return nil, status.Error(codes.Unauthenticated, "caller metadata is required")
+		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
 
-	values := md.Get(pluginpb.CallerUserIDMetadataKey)
+	values := md.Get(pluginpb.PluginInvocationTokenMetadataKey)
 	if len(values) == 0 || values[0] == "" {
-		return nil, status.Error(codes.Unauthenticated, "caller user id is required")
+		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
 
-	userID := values[0]
-	if _, err := uuid.Parse(userID); err != nil {
-		return nil, status.Errorf(codes.Unauthenticated, "invalid caller user id %q", userID)
+	claims, err := auth.VerifyPluginInvocationToken(values[0], s.pluginID.String())
+	if err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "invalid plugin invocation token: %v", err)
 	}
 
 	baseCtx := s.ctx.Wrap(ctx)
 	var person models.Person
-	if err := baseCtx.DB().WithContext(ctx).Where("id = ?", userID).First(&person).Error; err != nil {
-		return nil, status.Errorf(codes.Unauthenticated, "caller %s: %v", userID, err)
+	if err := baseCtx.DB().WithContext(ctx).Where("id = ?", claims.Subject).First(&person).Error; err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "plugin invocation subject %s: %v", claims.Subject, err)
 	}
 
 	return baseCtx.WithUser(&person), nil
@@ -194,7 +194,12 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 		return cached, nil
 	}
 
-	resolved, err := resolveConnection(s.ctx, entry.Spec, req)
+	var resolved *pluginpb.ResolvedConnection
+	err = auth.WithRLS(baseCtx, func(rlsCtx dutyContext.Context) error {
+		var err error
+		resolved, err = resolveConnection(rlsCtx, entry.Spec, req)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}

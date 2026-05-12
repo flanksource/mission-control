@@ -42,47 +42,59 @@ type HostClient interface {
 }
 
 type hostClient struct {
-	c pluginpb.HostServiceClient
+	c               pluginpb.HostServiceClient
+	invocationToken string
 }
 
-func newHostClient(conn *grpc.ClientConn) HostClient {
+func newHostClient(conn *grpc.ClientConn) *hostClient {
 	return &hostClient{c: pluginpb.NewHostServiceClient(conn)}
 }
 
+func (h *hostClient) withInvocationToken(token string) *hostClient {
+	if h == nil {
+		return nil
+	}
+	return &hostClient{c: h.c, invocationToken: token}
+}
+
+func (h *hostClient) authContext(ctx context.Context) context.Context {
+	return withInvocationToken(ctx, h.invocationToken)
+}
+
 func (h *hostClient) GetConfigItem(ctx context.Context, id string) (*pluginpb.ConfigItem, error) {
-	return h.c.GetConfigItem(withCallerMetadata(ctx), &pluginpb.GetConfigItemRequest{Id: id})
+	return h.c.GetConfigItem(h.authContext(ctx), &pluginpb.GetConfigItemRequest{Id: id})
 }
 
 func (h *hostClient) ListConfigs(ctx context.Context, selector types.ResourceSelector, limit int) (*pluginpb.ConfigItemList, error) {
-	return h.c.ListConfigs(withCallerMetadata(ctx), &pluginpb.ListConfigsRequest{
+	return h.c.ListConfigs(h.authContext(ctx), &pluginpb.ListConfigsRequest{
 		Selector: pluginpb.ResourceSelectorFromDuty(selector),
 		Limit:    int32(limit),
 	})
 }
 
 func (h *hostClient) GetConnectionByType(ctx context.Context, typ ConnectionType) (*pluginpb.ResolvedConnection, error) {
-	return h.c.GetConnection(withCallerMetadata(ctx), &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_Type{Type: string(typ)}})
+	return h.c.GetConnection(h.authContext(ctx), &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_Type{Type: string(typ)}})
 }
 
 func (h *hostClient) GetConnectionForConfig(ctx context.Context, configItemID string) (*pluginpb.ResolvedConnection, error) {
-	return h.c.GetConnection(withCallerMetadata(ctx), &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_ConfigItemId{ConfigItemId: configItemID}})
+	return h.c.GetConnection(h.authContext(ctx), &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_ConfigItemId{ConfigItemId: configItemID}})
 }
 
 func (h *hostClient) GetConnectionByLabel(ctx context.Context, label string) (*pluginpb.ResolvedConnection, error) {
-	return h.c.GetConnection(withCallerMetadata(ctx), &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_Label{Label: label}})
+	return h.c.GetConnection(h.authContext(ctx), &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_Label{Label: label}})
 }
 
 func (h *hostClient) Log(ctx context.Context, level, message string, fields map[string]string) error {
-	_, err := h.c.Log(withCallerMetadata(ctx), &pluginpb.LogEntry{Level: level, Message: message, Fields: fields})
+	_, err := h.c.Log(h.authContext(ctx), &pluginpb.LogEntry{Level: level, Message: message, Fields: fields})
 	return err
 }
 
 func (h *hostClient) WriteArtifact(ctx context.Context, a *pluginpb.Artifact) (*pluginpb.ArtifactRef, error) {
-	return h.c.WriteArtifact(withCallerMetadata(ctx), a)
+	return h.c.WriteArtifact(h.authContext(ctx), a)
 }
 
 func (h *hostClient) ReadArtifact(ctx context.Context, ref *pluginpb.ArtifactRef) (*pluginpb.Artifact, error) {
-	return h.c.ReadArtifact(withCallerMetadata(ctx), ref)
+	return h.c.ReadArtifact(h.authContext(ctx), ref)
 }
 
 // settingsFromStruct decodes a *structpb.Struct into a JSON-shaped map[string]any.

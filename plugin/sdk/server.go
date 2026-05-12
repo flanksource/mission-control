@@ -21,7 +21,7 @@ type pluginServer struct {
 	impl    Plugin
 	uiPort  uint32
 	mu      sync.Mutex
-	host    HostClient
+	host    *hostClient
 	hostBrk *goplugin.GRPCBroker
 	ops     map[string]Operation
 }
@@ -106,17 +106,17 @@ func (s *pluginServer) Invoke(ctx context.Context, req *pluginpb.InvokeRequest) 
 	host := s.host
 	s.mu.Unlock()
 
-	handlerCtx := ctx
-	if req.Caller != nil {
-		handlerCtx = withCallerUserID(handlerCtx, req.Caller.UserId)
+	var invokeHost HostClient
+	if host != nil {
+		invokeHost = host.withInvocationToken(req.InvocationToken)
 	}
 
-	res, err := op.Handler(handlerCtx, InvokeCtx{
+	res, err := op.Handler(ctx, InvokeCtx{
 		Operation:    req.Operation,
 		ParamsJSON:   req.ParamsJson,
 		ConfigItemID: req.ConfigItemId,
 		Caller:       req.Caller,
-		Host:         host,
+		Host:         invokeHost,
 	})
 	if err != nil {
 		return &pluginpb.InvokeResponse{

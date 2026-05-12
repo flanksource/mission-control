@@ -96,11 +96,7 @@ func WithRLS(ctx context.Context, fn func(context.Context) error) error {
 	}
 
 	if ctx.Properties().On(false, "rls.debug") {
-		userID := ""
-		if user := ctx.User(); user != nil {
-			userID = user.ID.String()
-		}
-		ctx.Logger.WithValues("user", userID).Infof("RLS payload: %s", logger.Pretty(rlsPayload))
+		ctx.Logger.WithValues("user", lo.FromPtr(ctx.User()).ID).Infof("RLS payload: %s", logger.Pretty(rlsPayload))
 	}
 
 	if rlsPayload.Disable {

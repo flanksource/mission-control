@@ -1,3 +1,3 @@
 package pluginpb
 
-const CallerUserIDMetadataKey = "x-flanksource-user-id"
+const PluginInvocationTokenMetadataKey = "x-flanksource-plugin-invocation"
