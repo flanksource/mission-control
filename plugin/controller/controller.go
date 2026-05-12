@@ -27,6 +27,7 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 	"google.golang.org/grpc/metadata"
 
 	"github.com/flanksource/incident-commander/auth"
@@ -118,7 +119,7 @@ func InvokeOperation(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "read request body"))
 	}
 
-	invocationToken, err := auth.MintPluginInvocationToken(ctx.User(), entry.ID.String())
+	invocationToken, err := auth.MintPluginInvocationToken(lo.FromPtr(ctx.User()), entry.ID)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 	}
