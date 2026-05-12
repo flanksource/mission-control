@@ -17,6 +17,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"time"
@@ -78,7 +79,7 @@ func ListPlugins(c echo.Context) error {
 			continue
 		}
 		out = append(out, PluginListing{
-			Name:        e.Manifest.Name,
+			Name:        e.Name,
 			Description: e.Manifest.Description,
 			Version:     e.Manifest.Version,
 			Tabs:        e.Manifest.Tabs,
@@ -92,20 +93,22 @@ func ListPlugins(c echo.Context) error {
 // The plugin returns raw bytes plus a MIME type; we forward both verbatim.
 func InvokeOperation(c echo.Context) error {
 	ctx := c.Request().Context().(dutyContext.Context)
-	name := c.Param("name")
+	pluginRef := c.Param("name")
 	op := c.Param("op")
 
-	sup := supervisor.LookupSupervisor(name)
+	entry, err := resolvePlugin(ctx, pluginRef)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	sup := supervisor.LookupSupervisor(entry.ID)
 	if sup == nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", name))
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", pluginRef))
 	}
 
 	configID := c.QueryParam("config_id")
-	if configID != "" {
-		entry := registry.Default.Get(name)
-		if entry != nil && !selectorMatches(ctx, entry, configID) {
-			return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", name, configID))
-		}
+	if configID != "" && !selectorMatches(ctx, entry, configID) {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, configID))
 	}
 
 	body, err := io.ReadAll(c.Request().Body)
@@ -124,7 +127,7 @@ func InvokeOperation(c echo.Context) error {
 		Caller:       caller,
 	})
 	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "plugin %s/%s", name, op))
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "plugin %s/%s", pluginRef, op))
 	}
 	if resp.ErrorMessage != "" {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(resp.ErrorCode).Errorf("%s", resp.ErrorMessage))
@@ -136,6 +139,20 @@ func InvokeOperation(c echo.Context) error {
 	}
 	c.Response().Header().Set(echo.HeaderContentType, mime)
 	return c.Blob(http.StatusOK, mime, resp.Result)
+}
+
+func resolvePlugin(ctx dutyContext.Context, ref string) (*registry.Entry, error) {
+	entry, err := registry.Default.Resolve(ref)
+	if err != nil {
+		if errors.Is(err, registry.ErrAmbiguousPlugin) {
+			return nil, ctx.Oops().Code(dutyAPI.ECONFLICT).Wrap(err)
+		}
+		return nil, ctx.Oops().Wrap(err)
+	}
+	if entry == nil {
+		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", ref)
+	}
+	return entry, nil
 }
 
 // selectorMatches returns true when the given config id satisfies the plugin

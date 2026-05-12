@@ -34,7 +34,7 @@ func PluginPath() string {
 //
 // SupervisorStarter is injected by the cmd/server wiring at boot to break
 // the import cycle between registry and supervisor.
-var SupervisorStarter func(ctx context.Context, name string) error
+var SupervisorStarter func(ctx context.Context, id string) error
 
 func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 	if p == nil {
@@ -68,25 +68,27 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 
 	p.Status.InstalledPath = binPath
 
+	id := pluginID(p.Namespace, p.Name, string(p.UID))
+
 	var previous *Entry
-	if entry := Default.Get(p.Name); entry != nil {
+	if entry := Default.Get(id); entry != nil {
 		copy := *entry
 		previous = &copy
 	}
 
-	Default.Upsert(string(p.UID), p.Namespace, p.Name, p.Spec)
+	Default.Upsert(id, p.Namespace, p.Name, p.Spec)
 
 	if SupervisorStarter != nil {
-		if err := SupervisorStarter(ctx, p.Name); err != nil {
+		if err := SupervisorStarter(ctx, id); err != nil {
 			if previous != nil {
 				Default.Upsert(previous.ID, previous.Namespace, previous.Name, previous.Spec)
 			} else {
-				Default.Remove(p.Name)
+				Default.Remove(id)
 			}
 			return err
 		}
 	}
-	if entry := Default.Get(p.Name); entry != nil && entry.Manifest != nil {
+	if entry := Default.Get(id); entry != nil && entry.Manifest != nil {
 		p.Status.PluginVersion = entry.Manifest.Version
 	}
 
@@ -95,22 +97,27 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 
 // SupervisorStopper is injected by the cmd/server wiring (same reason as
 // SupervisorStarter).
-var SupervisorStopper func(name string) error
+var SupervisorStopper func(id string) error
 
 // DeletePlugin is the kopper delete callback. It stops the supervised
 // process and drops the registry entry. The binary is left on disk —
 // re-creating the CRD won't re-download a binary that already exists.
 func DeletePlugin(ctx context.Context, id string) error {
-	name := Default.NameForID(id)
-	if name == "" {
-		name = id
+	if Default.Get(id) == nil {
+		entry, err := Default.Resolve(id)
+		if err != nil {
+			return err
+		}
+		if entry != nil {
+			id = entry.ID
+		}
 	}
 	if SupervisorStopper != nil {
-		if err := SupervisorStopper(name); err != nil {
+		if err := SupervisorStopper(id); err != nil {
 			return err
 		}
 	}
-	Default.Remove(name)
+	Default.Remove(id)
 	return nil
 }
 
@@ -120,26 +127,32 @@ func DeleteStalePlugin(ctx context.Context, newer *v1.Plugin) error {
 	if newer == nil {
 		return nil
 	}
-	newerID := string(newer.UID)
+	newerID := pluginID(newer.Namespace, newer.Name, string(newer.UID))
 	for _, e := range Default.List() {
-		name := e.Name
-		if e.Manifest != nil && e.Manifest.Name != "" {
-			name = e.Manifest.Name
-		}
-		if name != newer.Name {
+		if e.Name != newer.Name || e.Namespace != newer.Namespace {
 			continue
 		}
 		if e.ID == newerID && e.Spec.Source == newer.Spec.Source && e.Spec.Version == newer.Spec.Version {
 			continue
 		}
 		if SupervisorStopper != nil {
-			if err := SupervisorStopper(e.Name); err != nil {
+			if err := SupervisorStopper(e.ID); err != nil {
 				return err
 			}
 		}
-		Default.Remove(e.Name)
+		Default.Remove(e.ID)
 	}
 	return nil
+}
+
+func pluginID(namespace, name, uid string) string {
+	if uid != "" {
+		return uid
+	}
+	if namespace != "" {
+		return namespace + "/" + name
+	}
+	return name
 }
 
 // BinaryPathFor returns the on-disk path for a plugin's binary. The
