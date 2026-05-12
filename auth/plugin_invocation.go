@@ -1,7 +1,10 @@
 package auth
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/flanksource/duty/models"
@@ -17,8 +20,28 @@ const (
 
 var (
 	PluginJWTTTL = 5 * time.Minute
-	PluginJWTSecret          string
+
+	// Signing secret
+	PluginJWTSecret string
 )
+
+func init() {
+	if PluginJWTSecret != "" {
+		return
+	}
+
+	if secret := os.Getenv("PLUGIN_JWT_SECRET"); secret != "" {
+		PluginJWTSecret = secret
+		return
+	}
+
+	// Generate a random secret if not provided
+	secret := make([]byte, 32)
+	if _, err := rand.Read(secret); err != nil {
+		panic(fmt.Errorf("generate plugin invocation jwt secret: %w", err))
+	}
+	PluginJWTSecret = base64.RawStdEncoding.EncodeToString(secret)
+}
 
 type PluginInvocationClaims struct {
 	Plugin uuid.UUID `json:"pluginID"`
