@@ -35,6 +35,11 @@ func (in *PermissionObject) DeepCopyInto(out *PermissionObject) {
 		*out = make([]dutyRBAC.ViewRef, len(*in))
 		copy(*out, *in)
 	}
+	if in.Plugins != nil {
+		in, out := &in.Plugins, &out.Plugins
+		*out = make([]types.ResourceSelector, len(*in))
+		copy(*out, *in)
+	}
 
 	// Copy Scopes
 	if in.Scopes != nil {

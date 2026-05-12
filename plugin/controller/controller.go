@@ -24,8 +24,11 @@ import (
 
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/duty/types"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 	"google.golang.org/grpc/metadata"
@@ -50,7 +53,7 @@ var registerUIProxy func(e *echo.Echo)
 func RegisterRoutes(e *echo.Echo) {
 	g := e.Group("/api/plugins")
 	g.GET("", ListPlugins, rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
-	g.POST("/:name/operations/:op", InvokeOperation, rbac.Authorization(policy.ObjectCatalog, policy.ActionUpdate))
+	g.POST("/:name/operations/:op", InvokeOperation)
 
 	if registerUIProxy != nil {
 		registerUIProxy(e)
@@ -113,6 +116,9 @@ func InvokeOperation(c echo.Context) error {
 	if configID != "" && !selectorMatches(ctx, entry, configID) {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, configID))
 	}
+	if err := enforcePluginInvokePermission(ctx, entry, op, configID); err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
 
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
@@ -166,6 +172,37 @@ func resolvePlugin(ctx dutyContext.Context, ref string) (*registry.Entry, error)
 		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", ref)
 	}
 	return entry, nil
+}
+
+func enforcePluginInvokePermission(ctx dutyContext.Context, entry *registry.Entry, op, configID string) error {
+	user := ctx.User()
+	if user == nil {
+		return ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in")
+	}
+
+	attr := &models.ABACAttribute{
+		Plugin: types.ResourceSelectableMap{
+			"id":        entry.ID.String(),
+			"namespace": entry.Namespace,
+			"name":      entry.Name,
+			"type":      "plugin",
+		},
+	}
+
+	if configID != "" {
+		item, err := query.ConfigItemFromCache(ctx, configID)
+		if err != nil {
+			return ctx.Oops().Wrapf(err, "get config item %s", configID)
+		}
+		attr.Config = item
+	}
+
+	action := "invoke:" + op
+	if !dutyRBAC.HasPermission(ctx, user.ID.String(), attr, action) {
+		return ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("not allowed to invoke plugin %s operation %s", entry.Name, op)
+	}
+
+	return nil
 }
 
 // selectorMatches returns true when the given config id satisfies the plugin

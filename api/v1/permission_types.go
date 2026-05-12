@@ -111,6 +111,20 @@ func findTeam(ctx context.Context, selector string) (string, models.PermissionSu
 	return id, models.PermissionSubjectTypeTeam, nil
 }
 
+func pluginSubject(selector string) (string, models.PermissionSubjectType, error) {
+	selector = strings.TrimSpace(selector)
+	if selector == "" {
+		return "", "", dutyAPI.Errorf(dutyAPI.EINVALID, "plugin subject is required")
+	}
+
+	splits := strings.Split(selector, "/")
+	if len(splits) != 2 || strings.TrimSpace(splits[1]) == "" {
+		return "", "", dutyAPI.Errorf(dutyAPI.EINVALID, "%s is not a valid plugin subject. Must be <namespace>/<name> or /<name>", selector)
+	}
+
+	return "plugin:" + strings.TrimSpace(splits[0]) + "/" + strings.TrimSpace(splits[1]), models.PermissionSubjectTypePlugin, nil
+}
+
 func findNamespacedResource(ctx context.Context, table string, selector string, subjectType models.PermissionSubjectType) (string, models.PermissionSubjectType, error) {
 	query := ctx.DB().Select("id").Table(table).Where("deleted_at IS NULL")
 
@@ -163,6 +177,9 @@ type PermissionSubject struct {
 	// Playbook <namespace>/<name> selector
 	Playbook string `json:"playbook,omitempty"`
 
+	// Plugin <namespace>/<name> selector
+	Plugin string `json:"plugin,omitempty"`
+
 	// Canary <namespace>/<name> selector
 	Canary string `json:"canary,omitempty"`
 
@@ -175,7 +192,7 @@ type PermissionSubject struct {
 
 func (t *PermissionSubject) Empty() bool {
 	return t.Person == "" && t.Team == "" && t.Notification == "" && t.Group == "" && t.Playbook == "" &&
-		t.Canary == "" && t.Scraper == "" && t.Topology == ""
+		t.Plugin == "" && t.Canary == "" && t.Scraper == "" && t.Topology == ""
 }
 
 func (t *PermissionSubject) Populate(ctx context.Context) (string, models.PermissionSubjectType, error) {
@@ -203,6 +220,10 @@ func (t *PermissionSubject) Populate(ctx context.Context) (string, models.Permis
 		return findNamespacedResource(ctx, "playbooks", string(t.Playbook), models.PermissionSubjectTypePlaybook)
 	}
 
+	if t.Plugin != "" {
+		return pluginSubject(string(t.Plugin))
+	}
+
 	if t.Canary != "" {
 		return findNamespacedResource(ctx, "canaries", string(t.Canary), models.PermissionSubjectTypeCanary)
 	}
@@ -219,7 +240,7 @@ func (t *PermissionSubject) Populate(ctx context.Context) (string, models.Permis
 }
 
 // +kubebuilder:object:generate=false
-// +kubebuilder:validation:XValidation:rule="!(has(self.mcp) && self.mcp && (has(self.configs) || has(self.components) || has(self.playbooks) || has(self.connections) || has(self.views) || has(self.scopes)))",message="object.mcp cannot be combined with selectors or scopes"
+// +kubebuilder:validation:XValidation:rule="!(has(self.mcp) && self.mcp && (has(self.configs) || has(self.components) || has(self.playbooks) || has(self.connections) || has(self.views) || has(self.plugins) || has(self.scopes)))",message="object.mcp cannot be combined with selectors or scopes"
 type PermissionObject struct {
 	dutyRBAC.Selectors `json:",inline"`
 
@@ -255,13 +276,15 @@ func (t *PermissionObject) GlobalObject() (string, bool) {
 		return policy.ObjectConnection, true
 	case t.isViewWildcardOnly():
 		return policy.ObjectViews, true
+	case t.isWildcardOnly(t.Plugins, t.Playbooks, t.Configs, t.Components, t.Connections) && len(t.Views) == 0:
+		return policy.ObjectPlugins, true
 	default:
 		return "", false
 	}
 }
 
 func (t *PermissionObject) HasSelectors() bool {
-	return len(t.Playbooks) > 0 || len(t.Configs) > 0 || len(t.Components) > 0 || len(t.Connections) > 0 || len(t.Views) > 0 || len(t.Scopes) > 0
+	return len(t.Playbooks) > 0 || len(t.Configs) > 0 || len(t.Components) > 0 || len(t.Connections) > 0 || len(t.Views) > 0 || len(t.Plugins) > 0 || len(t.Scopes) > 0
 }
 
 func (t *PermissionObject) Validate() error {
@@ -287,7 +310,7 @@ func (t *PermissionObject) isWildcardOnly(primary []types.ResourceSelector, othe
 func (t *PermissionObject) isViewWildcardOnly() bool {
 	// Check that all other selectors are empty
 	if len(t.Configs) != 0 || len(t.Components) != 0 ||
-		len(t.Playbooks) != 0 || len(t.Connections) != 0 {
+		len(t.Playbooks) != 0 || len(t.Connections) != 0 || len(t.Plugins) != 0 {
 		return false
 	}
 

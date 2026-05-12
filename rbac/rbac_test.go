@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -47,6 +48,12 @@ var _ = ginkgo.Describe("Enforcer", func() {
 			Object:   "*",
 			Action:   policy.ActionRead,
 		},
+		{
+			ID:             uuid.New(),
+			PersonID:       lo.ToPtr(userID),
+			Action:         "invoke:tail",
+			ObjectSelector: []byte(`{"plugins":[{"namespace":"default","name":"kubernetes-logs"}]}`),
+		},
 	}
 
 	testData := []struct {
@@ -62,6 +69,28 @@ var _ = ginkgo.Describe("Enforcer", func() {
 			obj:         &models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "default"}}},
 			act:         "read",
 			allowed:     true,
+		},
+		{
+			description: "plugin operation action matches plugin selector",
+			user:        userID.String(),
+			obj: &models.ABACAttribute{Plugin: types.ResourceSelectableMap{
+				"id":        uuid.NewString(),
+				"namespace": "default",
+				"name":      "kubernetes-logs",
+			}},
+			act:     "invoke:tail",
+			allowed: true,
+		},
+		{
+			description: "plugin operation action does not match other operation",
+			user:        userID.String(),
+			obj: &models.ABACAttribute{Plugin: types.ResourceSelectableMap{
+				"id":        uuid.NewString(),
+				"namespace": "default",
+				"name":      "kubernetes-logs",
+			}},
+			act:     "invoke:delete",
+			allowed: false,
 		},
 	}
 

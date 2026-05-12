@@ -237,6 +237,12 @@
           },
           "type": "array"
         },
+        "plugins": {
+          "items": {
+            "$ref": "#/$defs/ResourceSelector"
+          },
+          "type": "array"
+        },
         "mcp": {
           "type": "boolean",
           "description": "MCP sets the global MCP object permission.\nWhen true, no resource selectors or scopes may be specified."
@@ -336,6 +342,10 @@
         "playbook": {
           "type": "string",
           "description": "Playbook \u003cnamespace\u003e/\u003cname\u003e selector"
+        },
+        "plugin": {
+          "type": "string",
+          "description": "Plugin \u003cnamespace\u003e/\u003cname\u003e selector"
         },
         "canary": {
           "type": "string",
