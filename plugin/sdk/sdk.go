@@ -33,11 +33,6 @@ type Plugin interface {
 	// Manifest(). The Def field on each Operation should match a name in
 	// Manifest().Operations.
 	Operations() []Operation
-
-	// HTTPHandler is mounted on the plugin's HTTP server for static UI-adjacent
-	// routes. Dynamic browser-facing APIs should be declared as Operations with
-	// HTTP bindings so Mission Control can authorize and proxy them explicitly.
-	HTTPHandler() http.Handler
 }
 
 // Operation is a runtime handler for a named operation declared in the

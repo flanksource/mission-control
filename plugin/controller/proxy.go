@@ -113,13 +113,10 @@ func proxyToPluginHTTP(c echo.Context, entry *registry.Entry, pluginRef, prefix,
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
 			if invocationToken != "" {
-				pr.Out.URL.Path = "/__mc/operations/" + c.Param("op") + strings.TrimPrefix(pr.In.URL.Path, prefix)
+				pr.Out.URL.Path = pluginProxyTargetPath(prefix, pr.In.URL.Path, c.Param("op"), true)
 				pr.Out.Header.Set(pluginpb.PluginInvocationTokenMetadataKey, invocationToken)
 			} else {
-				pr.Out.URL.Path = strings.TrimPrefix(pr.In.URL.Path, prefix)
-			}
-			if pr.Out.URL.Path == "" {
-				pr.Out.URL.Path = "/"
+				pr.Out.URL.Path = pluginProxyTargetPath(prefix, pr.In.URL.Path, "", false)
 			}
 			pr.Out.URL.RawPath = ""
 			pr.Out.Header.Del("X-Mission-Control-User")
@@ -139,6 +136,17 @@ func proxyToPluginHTTP(c echo.Context, entry *registry.Entry, pluginRef, prefix,
 
 	rp.ServeHTTP(c.Response().Writer, c.Request())
 	return nil
+}
+
+func pluginProxyTargetPath(prefix, requestPath, op string, operation bool) string {
+	pluginPath := strings.TrimPrefix(requestPath, prefix)
+	if pluginPath == "" {
+		pluginPath = "/"
+	}
+	if operation {
+		return "/__mc/operations/" + op + pluginPath
+	}
+	return "/__mc/ui" + pluginPath
 }
 
 func operationHTTPBindingAllowed(def *pluginpb.OperationDef, method, requestPath string) bool {

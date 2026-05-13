@@ -2,7 +2,6 @@ package sdk
 
 import (
 	"context"
-	"net/http"
 
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -40,7 +39,6 @@ type stubPlugin struct {
 func (s stubPlugin) Manifest() *pluginpb.PluginManifest            { return s.manifest }
 func (stubPlugin) Configure(context.Context, map[string]any) error { return nil }
 func (stubPlugin) Operations() []Operation                         { return nil }
-func (stubPlugin) HTTPHandler() http.Handler                       { return nil }
 
 var _ = ginkgo.Describe("RegisterPlugin version guard", func() {
 	ginkgo.It("rejects an empty Version", func() {

@@ -15,44 +15,6 @@ import (
 	"github.com/flanksource/incident-commander/plugin/sdk"
 )
 
-// httpPods returns the pods for the catalog item passed in via query string.
-// The frontend calls this to render the pod selector before opening a log
-// stream.
-func (p *KubernetesLogsPlugin) httpPods(w http.ResponseWriter, r *http.Request) {
-	configID := r.URL.Query().Get("config_id")
-	if configID == "" {
-		http.Error(w, "config_id required", http.StatusBadRequest)
-		return
-	}
-
-	// The host's identity is forwarded by the proxy as a header but the
-	// HTTPHandler runs in the plugin process — it doesn't carry the gRPC
-	// HostClient. The iframe operations that need host data must go via
-	// the host's POST /operations endpoint (which does have HostClient
-	// access). So this handler is best-effort: it works only when the
-	// kubernetes connection is available via in-cluster fallback.
-	cli, err := p.clients.For(r.Context(), nil, configID)
-	if err != nil {
-		jsonError(w, http.StatusServiceUnavailable, err.Error())
-		return
-	}
-
-	// Parse out kind/namespace/name from headers the host injects, if any.
-	namespace := r.Header.Get("X-Mission-Control-Namespace")
-	name := r.Header.Get("X-Mission-Control-Name")
-	if namespace == "" || name == "" {
-		jsonError(w, http.StatusBadRequest, "host did not forward namespace/name headers; use the gRPC list-pods operation instead")
-		return
-	}
-	pods, err := podsBySelector(r.Context(), cli, namespace, map[string]string{"app": name})
-	if err != nil {
-		jsonError(w, http.StatusInternalServerError, err.Error())
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(pods)
-}
-
 // httpLogs streams pod logs as Server-Sent Events. One event per log line:
 //
 //	data: {"pod":"x","container":"c","line":"..."}\n\n
@@ -179,10 +141,4 @@ func writeSSEJSON(w http.ResponseWriter, f http.Flusher, v any) {
 	}
 	fmt.Fprintf(w, "data: %s\n\n", b)
 	f.Flush()
-}
-
-func jsonError(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	_, _ = w.Write([]byte(`{"error":` + strconv.Quote(msg) + `}`))
 }

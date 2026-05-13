@@ -97,18 +97,6 @@ func (p *KubernetesLogsPlugin) Operations() []sdk.Operation {
 	}
 }
 
-// HTTPHandler serves static UI-adjacent endpoints. Dynamic API routes are
-// exposed as manifest-declared operations through the SDK.
-func (p *KubernetesLogsPlugin) HTTPHandler() http.Handler {
-	mux := http.NewServeMux()
-	mux.Handle("/version", sdk.VersionHandler(sdk.BuildInfo{
-		Name:      "kubernetes-logs",
-		Version:   Version,
-		BuildDate: BuildDate,
-	}))
-	return mux
-}
-
 // TailParams is the input shape for the `tail` operation. The CLI sends
 // these as JSON via --param/--json; the iframe sends them through the
 // `tail` button. PostProcess mirrors the playbook `logs` action shape so
