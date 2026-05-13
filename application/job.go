@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
@@ -46,11 +47,10 @@ func linkToConfigs(ctx context.Context, app *v1.Application) error {
 		return nil
 	}
 
-	if err := ctx.DB().Save(relationships).Error; err != nil {
-		return err
-	}
-
-	return nil
+	return ctx.DB().Clauses(clause.OnConflict{
+		Columns:   models.ConfigRelationship{}.PKCols(),
+		UpdateAll: true,
+	}).Create(&relationships).Error
 }
 
 func SyncApplications(sc context.Context) *job.Job {
