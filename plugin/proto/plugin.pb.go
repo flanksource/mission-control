@@ -237,6 +237,7 @@ type OperationDef struct {
 	Destructive         bool                   `protobuf:"varint,6,opt,name=destructive,proto3" json:"destructive,omitempty"`
 	RequiredPermissions []string               `protobuf:"bytes,7,rep,name=required_permissions,json=requiredPermissions,proto3" json:"required_permissions,omitempty"`
 	Http                []*HTTPBinding         `protobuf:"bytes,8,rep,name=http,proto3" json:"http,omitempty"`
+	Streaming           bool                   `protobuf:"varint,9,opt,name=streaming,proto3" json:"streaming,omitempty"`
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -327,12 +328,16 @@ func (x *OperationDef) GetHttp() []*HTTPBinding {
 	return nil
 }
 
+func (x *OperationDef) GetStreaming() bool {
+	if x != nil {
+		return x.Streaming
+	}
+	return false
+}
+
 type HTTPBinding struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Method        string                 `protobuf:"bytes,1,opt,name=method,proto3" json:"method,omitempty"`
-	Path          string                 `protobuf:"bytes,2,opt,name=path,proto3" json:"path,omitempty"`
-	ResultMime    string                 `protobuf:"bytes,3,opt,name=result_mime,json=resultMime,proto3" json:"result_mime,omitempty"`
-	Streaming     bool                   `protobuf:"varint,4,opt,name=streaming,proto3" json:"streaming,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -372,27 +377,6 @@ func (x *HTTPBinding) GetMethod() string {
 		return x.Method
 	}
 	return ""
-}
-
-func (x *HTTPBinding) GetPath() string {
-	if x != nil {
-		return x.Path
-	}
-	return ""
-}
-
-func (x *HTTPBinding) GetResultMime() string {
-	if x != nil {
-		return x.ResultMime
-	}
-	return ""
-}
-
-func (x *HTTPBinding) GetStreaming() bool {
-	if x != nil {
-		return x.Streaming
-	}
-	return false
 }
 
 type RegisterRequest struct {
@@ -1714,7 +1698,7 @@ const file_plugin_proto_rawDesc = "" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x12\n" +
 	"\x04icon\x18\x02 \x01(\tR\x04icon\x12\x12\n" +
 	"\x04path\x18\x03 \x01(\tR\x04path\x12\x14\n" +
-	"\x05scope\x18\x04 \x01(\tR\x05scope\"\xc9\x02\n" +
+	"\x05scope\x18\x04 \x01(\tR\x05scope\"\xe7\x02\n" +
 	"\fOperationDef\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
 	"\vdescription\x18\x02 \x01(\tR\vdescription\x12<\n" +
@@ -1724,13 +1708,10 @@ const file_plugin_proto_rawDesc = "" +
 	"\x05scope\x18\x05 \x01(\tR\x05scope\x12 \n" +
 	"\vdestructive\x18\x06 \x01(\bR\vdestructive\x121\n" +
 	"\x14required_permissions\x18\a \x03(\tR\x13requiredPermissions\x129\n" +
-	"\x04http\x18\b \x03(\v2%.missioncontrol.plugin.v1.HTTPBindingR\x04http\"x\n" +
+	"\x04http\x18\b \x03(\v2%.missioncontrol.plugin.v1.HTTPBindingR\x04http\x12\x1c\n" +
+	"\tstreaming\x18\t \x01(\bR\tstreaming\"U\n" +
 	"\vHTTPBinding\x12\x16\n" +
-	"\x06method\x18\x01 \x01(\tR\x06method\x12\x12\n" +
-	"\x04path\x18\x02 \x01(\tR\x04path\x12\x1f\n" +
-	"\vresult_mime\x18\x03 \x01(\tR\n" +
-	"resultMime\x12\x1c\n" +
-	"\tstreaming\x18\x04 \x01(\bR\tstreaming\"\x8c\x02\n" +
+	"\x06method\x18\x01 \x01(\tR\x06methodJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04J\x04\b\x04\x10\x05R\x04pathR\vresult_mimeR\tstreaming\"\x8c\x02\n" +
 	"\x0fRegisterRequest\x122\n" +
 	"\x15host_protocol_version\x18\x01 \x01(\rR\x13hostProtocolVersion\x12!\n" +
 	"\fhost_version\x18\x02 \x01(\tR\vhostVersion\x12$\n" +

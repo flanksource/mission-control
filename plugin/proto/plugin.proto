@@ -57,13 +57,13 @@ message OperationDef {
   bool   destructive       = 6;
   repeated string required_permissions = 7;
   repeated HTTPBinding http = 8;
+  bool streaming = 9;
 }
 
 message HTTPBinding {
-  string method       = 1;
-  string path         = 2;
-  string result_mime  = 3;
-  bool streaming      = 4;
+  string method = 1;
+  reserved 2, 3, 4;
+  reserved "path", "result_mime", "streaming";
 }
 
 message RegisterRequest {

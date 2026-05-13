@@ -17,15 +17,14 @@ var _ = ginkgo.Describe("plugin HTTP proxy", func() {
 
 	ginkgo.It("rewrites operation traffic to the reserved operation mount", func() {
 		prefix := "/api/plugins/kubernetes-logs/proxy/logs"
-		Expect(pluginProxyTargetPath(prefix, prefix, "logs", true)).To(Equal("/__mc/operations/logs/"))
-		Expect(pluginProxyTargetPath(prefix, prefix+"/stream", "logs", true)).To(Equal("/__mc/operations/logs/stream"))
+		Expect(pluginProxyTargetPath(prefix, prefix, "logs", true)).To(Equal("/__mc/operations/logs"))
+		Expect(pluginProxyTargetPath(prefix, prefix+"/stream", "logs", true)).To(Equal("/__mc/operations/logs"))
 	})
 
-	ginkgo.It("allows only exact declared HTTP operation bindings", func() {
-		def := &pluginpb.OperationDef{Http: []*pluginpb.HTTPBinding{{Method: http.MethodGet, Path: "/stream"}}}
-		Expect(operationHTTPBindingAllowed(def, http.MethodGet, "/stream")).To(BeTrue())
-		Expect(operationHTTPBindingAllowed(def, http.MethodPost, "/stream")).To(BeFalse())
-		Expect(operationHTTPBindingAllowed(def, http.MethodGet, "/stream/extra")).To(BeFalse())
-		Expect(operationHTTPBindingAllowed(&pluginpb.OperationDef{}, http.MethodGet, "/stream")).To(BeFalse())
+	ginkgo.It("allows declared HTTP operation methods", func() {
+		def := &pluginpb.OperationDef{Http: []*pluginpb.HTTPBinding{{Method: http.MethodGet}}}
+		Expect(operationHTTPBindingAllowed(def, http.MethodGet)).To(BeTrue())
+		Expect(operationHTTPBindingAllowed(def, http.MethodPost)).To(BeFalse())
+		Expect(operationHTTPBindingAllowed(&pluginpb.OperationDef{}, http.MethodGet)).To(BeFalse())
 	})
 })

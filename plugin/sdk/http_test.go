@@ -45,20 +45,20 @@ var _ = ginkgo.Describe("HTTP server routing", func() {
 				Name: "logs",
 				Http: []*pluginpb.HTTPBinding{{Method: http.MethodGet}},
 			},
-			HTTPHandler: func(_ context.Context, w http.ResponseWriter, _ *http.Request, _ InvokeCtx) error {
+			HTTPHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				Expect(OperationFromContext(r.Context())).To(Equal("logs"))
 				_, _ = w.Write([]byte("operation"))
-				return nil
-			},
+			}),
 		}}}
 		port, server := startHTTPServer(&serveOptions{}, newPluginServer(plugin, 0))
 		defer server.Close()
 
-		body, status := httpGet(fmt.Sprintf("http://127.0.0.1:%d/__mc/operations/logs/", port))
+		body, status := httpGet(fmt.Sprintf("http://127.0.0.1:%d/__mc/operations/logs", port))
 		Expect(status).To(Equal(http.StatusOK))
 		Expect(body).To(Equal("operation"))
 
 		_, status = httpGet(fmt.Sprintf("http://127.0.0.1:%d/__mc/operations/logs/extra", port))
-		Expect(status).To(Equal(http.StatusMethodNotAllowed))
+		Expect(status).To(Equal(http.StatusNotFound))
 	})
 })
 

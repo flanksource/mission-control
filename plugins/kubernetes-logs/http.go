@@ -22,7 +22,7 @@ import (
 // The iframe consumes this via EventSource so logs appear live without
 // re-polling. The TailLines query param caps the initial backlog; after
 // that, follow=true streams new lines until the client disconnects.
-func (p *KubernetesLogsPlugin) httpLogs(_ context.Context, w http.ResponseWriter, r *http.Request, req sdk.InvokeCtx) error {
+func (p *KubernetesLogsPlugin) httpLogs(w http.ResponseWriter, r *http.Request) {
 	configID := r.URL.Query().Get("config_id")
 	pod := r.URL.Query().Get("pod")
 	namespace := r.URL.Query().Get("namespace")
@@ -34,19 +34,19 @@ func (p *KubernetesLogsPlugin) httpLogs(_ context.Context, w http.ResponseWriter
 	}
 	if configID == "" || pod == "" || namespace == "" {
 		http.Error(w, "config_id, pod and namespace required", http.StatusBadRequest)
-		return nil
+		return
 	}
 
-	cli, err := p.clients.For(r.Context(), req.Host, configID)
+	cli, err := p.clients.For(r.Context(), sdk.HostClientFromContext(r.Context()), configID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return nil
+		return
 	}
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
-		return nil
+		return
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -62,7 +62,7 @@ func (p *KubernetesLogsPlugin) httpLogs(_ context.Context, w http.ResponseWriter
 	stream, err := cli.CoreV1().Pods(namespace).GetLogs(pod, opts).Stream(r.Context())
 	if err != nil {
 		writeSSE(w, flusher, "error", err.Error())
-		return nil
+		return
 	}
 	defer stream.Close()
 
@@ -77,7 +77,6 @@ func (p *KubernetesLogsPlugin) httpLogs(_ context.Context, w http.ResponseWriter
 	streamLines(r.Context(), stream, func(raw string) {
 		writeSSEJSON(w, flusher, parseSSELine(pod, container, baseLabels, raw))
 	})
-	return nil
 }
 
 // sseLogLine is the wire shape sent to the iframe over SSE. Pod/container/line

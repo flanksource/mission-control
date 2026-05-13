@@ -36,13 +36,12 @@ type Plugin interface {
 }
 
 // Operation is a runtime handler for a named operation declared in the
-// plugin's manifest. Handler returns either a value implementing the clicky
-// Result interface (preferred — the SDK marshals to application/clicky+json)
-// or raw bytes for advanced cases.
+// plugin's manifest. Handler serves unary gRPC invocation. HTTPHandler serves
+// the operation's declared HTTP methods at /__mc/operations/<operation-name>.
 type Operation struct {
 	Def         *pluginpb.OperationDef
 	Handler     func(ctx context.Context, req InvokeCtx) (any, error)
-	HTTPHandler func(ctx context.Context, w http.ResponseWriter, r *http.Request, req InvokeCtx) error
+	HTTPHandler http.Handler
 }
 
 // InvokeCtx is passed to operation handlers. It exposes the request payload,

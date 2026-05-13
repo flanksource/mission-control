@@ -25,7 +25,6 @@ func registerProxyRoutes(e *echo.Echo) {
 	g.GET("/:name/ui/*", uiProxy)
 	g.HEAD("/:name/ui/*", uiProxy)
 	g.Any("/:name/proxy/:op", operationHTTPProxy)
-	g.Any("/:name/proxy/:op/*", operationHTTPProxy)
 }
 
 // uiProxy reverse-proxies static plugin UI assets. Dynamic/plugin API calls
@@ -69,12 +68,8 @@ func operationHTTPProxy(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q operation %q not found", pluginRef, op))
 	}
 	prefix := "/api/plugins/" + pluginRef + "/proxy/" + op
-	operationPath := strings.TrimPrefix(c.Request().URL.Path, prefix)
-	if operationPath == "" {
-		operationPath = "/"
-	}
-	if !operationHTTPBindingAllowed(def, c.Request().Method, operationPath) {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q operation %q does not allow HTTP %s %s", pluginRef, op, c.Request().Method, operationPath))
+	if !operationHTTPBindingAllowed(def, c.Request().Method) {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q operation %q does not allow HTTP %s", pluginRef, op, c.Request().Method))
 	}
 
 	configID := c.QueryParam("config_id")
@@ -139,27 +134,19 @@ func proxyToPluginHTTP(c echo.Context, entry *registry.Entry, pluginRef, prefix,
 }
 
 func pluginProxyTargetPath(prefix, requestPath, op string, operation bool) string {
+	if operation {
+		return "/__mc/operations/" + op
+	}
 	pluginPath := strings.TrimPrefix(requestPath, prefix)
 	if pluginPath == "" {
 		pluginPath = "/"
 	}
-	if operation {
-		return "/__mc/operations/" + op + pluginPath
-	}
 	return "/__mc/ui" + pluginPath
 }
 
-func operationHTTPBindingAllowed(def *pluginpb.OperationDef, method, requestPath string) bool {
-	requestPath = path.Clean("/" + strings.TrimPrefix(requestPath, "/"))
+func operationHTTPBindingAllowed(def *pluginpb.OperationDef, method string) bool {
 	for _, binding := range def.Http {
-		if binding == nil || !strings.EqualFold(binding.Method, method) {
-			continue
-		}
-		bindingPath := path.Clean("/" + strings.TrimPrefix(binding.Path, "/"))
-		if binding.Path == "" {
-			bindingPath = "/"
-		}
-		if requestPath == bindingPath {
+		if binding != nil && strings.EqualFold(binding.Method, method) {
 			return true
 		}
 	}
