@@ -212,11 +212,16 @@ func casbinRuleFromPolicy(ptype string, rule []string) gormadapter.CasbinRule {
 func PermissionToCasbinRule(permission models.Permission) [][]string {
 	var policies [][]string
 	patterns := strings.Split(permission.Action, ",")
+	seen := map[string]struct{}{}
 
-	for _, action := range pkgPolicy.AllActions {
-		if !collections.MatchItems(action, patterns...) {
-			continue
+	addPolicy := func(action string) {
+		if action == "" {
+			return
 		}
+		if _, ok := seen[action]; ok {
+			return
+		}
+		seen[action] = struct{}{}
 
 		policies = append(policies, createPolicy(permission, action))
 
@@ -226,6 +231,23 @@ func PermissionToCasbinRule(permission models.Permission) [][]string {
 			abacPermission.ObjectSelector = objectSelector
 			policies = append(policies, createPolicy(abacPermission, action))
 		}
+	}
+
+	for _, action := range pkgPolicy.AllActions {
+		if collections.MatchItems(action, patterns...) {
+			addPolicy(action)
+		}
+	}
+
+	for _, pattern := range patterns {
+		pattern = strings.TrimSpace(pattern)
+		if pattern == "" || collections.MatchItems(pattern, pkgPolicy.AllActions...) {
+			continue
+		}
+		if strings.HasPrefix(pattern, "!") {
+			continue
+		}
+		addPolicy(pattern)
 	}
 
 	return policies
