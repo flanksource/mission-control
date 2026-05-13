@@ -9,7 +9,6 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
-	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -49,10 +48,16 @@ var _ = ginkgo.Describe("Enforcer", func() {
 			Action:   policy.ActionRead,
 		},
 		{
-			ID:             uuid.New(),
-			PersonID:       lo.ToPtr(userID),
-			Action:         "invoke:tail",
-			ObjectSelector: []byte(`{"plugins":[{"namespace":"default","name":"kubernetes-logs"}]}`),
+			ID:       uuid.New(),
+			PersonID: lo.ToPtr(userID),
+			Action:   "invoke:kubernetes-logs:*",
+			Object:   "*",
+		},
+		{
+			ID:       uuid.New(),
+			PersonID: lo.ToPtr(userID),
+			Action:   "kubernetes-logs:tail",
+			Object:   "*",
 		},
 	}
 
@@ -71,26 +76,25 @@ var _ = ginkgo.Describe("Enforcer", func() {
 			allowed:     true,
 		},
 		{
-			description: "plugin operation action matches plugin selector",
+			description: "plugin operation wildcard action matches",
 			user:        userID.String(),
-			obj: &models.ABACAttribute{Plugin: types.ResourceSelectableMap{
-				"id":        uuid.NewString(),
-				"namespace": "default",
-				"name":      "kubernetes-logs",
-			}},
-			act:     "invoke:tail",
-			allowed: true,
+			obj:         &models.ABACAttribute{},
+			act:         "invoke:kubernetes-logs:list-pods",
+			allowed:     true,
 		},
 		{
-			description: "plugin operation action does not match other operation",
+			description: "plugin operation wildcard action does not match other plugin",
 			user:        userID.String(),
-			obj: &models.ABACAttribute{Plugin: types.ResourceSelectableMap{
-				"id":        uuid.NewString(),
-				"namespace": "default",
-				"name":      "kubernetes-logs",
-			}},
-			act:     "invoke:delete",
-			allowed: false,
+			obj:         &models.ABACAttribute{},
+			act:         "invoke:other-plugin:list-pods",
+			allowed:     false,
+		},
+		{
+			description: "plugin operation short action matches",
+			user:        userID.String(),
+			obj:         &models.ABACAttribute{},
+			act:         "kubernetes-logs:tail",
+			allowed:     true,
 		},
 	}
 

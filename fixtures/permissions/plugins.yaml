@@ -8,8 +8,7 @@ spec:
   subject:
     person: john@doe.com
   actions:
-    - invoke:list-pods
+    - invoke:kubernetes-logs:list-pods
   object:
-    plugins:
-      - namespace: mc
-        name: kubernetes-logs
+    configs:
+      - namespace: kube-system

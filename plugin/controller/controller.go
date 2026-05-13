@@ -28,7 +28,6 @@ import (
 	"github.com/flanksource/duty/query"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
-	"github.com/flanksource/duty/types"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 	"google.golang.org/grpc/metadata"
@@ -180,14 +179,7 @@ func enforcePluginInvokePermission(ctx dutyContext.Context, entry *registry.Entr
 		return ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in")
 	}
 
-	attr := &models.ABACAttribute{
-		Plugin: types.ResourceSelectableMap{
-			"id":        entry.ID.String(),
-			"namespace": entry.Namespace,
-			"name":      entry.Name,
-			"type":      "plugin",
-		},
-	}
+	attr := &models.ABACAttribute{}
 
 	if configID != "" {
 		item, err := query.ConfigItemFromCache(ctx, configID)
@@ -197,12 +189,16 @@ func enforcePluginInvokePermission(ctx dutyContext.Context, entry *registry.Entr
 		attr.Config = item
 	}
 
-	action := "invoke:" + op
-	if !dutyRBAC.HasPermission(ctx, user.ID.String(), attr, action) {
+	if !canInvokePluginOperation(ctx, user.ID.String(), attr, entry.Name, op) {
 		return ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("not allowed to invoke plugin %s operation %s", entry.Name, op)
 	}
 
 	return nil
+}
+
+func canInvokePluginOperation(ctx dutyContext.Context, subject string, attr *models.ABACAttribute, pluginName, op string) bool {
+	return dutyRBAC.HasPermission(ctx, subject, attr, policy.NewPluginInvokeAction(pluginName, op)) ||
+		dutyRBAC.HasPermission(ctx, subject, attr, pluginName+":"+op)
 }
 
 // selectorMatches returns true when the given config id satisfies the plugin

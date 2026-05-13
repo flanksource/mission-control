@@ -240,7 +240,7 @@ func (t *PermissionSubject) Populate(ctx context.Context) (string, models.Permis
 }
 
 // +kubebuilder:object:generate=false
-// +kubebuilder:validation:XValidation:rule="!(has(self.mcp) && self.mcp && (has(self.configs) || has(self.components) || has(self.playbooks) || has(self.connections) || has(self.views) || has(self.plugins) || has(self.scopes)))",message="object.mcp cannot be combined with selectors or scopes"
+// +kubebuilder:validation:XValidation:rule="!(has(self.mcp) && self.mcp && (has(self.configs) || has(self.components) || has(self.playbooks) || has(self.connections) || has(self.views) || has(self.scopes)))",message="object.mcp cannot be combined with selectors or scopes"
 type PermissionObject struct {
 	dutyRBAC.Selectors `json:",inline"`
 
@@ -276,15 +276,13 @@ func (t *PermissionObject) GlobalObject() (string, bool) {
 		return policy.ObjectConnection, true
 	case t.isViewWildcardOnly():
 		return policy.ObjectViews, true
-	case t.isWildcardOnly(t.Plugins, t.Playbooks, t.Configs, t.Components, t.Connections) && len(t.Views) == 0:
-		return policy.ObjectPlugins, true
 	default:
 		return "", false
 	}
 }
 
 func (t *PermissionObject) HasSelectors() bool {
-	return len(t.Playbooks) > 0 || len(t.Configs) > 0 || len(t.Components) > 0 || len(t.Connections) > 0 || len(t.Views) > 0 || len(t.Plugins) > 0 || len(t.Scopes) > 0
+	return len(t.Playbooks) > 0 || len(t.Configs) > 0 || len(t.Components) > 0 || len(t.Connections) > 0 || len(t.Views) > 0 || len(t.Scopes) > 0
 }
 
 func (t *PermissionObject) Validate() error {
@@ -310,7 +308,7 @@ func (t *PermissionObject) isWildcardOnly(primary []types.ResourceSelector, othe
 func (t *PermissionObject) isViewWildcardOnly() bool {
 	// Check that all other selectors are empty
 	if len(t.Configs) != 0 || len(t.Components) != 0 ||
-		len(t.Playbooks) != 0 || len(t.Connections) != 0 || len(t.Plugins) != 0 {
+		len(t.Playbooks) != 0 || len(t.Connections) != 0 {
 		return false
 	}
 

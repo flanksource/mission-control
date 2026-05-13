@@ -244,7 +244,7 @@ func PermissionToCasbinRule(permission models.Permission) [][]string {
 		if pattern == "" || collections.MatchItems(pattern, pkgPolicy.AllActions...) {
 			continue
 		}
-		if strings.ContainsAny(pattern, "*,!") {
+		if strings.HasPrefix(pattern, "!") {
 			continue
 		}
 		addPolicy(pattern)
