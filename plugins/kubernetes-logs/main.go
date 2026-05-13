@@ -82,15 +82,25 @@ func (p *KubernetesLogsPlugin) Operations() []sdk.Operation {
 			},
 			Handler: p.listPods,
 		},
+		{
+			Def: &pluginpb.OperationDef{
+				Name:        "logs",
+				Description: "Stream Kubernetes pod logs as Server-Sent Events.",
+				Scope:       "config",
+				ResultMime:  "text/event-stream",
+				Http: []*pluginpb.HTTPBinding{
+					{Method: http.MethodGet, ResultMime: "text/event-stream", Streaming: true},
+				},
+			},
+			HTTPHandler: p.httpLogs,
+		},
 	}
 }
 
-// HTTPHandler powers the iframe UI: GET /api/pods?config_id=… and
-// GET /api/logs?pod=…&namespace=…&tailLines=N stream-as-NDJSON.
+// HTTPHandler serves static UI-adjacent endpoints. Dynamic API routes are
+// exposed as manifest-declared operations through the SDK.
 func (p *KubernetesLogsPlugin) HTTPHandler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/pods", p.httpPods)
-	mux.HandleFunc("/logs", p.httpLogs)
 	mux.Handle("/version", sdk.VersionHandler(sdk.BuildInfo{
 		Name:      "kubernetes-logs",
 		Version:   Version,

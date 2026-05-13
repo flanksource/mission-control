@@ -11,6 +11,8 @@ import (
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
+
+	"github.com/flanksource/incident-commander/plugin/sdk"
 )
 
 // httpPods returns the pods for the catalog item passed in via query string.
@@ -58,7 +60,7 @@ func (p *KubernetesLogsPlugin) httpPods(w http.ResponseWriter, r *http.Request) 
 // The iframe consumes this via EventSource so logs appear live without
 // re-polling. The TailLines query param caps the initial backlog; after
 // that, follow=true streams new lines until the client disconnects.
-func (p *KubernetesLogsPlugin) httpLogs(w http.ResponseWriter, r *http.Request) {
+func (p *KubernetesLogsPlugin) httpLogs(_ context.Context, w http.ResponseWriter, r *http.Request, req sdk.InvokeCtx) error {
 	configID := r.URL.Query().Get("config_id")
 	pod := r.URL.Query().Get("pod")
 	namespace := r.URL.Query().Get("namespace")
@@ -70,19 +72,19 @@ func (p *KubernetesLogsPlugin) httpLogs(w http.ResponseWriter, r *http.Request) 
 	}
 	if configID == "" || pod == "" || namespace == "" {
 		http.Error(w, "config_id, pod and namespace required", http.StatusBadRequest)
-		return
+		return nil
 	}
 
-	cli, err := p.clients.For(r.Context(), nil, configID)
+	cli, err := p.clients.For(r.Context(), req.Host, configID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
-		return
+		return nil
 	}
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		http.Error(w, "streaming not supported", http.StatusInternalServerError)
-		return
+		return nil
 	}
 
 	w.Header().Set("Content-Type", "text/event-stream")
@@ -98,7 +100,7 @@ func (p *KubernetesLogsPlugin) httpLogs(w http.ResponseWriter, r *http.Request) 
 	stream, err := cli.CoreV1().Pods(namespace).GetLogs(pod, opts).Stream(r.Context())
 	if err != nil {
 		writeSSE(w, flusher, "error", err.Error())
-		return
+		return nil
 	}
 	defer stream.Close()
 
@@ -113,6 +115,7 @@ func (p *KubernetesLogsPlugin) httpLogs(w http.ResponseWriter, r *http.Request) 
 	streamLines(r.Context(), stream, func(raw string) {
 		writeSSEJSON(w, flusher, parseSSELine(pod, container, baseLabels, raw))
 	})
+	return nil
 }
 
 // sseLogLine is the wire shape sent to the iframe over SSE. Pod/container/line

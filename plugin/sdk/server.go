@@ -2,7 +2,11 @@ package sdk
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -92,7 +96,7 @@ func (s *pluginServer) ListOperations(ctx context.Context, _ *pluginpb.Empty) (*
 
 func (s *pluginServer) Invoke(ctx context.Context, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
 	op, ok := s.ops[req.Operation]
-	if !ok {
+	if !ok || op.Handler == nil {
 		return &pluginpb.InvokeResponse{
 			ErrorCode:    "UNKNOWN_OPERATION",
 			ErrorMessage: fmt.Sprintf("unknown operation %q", req.Operation),
@@ -133,6 +137,108 @@ func (s *pluginServer) Invoke(ctx context.Context, req *pluginpb.InvokeRequest) 
 		mime = ClickyResultMimeType
 	}
 	return &pluginpb.InvokeResponse{Result: body, Mime: mime}, nil
+}
+
+func (s *pluginServer) httpOperationsHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		opPath := strings.TrimPrefix(r.URL.Path, "/__mc/operations/")
+		opName := opPath
+		if idx := strings.IndexByte(opName, '/'); idx >= 0 {
+			opName = opName[:idx]
+			opPath = opPath[idx:]
+		} else {
+			opPath = "/"
+		}
+		if opName == "" {
+			http.NotFound(w, r)
+			return
+		}
+
+		s.mu.Lock()
+		op, ok := s.ops[opName]
+		host := newHostClient(s.mcgPRCConn, r.Header.Get(pluginpb.PluginInvocationTokenMetadataKey))
+		s.mu.Unlock()
+		if !ok {
+			http.NotFound(w, r)
+			return
+		}
+		if !httpBindingAllowed(op.Def, r.Method, opPath) {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		req := InvokeCtx{
+			Operation:    opName,
+			ConfigItemID: r.URL.Query().Get("config_id"),
+			Host:         host,
+		}
+		if r.Method == http.MethodGet || r.Method == http.MethodHead {
+			req.ParamsJSON = paramsJSONFromHTTPRequest(r)
+		}
+		if op.HTTPHandler != nil {
+			if err := op.HTTPHandler(r.Context(), w, r, req); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+			}
+			return
+		}
+		if op.Handler == nil {
+			http.NotFound(w, r)
+			return
+		}
+
+		req.ParamsJSON = paramsJSONFromHTTPRequest(r)
+		res, err := op.Handler(r.Context(), req)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		body, err := ClickyResult(res)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		mime := op.Def.ResultMime
+		if mime == "" {
+			mime = ClickyResultMimeType
+		}
+		w.Header().Set("Content-Type", mime)
+		_, _ = w.Write(body)
+	})
+}
+
+func httpBindingAllowed(def *pluginpb.OperationDef, method, requestPath string) bool {
+	if def == nil || len(def.Http) == 0 {
+		return false
+	}
+	requestPath = "/" + strings.TrimPrefix(requestPath, "/")
+	for _, binding := range def.Http {
+		if binding == nil || !strings.EqualFold(binding.Method, method) {
+			continue
+		}
+		bindingPath := "/" + strings.TrimPrefix(binding.Path, "/")
+		if binding.Path == "" {
+			bindingPath = "/"
+		}
+		if requestPath == bindingPath {
+			return true
+		}
+	}
+	return false
+}
+
+func paramsJSONFromHTTPRequest(r *http.Request) []byte {
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Body != nil {
+		body, _ := io.ReadAll(r.Body)
+		return body
+	}
+	params := map[string]string{}
+	for k, v := range r.URL.Query() {
+		if len(v) > 0 {
+			params[k] = v[len(v)-1]
+		}
+	}
+	body, _ := json.Marshal(params)
+	return body
 }
 
 func (s *pluginServer) Health(ctx context.Context, _ *pluginpb.Empty) (*pluginpb.HealthStatus, error) {

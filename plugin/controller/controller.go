@@ -8,7 +8,7 @@
 //	    given config item. Used by the frontend to populate the tab bar
 //	    on the catalog detail page.
 //
-//	POST /api/plugins/:name/operations/:op?config_id=X
+//	POST /api/plugins/:name/invoke/:op?config_id=X
 //	    Invokes a plugin operation. The body is the operation's params
 //	    (JSON). The response body is whatever the plugin returned via
 //	    InvokeResponse.result, with the plugin's declared MIME type
@@ -44,19 +44,13 @@ func init() {
 	echoSrv.RegisterRoutes(RegisterRoutes)
 }
 
-// registerUIProxy is set by proxy.go's init so the proxy registration code
-// can stay in its own file without an import cycle.
-var registerUIProxy func(e *echo.Echo)
-
 // RegisterRoutes wires the plugin HTTP API onto the given echo instance.
 func RegisterRoutes(e *echo.Echo) {
 	g := e.Group("/api/plugins")
 	g.GET("", ListPlugins, rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
-	g.POST("/:name/operations/:op", InvokeOperation)
+	g.POST("/:name/invoke/:op", InvokeOperation)
 
-	if registerUIProxy != nil {
-		registerUIProxy(e)
-	}
+	registerProxyRoutes(e)
 }
 
 // PluginListing is what GET /api/plugins returns: a flat list of plugins
@@ -104,6 +98,9 @@ func InvokeOperation(c echo.Context) error {
 	entry, err := resolvePlugin(ctx, pluginRef)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
+	}
+	if operationDef(entry, op) == nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q operation %q not found", pluginRef, op))
 	}
 
 	sup := supervisor.LookupSupervisor(entry.ID)
@@ -171,6 +168,18 @@ func resolvePlugin(ctx dutyContext.Context, ref string) (*registry.Entry, error)
 		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", ref)
 	}
 	return entry, nil
+}
+
+func operationDef(entry *registry.Entry, op string) *pluginpb.OperationDef {
+	if entry == nil || entry.Manifest == nil {
+		return nil
+	}
+	for _, def := range entry.Manifest.Operations {
+		if def != nil && def.Name == op {
+			return def
+		}
+	}
+	return nil
 }
 
 func enforcePluginInvokePermission(ctx dutyContext.Context, entry *registry.Entry, op, configID string) error {

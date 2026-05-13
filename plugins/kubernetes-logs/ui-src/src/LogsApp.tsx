@@ -46,7 +46,7 @@ async function fetchOrThrow(input: string, init: RequestInit, label: string): Pr
 
 async function listPods(configId: string): Promise<PodRow[]> {
   const res = await fetchOrThrow(
-    `${PLUGIN_BASE}/operations/list-pods?config_id=${encodeURIComponent(configId)}`,
+    `${PLUGIN_BASE}/invoke/list-pods?config_id=${encodeURIComponent(configId)}`,
     {
       method: "POST",
       body: "{}",
@@ -127,7 +127,7 @@ export function LogsApp() {
     if (!selectedPod) return;
     const [ns, pod] = selectedPod.split("|");
     const url =
-      `${PLUGIN_BASE}/ui/logs` +
+      `${PLUGIN_BASE}/proxy/logs` +
       `?pod=${encodeURIComponent(pod)}` +
       `&config_id=${encodeURIComponent(configId)}` +
       `&namespace=${encodeURIComponent(ns)}` +

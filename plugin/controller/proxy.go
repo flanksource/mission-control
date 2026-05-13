@@ -4,37 +4,33 @@ import (
 	"fmt"
 	"net/http/httputil"
 	"net/url"
+	"path"
 	"strings"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 
+	"github.com/flanksource/incident-commander/auth"
+	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	"github.com/flanksource/incident-commander/plugin/registry"
 	"github.com/flanksource/incident-commander/plugin/supervisor"
-	"github.com/flanksource/incident-commander/rbac"
 )
 
-// init registers the UI proxy alongside the operations routes.
-func init() {
-	registerUIProxy = registerProxyRoutes
-}
-
-// registerProxyRoutes is wired in via the package-level registerUIProxy
-// hook so the iframe proxy is always installed alongside the operations
-// routes; this keeps the route registration in one file (controller.go)
-// while letting us split the proxy implementation here.
 func registerProxyRoutes(e *echo.Echo) {
-	g := e.Group("/api/plugins/:name/ui",
-		rbac.Authorization(policy.ObjectCatalog, policy.ActionRead),
-	)
-	g.Any("", uiProxy)
-	g.Any("/*", uiProxy)
+	g := e.Group("/api/plugins")
+	g.GET("/:name/ui", uiProxy)
+	g.HEAD("/:name/ui", uiProxy)
+	g.GET("/:name/ui/*", uiProxy)
+	g.HEAD("/:name/ui/*", uiProxy)
+	g.Any("/:name/proxy/:op", operationHTTPProxy)
+	g.Any("/:name/proxy/:op/*", operationHTTPProxy)
 }
 
-// uiProxy reverse-proxies requests under /api/plugins/:name/ui/* to the
-// plugin's HTTP server (whose port the plugin reports in PluginManifest.UiPort).
-// It strips the prefix so the plugin's HTTPHandler sees a clean path.
+// uiProxy reverse-proxies static plugin UI assets. Dynamic/plugin API calls
+// must go through /api/plugins/:name/proxy/:op where :op is declared in the
+// plugin manifest.
 func uiProxy(c echo.Context) error {
 	ctx := c.Request().Context().(dutyContext.Context)
 	pluginRef := c.Param("name")
@@ -43,6 +39,62 @@ func uiProxy(c echo.Context) error {
 		return dutyAPI.WriteError(c, err)
 	}
 
+	if cfg := c.QueryParam("config_id"); cfg != "" && !selectorMatches(ctx, entry, cfg) {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, cfg))
+	}
+
+	prefix := "/api/plugins/" + pluginRef + "/ui"
+	pluginPath := strings.TrimPrefix(c.Request().URL.Path, prefix)
+	if pluginPath == "" {
+		pluginPath = "/"
+	}
+	if !allowedUIPath(entry, pluginPath) {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin UI path %q not found", pluginPath))
+	}
+
+	return proxyToPluginHTTP(c, entry, pluginRef, prefix, "")
+}
+
+func operationHTTPProxy(c echo.Context) error {
+	ctx := c.Request().Context().(dutyContext.Context)
+	pluginRef := c.Param("name")
+	op := c.Param("op")
+
+	entry, err := resolvePlugin(ctx, pluginRef)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+	def := operationDef(entry, op)
+	if def == nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q operation %q not found", pluginRef, op))
+	}
+	prefix := "/api/plugins/" + pluginRef + "/proxy/" + op
+	operationPath := strings.TrimPrefix(c.Request().URL.Path, prefix)
+	if operationPath == "" {
+		operationPath = "/"
+	}
+	if !operationHTTPBindingAllowed(def, c.Request().Method, operationPath) {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q operation %q does not allow HTTP %s %s", pluginRef, op, c.Request().Method, operationPath))
+	}
+
+	configID := c.QueryParam("config_id")
+	if configID != "" && !selectorMatches(ctx, entry, configID) {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, configID))
+	}
+	if err := enforcePluginInvokePermission(ctx, entry, op, configID); err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	invocationToken, err := auth.MintPluginInvocationToken(lo.FromPtr(ctx.User()), entry.ID)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
+	}
+
+	return proxyToPluginHTTP(c, entry, pluginRef, prefix, invocationToken)
+}
+
+func proxyToPluginHTTP(c echo.Context, entry *registry.Entry, pluginRef, prefix, invocationToken string) error {
+	ctx := c.Request().Context().(dutyContext.Context)
 	sup := supervisor.LookupSupervisor(entry.ID)
 	if sup == nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", pluginRef))
@@ -56,11 +108,16 @@ func uiProxy(c echo.Context) error {
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "parse plugin url"))
 	}
-	prefix := "/api/plugins/" + pluginRef + "/ui"
+
 	rp := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
-			pr.Out.URL.Path = strings.TrimPrefix(pr.In.URL.Path, prefix)
+			if invocationToken != "" {
+				pr.Out.URL.Path = "/__mc/operations/" + c.Param("op") + strings.TrimPrefix(pr.In.URL.Path, prefix)
+				pr.Out.Header.Set(pluginpb.PluginInvocationTokenMetadataKey, invocationToken)
+			} else {
+				pr.Out.URL.Path = strings.TrimPrefix(pr.In.URL.Path, prefix)
+			}
 			if pr.Out.URL.Path == "" {
 				pr.Out.URL.Path = "/"
 			}
@@ -68,8 +125,6 @@ func uiProxy(c echo.Context) error {
 			pr.Out.Header.Del("X-Mission-Control-User")
 			pr.Out.Header.Del("X-Mission-Control-User-Email")
 			pr.Out.Header.Del("X-Mission-Control-Config-Id")
-			// Forward caller identity + the catalog id from the query string so
-			// the plugin doesn't need to re-derive them.
 			if u := ctx.User(); u != nil {
 				pr.Out.Header.Set("X-Mission-Control-User", u.ID.String())
 				if u.Email != "" {
@@ -84,4 +139,43 @@ func uiProxy(c echo.Context) error {
 
 	rp.ServeHTTP(c.Response().Writer, c.Request())
 	return nil
+}
+
+func operationHTTPBindingAllowed(def *pluginpb.OperationDef, method, requestPath string) bool {
+	requestPath = path.Clean("/" + strings.TrimPrefix(requestPath, "/"))
+	for _, binding := range def.Http {
+		if binding == nil || !strings.EqualFold(binding.Method, method) {
+			continue
+		}
+		bindingPath := path.Clean("/" + strings.TrimPrefix(binding.Path, "/"))
+		if binding.Path == "" {
+			bindingPath = "/"
+		}
+		if requestPath == bindingPath {
+			return true
+		}
+	}
+	return false
+}
+
+func allowedUIPath(entry *registry.Entry, p string) bool {
+	if p == "" || p == "/" {
+		return true
+	}
+	clean := path.Clean("/" + strings.TrimPrefix(p, "/"))
+	if strings.HasPrefix(clean, "/assets/") || strings.Contains(path.Base(clean), ".") {
+		return true
+	}
+	if entry != nil && entry.Manifest != nil {
+		for _, tab := range entry.Manifest.Tabs {
+			if tab == nil {
+				continue
+			}
+			tabPath := path.Clean("/" + strings.TrimPrefix(tab.Path, "/"))
+			if clean == tabPath {
+				return true
+			}
+		}
+	}
+	return false
 }

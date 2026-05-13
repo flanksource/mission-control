@@ -34,10 +34,9 @@ type Plugin interface {
 	// Manifest().Operations.
 	Operations() []Operation
 
-	// HTTPHandler is mounted at /api/* on the plugin's HTTP server. The host
-	// reverse-proxies /api/plugins/<name>/ui/api/* to this handler. Plugins
-	// use it to power their own UI (the host neither knows nor cares about
-	// these endpoints).
+	// HTTPHandler is mounted on the plugin's HTTP server for static UI-adjacent
+	// routes. Dynamic browser-facing APIs should be declared as Operations with
+	// HTTP bindings so Mission Control can authorize and proxy them explicitly.
 	HTTPHandler() http.Handler
 }
 
@@ -46,8 +45,9 @@ type Plugin interface {
 // Result interface (preferred — the SDK marshals to application/clicky+json)
 // or raw bytes for advanced cases.
 type Operation struct {
-	Def     *pluginpb.OperationDef
-	Handler func(ctx context.Context, req InvokeCtx) (any, error)
+	Def         *pluginpb.OperationDef
+	Handler     func(ctx context.Context, req InvokeCtx) (any, error)
+	HTTPHandler func(ctx context.Context, w http.ResponseWriter, r *http.Request, req InvokeCtx) error
 }
 
 // InvokeCtx is passed to operation handlers. It exposes the request payload,

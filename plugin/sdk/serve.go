@@ -70,8 +70,9 @@ func Serve(impl Plugin, opts ...Option) {
 		fmt.Fprintf(os.Stderr, "plugin %s loading: version=%s\n", m.Name, m.Version)
 	}
 
-	uiPort, httpServer := startHTTPServer(impl, cfg)
-	srv := newPluginServer(impl, uiPort)
+	srv := newPluginServer(impl, 0)
+	uiPort, httpServer := startHTTPServer(impl, cfg, srv)
+	srv.uiPort = uiPort
 
 	goplugin.Serve(&goplugin.ServeConfig{
 		HandshakeConfig: adapter.Handshake,
@@ -86,8 +87,9 @@ func Serve(impl Plugin, opts ...Option) {
 	_ = httpServer.Close()
 }
 
-func startHTTPServer(impl Plugin, cfg *serveOptions) (uint32, *http.Server) {
+func startHTTPServer(impl Plugin, cfg *serveOptions, srv *pluginServer) (uint32, *http.Server) {
 	mux := http.NewServeMux()
+	mux.Handle("/__mc/operations/", srv.httpOperationsHandler())
 
 	// The host proxy strips /api/plugins/<name>/ui and forwards the
 	// remainder, so the plugin sees a flat path. The plugin's HTTPHandler

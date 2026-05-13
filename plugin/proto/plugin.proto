@@ -56,6 +56,14 @@ message OperationDef {
   string scope             = 5;
   bool   destructive       = 6;
   repeated string required_permissions = 7;
+  repeated HTTPBinding http = 8;
+}
+
+message HTTPBinding {
+  string method       = 1;
+  string path         = 2;
+  string result_mime  = 3;
+  bool streaming      = 4;
 }
 
 message RegisterRequest {

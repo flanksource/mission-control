@@ -158,7 +158,7 @@ func (c *Client) InvokePluginOperation(name, operation, configID string, params 
 		req = req.QueryParam("config_id", configID)
 	}
 
-	r, err := req.Post("/api/plugins/"+url.PathEscape(name)+"/operations/"+url.PathEscape(operation), params)
+	r, err := req.Post("/api/plugins/"+url.PathEscape(name)+"/invoke/"+url.PathEscape(operation), params)
 	if err != nil {
 		return nil, err
 	}
