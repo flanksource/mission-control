@@ -24,10 +24,15 @@ import (
 
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
+	"google.golang.org/grpc/metadata"
 
+	"github.com/flanksource/incident-commander/auth"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
@@ -47,7 +52,7 @@ var registerUIProxy func(e *echo.Echo)
 func RegisterRoutes(e *echo.Echo) {
 	g := e.Group("/api/plugins")
 	g.GET("", ListPlugins, rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
-	g.POST("/:name/operations/:op", InvokeOperation, rbac.Authorization(policy.ObjectCatalog, policy.ActionUpdate))
+	g.POST("/:name/operations/:op", InvokeOperation)
 
 	if registerUIProxy != nil {
 		registerUIProxy(e)
@@ -110,15 +115,28 @@ func InvokeOperation(c echo.Context) error {
 	if configID != "" && !selectorMatches(ctx, entry, configID) {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, configID))
 	}
+	if err := enforcePluginInvokePermission(ctx, entry, op, configID); err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
 
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "read request body"))
 	}
 
+	invocationToken, err := auth.MintPluginInvocationToken(lo.FromPtr(ctx.User()), entry.ID)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
+	}
+
 	caller := callerFromCtx(ctx)
 	invokeCtx, cancel := context.WithTimeout(c.Request().Context(), 60*time.Second)
 	defer cancel()
+
+	// Like Set-Cookie in HTTP, Mission Control issues a short-lived invocation
+	// token to the plugin over gRPC metadata. The plugin SDK presents the same
+	// token on HostService callbacks so Mission Control can verify the actor.
+	invokeCtx = metadata.AppendToOutgoingContext(invokeCtx, pluginpb.PluginInvocationTokenMetadataKey, invocationToken)
 
 	resp, err := sup.Invoke(invokeCtx, &pluginpb.InvokeRequest{
 		Operation:    op,
@@ -153,6 +171,34 @@ func resolvePlugin(ctx dutyContext.Context, ref string) (*registry.Entry, error)
 		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", ref)
 	}
 	return entry, nil
+}
+
+func enforcePluginInvokePermission(ctx dutyContext.Context, entry *registry.Entry, op, configID string) error {
+	user := ctx.User()
+	if user == nil {
+		return ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in")
+	}
+
+	attr := &models.ABACAttribute{}
+
+	if configID != "" {
+		item, err := query.ConfigItemFromCache(ctx, configID)
+		if err != nil {
+			return ctx.Oops().Wrapf(err, "get config item %s", configID)
+		}
+		attr.Config = item
+	}
+
+	if !canInvokePluginOperation(ctx, user.ID.String(), attr, entry.Name, op) {
+		return ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("not allowed to invoke plugin %s operation %s", entry.Name, op)
+	}
+
+	return nil
+}
+
+func canInvokePluginOperation(ctx dutyContext.Context, subject string, attr *models.ABACAttribute, pluginName, op string) bool {
+	return dutyRBAC.HasPermission(ctx, subject, attr, policy.NewPluginInvokeAction(pluginName, op)) ||
+		dutyRBAC.HasPermission(ctx, subject, attr, pluginName+":"+op)
 }
 
 // selectorMatches returns true when the given config id satisfies the plugin

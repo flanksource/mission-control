@@ -1,0 +1,14 @@
+---
+# yaml-language-server: $schema=../../config/schemas/permission.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-john-kubernetes-plugin
+spec:
+  subject:
+    person: john@doe.com
+  actions:
+    - invoke:kubernetes-logs:list-pods
+  object:
+    configs:
+      - namespace: kube-system

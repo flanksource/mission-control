@@ -47,6 +47,18 @@ var _ = ginkgo.Describe("Enforcer", func() {
 			Object:   "*",
 			Action:   policy.ActionRead,
 		},
+		{
+			ID:       uuid.New(),
+			PersonID: lo.ToPtr(userID),
+			Action:   "invoke:kubernetes-logs:*",
+			Object:   "*",
+		},
+		{
+			ID:       uuid.New(),
+			PersonID: lo.ToPtr(userID),
+			Action:   "kubernetes-logs:tail",
+			Object:   "*",
+		},
 	}
 
 	testData := []struct {
@@ -61,6 +73,27 @@ var _ = ginkgo.Describe("Enforcer", func() {
 			user:        userID.String(),
 			obj:         &models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "default"}}},
 			act:         "read",
+			allowed:     true,
+		},
+		{
+			description: "plugin operation wildcard action matches",
+			user:        userID.String(),
+			obj:         &models.ABACAttribute{},
+			act:         "invoke:kubernetes-logs:list-pods",
+			allowed:     true,
+		},
+		{
+			description: "plugin operation wildcard action does not match other plugin",
+			user:        userID.String(),
+			obj:         &models.ABACAttribute{},
+			act:         "invoke:other-plugin:list-pods",
+			allowed:     false,
+		},
+		{
+			description: "plugin operation short action matches",
+			user:        userID.String(),
+			obj:         &models.ABACAttribute{},
+			act:         "kubernetes-logs:tail",
 			allowed:     true,
 		},
 	}

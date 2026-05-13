@@ -358,6 +358,9 @@ spec:
                   playbook:
                     description: Playbook <namespace>/<name> selector
                     type: string
+                  plugin:
+                    description: Plugin <namespace>/<name> selector
+                    type: string
                   scraper:
                     description: Scraper <namespace>/<name> selector
                     type: string

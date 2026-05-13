@@ -111,6 +111,20 @@ func findTeam(ctx context.Context, selector string) (string, models.PermissionSu
 	return id, models.PermissionSubjectTypeTeam, nil
 }
 
+func pluginSubject(selector string) (string, models.PermissionSubjectType, error) {
+	selector = strings.TrimSpace(selector)
+	if selector == "" {
+		return "", "", dutyAPI.Errorf(dutyAPI.EINVALID, "plugin subject is required")
+	}
+
+	splits := strings.Split(selector, "/")
+	if len(splits) != 2 || strings.TrimSpace(splits[1]) == "" {
+		return "", "", dutyAPI.Errorf(dutyAPI.EINVALID, "%s is not a valid plugin subject. Must be <namespace>/<name> or /<name>", selector)
+	}
+
+	return "plugin:" + strings.TrimSpace(splits[0]) + "/" + strings.TrimSpace(splits[1]), models.PermissionSubjectTypePlugin, nil
+}
+
 func findNamespacedResource(ctx context.Context, table string, selector string, subjectType models.PermissionSubjectType) (string, models.PermissionSubjectType, error) {
 	query := ctx.DB().Select("id").Table(table).Where("deleted_at IS NULL")
 
@@ -163,6 +177,9 @@ type PermissionSubject struct {
 	// Playbook <namespace>/<name> selector
 	Playbook string `json:"playbook,omitempty"`
 
+	// Plugin <namespace>/<name> selector
+	Plugin string `json:"plugin,omitempty"`
+
 	// Canary <namespace>/<name> selector
 	Canary string `json:"canary,omitempty"`
 
@@ -175,7 +192,7 @@ type PermissionSubject struct {
 
 func (t *PermissionSubject) Empty() bool {
 	return t.Person == "" && t.Team == "" && t.Notification == "" && t.Group == "" && t.Playbook == "" &&
-		t.Canary == "" && t.Scraper == "" && t.Topology == ""
+		t.Plugin == "" && t.Canary == "" && t.Scraper == "" && t.Topology == ""
 }
 
 func (t *PermissionSubject) Populate(ctx context.Context) (string, models.PermissionSubjectType, error) {
@@ -201,6 +218,10 @@ func (t *PermissionSubject) Populate(ctx context.Context) (string, models.Permis
 
 	if t.Playbook != "" {
 		return findNamespacedResource(ctx, "playbooks", string(t.Playbook), models.PermissionSubjectTypePlaybook)
+	}
+
+	if t.Plugin != "" {
+		return pluginSubject(string(t.Plugin))
 	}
 
 	if t.Canary != "" {
