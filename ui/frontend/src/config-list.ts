@@ -202,7 +202,7 @@ export function healthOptions() {
 }
 
 export async function getConfigList(query: string): Promise<ConfigItem[]> {
-  const result = await fetchPostgrest<ConfigItem[]>(`/db/config_detail?${query}`);
+  const result = await fetchPostgrest<ConfigItem[]>(`/db/configs?${query}`);
   return result.data ?? [];
 }
 
