@@ -14,7 +14,7 @@ require (
 	github.com/flanksource/gomplate/v3 v3.24.79
 	github.com/flanksource/kopper v1.0.22
 	github.com/gomarkdown/markdown v0.0.0-20260411013819-759bbc3e3207
-	github.com/google/cel-go v0.28.0
+	github.com/google/cel-go v0.28.1
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.9.2
@@ -23,12 +23,12 @@ require (
 	github.com/lib/pq v1.12.3
 	github.com/onsi/ginkgo/v2 v2.28.3
 	github.com/onsi/gomega v1.40.0
-	github.com/ory/client-go v1.22.38
+	github.com/ory/client-go v1.22.39
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	gorm.io/gorm v1.31.1
-	k8s.io/apimachinery v0.36.0
+	k8s.io/apimachinery v0.36.1
 	k8s.io/client-go v0.35.4
 	sigs.k8s.io/controller-runtime v0.23.3
 )
@@ -50,7 +50,7 @@ require (
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6
 	github.com/emersion/go-smtp v0.24.0
 	github.com/flanksource/artifacts v1.0.24
-	github.com/flanksource/clicky v1.21.8
+	github.com/flanksource/clicky v1.21.9
 	github.com/flanksource/commons-test v0.1.13
 	github.com/flanksource/deps v1.0.28
 	github.com/fluxcd/pkg/gittestserver v0.28.0
@@ -67,8 +67,8 @@ require (
 	github.com/henvic/httpretty v0.1.4
 	github.com/invopop/jsonschema v0.14.0
 	github.com/jackc/pgerrcode v0.0.0-20250907135507-afb5586c32a6
-	github.com/jenkins-x/go-scm v1.15.21
-	github.com/mark3labs/mcp-go v0.52.0
+	github.com/jenkins-x/go-scm v1.15.22
+	github.com/mark3labs/mcp-go v0.53.0
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/pb33f/ordered-map/v2 v2.3.1
 	github.com/prometheus/client_model v0.6.2
@@ -379,7 +379,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.35.2 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a // indirect
-	k8s.io/streaming v0.36.0 // indirect
+	k8s.io/streaming v0.36.1 // indirect
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2 // indirect
 	layeh.com/gopher-json v0.0.0-20201124131017-552bb3c4c3bf // indirect
 	modernc.org/libc v1.72.0 // indirect
@@ -443,7 +443,7 @@ require (
 	golang.org/x/sys v0.44.0 // indirect
 	golang.org/x/text v0.37.0
 	golang.org/x/time v0.15.0 // indirect
-	google.golang.org/api v0.278.0
+	google.golang.org/api v0.279.0
 	google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7 // indirect
 	google.golang.org/grpc v1.81.0
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
