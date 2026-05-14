@@ -72,6 +72,7 @@ plugins-ui: $(LOCALBIN)/pnpm ## Build embedded plugin UI bundles
 .PHONY: build-plugins
 build-plugins: plugins-ui
 	make -C plugins/kubernetes-logs build
+	make -C plugins/postgres build
 
 .PHONY: test
 test:

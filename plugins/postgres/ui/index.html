@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Postgres Connection Status</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: transparent;
+        color: CanvasText;
+      }
+      body {
+        margin: 0;
+      }
+      .wrap {
+        min-height: 100vh;
+        box-sizing: border-box;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+      }
+      .card {
+        width: min(720px, 100%);
+        border: 1px solid color-mix(in srgb, CanvasText 14%, transparent);
+        border-radius: 16px;
+        padding: 24px;
+        background: color-mix(in srgb, Canvas 92%, transparent);
+        box-shadow: 0 10px 30px color-mix(in srgb, CanvasText 8%, transparent);
+      }
+      .header {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+      }
+      .title {
+        margin: 0 0 4px;
+        font-size: 18px;
+        font-weight: 650;
+      }
+      .refresh {
+        border: 1px solid color-mix(in srgb, CanvasText 16%, transparent);
+        border-radius: 10px;
+        background: color-mix(in srgb, CanvasText 5%, transparent);
+        color: CanvasText;
+        cursor: pointer;
+        font: inherit;
+        font-size: 13px;
+        padding: 8px 12px;
+      }
+      .refresh:hover:not(:disabled) {
+        background: color-mix(in srgb, CanvasText 9%, transparent);
+      }
+      .refresh:disabled {
+        cursor: wait;
+        opacity: 0.65;
+      }
+      .subtitle {
+        margin: 0 0 24px;
+        color: color-mix(in srgb, CanvasText 62%, transparent);
+        font-size: 13px;
+      }
+      .content {
+        display: grid;
+        grid-template-columns: 260px 1fr;
+        gap: 28px;
+        align-items: center;
+      }
+      .chart {
+        width: 240px;
+        height: 240px;
+        border-radius: 50%;
+        background: conic-gradient(#22c55e 0deg, #22c55e var(--active), #64748b var(--active), #64748b var(--idle), #f59e0b var(--idle), #f59e0b 360deg);
+        position: relative;
+      }
+      .chart::after {
+        content: attr(data-total);
+        position: absolute;
+        inset: 48px;
+        display: grid;
+        place-items: center;
+        border-radius: 50%;
+        background: Canvas;
+        font-size: 34px;
+        font-weight: 750;
+      }
+      .legend {
+        display: grid;
+        gap: 12px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 14px 1fr auto;
+        gap: 10px;
+        align-items: center;
+        padding: 10px 12px;
+        border-radius: 10px;
+        background: color-mix(in srgb, CanvasText 5%, transparent);
+      }
+      .swatch {
+        width: 12px;
+        height: 12px;
+        border-radius: 999px;
+      }
+      .value {
+        font-variant-numeric: tabular-nums;
+        font-weight: 700;
+      }
+      .error {
+        color: #ef4444;
+        white-space: pre-wrap;
+      }
+      @media (max-width: 640px) {
+        .content {
+          grid-template-columns: 1fr;
+          justify-items: center;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="card">
+        <div class="header">
+          <div>
+            <h1 class="title">Postgres connection status</h1>
+            <p class="subtitle" id="subtitle">Loading pg_stat_activity…</p>
+          </div>
+          <button class="refresh" id="refresh" type="button">Refresh</button>
+        </div>
+        <div id="app"></div>
+      </section>
+    </main>
+
+    <script>
+      const app = document.getElementById("app");
+      const subtitle = document.getElementById("subtitle");
+      const refresh = document.getElementById("refresh");
+
+      function render(data) {
+        const idle = Number(data.Idle || data.idle || 0);
+        const active = Number(data.Active || data.active || 0);
+        const unknown = Number(data.Unknown || data.unknown || 0);
+        const total = idle + active + unknown;
+        const activeDeg = total ? (active / total) * 360 : 0;
+        const idleDeg = total ? activeDeg + (idle / total) * 360 : 0;
+
+        subtitle.textContent = "Current sessions grouped from pg_stat_activity";
+        app.innerHTML = `
+          <div class="content">
+            <div class="chart" data-total="${total}" style="--active:${activeDeg}deg; --idle:${idleDeg}deg" title="${total} total connections"></div>
+            <div class="legend">
+              ${row("#22c55e", "Active", active)}
+              ${row("#64748b", "Idle", idle)}
+              ${row("#f59e0b", "Unknown", unknown)}
+            </div>
+          </div>
+        `;
+      }
+
+      function row(color, label, value) {
+        return `<div class="row"><span class="swatch" style="background:${color}"></span><span>${label}</span><span class="value">${value}</span></div>`;
+      }
+
+      async function load() {
+        refresh.disabled = true;
+        try {
+          const res = await fetch("/api/plugins/postgres/invoke/connection_status", {
+            method: "POST",
+            body: "{}",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}: ${await res.text()}`);
+          render(await res.json());
+        } catch (err) {
+          subtitle.textContent = "Failed to load connection status";
+          app.innerHTML = `<div class="error"></div>`;
+          app.querySelector(".error").textContent = err instanceof Error ? err.message : String(err);
+        } finally {
+          refresh.disabled = false;
+          window.parent?.postMessage({ type: "mc.tab.ready" }, "*");
+        }
+      }
+
+      refresh.addEventListener("click", load);
+      load();
+      setInterval(load, 30000);
+    </script>
+  </body>
+</html>

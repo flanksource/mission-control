@@ -1,0 +1,12 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Plugin
+metadata:
+  name: postgres
+spec:
+  source: postgres
+  selector:
+    types:
+      - MissionControl::Connection
+  connections:
+    types:
+      postgres: connection://mc/mission-control
