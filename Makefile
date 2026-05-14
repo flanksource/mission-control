@@ -68,10 +68,12 @@ ui: $(LOCALBIN)/pnpm ## Build the embedded catalog explorer UI (ui/frontend -> u
 .PHONY: plugins-ui
 plugins-ui: $(LOCALBIN)/pnpm ## Build embedded plugin UI bundles
 	cd plugins/kubernetes-logs/ui-src && CI=true pnpm install --no-frozen-lockfile --prefer-offline && pnpm run build
+	cd plugins/sql-server/ui-src && CI=true pnpm install --no-frozen-lockfile --prefer-offline && pnpm run build
 
 .PHONY: build-plugins
 build-plugins: plugins-ui
 	make -C plugins/kubernetes-logs build
+	make -C plugins/sql-server build
 
 .PHONY: test
 test:

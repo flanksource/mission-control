@@ -1,0 +1,13 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Plugin
+metadata:
+  name: sql-server
+spec:
+  source: sql-server
+  version: "0.1.0"
+  selector:
+    types:
+      - MissionControl::Connection
+  connections:
+    types:
+      sql: connection://mission-control/mssql-non-prod
