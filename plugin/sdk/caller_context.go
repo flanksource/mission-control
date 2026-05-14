@@ -3,9 +3,8 @@ package sdk
 import (
 	"context"
 
+	"github.com/flanksource/incident-commander/plugin"
 	"google.golang.org/grpc/metadata"
-
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 )
 
 func invocationTokenFromIncomingContext(ctx context.Context) string {
@@ -13,7 +12,7 @@ func invocationTokenFromIncomingContext(ctx context.Context) string {
 	if !ok {
 		return ""
 	}
-	values := md.Get(pluginpb.PluginInvocationTokenMetadataKey)
+	values := md.Get(plugin.InvocationTokenGRPCMetadataKey)
 	if len(values) == 0 {
 		return ""
 	}
@@ -24,7 +23,7 @@ func withInvocationToken(ctx context.Context, token string) context.Context {
 	if token == "" {
 		return ctx
 	}
-	return metadata.AppendToOutgoingContext(ctx, pluginpb.PluginInvocationTokenMetadataKey, token)
+	return metadata.AppendToOutgoingContext(ctx, plugin.InvocationTokenGRPCMetadataKey, token)
 }
 
 type httpRequestContext struct {

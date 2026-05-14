@@ -34,6 +34,7 @@ import (
 
 	"github.com/flanksource/incident-commander/auth"
 	echoSrv "github.com/flanksource/incident-commander/echo"
+	"github.com/flanksource/incident-commander/plugin"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
 	"github.com/flanksource/incident-commander/plugin/supervisor"
@@ -133,7 +134,7 @@ func InvokeOperation(c echo.Context) error {
 	// Like Set-Cookie in HTTP, Mission Control issues a short-lived invocation
 	// token to the plugin over gRPC metadata. The plugin SDK presents the same
 	// token on HostService callbacks so Mission Control can verify the actor.
-	invokeCtx = metadata.AppendToOutgoingContext(invokeCtx, pluginpb.PluginInvocationTokenMetadataKey, invocationToken)
+	invokeCtx = metadata.AppendToOutgoingContext(invokeCtx, plugin.InvocationTokenGRPCMetadataKey, invocationToken)
 
 	resp, err := sup.Invoke(invokeCtx, &pluginpb.InvokeRequest{
 		Operation:    op,

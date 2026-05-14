@@ -11,14 +11,12 @@ import (
 var _ = ginkgo.Describe("plugin HTTP proxy", func() {
 	ginkgo.It("rewrites UI traffic to the reserved static UI mount", func() {
 		prefix := "/api/plugins/kubernetes-logs/ui"
-		Expect(pluginProxyTargetPath(prefix, prefix, "", false)).To(Equal("/__mc/ui/"))
-		Expect(pluginProxyTargetPath(prefix, prefix+"/assets/app.js", "", false)).To(Equal("/__mc/ui/assets/app.js"))
+		Expect(pluginUITargetPath(prefix, prefix)).To(Equal("/__mc/ui/"))
+		Expect(pluginUITargetPath(prefix, prefix+"/assets/app.js")).To(Equal("/__mc/ui/assets/app.js"))
 	})
 
 	ginkgo.It("rewrites operation traffic to the reserved operation mount", func() {
-		prefix := "/api/plugins/kubernetes-logs/proxy/logs"
-		Expect(pluginProxyTargetPath(prefix, prefix, "logs", true)).To(Equal("/__mc/operations/logs"))
-		Expect(pluginProxyTargetPath(prefix, prefix+"/stream", "logs", true)).To(Equal("/__mc/operations/logs"))
+		Expect(pluginOperationTargetPath("logs")).To(Equal("/__mc/operations/logs"))
 	})
 
 	ginkgo.It("allows declared HTTP operation methods", func() {

@@ -13,6 +13,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/plugin"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
 	"github.com/flanksource/incident-commander/plugin/supervisor"
@@ -51,7 +52,7 @@ func uiProxy(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin UI path %q not found", pluginPath))
 	}
 
-	return proxyToPluginHTTP(c, entry, pluginRef, prefix, "")
+	return proxyToPluginUI(c, entry, pluginRef, prefix)
 }
 
 func operationHTTPProxy(c echo.Context) error {
@@ -67,7 +68,6 @@ func operationHTTPProxy(c echo.Context) error {
 	if def == nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q operation %q not found", pluginRef, op))
 	}
-	prefix := "/api/plugins/" + pluginRef + "/proxy/" + op
 	if !operationHTTPBindingAllowed(def, c.Request().Method) {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q operation %q does not allow HTTP %s", pluginRef, op, c.Request().Method))
 	}
@@ -85,47 +85,20 @@ func operationHTTPProxy(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 	}
 
-	return proxyToPluginHTTP(c, entry, pluginRef, prefix, invocationToken)
+	return proxyToPluginOperation(c, entry, pluginRef, op, invocationToken)
 }
 
-func proxyToPluginHTTP(c echo.Context, entry *registry.Entry, pluginRef, prefix, invocationToken string) error {
-	ctx := c.Request().Context().(dutyContext.Context)
-	sup := supervisor.LookupSupervisor(entry.ID)
-	if sup == nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", pluginRef))
-	}
-	port := sup.UIPort()
-	if port == 0 {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINTERNAL).Errorf("plugin %q did not advertise a UI port", pluginRef))
-	}
-
-	target, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
+func proxyToPluginUI(c echo.Context, entry *registry.Entry, pluginRef, prefix string) error {
+	target, err := pluginHTTPURL(c, entry, pluginRef)
 	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "parse plugin url"))
+		return err
 	}
 
 	rp := &httputil.ReverseProxy{
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
-			if invocationToken != "" {
-				pr.Out.URL.Path = pluginProxyTargetPath(prefix, pr.In.URL.Path, c.Param("op"), true)
-				pr.Out.Header.Set(pluginpb.PluginInvocationTokenMetadataKey, invocationToken)
-			} else {
-				pr.Out.URL.Path = pluginProxyTargetPath(prefix, pr.In.URL.Path, "", false)
-			}
+			pr.Out.URL.Path = pluginUITargetPath(prefix, pr.In.URL.Path)
 			pr.Out.URL.RawPath = ""
-			pr.Out.Header.Del("X-Mission-Control-User")
-			pr.Out.Header.Del("X-Mission-Control-User-Email")
-			pr.Out.Header.Del("X-Mission-Control-Config-Id")
-			if u := ctx.User(); u != nil {
-				pr.Out.Header.Set("X-Mission-Control-User", u.ID.String())
-				if u.Email != "" {
-					pr.Out.Header.Set("X-Mission-Control-User-Email", u.Email)
-				}
-			}
-			if cfg := c.QueryParam("config_id"); cfg != "" {
-				pr.Out.Header.Set("X-Mission-Control-Config-Id", cfg)
-			}
 		},
 	}
 
@@ -133,10 +106,48 @@ func proxyToPluginHTTP(c echo.Context, entry *registry.Entry, pluginRef, prefix,
 	return nil
 }
 
-func pluginProxyTargetPath(prefix, requestPath, op string, operation bool) string {
-	if operation {
-		return "/__mc/operations/" + op
+func proxyToPluginOperation(c echo.Context, entry *registry.Entry, pluginRef, op, invocationToken string) error {
+	target, err := pluginHTTPURL(c, entry, pluginRef)
+	if err != nil {
+		return err
 	}
+
+	rp := &httputil.ReverseProxy{
+		Rewrite: func(pr *httputil.ProxyRequest) {
+			pr.SetURL(target)
+			pr.Out.URL.Path = pluginOperationTargetPath(op)
+			pr.Out.Header.Set(plugin.InvocationTokenHTTPHeader, invocationToken)
+			pr.Out.URL.RawPath = ""
+		},
+	}
+
+	rp.ServeHTTP(c.Response().Writer, c.Request())
+	return nil
+}
+
+func pluginHTTPURL(c echo.Context, entry *registry.Entry, pluginRef string) (*url.URL, error) {
+	ctx := c.Request().Context().(dutyContext.Context)
+	sup := supervisor.LookupSupervisor(entry.ID)
+	if sup == nil {
+		return nil, dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", pluginRef))
+	}
+	port := sup.UIPort()
+	if port == 0 {
+		return nil, dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINTERNAL).Errorf("plugin %q did not advertise a UI port", pluginRef))
+	}
+
+	target, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
+	if err != nil {
+		return nil, dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "parse plugin url"))
+	}
+	return target, nil
+}
+
+func pluginOperationTargetPath(op string) string {
+	return "/__mc/operations/" + op
+}
+
+func pluginUITargetPath(prefix, requestPath string) string {
 	pluginPath := strings.TrimPrefix(requestPath, prefix)
 	if pluginPath == "" {
 		pluginPath = "/"
