@@ -9,6 +9,7 @@ import (
 
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 
@@ -17,14 +18,14 @@ import (
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
 	"github.com/flanksource/incident-commander/plugin/supervisor"
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 func registerProxyRoutes(e *echo.Echo) {
 	g := e.Group("/api/plugins")
-	g.GET("/:name/ui", uiProxy)
-	g.HEAD("/:name/ui", uiProxy)
-	g.GET("/:name/ui/*", uiProxy)
-	g.HEAD("/:name/ui/*", uiProxy)
+	uiAuth := rbac.Authorization(policy.ObjectCatalog, policy.ActionRead)
+	g.GET("/:name/ui", uiProxy, uiAuth)
+	g.GET("/:name/ui/*", uiProxy, uiAuth)
 	g.Any("/:name/proxy/:op", operationHTTPProxy)
 }
 
