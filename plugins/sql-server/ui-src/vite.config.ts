@@ -23,7 +23,7 @@ export default defineConfig({
   define: {
     "process.env.NODE_ENV": JSON.stringify("production"),
     "process.env": "{}",
-    // Build-time injected — printed on app startup and exposed via /version.
+    // Build-time injected — printed on app startup.
     __PLUGIN_VERSION__: JSON.stringify(process.env.PLUGIN_VERSION ?? "dev"),
     __PLUGIN_BUILD_DATE__: JSON.stringify(process.env.PLUGIN_BUILD_DATE ?? ""),
   },

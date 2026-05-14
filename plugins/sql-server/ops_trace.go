@@ -51,9 +51,15 @@ func (p *SQLServerPlugin) traceStart(ctx context.Context, req sdk.InvokeCtx) (an
 	})
 }
 
-func (p *SQLServerPlugin) traceList(_ context.Context, _ sdk.InvokeCtx) (any, error) {
+func (p *SQLServerPlugin) traceList(_ context.Context, req sdk.InvokeCtx) (any, error) {
 	p.traces.GC()
-	return p.traces.List(), nil
+	out := []*sqltrace.ActiveTrace{}
+	for _, trace := range p.traces.List() {
+		if trace.ConfigItemID == req.ConfigItemID {
+			out = append(out, trace)
+		}
+	}
+	return out, nil
 }
 
 type TraceIDParams struct {
@@ -66,9 +72,9 @@ func (p *SQLServerPlugin) traceGet(_ context.Context, req sdk.InvokeCtx) (any, e
 	if err := json.Unmarshal(req.ParamsJSON, &params); err != nil {
 		return nil, err
 	}
-	t, ok := p.traces.Get(params.ID)
-	if !ok {
-		return nil, fmt.Errorf("trace %q not found", params.ID)
+	t, err := p.traceForConfig(params.ID, req.ConfigItemID)
+	if err != nil {
+		return nil, err
 	}
 	events := t.EventsSince(params.Since)
 	return map[string]any{
@@ -83,6 +89,9 @@ func (p *SQLServerPlugin) traceStop(_ context.Context, req sdk.InvokeCtx) (any, 
 	if err := json.Unmarshal(req.ParamsJSON, &params); err != nil {
 		return nil, err
 	}
+	if _, err := p.traceForConfig(params.ID, req.ConfigItemID); err != nil {
+		return nil, err
+	}
 	t, err := p.traces.Stop(params.ID)
 	if err != nil {
 		return nil, err
@@ -95,9 +104,23 @@ func (p *SQLServerPlugin) traceDelete(_ context.Context, req sdk.InvokeCtx) (any
 	if err := json.Unmarshal(req.ParamsJSON, &params); err != nil {
 		return nil, err
 	}
+	if _, err := p.traceForConfig(params.ID, req.ConfigItemID); err != nil {
+		return nil, err
+	}
 	removed, err := p.traces.Delete(params.ID)
 	if err != nil {
 		return nil, err
 	}
 	return map[string]any{"removed": removed}, nil
+}
+
+func (p *SQLServerPlugin) traceForConfig(id, configID string) (*sqltrace.ActiveTrace, error) {
+	t, ok := p.traces.Get(id)
+	if !ok {
+		return nil, fmt.Errorf("trace %q not found", id)
+	}
+	if configID == "" || t.ConfigItemID != configID {
+		return nil, fmt.Errorf("trace %q does not belong to this config", id)
+	}
+	return t, nil
 }

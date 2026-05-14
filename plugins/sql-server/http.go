@@ -4,33 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/flanksource/incident-commander/plugin/sdk"
 )
 
-// HTTPHandler powers the iframe's streaming endpoints. The unary
-// operations (stats/query/explain/trace-*) are handled by the host's
-// /api/plugins/<name>/operations/<op> route which has HostClient access;
-// SSE has to live in the plugin's HTTP server because operations are
-// unary RPCs.
-//
-// /trace-stream/<id> tails an existing trace's event buffer.
-func (p *SQLServerPlugin) HTTPHandler() http.Handler {
-	mux := http.NewServeMux()
-	mux.HandleFunc("/trace-stream/", p.httpTraceStream)
-	mux.Handle("/version", sdk.VersionHandler(sdk.BuildInfo{
-		Name:       "sql-server",
-		Version:    Version,
-		BuildDate:  BuildDate,
-		UIChecksum: uiChecksum,
-	}))
-	return mux
-}
-
 func (p *SQLServerPlugin) httpTraceStream(w http.ResponseWriter, r *http.Request) {
-	id := strings.TrimPrefix(r.URL.Path, "/trace-stream/")
+	id := r.URL.Query().Get("id")
 	if id == "" {
 		http.Error(w, "trace id required", http.StatusBadRequest)
 		return
@@ -38,6 +18,11 @@ func (p *SQLServerPlugin) httpTraceStream(w http.ResponseWriter, r *http.Request
 	trace, ok := p.traces.Get(id)
 	if !ok {
 		http.Error(w, fmt.Sprintf("trace %q not found", id), http.StatusNotFound)
+		return
+	}
+	configID := sdk.ConfigItemIDFromContext(r.Context())
+	if configID == "" || trace.ConfigItemID != configID {
+		http.Error(w, "trace does not belong to this config", http.StatusForbidden)
 		return
 	}
 	flusher, ok := w.(http.Flusher)

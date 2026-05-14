@@ -239,6 +239,7 @@ export function TraceTab() {
     esRef.current?.close();
     const es = openTraceStream(
       activeTraceID,
+      configID,
       (e) => setEvents((prev) => [...prev, e as TraceEvent]),
       () => qc.invalidateQueries({ queryKey: ["traces"] }),
     );

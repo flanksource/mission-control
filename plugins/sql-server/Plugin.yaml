@@ -8,6 +8,7 @@ spec:
   selector:
     types:
       - MissionControl::Connection
+      - MSSQL::Database
   connections:
     types:
       sql: connection://mission-control/mssql-non-prod

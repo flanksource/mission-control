@@ -1,32 +1,29 @@
 // API client for the sql-server plugin's iframe.
 //
 // The iframe is served from `/api/plugins/sql-server/ui/` (the host's
-// reverse proxy). The plugin's operations live one level up at
-// `/api/plugins/sql-server/operations/<name>` — which is NOT under the iframe
-// origin (`./`). To reach them we go up two segments.
+// reverse proxy). Unary operations are exposed by the host at
+// `/api/plugins/sql-server/invoke/<name>` and HTTP/SSE operations at
+// `/api/plugins/sql-server/proxy/<name>`.
 //
-// `config_id` is the catalog item the user is viewing — for the SQL Server
-// plugin that's the Connection UUID (the host's resolveSQLConnection looks
-// it up by ID). The host proxy reads it from the iframe URL and the
-// operations endpoint accepts it as a query param.
+// `config_id` is the catalog item the user is viewing. The host reads it from
+// the query string for selector checks and connection resolution.
 
 export const PLUGIN_NAME = "sql-server";
 
+function pluginBase(): string {
+  return window.location.pathname.replace(/\/ui(?:\/.*)?$/, "");
+}
+
 function operationURL(op: string, configID: string): string {
-  // The iframe origin path is /api/plugins/sql-server/ui/ — strip /ui/ and
-  // append /operations/<op> to reach the host's operations endpoint.
-  // We construct the URL relative to window.location to honour the
-  // current host:port (works in dev with the vite proxy and in prod
-  // under the iframe).
-  const base = window.location.pathname.replace(/\/ui\/.*$/, "");
-  const url = new URL(base + "/operations/" + op, window.location.origin);
+  const url = new URL(pluginBase() + "/invoke/" + op, window.location.origin);
   if (configID) url.searchParams.set("config_id", configID);
   return url.toString();
 }
 
-function traceStreamURL(traceID: string, since?: string): string {
-  // SSE endpoint lives inside the plugin's HTTP server, mounted at /ui/.
-  const url = new URL("trace-stream/" + traceID, window.location.href);
+function traceStreamURL(traceID: string, configID: string, since?: string): string {
+  const url = new URL(pluginBase() + "/proxy/trace-stream", window.location.origin);
+  url.searchParams.set("id", traceID);
+  if (configID) url.searchParams.set("config_id", configID);
   if (since) url.searchParams.set("since", since);
   return url.toString();
 }
@@ -86,11 +83,12 @@ export async function callOp<T = unknown>(
 
 export function openTraceStream(
   traceID: string,
+  configID: string,
   onEvent: (e: unknown) => void,
   onDone?: () => void,
   since?: string,
 ): EventSource {
-  const es = new EventSource(traceStreamURL(traceID, since), {
+  const es = new EventSource(traceStreamURL(traceID, configID, since), {
     withCredentials: true,
   });
   es.onmessage = (ev) => {

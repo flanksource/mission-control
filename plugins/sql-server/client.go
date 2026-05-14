@@ -19,7 +19,10 @@ import (
 // MSSQLDatabaseType is the catalog item type that pins the plugin to a single
 // database. When the user opens the iframe on an item of this type, every
 // query must be constrained to it (USE [name] before each statement).
-const MSSQLDatabaseType = "MSSQL::Database"
+const (
+	MSSQLDatabaseType = "MSSQL::Database"
+	ConnectionType    = "MissionControl::Connection"
+)
 
 // resolved is what every operation handler unwraps from the cache: the gorm
 // connection plus the optional database the iframe is scoped to. When
@@ -53,7 +56,11 @@ func (c *connectionCache) For(ctx context.Context, host sdk.HostClient, configIt
 	if host == nil {
 		return nil, fmt.Errorf("no host client (HTTP handlers must call operations to access the SQL connection)")
 	}
+	item, _ := host.GetConfigItem(ctx, configItemID)
 	conn, err := host.GetConnectionForConfig(ctx, configItemID)
+	if err != nil && item != nil && item.Type == ConnectionType {
+		conn, err = host.GetConnectionByType(ctx, sdk.ConnectionTypeSQL)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("get sql connection: %w", err)
 	}
@@ -66,7 +73,7 @@ func (c *connectionCache) For(ctx context.Context, host sdk.HostClient, configIt
 			connType = t
 		}
 	}
-	bound := boundDatabase(ctx, host, configItemID)
+	bound := boundDatabase(item)
 	connURL := conn.Url
 	if bound != "" {
 		// Bake the database into the connection URL so every pooled
@@ -92,15 +99,14 @@ func (c *connectionCache) For(ctx context.Context, host sdk.HostClient, configIt
 // MSSQL::Database. It returns "" silently for any other type or on lookup
 // failure — being unable to look up the config item just means we run
 // unconstrained, which is the same behaviour as before this feature.
-func boundDatabase(ctx context.Context, host sdk.HostClient, configItemID string) string {
-	item, err := host.GetConfigItem(ctx, configItemID)
-	if err != nil || item == nil {
+func boundDatabase(item interface {
+	GetType() string
+	GetName() string
+}) string {
+	if item == nil || item.GetType() != MSSQLDatabaseType {
 		return ""
 	}
-	if item.Type != MSSQLDatabaseType {
-		return ""
-	}
-	return item.Name
+	return item.GetName()
 }
 
 func (c *connectionCache) lookup(k string) (*resolved, bool) {
@@ -144,9 +150,9 @@ func openGorm(ctx context.Context, connType, url string) (*gorm.DB, error) {
 
 func dialectorFor(connType, url string) (gorm.Dialector, error) {
 	switch connType {
-	case "sql_server", "":
+	case "sql_server", "sqlserver", "mssql", "sql-server", "":
 		return sqlserver.Open(url), nil
-	case "postgres":
+	case "postgres", "postgresql":
 		return postgres.Open(url), nil
 	case "mysql":
 		return mysql.Open(url), nil

@@ -9,6 +9,7 @@ import (
 	"context"
 	"embed"
 	"io/fs"
+	"net/http"
 
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/sdk"
@@ -31,6 +32,7 @@ const (
 	OpTraceGet        = "trace-get"
 	OpTraceStop       = "trace-stop"
 	OpTraceDelete     = "trace-delete"
+	OpTraceStream     = "trace-stream"
 	OpDefragInstall   = "defrag-install"
 	OpDefragRun       = "defrag-run"
 	OpDefragStatus    = "defrag-status"
@@ -124,6 +126,10 @@ func (p *SQLServerPlugin) Operations() []sdk.Operation {
 	}
 	out := make([]sdk.Operation, 0, len(defs))
 	for _, d := range defs {
+		if d.Name == OpTraceStream {
+			out = append(out, sdk.Operation{Def: d, HTTPHandler: http.HandlerFunc(p.httpTraceStream)})
+			continue
+		}
 		h, ok := handlers[d.Name]
 		if !ok {
 			continue
@@ -134,8 +140,20 @@ func (p *SQLServerPlugin) Operations() []sdk.Operation {
 }
 
 func operationDefs() []*pluginpb.OperationDef {
+	destructive := map[string]bool{
+		OpProcessKill:     true,
+		OpTraceStop:       true,
+		OpTraceDelete:     true,
+		OpDefragInstall:   true,
+		OpDefragRun:       true,
+		OpDefragTerminate: true,
+		OpDefragStop:      true,
+	}
 	mk := func(name, desc string) *pluginpb.OperationDef {
-		return &pluginpb.OperationDef{Name: name, Description: desc, Scope: "config", ResultMime: sdk.ClickyResultMimeType}
+		return &pluginpb.OperationDef{Name: name, Description: desc, Scope: "config", ResultMime: sdk.ClickyResultMimeType, Destructive: destructive[name]}
+	}
+	stream := func(name, desc string) *pluginpb.OperationDef {
+		return &pluginpb.OperationDef{Name: name, Description: desc, Scope: "config", ResultMime: "text/event-stream", Http: []*pluginpb.HTTPBinding{{Method: http.MethodGet}}}
 	}
 	return []*pluginpb.OperationDef{
 		mk(OpStats, "Snapshot of SQL Server instance/CPU/memory/disk/IO health."),
@@ -150,6 +168,7 @@ func operationDefs() []*pluginpb.OperationDef {
 		mk(OpTraceGet, "Fetch a trace's buffered events. Pass {since:<lastKey>} to tail incrementally."),
 		mk(OpTraceStop, "Stop a running trace. Returns the final TraceResult."),
 		mk(OpTraceDelete, "Stop and remove a trace from the registry."),
+		stream(OpTraceStream, "Stream Extended Events trace events as Server-Sent Events."),
 		mk(OpDefragInstall, "Install Microsoft TigerToolbox AdaptiveIndexDefrag into the maintenance DB."),
 		mk(OpDefragRun, "Run AdaptiveIndexDefrag asynchronously. Returns a job handle."),
 		mk(OpDefragStatus, "Read AdaptiveIndexDefrag installation/configuration status."),
