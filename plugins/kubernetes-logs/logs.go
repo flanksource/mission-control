@@ -3,14 +3,65 @@ package main
 import (
 	"bufio"
 	"context"
+	"encoding/json"
+	"fmt"
 	"io"
 	"strings"
 	"time"
 
+	dutyContext "github.com/flanksource/duty/context"
 	dutylogs "github.com/flanksource/duty/logs"
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/plugin/sdk"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
 )
+
+// TailParams is the input shape for the `tail` operation. The CLI sends
+// these as JSON via --param/--json; the iframe sends them through the
+// `tail` button. PostProcess mirrors the playbook `logs` action shape so
+// CEL match expressions and dedup/window settings work the same way.
+type TailParams struct {
+	Container   string             `json:"container,omitempty"`
+	TailLines   int64              `json:"tailLines,omitempty"`
+	Previous    bool               `json:"previous,omitempty"`
+	PostProcess v1.LogsPostProcess `json:"postProcess,omitempty"`
+}
+
+func (p *KubernetesLogsPlugin) tail(ctx context.Context, req sdk.InvokeCtx) (any, error) {
+	var params TailParams
+	if len(req.ParamsJSON) > 0 {
+		if err := json.Unmarshal(req.ParamsJSON, &params); err != nil {
+			return nil, fmt.Errorf("decode params: %w", err)
+		}
+	}
+	if params.TailLines <= 0 {
+		params.TailLines = 200
+	}
+
+	cli, err := p.clients.For(ctx, req.Host, req.ConfigItemID)
+	if err != nil {
+		return nil, err
+	}
+
+	pods, err := resolvePods(ctx, cli, req.Host, req.ConfigItemID)
+	if err != nil {
+		return nil, err
+	}
+
+	var lines []*dutylogs.LogLine
+	for _, pod := range pods {
+		podLines, err := tailPod(ctx, cli, pod, params)
+		if err != nil {
+			lines = append(lines, errorLine(pod, "", err.Error()))
+			continue
+		}
+		lines = append(lines, podLines...)
+	}
+
+	dctx := dutyContext.NewContext(ctx)
+	return postProcessLogs(dctx, lines, params.PostProcess), nil
+}
 
 // tailPod returns the last params.TailLines log lines from every container
 // in the pod (or just one if params.Container is set). Each returned LogLine
