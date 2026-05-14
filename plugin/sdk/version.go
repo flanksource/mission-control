@@ -39,9 +39,8 @@ func FormatVersion(version, buildDate, uiChecksum string) string {
 }
 
 // VersionHandler returns an HTTP handler that serves a plugin's BuildInfo
-// as JSON at any path the plugin mounts it on (typically "/version").
-// The returned handler is safe to mount at root since it ignores the
-// request URL.
+// as JSON. Plugins that want to expose this through Mission Control should
+// call it from a manifest-declared operation HTTPHandler.
 func VersionHandler(info BuildInfo) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

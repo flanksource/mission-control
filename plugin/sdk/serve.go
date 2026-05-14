@@ -1,9 +1,6 @@
 package sdk
 
 import (
-	"bufio"
-	"bytes"
-	"errors"
 	"fmt"
 	"io/fs"
 	"net"
@@ -25,9 +22,9 @@ type serveOptions struct {
 	staticAssets fs.FS
 }
 
-// WithStaticAssets mounts the given filesystem at the root of the plugin's
-// HTTP server. Plugin authors typically pass an embed.FS containing their
-// vite-built dist/ directory:
+// WithStaticAssets mounts the given filesystem under the plugin HTTP server's
+// reserved /__mc/ui/ path. Plugin authors typically pass an embed.FS containing
+// their vite-built dist/ directory:
 //
 //	//go:embed ui/dist
 //	var uiAssets embed.FS
@@ -50,8 +47,8 @@ func shutdownSignal() {
 // Serve is the entry point for plugin binaries. It:
 //
 //  1. validates the magic-cookie env var (exits 1 if not set);
-//  2. binds an HTTP listener on 127.0.0.1:0 to serve the static assets and
-//     the plugin's /api/* routes;
+//  2. binds an HTTP listener on 127.0.0.1:0 to serve static UI assets under
+//     /__mc/ui/ and manifest-declared HTTP operations under /__mc/operations/;
 //  3. starts the goplugin gRPC server (which prints its own handshake line
 //     to stdout — go-plugin's host parses it);
 //  4. blocks until either Shutdown is called or SIGTERM is received.
@@ -70,8 +67,9 @@ func Serve(impl Plugin, opts ...Option) {
 		fmt.Fprintf(os.Stderr, "plugin %s loading: version=%s\n", m.Name, m.Version)
 	}
 
-	uiPort, httpServer := startHTTPServer(impl, cfg)
-	srv := newPluginServer(impl, uiPort)
+	srv := newPluginServer(impl, 0)
+	uiPort, httpServer := startHTTPServer(cfg, srv)
+	srv.uiPort = uiPort
 
 	goplugin.Serve(&goplugin.ServeConfig{
 		HandshakeConfig: adapter.Handshake,
@@ -86,21 +84,15 @@ func Serve(impl Plugin, opts ...Option) {
 	_ = httpServer.Close()
 }
 
-func startHTTPServer(impl Plugin, cfg *serveOptions) (uint32, *http.Server) {
+func startHTTPServer(cfg *serveOptions, srv *pluginServer) (uint32, *http.Server) {
 	mux := http.NewServeMux()
+	mux.Handle("/__mc/operations/", srv.httpOperationsHandler())
 
-	// The host proxy strips /api/plugins/<name>/ui and forwards the
-	// remainder, so the plugin sees a flat path. The plugin's HTTPHandler
-	// wins on routes it claims; anything that comes back as a buffered 404
-	// falls through to the static file server. Streaming responses (the
-	// plugin calls Flush or Hijack) are committed immediately and never
-	// fall through.
-	pluginHandler := impl.HTTPHandler()
-	var staticHandler http.Handler
+	staticHandler := http.Handler(http.NotFoundHandler())
 	if cfg.staticAssets != nil {
 		staticHandler = http.FileServer(http.FS(cfg.staticAssets))
 	}
-	mux.Handle("/", composeHandler(pluginHandler, staticHandler))
+	mux.Handle("/__mc/ui/", http.StripPrefix("/__mc/ui", staticHandler))
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -120,125 +112,4 @@ func startHTTPServer(impl Plugin, cfg *serveOptions) (uint32, *http.Server) {
 	}()
 
 	return port, server
-}
-
-// composeHandler runs the plugin handler first; on a buffered 404 with no
-// streaming, it replays the request against the static asset server. If
-// either handler is nil, the other handles the request alone.
-func composeHandler(plugin, static http.Handler) http.Handler {
-	if plugin == nil {
-		if static == nil {
-			return http.HandlerFunc(http.NotFound)
-		}
-		return static
-	}
-	if static == nil {
-		return plugin
-	}
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		buf := &bufferedResponse{header: http.Header{}, target: w}
-		plugin.ServeHTTP(buf, r)
-		if buf.committed {
-			return
-		}
-		if buf.status != http.StatusNotFound && buf.status != 0 {
-			buf.flushTo(w)
-			return
-		}
-		static.ServeHTTP(w, r)
-	})
-}
-
-// bufferedResponse captures a handler's output so we can decide whether to
-// fall through to the static asset server. As soon as the handler signals
-// streaming (Flush, Hijack) we commit and write through to the underlying
-// ResponseWriter — we never fall through after that.
-type bufferedResponse struct {
-	header    http.Header
-	body      bytes.Buffer
-	status    int
-	committed bool
-	passthru  http.ResponseWriter
-	target    http.ResponseWriter
-}
-
-// Flush implements http.Flusher. Calling Flush is the plugin signalling it
-// is streaming; we commit the buffered prelude and forward all subsequent
-// writes (and Flush calls) to the real ResponseWriter.
-func (b *bufferedResponse) Flush() {
-	if !b.committed {
-		b.commit(b.target)
-	}
-	if f, ok := b.passthru.(http.Flusher); ok {
-		f.Flush()
-	}
-}
-
-// Hijack implements http.Hijacker. Calling Hijack is the plugin signalling a
-// protocol upgrade; we commit the buffered prelude and delegate to the real
-// ResponseWriter.
-func (b *bufferedResponse) Hijack() (net.Conn, *bufio.ReadWriter, error) {
-	if !b.committed {
-		b.commit(b.target)
-	}
-	h, ok := b.passthru.(http.Hijacker)
-	if !ok {
-		return nil, nil, errors.New("plugin sdk: underlying ResponseWriter does not support hijacking")
-	}
-	return h.Hijack()
-}
-
-func (b *bufferedResponse) Header() http.Header {
-	if b.committed && b.passthru != nil {
-		return b.passthru.Header()
-	}
-	return b.header
-}
-
-func (b *bufferedResponse) WriteHeader(code int) {
-	if b.committed {
-		if b.passthru != nil {
-			b.passthru.WriteHeader(code)
-		}
-		return
-	}
-	b.status = code
-}
-
-func (b *bufferedResponse) Write(p []byte) (int, error) {
-	if b.committed && b.passthru != nil {
-		return b.passthru.Write(p)
-	}
-	if b.status == 0 {
-		b.status = http.StatusOK
-	}
-	return b.body.Write(p)
-}
-
-func (b *bufferedResponse) flushTo(w http.ResponseWriter) {
-	for k, v := range b.header {
-		w.Header()[k] = v
-	}
-	if b.status != 0 {
-		w.WriteHeader(b.status)
-	}
-	_, _ = w.Write(b.body.Bytes())
-}
-
-// commit writes the buffered headers/body through and switches the writer
-// into pass-through mode for the streaming tail.
-func (b *bufferedResponse) commit(w http.ResponseWriter) {
-	if b.committed {
-		return
-	}
-	b.committed = true
-	b.passthru = w
-	for k, v := range b.header {
-		w.Header()[k] = v
-	}
-	if b.status != 0 {
-		w.WriteHeader(b.status)
-	}
-	_, _ = w.Write(b.body.Bytes())
-	b.body.Reset()
 }

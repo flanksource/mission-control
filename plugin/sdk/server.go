@@ -3,12 +3,15 @@ package sdk
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"strings"
 	"sync"
 	"time"
 
 	goplugin "github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
 
+	"github.com/flanksource/incident-commander/plugin"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 )
 
@@ -92,7 +95,7 @@ func (s *pluginServer) ListOperations(ctx context.Context, _ *pluginpb.Empty) (*
 
 func (s *pluginServer) Invoke(ctx context.Context, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
 	op, ok := s.ops[req.Operation]
-	if !ok {
+	if !ok || op.Handler == nil {
 		return &pluginpb.InvokeResponse{
 			ErrorCode:    "UNKNOWN_OPERATION",
 			ErrorMessage: fmt.Sprintf("unknown operation %q", req.Operation),
@@ -133,6 +136,39 @@ func (s *pluginServer) Invoke(ctx context.Context, req *pluginpb.InvokeRequest) 
 		mime = ClickyResultMimeType
 	}
 	return &pluginpb.InvokeResponse{Result: body, Mime: mime}, nil
+}
+
+func (s *pluginServer) httpOperationsHandler() http.Handler {
+	mux := http.NewServeMux()
+	for _, op := range s.ops {
+		if op.Def == nil || op.HTTPHandler == nil {
+			continue
+		}
+		operationName := op.Def.Name
+		for _, binding := range op.Def.Http {
+			if binding == nil || strings.TrimSpace(binding.Method) == "" {
+				continue
+			}
+			pattern := strings.ToUpper(binding.Method) + " /__mc/operations/" + operationName
+			mux.Handle(pattern, s.httpOperationMiddleware(operationName, op.HTTPHandler))
+		}
+	}
+	return mux
+}
+
+func (s *pluginServer) httpOperationMiddleware(operationName string, next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		s.mu.Lock()
+		host := newHostClient(s.mcgPRCConn, r.Header.Get(plugin.InvocationTokenHTTPHeader))
+		s.mu.Unlock()
+
+		ctx := withHTTPRequestContext(r.Context(), httpRequestContext{
+			operation:    operationName,
+			configItemID: r.URL.Query().Get("config_id"),
+			host:         host,
+		})
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 func (s *pluginServer) Health(ctx context.Context, _ *pluginpb.Empty) (*pluginpb.HealthStatus, error) {

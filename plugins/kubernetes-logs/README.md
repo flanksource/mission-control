@@ -34,7 +34,7 @@ mission-control plugin kubernetes-logs list-pods --config-id <uuid>
 
 ```sh
 curl -X POST -d '{"tailLines":50}' \
-  "$MISSION_CONTROL_URL/api/plugins/kubernetes-logs/operations/tail?config_id=<uuid>"
+  "$MISSION_CONTROL_URL/api/plugins/kubernetes-logs/invoke/tail?config_id=<uuid>"
 ```
 
 Returns `application/clicky+json` rows of `{pod, container, line}`.

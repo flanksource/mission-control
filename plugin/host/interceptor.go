@@ -5,6 +5,7 @@ import (
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/plugin"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -32,7 +33,7 @@ func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, e
 		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
 
-	values := md.Get(pluginpb.PluginInvocationTokenMetadataKey)
+	values := md.Get(plugin.InvocationTokenGRPCMetadataKey)
 	if len(values) == 0 || values[0] == "" {
 		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
