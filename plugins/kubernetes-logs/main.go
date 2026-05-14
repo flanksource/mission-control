@@ -83,7 +83,6 @@ func (p *KubernetesLogsPlugin) Operations() []sdk.Operation {
 				Description: "Stream Kubernetes pod logs as Server-Sent Events.",
 				Scope:       "config",
 				ResultMime:  "text/event-stream",
-				Streaming:   true,
 				Http: []*pluginpb.HTTPBinding{
 					{Method: http.MethodGet},
 				},
