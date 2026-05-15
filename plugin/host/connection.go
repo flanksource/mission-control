@@ -29,7 +29,7 @@ func (s *Service) getConnectionByRef(ctx dutyContext.Context, ref string) (*plug
 
 	attr := models.ABACAttribute{Connection: *conn}
 	if !dutyRBAC.HasPermission(ctx, ctx.Subject(), &attr, policy.ActionRead) {
-		return nil, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("access denied to %s, `read` permission required on %s", ctx.Subject(), ref)
+		return nil, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("access denied to %s, `read` permission required on %s", ctx.Subject(), ref)
 	}
 
 	key := connKey{connectionID: conn.ID.String()}
