@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flanksource/commons/collections"
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
@@ -40,6 +41,10 @@ type invocationChangeInput struct {
 }
 
 func recordPluginInvocation(ctx dutyContext.Context, entry *registry.Entry, op string, configID uuid.UUID, source, method, paramsHash, errorMessage string, req *http.Request, requestBody []byte) {
+	if !pluginInvocationAudited(entry, op) {
+		return
+	}
+
 	user := models.Person{}
 	if ctx.User() != nil {
 		user = *ctx.User()
@@ -59,6 +64,15 @@ func recordPluginInvocation(ctx dutyContext.Context, entry *registry.Entry, op s
 	}); err != nil {
 		ctx.Logger.Warnf("record plugin invocation config change: %v", err)
 	}
+}
+
+func pluginInvocationAudited(entry *registry.Entry, op string) bool {
+	if entry == nil || len(entry.Spec.Audit) == 0 {
+		return false
+	}
+
+	matches, _ := collections.MatchItem(op, entry.Spec.Audit...)
+	return matches
 }
 
 func recordInvocationChange(ctx dutyContext.Context, in invocationChangeInput) error {

@@ -4,7 +4,9 @@ import (
 	"net/http"
 	"net/url"
 
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	"github.com/flanksource/incident-commander/plugin/registry"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -47,5 +49,14 @@ var _ = ginkgo.Describe("plugin HTTP proxy", func() {
 		paramsHash := hashBytes([]byte(`{"pod":"api"}`))
 		Expect(invocationFingerprint("plugin-id", "tail", "user-id", paramsHash)).To(Equal(invocationFingerprint("plugin-id", "tail", "user-id", paramsHash)))
 		Expect(invocationFingerprint("plugin-id", "tail", "other-user", paramsHash)).ToNot(Equal(invocationFingerprint("plugin-id", "tail", "user-id", paramsHash)))
+	})
+
+	ginkgo.It("audits invocation changes using plugin spec match expressions", func() {
+		Expect(pluginInvocationAudited(nil, "logs")).To(BeFalse())
+		Expect(pluginInvocationAudited(&registry.Entry{}, "logs")).To(BeFalse())
+		Expect(pluginInvocationAudited(&registry.Entry{Spec: v1.PluginSpec{Audit: []string{"logs"}}}, "logs")).To(BeTrue())
+		Expect(pluginInvocationAudited(&registry.Entry{Spec: v1.PluginSpec{Audit: []string{"logs"}}}, "exec")).To(BeFalse())
+		Expect(pluginInvocationAudited(&registry.Entry{Spec: v1.PluginSpec{Audit: []string{"*", "!debug"}}}, "exec")).To(BeTrue())
+		Expect(pluginInvocationAudited(&registry.Entry{Spec: v1.PluginSpec{Audit: []string{"*", "!debug"}}}, "debug")).To(BeFalse())
 	})
 })

@@ -57,6 +57,14 @@ type PluginSpec struct {
 	//+kubebuilder:validation:Optional
 	Connections PluginConnectionMappings `json:"connections,omitempty"`
 
+	// Audit selects plugin operations whose invocations should be recorded as
+	// catalog config changes. Each entry is matched against the operation name
+	// using Mission Control match expressions: exact names, wildcards such as
+	// "*" or "logs-*", and negations such as "!debug". When omitted or empty,
+	// plugin invocations are not recorded as changes.
+	//+kubebuilder:validation:Optional
+	Audit []string `json:"audit,omitempty"`
+
 	// Properties are arbitrary key/value settings forwarded to the plugin
 	// via the Configure() RPC at startup. Use this for plugin-specific
 	// configuration that doesn't fit any of the other fields.
