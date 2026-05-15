@@ -28,6 +28,7 @@ import (
 	"github.com/flanksource/duty/query"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 	"google.golang.org/grpc/metadata"
@@ -104,17 +105,24 @@ func InvokeOperation(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q operation %q not found", pluginRef, op))
 	}
 
-	sup := supervisor.LookupSupervisor(entry.ID)
-	if sup == nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", pluginRef))
-	}
-
 	configID := c.QueryParam("config_id")
-	if configID != "" && !selectorMatches(ctx, entry, configID) {
+	if configID == "" {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("config_id is required"))
+	}
+	configUUID, err := uuid.Parse(configID)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("config_id is invalid"))
+	}
+	if !selectorMatches(ctx, entry, configID) {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, configID))
 	}
 	if err := enforcePluginInvokePermission(ctx, entry, op, configID); err != nil {
 		return dutyAPI.WriteError(c, err)
+	}
+
+	sup := supervisor.LookupSupervisor(entry.ID)
+	if sup == nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", pluginRef))
 	}
 
 	body, err := io.ReadAll(c.Request().Body)
@@ -136,6 +144,7 @@ func InvokeOperation(c echo.Context) error {
 	// token on HostService callbacks so Mission Control can verify the actor.
 	invokeCtx = metadata.AppendToOutgoingContext(invokeCtx, plugin.InvocationTokenGRPCMetadataKey, invocationToken)
 
+	paramsHash := hashBytes(body)
 	resp, err := sup.Invoke(invokeCtx, &pluginpb.InvokeRequest{
 		Operation:    op,
 		ParamsJson:   body,
@@ -143,11 +152,15 @@ func InvokeOperation(c echo.Context) error {
 		Caller:       caller,
 	})
 	if err != nil {
+		recordPluginInvocation(ctx, entry, op, configUUID, "grpc", c.Request().Method, paramsHash, err.Error(), c.Request(), body)
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "plugin %s/%s", pluginRef, op))
 	}
 	if resp.ErrorMessage != "" {
+		recordPluginInvocation(ctx, entry, op, configUUID, "grpc", c.Request().Method, paramsHash, resp.ErrorMessage, c.Request(), body)
 		return dutyAPI.WriteError(c, ctx.Oops().Code(resp.ErrorCode).Errorf("%s", resp.ErrorMessage))
 	}
+
+	recordPluginInvocation(ctx, entry, op, configUUID, "grpc", c.Request().Method, paramsHash, "", c.Request(), body)
 
 	mime := resp.Mime
 	if mime == "" {

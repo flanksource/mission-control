@@ -2,6 +2,7 @@ package controller
 
 import (
 	"net/http"
+	"net/url"
 
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -24,5 +25,27 @@ var _ = ginkgo.Describe("plugin HTTP proxy", func() {
 		Expect(operationHTTPBindingAllowed(def, http.MethodGet)).To(BeTrue())
 		Expect(operationHTTPBindingAllowed(def, http.MethodPost)).To(BeFalse())
 		Expect(operationHTTPBindingAllowed(&pluginpb.OperationDef{}, http.MethodGet)).To(BeFalse())
+	})
+
+	ginkgo.It("excludes config_id and sorts query values for HTTP params hashes", func() {
+		left := url.Values{
+			"config_id": []string{"config-a"},
+			"level":     []string{"info"},
+			"pod":       []string{"b", "a"},
+		}
+		right := url.Values{
+			"config_id": []string{"config-b"},
+			"pod":       []string{"a", "b"},
+			"level":     []string{"info"},
+		}
+
+		Expect(httpParamsHash(http.MethodGet, left)).To(Equal(httpParamsHash(http.MethodGet, right)))
+		Expect(httpParamsHash(http.MethodPost, left)).ToNot(Equal(httpParamsHash(http.MethodGet, left)))
+	})
+
+	ginkgo.It("uses only stable fields for fingerprints", func() {
+		paramsHash := hashBytes([]byte(`{"pod":"api"}`))
+		Expect(invocationFingerprint("plugin-id", "tail", "user-id", paramsHash)).To(Equal(invocationFingerprint("plugin-id", "tail", "user-id", paramsHash)))
+		Expect(invocationFingerprint("plugin-id", "tail", "other-user", paramsHash)).ToNot(Equal(invocationFingerprint("plugin-id", "tail", "user-id", paramsHash)))
 	})
 })
