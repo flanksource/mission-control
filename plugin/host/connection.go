@@ -53,6 +53,8 @@ func (s *Service) getConnectionForConfig(ctx dutyContext.Context, configItemID s
 		return nil, fmt.Errorf("connection for config: find scraper for config %s: %w", configItemID, err)
 	}
 
+	ctx = ctx.WithNamespace(scraper.Namespace)
+
 	if conn, ok, err := s.connectionFromKubernetesScraper(ctx, scraper.Spec); err != nil {
 		return nil, fmt.Errorf("connection for scraper %s: %w", scraper.ID, err)
 	} else if ok {
