@@ -53,12 +53,6 @@ var _ = ginkgo.Describe("Enforcer", func() {
 			Action:   "invoke:kubernetes-logs:*",
 			Object:   "*",
 		},
-		{
-			ID:       uuid.New(),
-			PersonID: lo.ToPtr(userID),
-			Action:   "kubernetes-logs:tail",
-			Object:   "*",
-		},
 	}
 
 	testData := []struct {
@@ -88,13 +82,6 @@ var _ = ginkgo.Describe("Enforcer", func() {
 			obj:         &models.ABACAttribute{},
 			act:         "invoke:other-plugin:list-pods",
 			allowed:     false,
-		},
-		{
-			description: "plugin operation short action matches",
-			user:        userID.String(),
-			obj:         &models.ABACAttribute{},
-			act:         "kubernetes-logs:tail",
-			allowed:     true,
 		},
 	}
 

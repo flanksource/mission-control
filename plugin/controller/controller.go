@@ -220,8 +220,7 @@ func enforcePluginInvokePermission(ctx dutyContext.Context, entry *registry.Entr
 }
 
 func canInvokePluginOperation(ctx dutyContext.Context, subject string, attr *models.ABACAttribute, pluginName, op string) bool {
-	return dutyRBAC.HasPermission(ctx, subject, attr, policy.NewPluginInvokeAction(pluginName, op)) ||
-		dutyRBAC.HasPermission(ctx, subject, attr, pluginName+":"+op)
+	return dutyRBAC.HasPermission(ctx, subject, attr, policy.NewPluginInvokeAction(pluginName, op))
 }
 
 // selectorMatches returns true when the given config id satisfies the plugin
