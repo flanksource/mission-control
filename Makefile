@@ -65,14 +65,6 @@ static: $(TAILWIND_JS) manifests generate fmt ginkgo ui
 ui: $(LOCALBIN)/pnpm ## Build the embedded catalog explorer UI (ui/frontend -> ui/frontend/dist/ui.js)
 	cd ui/frontend && CI=true pnpm install --no-frozen-lockfile --prefer-offline && pnpm run build
 
-.PHONY: plugins-ui
-plugins-ui: $(LOCALBIN)/pnpm ## Build embedded plugin UI bundles
-	cd plugins/kubernetes-logs/ui-src && CI=true pnpm install --no-frozen-lockfile --prefer-offline && pnpm run build
-
-.PHONY: build-plugins
-build-plugins: plugins-ui
-	make -C plugins/kubernetes-logs build
-
 .PHONY: test
 test:
 	ginkgo -r --skip-package=tests/e2e --keep-going \
@@ -81,12 +73,12 @@ test:
 		--succinct --label-filter='!ignore_local'
 
 .PHONY: ci-test
-ci-test: $(TAILWIND_JS) $(LOCALBIN) ui plugins-ui
+ci-test: $(TAILWIND_JS) $(LOCALBIN) ui
 	go build -o ./.bin/$(NAME) main.go
 	ginkgo -r --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct
 
 .PHONY: e2e
-e2e: $(TAILWIND_JS) ui plugins-ui
+e2e: $(TAILWIND_JS) ui
 	go build -o ./.bin/$(NAME) main.go
 	ginkgo -r --keep-going  ./tests/e2e/...
 
