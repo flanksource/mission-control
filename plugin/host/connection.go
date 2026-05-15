@@ -3,6 +3,7 @@ package host
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/flanksource/duty/types"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
+	"google.golang.org/protobuf/proto"
 )
 
 func (s *Service) getConnectionByRef(ctx dutyContext.Context, ref string) (*pluginpb.ResolvedConnection, error) {
@@ -32,7 +34,7 @@ func (s *Service) getConnectionByRef(ctx dutyContext.Context, ref string) (*plug
 
 	key := connKey{connectionID: conn.ID.String()}
 	if cached, ok := s.connCache.Get(key); ok {
-		return cached, nil
+		return cloneResolvedConnection(cached), nil
 	}
 
 	hydrated, err := dutyContext.HydrateConnection(ctx, conn)
@@ -42,7 +44,7 @@ func (s *Service) getConnectionByRef(ctx dutyContext.Context, ref string) (*plug
 
 	resolved := pluginpb.ConnectionToProto(hydrated)
 	s.connCache.Add(key, resolved)
-	return resolved, nil
+	return cloneResolvedConnection(resolved), nil
 }
 
 func (s *Service) getConnectionForConfig(ctx dutyContext.Context, configItemID string) (*pluginpb.ResolvedConnection, error) {
@@ -128,27 +130,53 @@ func (s *Service) connectionFromSQLScraper(ctx dutyContext.Context, specJSON str
 		if sql.Connection == "" {
 			continue
 		}
-		conn, err := s.getConnectionByRef(ctx, sql.Connection)
-		if err != nil {
-			return nil, true, fmt.Errorf("hydrate sql connection %q: %w", sql.Connection, err)
+
+		if dutyContext.IsValidConnectionURL(sql.Connection) {
+			conn, err := s.getConnectionByRef(ctx, sql.Connection)
+			if err != nil {
+				return nil, true, fmt.Errorf("hydrate sql connection %q: %w", sql.Connection, err)
+			}
+			return conn, true, nil
 		}
+
+		conn := parseRawSQLConnection(sql.Connection)
 		if username, err := ctx.GetEnvValueFromCache(sql.Authentication.Username, ctx.GetNamespace()); err != nil {
 			return nil, true, fmt.Errorf("hydrate sql username: %w", err)
 		} else if username != "" {
 			conn.Username = username
 		}
+
 		if password, err := ctx.GetEnvValueFromCache(sql.Authentication.Password, ctx.GetNamespace()); err != nil {
 			return nil, true, fmt.Errorf("hydrate sql password: %w", err)
 		} else if password != "" {
 			conn.Password = password
 		}
-		if conn.Type == "" {
-			conn.Type = "sql"
-		}
-		return conn, true, nil
+
+		return pluginpb.ConnectionToProto(conn), true, nil
 	}
 
 	return nil, true, fmt.Errorf("no sql.connection set")
+}
+
+func cloneResolvedConnection(conn *pluginpb.ResolvedConnection) *pluginpb.ResolvedConnection {
+	if conn == nil {
+		return nil
+	}
+	return proto.Clone(conn).(*pluginpb.ResolvedConnection)
+}
+
+func parseRawSQLConnection(connection string) *models.Connection {
+	conn := &models.Connection{URL: connection}
+	parsed, err := url.Parse(connection)
+	if err != nil || parsed.Scheme == "" || parsed.User == nil {
+		return conn
+	}
+
+	conn.Username = parsed.User.Username()
+	conn.Password, _ = parsed.User.Password()
+	parsed.User = nil
+	conn.URL = parsed.String()
+	return conn
 }
 
 func readDefaultKubeconfig() (string, error) {
