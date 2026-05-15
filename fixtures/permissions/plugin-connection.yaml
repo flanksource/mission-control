@@ -1,0 +1,14 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-john-kubernetes-plugin
+  namespace: mc
+spec:
+  subject:
+    plugin: mc/kubernetes-logs
+  actions:
+    - read
+  object:
+    connections:
+      - name: homelab-kubeconfig
+        namespace: mc
