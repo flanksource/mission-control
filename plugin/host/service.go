@@ -9,9 +9,9 @@ package host
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
+	"github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -19,35 +19,29 @@ import (
 	lru "github.com/hashicorp/golang-lru/v2/expirable"
 	"google.golang.org/grpc"
 
-	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
 )
 
-// connectionCacheTTL is how long a resolved connection stays cached on the
-// host. Plugins re-fetch on cache miss, which is rare in practice (most
-// operations make many calls within the TTL).
+// connectionCacheTTL is how long a resolved connection stays cached on the host.
 const connectionCacheTTL = 5 * time.Minute
 
 type connKey struct {
-	pluginID uuid.UUID
-	typ      string
-	label    string
-	configID string
+	connectionID string
 }
 
 // Service is the host-side gRPC server. There is one per plugin process —
 // the supervisor instantiates it during Start() so it can stamp the plugin
-// id into requests for allowlist enforcement and caching.
+// id into requests for allowlist enforcement.
 type Service struct {
 	pluginpb.UnimplementedHostServiceServer
 
 	pluginID uuid.UUID
 	ctx      dutyContext.Context
 
-	// connCache memoises GetConnection results across calls within a single
-	// plugin process. Keyed by (plugin, type, label, configID).
+	// connCache memoises named connection resolutions across calls within a single
+	// plugin process. Authorization is checked before serving cached results.
 	connCache *lru.LRU[connKey, *pluginpb.ResolvedConnection]
 }
 
@@ -129,19 +123,29 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 		return nil, fmt.Errorf("plugin %s is not registered", s.pluginID)
 	}
 
-	key := connKey{pluginID: s.pluginID, typ: req.GetType(), label: req.GetLabel(), configID: req.GetConfigItemId()}
-	if cached, ok := s.connCache.Get(key); ok {
-		return cached, nil
-	}
+	pluginCtx := s.ctx.Wrap(ctx).WithNamespace(entry.Namespace).WithSubject(pluginRBACSubject(entry))
 
-	pluginCtx := s.ctx.Wrap(ctx).WithNamespace(entry.Namespace)
-	resolved, err := resolveConnection(pluginCtx, entry.Spec, req)
-	if err != nil {
-		return nil, err
-	}
+	switch lookup := req.GetLookup().(type) {
+	case *pluginpb.GetConnectionRequest_Type:
+		ref, ok := entry.Spec.Connections.Types[lookup.Type]
+		if !ok || ref == "" {
+			return nil, pluginCtx.Oops().Code(api.EINVALID).Errorf("plugin did not declare a %s connection mapping", lookup.Type)
+		}
+		return s.getConnectionByRef(pluginCtx, ref)
 
-	s.connCache.Add(key, resolved)
-	return resolved, nil
+	case *pluginpb.GetConnectionRequest_Label:
+		ref, ok := entry.Spec.Connections.Labels[lookup.Label]
+		if !ok || ref == "" {
+			return nil, pluginCtx.Oops().Code(api.EINVALID).Errorf("plugin did not declare connection label %q", lookup.Label)
+		}
+		return s.getConnectionByRef(pluginCtx, ref)
+
+	case *pluginpb.GetConnectionRequest_ConfigItemId:
+		return s.getConnectionForConfig(pluginCtx, lookup.ConfigItemId)
+
+	default:
+		return nil, fmt.Errorf("connection lookup is required")
+	}
 }
 
 func (s *Service) Log(ctx context.Context, e *pluginpb.LogEntry) (*pluginpb.Empty, error) {
@@ -174,11 +178,3 @@ func (s *Service) WriteArtifact(ctx context.Context, a *pluginpb.Artifact) (*plu
 func (s *Service) ReadArtifact(ctx context.Context, ref *pluginpb.ArtifactRef) (*pluginpb.Artifact, error) {
 	return nil, fmt.Errorf("ReadArtifact: not implemented")
 }
-
-// _ keeps go vet from complaining about the import-only sync package usage
-// in case a future revision drops the cache mutex.
-var _ = sync.Mutex{}
-
-// _ retains the v1 import for godoc cross-references; the package is used
-// indirectly via registry.Default.Get(...).Spec.
-var _ = v1.PluginSpec{}

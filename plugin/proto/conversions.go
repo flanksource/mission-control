@@ -59,7 +59,7 @@ func ResourceSelectorFromDuty(selector types.ResourceSelector) *ResourceSelector
 }
 
 // ConnectionToProto converts a duty connection into its protobuf representation.
-func ConnectionToProto(conn *models.Connection, requestedType string) *ResolvedConnection {
+func ConnectionToProto(conn *models.Connection) *ResolvedConnection {
 	props := map[string]any{
 		"type":        conn.Type,
 		"name":        conn.Name,
@@ -79,13 +79,8 @@ func ConnectionToProto(conn *models.Connection, requestedType string) *ResolvedC
 	}
 	pbProps, _ := structpb.NewStruct(props)
 
-	typ := conn.Type
-	if requestedType != "" {
-		typ = requestedType
-	}
-
 	return &ResolvedConnection{
-		Type:        typ,
+		Type:        conn.Type,
 		Url:         conn.URL,
 		Username:    conn.Username,
 		Password:    conn.Password,

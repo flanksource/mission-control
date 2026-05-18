@@ -122,6 +122,8 @@ func pluginSubject(selector string) (string, models.PermissionSubjectType, error
 		return "", "", dutyAPI.Errorf(dutyAPI.EINVALID, "%s is not a valid plugin subject. Must be <namespace>/<name> or /<name>", selector)
 	}
 
+	// Since we do not persist plugins to the database, we don't have a handy namespacedName -> uuid lookup at this point.
+	// So we use the namespacedName as the casbin policy subject.
 	return "plugin:" + strings.TrimSpace(splits[0]) + "/" + strings.TrimSpace(splits[1]), models.PermissionSubjectTypePlugin, nil
 }
 
@@ -177,7 +179,7 @@ type PermissionSubject struct {
 	// Playbook <namespace>/<name> selector
 	Playbook string `json:"playbook,omitempty"`
 
-	// Plugin <namespace>/<name> selector
+	// Plugin <namespace>/<name> or /<name> selector
 	Plugin string `json:"plugin,omitempty"`
 
 	// Canary <namespace>/<name> selector

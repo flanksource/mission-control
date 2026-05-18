@@ -339,7 +339,7 @@
         },
         "plugin": {
           "type": "string",
-          "description": "Plugin \u003cnamespace\u003e/\u003cname\u003e selector"
+          "description": "Plugin \u003cnamespace\u003e/\u003cname\u003e or /\u003cname\u003e selector"
         },
         "canary": {
           "type": "string",

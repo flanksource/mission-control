@@ -3,79 +3,74 @@ package host
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	dutyConn "github.com/flanksource/duty/connection"
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
-	v1 "github.com/flanksource/incident-commander/api/v1"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
-	"github.com/google/uuid"
+	"github.com/flanksource/incident-commander/plugin/registry"
+	"google.golang.org/protobuf/proto"
 )
 
-// resolveConnection resolves a connection request using one of the plugin
-// connection mappings or the scraper that created a config item.
-func resolveConnection(ctx dutyContext.Context, spec v1.PluginSpec, req *pluginpb.GetConnectionRequest) (*pluginpb.ResolvedConnection, error) {
-	switch lookup := req.GetLookup().(type) {
-	case *pluginpb.GetConnectionRequest_Type:
-		return resolveConnectionByType(ctx, spec, lookup.Type)
-	case *pluginpb.GetConnectionRequest_ConfigItemId:
-		return resolveConnectionForConfig(ctx, lookup.ConfigItemId)
-	case *pluginpb.GetConnectionRequest_Label:
-		return resolveConnectionByLabel(ctx, spec, lookup.Label)
-	default:
-		return nil, fmt.Errorf("connection lookup is required")
+func (s *Service) getConnectionByRef(ctx dutyContext.Context, ref string) (*pluginpb.ResolvedConnection, error) {
+	conn, err := dutyContext.FindConnectionByURL(ctx, ref)
+	if err != nil {
+		return nil, fmt.Errorf("find connection %q: %w", ref, err)
+	} else if conn == nil {
+		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("connection %q not found", ref)
 	}
+
+	attr := models.ABACAttribute{Connection: *conn}
+	if !dutyRBAC.HasPermission(ctx, ctx.Subject(), &attr, policy.ActionRead) {
+		return nil, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("access denied to %s, `read` permission required on %s", ctx.Subject(), ref)
+	}
+
+	key := connKey{connectionID: conn.ID.String()}
+	if cached, ok := s.connCache.Get(key); ok {
+		return cloneResolvedConnection(cached), nil
+	}
+
+	hydrated, err := dutyContext.HydrateConnection(ctx, conn)
+	if err != nil {
+		return nil, fmt.Errorf("hydrate connection %q: %w", ref, err)
+	}
+
+	resolved := pluginpb.ConnectionToProto(hydrated)
+	s.connCache.Add(key, resolved)
+	return cloneResolvedConnection(resolved), nil
 }
 
-func resolveConnectionByType(ctx dutyContext.Context, spec v1.PluginSpec, typ string) (*pluginpb.ResolvedConnection, error) {
-	ref, ok := spec.Connections.Types[typ]
-	if !ok || ref == "" {
-		return nil, fmt.Errorf("plugin did not declare a %s connection mapping", typ)
-	}
-	return resolveConnectionRef(ctx, ref, typ)
-}
-
-func resolveConnectionByLabel(ctx dutyContext.Context, spec v1.PluginSpec, label string) (*pluginpb.ResolvedConnection, error) {
-	ref, ok := spec.Connections.Labels[label]
-	if !ok || ref == "" {
-		return nil, fmt.Errorf("plugin did not declare connection label %q", label)
-	}
-	return resolveConnectionRef(ctx, ref, "")
-}
-
-func resolveConnectionForConfig(ctx dutyContext.Context, configItemID string) (*pluginpb.ResolvedConnection, error) {
-	if _, err := uuid.Parse(configItemID); err != nil {
-		return nil, fmt.Errorf("connection for config: config_id %q is not a UUID", configItemID)
-	}
+func (s *Service) getConnectionForConfig(ctx dutyContext.Context, configItemID string) (*pluginpb.ResolvedConnection, error) {
 	scraper, err := models.FindScraperByConfigId(ctx.DB(), configItemID)
 	if err != nil {
 		return nil, fmt.Errorf("connection for config: find scraper for config %s: %w", configItemID, err)
 	}
-	return connectionFromScraper(ctx, scraper)
-}
 
-func connectionFromScraper(ctx dutyContext.Context, scraper *models.ConfigScraper) (*pluginpb.ResolvedConnection, error) {
-	ctx = ctx.WithObject(scraper).WithNamespace(scraper.Namespace)
-	if conn, ok, err := connectionFromKubernetesScraper(ctx, scraper.Spec); err != nil {
+	ctx = ctx.WithNamespace(scraper.Namespace)
+
+	if conn, ok, err := s.connectionFromKubernetesScraper(ctx, scraper.Spec); err != nil {
 		return nil, fmt.Errorf("connection for scraper %s: %w", scraper.ID, err)
 	} else if ok {
-		return pluginpb.ConnectionToProto(conn, models.ConnectionTypeKubernetes), nil
+		return conn, nil
 	}
 
-	if conn, ok, err := connectionFromSQLScraper(ctx, scraper.Spec); err != nil {
+	if conn, ok, err := s.connectionFromSQLScraper(ctx, scraper.Spec); err != nil {
 		return nil, fmt.Errorf("connection for scraper %s: %w", scraper.ID, err)
 	} else if ok {
-		return pluginpb.ConnectionToProto(conn, "sql"), nil
+		return conn, nil
 	}
 
 	return nil, fmt.Errorf("connection for scraper %s: unsupported scraper type or no supported connection found", scraper.ID)
 }
 
-func connectionFromKubernetesScraper(ctx dutyContext.Context, specJSON string) (*models.Connection, bool, error) {
+func (s *Service) connectionFromKubernetesScraper(ctx dutyContext.Context, specJSON string) (*pluginpb.ResolvedConnection, bool, error) {
 	var spec struct {
 		Kubernetes []dutyConn.KubernetesConnection `json:"kubernetes"`
 	}
@@ -87,16 +82,20 @@ func connectionFromKubernetesScraper(ctx dutyContext.Context, specJSON string) (
 	}
 
 	conn := spec.Kubernetes[0]
-	if conn.ConnectionName != "" || conn.Kubeconfig != nil && !conn.Kubeconfig.IsEmpty() {
-		if _, _, err := conn.Populate(ctx, true); err != nil {
+	if conn.ConnectionName != "" {
+		resolved, err := s.getConnectionByRef(ctx, conn.ConnectionName)
+		return resolved, true, err
+	}
+
+	kubeconfig := ""
+	if conn.Kubeconfig != nil && !conn.Kubeconfig.IsEmpty() {
+		var err error
+		kubeconfig, err = ctx.GetEnvValueFromCache(*conn.Kubeconfig, ctx.GetNamespace())
+		if err != nil {
 			return nil, true, fmt.Errorf("hydrate kubernetes connection: %w", err)
 		}
 	}
 
-	kubeconfig := ""
-	if conn.Kubeconfig != nil {
-		kubeconfig = conn.Kubeconfig.ValueStatic
-	}
 	if kubeconfig == "" {
 		var err error
 		kubeconfig, err = readDefaultKubeconfig()
@@ -105,14 +104,14 @@ func connectionFromKubernetesScraper(ctx dutyContext.Context, specJSON string) (
 		}
 	}
 
-	return &models.Connection{
+	return pluginpb.ConnectionToProto(&models.Connection{
 		Name:        "scraper-kubernetes",
 		Type:        models.ConnectionTypeKubernetes,
 		Certificate: kubeconfig,
-	}, true, nil
+	}), true, nil
 }
 
-func connectionFromSQLScraper(ctx dutyContext.Context, specJSON string) (*models.Connection, bool, error) {
+func (s *Service) connectionFromSQLScraper(ctx dutyContext.Context, specJSON string) (*pluginpb.ResolvedConnection, bool, error) {
 	var spec struct {
 		SQL []struct {
 			Connection     string `json:"connection"`
@@ -133,30 +132,53 @@ func connectionFromSQLScraper(ctx dutyContext.Context, specJSON string) (*models
 		if sql.Connection == "" {
 			continue
 		}
-		conn, err := ctx.HydrateConnectionByURL(sql.Connection)
-		if err != nil {
-			return nil, true, fmt.Errorf("hydrate sql connection %q: %w", sql.Connection, err)
+
+		if dutyContext.IsValidConnectionURL(sql.Connection) {
+			conn, err := s.getConnectionByRef(ctx, sql.Connection)
+			if err != nil {
+				return nil, true, fmt.Errorf("hydrate sql connection %q: %w", sql.Connection, err)
+			}
+			return conn, true, nil
 		}
-		if conn == nil {
-			return nil, true, fmt.Errorf("sql connection %q not found", sql.Connection)
-		}
+
+		conn := parseRawSQLConnection(sql.Connection)
 		if username, err := ctx.GetEnvValueFromCache(sql.Authentication.Username, ctx.GetNamespace()); err != nil {
 			return nil, true, fmt.Errorf("hydrate sql username: %w", err)
 		} else if username != "" {
 			conn.Username = username
 		}
+
 		if password, err := ctx.GetEnvValueFromCache(sql.Authentication.Password, ctx.GetNamespace()); err != nil {
 			return nil, true, fmt.Errorf("hydrate sql password: %w", err)
 		} else if password != "" {
 			conn.Password = password
 		}
-		if conn.Type == "" {
-			conn.Type = "sql"
-		}
-		return conn, true, nil
+
+		return pluginpb.ConnectionToProto(conn), true, nil
 	}
 
 	return nil, true, fmt.Errorf("no sql.connection set")
+}
+
+func cloneResolvedConnection(conn *pluginpb.ResolvedConnection) *pluginpb.ResolvedConnection {
+	if conn == nil {
+		return nil
+	}
+	return proto.Clone(conn).(*pluginpb.ResolvedConnection)
+}
+
+func parseRawSQLConnection(connection string) *models.Connection {
+	conn := &models.Connection{URL: connection}
+	parsed, err := url.Parse(connection)
+	if err != nil || parsed.Scheme == "" || parsed.User == nil {
+		return conn
+	}
+
+	conn.Username = parsed.User.Username()
+	conn.Password, _ = parsed.User.Password()
+	parsed.User = nil
+	conn.URL = parsed.String()
+	return conn
 }
 
 func readDefaultKubeconfig() (string, error) {
@@ -179,28 +201,12 @@ func readDefaultKubeconfig() (string, error) {
 	return "", fmt.Errorf("no default kubeconfig found")
 }
 
-func resolveConnectionRef(ctx dutyContext.Context, ref, requestedType string) (*pluginpb.ResolvedConnection, error) {
-	conn, err := dutyConn.Get(ctx, ref)
-	if err != nil {
-		return nil, fmt.Errorf("hydrate connection %q: %w", ref, err)
+func pluginRBACSubject(entry *registry.Entry) string {
+	if entry == nil {
+		return "plugin:/"
 	}
-	if requestedType != "" && !connectionTypeMatches(requestedType, conn.Type) {
-		return nil, fmt.Errorf("connection %q is %q, not %q", ref, conn.Type, requestedType)
-	}
-	return pluginpb.ConnectionToProto(conn, requestedType), nil
-}
-
-func connectionTypeMatches(requested, actual string) bool {
-	requested = strings.ToLower(strings.ReplaceAll(requested, "-", "_"))
-	actual = strings.ToLower(strings.ReplaceAll(actual, "-", "_"))
-	if requested == actual {
-		return true
-	}
-	if requested == "sql" {
-		switch actual {
-		case "postgres", "postgresql", "mysql", "mssql", "sql_server", "sqlserver":
-			return true
-		}
-	}
-	return false
+	// Plugin permissions use namespace/name instead of UUID because plugins are
+	// persisted as CRDs/registry entries, not database rows whose IDs can be
+	// resolved when Permission CRDs are converted into Casbin rules.
+	return "plugin:" + entry.Namespace + "/" + entry.Name
 }
