@@ -83,6 +83,14 @@ export async function getConfig(id: string): Promise<ConfigItem | null> {
   return result.data[0] ?? null;
 }
 
+export async function getConfigsByIDs(ids: string[]): Promise<ConfigItem[]> {
+  if (ids.length === 0) return [];
+  const result = await fetchPostgrest<ConfigItem[]>(
+    `/db/config_detail?id=in.(${ids.map(encodeURIComponent).join(",")})&select=id,name,type,config_class,health,status,deleted_at`,
+  );
+  return result.data ?? [];
+}
+
 export async function searchConfigItems(query: string, type?: string, limit = 12): Promise<ConfigItem[]> {
   const params = new URLSearchParams({
     select: "id,name,type,config_class,status,health,path,external_id,updated_at,deleted_at",

@@ -200,21 +200,23 @@ function PlaybooksListPage() {
       />
       <QueryState query={playbooksQuery} emptyIcon="lucide:book-open-check" emptyLabel="No playbooks" />
       {playbooks.length > 0 && (
-        <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_28rem]">
-          <div className="flex min-w-0 flex-col gap-4">
-            <CategoryAnchorBar sections={visibleSections} />
-            {visibleSections.map((section) => (
-              <PlaybookLibrarySection
-                key={section.id}
-                section={section}
-                runs={runs}
-                onRun={(playbook, target, resourceLabel) => setSelected({ playbook, target, resourceLabel })}
-                onEdit={(playbook) => setEditing(playbook)}
-              />
-            ))}
+        <>
+          <CategoryAnchorBar sections={visibleSections} />
+          <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_28rem]">
+            <div className="flex min-w-0 flex-col gap-4">
+              {visibleSections.map((section) => (
+                <PlaybookLibrarySection
+                  key={section.id}
+                  section={section}
+                  runs={runs}
+                  onRun={(playbook, target, resourceLabel) => setSelected({ playbook, target, resourceLabel })}
+                  onEdit={(playbook) => setEditing(playbook)}
+                />
+              ))}
+            </div>
+            <RecentRunsPanel runs={runs} loading={runsQuery.isLoading} />
           </div>
-          <RecentRunsPanel runs={runs} loading={runsQuery.isLoading} />
-        </div>
+        </>
       )}
       {selected && (
         <SubmitPlaybookRunDialog
@@ -433,7 +435,7 @@ function LibraryToolbar({
 function CategoryAnchorBar({ sections }: { sections: PlaybookSection[] }) {
   if (sections.length === 0) return null;
   return (
-    <nav className="sticky top-0 z-10 -mx-1 flex min-w-0 gap-2 overflow-x-auto border-b border-border bg-background/95 px-1 py-2 backdrop-blur">
+    <nav className="sticky top-0 z-10 -mx-5 flex min-w-0 gap-2 overflow-x-auto border-b border-border bg-background px-5 py-3">
       {sections.map((section) => (
         <a
           key={section.id}
@@ -1849,8 +1851,8 @@ function PlaybookShell({
           </div>
         </div>
       </header>
-      <div className="min-h-0 flex-1 overflow-auto p-5">
-        <div className="flex min-w-0 flex-col gap-4">{children}</div>
+      <div className="min-h-0 flex-1 overflow-auto">
+        <div className="flex min-w-0 flex-col gap-4 p-5">{children}</div>
       </div>
     </div>
   );

@@ -18,6 +18,7 @@ import {
   getConfigInsights,
   getConfigParentsByLocation,
   getConfigRelationshipTrees,
+  getConfigsByIDs,
 } from "./configs";
 import {
   getPlaybookRunWithActions,
@@ -34,6 +35,15 @@ export function useConfigDetail(id: string) {
     queryKey: ["config", id],
     queryFn: () => getConfig(id),
     enabled: !!id,
+  });
+}
+
+export function useConfigsByIDs(ids: string[]) {
+  const sortedKey = [...ids].sort();
+  return useQuery({
+    queryKey: ["configs", "byIds", sortedKey],
+    queryFn: () => getConfigsByIDs(ids),
+    enabled: ids.length > 0,
   });
 }
 
