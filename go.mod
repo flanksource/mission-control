@@ -10,7 +10,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.34.0 // indirect
 	github.com/flanksource/commons v1.51.4
-	github.com/flanksource/duty v1.0.1307
+	github.com/flanksource/duty v1.0.1308
 	github.com/flanksource/gomplate/v3 v3.24.79
 	github.com/flanksource/kopper v1.0.22
 	github.com/gomarkdown/markdown v0.0.0-20260411013819-759bbc3e3207
@@ -21,9 +21,9 @@ require (
 	github.com/labstack/echo-contrib v0.50.1
 	github.com/labstack/echo/v4 v4.15.2
 	github.com/lib/pq v1.12.3
-	github.com/onsi/ginkgo/v2 v2.28.3
-	github.com/onsi/gomega v1.40.0
-	github.com/ory/client-go v1.22.39
+	github.com/onsi/ginkgo/v2 v2.29.0
+	github.com/onsi/gomega v1.41.0
+	github.com/ory/client-go v1.22.40
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
@@ -41,7 +41,7 @@ require (
 	github.com/aws/aws-sdk-go-v2 v1.41.7
 	github.com/aws/aws-sdk-go-v2/config v1.32.17
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.16
-	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.73.0
+	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.74.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.42.1
 	github.com/charmbracelet/huh v1.0.0
 	github.com/chromedp/cdproto v0.0.0-20260321001828-e3e3800016bc
@@ -68,7 +68,7 @@ require (
 	github.com/invopop/jsonschema v0.14.0
 	github.com/jackc/pgerrcode v0.0.0-20250907135507-afb5586c32a6
 	github.com/jenkins-x/go-scm v1.15.22
-	github.com/mark3labs/mcp-go v0.53.0
+	github.com/mark3labs/mcp-go v0.54.0
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/pb33f/ordered-map/v2 v2.3.1
 	github.com/prometheus/client_model v0.6.2
@@ -92,7 +92,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.43.0
 	go.opentelemetry.io/otel/trace v1.43.0
 	golang.org/x/sync v0.20.0
-	google.golang.org/genai v1.56.0
+	google.golang.org/genai v1.57.0
 	gorm.io/hints v1.1.2
 	k8s.io/api v0.35.4
 )
@@ -445,7 +445,7 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/api v0.279.0
 	google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7 // indirect
-	google.golang.org/grpc v1.81.0
+	google.golang.org/grpc v1.81.1
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0
