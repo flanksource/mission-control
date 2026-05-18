@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   Badge,
@@ -24,6 +24,7 @@ import {
   useConfigInsights,
   useConfigParents,
   useConfigRelationshipTrees,
+  useConfigsByIDs,
 } from "../api/hooks";
 import type {
   ConfigAccessLog,
@@ -393,7 +394,109 @@ function RelationshipsTab({
   if (!relationships) return <DetailEmptyState label="No relationships" />;
 
   return (
-    <RelationshipTree config={config} relationships={relationships} />
+    <div className="flex flex-col gap-4">
+      <ParentageSection config={config} />
+      <RelationshipTree config={config} relationships={relationships} />
+    </div>
+  );
+}
+
+function ParentageSection({ config }: { config: ConfigItem }) {
+  const pathIds = useMemo(() => {
+    const parts = config.path?.split(".").filter(Boolean) ?? [];
+    if (parts.length === 0) return [];
+    if (parts[parts.length - 1] !== config.id) parts.push(config.id);
+    return parts;
+  }, [config.path, config.id]);
+
+  const ancestorIds = useMemo(
+    () => pathIds.filter((id) => id !== config.id),
+    [pathIds, config.id],
+  );
+  const ancestorsQuery = useConfigsByIDs(ancestorIds);
+
+  if (pathIds.length === 0) return null;
+
+  const byId = new Map((ancestorsQuery.data ?? []).map((item) => [item.id, item]));
+  byId.set(config.id, config);
+
+  return (
+    <Section title="Parentage" icon="lucide:git-merge" defaultOpen summary={String(pathIds.length)}>
+      <div className="flex flex-wrap items-center gap-2 overflow-x-auto py-1">
+        {pathIds.map((id, index) => (
+          <Fragment key={`${id}-${index}`}>
+            {index > 0 && (
+              <Icon name="lucide:chevron-right" className="shrink-0 text-muted-foreground" />
+            )}
+            <ParentageBlock
+              id={id}
+              item={byId.get(id)}
+              isSelf={id === config.id}
+              isLoading={ancestorsQuery.isLoading && !byId.has(id)}
+            />
+          </Fragment>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
+function ParentageBlock({
+  id,
+  item,
+  isSelf,
+  isLoading,
+}: {
+  id: string;
+  item?: ConfigItem;
+  isSelf: boolean;
+  isLoading: boolean;
+}) {
+  const content = (
+    <div
+      className={[
+        "flex min-w-0 max-w-[20rem] items-center gap-2 rounded-md border px-2.5 py-1.5 shadow-sm transition",
+        isSelf
+          ? "border-primary/30 bg-primary/5"
+          : "border-border bg-background group-hover:bg-accent/50 group-hover:shadow",
+      ].join(" ")}
+    >
+      <ConfigIcon
+        primary={item?.type}
+        className={isSelf ? "h-4 max-w-4 shrink-0 text-primary" : "h-4 max-w-4 shrink-0 text-muted-foreground"}
+      />
+      <div className="min-w-0">
+        <div className="truncate text-sm font-medium">
+          {item?.name || (isLoading ? "Loading..." : id)}
+        </div>
+        {item?.type && (
+          <div className="truncate font-mono text-[11px] text-muted-foreground">{item.type}</div>
+        )}
+      </div>
+      {isSelf && <Badge size="xxs">Current</Badge>}
+      {item && isKnownHealth(item.health) && (
+        <Badge
+          variant="status"
+          status={healthStatus(item.health)}
+          label={item.health}
+          size="xxs"
+        />
+      )}
+    </div>
+  );
+
+  if (isSelf) {
+    return <div className="shrink-0">{content}</div>;
+  }
+
+  return (
+    <a
+      href={`/ui/item/${encodeURIComponent(id)}`}
+      className="group shrink-0"
+      title={item?.name || id}
+    >
+      {content}
+    </a>
   );
 }
 
