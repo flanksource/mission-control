@@ -12,12 +12,12 @@ import (
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
+	pluginruntime "github.com/flanksource/incident-commander/plugin/runtime"
 	"github.com/flanksource/incident-commander/plugin/supervisor"
 	"github.com/flanksource/incident-commander/rbac"
 )
@@ -36,12 +36,12 @@ func registerProxyRoutes(e *echo.Echo) {
 func uiProxy(c echo.Context) error {
 	ctx := c.Request().Context().(dutyContext.Context)
 	pluginRef := c.Param("name")
-	entry, err := resolvePlugin(ctx, pluginRef)
+	entry, err := pluginruntime.ResolvePlugin(ctx, pluginRef)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
 
-	if cfg := c.QueryParam("config_id"); cfg != "" && !selectorMatches(ctx, entry, cfg) {
+	if cfg := c.QueryParam("config_id"); cfg != "" && !pluginruntime.SelectorMatches(ctx, entry, cfg) {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, cfg))
 	}
 
@@ -62,11 +62,11 @@ func operationHTTPProxy(c echo.Context) error {
 	pluginRef := c.Param("name")
 	op := c.Param("op")
 
-	entry, err := resolvePlugin(ctx, pluginRef)
+	entry, err := pluginruntime.ResolvePlugin(ctx, pluginRef)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
-	def := operationDef(entry, op)
+	def := pluginruntime.OperationDef(entry, op)
 	if def == nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q operation %q not found", pluginRef, op))
 	}
@@ -82,14 +82,19 @@ func operationHTTPProxy(c echo.Context) error {
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("config_id is invalid"))
 	}
-	if !selectorMatches(ctx, entry, configID) {
+	if !pluginruntime.SelectorMatches(ctx, entry, configID) {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, configID))
 	}
-	if err := enforcePluginInvokePermission(ctx, entry, op, configID); err != nil {
+	user := ctx.User()
+	if user == nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in"))
+	}
+	subject := user.ID.String()
+	if err := pluginruntime.EnforceInvokePermission(ctx, subject, entry, op, configID); err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
 
-	invocationToken, err := auth.MintPluginInvocationToken(lo.FromPtr(ctx.User()), entry.ID)
+	invocationToken, err := auth.MintPluginInvocationToken(*user, entry.ID)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 	}

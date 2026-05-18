@@ -46,14 +46,20 @@ func init() {
 type PluginInvocationClaims struct {
 	Plugin uuid.UUID `json:"pluginID"`
 	Type   string    `json:"typ"`
+	Depth  int       `json:"depth,omitempty"`
 	jwt.RegisteredClaims
 }
 
 func MintPluginInvocationToken(user models.Person, pluginID uuid.UUID) (string, error) {
+	return MintPluginInvocationTokenWithDepth(user, pluginID, 0)
+}
+
+func MintPluginInvocationTokenWithDepth(user models.Person, pluginID uuid.UUID, depth int) (string, error) {
 	now := time.Now()
 	claims := PluginInvocationClaims{
 		Plugin: pluginID,
 		Type:   pluginInvocationTokenType,
+		Depth:  depth,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    pluginInvocationTokenIssuer,
 			Subject:   user.ID.String(),

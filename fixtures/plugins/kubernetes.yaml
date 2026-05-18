@@ -1,18 +1,26 @@
 apiVersion: mission-control.flanksource.com/v1
 kind: Plugin
 metadata:
-  name: kubernetes-logs
+  name: kubernetes
+  namespace: default
 spec:
-  source: kubernetes-logs
+  source: kubernetes
   version: "0.1.0"
   selector:
     types:
-      - Kubernetes::Pod
-      - Kubernetes::Deployment
-      - Kubernetes::StatefulSet
-      - Kubernetes::DaemonSet
-      - Kubernetes::ReplicaSet
-      - Kubernetes::Job
-      - Kubernetes::CronJob
-  audit:
-    - "*"
+      - Kubernetes::Namespace
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-kubernetes-plugin-kubernetes-logs
+  namespace: default
+spec:
+  subject:
+    plugin: default/kubernetes
+  actions:
+    - invoke:kubernetes-logs:list-pods
+  object:
+    configs:
+      - types:
+          - Kubernetes::Namespace
