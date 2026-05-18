@@ -281,8 +281,16 @@ function ConfigHeader({ config }: { config: ConfigItem }) {
 function ConfigHeaderActions({ config, onReport }: { config: ConfigItem; onReport: () => void }) {
   return (
     <>
-      {config.updated_at && <Badge variant="metric" label="Updated" value={timeAgo(config.updated_at)} size="xs" icon="lucide:clock-3" />}
-      {config.last_scraped_time && <Badge variant="metric" label="Scraped" value={timeAgo(config.last_scraped_time)} size="xs" icon="lucide:refresh-cw" />}
+      {config.updated_at && (
+        <AccessMatrixTooltip content={formatDate(config.updated_at)}>
+          <Badge variant="metric" label="Updated" value={timeAgo(config.updated_at)} size="xs" icon="lucide:clock-3" />
+        </AccessMatrixTooltip>
+      )}
+      {config.last_scraped_time && (
+        <AccessMatrixTooltip content={formatDate(config.last_scraped_time)}>
+          <Badge variant="metric" label="Scraped" value={timeAgo(config.last_scraped_time)} size="xs" icon="lucide:refresh-cw" />
+        </AccessMatrixTooltip>
+      )}
       <button
         type="button"
         onClick={onReport}
@@ -1332,7 +1340,18 @@ function buildDetailItems(config: ConfigItem, parents: ConfigChildItem[]): KeyVa
     { key: "source", label: "Source", value: config.source ?? "-", hidden: !config.source },
     { key: "path", label: "Path", value: <span className="break-all font-mono text-xs">{config.path}</span>, hidden: !config.path },
     { key: "parent_id", label: "Parent ID", value: <span className="font-mono text-xs">{config.parent_id}</span>, hidden: !config.parent_id },
-    { key: "external_id", label: "External ID", value: config.external_id?.join(", ") ?? "-", hidden: !config.external_id?.length },
+    {
+      key: "external_id",
+      label: "External ID",
+      value: (
+        <div className="flex flex-wrap gap-1">
+          {config.external_id?.map((id) => (
+            <Badge key={id} size="xs" label={id} />
+          ))}
+        </div>
+      ),
+      hidden: !config.external_id?.length,
+    },
     { key: "scraper", label: "Scraper", value: config.scraper_name || config.scraper_id || "-", hidden: !config.scraper_name && !config.scraper_id },
     { key: "agent", label: "Agent", value: agent || "-", hidden: !agent },
     { key: "created", label: "Created", value: `${formatDate(config.created_at)} (${timeAgo(config.created_at)})`, hidden: !config.created_at },
