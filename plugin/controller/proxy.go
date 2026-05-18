@@ -88,8 +88,12 @@ func operationHTTPProxy(c echo.Context) error {
 	if err := enforcePluginInvokePermission(ctx, entry, op, configID); err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
+	roles, err := pluginRolesForUser(ctx, entry, configID)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
 
-	invocationToken, err := auth.MintPluginInvocationToken(lo.FromPtr(ctx.User()), entry.ID)
+	invocationToken, err := auth.MintPluginInvocationToken(lo.FromPtr(ctx.User()), entry.ID, roles...)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 	}

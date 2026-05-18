@@ -119,6 +119,10 @@ func InvokeOperation(c echo.Context) error {
 	if err := enforcePluginInvokePermission(ctx, entry, op, configID); err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
+	roles, err := pluginRolesForUser(ctx, entry, configID)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
 
 	sup := supervisor.LookupSupervisor(entry.ID)
 	if sup == nil {
@@ -130,7 +134,7 @@ func InvokeOperation(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "read request body"))
 	}
 
-	invocationToken, err := auth.MintPluginInvocationToken(lo.FromPtr(ctx.User()), entry.ID)
+	invocationToken, err := auth.MintPluginInvocationToken(lo.FromPtr(ctx.User()), entry.ID, roles...)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 	}
@@ -202,14 +206,9 @@ func enforcePluginInvokePermission(ctx dutyContext.Context, entry *registry.Entr
 		return ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in")
 	}
 
-	attr := &models.ABACAttribute{}
-
-	if configID != "" {
-		item, err := query.ConfigItemFromCache(ctx, configID)
-		if err != nil {
-			return ctx.Oops().Wrapf(err, "get config item %s", configID)
-		}
-		attr.Config = item
+	attr, err := pluginABACAttribute(ctx, configID)
+	if err != nil {
+		return err
 	}
 
 	if !canInvokePluginOperation(ctx, user.ID.String(), attr, entry.Name, op) {

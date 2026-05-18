@@ -45,11 +45,16 @@ type Operation struct {
 }
 
 // InvokeCtx is passed to operation handlers. It exposes the request payload,
-// the calling user's identity/permissions, and a HostClient for callbacks.
+// the calling user's identity/permissions, plugin roles, and a HostClient for callbacks.
 type InvokeCtx struct {
 	Operation    string
 	ParamsJSON   []byte
 	ConfigItemID string
 	Caller       *pluginpb.CallerContext
+	Roles        []string
 	Host         HostClient
+}
+
+func (c InvokeCtx) HasRole(role string) bool {
+	return hasRole(c.Roles, role)
 }
