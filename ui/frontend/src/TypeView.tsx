@@ -31,6 +31,7 @@ import {
   type TriStateFilterValue,
 } from "./config-list";
 import { TagList } from "./config-detail/TagList";
+import { healthStatus } from "./config-detail/utils";
 import { DetailPageLayout, EntityHeader } from "./layout/DetailPageLayout";
 
 export type TypeViewProps = {
@@ -388,8 +389,7 @@ function tagEntries(tags: ConfigItem["tags"]): string[] {
 function renderHealth(value: unknown): ReactNode {
   const text = String(value ?? "").trim();
   if (!text) return <span className="text-muted-foreground">-</span>;
-  const tone = text === "healthy" ? "success" : text === "warning" ? "warning" : text === "unhealthy" ? "danger" : "neutral";
-  return <Badge size="xs" tone={tone}>{text}</Badge>;
+  return <Badge variant="status" status={healthStatus(text)} label={text} size="xs" />;
 }
 
 function renderBadge(value: unknown, tone: "neutral" | "success" | "danger" | "warning" | "info"): ReactNode {
