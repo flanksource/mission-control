@@ -86,10 +86,10 @@ func operationHTTPProxy(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, configID))
 	}
 	user := ctx.User()
-	subject := ""
-	if user != nil {
-		subject = user.ID.String()
+	if user == nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in"))
 	}
+	subject := user.ID.String()
 	if err := pluginruntime.EnforceInvokePermission(ctx, subject, entry, op, configID); err != nil {
 		return dutyAPI.WriteError(c, err)
 	}

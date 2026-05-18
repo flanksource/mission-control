@@ -1,10 +1,10 @@
 package supervisor
 
 import (
-	"context"
 	"fmt"
 	"sync"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/google/uuid"
 	goplugin "github.com/hashicorp/go-plugin"
@@ -45,10 +45,10 @@ func startPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 	}
 	binPath := registry.BinaryPathFor(entry.Name)
 	svc := host.New(ctx, id)
-	svc.SetPluginInvoker(func(invokeCtx context.Context, targetID uuid.UUID, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
+	svc.SetPluginInvoker(func(invokeCtx dutyContext.Context, targetID uuid.UUID, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
 		sup := LookupSupervisor(targetID)
 		if sup == nil {
-			return nil, fmt.Errorf("plugin %s not running", targetID)
+			return nil, invokeCtx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", targetID)
 		}
 		return sup.Invoke(invokeCtx, req)
 	})

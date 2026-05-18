@@ -24,7 +24,7 @@ import (
 
 const MaxInvokeDepth = 5
 
-type Invoker func(ctx context.Context, pluginID uuid.UUID, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error)
+type Invoker func(ctx dutyContext.Context, pluginID uuid.UUID, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error)
 
 type Request struct {
 	Context      context.Context
@@ -81,16 +81,20 @@ func Invoke(ctx dutyContext.Context, req Request, invoker Invoker) (*pluginpb.In
 		return nil, entry, ctx.Oops().Wrapf(err, "mint plugin invocation token")
 	}
 
-	invokeCtx := req.Context
-	if invokeCtx == nil {
-		invokeCtx = ctx
+	invokeCtx := ctx
+	if req.Context != nil {
+		if dutyCtx, ok := req.Context.(dutyContext.Context); ok {
+			invokeCtx = dutyCtx
+		} else {
+			invokeCtx = ctx.Wrap(req.Context)
+		}
 	}
 	if req.Timeout > 0 {
 		var cancel context.CancelFunc
-		invokeCtx, cancel = context.WithTimeout(invokeCtx, req.Timeout)
+		invokeCtx, cancel = invokeCtx.WithTimeout(req.Timeout)
 		defer cancel()
 	}
-	invokeCtx = metadata.AppendToOutgoingContext(invokeCtx, plugin.InvocationTokenGRPCMetadataKey, token)
+	invokeCtx = invokeCtx.Wrap(metadata.AppendToOutgoingContext(invokeCtx, plugin.InvocationTokenGRPCMetadataKey, token)).WithUser(req.User)
 
 	caller := req.Caller
 	if caller == nil {
