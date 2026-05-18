@@ -10,6 +10,7 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 
@@ -74,7 +75,14 @@ func operationHTTPProxy(c echo.Context) error {
 	}
 
 	configID := c.QueryParam("config_id")
-	if configID != "" && !selectorMatches(ctx, entry, configID) {
+	if configID == "" {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("config_id is required"))
+	}
+	configUUID, err := uuid.Parse(configID)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("config_id is invalid"))
+	}
+	if !selectorMatches(ctx, entry, configID) {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, configID))
 	}
 	if err := enforcePluginInvokePermission(ctx, entry, op, configID); err != nil {
@@ -86,7 +94,14 @@ func operationHTTPProxy(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 	}
 
-	return proxyToPluginOperation(c, entry, pluginRef, op, invocationToken)
+	paramsHash := httpParamsHash(c.Request().Method, c.QueryParams())
+	if err := proxyToPluginOperation(c, entry, pluginRef, op, invocationToken); err != nil {
+		return err
+	}
+
+	recordPluginInvocation(ctx, entry, op, configUUID, "http", c.Request().Method, paramsHash, "", c.Request(), nil)
+
+	return nil
 }
 
 func proxyToPluginUI(c echo.Context, entry *registry.Entry, pluginRef, prefix string) error {

@@ -3480,6 +3480,11 @@ func (in *PluginSpec) DeepCopyInto(out *PluginSpec) {
 	*out = *in
 	in.Selector.DeepCopyInto(&out.Selector)
 	in.Connections.DeepCopyInto(&out.Connections)
+	if in.Audit != nil {
+		in, out := &in.Audit, &out.Audit
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.Properties != nil {
 		in, out := &in.Properties, &out.Properties
 		*out = make(map[string]string, len(*in))
