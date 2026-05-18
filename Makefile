@@ -50,6 +50,7 @@ NODE_VERSION ?= 24.11.0
 PNPM_VERSION ?= 10.33.0
 TAILWIND_VERSION ?= 3.4.17
 TAILWIND_JS = auth/oidc/static/tailwind.min.js
+DEPS_VERSION ?= $(shell go list -m -f '{{.Version}}' github.com/flanksource/deps 2>/dev/null || echo latest)
 
 $(TAILWIND_JS):
 	curl -sL "https://cdn.tailwindcss.com/$(TAILWIND_VERSION)" -o $(TAILWIND_JS)
@@ -203,7 +204,14 @@ $(DEPS): | $(LOCALBIN)
 	elif command -v deps >/dev/null 2>&1; then \
 		ln -sf "$$(command -v deps)" "$(DEPS)"; \
 	else \
-		curl -sSL https://github.com/flanksource/deps/releases/latest/download/deps-$(OS)-$(ARCH).tar.gz | tar -xz -C $(LOCALBIN); \
+		url="https://github.com/flanksource/deps/releases/download/$(DEPS_VERSION)/deps-$(OS)-$(ARCH).tar.gz"; \
+		tmp="$(LOCALBIN)/deps-$(OS)-$(ARCH).tar.gz"; \
+		if curl -fsSL "$$url" -o "$$tmp"; then \
+			tar -xzf "$$tmp" -C $(LOCALBIN); \
+		else \
+			GOBIN=$(LOCALBIN) go install github.com/flanksource/deps/cmd/deps@$(DEPS_VERSION); \
+		fi; \
+		rm -f "$$tmp"; \
 	fi
 
 .PHONY: deps
