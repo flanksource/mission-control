@@ -46,14 +46,16 @@ func init() {
 type PluginInvocationClaims struct {
 	Plugin uuid.UUID `json:"pluginID"`
 	Type   string    `json:"typ"`
+	Roles  []string  `json:"roles,omitempty"`
 	jwt.RegisteredClaims
 }
 
-func MintPluginInvocationToken(user models.Person, pluginID uuid.UUID) (string, error) {
+func MintPluginInvocationToken(user models.Person, pluginID uuid.UUID, roles ...string) (string, error) {
 	now := time.Now()
 	claims := PluginInvocationClaims{
 		Plugin: pluginID,
 		Type:   pluginInvocationTokenType,
+		Roles:  append([]string(nil), roles...),
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    pluginInvocationTokenIssuer,
 			Subject:   user.ID.String(),
