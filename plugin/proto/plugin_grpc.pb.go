@@ -321,6 +321,7 @@ const (
 	HostService_Log_FullMethodName           = "/missioncontrol.plugin.v1.HostService/Log"
 	HostService_WriteArtifact_FullMethodName = "/missioncontrol.plugin.v1.HostService/WriteArtifact"
 	HostService_ReadArtifact_FullMethodName  = "/missioncontrol.plugin.v1.HostService/ReadArtifact"
+	HostService_InvokePlugin_FullMethodName  = "/missioncontrol.plugin.v1.HostService/InvokePlugin"
 )
 
 // HostServiceClient is the client API for HostService service.
@@ -336,6 +337,7 @@ type HostServiceClient interface {
 	Log(ctx context.Context, in *LogEntry, opts ...grpc.CallOption) (*Empty, error)
 	WriteArtifact(ctx context.Context, in *Artifact, opts ...grpc.CallOption) (*ArtifactRef, error)
 	ReadArtifact(ctx context.Context, in *ArtifactRef, opts ...grpc.CallOption) (*Artifact, error)
+	InvokePlugin(ctx context.Context, in *InvokePluginRequest, opts ...grpc.CallOption) (*InvokeResponse, error)
 }
 
 type hostServiceClient struct {
@@ -406,6 +408,16 @@ func (c *hostServiceClient) ReadArtifact(ctx context.Context, in *ArtifactRef, o
 	return out, nil
 }
 
+func (c *hostServiceClient) InvokePlugin(ctx context.Context, in *InvokePluginRequest, opts ...grpc.CallOption) (*InvokeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(InvokeResponse)
+	err := c.cc.Invoke(ctx, HostService_InvokePlugin_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HostServiceServer is the server API for HostService service.
 // All implementations must embed UnimplementedHostServiceServer
 // for forward compatibility.
@@ -419,6 +431,7 @@ type HostServiceServer interface {
 	Log(context.Context, *LogEntry) (*Empty, error)
 	WriteArtifact(context.Context, *Artifact) (*ArtifactRef, error)
 	ReadArtifact(context.Context, *ArtifactRef) (*Artifact, error)
+	InvokePlugin(context.Context, *InvokePluginRequest) (*InvokeResponse, error)
 	mustEmbedUnimplementedHostServiceServer()
 }
 
@@ -446,6 +459,9 @@ func (UnimplementedHostServiceServer) WriteArtifact(context.Context, *Artifact) 
 }
 func (UnimplementedHostServiceServer) ReadArtifact(context.Context, *ArtifactRef) (*Artifact, error) {
 	return nil, status.Error(codes.Unimplemented, "method ReadArtifact not implemented")
+}
+func (UnimplementedHostServiceServer) InvokePlugin(context.Context, *InvokePluginRequest) (*InvokeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method InvokePlugin not implemented")
 }
 func (UnimplementedHostServiceServer) mustEmbedUnimplementedHostServiceServer() {}
 func (UnimplementedHostServiceServer) testEmbeddedByValue()                     {}
@@ -576,6 +592,24 @@ func _HostService_ReadArtifact_Handler(srv interface{}, ctx context.Context, dec
 	return interceptor(ctx, in, info, handler)
 }
 
+func _HostService_InvokePlugin_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(InvokePluginRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HostServiceServer).InvokePlugin(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: HostService_InvokePlugin_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HostServiceServer).InvokePlugin(ctx, req.(*InvokePluginRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // HostService_ServiceDesc is the grpc.ServiceDesc for HostService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -606,6 +640,10 @@ var HostService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReadArtifact",
 			Handler:    _HostService_ReadArtifact_Handler,
+		},
+		{
+			MethodName: "InvokePlugin",
+			Handler:    _HostService_InvokePlugin_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

@@ -1,6 +1,7 @@
 package supervisor
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -11,6 +12,7 @@ import (
 
 	"github.com/flanksource/incident-commander/plugin/adapter"
 	"github.com/flanksource/incident-commander/plugin/host"
+	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
 )
 
@@ -43,6 +45,13 @@ func startPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 	}
 	binPath := registry.BinaryPathFor(entry.Name)
 	svc := host.New(ctx, id)
+	svc.SetPluginInvoker(func(invokeCtx context.Context, targetID uuid.UUID, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
+		sup := LookupSupervisor(targetID)
+		if sup == nil {
+			return nil, fmt.Errorf("plugin %s not running", targetID)
+		}
+		return sup.Invoke(invokeCtx, req)
+	})
 
 	// startHost is invoked after Dispense() so the broker is live. It opens
 	// a listener on the broker, starts a gRPC server for this plugin's

@@ -27,6 +27,13 @@ func (s *Service) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	}
 }
 
+type invocationClaimsContextKey struct{}
+
+func invocationClaimsFromContext(ctx context.Context) (*auth.PluginInvocationClaims, bool) {
+	claims, ok := ctx.Value(invocationClaimsContextKey{}).(*auth.PluginInvocationClaims)
+	return claims, ok
+}
+
 func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -49,14 +56,15 @@ func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, e
 		return nil, status.Errorf(codes.Unauthenticated, "plugin invocation subject %s: %v", claims.Subject, err)
 	}
 
-	return baseCtx.WithUser(&person), nil
+	return baseCtx.WithUser(&person).WithValue(invocationClaimsContextKey{}, claims), nil
 }
 
 func requiresInvocation(method string) bool {
 	switch method {
 	case pluginpb.HostService_GetConfigItem_FullMethodName,
 		pluginpb.HostService_ListConfigs_FullMethodName,
-		pluginpb.HostService_GetConnection_FullMethodName:
+		pluginpb.HostService_GetConnection_FullMethodName,
+		pluginpb.HostService_InvokePlugin_FullMethodName:
 		return true
 	default:
 		return false

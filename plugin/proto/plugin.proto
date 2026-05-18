@@ -28,6 +28,7 @@ service HostService {
   rpc Log            (LogEntry)             returns (Empty);
   rpc WriteArtifact  (Artifact)             returns (ArtifactRef);
   rpc ReadArtifact   (ArtifactRef)          returns (Artifact);
+  rpc InvokePlugin   (InvokePluginRequest)  returns (InvokeResponse);
 }
 
 message PluginManifest {
@@ -99,6 +100,14 @@ message InvokeResponse {
   string error_message = 3;
   string error_code    = 4;
   repeated LogEntry logs = 5;
+}
+
+message InvokePluginRequest {
+  string plugin         = 1;
+  string operation      = 2;
+  bytes  params_json    = 3;
+  string config_item_id = 4;
+  google.protobuf.Timestamp deadline = 5;
 }
 
 message OperationList { repeated OperationDef operations = 1; }
