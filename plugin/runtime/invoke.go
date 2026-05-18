@@ -35,6 +35,7 @@ type Request struct {
 	Caller       *pluginpb.CallerContext
 	User         *models.Person
 	Subject      string
+	Roles        []string
 	Depth        int
 	Deadline     *timestamppb.Timestamp
 	Timeout      time.Duration
@@ -76,7 +77,7 @@ func Invoke(ctx dutyContext.Context, req Request, invoker Invoker) (*pluginpb.In
 		return nil, entry, err
 	}
 
-	token, err := auth.MintPluginInvocationTokenWithDepth(*req.User, entry.ID, req.Depth)
+	token, err := auth.MintPluginInvocationTokenWithDepth(*req.User, entry.ID, req.Depth, req.Roles...)
 	if err != nil {
 		return nil, entry, ctx.Oops().Wrapf(err, "mint plugin invocation token")
 	}
