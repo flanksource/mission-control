@@ -1033,6 +1033,49 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 				return len(sendHistory)
 			}, "15s", "1s").Should(Equal(1))
 		})
+
+		ginkgo.It("should skip pending notification when resource generation changes", func() {
+			generationConfig := models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr("generation-test"),
+				ConfigClass: models.ConfigClassDeployment,
+				Health:      lo.ToPtr(models.HealthHealthy),
+				Config:      lo.ToPtr(`{"metadata":{"generation":1}}`),
+				Type:        lo.ToPtr("Kubernetes::Deployment"),
+			}
+			Expect(DefaultContext.DB().Create(&generationConfig).Error).To(BeNil())
+			defer DefaultContext.DB().Delete(&generationConfig)
+
+			Expect(DefaultContext.DB().Model(&models.ConfigItem{}).Where("id = ?", generationConfig.ID).Update("health", models.HealthUnhealthy).Error).To(BeNil())
+			events.ConsumeAll(DefaultContext)
+
+			var history models.NotificationSendHistory
+			Eventually(func(g Gomega) {
+				g.Expect(DefaultContext.DB().Where("notification_id = ?", n.ID.String()).
+					Where("resource_id = ?", generationConfig.ID.String()).
+					Where("status = ?", models.NotificationStatusPending).
+					First(&history).Error).To(BeNil())
+			}, "5s", "1s").Should(Succeed())
+
+			var payload notification.NotificationEventPayload
+			payload.FromMap(history.Payload)
+			Expect(payload.ResourceGeneration).To(Equal("1"))
+
+			Expect(DefaultContext.DB().Model(&models.ConfigItem{}).Where("id = ?", generationConfig.ID).Updates(map[string]any{
+				"config": `{"metadata":{"generation":2}}`,
+				"health": models.HealthUnhealthy,
+			}).Error).To(BeNil())
+			query.InvalidateCacheByID[models.ConfigItem](generationConfig.ID.String())
+
+			Expect(DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", history.ID).Update("not_before", time.Now().Add(-time.Minute)).Error).To(BeNil())
+			_, err := notification.ProcessPendingNotifications(DefaultContext)
+			Expect(err).To(BeNil())
+
+			var updated models.NotificationSendHistory
+			Expect(DefaultContext.DB().Where("id = ?", history.ID).First(&updated).Error).To(BeNil())
+			Expect(updated.Status).To(Equal(models.NotificationStatusSkipped))
+			Expect(lo.FromPtr(updated.Error)).To(ContainSubstring("resource generation changed"))
+		})
 	})
 
 	var _ = ginkgo.Describe("recent events", ginkgo.Ordered, func() {
