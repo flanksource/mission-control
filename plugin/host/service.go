@@ -22,10 +22,14 @@ import (
 	"github.com/flanksource/incident-commander/auth"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
+	pluginruntime "github.com/flanksource/incident-commander/plugin/runtime"
 )
 
 // connectionCacheTTL is how long a resolved connection stays cached on the host.
 const connectionCacheTTL = 5 * time.Minute
+
+// PluginInvoker invokes a target plugin through its supervisor.
+type PluginInvoker = pluginruntime.Invoker
 
 type connKey struct {
 	connectionID string
@@ -43,6 +47,8 @@ type Service struct {
 	// connCache memoises named connection resolutions across calls within a single
 	// plugin process. Authorization is checked before serving cached results.
 	connCache *lru.LRU[connKey, *pluginpb.ResolvedConnection]
+
+	invokePlugin PluginInvoker
 }
 
 // New creates a host Service for one plugin id. Multiple plugins running
@@ -55,6 +61,11 @@ func New(ctx dutyContext.Context, pluginID uuid.UUID) *Service {
 		ctx:       ctx,
 		connCache: cache,
 	}
+}
+
+// SetPluginInvoker configures the callback used by InvokePlugin.
+func (s *Service) SetPluginInvoker(invoke PluginInvoker) {
+	s.invokePlugin = invoke
 }
 
 // Register exposes the service on the given gRPC server.
@@ -146,6 +157,39 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 	default:
 		return nil, fmt.Errorf("connection lookup is required")
 	}
+}
+
+func (s *Service) InvokePlugin(ctx context.Context, req *pluginpb.InvokePluginRequest) (*pluginpb.InvokeResponse, error) {
+	dutyCtx := invocationDutyContext(s.ctx, ctx)
+	source := registry.Default.Get(s.pluginID)
+	if source == nil {
+		return nil, fmt.Errorf("plugin %s is not registered", s.pluginID)
+	}
+
+	depth := 1
+	if claims, ok := invocationClaimsFromContext(ctx); ok {
+		depth = claims.Depth + 1
+	}
+
+	resp, _, err := pluginruntime.Invoke(dutyCtx, pluginruntime.Request{
+		Context:      ctx,
+		PluginRef:    req.Plugin,
+		Operation:    req.Operation,
+		ParamsJSON:   req.ParamsJson,
+		ConfigItemID: req.ConfigItemId,
+		User:         dutyCtx.User(),
+		Subject:      pluginruntime.PluginSubject(source.Namespace, source.Name),
+		Depth:        depth,
+		Deadline:     req.Deadline,
+	}, s.invokePlugin)
+	return resp, err
+}
+
+func invocationDutyContext(base dutyContext.Context, ctx context.Context) dutyContext.Context {
+	if dutyCtx, ok := ctx.(dutyContext.Context); ok {
+		return dutyCtx
+	}
+	return base.Wrap(ctx)
 }
 
 func (s *Service) Log(ctx context.Context, e *pluginpb.LogEntry) (*pluginpb.Empty, error) {

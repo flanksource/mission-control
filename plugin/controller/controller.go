@@ -17,27 +17,21 @@ package controller
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/query"
-	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-	"github.com/samber/lo"
-	"google.golang.org/grpc/metadata"
 
-	"github.com/flanksource/incident-commander/auth"
 	echoSrv "github.com/flanksource/incident-commander/echo"
-	"github.com/flanksource/incident-commander/plugin"
 	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
+	pluginruntime "github.com/flanksource/incident-commander/plugin/runtime"
 	"github.com/flanksource/incident-commander/plugin/supervisor"
 	"github.com/flanksource/incident-commander/rbac"
 )
@@ -76,7 +70,7 @@ func ListPlugins(c echo.Context) error {
 		if e.Manifest == nil {
 			continue
 		}
-		if configID != "" && !selectorMatches(ctx, e, configID) {
+		if configID != "" && !pluginruntime.SelectorMatches(ctx, e, configID) {
 			continue
 		}
 		out = append(out, PluginListing{
@@ -97,14 +91,6 @@ func InvokeOperation(c echo.Context) error {
 	pluginRef := c.Param("name")
 	op := c.Param("op")
 
-	entry, err := resolvePlugin(ctx, pluginRef)
-	if err != nil {
-		return dutyAPI.WriteError(c, err)
-	}
-	if operationDef(entry, op) == nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q operation %q not found", pluginRef, op))
-	}
-
 	configID := c.QueryParam("config_id")
 	if configID == "" {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("config_id is required"))
@@ -113,47 +99,28 @@ func InvokeOperation(c echo.Context) error {
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("config_id is invalid"))
 	}
-	if !selectorMatches(ctx, entry, configID) {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, configID))
-	}
-	if err := enforcePluginInvokePermission(ctx, entry, op, configID); err != nil {
-		return dutyAPI.WriteError(c, err)
-	}
-
-	sup := supervisor.LookupSupervisor(entry.ID)
-	if sup == nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", pluginRef))
-	}
 
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "read request body"))
 	}
 
-	invocationToken, err := auth.MintPluginInvocationToken(lo.FromPtr(ctx.User()), entry.ID)
-	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
-	}
-
-	caller := callerFromCtx(ctx)
-	invokeCtx, cancel := context.WithTimeout(c.Request().Context(), 60*time.Second)
-	defer cancel()
-
-	// Like Set-Cookie in HTTP, Mission Control issues a short-lived invocation
-	// token to the plugin over gRPC metadata. The plugin SDK presents the same
-	// token on HostService callbacks so Mission Control can verify the actor.
-	invokeCtx = metadata.AppendToOutgoingContext(invokeCtx, plugin.InvocationTokenGRPCMetadataKey, invocationToken)
-
 	paramsHash := hashBytes(body)
-	resp, err := sup.Invoke(invokeCtx, &pluginpb.InvokeRequest{
+	resp, entry, err := pluginruntime.Invoke(ctx, pluginruntime.Request{
+		Context:      c.Request().Context(),
+		PluginRef:    pluginRef,
 		Operation:    op,
-		ParamsJson:   body,
-		ConfigItemId: configID,
-		Caller:       caller,
-	})
+		ConfigItemID: configID,
+		ParamsJSON:   body,
+		User:         ctx.User(),
+		Depth:        0,
+		Timeout:      60 * time.Second,
+	}, invokeViaSupervisor)
 	if err != nil {
-		recordPluginInvocation(ctx, entry, op, configUUID, "grpc", c.Request().Method, paramsHash, err.Error(), c.Request(), body)
-		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "plugin %s/%s", pluginRef, op))
+		if entry != nil {
+			recordPluginInvocation(ctx, entry, op, configUUID, "grpc", c.Request().Method, paramsHash, err.Error(), c.Request(), body)
+		}
+		return dutyAPI.WriteError(c, err)
 	}
 	if resp.ErrorMessage != "" {
 		recordPluginInvocation(ctx, entry, op, configUUID, "grpc", c.Request().Method, paramsHash, resp.ErrorMessage, c.Request(), body)
@@ -170,80 +137,10 @@ func InvokeOperation(c echo.Context) error {
 	return c.Blob(http.StatusOK, mime, resp.Result)
 }
 
-func resolvePlugin(ctx dutyContext.Context, ref string) (*registry.Entry, error) {
-	entry, err := registry.Default.Resolve(ref)
-	if err != nil {
-		if errors.Is(err, registry.ErrAmbiguousPlugin) {
-			return nil, ctx.Oops().Code(dutyAPI.ECONFLICT).Wrap(err)
-		}
-		return nil, ctx.Oops().Wrap(err)
+func invokeViaSupervisor(ctx context.Context, pluginID uuid.UUID, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
+	sup := supervisor.LookupSupervisor(pluginID)
+	if sup == nil {
+		return nil, fmt.Errorf("plugin %s not running", pluginID)
 	}
-	if entry == nil {
-		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", ref)
-	}
-	return entry, nil
-}
-
-func operationDef(entry *registry.Entry, op string) *pluginpb.OperationDef {
-	if entry == nil || entry.Manifest == nil {
-		return nil
-	}
-	for _, def := range entry.Manifest.Operations {
-		if def != nil && def.Name == op {
-			return def
-		}
-	}
-	return nil
-}
-
-func enforcePluginInvokePermission(ctx dutyContext.Context, entry *registry.Entry, op, configID string) error {
-	user := ctx.User()
-	if user == nil {
-		return ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in")
-	}
-
-	attr := &models.ABACAttribute{}
-
-	if configID != "" {
-		item, err := query.ConfigItemFromCache(ctx, configID)
-		if err != nil {
-			return ctx.Oops().Wrapf(err, "get config item %s", configID)
-		}
-		attr.Config = item
-	}
-
-	if !canInvokePluginOperation(ctx, user.ID.String(), attr, entry.Name, op) {
-		return ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("not allowed to invoke plugin %s operation %s", entry.Name, op)
-	}
-
-	return nil
-}
-
-func canInvokePluginOperation(ctx dutyContext.Context, subject string, attr *models.ABACAttribute, pluginName, op string) bool {
-	return dutyRBAC.HasPermission(ctx, subject, attr, policy.NewPluginInvokeAction(pluginName, op))
-}
-
-// selectorMatches returns true when the given config id satisfies the plugin
-// CRD's ResourceSelector. Centralised so all routes apply the same check.
-func selectorMatches(ctx dutyContext.Context, entry *registry.Entry, configID string) bool {
-	selector := entry.Spec.Selector
-	if selector.IsEmpty() {
-		return true
-	}
-
-	item, err := query.ConfigItemFromCache(ctx, configID)
-	if err != nil {
-		return false
-	}
-
-	return selector.Matches(item)
-}
-
-func callerFromCtx(ctx dutyContext.Context) *pluginpb.CallerContext {
-	cc := &pluginpb.CallerContext{}
-	if u := ctx.User(); u != nil {
-		cc.UserId = u.ID.String()
-	}
-
-	return cc
+	return sup.Invoke(ctx, req)
 }
