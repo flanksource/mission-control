@@ -16,8 +16,6 @@
 package controller
 
 import (
-	"context"
-	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -137,10 +135,11 @@ func InvokeOperation(c echo.Context) error {
 	return c.Blob(http.StatusOK, mime, resp.Result)
 }
 
-func invokeViaSupervisor(ctx context.Context, pluginID uuid.UUID, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
+func invokeViaSupervisor(ctx dutyContext.Context, pluginID uuid.UUID, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
 	sup := supervisor.LookupSupervisor(pluginID)
 	if sup == nil {
-		return nil, fmt.Errorf("plugin %s not running", pluginID)
+		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
 	}
+
 	return sup.Invoke(ctx, req)
 }
