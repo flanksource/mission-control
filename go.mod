@@ -52,7 +52,7 @@ require (
 	github.com/flanksource/artifacts v1.0.24
 	github.com/flanksource/clicky v1.21.9
 	github.com/flanksource/commons-test v0.1.13
-	github.com/flanksource/deps v1.0.31
+	github.com/flanksource/deps v1.0.32
 	github.com/fluxcd/pkg/gittestserver v0.28.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/glebarez/sqlite v1.11.0
