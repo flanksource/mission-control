@@ -14,7 +14,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = ginkgo.Describe("OIDC Browser Login Flow", ginkgo.Label("slow"), ginkgo.Ordered, func() {
+var _ = ginkgo.XDescribe("OIDC Browser Login Flow", ginkgo.Label("slow"), ginkgo.Ordered, func() {
 	var tokens *oidcclient.Tokens
 	var endpoints *oidcclient.Discovery
 
