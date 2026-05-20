@@ -40,6 +40,12 @@ message PluginManifest {
   repeated OperationDef operations = 6;
   uint32 ui_port = 7;
   repeated TabSpec tabs = 8;
+  repeated PluginRole roles = 9;
+}
+
+message PluginRole {
+  string name = 1;
+  string description = 2;
 }
 
 message TabSpec {
