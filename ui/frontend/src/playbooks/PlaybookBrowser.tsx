@@ -83,6 +83,7 @@ type RunDialogSelection = {
   playbook: RunnablePlaybook;
   target?: PlaybookRunTarget;
   resourceLabel?: string;
+  recentTargets?: PlaybookRunTargetSummary[];
 };
 
 type StepParameterGroup = {
@@ -209,7 +210,7 @@ function PlaybooksListPage() {
                   key={section.id}
                   section={section}
                   runs={runs}
-                  onRun={(playbook, target, resourceLabel) => setSelected({ playbook, target, resourceLabel })}
+                  onRun={(playbook, target, resourceLabel, recentTargets) => setSelected({ playbook, target, resourceLabel, recentTargets })}
                   onEdit={(playbook) => setEditing(playbook)}
                 />
               ))}
@@ -224,6 +225,7 @@ function PlaybooksListPage() {
           playbook={selected.playbook}
           target={selected.target}
           resourceLabel={selected.resourceLabel}
+          recentTargets={selected.recentTargets}
           onClose={() => setSelected(null)}
         />
       )}
@@ -459,7 +461,12 @@ function PlaybookLibrarySection({
 }: {
   section: PlaybookSection;
   runs: PlaybookRun[];
-  onRun: (playbook: RunnablePlaybook, target?: PlaybookRunTarget, resourceLabel?: string) => void;
+  onRun: (
+    playbook: RunnablePlaybook,
+    target?: PlaybookRunTarget,
+    resourceLabel?: string,
+    recentTargets?: PlaybookRunTargetSummary[],
+  ) => void;
   onEdit: (playbook: RunnablePlaybook) => void;
 }) {
   return (
@@ -504,10 +511,14 @@ function PlaybookLibraryCard({
 }: {
   playbook: RunnablePlaybook;
   recentTargets: PlaybookRunTargetSummary[];
-  onRun: (playbook: RunnablePlaybook, target?: PlaybookRunTarget, resourceLabel?: string) => void;
+  onRun: (
+    playbook: RunnablePlaybook,
+    target?: PlaybookRunTarget,
+    resourceLabel?: string,
+    recentTargets?: PlaybookRunTargetSummary[],
+  ) => void;
   onEdit: (playbook: RunnablePlaybook) => void;
 }) {
-  const paramCount = normalizeParameterList(playbook.parameters ?? playbook.spec?.parameters).length;
   const [menuOpen, setMenuOpen] = useState(false);
   const queryClient = useQueryClient();
   const deleteMutation = useMutation({
@@ -520,11 +531,11 @@ function PlaybookLibraryCard({
     <article
       role="button"
       tabIndex={0}
-      onClick={() => onRun(playbook)}
+      onClick={() => onRun(playbook, undefined, undefined, recentTargets)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          onRun(playbook);
+          onRun(playbook, undefined, undefined, recentTargets);
         }
       }}
       className="group relative flex min-h-[11rem] cursor-pointer flex-col rounded-md border border-border bg-background p-4 shadow-sm outline-none transition hover:border-primary/40 hover:shadow-md focus:border-primary/60"
@@ -539,7 +550,6 @@ function PlaybookLibraryCard({
             <div className="mt-1 flex flex-wrap gap-1.5">
               {playbook.category && <Badge size="xxs">{playbook.category}</Badge>}
               {playbook.source && <Badge size="xxs">{playbook.source}</Badge>}
-              <Badge size="xxs">{paramCount} params</Badge>
             </div>
           </div>
         </div>
@@ -562,7 +572,7 @@ function PlaybookLibraryCard({
               deleting={deleteMutation.isPending}
               onRun={() => {
                 setMenuOpen(false);
-                onRun(playbook);
+                onRun(playbook, undefined, undefined, recentTargets);
               }}
               onEdit={() => {
                 setMenuOpen(false);
@@ -578,27 +588,6 @@ function PlaybookLibraryCard({
         </div>
       </div>
       {playbook.description && <p className="mt-3 line-clamp-1 text-sm leading-5 text-muted-foreground">{playbook.description}</p>}
-      {recentTargets.length > 0 && (
-        <div className="mt-auto pt-4">
-          <div className="flex flex-wrap gap-1.5">
-            {recentTargets.map((target) => (
-              <button
-                key={target.key}
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  onRun(playbook, target.target, target.label);
-                }}
-                className="inline-flex h-7 max-w-full items-center gap-1.5 rounded-md border border-border bg-muted/30 px-2 text-xs hover:bg-accent/60"
-              >
-                <ConfigIcon primary={target.icon} className="h-3.5 max-w-3.5 shrink-0" />
-                <span className="truncate">{target.label}</span>
-                {target.count > 1 && <span className="font-mono text-[10px] text-muted-foreground">x{target.count}</span>}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
       {deleteMutation.error && (
         <div className="mt-3 rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-xs text-destructive">
           {deleteMutation.error instanceof Error ? deleteMutation.error.message : String(deleteMutation.error)}
@@ -1394,12 +1383,14 @@ function SubmitPlaybookRunDialog({
   playbook,
   target = {},
   resourceLabel,
+  recentTargets,
   onClose,
 }: {
   open: boolean;
   playbook: RunnablePlaybook;
   target?: PlaybookRunTarget;
   resourceLabel?: string;
+  recentTargets?: PlaybookRunTargetSummary[];
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
@@ -1480,6 +1471,34 @@ function SubmitPlaybookRunDialog({
           configSelectors={configTargetSelectors}
           onChange={setRunTarget}
         />
+        {!fixedNonConfigTarget && recentTargets && recentTargets.length > 0 && (
+          <div className="grid gap-2 rounded-md border border-border bg-muted/15 p-3">
+            <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Suggested targets</div>
+            <div className="flex flex-wrap gap-1.5">
+              {recentTargets.map((suggestion) => {
+                const active = suggestion.target.config_id && runTarget.config_id === suggestion.target.config_id;
+                return (
+                  <button
+                    key={suggestion.key}
+                    type="button"
+                    onClick={() => setRunTarget(suggestion.target)}
+                    className={`inline-flex h-7 max-w-full items-center gap-1.5 rounded-md border px-2 text-xs ${
+                      active
+                        ? "border-primary/60 bg-primary/10 text-foreground"
+                        : "border-border bg-muted/30 hover:bg-accent/60"
+                    }`}
+                  >
+                    <ConfigIcon primary={suggestion.icon} className="h-3.5 max-w-3.5 shrink-0" />
+                    <span className="truncate">{suggestion.label}</span>
+                    {suggestion.count > 1 && (
+                      <span className="font-mono text-[10px] text-muted-foreground">x{suggestion.count}</span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
         {loadingParams ? (
           <div className="flex flex-1 items-center justify-center gap-2 text-sm text-muted-foreground">
             <Icon name="lucide:loader-2" className="animate-spin" />
@@ -1802,7 +1821,6 @@ function PlaybookRunCard({ playbook, onRun }: { playbook: RunnablePlaybook; onRu
           {playbook.description && <div className="mt-1 line-clamp-2 text-xs text-muted-foreground">{playbook.description}</div>}
           <div className="mt-2 flex flex-wrap gap-1">
             {playbook.category && <Badge size="xxs">{playbook.category}</Badge>}
-            <Badge size="xxs">{normalizeParameterList(playbook.parameters).length} params</Badge>
           </div>
         </div>
       </div>
