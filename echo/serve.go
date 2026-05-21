@@ -157,7 +157,15 @@ func New(ctx context.Context) *echov4.Echo {
 		Gatherer: prom.DefaultGatherer,
 	}))
 
-	e.GET("/health", func(c echov4.Context) error {
+	e.GET("/livez", func(c echov4.Context) error {
+		return c.String(http.StatusOK, "OK")
+	})
+
+	e.GET("/readyz", func(c echov4.Context) error {
+		if err := checkReadiness(c.Request().Context(), ctx); err != nil {
+			return c.String(http.StatusServiceUnavailable, err.Error())
+		}
+
 		return c.String(http.StatusOK, "OK")
 	})
 
@@ -497,7 +505,25 @@ func ServerCache(next echov4.HandlerFunc) echov4.HandlerFunc {
 
 // telemetryURLSkipper ignores health and metrics routes on some middleware
 func telemetryURLSkipper(c echov4.Context) bool {
-	return c.Path() == "/health" || c.Path() == "/metrics"
+	switch c.Path() {
+	case "/livez", "/readyz", "/metrics":
+		return true
+	default:
+		return false
+	}
+}
+
+func checkReadiness(reqCtx gocontext.Context, ctx context.Context) error {
+	sqlDB, err := ctx.DB().DB()
+	if err != nil {
+		return fmt.Errorf("postgres: %w", err)
+	}
+
+	if err := sqlDB.PingContext(reqCtx); err != nil {
+		return fmt.Errorf("postgres: %w", err)
+	}
+
+	return nil
 }
 
 func ModifyKratosRequestHeaders(next echov4.HandlerFunc) echov4.HandlerFunc {

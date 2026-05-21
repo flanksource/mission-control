@@ -78,6 +78,6 @@ func NewSlogLogger(ctx context.Context, logger *slog.Logger) echo.MiddlewareFunc
 		WithResponseHeader: ctx.Properties().On(true, "access.log.request.header"),
 		WithSpanID:         ctx.Properties().On(true, "access.log.spanId"),
 		WithTraceID:        ctx.Properties().On(true, "access.log.traceId"),
-		Filters:            []slogecho.Filter{slogecho.IgnorePathPrefix("/health", "/metrics")},
+		Filters:            []slogecho.Filter{slogecho.IgnorePathPrefix("/livez", "/readyz", "/metrics")},
 	})
 }

@@ -66,7 +66,8 @@ var skipAuthPathPrefixes = []string{
 }
 
 var skipAuthPathsExact = []string{
-	"/health",
+	"/livez",
+	"/readyz",
 
 	// Basic auth endpoints — they handle credentials themselves.
 	"/auth/login",

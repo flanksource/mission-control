@@ -49,23 +49,35 @@ security:
   - BearerAuth: []
 
 paths:
-  /health:
+  /livez:
     get:
       tags: [Health]
-      summary: Health check
-      description: Returns health status of the service
+      summary: Liveness check
+      description: Returns liveness status of the service
       security: []
       responses:
         "200":
-          description: Service is healthy
+          description: Service is live
           content:
-            application/json:
+            text/plain:
               schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: ok
+                type: string
+                example: OK
+
+  /readyz:
+    get:
+      tags: [Health]
+      summary: Readiness check
+      description: Returns readiness status after pinging PostgreSQL
+      security: []
+      responses:
+        "200":
+          description: Service is ready
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: OK
 
   /metrics:
     get:
