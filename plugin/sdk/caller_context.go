@@ -2,6 +2,9 @@ package sdk
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
+	"strings"
 
 	"github.com/flanksource/incident-commander/plugin"
 	"google.golang.org/grpc/metadata"
@@ -29,6 +32,7 @@ func withInvocationToken(ctx context.Context, token string) context.Context {
 type httpRequestContext struct {
 	operation    string
 	configItemID string
+	roles        []string
 	host         HostClient
 }
 
@@ -61,4 +65,44 @@ func OperationFromContext(ctx context.Context) string {
 // request.
 func ConfigItemIDFromContext(ctx context.Context) string {
 	return httpRequestContextFromContext(ctx).configItemID
+}
+
+// RolesFromContext returns the plugin roles attached to an HTTP operation request.
+func RolesFromContext(ctx context.Context) []string {
+	roles := httpRequestContextFromContext(ctx).roles
+	return append([]string(nil), roles...)
+}
+
+// HasRole reports whether the HTTP operation request has the given plugin role.
+func HasRole(ctx context.Context, role string) bool {
+	return hasRole(httpRequestContextFromContext(ctx).roles, role)
+}
+
+func rolesFromInvocationToken(token string) []string {
+	parts := strings.Split(token, ".")
+	if len(parts) < 2 {
+		return nil
+	}
+
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		return nil
+	}
+
+	var claims struct {
+		Roles []string `json:"roles"`
+	}
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		return nil
+	}
+	return claims.Roles
+}
+
+func hasRole(roles []string, role string) bool {
+	for _, r := range roles {
+		if r == role {
+			return true
+		}
+	}
+	return false
 }

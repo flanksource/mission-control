@@ -108,8 +108,9 @@ func (s *pluginServer) Invoke(ctx context.Context, req *pluginpb.InvokeRequest) 
 		defer cancel()
 	}
 
+	token := invocationTokenFromIncomingContext(ctx)
 	s.mu.Lock()
-	host := newHostClient(s.mcgPRCConn, invocationTokenFromIncomingContext(ctx))
+	host := newHostClient(s.mcgPRCConn, token)
 	s.mu.Unlock()
 
 	res, err := op.Handler(ctx, InvokeCtx{
@@ -117,6 +118,7 @@ func (s *pluginServer) Invoke(ctx context.Context, req *pluginpb.InvokeRequest) 
 		ParamsJSON:   req.ParamsJson,
 		ConfigItemID: req.ConfigItemId,
 		Caller:       req.Caller,
+		Roles:        rolesFromInvocationToken(token),
 		Host:         host,
 	})
 	if err != nil {
@@ -158,13 +160,15 @@ func (s *pluginServer) httpOperationsHandler() http.Handler {
 
 func (s *pluginServer) httpOperationMiddleware(operationName string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		token := r.Header.Get(plugin.InvocationTokenHTTPHeader)
 		s.mu.Lock()
-		host := newHostClient(s.mcgPRCConn, r.Header.Get(plugin.InvocationTokenHTTPHeader))
+		host := newHostClient(s.mcgPRCConn, token)
 		s.mu.Unlock()
 
 		ctx := withHTTPRequestContext(r.Context(), httpRequestContext{
 			operation:    operationName,
 			configItemID: r.URL.Query().Get("config_id"),
+			roles:        rolesFromInvocationToken(token),
 			host:         host,
 		})
 		next.ServeHTTP(w, r.WithContext(ctx))

@@ -330,6 +330,14 @@ func TestMyPkg(t *testing.T) {
 - Use `ginkgo.Label("slow")` for tests taking more than 10 seconds.
 - Use `ginkgo.Ordered` only when test steps must run sequentially.
 
+### Plugins
+
+Plugins are external binaries managed by Mission Control from `Plugin` CRDs and supervised through Hashicorp `go-plugin`.
+They expose manifests which includes: UI tabs, and operations over gRPC, while Mission Control provides a host callback service for config lookup, connection resolution, logging, and artifacts.
+Users invoke plugin operations through the Mission Control API, which enforces selectors and RBAC before minting a short-lived invocation token.
+
+We maintain a registry of operations in a different repo - https://github.com/flanksource/mission-control-plugins
+
 ## Comments Guidelines
 
 - Only add comments if really really necessary. Do not add comments that simply explain the code.

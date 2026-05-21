@@ -97,6 +97,14 @@ func InvokeOperation(c echo.Context) error {
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("config_id is invalid"))
 	}
+	entry, err := pluginruntime.ResolvePlugin(ctx, pluginRef)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+	roles, err := pluginRolesForUser(ctx, entry, configID)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
 
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
@@ -111,6 +119,7 @@ func InvokeOperation(c echo.Context) error {
 		ConfigItemID: configID,
 		ParamsJSON:   body,
 		User:         ctx.User(),
+		Roles:        roles,
 		Depth:        0,
 		Timeout:      60 * time.Second,
 	}, invokeViaSupervisor)
