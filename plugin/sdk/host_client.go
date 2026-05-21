@@ -34,6 +34,9 @@ type HostClient interface {
 	// Log forwards a structured log entry to the host's logger.
 	Log(ctx context.Context, level, message string, fields map[string]string) error
 
+	// InvokePlugin invokes another plugin operation through Mission Control.
+	InvokePlugin(ctx context.Context, plugin, operation, configItemID string, params json.RawMessage) (*pluginpb.InvokeResponse, error)
+
 	// WriteArtifact persists raw bytes via the host's artifact store and returns a reference.
 	WriteArtifact(ctx context.Context, a *pluginpb.Artifact) (*pluginpb.ArtifactRef, error)
 
@@ -80,6 +83,15 @@ func (h *hostClient) GetConnectionByLabel(ctx context.Context, label string) (*p
 func (h *hostClient) Log(ctx context.Context, level, message string, fields map[string]string) error {
 	_, err := h.c.Log(h.authContext(ctx), &pluginpb.LogEntry{Level: level, Message: message, Fields: fields})
 	return err
+}
+
+func (h *hostClient) InvokePlugin(ctx context.Context, plugin, operation, configItemID string, params json.RawMessage) (*pluginpb.InvokeResponse, error) {
+	return h.c.InvokePlugin(h.authContext(ctx), &pluginpb.InvokePluginRequest{
+		Plugin:       plugin,
+		Operation:    operation,
+		ConfigItemId: configItemID,
+		ParamsJson:   params,
+	})
 }
 
 func (h *hostClient) WriteArtifact(ctx context.Context, a *pluginpb.Artifact) (*pluginpb.ArtifactRef, error) {

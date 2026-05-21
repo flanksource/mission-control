@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/google/uuid"
 	goplugin "github.com/hashicorp/go-plugin"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/flanksource/incident-commander/plugin/adapter"
 	"github.com/flanksource/incident-commander/plugin/host"
+	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
 )
 
@@ -43,6 +45,13 @@ func startPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 	}
 	binPath := registry.BinaryPathFor(entry.Name)
 	svc := host.New(ctx, id)
+	svc.SetPluginInvoker(func(invokeCtx dutyContext.Context, targetID uuid.UUID, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
+		sup := LookupSupervisor(targetID)
+		if sup == nil {
+			return nil, invokeCtx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", targetID)
+		}
+		return sup.Invoke(invokeCtx, req)
+	})
 
 	// startHost is invoked after Dispense() so the broker is live. It opens
 	// a listener on the broker, starts a gRPC server for this plugin's
