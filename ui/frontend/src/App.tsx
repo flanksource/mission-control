@@ -138,28 +138,28 @@ function Home() {
 
 function TypeRoute() {
   const { configType } = useParams();
-  return <TypeView configType={decodeParam(configType ?? "")} />;
+  return <TypeView configType={configType ?? ""} />;
 }
 
 function ItemRoute({ commandRuntime }: { commandRuntime: ClickyCommandRuntime }) {
   const { id } = useParams();
-  return <ItemView id={decodeParam(id ?? "")} commandRuntime={commandRuntime} />;
+  return <ItemView id={id ?? ""} commandRuntime={commandRuntime} />;
 }
 
 function AccessRoute() {
   const { mode, id } = useParams();
   if (mode !== "users" && mode !== "groups") return <Navigate to="/access/users" replace />;
-  return <AccessBrowser mode={mode as AccessBrowserMode} id={id ? decodeParam(id) : undefined} />;
+  return <AccessBrowser mode={mode as AccessBrowserMode} id={id} />;
 }
 
 function PlaybookRunRoute() {
   const { runId } = useParams();
-  return <PlaybookBrowser mode="run" runId={decodeParam(runId ?? "")} />;
+  return <PlaybookBrowser mode="run" runId={runId ?? ""} />;
 }
 
 function SettingsScrapersRoute() {
   const { scraperId } = useParams();
-  return <SettingsBrowser mode="scrapers" scraperId={scraperId ? decodeParam(scraperId) : undefined} />;
+  return <SettingsBrowser mode="scrapers" scraperId={scraperId} />;
 }
 
 function ExplorerRoute() {
@@ -200,14 +200,6 @@ function SidebarButton({
       </span>
     </NavLink>
   );
-}
-
-function decodeParam(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
 }
 
 // buildCommandHref maps a resolved clicky command (command name + args/flags)
