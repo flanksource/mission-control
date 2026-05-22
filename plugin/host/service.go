@@ -154,6 +154,9 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 	case *pluginpb.GetConnectionRequest_ConfigItemId:
 		return s.getConnectionForConfig(pluginCtx, lookup.ConfigItemId)
 
+	case *pluginpb.GetConnectionRequest_ConnectionId:
+		return s.getConnectionByID(pluginCtx, lookup.ConnectionId)
+
 	default:
 		return nil, fmt.Errorf("connection lookup is required")
 	}

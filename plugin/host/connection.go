@@ -47,6 +47,18 @@ func (s *Service) getConnectionByRef(ctx dutyContext.Context, ref string) (*plug
 	return cloneResolvedConnection(resolved), nil
 }
 
+func (s *Service) getConnectionByID(ctx dutyContext.Context, connectionID string) (*pluginpb.ResolvedConnection, error) {
+	if connectionID == "" {
+		return nil, fmt.Errorf("connection id is required")
+	}
+
+	conn, err := dutyConn.Get(ctx, connectionID)
+	if err != nil {
+		return nil, fmt.Errorf("get connection %s: %w", connectionID, err)
+	}
+	return pluginpb.ConnectionToProto(conn), nil
+}
+
 func (s *Service) getConnectionForConfig(ctx dutyContext.Context, configItemID string) (*pluginpb.ResolvedConnection, error) {
 	scraper, err := models.FindScraperByConfigId(ctx.DB(), configItemID)
 	if err != nil {

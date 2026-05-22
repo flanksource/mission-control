@@ -164,15 +164,22 @@ message ListConfigsRequest {
   string cursor             = 3;
 }
 
-// GetConnectionRequest asks the host to resolve a connection by one of three
-// supported lookups: type, config item, or plugin-defined label. Type and label
-// lookups use spec.connections mappings from the Plugin CRD. Config lookups use
-// the scraper that created the config item.
+// GetConnectionRequest asks the host to resolve a connection by one of four
+// supported lookups: type, scraper config item, plugin-defined label, or direct
+// connection id.
+//
+// Type and label lookups use spec.connections mappings from the Plugin CRD.
+// config_item_id preserves the existing behavior: it resolves the connection
+// used by the scraper that created the config item. connection_id resolves a
+// Mission Control connection by id; plugins attached to MissionControl::Connection
+// config items can pass their config_item_id because connection config item ids
+// are the same as the underlying connection ids.
 message GetConnectionRequest {
   oneof lookup {
-    string type           = 1; // e.g. "sql", "aws", "kubernetes", "gcp", "azure"
+    string type           = 1; // e.g. "sql", "aws", "kubernetes", "gcp", "azure", "s3"
     string config_item_id = 2; // resolve the connection used by this config item's scraper
     string label          = 3; // resolve a plugin-defined connection label mapping
+    string connection_id  = 4; // resolve a Mission Control connection by id
   }
 }
 
