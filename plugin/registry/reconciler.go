@@ -7,6 +7,7 @@ import (
 
 	"github.com/flanksource/deps"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/query/grammar"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
@@ -43,6 +44,9 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 	}
 	if p.Spec.Source == "" {
 		return fmt.Errorf("plugin %s: spec.source is required", p.Name)
+	}
+	if err := validatePluginSelector(p); err != nil {
+		return err
 	}
 
 	binDir := PluginPath()
@@ -164,6 +168,26 @@ func DeleteStalePlugin(ctx context.Context, newer *v1.Plugin) error {
 		}
 		Default.Remove(e.ID)
 	}
+	return nil
+}
+
+func validatePluginSelector(p *v1.Plugin) error {
+	selector := p.Spec.Selector
+	if selector.IsEmpty() {
+		return nil
+	}
+
+	peg, err := selector.ToPeg(true)
+	if err != nil {
+		return fmt.Errorf("plugin %s: invalid spec.selector: %w", p.Name, err)
+	}
+	if peg == "" {
+		return nil
+	}
+	if _, err := grammar.ParsePEG(peg); err != nil {
+		return fmt.Errorf("plugin %s: invalid spec.selector: %w", p.Name, err)
+	}
+
 	return nil
 }
 
