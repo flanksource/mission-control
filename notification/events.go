@@ -1052,8 +1052,16 @@ func getFirstSilencer(ctx context.Context, celEnv *celVariables, matchingSilence
 		if silence.Filter != "" {
 			res, err := ctx.RunTemplate(gomplate.Template{Expression: string(silence.Filter)}, celEnv.AsMap(ctx))
 			if err != nil {
+				errMsg := fmt.Sprintf("filter evaluation failed for resource '%s': %v", celEnv.SelectableResource().GetID(), err)
+				ctx.Errorf("silence %s (%q) failed: %s", silence.ID, lo.Ellipsis(string(silence.Filter), 30), errMsg)
+				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), errMsg),
+					fmt.Sprintf("failed to update notification silence(%s)", silence.ID))
 				continue
 			} else if ok, err := strconv.ParseBool(res); err != nil {
+				errMsg := fmt.Sprintf("non-boolean result for resource '%s': %v", celEnv.SelectableResource().GetID(), err)
+				ctx.Errorf("silence %q failed: %s", silence.Filter, errMsg)
+				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), errMsg),
+					fmt.Sprintf("failed to update notification silence(%s)", silence.ID))
 				continue
 			} else if ok {
 				return &silence
@@ -1063,10 +1071,18 @@ func getFirstSilencer(ctx context.Context, celEnv *celVariables, matchingSilence
 		if silence.Selectors != nil {
 			var resourceSelectors []types.ResourceSelector
 			if err := json.Unmarshal(silence.Selectors, &resourceSelectors); err != nil {
+				errMsg := fmt.Sprintf("failed to parse selectors for resource '%s': %v", celEnv.SelectableResource().GetID(), err)
+				ctx.Errorf("silence %s (%s) failed: %s", silence.ID, lo.Ellipsis(string(silence.Selectors), 30), errMsg)
+				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), errMsg),
+					fmt.Sprintf("failed to update notification silence(%s)", silence.ID))
 				continue
 			}
 
 			if ok, err := matchSelectors(celEnv.SelectableResource(), resourceSelectors); err != nil {
+				errMsg := fmt.Sprintf("selector matching failed for resource '%s': %v", celEnv.SelectableResource().GetID(), err)
+				ctx.Errorf("silence %s (%s) failed: %s", silence.ID, lo.Ellipsis(string(silence.Selectors), 30), errMsg)
+				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), errMsg),
+					fmt.Sprintf("failed to update notification silence(%s)", silence.ID))
 				continue
 			} else if ok {
 				return &silence
