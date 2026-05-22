@@ -115,7 +115,11 @@ func computeGrantsForConfigResults(ctx context.Context, results []dataquery.Quer
 		// Match each scope against this row
 		for _, sc := range scopeConfigs {
 			for _, selector := range sc.selectors {
-				if selector.Matches(rowMap) {
+				ok, err := selector.Matches(rowMap)
+				if err != nil {
+					return nil, fmt.Errorf("error matching scope[%s] selector: %w", sc.scopeID, err)
+				}
+				if ok {
 					grantsSet[sc.scopeID] = struct{}{}
 					break
 				}

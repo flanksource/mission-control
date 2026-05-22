@@ -41,8 +41,14 @@ func uiProxy(c echo.Context) error {
 		return dutyAPI.WriteError(c, err)
 	}
 
-	if cfg := c.QueryParam("config_id"); cfg != "" && !pluginruntime.SelectorMatches(ctx, entry, cfg) {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, cfg))
+	if cfg := c.QueryParam("config_id"); cfg != "" {
+		matches, err := pluginruntime.SelectorMatches(ctx, entry, cfg)
+		if err != nil {
+			return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+		}
+		if !matches {
+			return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, cfg))
+		}
 	}
 
 	prefix := "/api/plugins/" + pluginRef + "/ui"
@@ -82,7 +88,11 @@ func operationHTTPProxy(c echo.Context) error {
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("config_id is invalid"))
 	}
-	if !pluginruntime.SelectorMatches(ctx, entry, configID) {
+	matches, err := pluginruntime.SelectorMatches(ctx, entry, configID)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	}
+	if !matches {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, configID))
 	}
 	user := ctx.User()

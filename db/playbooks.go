@@ -129,7 +129,11 @@ func findPlaybooksForResourceSelectable(ctx context.Context, selectable types.Re
 
 		matches := true
 		for _, rs := range resourceSelectors {
-			if !rs.Matches(selectable) {
+			ok, err := rs.Matches(selectable)
+			if err != nil {
+				return nil, nil, fmt.Errorf("error matching playbook[%s] selector: %w", pb.ID, err)
+			}
+			if !ok {
 				matches = false
 				break
 			}

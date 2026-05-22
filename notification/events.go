@@ -1078,7 +1078,9 @@ func getFirstSilencer(ctx context.Context, celEnv *celVariables, matchingSilence
 				continue
 			}
 
-			if matchSelectors(celEnv.SelectableResource(), resourceSelectors) {
+			if ok, err := matchSelectors(celEnv.SelectableResource(), resourceSelectors); err != nil {
+				continue
+			} else if ok {
 				return &silence
 			}
 		}
@@ -1087,16 +1089,20 @@ func getFirstSilencer(ctx context.Context, celEnv *celVariables, matchingSilence
 	return nil
 }
 
-func matchSelectors(selectableResource types.ResourceSelectable, resourceSelectors []types.ResourceSelector) bool {
+func matchSelectors(selectableResource types.ResourceSelectable, resourceSelectors []types.ResourceSelector) (bool, error) {
 	if selectableResource == nil {
-		return false
+		return false, nil
 	}
 
 	for _, rs := range resourceSelectors {
-		if rs.Matches(selectableResource) {
-			return true
+		ok, err := rs.Matches(selectableResource)
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			return true, nil
 		}
 	}
 
-	return false
+	return false, nil
 }
