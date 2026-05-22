@@ -1079,10 +1079,6 @@ func getFirstSilencer(ctx context.Context, celEnv *celVariables, matchingSilence
 			}
 
 			if ok, err := matchSelectors(celEnv.SelectableResource(), resourceSelectors); err != nil {
-				errMsg := fmt.Sprintf("selector matching failed for resource '%s': %v", celEnv.SelectableResource().GetID(), err)
-				ctx.Errorf("silence %s (%s) failed: %s", silence.ID, lo.Ellipsis(string(silence.Selectors), 30), errMsg)
-				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), errMsg),
-					fmt.Sprintf("failed to update notification silence(%s)", silence.ID))
 				continue
 			} else if ok {
 				return &silence
