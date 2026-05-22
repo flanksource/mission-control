@@ -1,16 +1,14 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ErrorDetails, Icon, Tree } from "@flanksource/clicky-ui";
+import { NavLink, useNavigate } from "react-router-dom";
 import { fetchCatalogSummary } from "./api";
 import { errorDiagnosticsFromUnknown } from "./api/http";
 import { buildTypeTree, type TypeNode } from "./buildTree";
 import { ConfigIcon } from "./ConfigIcon";
 
-export type CatalogSidebarProps = {
-  selected: string | null;
-};
-
-export function CatalogSidebar({ selected }: CatalogSidebarProps) {
+export const CatalogSidebar = memo(function CatalogSidebar() {
+  const navigate = useNavigate();
   const [expandAll, setExpandAll] = useState<boolean | null>(null);
   const { data, isLoading, error } = useQuery({
     queryKey: ["catalog-summary"],
@@ -74,18 +72,12 @@ export function CatalogSidebar({ selected }: CatalogSidebarProps) {
         showControls={false}
         onSelect={(node) => {
           if (node.fullType) {
-            window.location.href = `/ui/type/${encodeURIComponent(node.fullType)}`;
+            navigate(typePath(node.fullType));
           }
         }}
         renderRow={({ node, hasChildren }) => {
           const isLeaf = !hasChildren && !!node.fullType;
-          const isSelected = isLeaf && selected === node.fullType;
-          const rowClassName = [
-            "flex w-full min-w-0 items-center justify-start gap-1 rounded px-1.5 py-0.5 text-left text-[13px]",
-            isSelected
-              ? "bg-accent font-semibold text-accent-foreground"
-              : "text-foreground/80 hover:bg-accent/50 hover:text-accent-foreground",
-          ].join(" ");
+          const baseClassName = "flex w-full min-w-0 items-center justify-start gap-1 rounded px-1.5 py-0.5 text-left text-[13px]";
 
           const content = (
             <>
@@ -103,18 +95,23 @@ export function CatalogSidebar({ selected }: CatalogSidebarProps) {
 
           if (isLeaf && node.fullType) {
             return (
-              <a
-                className={rowClassName}
-                href={`/ui/type/${encodeURIComponent(node.fullType)}`}
+              <NavLink
+                className={({ isActive }) => [
+                  baseClassName,
+                  isActive
+                    ? "bg-accent font-semibold text-accent-foreground"
+                    : "text-foreground/80 hover:bg-accent/50 hover:text-accent-foreground",
+                ].join(" ")}
+                to={typePath(node.fullType)}
                 onClick={(event) => event.stopPropagation()}
               >
                 {content}
-              </a>
+              </NavLink>
             );
           }
 
           return (
-            <div className={rowClassName}>
+            <div className={[baseClassName, "text-foreground/80 hover:bg-accent/50 hover:text-accent-foreground"].join(" ")}>
               {content}
             </div>
           );
@@ -126,4 +123,8 @@ export function CatalogSidebar({ selected }: CatalogSidebarProps) {
       />
     </div>
   );
+});
+
+function typePath(fullType: string) {
+  return `/type/${encodeURIComponent(fullType)}`;
 }

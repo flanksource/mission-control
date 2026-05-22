@@ -6,6 +6,7 @@ import { ConfigIcon } from "../ConfigIcon";
 import { searchConfigResources, type ResourceSelector } from "../api/configs";
 import { useConfigDetail } from "../api/hooks";
 import type { ConfigItem } from "../api/types";
+import { AppLink } from "../navigation";
 
 type ConfigItemSelectorProps = {
   valueId?: string;
@@ -191,10 +192,10 @@ function ConfigLink({
   if (!id) return <span className="text-muted-foreground">-</span>;
   const label = config?.name || labelFallback || id;
   return (
-    <a href={`/ui/item/${encodeURIComponent(id)}`} className="inline-flex max-w-full min-w-0 items-center gap-2 text-sm text-foreground hover:text-primary">
+    <AppLink href={`/ui/item/${encodeURIComponent(id)}`} className="inline-flex max-w-full min-w-0 items-center gap-2 text-sm text-foreground hover:text-primary">
       <ConfigIcon primary={config?.type || config?.config_class || "config"} className="h-4 max-w-4 shrink-0 text-muted-foreground" />
       <span className="min-w-0 truncate">{label}</span>
       {config?.deleted_at && <Badge tone="danger" size="xxs">Deleted</Badge>}
-    </a>
+    </AppLink>
   );
 }

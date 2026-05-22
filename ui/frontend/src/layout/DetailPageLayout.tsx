@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from "react";
 import { Icon } from "@flanksource/clicky-ui";
 import { ConfigIcon } from "../ConfigIcon";
+import { AppLink } from "../navigation";
 
 export type PageBreadcrumbItem = {
   label: ReactNode;
@@ -77,7 +78,7 @@ export function PageBreadcrumbs({ items }: { items: PageBreadcrumbItem[] }) {
           <span key={index} className="inline-flex min-w-0 items-center gap-3">
             {index > 0 && <span className="text-lg text-muted-foreground">/</span>}
             {item.href ? (
-              <a
+              <AppLink
                 href={item.href}
                 title={item.title}
                 className={[
@@ -86,7 +87,7 @@ export function PageBreadcrumbs({ items }: { items: PageBreadcrumbItem[] }) {
                 ].filter(Boolean).join(" ")}
               >
                 {content}
-              </a>
+              </AppLink>
             ) : (
               <span
                 title={item.title}

@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { BrowserRouter } from "react-router-dom";
 import {
   ThemeProvider,
   DensityProvider,
@@ -45,7 +46,9 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     <ThemeProvider>
       <DensityProvider>
         <QueryClientProvider client={queryClient}>
-          <App />
+          <BrowserRouter basename="/ui">
+            <App />
+          </BrowserRouter>
         </QueryClientProvider>
       </DensityProvider>
     </ThemeProvider>
