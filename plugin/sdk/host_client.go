@@ -28,6 +28,9 @@ type HostClient interface {
 	// GetConnectionForConfig resolves the connection used by the scraper that created the config item.
 	GetConnectionForConfig(ctx context.Context, configItemID string) (*pluginpb.ResolvedConnection, error)
 
+	// GetConnectionByID resolves a Mission Control connection by id.
+	GetConnectionByID(ctx context.Context, connectionID string) (*pluginpb.ResolvedConnection, error)
+
 	// GetConnectionByLabel resolves a connection using spec.connections.labels.
 	GetConnectionByLabel(ctx context.Context, label string) (*pluginpb.ResolvedConnection, error)
 
@@ -74,6 +77,10 @@ func (h *hostClient) GetConnectionByType(ctx context.Context, typ ConnectionType
 
 func (h *hostClient) GetConnectionForConfig(ctx context.Context, configItemID string) (*pluginpb.ResolvedConnection, error) {
 	return h.c.GetConnection(h.authContext(ctx), &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_ConfigItemId{ConfigItemId: configItemID}})
+}
+
+func (h *hostClient) GetConnectionByID(ctx context.Context, connectionID string) (*pluginpb.ResolvedConnection, error) {
+	return h.c.GetConnection(h.authContext(ctx), &pluginpb.GetConnectionRequest{Lookup: &pluginpb.GetConnectionRequest_ConnectionId{ConnectionId: connectionID}})
 }
 
 func (h *hostClient) GetConnectionByLabel(ctx context.Context, label string) (*pluginpb.ResolvedConnection, error) {

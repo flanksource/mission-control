@@ -1415,10 +1415,16 @@ func (x *ListConfigsRequest) GetCursor() string {
 	return ""
 }
 
-// GetConnectionRequest asks the host to resolve a connection by one of three
-// supported lookups: type, config item, or plugin-defined label. Type and label
-// lookups use spec.connections mappings from the Plugin CRD. Config lookups use
-// the scraper that created the config item.
+// GetConnectionRequest asks the host to resolve a connection by one of four
+// supported lookups: type, scraper config item, plugin-defined label, or direct
+// connection id.
+//
+// Type and label lookups use spec.connections mappings from the Plugin CRD.
+// config_item_id preserves the existing behavior: it resolves the connection
+// used by the scraper that created the config item. connection_id resolves a
+// Mission Control connection by id; plugins attached to MissionControl::Connection
+// config items can pass their config_item_id because connection config item ids
+// are the same as the underlying connection ids.
 type GetConnectionRequest struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Lookup:
@@ -1426,6 +1432,7 @@ type GetConnectionRequest struct {
 	//	*GetConnectionRequest_Type
 	//	*GetConnectionRequest_ConfigItemId
 	//	*GetConnectionRequest_Label
+	//	*GetConnectionRequest_ConnectionId
 	Lookup        isGetConnectionRequest_Lookup `protobuf_oneof:"lookup"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1495,12 +1502,21 @@ func (x *GetConnectionRequest) GetLabel() string {
 	return ""
 }
 
+func (x *GetConnectionRequest) GetConnectionId() string {
+	if x != nil {
+		if x, ok := x.Lookup.(*GetConnectionRequest_ConnectionId); ok {
+			return x.ConnectionId
+		}
+	}
+	return ""
+}
+
 type isGetConnectionRequest_Lookup interface {
 	isGetConnectionRequest_Lookup()
 }
 
 type GetConnectionRequest_Type struct {
-	Type string `protobuf:"bytes,1,opt,name=type,proto3,oneof"` // e.g. "sql", "aws", "kubernetes", "gcp", "azure"
+	Type string `protobuf:"bytes,1,opt,name=type,proto3,oneof"` // e.g. "sql", "aws", "kubernetes", "gcp", "azure", "s3"
 }
 
 type GetConnectionRequest_ConfigItemId struct {
@@ -1511,11 +1527,17 @@ type GetConnectionRequest_Label struct {
 	Label string `protobuf:"bytes,3,opt,name=label,proto3,oneof"` // resolve a plugin-defined connection label mapping
 }
 
+type GetConnectionRequest_ConnectionId struct {
+	ConnectionId string `protobuf:"bytes,4,opt,name=connection_id,json=connectionId,proto3,oneof"` // resolve a Mission Control connection by id
+}
+
 func (*GetConnectionRequest_Type) isGetConnectionRequest_Lookup() {}
 
 func (*GetConnectionRequest_ConfigItemId) isGetConnectionRequest_Lookup() {}
 
 func (*GetConnectionRequest_Label) isGetConnectionRequest_Lookup() {}
+
+func (*GetConnectionRequest_ConnectionId) isGetConnectionRequest_Lookup() {}
 
 type ResolvedConnection struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
@@ -1938,11 +1960,12 @@ const file_plugin_proto_rawDesc = "" +
 	"\x12ListConfigsRequest\x12F\n" +
 	"\bselector\x18\x01 \x01(\v2*.missioncontrol.plugin.v1.ResourceSelectorR\bselector\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\x05R\x05limit\x12\x16\n" +
-	"\x06cursor\x18\x03 \x01(\tR\x06cursor\"v\n" +
+	"\x06cursor\x18\x03 \x01(\tR\x06cursor\"\x9d\x01\n" +
 	"\x14GetConnectionRequest\x12\x14\n" +
 	"\x04type\x18\x01 \x01(\tH\x00R\x04type\x12&\n" +
 	"\x0econfig_item_id\x18\x02 \x01(\tH\x00R\fconfigItemId\x12\x16\n" +
-	"\x05label\x18\x03 \x01(\tH\x00R\x05labelB\b\n" +
+	"\x05label\x18\x03 \x01(\tH\x00R\x05label\x12%\n" +
+	"\rconnection_id\x18\x04 \x01(\tH\x00R\fconnectionIdB\b\n" +
 	"\x06lookup\"\x9e\x02\n" +
 	"\x12ResolvedConnection\x12\x12\n" +
 	"\x04type\x18\x01 \x01(\tR\x04type\x12\x10\n" +
@@ -2104,6 +2127,7 @@ func file_plugin_proto_init() {
 		(*GetConnectionRequest_Type)(nil),
 		(*GetConnectionRequest_ConfigItemId)(nil),
 		(*GetConnectionRequest_Label)(nil),
+		(*GetConnectionRequest_ConnectionId)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
