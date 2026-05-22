@@ -68,8 +68,14 @@ func ListPlugins(c echo.Context) error {
 		if e.Manifest == nil {
 			continue
 		}
-		if configID != "" && !pluginruntime.SelectorMatches(ctx, e, configID) {
-			continue
+		if configID != "" {
+			matches, err := pluginruntime.SelectorMatches(ctx, e, configID)
+			if err != nil {
+				return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+			}
+			if !matches {
+				continue
+			}
 		}
 		out = append(out, PluginListing{
 			Name:        e.Name,

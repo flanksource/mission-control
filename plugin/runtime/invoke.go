@@ -65,8 +65,14 @@ func Invoke(ctx dutyContext.Context, req Request, invoker Invoker) (*pluginpb.In
 	if OperationDef(entry, req.Operation) == nil {
 		return nil, entry, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "plugin %q operation %q not found", req.PluginRef, req.Operation)
 	}
-	if req.ConfigItemID != "" && !SelectorMatches(ctx, entry, req.ConfigItemID) {
-		return nil, entry, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "plugin %q is not enabled for config %s", req.PluginRef, req.ConfigItemID)
+	if req.ConfigItemID != "" {
+		matches, err := SelectorMatches(ctx, entry, req.ConfigItemID)
+		if err != nil {
+			return nil, entry, err
+		}
+		if !matches {
+			return nil, entry, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "plugin %q is not enabled for config %s", req.PluginRef, req.ConfigItemID)
+		}
 	}
 
 	subject := req.Subject
@@ -137,19 +143,20 @@ func OperationDef(entry *registry.Entry, op string) *pluginpb.OperationDef {
 	return nil
 }
 
-func SelectorMatches(ctx dutyContext.Context, entry *registry.Entry, configID string) bool {
+func SelectorMatches(ctx dutyContext.Context, entry *registry.Entry, configID string) (bool, error) {
 	if entry == nil {
-		return false
+		return false, nil
 	}
 	selector := entry.Spec.Selector
 	if selector.IsEmpty() {
-		return true
+		return true, nil
 	}
 
 	item, err := query.ConfigItemFromCache(ctx, configID)
 	if err != nil {
-		return false
+		return false, err
 	}
+
 	return selector.Matches(item)
 }
 

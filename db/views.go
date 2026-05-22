@@ -180,7 +180,11 @@ func FindViewsForConfig(ctx context.Context, config models.ConfigItem) ([]api.Vi
 
 		var matches bool
 		for _, uiPlugin := range spec.Display.Plugins {
-			if uiPlugin.ConfigTab.Matches(config) {
+			ok, err := uiPlugin.ConfigTab.Matches(config)
+			if err != nil {
+				return nil, fmt.Errorf("error matching view[%s] config tab selector: %w", view.ID, err)
+			}
+			if ok {
 				matches = true
 				break
 			}
