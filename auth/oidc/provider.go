@@ -26,14 +26,17 @@ type Provider struct {
 // It loads or generates the RSA signing key, upserts the public key to DB,
 // and returns a Provider containing the OpenIDProvider and http.Handler.
 func NewProvider(ctx context.Context, issuerURL, signingKeyPath string) (*Provider, error) {
-	privateKey, keyID, err := loadOrGenerateKey(ctx, signingKeyPath)
-	if err != nil {
-		return nil, fmt.Errorf("oidc signing key: %w", err)
-	}
-
 	cryptoKey, err := loadOrGenerateCryptoKey(signingKeyPath)
 	if err != nil {
 		return nil, fmt.Errorf("oidc crypto key: %w", err)
+	}
+	return newProviderWithCryptoKey(ctx, issuerURL, signingKeyPath, cryptoKey)
+}
+
+func newProviderWithCryptoKey(ctx context.Context, issuerURL, signingKeyPath string, cryptoKey [32]byte) (*Provider, error) {
+	privateKey, keyID, err := loadOrGenerateKey(ctx, signingKeyPath)
+	if err != nil {
+		return nil, fmt.Errorf("oidc signing key: %w", err)
 	}
 
 	signer := &signingKey{

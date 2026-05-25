@@ -1,6 +1,7 @@
 package oidc
 
 import (
+	"fmt"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -16,10 +17,17 @@ import (
 // A convenience redirect from /.well-known/openid-configuration is provided for standard discovery.
 func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL, signingKeyPath string, passwordChecker PasswordLoginChecker, externalProvider ExternalLoginProvider, lookup PersonLookup) error {
 	oidcIssuer := strings.TrimRight(issuerURL, "/")
-	provider, err := NewProvider(ctx, oidcIssuer, signingKeyPath)
+	cryptoKey, err := loadOrGenerateCryptoKey(signingKeyPath)
+	if err != nil {
+		return fmt.Errorf("oidc crypto key: %w", err)
+	}
+
+	provider, err := newProviderWithCryptoKey(ctx, oidcIssuer, signingKeyPath, cryptoKey)
 	if err != nil {
 		return err
 	}
+
+	oidcTxCookierManager := newTransactionCookieManager(cryptoKey, oidcIssuer)
 
 	var loginHandler *LoginHandler
 	if externalProvider != nil {
@@ -27,6 +35,7 @@ func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL, signingKeyPath st
 	} else {
 		loginHandler = NewPasswordLoginHandler(provider.Storage, provider.OpenIDProvider, passwordChecker, lookup, oidcIssuer)
 	}
+	loginHandler.oidcTxCookieValidator = oidcTxCookierManager
 
 	// Custom login form (not part of the standard OIDC protocol paths).
 	e.GET("/oidc/login", loginHandler.ShowForm)
@@ -41,9 +50,11 @@ func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL, signingKeyPath st
 	// Standard OIDC protocol endpoints — mounted at the root so that the issuer URL
 	// and the authorization_endpoint/token_endpoint values in the discovery document
 	// resolve to real routes on this server.
+	authorizeHandler := echo.WrapHandler(oidcTxCookierManager.issueOnAuthorize(provider.Handler))
+	callbackHandler := echo.WrapHandler(oidcTxCookierManager.requireOnAuthorizeCallback(provider.Handler))
 	h := echo.WrapHandler(provider.Handler)
-	e.Any("/authorize", h)
-	e.Any("/authorize/*", h)
+	e.Any("/authorize", authorizeHandler)
+	e.Any("/authorize/*", callbackHandler)
 	e.Any("/oauth/token", h)
 	e.Any("/oauth/introspect", h)
 	e.Any("/userinfo", h)
