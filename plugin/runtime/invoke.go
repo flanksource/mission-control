@@ -172,6 +172,9 @@ func EnforceInvokePermission(ctx dutyContext.Context, subject string, entry *reg
 			return ctx.Oops().Wrapf(err, "get config item %s", configID)
 		}
 		attr.Config = item
+		if !dutyRBAC.HasPermission(ctx, subject, attr, policy.ActionRead) {
+			return ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("not allowed to read config %s", configID)
+		}
 	}
 
 	if CanInvokePluginOperation(ctx, subject, attr, entry.Name, op) {
