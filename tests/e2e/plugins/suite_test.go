@@ -50,7 +50,6 @@ func TestPluginsE2E(t *testing.T) {
 }
 
 var _ = ginkgo.BeforeSuite(func() {
-	tmpDir = ginkgo.GinkgoT().TempDir()
 	Expect(os.Unsetenv(setup.DUTY_DB_URL)).To(Succeed())
 	defaultContext = setup.BeforeSuiteFn()
 
@@ -58,6 +57,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	noInvokeUser = createPerson("Plugin No Invoke", "plugin-no-invoke@test.local")
 	noConfigUser = createPerson("Plugin No Config", "plugin-no-config@test.local")
 
+	tmpDir = ginkgo.GinkgoT().TempDir()
 	pluginBinDir = filepath.Join(tmpDir, "plugins")
 	Expect(os.MkdirAll(pluginBinDir, 0750)).To(Succeed())
 	buildHasherPlugin(pluginBinDir)
