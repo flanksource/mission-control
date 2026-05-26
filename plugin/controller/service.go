@@ -4,7 +4,7 @@
 //
 // All RPCs operate in the calling plugin's identity (matched via the
 // peer-info that go-plugin's broker adds to the gRPC context).
-package host
+package controller
 
 import (
 	"context"
@@ -22,14 +22,10 @@ import (
 	"github.com/flanksource/incident-commander/auth"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/registry"
-	pluginruntime "github.com/flanksource/incident-commander/plugin/runtime"
 )
 
 // connectionCacheTTL is how long a resolved connection stays cached on the host.
 const connectionCacheTTL = 5 * time.Minute
-
-// PluginInvoker invokes a target plugin through its supervisor.
-type PluginInvoker = pluginruntime.Invoker
 
 type connKey struct {
 	connectionID string
@@ -48,7 +44,7 @@ type Service struct {
 	// plugin process. Authorization is checked before serving cached results.
 	connCache *lru.LRU[connKey, *pluginpb.ResolvedConnection]
 
-	invokePlugin PluginInvoker
+	invokePlugin Invoker
 }
 
 // New creates a host Service for one plugin id. Multiple plugins running
@@ -64,7 +60,7 @@ func New(ctx dutyContext.Context, pluginID uuid.UUID) *Service {
 }
 
 // SetPluginInvoker configures the callback used by InvokePlugin.
-func (s *Service) SetPluginInvoker(invoke PluginInvoker) {
+func (s *Service) SetPluginInvoker(invoke Invoker) {
 	s.invokePlugin = invoke
 }
 
@@ -174,14 +170,14 @@ func (s *Service) InvokePlugin(ctx context.Context, req *pluginpb.InvokePluginRe
 		depth = claims.Depth + 1
 	}
 
-	resp, _, err := pluginruntime.Invoke(dutyCtx, pluginruntime.Request{
+	resp, _, err := Invoke(dutyCtx, Request{
 		Context:      ctx,
 		PluginRef:    req.Plugin,
 		Operation:    req.Operation,
 		ParamsJSON:   req.ParamsJson,
 		ConfigItemID: req.ConfigItemId,
 		User:         dutyCtx.User(),
-		Subject:      pluginruntime.PluginSubject(source.Namespace, source.Name),
+		Subject:      PluginSubject(source.Namespace, source.Name),
 		Depth:        depth,
 		Deadline:     req.Deadline,
 	}, s.invokePlugin)

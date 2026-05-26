@@ -29,7 +29,6 @@ import (
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/registry"
-	pluginruntime "github.com/flanksource/incident-commander/plugin/runtime"
 	"github.com/flanksource/incident-commander/plugin/supervisor"
 	"github.com/flanksource/incident-commander/rbac"
 )
@@ -69,7 +68,7 @@ func ListPlugins(c echo.Context) error {
 			continue
 		}
 		if configID != "" {
-			matches, err := pluginruntime.SelectorMatches(ctx, e, configID)
+			matches, err := SelectorMatches(ctx, e, configID)
 			if err != nil {
 				return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 			}
@@ -103,7 +102,7 @@ func InvokeOperation(c echo.Context) error {
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("config_id is invalid"))
 	}
-	entry, err := pluginruntime.ResolvePlugin(ctx, pluginRef)
+	entry, err := ResolvePlugin(ctx, pluginRef)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
@@ -118,7 +117,7 @@ func InvokeOperation(c echo.Context) error {
 	}
 
 	paramsHash := hashBytes(body)
-	resp, entry, err := pluginruntime.Invoke(ctx, pluginruntime.Request{
+	resp, entry, err := Invoke(ctx, Request{
 		Context:      c.Request().Context(),
 		PluginRef:    pluginRef,
 		Operation:    op,

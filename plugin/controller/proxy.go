@@ -17,7 +17,6 @@ import (
 	"github.com/flanksource/incident-commander/plugin"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/registry"
-	pluginruntime "github.com/flanksource/incident-commander/plugin/runtime"
 	"github.com/flanksource/incident-commander/plugin/supervisor"
 	"github.com/flanksource/incident-commander/rbac"
 )
@@ -36,13 +35,13 @@ func registerProxyRoutes(e *echo.Echo) {
 func uiProxy(c echo.Context) error {
 	ctx := c.Request().Context().(dutyContext.Context)
 	pluginRef := c.Param("name")
-	entry, err := pluginruntime.ResolvePlugin(ctx, pluginRef)
+	entry, err := ResolvePlugin(ctx, pluginRef)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
 
 	if cfg := c.QueryParam("config_id"); cfg != "" {
-		matches, err := pluginruntime.SelectorMatches(ctx, entry, cfg)
+		matches, err := SelectorMatches(ctx, entry, cfg)
 		if err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 		}
@@ -68,11 +67,11 @@ func operationHTTPProxy(c echo.Context) error {
 	pluginRef := c.Param("name")
 	op := c.Param("op")
 
-	entry, err := pluginruntime.ResolvePlugin(ctx, pluginRef)
+	entry, err := ResolvePlugin(ctx, pluginRef)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
-	def := pluginruntime.OperationDef(entry, op)
+	def := OperationDef(entry, op)
 	if def == nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q operation %q not found", pluginRef, op))
 	}
@@ -88,7 +87,7 @@ func operationHTTPProxy(c echo.Context) error {
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("config_id is invalid"))
 	}
-	matches, err := pluginruntime.SelectorMatches(ctx, entry, configID)
+	matches, err := SelectorMatches(ctx, entry, configID)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
@@ -100,7 +99,7 @@ func operationHTTPProxy(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in"))
 	}
 	subject := user.ID.String()
-	if err := pluginruntime.EnforceInvokePermission(ctx, subject, entry, op, configID); err != nil {
+	if err := EnforceInvokePermission(ctx, subject, entry, op, configID); err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
 	roles, err := pluginRolesForUser(ctx, entry, configID)
