@@ -13,7 +13,7 @@
 //	    (JSON). The response body is whatever the plugin returned via
 //	    InvokeResponse.result, with the plugin's declared MIME type
 //	    (typically application/clicky+json).
-package controller
+package gateway
 
 import (
 	"io"

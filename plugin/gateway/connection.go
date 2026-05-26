@@ -1,4 +1,4 @@
-package controller
+package gateway
 
 import (
 	"encoding/json"

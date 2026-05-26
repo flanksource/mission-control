@@ -10,7 +10,7 @@ import (
 
 	"github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/adapter"
-	host "github.com/flanksource/incident-commander/plugin/controller"
+	host "github.com/flanksource/incident-commander/plugin/gateway"
 	"github.com/flanksource/incident-commander/plugin/registry"
 	"github.com/flanksource/incident-commander/plugin/supervisor"
 	"github.com/google/uuid"
@@ -37,7 +37,7 @@ func startPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 		return fmt.Errorf("plugin %s: not registered", id)
 	}
 	binPath := registry.BinaryPathFor(entry.Name)
-	svc := host.New(ctx, id)
+	svc := host.NewGRPCService(ctx, id)
 	svc.SetPluginInvoker(func(invokeCtx dutyContext.Context, targetID uuid.UUID, req *plugin.InvokeRequest) (*plugin.InvokeResponse, error) {
 		sup := supervisor.LookupSupervisor(targetID)
 		if sup == nil {

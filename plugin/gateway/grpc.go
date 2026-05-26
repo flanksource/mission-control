@@ -4,7 +4,7 @@
 //
 // All RPCs operate in the calling plugin's identity (matched via the
 // peer-info that go-plugin's broker adds to the gRPC context).
-package controller
+package gateway
 
 import (
 	"context"
@@ -47,10 +47,10 @@ type Service struct {
 	invokePlugin Invoker
 }
 
-// New creates a host Service for one plugin id. Multiple plugins running
+// NewGRPCService creates a host Service for one plugin id. Multiple plugins running
 // concurrently get separate Services so the connection allowlist (read off
 // the Plugin CRD via the registry) is enforced per-plugin.
-func New(ctx dutyContext.Context, pluginID uuid.UUID) *Service {
+func NewGRPCService(ctx dutyContext.Context, pluginID uuid.UUID) *Service {
 	cache := lru.NewLRU[connKey, *pluginpb.ResolvedConnection](256, nil, connectionCacheTTL)
 	return &Service{
 		pluginID:  pluginID,
