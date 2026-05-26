@@ -29,6 +29,7 @@ import type { ConfigItem } from "../api/types";
 import { ConfigItemSelector } from "../components/ConfigItemSelector";
 import { formatDate, stringifyValue, timeAgo } from "../config-detail/utils";
 import { DetailPageLayout, EntityHeader, HeaderPill, PageBreadcrumbs } from "../layout/DetailPageLayout";
+import { AppLink } from "../navigation";
 
 export type SettingsMode = "scrapers" | "scrape-plugins";
 
@@ -426,10 +427,10 @@ function ScraperTable({ rows }: { rows: ConfigScraper[] }) {
           {rows.map((row) => (
             <tr key={row.id} className="border-b border-border last:border-b-0 hover:bg-accent/40">
               <td className="px-3 py-2">
-                <a href={`/ui/settings/scrapers/${encodeURIComponent(row.id)}`} className="flex min-w-0 items-center gap-2 hover:text-primary">
+                <AppLink href={`/ui/settings/scrapers/${encodeURIComponent(row.id)}`} className="flex min-w-0 items-center gap-2 hover:text-primary">
                   <Icon name="lucide:radar" className="shrink-0 text-muted-foreground" />
                   <span className="truncate font-medium">{row.name || row.id}</span>
-                </a>
+                </AppLink>
               </td>
               <td className="truncate px-3 py-2 text-muted-foreground">{stringifyValue(row.namespace)}</td>
               <td className="truncate px-3 py-2 text-muted-foreground">{stringifyValue(row.source)}</td>

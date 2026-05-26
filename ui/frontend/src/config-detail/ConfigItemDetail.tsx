@@ -67,6 +67,7 @@ import type {
 } from "./config-changes/types";
 import { PluginTab } from "./PluginTab";
 import { pluginTabKey, usePluginTabs } from "./use-plugin-tabs";
+import { AppLink } from "../navigation";
 
 type TabKey = "overview" | "relationships" | "changes" | "insights" | "access" | "playbooks" | "json" | string;
 
@@ -263,9 +264,9 @@ function ConfigHeader({ config }: { config: ConfigItem }) {
         <>
           <div className="flex min-w-0 flex-wrap items-center gap-2">
             {config.type && (
-              <a className="font-mono text-xs text-sky-700 hover:underline" href={`/ui/type/${encodeURIComponent(config.type)}`}>
+              <AppLink className="font-mono text-xs text-sky-700 hover:underline" href={`/ui/type/${encodeURIComponent(config.type)}`}>
                 {config.type}
-              </a>
+              </AppLink>
             )}
             {config.config_class && <span>{config.config_class}</span>}
             <span className="font-mono text-xs">{config.id}</span>
@@ -343,13 +344,13 @@ function OverviewTab({
           ) : (
             <div className="flex flex-col gap-2">
               {parents.map((parent) => (
-                <a key={parent.id} href={`/ui/item/${encodeURIComponent(parent.id)}`} className="rounded-md border border-border p-2 hover:bg-accent/50">
+                <AppLink key={parent.id} href={`/ui/item/${encodeURIComponent(parent.id)}`} className="rounded-md border border-border p-2 hover:bg-accent/50">
                   <div className="flex items-center gap-2">
                     <ConfigIcon primary={parent.type} className="h-4 max-w-4 shrink-0 text-muted-foreground" />
                     <span className="truncate text-sm font-medium">{parent.name}</span>
                   </div>
                   <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{parent.type}</div>
-                </a>
+                </AppLink>
               ))}
               <div className="rounded-md border border-primary/30 bg-primary/5 p-2">
                 <div className="flex items-center gap-2">
@@ -490,13 +491,13 @@ function ParentageBlock({
   }
 
   return (
-    <a
+    <AppLink
       href={`/ui/item/${encodeURIComponent(id)}`}
       className="group shrink-0"
       title={item?.name || id}
     >
       {content}
-    </a>
+    </AppLink>
   );
 }
 
@@ -704,7 +705,7 @@ function RelationshipCard({ item }: { item: ConfigRelationshipTreeNode }) {
   const tags = tagEntries(item.tags);
   const tagValues = tags.map(([key, value]) => `${key}=${value}`);
   return (
-    <a
+    <AppLink
       href={`/ui/item/${encodeURIComponent(item.id)}`}
       className={[
         "group flex min-w-0 flex-1 items-center gap-2 rounded-md border bg-background px-2.5 py-1.5 shadow-sm transition hover:bg-accent/50 hover:shadow",
@@ -732,7 +733,7 @@ function RelationshipCard({ item }: { item: ConfigRelationshipTreeNode }) {
       )}
       {item.relation && <Badge size="xxs">{item.relation}</Badge>}
       {isRelated && <span className="h-2 w-2 shrink-0 rounded-full bg-violet-500" title="Related config" />}
-    </a>
+    </AppLink>
   );
 }
 
@@ -970,7 +971,7 @@ function AccessMatrix({ config, rows }: { config: ConfigItem; rows: ConfigAccess
             </button>
           ) : undefined}
         >
-          <a href={accessPrincipalHref(NIL_UUID, group.groupId, `group:${group.groupName}`)} className="flex min-w-0 items-center gap-2 hover:underline">
+          <AppLink href={accessPrincipalHref(NIL_UUID, group.groupId, `group:${group.groupName}`)} className="flex min-w-0 items-center gap-2 hover:underline">
             <Icon name="lucide:users" className="h-4 max-w-4 shrink-0 text-muted-foreground" />
             <div className="flex min-w-0 items-center gap-2">
               <span className="min-w-0 truncate">{group.groupName}</span>
@@ -980,7 +981,7 @@ function AccessMatrix({ config, rows }: { config: ConfigItem; rows: ConfigAccess
                 </Badge>
               )}
             </div>
-          </a>
+          </AppLink>
         </MatrixPrincipalLabel>
       ),
       cells: matrix.roles.map((role) => {
@@ -988,9 +989,9 @@ function AccessMatrix({ config, rows }: { config: ConfigItem; rows: ConfigAccess
         if (!row) return null;
         return (
           <AccessMatrixTooltip content={<AccessCellTooltip principalName={group.groupName} row={row} />}>
-            <a href={accessRoleHref(row)} className="inline-flex w-full justify-center">
+            <AppLink href={accessRoleHref(row)} className="inline-flex w-full justify-center">
               <AccessDot indirect />
-            </a>
+            </AppLink>
           </AccessMatrixTooltip>
         );
       }),
@@ -1027,7 +1028,7 @@ function matrixUserRow(
     key: child ? `${user.groupId ?? "group"}:${user.key}` : user.key,
     label: (
       <MatrixPrincipalLabel child={child}>
-        <a
+        <AppLink
           href={accessPrincipalHref(user.userId, user.groupId, child ? undefined : user.roleSource)}
           className="flex min-w-0 items-center gap-2 hover:underline"
         >
@@ -1036,7 +1037,7 @@ function matrixUserRow(
             <div className="truncate">{user.name}</div>
             {user.email && <div className="truncate text-xs font-normal text-muted-foreground">{user.email}</div>}
           </div>
-        </a>
+        </AppLink>
       </MatrixPrincipalLabel>
     ),
     cells: roles.map((role) => {
@@ -1045,9 +1046,9 @@ function matrixUserRow(
       const href = accessRoleHref(row);
       return (
         <AccessMatrixTooltip content={<AccessCellTooltip principalName={user.name} row={row} />}>
-          <a href={href} className="inline-flex w-full justify-center">
+          <AppLink href={href} className="inline-flex w-full justify-center">
             <AccessDot indirect={isIndirectAccess(row)} />
-          </a>
+          </AppLink>
         </AccessMatrixTooltip>
       );
     }),

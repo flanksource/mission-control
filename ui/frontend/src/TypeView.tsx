@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Badge,
@@ -33,13 +33,18 @@ import {
 import { TagList } from "./config-detail/TagList";
 import { healthStatus } from "./config-detail/utils";
 import { DetailPageLayout, EntityHeader } from "./layout/DetailPageLayout";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 export type TypeViewProps = {
   configType: string;
 };
 
 export function TypeView({ configType }: TypeViewProps) {
-  const [searchParams, setSearchParams] = useLocationSearchParams();
+  const navigate = useNavigate();
+  const [searchParams, setRouterSearchParams] = useSearchParams();
+  const setSearchParams = useCallback((updater: (current: URLSearchParams) => URLSearchParams) => {
+    setRouterSearchParams((current) => updater(new URLSearchParams(current)), { replace: true });
+  }, [setRouterSearchParams]);
   const searchParamsKey = searchParams.toString();
   const filters = useMemo(
     () => parseConfigListFilters(searchParams, configType),
@@ -120,7 +125,7 @@ export function TypeView({ configType }: TypeViewProps) {
         value: configType,
         options: configTypeOptions,
         onChange: (value) => {
-          if (value && value !== configType) navigateToConfigType(value, searchParams);
+          if (value && value !== configType) navigateToConfigType(navigate, value, searchParams);
         },
         disabled: configTypeOptions.length === 0,
       },
@@ -177,6 +182,7 @@ export function TypeView({ configType }: TypeViewProps) {
       filters.status,
       groupByOptions,
       labelOptions,
+      navigate,
       searchParams,
       statusOptions,
       updateParam,
@@ -251,12 +257,13 @@ function ConfigGroups({ groups }: { groups: ReturnType<typeof groupConfigItems> 
 }
 
 function ConfigTable({ rows }: { rows: ConfigItem[] }) {
+  const navigate = useNavigate();
   return (
     <DataTable
       data={rows as unknown as Record<string, unknown>[]}
       columns={configColumns}
       getRowId={(row) => String(row.id)}
-      getRowHref={(row) => `/ui/item/${encodeURIComponent(String(row.id))}`}
+      onRowClick={(row) => navigate(`/item/${encodeURIComponent(String(row.id))}`)}
       showGlobalFilter={false}
       defaultSort={{ key: "name", dir: "asc" }}
       emptyMessage="No matching config items"
@@ -321,36 +328,11 @@ const configColumns: DataTableColumn<Record<string, unknown>>[] = [
   },
 ];
 
-function useLocationSearchParams(): [
-  URLSearchParams,
-  (updater: (current: URLSearchParams) => URLSearchParams) => void,
-] {
-  const [search, setSearch] = useState(() => window.location.search);
-
-  useEffect(() => {
-    const onPopState = () => setSearch(window.location.search);
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, []);
-
-  const setSearchParams = useCallback((updater: (current: URLSearchParams) => URLSearchParams) => {
-    const next = updater(new URLSearchParams(window.location.search));
-    const query = next.toString();
-    const url = `${window.location.pathname}${query ? `?${query}` : ""}`;
-    window.history.replaceState(null, "", url);
-    setSearch(window.location.search);
-  }, []);
-
-  return [useMemo(() => new URLSearchParams(search), [search]), setSearchParams];
-}
-
-function navigateToConfigType(configType: string, currentParams: URLSearchParams) {
+function navigateToConfigType(navigate: ReturnType<typeof useNavigate>, configType: string, currentParams: URLSearchParams) {
   const nextParams = new URLSearchParams(currentParams);
   nextParams.delete("configType");
   const query = nextParams.toString();
-  const href = `/ui/type/${encodeURIComponent(configType)}${query ? `?${query}` : ""}`;
-  window.history.pushState(null, "", href);
-  window.dispatchEvent(new PopStateEvent("popstate"));
+  navigate(`/type/${encodeURIComponent(configType)}${query ? `?${query}` : ""}`);
 }
 
 function configLabelOptions(tags: ConfigLabelOption[], labels: ConfigLabelOption[]): MultiSelectOption[] {

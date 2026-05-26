@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   Badge,
   DataTable,
@@ -31,6 +32,7 @@ import type {
 import { TagList } from "../config-detail/TagList";
 import { formatDate, isIndirectAccess, stringifyValue, timeAgo } from "../config-detail/utils";
 import { DetailPageLayout, EntityHeader, HeaderPill, PageBreadcrumbs } from "../layout/DetailPageLayout";
+import { AppLink } from "../navigation";
 
 export type AccessBrowserMode = "users" | "groups";
 
@@ -47,6 +49,7 @@ export function AccessBrowser({ mode, id }: AccessBrowserProps) {
 }
 
 function AccessUsersList() {
+  const navigate = useNavigate();
   const query = useAccessUsers();
   return (
     <AccessShell
@@ -61,7 +64,7 @@ function AccessUsersList() {
           data={query.data as unknown as Record<string, unknown>[]}
           columns={userColumns}
           getRowId={(row) => String(row.id)}
-          getRowHref={(row) => `/ui/access/users/${encodeURIComponent(String(row.id))}`}
+          onRowClick={(row) => navigate(`/access/users/${encodeURIComponent(String(row.id))}`)}
           defaultSort={{ key: "name", dir: "asc" }}
           autoFilter
         />
@@ -71,6 +74,7 @@ function AccessUsersList() {
 }
 
 function AccessGroupsList() {
+  const navigate = useNavigate();
   const query = useAccessGroups();
   return (
     <AccessShell
@@ -85,7 +89,7 @@ function AccessGroupsList() {
           data={query.data as unknown as Record<string, unknown>[]}
           columns={groupColumns}
           getRowId={(row) => String(row.id)}
-          getRowHref={(row) => `/ui/access/groups/${encodeURIComponent(String(row.id))}`}
+          onRowClick={(row) => navigate(`/access/groups/${encodeURIComponent(String(row.id))}`)}
           defaultSort={{ key: "name", dir: "asc" }}
           autoFilter
         />
@@ -436,6 +440,7 @@ function numberSortValue(value: unknown) {
 }
 
 function MembershipGroupsTable({ rows }: { rows: ExternalUserGroupMembership[] }) {
+  const navigate = useNavigate();
   const [showRemoved, setShowRemoved] = useState(false);
   const [search, setSearch] = useState("");
   if (rows.length === 0) return <DetailEmptyState label="No group memberships" />;
@@ -463,7 +468,7 @@ function MembershipGroupsTable({ rows }: { rows: ExternalUserGroupMembership[] }
           data={visibleRows as unknown as Record<string, unknown>[]}
           columns={membershipGroupColumns}
           getRowId={(row, index) => `${row.external_group_id}-${index}`}
-          getRowHref={(row) => `/ui/access/groups/${encodeURIComponent(String(row.external_group_id))}`}
+          onRowClick={(row) => navigate(`/access/groups/${encodeURIComponent(String(row.external_group_id))}`)}
           showGlobalFilter={false}
         />
       )}
@@ -521,13 +526,14 @@ function membershipGroupSearchText(row: ExternalUserGroupMembership) {
 }
 
 function MembershipUsersTable({ rows }: { rows: ExternalUserGroupMembership[] }) {
+  const navigate = useNavigate();
   if (rows.length === 0) return <DetailEmptyState label="No members" />;
   return (
     <DataTable
       data={rows as unknown as Record<string, unknown>[]}
       columns={membershipUserColumns}
       getRowId={(row, index) => `${row.external_user_id}-${index}`}
-      getRowHref={(row) => `/ui/access/users/${encodeURIComponent(String(row.external_user_id))}`}
+      onRowClick={(row) => navigate(`/access/users/${encodeURIComponent(String(row.external_user_id))}`)}
       autoFilter
     />
   );
@@ -660,7 +666,7 @@ function permissionMatrixRows(group: PermissionResourceGroup): MatrixTableRow[] 
   return group.resources.map((resource) => ({
     key: resource.id,
     label: (
-      <a href={configHref(resource.id)} className="flex min-w-0 items-center gap-2 hover:underline">
+      <AppLink href={configHref(resource.id)} className="flex min-w-0 items-center gap-2 hover:underline">
         <ConfigIcon primary={resource.type} className="h-4 max-w-4 shrink-0 text-muted-foreground" />
         <div className="min-w-0">
           <div className="truncate">{resource.name}</div>
@@ -668,15 +674,15 @@ function permissionMatrixRows(group: PermissionResourceGroup): MatrixTableRow[] 
             <div className="truncate font-mono text-[11px] font-normal text-muted-foreground">{resource.id}</div>
           )}
         </div>
-      </a>
+      </AppLink>
     ),
     cells: group.roles.map((role) => {
       const permission = resource.roles.get(role);
       if (!permission) return null;
       return (
-        <a href={configHref(resource.id)} className="inline-flex w-full justify-center" title={permissionTooltip(permission)}>
+        <AppLink href={configHref(resource.id)} className="inline-flex w-full justify-center" title={permissionTooltip(permission)}>
           <PermissionDot indirect={isIndirectAccess(permission)} />
-        </a>
+        </AppLink>
       );
     }),
   }));

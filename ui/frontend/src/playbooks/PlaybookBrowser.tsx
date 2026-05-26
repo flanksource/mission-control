@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Badge,
   DataTable,
@@ -40,6 +41,7 @@ import {
   useRunnablePlaybooksForConfig,
 } from "../api/hooks";
 import { type ResourceSelector } from "../api/configs";
+import { AppLink } from "../navigation";
 import { ConfigItemSelector } from "../components/ConfigItemSelector";
 import type {
   ConfigItem,
@@ -616,10 +618,10 @@ function PlaybookCardMenu({
       className="absolute right-4 top-12 z-30 w-40 overflow-hidden rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-lg"
       onClick={(event) => event.stopPropagation()}
     >
-      <a href={historyHref} className={itemClass}>
+      <AppLink href={historyHref} className={itemClass}>
         <Icon name="lucide:history" />
         History
-      </a>
+      </AppLink>
       <button type="button" onClick={onRun} className={itemClass}>
         <Icon name="lucide:play" />
         Run
@@ -662,7 +664,7 @@ function RecentRunsPanel({ runs, loading }: { runs: PlaybookRun[]; loading: bool
               {runs.slice(0, 12).map((run) => {
                 const target = targetSummaryFromRun(run);
                 return (
-                  <a
+                  <AppLink
                     key={run.id}
                     href={`/ui/playbooks/runs/${encodeURIComponent(run.id)}`}
                     className="grid min-w-0 gap-2 rounded-md border border-transparent p-2 text-sm hover:border-border hover:bg-accent/30"
@@ -676,7 +678,7 @@ function RecentRunsPanel({ runs, loading }: { runs: PlaybookRun[]; loading: bool
                       <span className="truncate">{target?.label ?? "No target"}</span>
                       <span className="shrink-0">{timeAgo(run.start_time || run.scheduled_time || run.created_at || "")}</span>
                     </div>
-                  </a>
+                  </AppLink>
                 );
               })}
             </div>
@@ -1303,7 +1305,7 @@ function RunSideRail({
         ) : (
           <div className="grid gap-2">
             {childRuns.map((child) => (
-              <a
+              <AppLink
                 key={child.id}
                 href={`/ui/playbooks/runs/${encodeURIComponent(child.id)}`}
                 className="grid gap-1 rounded-md border border-border p-2 text-sm hover:bg-accent/30"
@@ -1313,7 +1315,7 @@ function RunSideRail({
                   <StatusDot status={child.status} />
                 </div>
                 <span className="truncate font-mono text-xs text-muted-foreground">{child.id}</span>
-              </a>
+              </AppLink>
             ))}
           </div>
         )}
@@ -1394,6 +1396,7 @@ function SubmitPlaybookRunDialog({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const [parameters, setParameters] = useState<PlaybookParameter[]>([]);
   const [values, setValues] = useState<Record<string, string>>({});
   const [runTarget, setRunTarget] = useState<PlaybookRunTarget>(target);
@@ -1405,8 +1408,7 @@ function SubmitPlaybookRunDialog({
     mutationFn: (request: PlaybookRunSubmitRequest) => submitPlaybookRun(request),
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ["playbook_runs"] });
-      window.history.pushState(null, "", `/ui/playbooks/runs/${encodeURIComponent(response.run_id)}`);
-      window.dispatchEvent(new PopStateEvent("popstate"));
+      navigate(`/playbooks/runs/${encodeURIComponent(response.run_id)}`);
       onClose();
     },
   });
@@ -1799,7 +1801,6 @@ function PlaybookRunsTable({ runs }: { runs: PlaybookRun[] }) {
       data={runs as unknown as Record<string, unknown>[]}
       columns={runColumns}
       getRowId={(row) => String(row.id)}
-      getRowHref={(row) => `/ui/playbooks/runs/${encodeURIComponent(String(row.id))}`}
       defaultSort={{ key: "created_at", dir: "desc" }}
       autoFilter
       renderExpandedRow={(row) => <JsonView data={row} defaultOpenDepth={1} />}
@@ -1858,10 +1859,10 @@ function PlaybookShell({
           </div>
           <div className="min-w-0">
             {backHref && (
-              <a href={backHref} className="mb-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+              <AppLink href={backHref} className="mb-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
                 <Icon name="lucide:arrow-left" />
                 {backLabel}
-              </a>
+              </AppLink>
             )}
             <h1 className="truncate text-xl font-semibold">{title}</h1>
             {subtitle && <div className="mt-1 truncate text-sm text-muted-foreground">{subtitle}</div>}
@@ -1885,12 +1886,11 @@ function PlaybookPageTabs({ active }: { active: "playbooks" | "runs" }) {
     <div className="border-b border-border pb-2">
       <div className="flex flex-wrap items-center gap-2" role="tablist">
         {tabs.map((tab) => (
-          <button
+          <AppLink
             key={tab.id}
-            type="button"
+            href={tab.href}
             role="tab"
             aria-selected={active === tab.id}
-            onClick={() => navigateTo(tab.href)}
             className={[
               "inline-flex h-9 items-center gap-2 rounded-md border px-3 text-sm font-medium",
               active === tab.id
@@ -1900,7 +1900,7 @@ function PlaybookPageTabs({ active }: { active: "playbooks" | "runs" }) {
           >
             <ConfigIcon primary={tab.icon} className="h-4 max-w-4" />
             {tab.label}
-          </button>
+          </AppLink>
         ))}
       </div>
     </div>
@@ -1914,10 +1914,10 @@ function RunFilters({ status, playbookId }: { status?: string; playbookId?: stri
       <span>Filters:</span>
       {status && <Badge size="xs" icon="lucide:activity">Status {status}</Badge>}
       {playbookId && <Badge size="xs" icon="lucide:book-open-check">Playbook {playbookId}</Badge>}
-      <a href="/ui/playbooks/runs" className="inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 hover:bg-accent/50">
+      <Link to="/playbooks/runs" className="inline-flex h-7 items-center gap-1 rounded-md border border-border px-2 hover:bg-accent/50">
         <Icon name="lucide:x" />
         Clear
-      </a>
+      </Link>
     </div>
   );
 }
@@ -1998,11 +1998,11 @@ function ConfigLink({
   if (!id) return <span className="text-muted-foreground">-</span>;
   const label = data?.name || labelFallback || id;
   return (
-    <a href={`/ui/item/${encodeURIComponent(id)}`} className={["inline-flex max-w-full items-center gap-2", className].join(" ")}>
+    <AppLink href={`/ui/item/${encodeURIComponent(id)}`} className={["inline-flex max-w-full items-center gap-2", className].join(" ")}>
       <ConfigIcon primary={data?.type || data?.config_class || "config"} className="h-4 max-w-4 shrink-0 text-muted-foreground" />
       <span className="min-w-0 truncate">{label}</span>
       {data?.deleted_at && <Badge tone="danger" size="xxs">Deleted</Badge>}
-    </a>
+    </AppLink>
   );
 }
 
@@ -2090,7 +2090,8 @@ const runColumns: DataTableColumn<Record<string, unknown>>[] = [
     grow: true,
     render: (value, row) => {
       const playbook = value as Playbook | null;
-      return (
+      const runId = String(row.id ?? "");
+      const content = (
         <div className="flex min-w-0 items-center gap-2">
           <PlaybookIcon playbook={playbook ?? { id: String(row.playbook_id ?? ""), name: String(row.playbook_id ?? "") }} className="h-5 max-w-5 shrink-0" />
           <div className="min-w-0">
@@ -2101,6 +2102,7 @@ const runColumns: DataTableColumn<Record<string, unknown>>[] = [
           </div>
         </div>
       );
+      return runId ? <AppLink href={`/ui/playbooks/runs/${encodeURIComponent(runId)}`} className="hover:underline">{content}</AppLink> : content;
     },
     filterValue: (value, row) => {
       const playbook = value as Playbook | null;
@@ -2120,15 +2122,13 @@ const runColumns: DataTableColumn<Record<string, unknown>>[] = [
 ];
 
 function usePlaybookRunFilters(): PlaybookRunsOptions {
-  const search = typeof window === "undefined" ? "" : window.location.search;
-  return useMemo(() => {
-    const params = new URLSearchParams(search);
-    return {
-      playbookId: params.get("playbook") || undefined,
-      status: params.get("status") || undefined,
-      limit: 50,
-    };
-  }, [search]);
+  const [params] = useSearchParams();
+  const search = params.toString();
+  return useMemo(() => ({
+    playbookId: params.get("playbook") || undefined,
+    status: params.get("status") || undefined,
+    limit: 50,
+  }), [params, search]);
 }
 
 function runnableListItemToPlaybook(item: PlaybookListItem): RunnablePlaybook {
@@ -2864,7 +2864,3 @@ function toneStepCircleClass(tone: PlaybookStatusVisual["tone"], emphasized = fa
   }
 }
 
-function navigateTo(href: string) {
-  window.history.pushState(null, "", href);
-  window.dispatchEvent(new PopStateEvent("popstate"));
-}
