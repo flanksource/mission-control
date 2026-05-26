@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/api"
@@ -32,6 +33,18 @@ var (
 )
 
 const basicAuthCookieName = "authorization"
+
+func setBasicAuthCookie(c echo.Context, token string) {
+	c.SetCookie(&http.Cookie{
+		Name:     basicAuthCookieName,
+		Value:    token,
+		Path:     "/",
+		MaxAge:   int(jwtTokenLifetime.Seconds()),
+		Expires:  time.Now().Add(jwtTokenLifetime),
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	})
+}
 
 func UseBasic(e *echo.Echo) {
 	logger.Infof("Using basic authentication with htpasswd file: %s", HtpasswdFile)
@@ -167,6 +180,9 @@ func authenticateFromCookie(c echo.Context) bool {
 
 	if err := InjectToken(ctx, c, &person, ""); err != nil {
 		return false
+	}
+	if token, ok := extractBearerAuthToken(c.Request().Header); ok && token != cookie.Value {
+		setBasicAuthCookie(c, token)
 	}
 
 	ctx = ctx.WithUser(&person)
@@ -353,13 +369,7 @@ func BasicLogin(c echo.Context) error {
 		return loginErr(http.StatusInternalServerError, "failed to generate token")
 	}
 
-	c.SetCookie(&http.Cookie{
-		Name:     basicAuthCookieName,
-		Value:    token,
-		Path:     "/",
-		HttpOnly: true,
-		SameSite: http.SameSiteStrictMode,
-	})
+	setBasicAuthCookie(c, token)
 
 	AddLoginContext(c, person)
 

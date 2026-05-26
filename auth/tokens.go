@@ -41,6 +41,9 @@ var tokenCache = cache.New(1*time.Hour, 1*time.Hour)
 var deletedTokensCache = cache.New(24*time.Hour, 24*time.Hour)
 
 const (
+	jwtTokenLifetime = time.Hour
+	jwtTokenCacheTTL = 55 * time.Minute
+
 	// If token is expiring within 15 days we update it's expiry
 	preExpiryWindow = 15 * 24 * time.Hour
 
@@ -68,11 +71,15 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		return token.(string), nil
 	}
 
+	now := time.Now()
+
 	// Postgrest makes this jwt available as a session parameter inside postgres.
 	// We inject the rls payload here and then access it inside postgres using request.jwt.claims parameter.
 	claims := jwt.MapClaims{
 		"role": config.Postgrest.DBRole,
 		"id":   user.ID.String(),
+		"iat":  jwt.NewNumericDate(now),
+		"exp":  jwt.NewNumericDate(now.Add(jwtTokenLifetime)),
 	}
 
 	if rlsPayload, err := GetRLSPayload(ctx.WithUser(user)); err != nil {
@@ -90,7 +97,7 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		ctx.Errorf("Error updating last login for user[%s]: %v", user, err)
 	}
 
-	tokenCache.SetDefault(key, token)
+	tokenCache.Set(key, token, jwtTokenCacheTTL)
 	return token, nil
 }
 
