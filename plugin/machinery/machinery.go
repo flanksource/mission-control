@@ -9,10 +9,9 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/flanksource/incident-commander/plugin"
-	"github.com/flanksource/incident-commander/plugin/adapter"
-	host "github.com/flanksource/incident-commander/plugin/gateway"
+	"github.com/flanksource/incident-commander/plugin/gateway"
+	"github.com/flanksource/incident-commander/plugin/machinery/local"
 	"github.com/flanksource/incident-commander/plugin/registry"
-	"github.com/flanksource/incident-commander/plugin/supervisor"
 	"github.com/google/uuid"
 )
 
@@ -36,10 +35,11 @@ func startPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 	if entry == nil {
 		return fmt.Errorf("plugin %s: not registered", id)
 	}
+
 	binPath := registry.BinaryPathFor(entry.Name)
-	svc := host.NewGRPCService(ctx, id)
+	svc := gateway.NewGRPCService(ctx, id)
 	svc.SetPluginInvoker(func(invokeCtx dutyContext.Context, targetID uuid.UUID, req *plugin.InvokeRequest) (*plugin.InvokeResponse, error) {
-		sup := supervisor.LookupSupervisor(targetID)
+		sup := local.LookupSupervisor(targetID)
 		if sup == nil {
 			return nil, invokeCtx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", targetID)
 		}
@@ -58,7 +58,7 @@ func startPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 				ctx.Logger.Errorf("plugin %s: host broker accept: %v", id, err)
 				return
 			}
-			grpcServer := adapter.GRPCServerFactory([]grpc.ServerOption{
+			grpcServer := local.GRPCServerFactory([]grpc.ServerOption{
 				grpc.UnaryInterceptor(svc.UnaryServerInterceptor()),
 			})
 			svc.Register(grpcServer)
@@ -69,15 +69,15 @@ func startPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 		return brokerID, nil
 	}
 
-	if supervisor.LookupSupervisor(id) != nil {
+	if local.LookupSupervisor(id) != nil {
 		return nil
 	}
 
-	sup := supervisor.New(id, binPath)
-	supervisor.Set(id, sup)
+	sup := local.New(id, binPath)
+	local.Set(id, sup)
 
 	if err := sup.Start(ctx, startHost); err != nil {
-		supervisor.Remove(id)
+		local.Remove(id)
 		return fmt.Errorf("plugin %s: start supervisor: %w", id, err)
 	}
 
@@ -85,8 +85,8 @@ func startPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 }
 
 func stopPlugin(id uuid.UUID) error {
-	sup := supervisor.LookupSupervisor(id)
-	supervisor.Remove(id)
+	sup := local.LookupSupervisor(id)
+	local.Remove(id)
 	if sup != nil {
 		sup.Stop()
 	}

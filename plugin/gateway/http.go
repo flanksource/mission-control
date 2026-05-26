@@ -28,8 +28,8 @@ import (
 
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/machinery/local"
 	"github.com/flanksource/incident-commander/plugin/registry"
-	"github.com/flanksource/incident-commander/plugin/supervisor"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
@@ -150,7 +150,7 @@ func InvokeOperation(c echo.Context) error {
 }
 
 func invokeViaSupervisor(ctx dutyContext.Context, pluginID uuid.UUID, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
-	sup := supervisor.LookupSupervisor(pluginID)
+	sup := local.LookupSupervisor(pluginID)
 	if sup == nil {
 		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
 	}

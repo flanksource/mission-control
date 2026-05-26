@@ -1,4 +1,4 @@
-package adapter
+package local
 
 import (
 	"context"
@@ -59,3 +59,19 @@ func GRPCServerFactory(opts []grpc.ServerOption) *grpc.Server {
 	)
 	return grpc.NewServer(opts...)
 }
+
+// ProtocolVersion is bumped whenever the gRPC contract in plugin/proto/
+// changes in a non-additive way. Plugins reporting a different version
+// are rejected by the supervisor.
+const ProtocolVersion = uint(1)
+
+// Handshake is the shared go-plugin handshake config.
+var Handshake = goplugin.HandshakeConfig{
+	ProtocolVersion:  ProtocolVersion,
+	MagicCookieKey:   "MISSION_CONTROL_PLUGIN",
+	MagicCookieValue: "mission-control-plugin/v1",
+}
+
+// PluginName is the key plugins are registered under in the go-plugin
+// PluginMap. There is only one plugin per binary.
+const PluginName = "mission-control"

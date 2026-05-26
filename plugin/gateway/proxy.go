@@ -16,8 +16,8 @@ import (
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/machinery/local"
 	"github.com/flanksource/incident-commander/plugin/registry"
-	"github.com/flanksource/incident-commander/plugin/supervisor"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
@@ -161,7 +161,7 @@ func proxyToPluginOperation(c echo.Context, entry *registry.Entry, pluginRef, op
 
 func pluginHTTPURL(c echo.Context, entry *registry.Entry, pluginRef string) (*url.URL, error) {
 	ctx := c.Request().Context().(dutyContext.Context)
-	sup := supervisor.LookupSupervisor(entry.ID)
+	sup := local.LookupSupervisor(entry.ID)
 	if sup == nil {
 		return nil, dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", pluginRef))
 	}

@@ -3,7 +3,7 @@
 // Each Supervisor wraps a goplugin.Client that talks to one plugin binary.
 // It launches the binary, completes the RegisterPlugin handshake, watches
 // for unexpected exits, and restarts up to a rate-limited budget.
-package supervisor
+package local
 
 import (
 	gocontext "context"
@@ -20,14 +20,13 @@ import (
 
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/plugin"
-	"github.com/flanksource/incident-commander/plugin/adapter"
 	"github.com/flanksource/incident-commander/plugin/registry"
 )
 
 // pluginMap is the host-side go-plugin registry used to dispense the
 // mission-control plugin client.
 var pluginMap = map[string]goplugin.Plugin{
-	adapter.PluginName: &adapter.GRPCPlugin{},
+	PluginName: &GRPCPlugin{},
 }
 
 // Supervisor owns the lifecycle of one plugin process.
@@ -41,7 +40,7 @@ type Supervisor struct {
 
 	mu        sync.Mutex
 	client    *goplugin.Client
-	pluginCLI *adapter.Client
+	pluginCLI *Client
 	manifest  *plugin.PluginManifest
 	hostBrkID uint32
 	startHost func(*goplugin.GRPCBroker) (uint32, error)
@@ -83,11 +82,11 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 
 	cmd := exec.Command(s.BinaryPath)
 	cmd.Env = append(cmd.Env,
-		fmt.Sprintf("%s=%s", adapter.Handshake.MagicCookieKey, adapter.Handshake.MagicCookieValue),
+		fmt.Sprintf("%s=%s", Handshake.MagicCookieKey, Handshake.MagicCookieValue),
 	)
 
 	cli := goplugin.NewClient(&goplugin.ClientConfig{
-		HandshakeConfig:  adapter.Handshake,
+		HandshakeConfig:  Handshake,
 		Plugins:          pluginMap,
 		Cmd:              cmd,
 		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolGRPC},
@@ -103,13 +102,13 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 		return fmt.Errorf("plugin %s rpc client: %w", s.Name, err)
 	}
 
-	raw, err := rpcClient.Dispense(adapter.PluginName)
+	raw, err := rpcClient.Dispense(PluginName)
 	if err != nil {
 		cli.Kill()
 		return fmt.Errorf("plugin %s dispense: %w", s.Name, err)
 	}
 
-	pluginCli, ok := raw.(*adapter.Client)
+	pluginCli, ok := raw.(*Client)
 	if !ok {
 		cli.Kill()
 		return fmt.Errorf("plugin %s: unexpected dispense type %T", s.Name, raw)
@@ -123,7 +122,7 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 	s.hostBrkID = hostBrkID
 
 	manifest, err := pluginCli.Service.RegisterPlugin(dialCtx, &plugin.RegisterRequest{
-		HostProtocolVersion: uint32(adapter.ProtocolVersion),
+		HostProtocolVersion: uint32(ProtocolVersion),
 		HostBrokerId:        hostBrkID,
 	})
 	if err != nil {
