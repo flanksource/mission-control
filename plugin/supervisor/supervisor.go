@@ -19,8 +19,8 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 
 	dutyContext "github.com/flanksource/duty/context"
+	"github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/adapter"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
 )
 
@@ -42,7 +42,7 @@ type Supervisor struct {
 	mu        sync.Mutex
 	client    *goplugin.Client
 	pluginCLI *adapter.Client
-	manifest  *pluginpb.PluginManifest
+	manifest  *plugin.PluginManifest
 	hostBrkID uint32
 	startHost func(*goplugin.GRPCBroker) (uint32, error)
 	stopped   bool
@@ -122,7 +122,7 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 	}
 	s.hostBrkID = hostBrkID
 
-	manifest, err := pluginCli.Service.RegisterPlugin(dialCtx, &pluginpb.RegisterRequest{
+	manifest, err := pluginCli.Service.RegisterPlugin(dialCtx, &plugin.RegisterRequest{
 		HostProtocolVersion: uint32(adapter.ProtocolVersion),
 		HostBrokerId:        hostBrkID,
 	})
@@ -327,7 +327,7 @@ func (s *Supervisor) Stop() {
 }
 
 // Manifest returns the most recent PluginManifest received from the plugin.
-func (s *Supervisor) Manifest() *pluginpb.PluginManifest {
+func (s *Supervisor) Manifest() *plugin.PluginManifest {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.manifest
@@ -343,7 +343,7 @@ func (s *Supervisor) UIPort() uint32 {
 }
 
 // Invoke calls the plugin's Invoke RPC.
-func (s *Supervisor) Invoke(ctx gocontext.Context, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
+func (s *Supervisor) Invoke(ctx gocontext.Context, req *plugin.InvokeRequest) (*plugin.InvokeResponse, error) {
 	s.mu.Lock()
 	pluginCli := s.pluginCLI
 	s.mu.Unlock()
@@ -354,12 +354,12 @@ func (s *Supervisor) Invoke(ctx gocontext.Context, req *pluginpb.InvokeRequest) 
 }
 
 // ListOperations calls the plugin's ListOperations RPC.
-func (s *Supervisor) ListOperations(ctx gocontext.Context) (*pluginpb.OperationList, error) {
+func (s *Supervisor) ListOperations(ctx gocontext.Context) (*plugin.OperationList, error) {
 	s.mu.Lock()
 	pluginCli := s.pluginCLI
 	s.mu.Unlock()
 	if pluginCli == nil {
 		return nil, fmt.Errorf("plugin %s not running", s.Name)
 	}
-	return pluginCli.Service.ListOperations(ctx, &pluginpb.Empty{})
+	return pluginCli.Service.ListOperations(ctx, &plugin.Empty{})
 }

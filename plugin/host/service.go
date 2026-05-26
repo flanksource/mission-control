@@ -20,7 +20,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/flanksource/incident-commander/auth"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/registry"
 	pluginruntime "github.com/flanksource/incident-commander/plugin/runtime"
 )

@@ -6,7 +6,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"

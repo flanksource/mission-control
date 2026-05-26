@@ -4,7 +4,7 @@
 // 	protoc        v3.21.9
 // source: plugin.proto
 
-package pluginpb
+package plugin
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -2012,7 +2012,7 @@ const file_plugin_proto_rawDesc = "" +
 	"\x03Log\x12\".missioncontrol.plugin.v1.LogEntry\x1a\x1f.missioncontrol.plugin.v1.Empty\x12Z\n" +
 	"\rWriteArtifact\x12\".missioncontrol.plugin.v1.Artifact\x1a%.missioncontrol.plugin.v1.ArtifactRef\x12Y\n" +
 	"\fReadArtifact\x12%.missioncontrol.plugin.v1.ArtifactRef\x1a\".missioncontrol.plugin.v1.Artifact\x12g\n" +
-	"\fInvokePlugin\x12-.missioncontrol.plugin.v1.InvokePluginRequest\x1a(.missioncontrol.plugin.v1.InvokeResponseBAZ?github.com/flanksource/incident-commander/plugin/proto;pluginpbb\x06proto3"
+	"\fInvokePlugin\x12-.missioncontrol.plugin.v1.InvokePluginRequest\x1a(.missioncontrol.plugin.v1.InvokeResponseB9Z7github.com/flanksource/incident-commander/plugin;pluginb\x06proto3"
 
 var (
 	file_plugin_proto_rawDescOnce sync.Once

@@ -281,8 +281,8 @@ $(PROTOC_GEN_GO_GRPC): $(LOCALBIN)
 .PHONY: proto
 proto: protoc $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC) ## Regenerate plugin gRPC stubs from plugin/proto/plugin.proto
 	$(PROTOC) \
-		--proto_path=plugin/proto \
+		--proto_path=plugin \
 		--proto_path=$(PROTOC_INCLUDE) \
-		--go_out=plugin/proto --go_opt=paths=source_relative \
-		--go-grpc_out=plugin/proto --go-grpc_opt=paths=source_relative \
-		plugin/proto/plugin.proto
+		--go_out=plugin --go_opt=paths=source_relative \
+		--go-grpc_out=plugin --go-grpc_opt=paths=source_relative \
+		plugin/plugin.proto

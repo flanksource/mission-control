@@ -6,7 +6,7 @@ import (
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	pluginpb "github.com/flanksource/incident-commander/plugin"
 )
 
 var _ = ginkgo.Describe("FormatVersion", func() {

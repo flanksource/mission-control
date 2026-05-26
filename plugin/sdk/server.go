@@ -12,7 +12,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/flanksource/incident-commander/plugin"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	pluginpb "github.com/flanksource/incident-commander/plugin"
 )
 
 // pluginServer adapts the user's Plugin interface onto the generated

@@ -5,7 +5,7 @@ import (
 	"net/url"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/registry"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

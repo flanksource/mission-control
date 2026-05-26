@@ -10,9 +10,9 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
 
+	"github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/adapter"
 	"github.com/flanksource/incident-commander/plugin/host"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/flanksource/incident-commander/plugin/registry"
 )
 
@@ -45,7 +45,7 @@ func startPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 	}
 	binPath := registry.BinaryPathFor(entry.Name)
 	svc := host.New(ctx, id)
-	svc.SetPluginInvoker(func(invokeCtx dutyContext.Context, targetID uuid.UUID, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
+	svc.SetPluginInvoker(func(invokeCtx dutyContext.Context, targetID uuid.UUID, req *plugin.InvokeRequest) (*plugin.InvokeResponse, error) {
 		sup := LookupSupervisor(targetID)
 		if sup == nil {
 			return nil, invokeCtx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", targetID)

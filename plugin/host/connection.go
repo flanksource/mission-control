@@ -14,7 +14,7 @@ import (
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/registry"
 	"google.golang.org/protobuf/proto"
 )

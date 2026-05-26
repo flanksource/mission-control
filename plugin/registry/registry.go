@@ -15,7 +15,7 @@ import (
 	"sync"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"github.com/google/uuid"
 )
 

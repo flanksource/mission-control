@@ -6,7 +6,7 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
 
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	pluginpb "github.com/flanksource/incident-commander/plugin"
 )
 
 const maxGRPCMessageSize = 64 * 1024 * 1024 // 64MB

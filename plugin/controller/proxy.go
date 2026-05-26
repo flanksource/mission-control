@@ -15,7 +15,7 @@ import (
 
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/registry"
 	pluginruntime "github.com/flanksource/incident-commander/plugin/runtime"
 	"github.com/flanksource/incident-commander/plugin/supervisor"
