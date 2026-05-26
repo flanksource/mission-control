@@ -538,6 +538,62 @@ var _ = ginkgo.Describe("OIDC", func() {
 		})
 	})
 
+	ginkgo.It("requires an OIDC transaction cookie after authorize creates an auth request", func() {
+		e := newEchoInstance(DefaultContext)
+		Expect(oidc.MountRoutes(e, DefaultContext, "http://localhost:8080", keyPath, &mockChecker{}, nil, mockLookup)).To(Succeed())
+
+		authorizeURL := "/authorize?" + url.Values{
+			"client_id":             {oidc.ClientID},
+			"response_type":         {"code"},
+			"redirect_uri":          {"http://localhost:6274/oauth/callback"},
+			"scope":                 {"openid profile email"},
+			"state":                 {"state-1"},
+			"nonce":                 {"nonce-1"},
+			"code_challenge":        {"challenge-1"},
+			"code_challenge_method": {"S256"},
+		}.Encode()
+
+		req := httptest.NewRequest(http.MethodGet, authorizeURL, nil)
+		req = req.WithContext(DefaultContext.Wrap(req.Context()))
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+
+		Expect(rec.Code).To(Equal(http.StatusFound))
+		loginURL := rec.Header().Get("Location")
+		Expect(loginURL).To(ContainSubstring("/oidc/login?auth_request_id="))
+		cookies := rec.Result().Cookies()
+		Expect(cookies).ToNot(BeEmpty())
+		parsedLoginURL, err := url.Parse(loginURL)
+		Expect(err).ToNot(HaveOccurred())
+		authRequestID := parsedLoginURL.Query().Get("auth_request_id")
+		Expect(authRequestID).ToNot(BeEmpty())
+
+		externalCallbackReq := httptest.NewRequest(http.MethodGet, "/oidc/kratos/callback?auth_request_id="+authRequestID, nil)
+		externalCallbackReq = externalCallbackReq.WithContext(DefaultContext.Wrap(externalCallbackReq.Context()))
+		externalCallbackRec := httptest.NewRecorder()
+		e.ServeHTTP(externalCallbackRec, externalCallbackReq)
+		Expect(externalCallbackRec.Code).To(Equal(http.StatusUnauthorized))
+
+		callbackReq := httptest.NewRequest(http.MethodGet, "/authorize/callback?id="+authRequestID, nil)
+		callbackReq = callbackReq.WithContext(DefaultContext.Wrap(callbackReq.Context()))
+		callbackRec := httptest.NewRecorder()
+		e.ServeHTTP(callbackRec, callbackReq)
+		Expect(callbackRec.Code).To(Equal(http.StatusUnauthorized))
+
+		loginReq := httptest.NewRequest(http.MethodGet, loginURL, nil)
+		loginReq = loginReq.WithContext(DefaultContext.Wrap(loginReq.Context()))
+		loginRec := httptest.NewRecorder()
+		e.ServeHTTP(loginRec, loginReq)
+		Expect(loginRec.Code).To(Equal(http.StatusUnauthorized))
+
+		loginReq = httptest.NewRequest(http.MethodGet, loginURL, nil)
+		loginReq = loginReq.WithContext(DefaultContext.Wrap(loginReq.Context()))
+		loginReq.AddCookie(cookies[0])
+		loginRec = httptest.NewRecorder()
+		e.ServeHTTP(loginRec, loginReq)
+		Expect(loginRec.Code).To(Equal(http.StatusOK))
+	})
+
 	ginkgo.It("mounts basic-auth OIDC discovery with the public endpoint issuer", func() {
 		oldAuthMode := vars.AuthMode
 		oldOIDCEnabled := OIDCEnabled

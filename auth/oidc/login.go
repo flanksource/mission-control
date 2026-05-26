@@ -18,6 +18,10 @@ type LoginHandler struct {
 	externalLoginProvider ExternalLoginProvider
 	PersonLookup          PersonLookup
 	issuerURL             string
+
+	// validates the transaction cookie created when the OIDC flow is initiated
+	// to bind callbacks to the browser that started the flow.
+	oidcTxCookieValidator *transactionCookieManager
 }
 
 type PasswordLoginChecker interface {
@@ -55,6 +59,9 @@ func (h *LoginHandler) ShowForm(c echo.Context) error {
 	if id == "" {
 		return c.String(http.StatusBadRequest, "missing auth_request_id")
 	}
+	if err := h.validateTransaction(c, id); err != nil {
+		return c.String(http.StatusUnauthorized, "invalid oidc transaction")
+	}
 
 	if h.externalLoginProvider != nil {
 		redirectURL, err := h.externalLoginProvider.LoginRedirectURL(id)
@@ -86,6 +93,9 @@ func (h *LoginHandler) HandleSubmit(c echo.Context) error {
 	if id == "" || username == "" || password == "" {
 		return renderForm("All fields required")
 	}
+	if err := h.validateTransaction(c, id); err != nil {
+		return c.String(http.StatusUnauthorized, "invalid oidc transaction")
+	}
 
 	if h.passwordLoginChecker == nil || h.PersonLookup == nil {
 		return c.String(http.StatusNotFound, "password login is not configured")
@@ -114,6 +124,9 @@ func (h *LoginHandler) HandleExternalCallback(c echo.Context) error {
 	if id == "" {
 		return c.String(http.StatusBadRequest, "missing auth_request_id")
 	}
+	if err := h.validateTransaction(c, id); err != nil {
+		return c.String(http.StatusUnauthorized, "invalid oidc transaction")
+	}
 
 	if h.externalLoginProvider == nil {
 		return c.String(http.StatusNotFound, "external callback is not configured")
@@ -131,4 +144,12 @@ func (h *LoginHandler) HandleExternalCallback(c echo.Context) error {
 	issuerCtx := op.ContextWithIssuer(c.Request().Context(), h.issuerURL)
 	callbackURL := op.AuthCallbackURL(h.provider)(issuerCtx, id)
 	return c.Redirect(http.StatusFound, callbackURL)
+}
+
+func (h *LoginHandler) validateTransaction(c echo.Context, authRequestID string) error {
+	if h.oidcTxCookieValidator == nil {
+		return nil
+	}
+
+	return h.oidcTxCookieValidator.validateEcho(c, authRequestID)
 }

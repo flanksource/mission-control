@@ -262,12 +262,20 @@ func (s *Storage) populateUserinfo(userinfo *oidc.UserInfo, subject string) erro
 // SetAuthRequestSubject sets the subject on an auth request after login.
 func (s *Storage) SetAuthRequestSubject(id, subject string) error {
 	now := time.Now()
-	return s.ctx.DB().Model(&AuthRequest{}).Where("id = ?", id).
+	result := s.ctx.DB().Model(&AuthRequest{}).
+		Where("id = ? AND expires_at > NOW() AND (subject = '' OR subject IS NULL)", id).
 		Updates(map[string]any{
 			"subject":   subject,
 			"auth_time": now,
 			"done":      true,
-		}).Error
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return fmt.Errorf("auth request not found or already completed")
+	}
+	return nil
 }
 
 // CleanupExpired removes expired auth requests and refresh tokens.
