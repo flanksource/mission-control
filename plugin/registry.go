@@ -8,6 +8,7 @@
 package plugin
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -20,16 +21,26 @@ import (
 
 var ErrAmbiguousPlugin = errors.New("ambiguous plugin reference")
 
+// Runtime is the host-side handle for a reachable plugin.
+type Runtime interface {
+	Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error)
+	UIPort() uint32
+	Stop()
+}
+
 // Entry is everything the host needs to route a request to one plugin.
 // Manifest is populated by the supervisor once the plugin completes
 // RegisterPlugin; it is nil while the plugin is starting up or has crashed
 // past the supervisor's restart budget.
 type Entry struct {
-	ID        uuid.UUID
-	Name      string
-	Namespace string
-	Spec      v1.PluginSpec
-	Manifest  *PluginManifest
+	ID             uuid.UUID
+	Name           string
+	Namespace      string
+	Spec           v1.PluginSpec
+	LifecycleKind  LifecycleKind
+	ConnectionKind ConnectionKind
+	Manifest       *PluginManifest
+	Runtime        Runtime
 }
 
 // Registry is the host-side in-memory store of plugins.
@@ -91,6 +102,12 @@ func (r *Registry) Upsert(id uuid.UUID, namespace, name string, spec v1.PluginSp
 	e.Name = name
 	e.Namespace = namespace
 	e.Spec = spec
+	if e.LifecycleKind == "" {
+		e.LifecycleKind = LifecycleManaged
+	}
+	if e.ConnectionKind == "" {
+		e.ConnectionKind = ConnectionLocal
+	}
 	r.addIndexes(e)
 	return e, nil
 }
@@ -161,6 +178,46 @@ func (r *Registry) Resolve(ref string) (*Entry, error) {
 		return nil, fmt.Errorf("%w %q; use plugin id or namespace/name, matches: %s", ErrAmbiguousPlugin, ref, strings.Join(refs, ", "))
 	}
 	return snapshotEntry(matches[0]), nil
+}
+
+// SetRuntime stores the running-process handle for a plugin.
+func (r *Registry) SetRuntime(id uuid.UUID, runtime Runtime) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	e, ok := r.plugins[id]
+	if !ok {
+		return fmt.Errorf("plugin %s not registered", id)
+	}
+	e.Runtime = runtime
+	return nil
+}
+
+// SetRuntimeIfAbsent stores the runtime only when no runtime is already active.
+func (r *Registry) SetRuntimeIfAbsent(id uuid.UUID, runtime Runtime) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	e, ok := r.plugins[id]
+	if !ok {
+		return false, fmt.Errorf("plugin %s not registered", id)
+	}
+	if e.Runtime != nil {
+		return false, nil
+	}
+	e.Runtime = runtime
+	return true, nil
+}
+
+// PopRuntime removes and returns the running-process handle for a plugin.
+func (r *Registry) PopRuntime(id uuid.UUID) Runtime {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	e, ok := r.plugins[id]
+	if !ok {
+		return nil
+	}
+	runtime := e.Runtime
+	e.Runtime = nil
+	return runtime
 }
 
 // Remove drops a plugin from the registry. Callers are responsible for

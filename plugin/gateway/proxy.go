@@ -1,7 +1,6 @@
 package gateway
 
 import (
-	"fmt"
 	"net/http/httputil"
 	"net/url"
 	"path"
@@ -16,7 +15,7 @@ import (
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
-	"github.com/flanksource/incident-commander/plugin/machinery/local"
+	"github.com/flanksource/incident-commander/plugin/machinery"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
@@ -34,13 +33,13 @@ func registerProxyRoutes(e *echo.Echo) {
 func uiProxy(c echo.Context) error {
 	ctx := c.Request().Context().(dutyContext.Context)
 	pluginRef := c.Param("name")
-	entry, err := ResolvePlugin(ctx, pluginRef)
+	entry, err := machinery.ResolvePlugin(ctx, pluginRef)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
 
 	if cfg := c.QueryParam("config_id"); cfg != "" {
-		matches, err := SelectorMatches(ctx, entry, cfg)
+		matches, err := machinery.SelectorMatches(ctx, entry, cfg)
 		if err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 		}
@@ -58,7 +57,7 @@ func uiProxy(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin UI path %q not found", pluginPath))
 	}
 
-	return proxyToPluginUI(c, entry, pluginRef, prefix)
+	return proxyToPluginUI(c, entry, prefix)
 }
 
 func operationHTTPProxy(c echo.Context) error {
@@ -66,11 +65,11 @@ func operationHTTPProxy(c echo.Context) error {
 	pluginRef := c.Param("name")
 	op := c.Param("op")
 
-	entry, err := ResolvePlugin(ctx, pluginRef)
+	entry, err := machinery.ResolvePlugin(ctx, pluginRef)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
-	def := OperationDef(entry, op)
+	def := machinery.OperationDef(entry, op)
 	if def == nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q operation %q not found", pluginRef, op))
 	}
@@ -86,7 +85,7 @@ func operationHTTPProxy(c echo.Context) error {
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("config_id is invalid"))
 	}
-	matches, err := SelectorMatches(ctx, entry, configID)
+	matches, err := machinery.SelectorMatches(ctx, entry, configID)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
@@ -98,7 +97,7 @@ func operationHTTPProxy(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in"))
 	}
 	subject := user.ID.String()
-	if err := EnforceInvokePermission(ctx, subject, entry, op, configID); err != nil {
+	if err := machinery.EnforceInvokePermission(ctx, subject, entry, op, configID); err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
 	roles, err := pluginRolesForUser(ctx, entry, configID)
@@ -112,7 +111,7 @@ func operationHTTPProxy(c echo.Context) error {
 	}
 
 	paramsHash := httpParamsHash(c.Request().Method, c.QueryParams())
-	if err := proxyToPluginOperation(c, entry, pluginRef, op, invocationToken); err != nil {
+	if err := proxyToPluginOperation(c, entry, op, invocationToken); err != nil {
 		return err
 	}
 
@@ -121,8 +120,8 @@ func operationHTTPProxy(c echo.Context) error {
 	return nil
 }
 
-func proxyToPluginUI(c echo.Context, entry *pluginpb.Entry, pluginRef, prefix string) error {
-	target, err := pluginHTTPURL(c, entry, pluginRef)
+func proxyToPluginUI(c echo.Context, entry *pluginpb.Entry, prefix string) error {
+	target, err := pluginHTTPURL(c, entry)
 	if err != nil {
 		return err
 	}
@@ -139,8 +138,8 @@ func proxyToPluginUI(c echo.Context, entry *pluginpb.Entry, pluginRef, prefix st
 	return nil
 }
 
-func proxyToPluginOperation(c echo.Context, entry *pluginpb.Entry, pluginRef, op, invocationToken string) error {
-	target, err := pluginHTTPURL(c, entry, pluginRef)
+func proxyToPluginOperation(c echo.Context, entry *pluginpb.Entry, op, invocationToken string) error {
+	target, err := pluginHTTPURL(c, entry)
 	if err != nil {
 		return err
 	}
@@ -158,20 +157,11 @@ func proxyToPluginOperation(c echo.Context, entry *pluginpb.Entry, pluginRef, op
 	return nil
 }
 
-func pluginHTTPURL(c echo.Context, entry *pluginpb.Entry, pluginRef string) (*url.URL, error) {
+func pluginHTTPURL(c echo.Context, entry *pluginpb.Entry) (*url.URL, error) {
 	ctx := c.Request().Context().(dutyContext.Context)
-	sup := local.LookupSupervisor(entry.ID)
-	if sup == nil {
-		return nil, dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q not running", pluginRef))
-	}
-	port := sup.UIPort()
-	if port == 0 {
-		return nil, dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINTERNAL).Errorf("plugin %q did not advertise a UI port", pluginRef))
-	}
-
-	target, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
+	target, err := machinery.HTTPURL(ctx, entry.ID)
 	if err != nil {
-		return nil, dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "parse plugin url"))
+		return nil, dutyAPI.WriteError(c, err)
 	}
 	return target, nil
 }

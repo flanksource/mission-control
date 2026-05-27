@@ -2,17 +2,13 @@ package reconciler
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 
-	"github.com/flanksource/deps"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/query/grammar"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/machinery"
-	"github.com/flanksource/incident-commander/plugin/machinery/local"
 	"github.com/google/uuid"
 )
 
@@ -27,28 +23,10 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 		return err
 	}
 
-	binDir := local.PluginPath()
-	if err := os.MkdirAll(binDir, 0o755); err != nil {
-		return fmt.Errorf("create plugin dir %s: %w", binDir, err)
+	binPath, err := machinery.InstallPlugin(ctx, p.Name, p.Spec.Source, p.Spec.Version)
+	if err != nil {
+		return err
 	}
-
-	binPath := filepath.Join(binDir, p.Name)
-	if info, err := os.Stat(binPath); err == nil && !info.IsDir() {
-		ctx.Logger.V(3).Infof("plugin %s: using existing binary at %s, skipping install", p.Name, binPath)
-	} else {
-		res, err := deps.InstallWithContext(ctx,
-			p.Spec.Source,
-			p.Spec.Version,
-			deps.WithBinDir(binDir),
-		)
-		if err != nil {
-			return fmt.Errorf("install plugin %s: %w", p.Name, err)
-		}
-		if res != nil && res.Error != nil {
-			return fmt.Errorf("install plugin %s: %w", p.Name, res.Error)
-		}
-	}
-
 	p.Status.InstalledPath = binPath
 
 	id, err := parsePluginID(string(p.UID))

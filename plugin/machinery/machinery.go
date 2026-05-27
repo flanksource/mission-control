@@ -2,17 +2,41 @@ package machinery
 
 import (
 	"fmt"
+	"net/url"
+	"os"
 
+	"github.com/flanksource/deps"
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
+	"github.com/google/uuid"
 	goplugin "github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
 
 	"github.com/flanksource/incident-commander/plugin"
-	"github.com/flanksource/incident-commander/plugin/gateway"
 	"github.com/flanksource/incident-commander/plugin/machinery/local"
-	"github.com/google/uuid"
 )
+
+func InstallPlugin(ctx dutyContext.Context, name, source, version string) (string, error) {
+	binDir := local.PluginPath()
+	if err := os.MkdirAll(binDir, 0o755); err != nil {
+		return "", fmt.Errorf("create plugin dir %s: %w", binDir, err)
+	}
+
+	binPath := local.BinaryPathFor(name)
+	if info, err := os.Stat(binPath); err == nil && !info.IsDir() {
+		ctx.Logger.V(3).Infof("plugin %s: using existing binary at %s, skipping install", name, binPath)
+		return binPath, nil
+	}
+
+	res, err := deps.InstallWithContext(ctx, source, version, deps.WithBinDir(binDir))
+	if err != nil {
+		return "", fmt.Errorf("install plugin %s: %w", name, err)
+	}
+	if res != nil && res.Error != nil {
+		return "", fmt.Errorf("install plugin %s: %w", name, res.Error)
+	}
+	return binPath, nil
+}
 
 func StartPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 	entry := plugin.DefaultRegistry.Get(id)
@@ -20,15 +44,16 @@ func StartPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 		return fmt.Errorf("plugin %s: not registered", id)
 	}
 
-	binPath := local.BinaryPathFor(entry.Name)
-	svc := gateway.NewGRPCService(ctx, id)
-	svc.SetPluginInvoker(func(invokeCtx dutyContext.Context, targetID uuid.UUID, req *plugin.InvokeRequest) (*plugin.InvokeResponse, error) {
-		sup := local.LookupSupervisor(targetID)
-		if sup == nil {
-			return nil, invokeCtx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", targetID)
-		}
-		return sup.Invoke(invokeCtx, req)
-	})
+	switch entry.ConnectionKind {
+	case "", plugin.ConnectionLocal:
+		return startLocalPlugin(ctx, entry)
+	default:
+		return fmt.Errorf("plugin %s: unsupported connection kind %q", id, entry.ConnectionKind)
+	}
+}
+
+func startLocalPlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
+	svc := NewGRPCService(ctx, entry.ID)
 
 	// startHost is invoked after Dispense() so the broker is live. It opens
 	// a listener on the broker, starts a gRPC server for this plugin's
@@ -39,7 +64,7 @@ func StartPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 		go func() {
 			lis, err := broker.Accept(brokerID)
 			if err != nil {
-				ctx.Logger.Errorf("plugin %s: host broker accept: %v", id, err)
+				ctx.Logger.Errorf("plugin %s: host broker accept: %v", entry.ID, err)
 				return
 			}
 			grpcServer := local.GRPCServerFactory([]grpc.ServerOption{
@@ -47,29 +72,75 @@ func StartPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 			})
 			svc.Register(grpcServer)
 			if err := grpcServer.Serve(lis); err != nil {
-				ctx.Logger.Debugf("plugin %s: host server stopped: %v", id, err)
+				ctx.Logger.Debugf("plugin %s: host server stopped: %v", entry.ID, err)
 			}
 		}()
 		return brokerID, nil
 	}
 
-	sup := local.New(id, binPath)
-	if !local.SetIfAbsent(id, sup) {
+	return startLocalPluginWithHost(ctx, entry, startHost)
+}
+
+func startLocalPluginWithHost(ctx dutyContext.Context, entry *plugin.Entry, startHost func(*goplugin.GRPCBroker) (uint32, error)) error {
+	sup := local.New(entry.ID, local.BinaryPathFor(entry.Name))
+	started, err := plugin.DefaultRegistry.SetRuntimeIfAbsent(entry.ID, sup)
+	if err != nil {
+		return err
+	}
+	if !started {
 		return nil
 	}
 
 	if err := sup.Start(ctx, startHost); err != nil {
-		local.RollbackSupervisor(id, sup)
-		return fmt.Errorf("plugin %s: start supervisor: %w", id, err)
+		plugin.DefaultRegistry.PopRuntime(entry.ID)
+		return fmt.Errorf("plugin %s: start supervisor: %w", entry.ID, err)
 	}
 
 	return nil
 }
 
 func StopPlugin(id uuid.UUID) error {
-	sup := local.PopSupervisor(id)
-	if sup != nil {
-		sup.Stop()
+	runtime := plugin.DefaultRegistry.PopRuntime(id)
+	if runtime != nil {
+		runtime.Stop()
 	}
 	return nil
+}
+
+func Invoke(ctx dutyContext.Context, pluginID uuid.UUID, req *plugin.InvokeRequest) (*plugin.InvokeResponse, error) {
+	entry := plugin.DefaultRegistry.Get(pluginID)
+	if entry == nil {
+		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not registered", pluginID)
+	}
+
+	switch entry.ConnectionKind {
+	case "", plugin.ConnectionLocal:
+		if entry.Runtime == nil {
+			return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
+		}
+		return entry.Runtime.Invoke(ctx, req)
+	default:
+		return nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has unsupported connection kind %q", pluginID, entry.ConnectionKind)
+	}
+}
+
+func HTTPURL(ctx dutyContext.Context, pluginID uuid.UUID) (*url.URL, error) {
+	entry := plugin.DefaultRegistry.Get(pluginID)
+	if entry == nil {
+		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not registered", pluginID)
+	}
+
+	switch entry.ConnectionKind {
+	case "", plugin.ConnectionLocal:
+		if entry.Runtime == nil {
+			return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
+		}
+		port := entry.Runtime.UIPort()
+		if port == 0 {
+			return nil, ctx.Oops().Code(dutyAPI.EINTERNAL).Errorf("plugin %s did not advertise a UI port", pluginID)
+		}
+		return url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
+	default:
+		return nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has unsupported connection kind %q", pluginID, entry.ConnectionKind)
+	}
 }

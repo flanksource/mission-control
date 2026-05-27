@@ -28,7 +28,7 @@ import (
 
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
-	"github.com/flanksource/incident-commander/plugin/machinery/local"
+	"github.com/flanksource/incident-commander/plugin/machinery"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
@@ -67,7 +67,7 @@ func ListPlugins(c echo.Context) error {
 			continue
 		}
 		if configID != "" {
-			matches, err := SelectorMatches(ctx, e, configID)
+			matches, err := machinery.SelectorMatches(ctx, e, configID)
 			if err != nil {
 				return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 			}
@@ -101,7 +101,7 @@ func InvokeOperation(c echo.Context) error {
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("config_id is invalid"))
 	}
-	entry, err := ResolvePlugin(ctx, pluginRef)
+	entry, err := machinery.ResolvePlugin(ctx, pluginRef)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
@@ -116,7 +116,7 @@ func InvokeOperation(c echo.Context) error {
 	}
 
 	paramsHash := hashBytes(body)
-	resp, entry, err := Invoke(ctx, Request{
+	resp, entry, err := machinery.InvokeOperation(ctx, machinery.Request{
 		Context:      c.Request().Context(),
 		PluginRef:    pluginRef,
 		Operation:    op,
@@ -126,7 +126,7 @@ func InvokeOperation(c echo.Context) error {
 		Roles:        roles,
 		Depth:        0,
 		Timeout:      60 * time.Second,
-	}, invokeViaSupervisor)
+	})
 	if err != nil {
 		if entry != nil {
 			recordPluginInvocation(ctx, entry, op, configUUID, "grpc", c.Request().Method, paramsHash, err.Error(), c.Request(), body)
@@ -146,13 +146,4 @@ func InvokeOperation(c echo.Context) error {
 	}
 	c.Response().Header().Set(echo.HeaderContentType, mime)
 	return c.Blob(http.StatusOK, mime, resp.Result)
-}
-
-func invokeViaSupervisor(ctx dutyContext.Context, pluginID uuid.UUID, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
-	sup := local.LookupSupervisor(pluginID)
-	if sup == nil {
-		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
-	}
-
-	return sup.Invoke(ctx, req)
 }

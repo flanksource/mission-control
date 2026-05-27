@@ -1,10 +1,4 @@
-// Package host implements the HostService gRPC server — the back-channel
-// that runs in the mission-control process and is dialed by every plugin
-// during RegisterPlugin.
-//
-// All RPCs operate in the calling plugin's identity (matched via the
-// peer-info that go-plugin's broker adds to the gRPC context).
-package gateway
+package machinery
 
 import (
 	"context"
@@ -42,8 +36,6 @@ type Service struct {
 	// connCache memoises named connection resolutions across calls within a single
 	// plugin process. Authorization is checked before serving cached results.
 	connCache *lru.LRU[connKey, *pluginpb.ResolvedConnection]
-
-	invokePlugin Invoker
 }
 
 // NewGRPCService creates a host Service for one plugin id. Multiple plugins running
@@ -56,11 +48,6 @@ func NewGRPCService(ctx dutyContext.Context, pluginID uuid.UUID) *Service {
 		ctx:       ctx,
 		connCache: cache,
 	}
-}
-
-// SetPluginInvoker configures the callback used by InvokePlugin.
-func (s *Service) SetPluginInvoker(invoke Invoker) {
-	s.invokePlugin = invoke
 }
 
 // Register exposes the service on the given gRPC server.
@@ -169,7 +156,7 @@ func (s *Service) InvokePlugin(ctx context.Context, req *pluginpb.InvokePluginRe
 		depth = claims.Depth + 1
 	}
 
-	resp, _, err := Invoke(dutyCtx, Request{
+	resp, _, err := InvokeOperation(dutyCtx, Request{
 		Context:      ctx,
 		PluginRef:    req.Plugin,
 		Operation:    req.Operation,
@@ -179,7 +166,7 @@ func (s *Service) InvokePlugin(ctx context.Context, req *pluginpb.InvokePluginRe
 		Subject:      PluginSubject(source.Namespace, source.Name),
 		Depth:        depth,
 		Deadline:     req.Deadline,
-	}, s.invokePlugin)
+	})
 	return resp, err
 }
 

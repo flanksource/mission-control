@@ -1,4 +1,4 @@
-package gateway
+package machinery
 
 import (
 	"context"
@@ -12,7 +12,6 @@ import (
 	"github.com/flanksource/duty/query"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
-	"github.com/google/uuid"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -22,8 +21,6 @@ import (
 )
 
 const MaxInvokeDepth = 5
-
-type Invoker func(ctx dutyContext.Context, pluginID uuid.UUID, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error)
 
 type Request struct {
 	Context      context.Context
@@ -40,10 +37,7 @@ type Request struct {
 	Timeout      time.Duration
 }
 
-func Invoke(ctx dutyContext.Context, req Request, invoker Invoker) (*pluginpb.InvokeResponse, *pluginpb.Entry, error) {
-	if invoker == nil {
-		return nil, nil, dutyAPI.Errorf(dutyAPI.EINTERNAL, "plugin invocation is not configured")
-	}
+func InvokeOperation(ctx dutyContext.Context, req Request) (*pluginpb.InvokeResponse, *pluginpb.Entry, error) {
 	if req.PluginRef == "" {
 		return nil, nil, dutyAPI.Errorf(dutyAPI.EINVALID, "plugin is required")
 	}
@@ -106,7 +100,7 @@ func Invoke(ctx dutyContext.Context, req Request, invoker Invoker) (*pluginpb.In
 	if caller == nil {
 		caller = CallerFromUser(req.User)
 	}
-	resp, err := invoker(invokeCtx, entry.ID, &pluginpb.InvokeRequest{
+	resp, err := Invoke(invokeCtx, entry.ID, &pluginpb.InvokeRequest{
 		Operation:    req.Operation,
 		ParamsJson:   req.ParamsJSON,
 		ConfigItemId: req.ConfigItemID,
