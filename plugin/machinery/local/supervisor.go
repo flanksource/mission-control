@@ -3,7 +3,7 @@
 // Each Supervisor wraps a goplugin.Client that talks to one plugin binary.
 // It launches the binary, completes the RegisterPlugin handshake, watches
 // for unexpected exits, and restarts up to a rate-limited budget.
-package supervisor
+package local
 
 import (
 	gocontext "context"
@@ -19,15 +19,13 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 
 	dutyContext "github.com/flanksource/duty/context"
-	"github.com/flanksource/incident-commander/plugin/adapter"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
-	"github.com/flanksource/incident-commander/plugin/registry"
+	"github.com/flanksource/incident-commander/plugin"
 )
 
 // pluginMap is the host-side go-plugin registry used to dispense the
 // mission-control plugin client.
 var pluginMap = map[string]goplugin.Plugin{
-	adapter.PluginName: &adapter.GRPCPlugin{},
+	PluginName: &GRPCPlugin{},
 }
 
 // Supervisor owns the lifecycle of one plugin process.
@@ -41,8 +39,8 @@ type Supervisor struct {
 
 	mu        sync.Mutex
 	client    *goplugin.Client
-	pluginCLI *adapter.Client
-	manifest  *pluginpb.PluginManifest
+	pluginCLI *Client
+	manifest  *plugin.PluginManifest
 	hostBrkID uint32
 	startHost func(*goplugin.GRPCBroker) (uint32, error)
 	stopped   bool
@@ -83,11 +81,11 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 
 	cmd := exec.Command(s.BinaryPath)
 	cmd.Env = append(cmd.Env,
-		fmt.Sprintf("%s=%s", adapter.Handshake.MagicCookieKey, adapter.Handshake.MagicCookieValue),
+		fmt.Sprintf("%s=%s", Handshake.MagicCookieKey, Handshake.MagicCookieValue),
 	)
 
 	cli := goplugin.NewClient(&goplugin.ClientConfig{
-		HandshakeConfig:  adapter.Handshake,
+		HandshakeConfig:  Handshake,
 		Plugins:          pluginMap,
 		Cmd:              cmd,
 		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolGRPC},
@@ -103,13 +101,13 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 		return fmt.Errorf("plugin %s rpc client: %w", s.Name, err)
 	}
 
-	raw, err := rpcClient.Dispense(adapter.PluginName)
+	raw, err := rpcClient.Dispense(PluginName)
 	if err != nil {
 		cli.Kill()
 		return fmt.Errorf("plugin %s dispense: %w", s.Name, err)
 	}
 
-	pluginCli, ok := raw.(*adapter.Client)
+	pluginCli, ok := raw.(*Client)
 	if !ok {
 		cli.Kill()
 		return fmt.Errorf("plugin %s: unexpected dispense type %T", s.Name, raw)
@@ -122,8 +120,8 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 	}
 	s.hostBrkID = hostBrkID
 
-	manifest, err := pluginCli.Service.RegisterPlugin(dialCtx, &pluginpb.RegisterRequest{
-		HostProtocolVersion: uint32(adapter.ProtocolVersion),
+	manifest, err := pluginCli.Service.RegisterPlugin(dialCtx, &plugin.RegisterRequest{
+		HostProtocolVersion: uint32(ProtocolVersion),
 		HostBrokerId:        hostBrkID,
 	})
 	if err != nil {
@@ -136,12 +134,9 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 	s.manifest = manifest
 	s.startHost = startHost
 
-	if err := registry.Default.SetManifest(s.ID, manifest); err != nil {
+	if err := plugin.DefaultRegistry.SetManifest(s.ID, manifest); err != nil {
 		// Not fatal — the registry might have been recreated, but the supervisor still works.
 		ctx.Logger.Warnf("plugin %s: register manifest: %v", s.Name, err)
-	}
-	if err := registry.Default.SetSupervisor(s.ID, s); err != nil {
-		ctx.Logger.Warnf("plugin %s: register supervisor: %v", s.Name, err)
 	}
 
 	go s.watchExit(ctx, cli)
@@ -327,7 +322,7 @@ func (s *Supervisor) Stop() {
 }
 
 // Manifest returns the most recent PluginManifest received from the plugin.
-func (s *Supervisor) Manifest() *pluginpb.PluginManifest {
+func (s *Supervisor) Manifest() *plugin.PluginManifest {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.manifest
@@ -343,7 +338,7 @@ func (s *Supervisor) UIPort() uint32 {
 }
 
 // Invoke calls the plugin's Invoke RPC.
-func (s *Supervisor) Invoke(ctx gocontext.Context, req *pluginpb.InvokeRequest) (*pluginpb.InvokeResponse, error) {
+func (s *Supervisor) Invoke(ctx gocontext.Context, req *plugin.InvokeRequest) (*plugin.InvokeResponse, error) {
 	s.mu.Lock()
 	pluginCli := s.pluginCLI
 	s.mu.Unlock()
@@ -354,12 +349,12 @@ func (s *Supervisor) Invoke(ctx gocontext.Context, req *pluginpb.InvokeRequest) 
 }
 
 // ListOperations calls the plugin's ListOperations RPC.
-func (s *Supervisor) ListOperations(ctx gocontext.Context) (*pluginpb.OperationList, error) {
+func (s *Supervisor) ListOperations(ctx gocontext.Context) (*plugin.OperationList, error) {
 	s.mu.Lock()
 	pluginCli := s.pluginCLI
 	s.mu.Unlock()
 	if pluginCli == nil {
 		return nil, fmt.Errorf("plugin %s not running", s.Name)
 	}
-	return pluginCli.Service.ListOperations(ctx, &pluginpb.Empty{})
+	return pluginCli.Service.ListOperations(ctx, &plugin.Empty{})
 }

@@ -5,9 +5,10 @@
 // State is intentionally kept in memory only — Plugin CRDs are the
 // persistence layer. On startup the kopper reconciler replays each Plugin
 // CRD to populate the registry.
-package registry
+package plugin
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sort"
@@ -15,24 +16,31 @@ import (
 	"sync"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
 	"github.com/google/uuid"
 )
 
 var ErrAmbiguousPlugin = errors.New("ambiguous plugin reference")
+
+// Runtime is the host-side handle for a reachable plugin.
+type Runtime interface {
+	Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error)
+	UIPort() uint32
+	Stop()
+}
 
 // Entry is everything the host needs to route a request to one plugin.
 // Manifest is populated by the supervisor once the plugin completes
 // RegisterPlugin; it is nil while the plugin is starting up or has crashed
 // past the supervisor's restart budget.
 type Entry struct {
-	ID        uuid.UUID
-	Name      string
-	Namespace string
-	Spec      v1.PluginSpec
-	Manifest  *pluginpb.PluginManifest
-	// Supervisor is opaque here; the supervisor package sets it.
-	Supervisor any
+	ID             uuid.UUID
+	Name           string
+	Namespace      string
+	Spec           v1.PluginSpec
+	LifecycleKind  LifecycleKind
+	ConnectionKind ConnectionKind
+	Manifest       *PluginManifest
+	Runtime        Runtime
 }
 
 // Registry is the host-side in-memory store of plugins.
@@ -50,9 +58,9 @@ type Registry struct {
 	refs map[string]uuid.UUID
 }
 
-// Default is the singleton used by the kopper reconciler and by every echo
+// DefaultRegistry is the singleton used by the kopper reconciler and by every echo
 // handler that needs to look up a plugin.
-var Default = New()
+var DefaultRegistry = New()
 
 // New returns a fresh, empty registry. Tests use this; production uses Default.
 func New() *Registry {
@@ -94,25 +102,18 @@ func (r *Registry) Upsert(id uuid.UUID, namespace, name string, spec v1.PluginSp
 	e.Name = name
 	e.Namespace = namespace
 	e.Spec = spec
+	if e.LifecycleKind == "" {
+		e.LifecycleKind = LifecycleManaged
+	}
+	if e.ConnectionKind == "" {
+		e.ConnectionKind = ConnectionLocal
+	}
 	r.addIndexes(e)
 	return e, nil
 }
 
-// SetSupervisor attaches a running supervisor to an existing entry. The
-// supervisor type is opaque here to avoid an import cycle.
-func (r *Registry) SetSupervisor(id uuid.UUID, sup any) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	e, ok := r.plugins[id]
-	if !ok {
-		return fmt.Errorf("plugin %s not registered", id)
-	}
-	e.Supervisor = sup
-	return nil
-}
-
 // SetManifest stores the manifest a plugin returned from RegisterPlugin.
-func (r *Registry) SetManifest(id uuid.UUID, m *pluginpb.PluginManifest) error {
+func (r *Registry) SetManifest(id uuid.UUID, m *PluginManifest) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	e, ok := r.plugins[id]
@@ -177,6 +178,46 @@ func (r *Registry) Resolve(ref string) (*Entry, error) {
 		return nil, fmt.Errorf("%w %q; use plugin id or namespace/name, matches: %s", ErrAmbiguousPlugin, ref, strings.Join(refs, ", "))
 	}
 	return snapshotEntry(matches[0]), nil
+}
+
+// SetRuntime stores the running-process handle for a plugin.
+func (r *Registry) SetRuntime(id uuid.UUID, runtime Runtime) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	e, ok := r.plugins[id]
+	if !ok {
+		return fmt.Errorf("plugin %s not registered", id)
+	}
+	e.Runtime = runtime
+	return nil
+}
+
+// SetRuntimeIfAbsent stores the runtime only when no runtime is already active.
+func (r *Registry) SetRuntimeIfAbsent(id uuid.UUID, runtime Runtime) (bool, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	e, ok := r.plugins[id]
+	if !ok {
+		return false, fmt.Errorf("plugin %s not registered", id)
+	}
+	if e.Runtime != nil {
+		return false, nil
+	}
+	e.Runtime = runtime
+	return true, nil
+}
+
+// PopRuntime removes and returns the running-process handle for a plugin.
+func (r *Registry) PopRuntime(id uuid.UUID) Runtime {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	e, ok := r.plugins[id]
+	if !ok {
+		return nil
+	}
+	runtime := e.Runtime
+	e.Runtime = nil
+	return runtime
 }
 
 // Remove drops a plugin from the registry. Callers are responsible for

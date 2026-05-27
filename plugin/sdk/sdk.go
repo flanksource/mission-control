@@ -15,7 +15,7 @@ import (
 	"context"
 	"net/http"
 
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	"github.com/flanksource/incident-commander/plugin"
 )
 
 // Plugin is the interface plugin authors implement. All methods are called by
@@ -23,7 +23,7 @@ import (
 type Plugin interface {
 	// Manifest returns the plugin's static manifest: name, version, and the
 	// operations it exposes. Called once on startup in response to RegisterPlugin.
-	Manifest() *pluginpb.PluginManifest
+	Manifest() *plugin.PluginManifest
 
 	// Configure applies host-pushed configuration. settings is the merged CRD
 	// spec.properties + any host-side overrides as a JSON-decoded map.
@@ -39,7 +39,7 @@ type Plugin interface {
 // plugin's manifest. Handler serves unary gRPC invocation. HTTPHandler serves
 // the operation's declared HTTP methods at /__mc/operations/<operation-name>.
 type Operation struct {
-	Def         *pluginpb.OperationDef
+	Def         *plugin.OperationDef
 	Handler     func(ctx context.Context, req InvokeCtx) (any, error)
 	HTTPHandler http.Handler
 }
@@ -50,7 +50,7 @@ type InvokeCtx struct {
 	Operation    string
 	ParamsJSON   []byte
 	ConfigItemID string
-	Caller       *pluginpb.CallerContext
+	Caller       *plugin.CallerContext
 	Roles        []string
 	Host         HostClient
 }

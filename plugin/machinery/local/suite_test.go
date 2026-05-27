@@ -1,4 +1,4 @@
-package host
+package local
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestHost(t *testing.T) {
+func TestSupervisor(t *testing.T) {
 	RegisterFailHandler(ginkgo.Fail)
-	ginkgo.RunSpecs(t, "Host")
+	ginkgo.RunSpecs(t, "Supervisor")
 }

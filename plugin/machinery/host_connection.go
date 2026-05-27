@@ -1,4 +1,4 @@
-package host
+package machinery
 
 import (
 	"encoding/json"
@@ -14,8 +14,7 @@ import (
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
-	"github.com/flanksource/incident-commander/plugin/registry"
+	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -213,7 +212,7 @@ func readDefaultKubeconfig() (string, error) {
 	return "", fmt.Errorf("no default kubeconfig found")
 }
 
-func pluginRBACSubject(entry *registry.Entry) string {
+func pluginRBACSubject(entry *pluginpb.Entry) string {
 	if entry == nil {
 		return "plugin:/"
 	}

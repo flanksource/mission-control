@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package missioncontrol.plugin.v1;
 
-option go_package = "github.com/flanksource/incident-commander/plugin/proto;pluginpb";
+option go_package = "github.com/flanksource/incident-commander/plugin;plugin";
 
 import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";

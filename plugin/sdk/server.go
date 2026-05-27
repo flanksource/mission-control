@@ -11,8 +11,7 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
 
-	"github.com/flanksource/incident-commander/plugin"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	pluginpb "github.com/flanksource/incident-commander/plugin"
 )
 
 // pluginServer adapts the user's Plugin interface onto the generated
@@ -160,7 +159,7 @@ func (s *pluginServer) httpOperationsHandler() http.Handler {
 
 func (s *pluginServer) httpOperationMiddleware(operationName string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		token := r.Header.Get(plugin.InvocationTokenHTTPHeader)
+		token := r.Header.Get(pluginpb.InvocationTokenHTTPHeader)
 		s.mu.Lock()
 		host := newHostClient(s.mcgPRCConn, token)
 		s.mu.Unlock()

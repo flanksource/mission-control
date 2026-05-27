@@ -12,7 +12,7 @@ import (
 
 	goplugin "github.com/hashicorp/go-plugin"
 
-	"github.com/flanksource/incident-commander/plugin/adapter"
+	"github.com/flanksource/incident-commander/plugin/machinery/local"
 )
 
 // Option configures Serve.
@@ -72,11 +72,11 @@ func Serve(impl Plugin, opts ...Option) {
 	srv.uiPort = uiPort
 
 	goplugin.Serve(&goplugin.ServeConfig{
-		HandshakeConfig: adapter.Handshake,
+		HandshakeConfig: local.Handshake,
 		Plugins: map[string]goplugin.Plugin{
-			adapter.PluginName: &grpcAdapter{srv: srv},
+			local.PluginName: &grpcAdapter{srv: srv},
 		},
-		GRPCServer: adapter.GRPCServerFactory,
+		GRPCServer: local.GRPCServerFactory,
 	})
 
 	// goplugin.Serve blocks until the host disconnects. Try to drain the

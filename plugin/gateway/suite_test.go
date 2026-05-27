@@ -1,4 +1,4 @@
-package supervisor
+package gateway
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestSupervisor(t *testing.T) {
+func TestController(t *testing.T) {
 	RegisterFailHandler(ginkgo.Fail)
-	ginkgo.RunSpecs(t, "Supervisor")
+	ginkgo.RunSpecs(t, "Plugin Controller")
 }

@@ -1,4 +1,4 @@
-package pluginpb
+package plugin
 
 import (
 	"encoding/json"

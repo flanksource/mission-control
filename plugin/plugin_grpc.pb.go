@@ -4,7 +4,7 @@
 // - protoc             v3.21.9
 // source: plugin.proto
 
-package pluginpb
+package plugin
 
 import (
 	context "context"

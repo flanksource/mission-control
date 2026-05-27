@@ -1,10 +1,4 @@
-// Package host implements the HostService gRPC server — the back-channel
-// that runs in the mission-control process and is dialed by every plugin
-// during RegisterPlugin.
-//
-// All RPCs operate in the calling plugin's identity (matched via the
-// peer-info that go-plugin's broker adds to the gRPC context).
-package host
+package machinery
 
 import (
 	"context"
@@ -20,16 +14,11 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/flanksource/incident-commander/auth"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
-	"github.com/flanksource/incident-commander/plugin/registry"
-	pluginruntime "github.com/flanksource/incident-commander/plugin/runtime"
+	pluginpb "github.com/flanksource/incident-commander/plugin"
 )
 
 // connectionCacheTTL is how long a resolved connection stays cached on the host.
 const connectionCacheTTL = 5 * time.Minute
-
-// PluginInvoker invokes a target plugin through its supervisor.
-type PluginInvoker = pluginruntime.Invoker
 
 type connKey struct {
 	connectionID string
@@ -47,25 +36,18 @@ type Service struct {
 	// connCache memoises named connection resolutions across calls within a single
 	// plugin process. Authorization is checked before serving cached results.
 	connCache *lru.LRU[connKey, *pluginpb.ResolvedConnection]
-
-	invokePlugin PluginInvoker
 }
 
-// New creates a host Service for one plugin id. Multiple plugins running
+// NewGRPCService creates a host Service for one plugin id. Multiple plugins running
 // concurrently get separate Services so the connection allowlist (read off
 // the Plugin CRD via the registry) is enforced per-plugin.
-func New(ctx dutyContext.Context, pluginID uuid.UUID) *Service {
+func NewGRPCService(ctx dutyContext.Context, pluginID uuid.UUID) *Service {
 	cache := lru.NewLRU[connKey, *pluginpb.ResolvedConnection](256, nil, connectionCacheTTL)
 	return &Service{
 		pluginID:  pluginID,
 		ctx:       ctx,
 		connCache: cache,
 	}
-}
-
-// SetPluginInvoker configures the callback used by InvokePlugin.
-func (s *Service) SetPluginInvoker(invoke PluginInvoker) {
-	s.invokePlugin = invoke
 }
 
 // Register exposes the service on the given gRPC server.
@@ -129,7 +111,7 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 		return nil, fmt.Errorf("connection lookup is required")
 	}
 
-	entry := registry.Default.Get(s.pluginID)
+	entry := pluginpb.DefaultRegistry.Get(s.pluginID)
 	if entry == nil {
 		return nil, fmt.Errorf("plugin %s is not registered", s.pluginID)
 	}
@@ -164,7 +146,7 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 
 func (s *Service) InvokePlugin(ctx context.Context, req *pluginpb.InvokePluginRequest) (*pluginpb.InvokeResponse, error) {
 	dutyCtx := invocationDutyContext(s.ctx, ctx)
-	source := registry.Default.Get(s.pluginID)
+	source := pluginpb.DefaultRegistry.Get(s.pluginID)
 	if source == nil {
 		return nil, fmt.Errorf("plugin %s is not registered", s.pluginID)
 	}
@@ -174,17 +156,17 @@ func (s *Service) InvokePlugin(ctx context.Context, req *pluginpb.InvokePluginRe
 		depth = claims.Depth + 1
 	}
 
-	resp, _, err := pluginruntime.Invoke(dutyCtx, pluginruntime.Request{
+	resp, _, err := InvokeOperation(dutyCtx, Request{
 		Context:      ctx,
 		PluginRef:    req.Plugin,
 		Operation:    req.Operation,
 		ParamsJSON:   req.ParamsJson,
 		ConfigItemID: req.ConfigItemId,
 		User:         dutyCtx.User(),
-		Subject:      pluginruntime.PluginSubject(source.Namespace, source.Name),
+		Subject:      PluginSubject(source.Namespace, source.Name),
 		Depth:        depth,
 		Deadline:     req.Deadline,
-	}, s.invokePlugin)
+	})
 	return resp, err
 }
 

@@ -1,4 +1,4 @@
-package controller
+package gateway
 
 import (
 	"crypto/sha256"
@@ -15,7 +15,7 @@ import (
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/plugin/registry"
+	"github.com/flanksource/incident-commander/plugin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -28,7 +28,7 @@ const (
 var initChangeCacheOnce sync.Once
 
 type invocationChangeInput struct {
-	Entry       registry.Entry
+	Entry       plugin.Entry
 	Operation   string
 	ConfigID    uuid.UUID
 	User        models.Person
@@ -40,7 +40,7 @@ type invocationChangeInput struct {
 	QueryParams url.Values
 }
 
-func recordPluginInvocation(ctx dutyContext.Context, entry *registry.Entry, op string, configID uuid.UUID, source, method, paramsHash, errorMessage string, req *http.Request, requestBody []byte) {
+func recordPluginInvocation(ctx dutyContext.Context, entry *plugin.Entry, op string, configID uuid.UUID, source, method, paramsHash, errorMessage string, req *http.Request, requestBody []byte) {
 	if !pluginInvocationAudited(entry, op) {
 		return
 	}
@@ -66,7 +66,7 @@ func recordPluginInvocation(ctx dutyContext.Context, entry *registry.Entry, op s
 	}
 }
 
-func pluginInvocationAudited(entry *registry.Entry, op string) bool {
+func pluginInvocationAudited(entry *plugin.Entry, op string) bool {
 	if entry == nil || len(entry.Spec.Audit) == 0 {
 		return false
 	}
@@ -227,14 +227,14 @@ func invocationSummary(in invocationChangeInput) string {
 	return invocationPluginName(in.Entry) + "." + in.Operation
 }
 
-func invocationPluginName(entry registry.Entry) string {
+func invocationPluginName(entry plugin.Entry) string {
 	if entry.Manifest != nil && entry.Manifest.Name != "" {
 		return entry.Manifest.Name
 	}
 	return entry.Name
 }
 
-func invocationPluginSource(entry registry.Entry) string {
+func invocationPluginSource(entry plugin.Entry) string {
 	parts := []string{"mission-control", "plugin"}
 	if entry.Namespace != "" {
 		parts = append(parts, entry.Namespace)
