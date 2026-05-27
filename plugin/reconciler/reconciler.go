@@ -23,12 +23,6 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 		return err
 	}
 
-	binPath, err := machinery.InstallPlugin(ctx, p.Name, p.Spec.Source, p.Spec.Version)
-	if err != nil {
-		return err
-	}
-	p.Status.InstalledPath = binPath
-
 	id, err := parsePluginID(string(p.UID))
 	if err != nil {
 		return err
@@ -56,6 +50,7 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 	}
 	if entry := plugin.DefaultRegistry.Get(id); entry != nil && entry.Manifest != nil {
 		p.Status.PluginVersion = entry.Manifest.Version
+		p.Status.InstalledPath = entry.InstalledPath
 	}
 
 	return nil

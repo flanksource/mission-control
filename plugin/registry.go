@@ -41,6 +41,7 @@ type Entry struct {
 	ConnectionKind ConnectionKind
 	Manifest       *PluginManifest
 	Runtime        Runtime
+	InstalledPath  string
 }
 
 // Registry is the host-side in-memory store of plugins.
@@ -189,6 +190,18 @@ func (r *Registry) SetRuntime(id uuid.UUID, runtime Runtime) error {
 		return fmt.Errorf("plugin %s not registered", id)
 	}
 	e.Runtime = runtime
+	return nil
+}
+
+// SetInstalledPath stores the executable path installed for a plugin.
+func (r *Registry) SetInstalledPath(id uuid.UUID, path string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	e, ok := r.plugins[id]
+	if !ok {
+		return fmt.Errorf("plugin %s not registered", id)
+	}
+	e.InstalledPath = path
 	return nil
 }
 

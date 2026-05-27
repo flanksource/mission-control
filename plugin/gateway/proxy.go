@@ -14,7 +14,6 @@ import (
 
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
-	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/machinery"
 	"github.com/flanksource/incident-commander/rbac"
 )
@@ -120,7 +119,7 @@ func operationHTTPProxy(c echo.Context) error {
 	return nil
 }
 
-func proxyToPluginUI(c echo.Context, entry *pluginpb.Entry, prefix string) error {
+func proxyToPluginUI(c echo.Context, entry *plugin.Entry, prefix string) error {
 	target, err := pluginHTTPURL(c, entry)
 	if err != nil {
 		return err
@@ -138,7 +137,7 @@ func proxyToPluginUI(c echo.Context, entry *pluginpb.Entry, prefix string) error
 	return nil
 }
 
-func proxyToPluginOperation(c echo.Context, entry *pluginpb.Entry, op, invocationToken string) error {
+func proxyToPluginOperation(c echo.Context, entry *plugin.Entry, op, invocationToken string) error {
 	target, err := pluginHTTPURL(c, entry)
 	if err != nil {
 		return err
@@ -157,7 +156,7 @@ func proxyToPluginOperation(c echo.Context, entry *pluginpb.Entry, op, invocatio
 	return nil
 }
 
-func pluginHTTPURL(c echo.Context, entry *pluginpb.Entry) (*url.URL, error) {
+func pluginHTTPURL(c echo.Context, entry *plugin.Entry) (*url.URL, error) {
 	ctx := c.Request().Context().(dutyContext.Context)
 	target, err := machinery.HTTPURL(ctx, entry.ID)
 	if err != nil {
@@ -178,7 +177,7 @@ func pluginUITargetPath(prefix, requestPath string) string {
 	return "/__mc/ui" + pluginPath
 }
 
-func operationHTTPBindingAllowed(def *pluginpb.OperationDef, method string) bool {
+func operationHTTPBindingAllowed(def *plugin.OperationDef, method string) bool {
 	for _, binding := range def.Http {
 		if binding != nil && strings.EqualFold(binding.Method, method) {
 			return true
@@ -187,7 +186,7 @@ func operationHTTPBindingAllowed(def *pluginpb.OperationDef, method string) bool
 	return false
 }
 
-func allowedUIPath(entry *pluginpb.Entry, p string) bool {
+func allowedUIPath(entry *plugin.Entry, p string) bool {
 	if p == "" || p == "/" {
 		return true
 	}
