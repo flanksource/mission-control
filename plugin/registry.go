@@ -30,8 +30,6 @@ type Entry struct {
 	Namespace string
 	Spec      v1.PluginSpec
 	Manifest  *PluginManifest
-	// Supervisor is opaque here; the supervisor package sets it.
-	Supervisor any
 }
 
 // Registry is the host-side in-memory store of plugins.
@@ -95,19 +93,6 @@ func (r *Registry) Upsert(id uuid.UUID, namespace, name string, spec v1.PluginSp
 	e.Spec = spec
 	r.addIndexes(e)
 	return e, nil
-}
-
-// SetSupervisor attaches a running supervisor to an existing entry. The
-// supervisor type is opaque here to avoid an import cycle.
-func (r *Registry) SetSupervisor(id uuid.UUID, sup any) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	e, ok := r.plugins[id]
-	if !ok {
-		return fmt.Errorf("plugin %s not registered", id)
-	}
-	e.Supervisor = sup
-	return nil
 }
 
 // SetManifest stores the manifest a plugin returned from RegisterPlugin.

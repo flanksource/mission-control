@@ -138,9 +138,6 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 		// Not fatal — the registry might have been recreated, but the supervisor still works.
 		ctx.Logger.Warnf("plugin %s: register manifest: %v", s.Name, err)
 	}
-	if err := plugin.DefaultRegistry.SetSupervisor(s.ID, s); err != nil {
-		ctx.Logger.Warnf("plugin %s: register supervisor: %v", s.Name, err)
-	}
 
 	go s.watchExit(ctx, cli)
 	go s.watchBinary(ctx)
