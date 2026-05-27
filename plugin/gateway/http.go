@@ -29,7 +29,6 @@ import (
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/machinery/local"
-	"github.com/flanksource/incident-commander/plugin/registry"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
@@ -63,7 +62,7 @@ func ListPlugins(c echo.Context) error {
 	ctx := c.Request().Context().(dutyContext.Context)
 	configID := c.QueryParam("config_id")
 	out := []PluginListing{}
-	for _, e := range registry.Default.List() {
+	for _, e := range pluginpb.DefaultRegistry.List() {
 		if e.Manifest == nil {
 			continue
 		}

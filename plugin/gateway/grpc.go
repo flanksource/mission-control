@@ -21,7 +21,6 @@ import (
 
 	"github.com/flanksource/incident-commander/auth"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
-	"github.com/flanksource/incident-commander/plugin/registry"
 )
 
 // connectionCacheTTL is how long a resolved connection stays cached on the host.
@@ -125,7 +124,7 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 		return nil, fmt.Errorf("connection lookup is required")
 	}
 
-	entry := registry.Default.Get(s.pluginID)
+	entry := pluginpb.DefaultRegistry.Get(s.pluginID)
 	if entry == nil {
 		return nil, fmt.Errorf("plugin %s is not registered", s.pluginID)
 	}
@@ -160,7 +159,7 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 
 func (s *Service) InvokePlugin(ctx context.Context, req *pluginpb.InvokePluginRequest) (*pluginpb.InvokeResponse, error) {
 	dutyCtx := invocationDutyContext(s.ctx, ctx)
-	source := registry.Default.Get(s.pluginID)
+	source := pluginpb.DefaultRegistry.Get(s.pluginID)
 	if source == nil {
 		return nil, fmt.Errorf("plugin %s is not registered", s.pluginID)
 	}

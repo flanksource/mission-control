@@ -15,7 +15,6 @@ import (
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
-	"github.com/flanksource/incident-commander/plugin/registry"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -213,7 +212,7 @@ func readDefaultKubeconfig() (string, error) {
 	return "", fmt.Errorf("no default kubeconfig found")
 }
 
-func pluginRBACSubject(entry *registry.Entry) string {
+func pluginRBACSubject(entry *pluginpb.Entry) string {
 	if entry == nil {
 		return "plugin:/"
 	}

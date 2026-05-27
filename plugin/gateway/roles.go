@@ -7,10 +7,10 @@ import (
 	"github.com/flanksource/duty/query"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
-	"github.com/flanksource/incident-commander/plugin/registry"
+	"github.com/flanksource/incident-commander/plugin"
 )
 
-func pluginRolesForUser(ctx dutyContext.Context, entry *registry.Entry, configID string) ([]string, error) {
+func pluginRolesForUser(ctx dutyContext.Context, entry *plugin.Entry, configID string) ([]string, error) {
 	user := ctx.User()
 	if user == nil {
 		return nil, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in")

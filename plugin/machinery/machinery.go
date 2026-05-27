@@ -11,32 +11,16 @@ import (
 	"github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/gateway"
 	"github.com/flanksource/incident-commander/plugin/machinery/local"
-	"github.com/flanksource/incident-commander/plugin/registry"
 	"github.com/google/uuid"
 )
 
-// Wire installs the supervisor as the registry's start/stop hook.
-// Must be called once at startup before the kopper reconciler is registered.
-//
-// The reconciler in plugin/registry stores plugin specs but does not import
-// the supervisor package (that would create an import cycle); this function
-// injects the start/stop callbacks at boot.
-func Wire(ctx dutyContext.Context) {
-	registry.SupervisorStarter = func(c dutyContext.Context, id uuid.UUID) error {
-		return startPlugin(c, id)
-	}
-	registry.SupervisorStopper = func(id uuid.UUID) error {
-		return stopPlugin(id)
-	}
-}
-
-func startPlugin(ctx dutyContext.Context, id uuid.UUID) error {
-	entry := registry.Default.Get(id)
+func StartPlugin(ctx dutyContext.Context, id uuid.UUID) error {
+	entry := plugin.DefaultRegistry.Get(id)
 	if entry == nil {
 		return fmt.Errorf("plugin %s: not registered", id)
 	}
 
-	binPath := registry.BinaryPathFor(entry.Name)
+	binPath := local.BinaryPathFor(entry.Name)
 	svc := gateway.NewGRPCService(ctx, id)
 	svc.SetPluginInvoker(func(invokeCtx dutyContext.Context, targetID uuid.UUID, req *plugin.InvokeRequest) (*plugin.InvokeResponse, error) {
 		sup := local.LookupSupervisor(targetID)
@@ -82,7 +66,7 @@ func startPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 	return nil
 }
 
-func stopPlugin(id uuid.UUID) error {
+func StopPlugin(id uuid.UUID) error {
 	sup := local.PopSupervisor(id)
 	if sup != nil {
 		sup.Stop()

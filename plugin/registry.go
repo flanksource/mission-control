@@ -5,7 +5,7 @@
 // State is intentionally kept in memory only — Plugin CRDs are the
 // persistence layer. On startup the kopper reconciler replays each Plugin
 // CRD to populate the registry.
-package registry
+package plugin
 
 import (
 	"errors"
@@ -15,7 +15,6 @@ import (
 	"sync"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"github.com/google/uuid"
 )
 
@@ -30,7 +29,7 @@ type Entry struct {
 	Name      string
 	Namespace string
 	Spec      v1.PluginSpec
-	Manifest  *pluginpb.PluginManifest
+	Manifest  *PluginManifest
 	// Supervisor is opaque here; the supervisor package sets it.
 	Supervisor any
 }
@@ -50,9 +49,9 @@ type Registry struct {
 	refs map[string]uuid.UUID
 }
 
-// Default is the singleton used by the kopper reconciler and by every echo
+// DefaultRegistry is the singleton used by the kopper reconciler and by every echo
 // handler that needs to look up a plugin.
-var Default = New()
+var DefaultRegistry = New()
 
 // New returns a fresh, empty registry. Tests use this; production uses Default.
 func New() *Registry {
@@ -112,7 +111,7 @@ func (r *Registry) SetSupervisor(id uuid.UUID, sup any) error {
 }
 
 // SetManifest stores the manifest a plugin returned from RegisterPlugin.
-func (r *Registry) SetManifest(id uuid.UUID, m *pluginpb.PluginManifest) error {
+func (r *Registry) SetManifest(id uuid.UUID, m *PluginManifest) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	e, ok := r.plugins[id]

@@ -17,7 +17,6 @@ import (
 	"github.com/flanksource/incident-commander/plugin"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/machinery/local"
-	"github.com/flanksource/incident-commander/plugin/registry"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
@@ -122,7 +121,7 @@ func operationHTTPProxy(c echo.Context) error {
 	return nil
 }
 
-func proxyToPluginUI(c echo.Context, entry *registry.Entry, pluginRef, prefix string) error {
+func proxyToPluginUI(c echo.Context, entry *pluginpb.Entry, pluginRef, prefix string) error {
 	target, err := pluginHTTPURL(c, entry, pluginRef)
 	if err != nil {
 		return err
@@ -140,7 +139,7 @@ func proxyToPluginUI(c echo.Context, entry *registry.Entry, pluginRef, prefix st
 	return nil
 }
 
-func proxyToPluginOperation(c echo.Context, entry *registry.Entry, pluginRef, op, invocationToken string) error {
+func proxyToPluginOperation(c echo.Context, entry *pluginpb.Entry, pluginRef, op, invocationToken string) error {
 	target, err := pluginHTTPURL(c, entry, pluginRef)
 	if err != nil {
 		return err
@@ -159,7 +158,7 @@ func proxyToPluginOperation(c echo.Context, entry *registry.Entry, pluginRef, op
 	return nil
 }
 
-func pluginHTTPURL(c echo.Context, entry *registry.Entry, pluginRef string) (*url.URL, error) {
+func pluginHTTPURL(c echo.Context, entry *pluginpb.Entry, pluginRef string) (*url.URL, error) {
 	ctx := c.Request().Context().(dutyContext.Context)
 	sup := local.LookupSupervisor(entry.ID)
 	if sup == nil {
@@ -198,7 +197,7 @@ func operationHTTPBindingAllowed(def *pluginpb.OperationDef, method string) bool
 	return false
 }
 
-func allowedUIPath(entry *registry.Entry, p string) bool {
+func allowedUIPath(entry *pluginpb.Entry, p string) bool {
 	if p == "" || p == "/" {
 		return true
 	}

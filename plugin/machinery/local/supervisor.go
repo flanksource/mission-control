@@ -20,7 +20,6 @@ import (
 
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/plugin"
-	"github.com/flanksource/incident-commander/plugin/registry"
 )
 
 // pluginMap is the host-side go-plugin registry used to dispense the
@@ -135,11 +134,11 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 	s.manifest = manifest
 	s.startHost = startHost
 
-	if err := registry.Default.SetManifest(s.ID, manifest); err != nil {
+	if err := plugin.DefaultRegistry.SetManifest(s.ID, manifest); err != nil {
 		// Not fatal — the registry might have been recreated, but the supervisor still works.
 		ctx.Logger.Warnf("plugin %s: register manifest: %v", s.Name, err)
 	}
-	if err := registry.Default.SetSupervisor(s.ID, s); err != nil {
+	if err := plugin.DefaultRegistry.SetSupervisor(s.ID, s); err != nil {
 		ctx.Logger.Warnf("plugin %s: register supervisor: %v", s.Name, err)
 	}
 

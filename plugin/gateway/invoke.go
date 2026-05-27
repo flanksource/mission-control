@@ -19,7 +19,6 @@ import (
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
-	"github.com/flanksource/incident-commander/plugin/registry"
 )
 
 const MaxInvokeDepth = 5
@@ -41,7 +40,7 @@ type Request struct {
 	Timeout      time.Duration
 }
 
-func Invoke(ctx dutyContext.Context, req Request, invoker Invoker) (*pluginpb.InvokeResponse, *registry.Entry, error) {
+func Invoke(ctx dutyContext.Context, req Request, invoker Invoker) (*pluginpb.InvokeResponse, *pluginpb.Entry, error) {
 	if invoker == nil {
 		return nil, nil, dutyAPI.Errorf(dutyAPI.EINTERNAL, "plugin invocation is not configured")
 	}
@@ -117,10 +116,10 @@ func Invoke(ctx dutyContext.Context, req Request, invoker Invoker) (*pluginpb.In
 	return resp, entry, err
 }
 
-func ResolvePlugin(ctx dutyContext.Context, ref string) (*registry.Entry, error) {
-	entry, err := registry.Default.Resolve(ref)
+func ResolvePlugin(ctx dutyContext.Context, ref string) (*pluginpb.Entry, error) {
+	entry, err := pluginpb.DefaultRegistry.Resolve(ref)
 	if err != nil {
-		if errors.Is(err, registry.ErrAmbiguousPlugin) {
+		if errors.Is(err, pluginpb.ErrAmbiguousPlugin) {
 			return nil, ctx.Oops().Code(dutyAPI.ECONFLICT).Wrap(err)
 		}
 		return nil, ctx.Oops().Wrap(err)
@@ -131,7 +130,7 @@ func ResolvePlugin(ctx dutyContext.Context, ref string) (*registry.Entry, error)
 	return entry, nil
 }
 
-func OperationDef(entry *registry.Entry, op string) *pluginpb.OperationDef {
+func OperationDef(entry *pluginpb.Entry, op string) *pluginpb.OperationDef {
 	if entry == nil || entry.Manifest == nil {
 		return nil
 	}
@@ -143,7 +142,7 @@ func OperationDef(entry *registry.Entry, op string) *pluginpb.OperationDef {
 	return nil
 }
 
-func SelectorMatches(ctx dutyContext.Context, entry *registry.Entry, configID string) (bool, error) {
+func SelectorMatches(ctx dutyContext.Context, entry *pluginpb.Entry, configID string) (bool, error) {
 	if entry == nil {
 		return false, nil
 	}
@@ -160,7 +159,7 @@ func SelectorMatches(ctx dutyContext.Context, entry *registry.Entry, configID st
 	return selector.Matches(item)
 }
 
-func EnforceInvokePermission(ctx dutyContext.Context, subject string, entry *registry.Entry, op, configID string) error {
+func EnforceInvokePermission(ctx dutyContext.Context, subject string, entry *pluginpb.Entry, op, configID string) error {
 	if subject == "" {
 		return ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in")
 	}
