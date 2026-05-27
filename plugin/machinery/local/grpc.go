@@ -60,7 +60,7 @@ func GRPCServerFactory(opts []grpc.ServerOption) *grpc.Server {
 	return grpc.NewServer(opts...)
 }
 
-// ProtocolVersion is bumped whenever the gRPC contract in plugin/proto/
+// ProtocolVersion is bumped whenever the gRPC contract in plugin/plugin.proto
 // changes in a non-additive way. Plugins reporting a different version
 // are rejected by the supervisor.
 const ProtocolVersion = uint(1)

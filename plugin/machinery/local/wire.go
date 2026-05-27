@@ -21,14 +21,32 @@ func LookupSupervisor(id uuid.UUID) *Supervisor {
 	return active[id]
 }
 
-func Set(id uuid.UUID, s *Supervisor) {
+// SetIfAbsent stores the supervisor only when no supervisor is already active.
+func SetIfAbsent(id uuid.UUID, s *Supervisor) bool {
 	mu.Lock()
 	defer mu.Unlock()
+	if active[id] != nil {
+		return false
+	}
 	active[id] = s
+	return true
 }
 
-func Remove(id uuid.UUID) {
+// RollbackSupervisor removes a supervisor that failed to start, without
+// deleting a newer supervisor registered for the same plugin.
+func RollbackSupervisor(id uuid.UUID, failed *Supervisor) {
 	mu.Lock()
 	defer mu.Unlock()
+	if active[id] == failed {
+		delete(active, id)
+	}
+}
+
+// PopSupervisor removes and returns the active supervisor for id.
+func PopSupervisor(id uuid.UUID) *Supervisor {
+	mu.Lock()
+	defer mu.Unlock()
+	sup := active[id]
 	delete(active, id)
+	return sup
 }

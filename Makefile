@@ -279,7 +279,7 @@ $(PROTOC_GEN_GO_GRPC): $(LOCALBIN)
 	GOBIN=$(LOCALBIN) go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@$(PROTOC_GEN_GO_GRPC_VERSION)
 
 .PHONY: proto
-proto: protoc $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC) ## Regenerate plugin gRPC stubs from plugin/proto/plugin.proto
+proto: protoc $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC) ## Regenerate plugin gRPC stubs from plugin/plugin.proto
 	$(PROTOC) \
 		--proto_path=plugin \
 		--proto_path=$(PROTOC_INCLUDE) \

@@ -69,15 +69,13 @@ func startPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 		return brokerID, nil
 	}
 
-	if local.LookupSupervisor(id) != nil {
+	sup := local.New(id, binPath)
+	if !local.SetIfAbsent(id, sup) {
 		return nil
 	}
 
-	sup := local.New(id, binPath)
-	local.Set(id, sup)
-
 	if err := sup.Start(ctx, startHost); err != nil {
-		local.Remove(id)
+		local.RollbackSupervisor(id, sup)
 		return fmt.Errorf("plugin %s: start supervisor: %w", id, err)
 	}
 
@@ -85,8 +83,7 @@ func startPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 }
 
 func stopPlugin(id uuid.UUID) error {
-	sup := local.LookupSupervisor(id)
-	local.Remove(id)
+	sup := local.PopSupervisor(id)
 	if sup != nil {
 		sup.Stop()
 	}
