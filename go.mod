@@ -11,7 +11,7 @@ require (
 	github.com/fergusstrange/embedded-postgres v1.34.0 // indirect
 	github.com/flanksource/commons v1.51.4
 	github.com/flanksource/duty v1.0.1312
-	github.com/flanksource/gomplate/v3 v3.24.80
+	github.com/flanksource/gomplate/v3 v3.24.81
 	github.com/flanksource/kopper v1.0.22
 	github.com/gomarkdown/markdown v0.0.0-20260411013819-759bbc3e3207
 	github.com/google/cel-go v0.28.1
