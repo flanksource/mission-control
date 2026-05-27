@@ -17,7 +17,6 @@ import (
 
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
-	pluginpb "github.com/flanksource/incident-commander/plugin"
 )
 
 const MaxInvokeDepth = 5
@@ -28,7 +27,7 @@ type Request struct {
 	Operation    string
 	ParamsJSON   []byte
 	ConfigItemID string
-	Caller       *pluginpb.CallerContext
+	Caller       *plugin.CallerContext
 	User         *models.Person
 	Subject      string
 	Roles        []string
@@ -37,7 +36,7 @@ type Request struct {
 	Timeout      time.Duration
 }
 
-func InvokeOperation(ctx dutyContext.Context, req Request) (*pluginpb.InvokeResponse, *pluginpb.Entry, error) {
+func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeResponse, *plugin.Entry, error) {
 	if req.PluginRef == "" {
 		return nil, nil, dutyAPI.Errorf(dutyAPI.EINVALID, "plugin is required")
 	}
@@ -100,7 +99,7 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*pluginpb.InvokeResp
 	if caller == nil {
 		caller = CallerFromUser(req.User)
 	}
-	resp, err := Invoke(invokeCtx, entry.ID, &pluginpb.InvokeRequest{
+	resp, err := Invoke(invokeCtx, entry.ID, &plugin.InvokeRequest{
 		Operation:    req.Operation,
 		ParamsJson:   req.ParamsJSON,
 		ConfigItemId: req.ConfigItemID,
@@ -110,10 +109,10 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*pluginpb.InvokeResp
 	return resp, entry, err
 }
 
-func ResolvePlugin(ctx dutyContext.Context, ref string) (*pluginpb.Entry, error) {
-	entry, err := pluginpb.DefaultRegistry.Resolve(ref)
+func ResolvePlugin(ctx dutyContext.Context, ref string) (*plugin.Entry, error) {
+	entry, err := plugin.DefaultRegistry.Resolve(ref)
 	if err != nil {
-		if errors.Is(err, pluginpb.ErrAmbiguousPlugin) {
+		if errors.Is(err, plugin.ErrAmbiguousPlugin) {
 			return nil, ctx.Oops().Code(dutyAPI.ECONFLICT).Wrap(err)
 		}
 		return nil, ctx.Oops().Wrap(err)
@@ -124,7 +123,7 @@ func ResolvePlugin(ctx dutyContext.Context, ref string) (*pluginpb.Entry, error)
 	return entry, nil
 }
 
-func OperationDef(entry *pluginpb.Entry, op string) *pluginpb.OperationDef {
+func OperationDef(entry *plugin.Entry, op string) *plugin.OperationDef {
 	if entry == nil || entry.Manifest == nil {
 		return nil
 	}
@@ -136,7 +135,7 @@ func OperationDef(entry *pluginpb.Entry, op string) *pluginpb.OperationDef {
 	return nil
 }
 
-func SelectorMatches(ctx dutyContext.Context, entry *pluginpb.Entry, configID string) (bool, error) {
+func SelectorMatches(ctx dutyContext.Context, entry *plugin.Entry, configID string) (bool, error) {
 	if entry == nil {
 		return false, nil
 	}
@@ -153,7 +152,7 @@ func SelectorMatches(ctx dutyContext.Context, entry *pluginpb.Entry, configID st
 	return selector.Matches(item)
 }
 
-func EnforceInvokePermission(ctx dutyContext.Context, subject string, entry *pluginpb.Entry, op, configID string) error {
+func EnforceInvokePermission(ctx dutyContext.Context, subject string, entry *plugin.Entry, op, configID string) error {
 	if subject == "" {
 		return ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in")
 	}
@@ -180,8 +179,8 @@ func CanInvokePluginOperation(ctx dutyContext.Context, subject string, attr *mod
 	return dutyRBAC.HasPermission(ctx, subject, attr, policy.NewPluginInvokeAction(pluginName, op))
 }
 
-func CallerFromUser(user *models.Person) *pluginpb.CallerContext {
-	cc := &pluginpb.CallerContext{}
+func CallerFromUser(user *models.Person) *plugin.CallerContext {
+	cc := &plugin.CallerContext{}
 	if user != nil {
 		cc.UserId = user.ID.String()
 	}
