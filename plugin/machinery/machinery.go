@@ -3,9 +3,7 @@ package machinery
 import (
 	"fmt"
 	"net/url"
-	"os"
 
-	"github.com/flanksource/deps"
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/google/uuid"
@@ -15,28 +13,6 @@ import (
 	"github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/machinery/local"
 )
-
-func InstallPlugin(ctx dutyContext.Context, name, source, version string) (string, error) {
-	binDir := local.PluginPath()
-	if err := os.MkdirAll(binDir, 0o755); err != nil {
-		return "", fmt.Errorf("create plugin dir %s: %w", binDir, err)
-	}
-
-	binPath := local.BinaryPathFor(name)
-	if info, err := os.Stat(binPath); err == nil && !info.IsDir() {
-		ctx.Logger.V(3).Infof("plugin %s: using existing binary at %s, skipping install", name, binPath)
-		return binPath, nil
-	}
-
-	res, err := deps.InstallWithContext(ctx, source, version, deps.WithBinDir(binDir))
-	if err != nil {
-		return "", fmt.Errorf("install plugin %s: %w", name, err)
-	}
-	if res != nil && res.Error != nil {
-		return "", fmt.Errorf("install plugin %s: %w", name, res.Error)
-	}
-	return binPath, nil
-}
 
 func StartPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 	entry := plugin.DefaultRegistry.Get(id)
@@ -53,6 +29,15 @@ func StartPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 }
 
 func startLocalPlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
+	installedPath, err := local.InstallPlugin(ctx, entry.Name, entry.Spec.Source, entry.Spec.Version)
+	if err != nil {
+		return fmt.Errorf("failed to install plugin %s: %w", entry.Name, err)
+	}
+	if err := plugin.DefaultRegistry.SetInstalledPath(entry.ID, installedPath); err != nil {
+		return err
+	}
+	entry.InstalledPath = installedPath
+
 	svc := NewGRPCService(ctx, entry.ID)
 
 	// startHost is invoked after Dispense() so the broker is live. It opens
@@ -82,7 +67,7 @@ func startLocalPlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 }
 
 func startLocalPluginWithHost(ctx dutyContext.Context, entry *plugin.Entry, startHost func(*goplugin.GRPCBroker) (uint32, error)) error {
-	sup := local.New(entry.ID, local.BinaryPathFor(entry.Name))
+	sup := local.New(entry.ID, entry.InstalledPath)
 	started, err := plugin.DefaultRegistry.SetRuntimeIfAbsent(entry.ID, sup)
 	if err != nil {
 		return err
