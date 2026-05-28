@@ -33,6 +33,7 @@ import (
 	"github.com/flanksource/incident-commander/metrics"
 	"github.com/flanksource/incident-commander/notification"
 	pluginReconciler "github.com/flanksource/incident-commander/plugin/reconciler"
+	"github.com/flanksource/incident-commander/upstream/tunnel"
 	echov4 "github.com/labstack/echo/v4"
 
 	// register event handlers & echo routers
@@ -245,6 +246,10 @@ var Serve = &cobra.Command{
 
 		ctx.WithTracer(otel.GetTracerProvider().Tracer("mission-control"))
 		ctx = ctx.WithNamespace(api.Namespace)
+
+		if api.UpstreamConf.Valid() {
+			go tunnel.StartAgentTunnel(ctx, api.UpstreamConf, e)
+		}
 
 		go jobs.Start(ctx, mcpServer.Server)
 

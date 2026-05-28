@@ -1,6 +1,7 @@
 package auth
 
 import (
+	gocontext "context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -176,8 +177,25 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 	return nil
 }
 
+type trustedUpstreamContextKey struct{}
+
+func WithTrustedUpstream(ctx gocontext.Context) gocontext.Context {
+	return gocontext.WithValue(ctx, trustedUpstreamContextKey{}, true)
+}
+
+func IsTrustedUpstream(ctx gocontext.Context) bool {
+	v, _ := ctx.Value(trustedUpstreamContextKey{}).(bool)
+	return v
+}
+
 // TODO: Use regex supported path matching
 func canSkipAuth(c echo.Context) bool {
+	if IsTrustedUpstream(c.Request().Context()) {
+		// Incoming requests from upstream can bypass authentication.
+		// At the moment we do not have a way for the upstream to authenticate itself against agents.
+		return true
+	}
+
 	requestPath := c.Request().URL.Path
 	// Use the request path instead of c.Path(), which can be empty or contain route
 	// patterns while global middleware is evaluating a request.

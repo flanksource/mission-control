@@ -1,6 +1,7 @@
 package upstream
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/flanksource/incident-commander/push"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/upstream/tunnel"
 )
 
 var agentCache = cache.New(3*24*time.Hour, 12*time.Hour)
@@ -39,6 +41,7 @@ func RegisterRoutes(e *echo.Echo) {
 		upstream.AgentAuthMiddleware(agentCache),
 	)
 	upstreamGroup.GET("/ping", upstream.PingHandler)
+	upstreamGroup.GET(fmt.Sprintf("/%s", tunnel.SessionCreateHTTPEndpoint), tunnel.YamuxSessionCreate)
 	upstreamGroup.POST("/list-views", upstream.ListViewsHandler)
 	upstreamGroup.POST("/push", upstream.NewPushHandler(upstream.NewStatusRingStore(job.EvictedJobs)))
 	upstreamGroup.DELETE("/push", upstream.DeleteHandler)
