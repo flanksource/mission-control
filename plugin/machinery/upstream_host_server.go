@@ -10,7 +10,6 @@ import (
 	dutyUpstream "github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/auth"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -31,7 +30,7 @@ func StartUpstreamHostGRPCServer(ctx dutyContext.Context, port int) (*grpc.Serve
 		return nil, err
 	}
 
-	svc := NewGRPCService(ctx, uuid.Nil)
+	svc := NewGRPCService(ctx)
 	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(upstreamHostUnaryInterceptor(ctx)))
 	pluginpb.RegisterHostServiceServer(grpcServer, upstreamHostService{Service: svc})
 

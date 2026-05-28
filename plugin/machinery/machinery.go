@@ -40,7 +40,7 @@ func startLocalPlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 	}
 	entry.InstalledPath = installedPath
 
-	svc := NewGRPCService(ctx, entry.ID)
+	svc := NewGRPCService(ctx)
 
 	// startHost is invoked after Dispense() so the broker is live. It opens
 	// a listener on the broker, starts a gRPC server for this plugin's

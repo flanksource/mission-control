@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -36,6 +37,18 @@ func invocationClaimsFromContext(ctx context.Context) (*auth.PluginInvocationCla
 	return claims, ok
 }
 
+func pluginEntryFromInvocation(ctx context.Context) (*plugin.Entry, error) {
+	claims, ok := invocationClaimsFromContext(ctx)
+	if !ok || claims.Plugin == uuid.Nil {
+		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
+	}
+	entry := plugin.DefaultRegistry.Get(claims.Plugin)
+	if entry == nil {
+		return nil, status.Errorf(codes.NotFound, "plugin %s is not registered", claims.Plugin)
+	}
+	return entry, nil
+}
+
 func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -47,7 +60,7 @@ func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, e
 		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
 
-	claims, err := auth.VerifyPluginInvocationToken(values[0], s.pluginID)
+	claims, err := auth.VerifyAnyPluginInvocationToken(values[0])
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid plugin invocation token: %v", err)
 	}
