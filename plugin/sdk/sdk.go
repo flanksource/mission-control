@@ -50,7 +50,6 @@ type InvokeCtx struct {
 	Operation    string
 	ParamsJSON   []byte
 	ConfigItemID string
-	Caller       *plugin.CallerContext
 	Roles        []string
 	Host         HostClient
 }

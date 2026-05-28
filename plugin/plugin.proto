@@ -85,19 +85,11 @@ message ConfigureRequest {
 
 message ConfigureResponse { repeated string warnings = 1; }
 
-message CallerContext {
-  string user_id              = 1;
-  repeated string permissions = 2;
-  string trace_id             = 3;
-  string request_id           = 4;
-}
-
 message InvokeRequest {
   string operation     = 1;
   bytes  params_json   = 2;
   string config_item_id = 3;
-  CallerContext caller = 4;
-  google.protobuf.Timestamp deadline = 5;
+  google.protobuf.Timestamp deadline = 4;
 }
 
 message InvokeResponse {
