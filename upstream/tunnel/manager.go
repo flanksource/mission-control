@@ -57,28 +57,37 @@ func (t *manager) DeleteIfSame(agentID uuid.UUID, session *yamux.Session) bool {
 
 func (t *manager) Open(ctx context.Context, agentID uuid.UUID) (net.Conn, error) {
 	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	session, ok := t.sessions[agentID]
 	if !ok {
+		t.mu.Unlock()
 		return nil, ErrSessionNotFound
 	}
 
 	if session.IsClosed() {
+		t.mu.Unlock()
 		return nil, ErrSessionClosed
 	}
+	t.mu.Unlock()
 
 	ch := make(chan struct {
 		conn net.Conn
 		err  error
-	}, 1)
+	})
 
 	go func() {
 		conn, err := session.Open()
-		ch <- struct {
+		res := struct {
 			conn net.Conn
 			err  error
 		}{conn, err}
+
+		select {
+		case ch <- res:
+		case <-ctx.Done():
+			if conn != nil {
+				_ = conn.Close()
+			}
+		}
 	}()
 
 	select {

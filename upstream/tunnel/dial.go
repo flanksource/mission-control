@@ -94,9 +94,15 @@ func runAgentTunnelSession(ctx gocontext.Context, upstreamConfig upstream.Upstre
 	}
 	defer session.Close()
 
+	done := make(chan struct{})
+	defer close(done)
+
 	go func() {
-		<-ctx.Done()
-		_ = session.Close()
+		select {
+		case <-ctx.Done():
+			_ = session.Close()
+		case <-done:
+		}
 	}()
 
 	server := &http.Server{

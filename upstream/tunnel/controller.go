@@ -34,12 +34,18 @@ func YamuxSessionCreate(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
-	_, _ = rw.WriteString(
+	if _, err := rw.WriteString(
 		"HTTP/1.1 101 Switching Protocols\r\n" +
 			"Connection: Upgrade\r\n" +
 			"Upgrade: yamux\r\n\r\n",
-	)
-	_ = rw.Flush()
+	); err != nil {
+		_ = conn.Close()
+		return nil
+	}
+	if err := rw.Flush(); err != nil {
+		_ = conn.Close()
+		return nil
+	}
 
 	session, err := yamux.Server(conn, nil)
 	if err != nil {
