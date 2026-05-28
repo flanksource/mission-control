@@ -20,11 +20,11 @@ func StartPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 		return fmt.Errorf("plugin %s: not registered", id)
 	}
 
-	switch entry.ConnectionKind {
-	case "", plugin.ConnectionLocal:
+	switch entry.Kind {
+	case "", plugin.PluginKindLocal:
 		return startLocalPlugin(ctx, entry)
 	default:
-		return fmt.Errorf("plugin %s: unsupported connection kind %q", id, entry.ConnectionKind)
+		return fmt.Errorf("plugin %s: unsupported connection kind %q", id, entry.Kind)
 	}
 }
 
@@ -98,14 +98,14 @@ func Invoke(ctx dutyContext.Context, pluginID uuid.UUID, req *plugin.InvokeReque
 		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not registered", pluginID)
 	}
 
-	switch entry.ConnectionKind {
-	case "", plugin.ConnectionLocal:
+	switch entry.Kind {
+	case "", plugin.PluginKindLocal:
 		if entry.Runtime == nil {
 			return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
 		}
 		return entry.Runtime.Invoke(ctx, req)
 	default:
-		return nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has unsupported connection kind %q", pluginID, entry.ConnectionKind)
+		return nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has unsupported connection kind %q", pluginID, entry.Kind)
 	}
 }
 
@@ -115,8 +115,8 @@ func HTTPURL(ctx dutyContext.Context, pluginID uuid.UUID) (*url.URL, error) {
 		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not registered", pluginID)
 	}
 
-	switch entry.ConnectionKind {
-	case "", plugin.ConnectionLocal:
+	switch entry.Kind {
+	case "", plugin.PluginKindLocal:
 		if entry.Runtime == nil {
 			return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
 		}
@@ -126,6 +126,6 @@ func HTTPURL(ctx dutyContext.Context, pluginID uuid.UUID) (*url.URL, error) {
 		}
 		return url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
 	default:
-		return nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has unsupported connection kind %q", pluginID, entry.ConnectionKind)
+		return nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has unsupported connection kind %q", pluginID, entry.Kind)
 	}
 }

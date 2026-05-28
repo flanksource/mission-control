@@ -116,7 +116,6 @@ func (s *pluginServer) Invoke(ctx context.Context, req *pluginpb.InvokeRequest) 
 		Operation:    req.Operation,
 		ParamsJSON:   req.ParamsJson,
 		ConfigItemID: req.ConfigItemId,
-		Caller:       req.Caller,
 		Roles:        rolesFromInvocationToken(token),
 		Host:         host,
 	})

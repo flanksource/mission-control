@@ -33,15 +33,14 @@ type Runtime interface {
 // RegisterPlugin; it is nil while the plugin is starting up or has crashed
 // past the supervisor's restart budget.
 type Entry struct {
-	ID             uuid.UUID
-	Name           string
-	Namespace      string
-	Spec           v1.PluginSpec
-	LifecycleKind  LifecycleKind
-	ConnectionKind ConnectionKind
-	Manifest       *PluginManifest
-	Runtime        Runtime
-	InstalledPath  string
+	ID            uuid.UUID
+	Name          string
+	Namespace     string
+	Spec          v1.PluginSpec
+	Kind          Kind
+	Manifest      *PluginManifest
+	Runtime       Runtime
+	InstalledPath string
 }
 
 // Registry is the host-side in-memory store of plugins.
@@ -103,11 +102,8 @@ func (r *Registry) Upsert(id uuid.UUID, namespace, name string, spec v1.PluginSp
 	e.Name = name
 	e.Namespace = namespace
 	e.Spec = spec
-	if e.LifecycleKind == "" {
-		e.LifecycleKind = LifecycleManaged
-	}
-	if e.ConnectionKind == "" {
-		e.ConnectionKind = ConnectionLocal
+	if e.Kind == "" {
+		e.Kind = PluginKindLocal
 	}
 	r.addIndexes(e)
 	return e, nil

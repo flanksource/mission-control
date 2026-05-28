@@ -27,7 +27,6 @@ type Request struct {
 	Operation    string
 	ParamsJSON   []byte
 	ConfigItemID string
-	Caller       *plugin.CallerContext
 	User         *models.Person
 	Subject      string
 	Roles        []string
@@ -95,15 +94,10 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeRespon
 	}
 	invokeCtx = invokeCtx.Wrap(metadata.AppendToOutgoingContext(invokeCtx, plugin.InvocationTokenGRPCMetadataKey, token)).WithUser(req.User)
 
-	caller := req.Caller
-	if caller == nil {
-		caller = CallerFromUser(req.User)
-	}
 	resp, err := Invoke(invokeCtx, entry.ID, &plugin.InvokeRequest{
 		Operation:    req.Operation,
 		ParamsJson:   req.ParamsJSON,
 		ConfigItemId: req.ConfigItemID,
-		Caller:       caller,
 		Deadline:     req.Deadline,
 	})
 	return resp, entry, err
@@ -177,14 +171,6 @@ func EnforceInvokePermission(ctx dutyContext.Context, subject string, entry *plu
 
 func CanInvokePluginOperation(ctx dutyContext.Context, subject string, attr *models.ABACAttribute, pluginName, op string) bool {
 	return dutyRBAC.HasPermission(ctx, subject, attr, policy.NewPluginInvokeAction(pluginName, op))
-}
-
-func CallerFromUser(user *models.Person) *plugin.CallerContext {
-	cc := &plugin.CallerContext{}
-	if user != nil {
-		cc.UserId = user.ID.String()
-	}
-	return cc
 }
 
 func PluginSubject(namespace, name string) string {

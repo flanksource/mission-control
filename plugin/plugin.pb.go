@@ -587,88 +587,19 @@ func (x *ConfigureResponse) GetWarnings() []string {
 	return nil
 }
 
-type CallerContext struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	UserId        string                 `protobuf:"bytes,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	Permissions   []string               `protobuf:"bytes,2,rep,name=permissions,proto3" json:"permissions,omitempty"`
-	TraceId       string                 `protobuf:"bytes,3,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
-	RequestId     string                 `protobuf:"bytes,4,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *CallerContext) Reset() {
-	*x = CallerContext{}
-	mi := &file_plugin_proto_msgTypes[9]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *CallerContext) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*CallerContext) ProtoMessage() {}
-
-func (x *CallerContext) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[9]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use CallerContext.ProtoReflect.Descriptor instead.
-func (*CallerContext) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{9}
-}
-
-func (x *CallerContext) GetUserId() string {
-	if x != nil {
-		return x.UserId
-	}
-	return ""
-}
-
-func (x *CallerContext) GetPermissions() []string {
-	if x != nil {
-		return x.Permissions
-	}
-	return nil
-}
-
-func (x *CallerContext) GetTraceId() string {
-	if x != nil {
-		return x.TraceId
-	}
-	return ""
-}
-
-func (x *CallerContext) GetRequestId() string {
-	if x != nil {
-		return x.RequestId
-	}
-	return ""
-}
-
 type InvokeRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Operation     string                 `protobuf:"bytes,1,opt,name=operation,proto3" json:"operation,omitempty"`
 	ParamsJson    []byte                 `protobuf:"bytes,2,opt,name=params_json,json=paramsJson,proto3" json:"params_json,omitempty"`
 	ConfigItemId  string                 `protobuf:"bytes,3,opt,name=config_item_id,json=configItemId,proto3" json:"config_item_id,omitempty"`
-	Caller        *CallerContext         `protobuf:"bytes,4,opt,name=caller,proto3" json:"caller,omitempty"`
-	Deadline      *timestamppb.Timestamp `protobuf:"bytes,5,opt,name=deadline,proto3" json:"deadline,omitempty"`
+	Deadline      *timestamppb.Timestamp `protobuf:"bytes,4,opt,name=deadline,proto3" json:"deadline,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *InvokeRequest) Reset() {
 	*x = InvokeRequest{}
-	mi := &file_plugin_proto_msgTypes[10]
+	mi := &file_plugin_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -680,7 +611,7 @@ func (x *InvokeRequest) String() string {
 func (*InvokeRequest) ProtoMessage() {}
 
 func (x *InvokeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[10]
+	mi := &file_plugin_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -693,7 +624,7 @@ func (x *InvokeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvokeRequest.ProtoReflect.Descriptor instead.
 func (*InvokeRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{10}
+	return file_plugin_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *InvokeRequest) GetOperation() string {
@@ -717,13 +648,6 @@ func (x *InvokeRequest) GetConfigItemId() string {
 	return ""
 }
 
-func (x *InvokeRequest) GetCaller() *CallerContext {
-	if x != nil {
-		return x.Caller
-	}
-	return nil
-}
-
 func (x *InvokeRequest) GetDeadline() *timestamppb.Timestamp {
 	if x != nil {
 		return x.Deadline
@@ -744,7 +668,7 @@ type InvokeResponse struct {
 
 func (x *InvokeResponse) Reset() {
 	*x = InvokeResponse{}
-	mi := &file_plugin_proto_msgTypes[11]
+	mi := &file_plugin_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -756,7 +680,7 @@ func (x *InvokeResponse) String() string {
 func (*InvokeResponse) ProtoMessage() {}
 
 func (x *InvokeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[11]
+	mi := &file_plugin_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -769,7 +693,7 @@ func (x *InvokeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvokeResponse.ProtoReflect.Descriptor instead.
 func (*InvokeResponse) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{11}
+	return file_plugin_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *InvokeResponse) GetResult() []byte {
@@ -820,7 +744,7 @@ type InvokePluginRequest struct {
 
 func (x *InvokePluginRequest) Reset() {
 	*x = InvokePluginRequest{}
-	mi := &file_plugin_proto_msgTypes[12]
+	mi := &file_plugin_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -832,7 +756,7 @@ func (x *InvokePluginRequest) String() string {
 func (*InvokePluginRequest) ProtoMessage() {}
 
 func (x *InvokePluginRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[12]
+	mi := &file_plugin_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -845,7 +769,7 @@ func (x *InvokePluginRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use InvokePluginRequest.ProtoReflect.Descriptor instead.
 func (*InvokePluginRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{12}
+	return file_plugin_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *InvokePluginRequest) GetPlugin() string {
@@ -892,7 +816,7 @@ type OperationList struct {
 
 func (x *OperationList) Reset() {
 	*x = OperationList{}
-	mi := &file_plugin_proto_msgTypes[13]
+	mi := &file_plugin_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -904,7 +828,7 @@ func (x *OperationList) String() string {
 func (*OperationList) ProtoMessage() {}
 
 func (x *OperationList) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[13]
+	mi := &file_plugin_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -917,7 +841,7 @@ func (x *OperationList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperationList.ProtoReflect.Descriptor instead.
 func (*OperationList) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{13}
+	return file_plugin_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *OperationList) GetOperations() []*OperationDef {
@@ -937,7 +861,7 @@ type HealthStatus struct {
 
 func (x *HealthStatus) Reset() {
 	*x = HealthStatus{}
-	mi := &file_plugin_proto_msgTypes[14]
+	mi := &file_plugin_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -949,7 +873,7 @@ func (x *HealthStatus) String() string {
 func (*HealthStatus) ProtoMessage() {}
 
 func (x *HealthStatus) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[14]
+	mi := &file_plugin_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -962,7 +886,7 @@ func (x *HealthStatus) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HealthStatus.ProtoReflect.Descriptor instead.
 func (*HealthStatus) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{14}
+	return file_plugin_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *HealthStatus) GetOk() bool {
@@ -998,7 +922,7 @@ type ConfigItem struct {
 
 func (x *ConfigItem) Reset() {
 	*x = ConfigItem{}
-	mi := &file_plugin_proto_msgTypes[15]
+	mi := &file_plugin_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1010,7 +934,7 @@ func (x *ConfigItem) String() string {
 func (*ConfigItem) ProtoMessage() {}
 
 func (x *ConfigItem) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[15]
+	mi := &file_plugin_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1023,7 +947,7 @@ func (x *ConfigItem) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigItem.ProtoReflect.Descriptor instead.
 func (*ConfigItem) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{15}
+	return file_plugin_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ConfigItem) GetId() string {
@@ -1113,7 +1037,7 @@ type ConfigItemList struct {
 
 func (x *ConfigItemList) Reset() {
 	*x = ConfigItemList{}
-	mi := &file_plugin_proto_msgTypes[16]
+	mi := &file_plugin_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1125,7 +1049,7 @@ func (x *ConfigItemList) String() string {
 func (*ConfigItemList) ProtoMessage() {}
 
 func (x *ConfigItemList) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[16]
+	mi := &file_plugin_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1138,7 +1062,7 @@ func (x *ConfigItemList) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConfigItemList.ProtoReflect.Descriptor instead.
 func (*ConfigItemList) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{16}
+	return file_plugin_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *ConfigItemList) GetItems() []*ConfigItem {
@@ -1164,7 +1088,7 @@ type GetConfigItemRequest struct {
 
 func (x *GetConfigItemRequest) Reset() {
 	*x = GetConfigItemRequest{}
-	mi := &file_plugin_proto_msgTypes[17]
+	mi := &file_plugin_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1176,7 +1100,7 @@ func (x *GetConfigItemRequest) String() string {
 func (*GetConfigItemRequest) ProtoMessage() {}
 
 func (x *GetConfigItemRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[17]
+	mi := &file_plugin_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1189,7 +1113,7 @@ func (x *GetConfigItemRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetConfigItemRequest.ProtoReflect.Descriptor instead.
 func (*GetConfigItemRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{17}
+	return file_plugin_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *GetConfigItemRequest) GetId() string {
@@ -1222,7 +1146,7 @@ type ResourceSelector struct {
 
 func (x *ResourceSelector) Reset() {
 	*x = ResourceSelector{}
-	mi := &file_plugin_proto_msgTypes[18]
+	mi := &file_plugin_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1234,7 +1158,7 @@ func (x *ResourceSelector) String() string {
 func (*ResourceSelector) ProtoMessage() {}
 
 func (x *ResourceSelector) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[18]
+	mi := &file_plugin_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1247,7 +1171,7 @@ func (x *ResourceSelector) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResourceSelector.ProtoReflect.Descriptor instead.
 func (*ResourceSelector) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{18}
+	return file_plugin_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ResourceSelector) GetAgent() string {
@@ -1366,7 +1290,7 @@ type ListConfigsRequest struct {
 
 func (x *ListConfigsRequest) Reset() {
 	*x = ListConfigsRequest{}
-	mi := &file_plugin_proto_msgTypes[19]
+	mi := &file_plugin_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1378,7 +1302,7 @@ func (x *ListConfigsRequest) String() string {
 func (*ListConfigsRequest) ProtoMessage() {}
 
 func (x *ListConfigsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[19]
+	mi := &file_plugin_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1391,7 +1315,7 @@ func (x *ListConfigsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListConfigsRequest.ProtoReflect.Descriptor instead.
 func (*ListConfigsRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{19}
+	return file_plugin_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ListConfigsRequest) GetSelector() *ResourceSelector {
@@ -1440,7 +1364,7 @@ type GetConnectionRequest struct {
 
 func (x *GetConnectionRequest) Reset() {
 	*x = GetConnectionRequest{}
-	mi := &file_plugin_proto_msgTypes[20]
+	mi := &file_plugin_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1452,7 +1376,7 @@ func (x *GetConnectionRequest) String() string {
 func (*GetConnectionRequest) ProtoMessage() {}
 
 func (x *GetConnectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[20]
+	mi := &file_plugin_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1465,7 +1389,7 @@ func (x *GetConnectionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetConnectionRequest.ProtoReflect.Descriptor instead.
 func (*GetConnectionRequest) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{20}
+	return file_plugin_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *GetConnectionRequest) GetLookup() isGetConnectionRequest_Lookup {
@@ -1555,7 +1479,7 @@ type ResolvedConnection struct {
 
 func (x *ResolvedConnection) Reset() {
 	*x = ResolvedConnection{}
-	mi := &file_plugin_proto_msgTypes[21]
+	mi := &file_plugin_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1567,7 +1491,7 @@ func (x *ResolvedConnection) String() string {
 func (*ResolvedConnection) ProtoMessage() {}
 
 func (x *ResolvedConnection) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[21]
+	mi := &file_plugin_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1580,7 +1504,7 @@ func (x *ResolvedConnection) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolvedConnection.ProtoReflect.Descriptor instead.
 func (*ResolvedConnection) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{21}
+	return file_plugin_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ResolvedConnection) GetType() string {
@@ -1651,7 +1575,7 @@ type LogEntry struct {
 
 func (x *LogEntry) Reset() {
 	*x = LogEntry{}
-	mi := &file_plugin_proto_msgTypes[22]
+	mi := &file_plugin_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1663,7 +1587,7 @@ func (x *LogEntry) String() string {
 func (*LogEntry) ProtoMessage() {}
 
 func (x *LogEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[22]
+	mi := &file_plugin_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1676,7 +1600,7 @@ func (x *LogEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
 func (*LogEntry) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{22}
+	return file_plugin_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *LogEntry) GetLevel() string {
@@ -1719,7 +1643,7 @@ type Artifact struct {
 
 func (x *Artifact) Reset() {
 	*x = Artifact{}
-	mi := &file_plugin_proto_msgTypes[23]
+	mi := &file_plugin_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1731,7 +1655,7 @@ func (x *Artifact) String() string {
 func (*Artifact) ProtoMessage() {}
 
 func (x *Artifact) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[23]
+	mi := &file_plugin_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1744,7 +1668,7 @@ func (x *Artifact) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Artifact.ProtoReflect.Descriptor instead.
 func (*Artifact) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{23}
+	return file_plugin_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *Artifact) GetName() string {
@@ -1785,7 +1709,7 @@ type ArtifactRef struct {
 
 func (x *ArtifactRef) Reset() {
 	*x = ArtifactRef{}
-	mi := &file_plugin_proto_msgTypes[24]
+	mi := &file_plugin_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1797,7 +1721,7 @@ func (x *ArtifactRef) String() string {
 func (*ArtifactRef) ProtoMessage() {}
 
 func (x *ArtifactRef) ProtoReflect() protoreflect.Message {
-	mi := &file_plugin_proto_msgTypes[24]
+	mi := &file_plugin_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1810,7 +1734,7 @@ func (x *ArtifactRef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ArtifactRef.ProtoReflect.Descriptor instead.
 func (*ArtifactRef) Descriptor() ([]byte, []int) {
-	return file_plugin_proto_rawDescGZIP(), []int{24}
+	return file_plugin_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ArtifactRef) GetId() string {
@@ -1877,20 +1801,13 @@ const file_plugin_proto_rawDesc = "" +
 	"\x10ConfigureRequest\x123\n" +
 	"\bsettings\x18\x01 \x01(\v2\x17.google.protobuf.StructR\bsettings\"/\n" +
 	"\x11ConfigureResponse\x12\x1a\n" +
-	"\bwarnings\x18\x01 \x03(\tR\bwarnings\"\x84\x01\n" +
-	"\rCallerContext\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\tR\x06userId\x12 \n" +
-	"\vpermissions\x18\x02 \x03(\tR\vpermissions\x12\x19\n" +
-	"\btrace_id\x18\x03 \x01(\tR\atraceId\x12\x1d\n" +
-	"\n" +
-	"request_id\x18\x04 \x01(\tR\trequestId\"\xed\x01\n" +
+	"\bwarnings\x18\x01 \x03(\tR\bwarnings\"\xac\x01\n" +
 	"\rInvokeRequest\x12\x1c\n" +
 	"\toperation\x18\x01 \x01(\tR\toperation\x12\x1f\n" +
 	"\vparams_json\x18\x02 \x01(\fR\n" +
 	"paramsJson\x12$\n" +
-	"\x0econfig_item_id\x18\x03 \x01(\tR\fconfigItemId\x12?\n" +
-	"\x06caller\x18\x04 \x01(\v2'.missioncontrol.plugin.v1.CallerContextR\x06caller\x126\n" +
-	"\bdeadline\x18\x05 \x01(\v2\x1a.google.protobuf.TimestampR\bdeadline\"\xb8\x01\n" +
+	"\x0econfig_item_id\x18\x03 \x01(\tR\fconfigItemId\x126\n" +
+	"\bdeadline\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\bdeadline\"\xb8\x01\n" +
 	"\x0eInvokeResponse\x12\x16\n" +
 	"\x06result\x18\x01 \x01(\fR\x06result\x12\x12\n" +
 	"\x04mime\x18\x02 \x01(\tR\x04mime\x12#\n" +
@@ -2026,7 +1943,7 @@ func file_plugin_proto_rawDescGZIP() []byte {
 	return file_plugin_proto_rawDescData
 }
 
-var file_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_plugin_proto_msgTypes = make([]protoimpl.MessageInfo, 29)
 var file_plugin_proto_goTypes = []any{
 	(*Empty)(nil),                 // 0: missioncontrol.plugin.v1.Empty
 	(*PluginManifest)(nil),        // 1: missioncontrol.plugin.v1.PluginManifest
@@ -2037,85 +1954,83 @@ var file_plugin_proto_goTypes = []any{
 	(*RegisterRequest)(nil),       // 6: missioncontrol.plugin.v1.RegisterRequest
 	(*ConfigureRequest)(nil),      // 7: missioncontrol.plugin.v1.ConfigureRequest
 	(*ConfigureResponse)(nil),     // 8: missioncontrol.plugin.v1.ConfigureResponse
-	(*CallerContext)(nil),         // 9: missioncontrol.plugin.v1.CallerContext
-	(*InvokeRequest)(nil),         // 10: missioncontrol.plugin.v1.InvokeRequest
-	(*InvokeResponse)(nil),        // 11: missioncontrol.plugin.v1.InvokeResponse
-	(*InvokePluginRequest)(nil),   // 12: missioncontrol.plugin.v1.InvokePluginRequest
-	(*OperationList)(nil),         // 13: missioncontrol.plugin.v1.OperationList
-	(*HealthStatus)(nil),          // 14: missioncontrol.plugin.v1.HealthStatus
-	(*ConfigItem)(nil),            // 15: missioncontrol.plugin.v1.ConfigItem
-	(*ConfigItemList)(nil),        // 16: missioncontrol.plugin.v1.ConfigItemList
-	(*GetConfigItemRequest)(nil),  // 17: missioncontrol.plugin.v1.GetConfigItemRequest
-	(*ResourceSelector)(nil),      // 18: missioncontrol.plugin.v1.ResourceSelector
-	(*ListConfigsRequest)(nil),    // 19: missioncontrol.plugin.v1.ListConfigsRequest
-	(*GetConnectionRequest)(nil),  // 20: missioncontrol.plugin.v1.GetConnectionRequest
-	(*ResolvedConnection)(nil),    // 21: missioncontrol.plugin.v1.ResolvedConnection
-	(*LogEntry)(nil),              // 22: missioncontrol.plugin.v1.LogEntry
-	(*Artifact)(nil),              // 23: missioncontrol.plugin.v1.Artifact
-	(*ArtifactRef)(nil),           // 24: missioncontrol.plugin.v1.ArtifactRef
-	nil,                           // 25: missioncontrol.plugin.v1.RegisterRequest.EnvEntry
-	nil,                           // 26: missioncontrol.plugin.v1.ConfigItem.LabelsEntry
-	nil,                           // 27: missioncontrol.plugin.v1.ConfigItem.TagsEntry
-	nil,                           // 28: missioncontrol.plugin.v1.LogEntry.FieldsEntry
-	nil,                           // 29: missioncontrol.plugin.v1.Artifact.MetadataEntry
-	(*structpb.Struct)(nil),       // 30: google.protobuf.Struct
-	(*timestamppb.Timestamp)(nil), // 31: google.protobuf.Timestamp
+	(*InvokeRequest)(nil),         // 9: missioncontrol.plugin.v1.InvokeRequest
+	(*InvokeResponse)(nil),        // 10: missioncontrol.plugin.v1.InvokeResponse
+	(*InvokePluginRequest)(nil),   // 11: missioncontrol.plugin.v1.InvokePluginRequest
+	(*OperationList)(nil),         // 12: missioncontrol.plugin.v1.OperationList
+	(*HealthStatus)(nil),          // 13: missioncontrol.plugin.v1.HealthStatus
+	(*ConfigItem)(nil),            // 14: missioncontrol.plugin.v1.ConfigItem
+	(*ConfigItemList)(nil),        // 15: missioncontrol.plugin.v1.ConfigItemList
+	(*GetConfigItemRequest)(nil),  // 16: missioncontrol.plugin.v1.GetConfigItemRequest
+	(*ResourceSelector)(nil),      // 17: missioncontrol.plugin.v1.ResourceSelector
+	(*ListConfigsRequest)(nil),    // 18: missioncontrol.plugin.v1.ListConfigsRequest
+	(*GetConnectionRequest)(nil),  // 19: missioncontrol.plugin.v1.GetConnectionRequest
+	(*ResolvedConnection)(nil),    // 20: missioncontrol.plugin.v1.ResolvedConnection
+	(*LogEntry)(nil),              // 21: missioncontrol.plugin.v1.LogEntry
+	(*Artifact)(nil),              // 22: missioncontrol.plugin.v1.Artifact
+	(*ArtifactRef)(nil),           // 23: missioncontrol.plugin.v1.ArtifactRef
+	nil,                           // 24: missioncontrol.plugin.v1.RegisterRequest.EnvEntry
+	nil,                           // 25: missioncontrol.plugin.v1.ConfigItem.LabelsEntry
+	nil,                           // 26: missioncontrol.plugin.v1.ConfigItem.TagsEntry
+	nil,                           // 27: missioncontrol.plugin.v1.LogEntry.FieldsEntry
+	nil,                           // 28: missioncontrol.plugin.v1.Artifact.MetadataEntry
+	(*structpb.Struct)(nil),       // 29: google.protobuf.Struct
+	(*timestamppb.Timestamp)(nil), // 30: google.protobuf.Timestamp
 }
 var file_plugin_proto_depIdxs = []int32{
 	4,  // 0: missioncontrol.plugin.v1.PluginManifest.operations:type_name -> missioncontrol.plugin.v1.OperationDef
 	3,  // 1: missioncontrol.plugin.v1.PluginManifest.tabs:type_name -> missioncontrol.plugin.v1.TabSpec
 	2,  // 2: missioncontrol.plugin.v1.PluginManifest.roles:type_name -> missioncontrol.plugin.v1.PluginRole
-	30, // 3: missioncontrol.plugin.v1.OperationDef.params_schema:type_name -> google.protobuf.Struct
+	29, // 3: missioncontrol.plugin.v1.OperationDef.params_schema:type_name -> google.protobuf.Struct
 	5,  // 4: missioncontrol.plugin.v1.OperationDef.http:type_name -> missioncontrol.plugin.v1.HTTPBinding
-	25, // 5: missioncontrol.plugin.v1.RegisterRequest.env:type_name -> missioncontrol.plugin.v1.RegisterRequest.EnvEntry
-	30, // 6: missioncontrol.plugin.v1.ConfigureRequest.settings:type_name -> google.protobuf.Struct
-	9,  // 7: missioncontrol.plugin.v1.InvokeRequest.caller:type_name -> missioncontrol.plugin.v1.CallerContext
-	31, // 8: missioncontrol.plugin.v1.InvokeRequest.deadline:type_name -> google.protobuf.Timestamp
-	22, // 9: missioncontrol.plugin.v1.InvokeResponse.logs:type_name -> missioncontrol.plugin.v1.LogEntry
-	31, // 10: missioncontrol.plugin.v1.InvokePluginRequest.deadline:type_name -> google.protobuf.Timestamp
-	4,  // 11: missioncontrol.plugin.v1.OperationList.operations:type_name -> missioncontrol.plugin.v1.OperationDef
-	30, // 12: missioncontrol.plugin.v1.ConfigItem.properties:type_name -> google.protobuf.Struct
-	30, // 13: missioncontrol.plugin.v1.ConfigItem.config:type_name -> google.protobuf.Struct
-	26, // 14: missioncontrol.plugin.v1.ConfigItem.labels:type_name -> missioncontrol.plugin.v1.ConfigItem.LabelsEntry
-	27, // 15: missioncontrol.plugin.v1.ConfigItem.tags:type_name -> missioncontrol.plugin.v1.ConfigItem.TagsEntry
-	15, // 16: missioncontrol.plugin.v1.ConfigItemList.items:type_name -> missioncontrol.plugin.v1.ConfigItem
-	18, // 17: missioncontrol.plugin.v1.ListConfigsRequest.selector:type_name -> missioncontrol.plugin.v1.ResourceSelector
-	30, // 18: missioncontrol.plugin.v1.ResolvedConnection.properties:type_name -> google.protobuf.Struct
-	31, // 19: missioncontrol.plugin.v1.ResolvedConnection.expires_at:type_name -> google.protobuf.Timestamp
-	28, // 20: missioncontrol.plugin.v1.LogEntry.fields:type_name -> missioncontrol.plugin.v1.LogEntry.FieldsEntry
-	31, // 21: missioncontrol.plugin.v1.LogEntry.ts:type_name -> google.protobuf.Timestamp
-	29, // 22: missioncontrol.plugin.v1.Artifact.metadata:type_name -> missioncontrol.plugin.v1.Artifact.MetadataEntry
-	6,  // 23: missioncontrol.plugin.v1.PluginService.RegisterPlugin:input_type -> missioncontrol.plugin.v1.RegisterRequest
-	7,  // 24: missioncontrol.plugin.v1.PluginService.Configure:input_type -> missioncontrol.plugin.v1.ConfigureRequest
-	0,  // 25: missioncontrol.plugin.v1.PluginService.ListOperations:input_type -> missioncontrol.plugin.v1.Empty
-	10, // 26: missioncontrol.plugin.v1.PluginService.Invoke:input_type -> missioncontrol.plugin.v1.InvokeRequest
-	0,  // 27: missioncontrol.plugin.v1.PluginService.Health:input_type -> missioncontrol.plugin.v1.Empty
-	0,  // 28: missioncontrol.plugin.v1.PluginService.Shutdown:input_type -> missioncontrol.plugin.v1.Empty
-	17, // 29: missioncontrol.plugin.v1.HostService.GetConfigItem:input_type -> missioncontrol.plugin.v1.GetConfigItemRequest
-	19, // 30: missioncontrol.plugin.v1.HostService.ListConfigs:input_type -> missioncontrol.plugin.v1.ListConfigsRequest
-	20, // 31: missioncontrol.plugin.v1.HostService.GetConnection:input_type -> missioncontrol.plugin.v1.GetConnectionRequest
-	22, // 32: missioncontrol.plugin.v1.HostService.Log:input_type -> missioncontrol.plugin.v1.LogEntry
-	23, // 33: missioncontrol.plugin.v1.HostService.WriteArtifact:input_type -> missioncontrol.plugin.v1.Artifact
-	24, // 34: missioncontrol.plugin.v1.HostService.ReadArtifact:input_type -> missioncontrol.plugin.v1.ArtifactRef
-	12, // 35: missioncontrol.plugin.v1.HostService.InvokePlugin:input_type -> missioncontrol.plugin.v1.InvokePluginRequest
-	1,  // 36: missioncontrol.plugin.v1.PluginService.RegisterPlugin:output_type -> missioncontrol.plugin.v1.PluginManifest
-	8,  // 37: missioncontrol.plugin.v1.PluginService.Configure:output_type -> missioncontrol.plugin.v1.ConfigureResponse
-	13, // 38: missioncontrol.plugin.v1.PluginService.ListOperations:output_type -> missioncontrol.plugin.v1.OperationList
-	11, // 39: missioncontrol.plugin.v1.PluginService.Invoke:output_type -> missioncontrol.plugin.v1.InvokeResponse
-	14, // 40: missioncontrol.plugin.v1.PluginService.Health:output_type -> missioncontrol.plugin.v1.HealthStatus
-	0,  // 41: missioncontrol.plugin.v1.PluginService.Shutdown:output_type -> missioncontrol.plugin.v1.Empty
-	15, // 42: missioncontrol.plugin.v1.HostService.GetConfigItem:output_type -> missioncontrol.plugin.v1.ConfigItem
-	16, // 43: missioncontrol.plugin.v1.HostService.ListConfigs:output_type -> missioncontrol.plugin.v1.ConfigItemList
-	21, // 44: missioncontrol.plugin.v1.HostService.GetConnection:output_type -> missioncontrol.plugin.v1.ResolvedConnection
-	0,  // 45: missioncontrol.plugin.v1.HostService.Log:output_type -> missioncontrol.plugin.v1.Empty
-	24, // 46: missioncontrol.plugin.v1.HostService.WriteArtifact:output_type -> missioncontrol.plugin.v1.ArtifactRef
-	23, // 47: missioncontrol.plugin.v1.HostService.ReadArtifact:output_type -> missioncontrol.plugin.v1.Artifact
-	11, // 48: missioncontrol.plugin.v1.HostService.InvokePlugin:output_type -> missioncontrol.plugin.v1.InvokeResponse
-	36, // [36:49] is the sub-list for method output_type
-	23, // [23:36] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	24, // 5: missioncontrol.plugin.v1.RegisterRequest.env:type_name -> missioncontrol.plugin.v1.RegisterRequest.EnvEntry
+	29, // 6: missioncontrol.plugin.v1.ConfigureRequest.settings:type_name -> google.protobuf.Struct
+	30, // 7: missioncontrol.plugin.v1.InvokeRequest.deadline:type_name -> google.protobuf.Timestamp
+	21, // 8: missioncontrol.plugin.v1.InvokeResponse.logs:type_name -> missioncontrol.plugin.v1.LogEntry
+	30, // 9: missioncontrol.plugin.v1.InvokePluginRequest.deadline:type_name -> google.protobuf.Timestamp
+	4,  // 10: missioncontrol.plugin.v1.OperationList.operations:type_name -> missioncontrol.plugin.v1.OperationDef
+	29, // 11: missioncontrol.plugin.v1.ConfigItem.properties:type_name -> google.protobuf.Struct
+	29, // 12: missioncontrol.plugin.v1.ConfigItem.config:type_name -> google.protobuf.Struct
+	25, // 13: missioncontrol.plugin.v1.ConfigItem.labels:type_name -> missioncontrol.plugin.v1.ConfigItem.LabelsEntry
+	26, // 14: missioncontrol.plugin.v1.ConfigItem.tags:type_name -> missioncontrol.plugin.v1.ConfigItem.TagsEntry
+	14, // 15: missioncontrol.plugin.v1.ConfigItemList.items:type_name -> missioncontrol.plugin.v1.ConfigItem
+	17, // 16: missioncontrol.plugin.v1.ListConfigsRequest.selector:type_name -> missioncontrol.plugin.v1.ResourceSelector
+	29, // 17: missioncontrol.plugin.v1.ResolvedConnection.properties:type_name -> google.protobuf.Struct
+	30, // 18: missioncontrol.plugin.v1.ResolvedConnection.expires_at:type_name -> google.protobuf.Timestamp
+	27, // 19: missioncontrol.plugin.v1.LogEntry.fields:type_name -> missioncontrol.plugin.v1.LogEntry.FieldsEntry
+	30, // 20: missioncontrol.plugin.v1.LogEntry.ts:type_name -> google.protobuf.Timestamp
+	28, // 21: missioncontrol.plugin.v1.Artifact.metadata:type_name -> missioncontrol.plugin.v1.Artifact.MetadataEntry
+	6,  // 22: missioncontrol.plugin.v1.PluginService.RegisterPlugin:input_type -> missioncontrol.plugin.v1.RegisterRequest
+	7,  // 23: missioncontrol.plugin.v1.PluginService.Configure:input_type -> missioncontrol.plugin.v1.ConfigureRequest
+	0,  // 24: missioncontrol.plugin.v1.PluginService.ListOperations:input_type -> missioncontrol.plugin.v1.Empty
+	9,  // 25: missioncontrol.plugin.v1.PluginService.Invoke:input_type -> missioncontrol.plugin.v1.InvokeRequest
+	0,  // 26: missioncontrol.plugin.v1.PluginService.Health:input_type -> missioncontrol.plugin.v1.Empty
+	0,  // 27: missioncontrol.plugin.v1.PluginService.Shutdown:input_type -> missioncontrol.plugin.v1.Empty
+	16, // 28: missioncontrol.plugin.v1.HostService.GetConfigItem:input_type -> missioncontrol.plugin.v1.GetConfigItemRequest
+	18, // 29: missioncontrol.plugin.v1.HostService.ListConfigs:input_type -> missioncontrol.plugin.v1.ListConfigsRequest
+	19, // 30: missioncontrol.plugin.v1.HostService.GetConnection:input_type -> missioncontrol.plugin.v1.GetConnectionRequest
+	21, // 31: missioncontrol.plugin.v1.HostService.Log:input_type -> missioncontrol.plugin.v1.LogEntry
+	22, // 32: missioncontrol.plugin.v1.HostService.WriteArtifact:input_type -> missioncontrol.plugin.v1.Artifact
+	23, // 33: missioncontrol.plugin.v1.HostService.ReadArtifact:input_type -> missioncontrol.plugin.v1.ArtifactRef
+	11, // 34: missioncontrol.plugin.v1.HostService.InvokePlugin:input_type -> missioncontrol.plugin.v1.InvokePluginRequest
+	1,  // 35: missioncontrol.plugin.v1.PluginService.RegisterPlugin:output_type -> missioncontrol.plugin.v1.PluginManifest
+	8,  // 36: missioncontrol.plugin.v1.PluginService.Configure:output_type -> missioncontrol.plugin.v1.ConfigureResponse
+	12, // 37: missioncontrol.plugin.v1.PluginService.ListOperations:output_type -> missioncontrol.plugin.v1.OperationList
+	10, // 38: missioncontrol.plugin.v1.PluginService.Invoke:output_type -> missioncontrol.plugin.v1.InvokeResponse
+	13, // 39: missioncontrol.plugin.v1.PluginService.Health:output_type -> missioncontrol.plugin.v1.HealthStatus
+	0,  // 40: missioncontrol.plugin.v1.PluginService.Shutdown:output_type -> missioncontrol.plugin.v1.Empty
+	14, // 41: missioncontrol.plugin.v1.HostService.GetConfigItem:output_type -> missioncontrol.plugin.v1.ConfigItem
+	15, // 42: missioncontrol.plugin.v1.HostService.ListConfigs:output_type -> missioncontrol.plugin.v1.ConfigItemList
+	20, // 43: missioncontrol.plugin.v1.HostService.GetConnection:output_type -> missioncontrol.plugin.v1.ResolvedConnection
+	0,  // 44: missioncontrol.plugin.v1.HostService.Log:output_type -> missioncontrol.plugin.v1.Empty
+	23, // 45: missioncontrol.plugin.v1.HostService.WriteArtifact:output_type -> missioncontrol.plugin.v1.ArtifactRef
+	22, // 46: missioncontrol.plugin.v1.HostService.ReadArtifact:output_type -> missioncontrol.plugin.v1.Artifact
+	10, // 47: missioncontrol.plugin.v1.HostService.InvokePlugin:output_type -> missioncontrol.plugin.v1.InvokeResponse
+	35, // [35:48] is the sub-list for method output_type
+	22, // [22:35] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_plugin_proto_init() }
@@ -2123,7 +2038,7 @@ func file_plugin_proto_init() {
 	if File_plugin_proto != nil {
 		return
 	}
-	file_plugin_proto_msgTypes[20].OneofWrappers = []any{
+	file_plugin_proto_msgTypes[19].OneofWrappers = []any{
 		(*GetConnectionRequest_Type)(nil),
 		(*GetConnectionRequest_ConfigItemId)(nil),
 		(*GetConnectionRequest_Label)(nil),
@@ -2135,7 +2050,7 @@ func file_plugin_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_plugin_proto_rawDesc), len(file_plugin_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   30,
+			NumMessages:   29,
 			NumExtensions: 0,
 			NumServices:   2,
 		},
