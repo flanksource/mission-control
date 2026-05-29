@@ -72,6 +72,8 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 	// Postgrest makes this jwt available as a session parameter inside postgres.
 	// We inject the rls payload here and then access it inside postgres using request.jwt.claims parameter.
 	claims := jwt.MapClaims{
+		"aud":  string(signing.AudiencePostgREST),
+		"iss":  signing.Issuer,
 		"role": config.Postgrest.DBRole,
 		"id":   user.ID.String(),
 	}
@@ -82,11 +84,7 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		claims = collections.MergeMap(claims, jwtClaim)
 	}
 
-	privateKey, _, err := signing.PrivateKey()
-	if err != nil {
-		return "", ctx.Oops().Wrap(err)
-	}
-	token, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(privateKey)
+	token, err := signing.NewJWT(signing.AudiencePostgREST, claims)
 	if err != nil {
 		return "", ctx.Oops().Wrap(err)
 	}

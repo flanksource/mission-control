@@ -6,15 +6,11 @@ import (
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/auth/signing"
-	"github.com/golang-jwt/jwt/v5"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 )
 
-const (
-	pluginInvocationTokenIssuer   = "mission-control"
-	pluginInvocationTokenAudience = "mission-control-plugin-host"
-	pluginInvocationTokenType     = "plugin-invocation"
-)
+const pluginInvocationTokenType = "plugin-invocation"
 
 var PluginJWTTTL = 5 * time.Minute
 
@@ -38,41 +34,24 @@ func MintPluginInvocationTokenWithDepth(user models.Person, pluginID uuid.UUID, 
 		Depth:  depth,
 		Roles:  append([]string(nil), roles...),
 		RegisteredClaims: jwt.RegisteredClaims{
-			Issuer:    pluginInvocationTokenIssuer,
+			Issuer:    signing.Issuer,
 			Subject:   user.ID.String(),
-			Audience:  jwt.ClaimStrings{pluginInvocationTokenAudience},
+			Audience:  jwt.ClaimStrings{string(signing.AudiencePluginInvocation)},
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
 			ExpiresAt: jwt.NewNumericDate(now.Add(PluginJWTTTL)),
 		},
 	}
 
-	key, _, err := signing.PrivateKey()
-	if err != nil {
-		return "", err
-	}
-	return jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(key)
+	return signing.NewJWT(signing.AudiencePluginInvocation, &claims)
 }
 
 func VerifyPluginInvocationToken(tokenString string, pluginID uuid.UUID) (*PluginInvocationClaims, error) {
-	key, _, err := signing.PublicKey()
-	if err != nil {
+	claims := &PluginInvocationClaims{}
+	if _, err := signing.ParseJWT(tokenString, claims, signing.AudiencePluginInvocation); err != nil {
 		return nil, err
 	}
 
-	claims := &PluginInvocationClaims{}
-	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (any, error) {
-		if t.Method != jwt.SigningMethodRS256 {
-			return nil, fmt.Errorf("unexpected signing method: got %v, expected RS256", t.Header["alg"])
-		}
-		return key, nil
-	}, jwt.WithAudience(pluginInvocationTokenAudience), jwt.WithIssuer(pluginInvocationTokenIssuer))
-	if err != nil {
-		return nil, err
-	}
-	if !token.Valid {
-		return nil, fmt.Errorf("plugin invocation token is invalid")
-	}
 	if claims.Type != pluginInvocationTokenType {
 		return nil, fmt.Errorf("plugin invocation token has invalid type %q", claims.Type)
 	}

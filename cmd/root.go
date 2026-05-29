@@ -69,6 +69,7 @@ var Root = &cobra.Command{
 			logger.Fatalf("failed to generate PostgREST JWT public key: %v", err)
 		}
 		dutyApi.DefaultConfig.Postgrest.JWTSecret = jwk
+		dutyApi.DefaultConfig.Postgrest.JWTAud = string(signing.AudiencePostgREST)
 
 		if f := cmd.Flags().Lookup("artifact-connection"); f != nil && f.Changed {
 			properties.Set("artifacts.connection", f.Value.String())

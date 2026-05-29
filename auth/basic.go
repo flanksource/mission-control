@@ -137,17 +137,8 @@ func authenticateFromCookie(c echo.Context) bool {
 		return false
 	}
 
-	pub, _, err := signing.PublicKey()
-	if err != nil {
-		return false
-	}
-	token, err := jwt.Parse(cookie.Value, signing.RSAKeyfunc(pub))
-	if err != nil || !token.Valid {
-		return false
-	}
-
-	claims, ok := token.Claims.(jwt.MapClaims)
-	if !ok {
+	claims := jwt.MapClaims{}
+	if _, err := signing.ParseJWT(cookie.Value, claims, signing.AudienceBasicAuth); err != nil {
 		return false
 	}
 
@@ -345,7 +336,11 @@ func BasicLogin(c echo.Context) error {
 		return loginErr(http.StatusUnauthorized, "user not found in database")
 	}
 
-	token, err := GetOrCreateJWTToken(ctx, person, "")
+	token, err := signing.NewJWT(signing.AudienceBasicAuth, jwt.MapClaims{
+		"aud": string(signing.AudienceBasicAuth),
+		"iss": signing.Issuer,
+		"id":  person.ID.String(),
+	})
 	if err != nil {
 		return loginErr(http.StatusInternalServerError, "failed to generate token")
 	}
