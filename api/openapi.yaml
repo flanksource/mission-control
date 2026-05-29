@@ -1374,6 +1374,8 @@ components:
           type: string
         access_token:
           type: string
+        jwk:
+          type: string
 
     GenerateTokenRequest:
       type: object

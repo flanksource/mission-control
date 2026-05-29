@@ -10,6 +10,7 @@ type GeneratedAgent struct {
 	ID          string `json:"id"`
 	Username    string `json:"username"`
 	AccessToken string `json:"access_token"`
+	JWK         string `json:"jwk"`
 }
 
 type GenerateTokenRequest struct {

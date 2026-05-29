@@ -10,6 +10,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/flanksource/incident-commander/db"
 )
 
@@ -38,10 +39,16 @@ func generateAgent(ctx context.Context, body api.GenerateAgentRequest) (*api.Gen
 		return nil, fmt.Errorf("failed to create a new agent: %w", err)
 	}
 
+	jwk, err := signing.PublicJWK()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate signing JWK: %w", err)
+	}
+
 	return &api.GeneratedAgent{
 		ID:          person.ID.String(),
 		Username:    username,
 		AccessToken: token,
+		JWK:         jwk,
 	}, nil
 }
 
