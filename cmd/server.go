@@ -176,7 +176,6 @@ var Serve = &cobra.Command{
 	Use: "serve",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		PreRun(cmd, args)
-		ensureLocalJWTSecret()
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		var dutyArgs []duty.StartOption

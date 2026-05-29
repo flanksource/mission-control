@@ -113,7 +113,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 				if err != nil {
 					return fmt.Errorf("failed to load htpasswd file: %w", err)
 				}
-				if err := oidc.MountRoutes(e, ctx, api.PublicURL, OIDCSigningKeyPath, htpasswdChecker, nil, LookupPersonByUsername); err != nil {
+				if err := oidc.MountRoutes(e, ctx, api.PublicURL, htpasswdChecker, nil, LookupPersonByUsername); err != nil {
 					return fmt.Errorf("failed to mount OIDC routes: %w", err)
 				}
 				logger.Infof("OIDC provider enabled at %s", api.PublicURL)
@@ -138,7 +138,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 
 		if OIDCEnabled {
 			kratosChecker := NewKratosCredentialChecker(kratosMiddleware)
-			if err := oidc.MountRoutes(e, ctx, api.PublicURL, OIDCSigningKeyPath, nil, kratosChecker, nil); err != nil {
+			if err := oidc.MountRoutes(e, ctx, api.PublicURL, nil, kratosChecker, nil); err != nil {
 				return fmt.Errorf("failed to mount OIDC routes: %w", err)
 			}
 			logger.Infof("OIDC provider enabled at %s (Kratos auth)", api.PublicURL)
@@ -153,7 +153,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 
 		if OIDCEnabled {
 			clerkChecker := NewClerkCredentialChecker(clerkHandler)
-			if err := oidc.MountRoutes(e, ctx, api.PublicURL, OIDCSigningKeyPath, nil, clerkChecker, nil); err != nil {
+			if err := oidc.MountRoutes(e, ctx, api.PublicURL, nil, clerkChecker, nil); err != nil {
 				return fmt.Errorf("failed to mount OIDC routes: %w", err)
 			}
 			logger.Infof("OIDC provider enabled at %s (Clerk auth)", api.PublicURL)

@@ -493,7 +493,6 @@ var _ = ginkgo.Describe("OIDC", func() {
 
 		ginkgo.BeforeAll(func() {
 			OIDCEnabled = true
-			OIDCSigningKeyPath = keyPath
 			HtpasswdFile = ""
 
 			e := newEchoInstance(DefaultContext)
@@ -540,7 +539,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 
 	ginkgo.It("requires an OIDC transaction cookie after authorize creates an auth request", func() {
 		e := newEchoInstance(DefaultContext)
-		Expect(oidc.MountRoutes(e, DefaultContext, "http://localhost:8080", keyPath, &mockChecker{}, nil, mockLookup)).To(Succeed())
+		Expect(oidc.MountRoutes(e, DefaultContext, "http://localhost:8080", &mockChecker{}, nil, mockLookup)).To(Succeed())
 
 		authorizeURL := "/authorize?" + url.Values{
 			"client_id":             {oidc.ClientID},
@@ -597,7 +596,6 @@ var _ = ginkgo.Describe("OIDC", func() {
 	ginkgo.It("mounts basic-auth OIDC discovery with the public endpoint issuer", func() {
 		oldAuthMode := vars.AuthMode
 		oldOIDCEnabled := OIDCEnabled
-		oldOIDCSigningKeyPath := OIDCSigningKeyPath
 		oldHtpasswdFile := HtpasswdFile
 		oldFrontendURL := api.FrontendURL
 		oldPublicURL := api.PublicURL
@@ -607,7 +605,6 @@ var _ = ginkgo.Describe("OIDC", func() {
 		defer func() {
 			vars.AuthMode = oldAuthMode
 			OIDCEnabled = oldOIDCEnabled
-			OIDCSigningKeyPath = oldOIDCSigningKeyPath
 			HtpasswdFile = oldHtpasswdFile
 			api.FrontendURL = oldFrontendURL
 			api.PublicURL = oldPublicURL
@@ -623,7 +620,6 @@ var _ = ginkgo.Describe("OIDC", func() {
 
 		vars.AuthMode = Basic
 		OIDCEnabled = true
-		OIDCSigningKeyPath = keyPath
 		HtpasswdFile = htpasswdPath
 		api.FrontendURL = "http://localhost:3000"
 		api.PublicURL = "http://localhost:8080"

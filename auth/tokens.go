@@ -22,6 +22,7 @@ import (
 	"golang.org/x/crypto/argon2"
 	"gorm.io/gorm"
 
+	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/flanksource/incident-commander/db"
 )
 
@@ -81,7 +82,11 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		claims = collections.MergeMap(claims, jwtClaim)
 	}
 
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(config.Postgrest.JWTSecret))
+	privateKey, _, err := signing.PrivateKey()
+	if err != nil {
+		return "", ctx.Oops().Wrap(err)
+	}
+	token, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(privateKey)
 	if err != nil {
 		return "", ctx.Oops().Wrap(err)
 	}

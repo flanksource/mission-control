@@ -11,21 +11,20 @@ import (
 	"strings"
 
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	incAPI "github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth/basic_static"
 	"github.com/flanksource/incident-commander/auth/oidc"
+	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/tg123/go-htpasswd"
 )
 
 var (
-	HtpasswdFile       string
-	OIDCEnabled        bool
-	OIDCSigningKeyPath string
+	HtpasswdFile string
+	OIDCEnabled  bool
 
 	checker       *htpasswd.File
 	localhostOnly bool
@@ -138,13 +137,11 @@ func authenticateFromCookie(c echo.Context) bool {
 		return false
 	}
 
-	config := api.DefaultConfig
-	token, err := jwt.Parse(cookie.Value, func(token *jwt.Token) (any, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return []byte(config.Postgrest.JWTSecret), nil
-	})
+	pub, _, err := signing.PublicKey()
+	if err != nil {
+		return false
+	}
+	token, err := jwt.Parse(cookie.Value, signing.RSAKeyfunc(pub))
 	if err != nil || !token.Valid {
 		return false
 	}

@@ -1,13 +1,11 @@
 package auth
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/google/uuid"
 )
@@ -18,30 +16,7 @@ const (
 	pluginInvocationTokenType     = "plugin-invocation"
 )
 
-var (
-	PluginJWTTTL = 5 * time.Minute
-
-	// Signing secret
-	PluginJWTSecret string
-)
-
-func init() {
-	if PluginJWTSecret != "" {
-		return
-	}
-
-	if secret := os.Getenv("PLUGIN_JWT_SECRET"); secret != "" {
-		PluginJWTSecret = secret
-		return
-	}
-
-	// Generate a random secret if not provided
-	secret := make([]byte, 32)
-	if _, err := rand.Read(secret); err != nil {
-		panic(fmt.Errorf("generate plugin invocation jwt secret: %w", err))
-	}
-	PluginJWTSecret = base64.RawStdEncoding.EncodeToString(secret)
-}
+var PluginJWTTTL = 5 * time.Minute
 
 type PluginInvocationClaims struct {
 	Plugin uuid.UUID `json:"pluginID"`
@@ -72,23 +47,23 @@ func MintPluginInvocationTokenWithDepth(user models.Person, pluginID uuid.UUID, 
 		},
 	}
 
-	key, err := pluginInvocationSigningKey()
+	key, _, err := signing.PrivateKey()
 	if err != nil {
 		return "", err
 	}
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(key)
+	return jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(key)
 }
 
 func VerifyPluginInvocationToken(tokenString string, pluginID uuid.UUID) (*PluginInvocationClaims, error) {
-	key, err := pluginInvocationSigningKey()
+	key, _, err := signing.PublicKey()
 	if err != nil {
 		return nil, err
 	}
 
 	claims := &PluginInvocationClaims{}
 	token, err := jwt.ParseWithClaims(tokenString, claims, func(t *jwt.Token) (any, error) {
-		if t.Method != jwt.SigningMethodHS256 {
-			return nil, fmt.Errorf("unexpected signing method %s", t.Header["alg"])
+		if t.Method != jwt.SigningMethodRS256 {
+			return nil, fmt.Errorf("unexpected signing method: got %v, expected RS256", t.Header["alg"])
 		}
 		return key, nil
 	}, jwt.WithAudience(pluginInvocationTokenAudience), jwt.WithIssuer(pluginInvocationTokenIssuer))
@@ -109,12 +84,4 @@ func VerifyPluginInvocationToken(tokenString string, pluginID uuid.UUID) (*Plugi
 	}
 
 	return claims, nil
-}
-
-func pluginInvocationSigningKey() ([]byte, error) {
-	if PluginJWTSecret == "" {
-		return nil, fmt.Errorf("plugin invocation jwt secret is required")
-	}
-
-	return []byte(PluginJWTSecret), nil
 }

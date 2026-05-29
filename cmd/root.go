@@ -20,6 +20,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/mail"
@@ -60,6 +61,15 @@ var Root = &cobra.Command{
 		dutyApi.DefaultConfig.SkipMigrationFiles = []string{"012_changelog.sql"}
 		dutyApi.DefaultConfig = dutyApi.DefaultConfig.ReadEnv()
 
+		if _, _, err := signing.Initialize(signing.PrivateKeyPath); err != nil {
+			logger.Fatalf("failed to initialize JWT signing key: %v", err)
+		}
+		jwk, err := signing.PublicJWK()
+		if err != nil {
+			logger.Fatalf("failed to generate PostgREST JWT public key: %v", err)
+		}
+		dutyApi.DefaultConfig.Postgrest.JWTSecret = jwk
+
 		if f := cmd.Flags().Lookup("artifact-connection"); f != nil && f.Changed {
 			properties.Set("artifacts.connection", f.Value.String())
 		}
@@ -79,6 +89,8 @@ var (
 	// Email defaults - used by SetFallbackSMTP in PreRun
 	emailFromAddress string
 	emailFromName    string
+
+	deprecatedPluginJWTSecret string
 )
 
 func ServerFlags(flags *pflag.FlagSet) {
@@ -100,8 +112,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&vars.AuthMode, "auth", "", "Enable authentication via Kratos or Clerk. Valid values are [kratos, clerk, basic]")
 	flags.StringVar(&auth.HtpasswdFile, "htpasswd-file", "htpasswd", "Path to htpasswd file for basic authentication")
 	flags.BoolVar(&auth.OIDCEnabled, "oidc", false, "Enable embedded OIDC provider (requires --auth basic)")
-	flags.StringVar(&auth.OIDCSigningKeyPath, "oidc-signing-key", "", "Path to RSA private key PEM for OIDC token signing (auto-generated if not provided)")
-	flags.StringVar(&auth.PluginJWTSecret, "plugin-jwt-secret", auth.PluginJWTSecret, "JWT secret used to sign plugin invocation tokens")
+	flags.StringVar(&signing.PrivateKeyPath, "signing-private-key", "", "Path to RSA private key PEM used to sign Mission Control JWTs (ephemeral key generated on startup if missing)")
 	flags.DurationVar(&auth.PluginJWTTTL, "plugin-jwt-ttl", auth.PluginJWTTTL, "TTL for plugin invocation tokens")
 	flags.StringVar(&emailFromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
 	flags.StringVar(&emailFromName, "email-from-name", "Mission Control", "Email name of the sender")
@@ -112,6 +123,9 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&api.DefaultLLMConnection, "llm-connection", "", "Specify the default connection to use for LLM provider (can be the connection string or the connection id)")
 	flags.StringVar(&secret.KMSConnection, "secret-keeper-connection", "", "Specify the connection to use for secret keepers (can be the connection string or the connection id)")
 
+	// Deprecated flags
+	flags.StringVar(&deprecatedPluginJWTSecret, "plugin-jwt-secret", "", "Deprecated: plugin JWTs use --signing-private-key")
+	_ = flags.MarkDeprecated("plugin-jwt-secret", "plugin JWTs now use --signing-private-key")
 	_ = flags.MarkDeprecated("artifact-connection", "use property artifacts.connection=<connection-id-or-url> instead")
 
 	var upstreamPageSizeDefault = 500

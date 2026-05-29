@@ -8,6 +8,7 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/auth/oidc/static"
+	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/labstack/echo/v4"
 )
 
@@ -15,14 +16,19 @@ import (
 // The OIDC provider is mounted under /oidc/ with the issuer set to {issuerURL}/oidc
 // so that discovery at /oidc/.well-known/openid-configuration returns correct endpoint URLs.
 // A convenience redirect from /.well-known/openid-configuration is provided for standard discovery.
-func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL, signingKeyPath string, passwordChecker PasswordLoginChecker, externalProvider ExternalLoginProvider, lookup PersonLookup) error {
+func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL string, passwordChecker PasswordLoginChecker, externalProvider ExternalLoginProvider, lookup PersonLookup) error {
 	oidcIssuer := strings.TrimRight(issuerURL, "/")
-	cryptoKey, err := loadOrGenerateCryptoKey(signingKeyPath)
+	cryptoKey, err := generateCryptoKey()
 	if err != nil {
 		return fmt.Errorf("oidc crypto key: %w", err)
 	}
 
-	provider, err := newProviderWithCryptoKey(ctx, oidcIssuer, signingKeyPath, cryptoKey)
+	privateKey, keyID, err := signing.PrivateKey()
+	if err != nil {
+		return fmt.Errorf("oidc signing key: %w", err)
+	}
+
+	provider, err := newProviderWithCryptoKey(ctx, oidcIssuer, cryptoKey, privateKey, keyID)
 	if err != nil {
 		return err
 	}
