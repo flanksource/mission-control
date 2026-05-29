@@ -191,8 +191,7 @@ func IsTrustedUpstream(ctx gocontext.Context) bool {
 // TODO: Use regex supported path matching
 func canSkipAuth(c echo.Context) bool {
 	if IsTrustedUpstream(c.Request().Context()) {
-		// Incoming requests from upstream can bypass authentication.
-		// At the moment we do not have a way for the upstream to authenticate itself against agents.
+		// Incoming requests from upstream have already been authenticated by the agent tunnel.
 		return true
 	}
 

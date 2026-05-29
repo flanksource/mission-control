@@ -71,6 +71,9 @@ func PublicKey() (*rsa.PublicKey, string, error) {
 	return &key.PublicKey, id, nil
 }
 
+// PublicJWK returns the initialized signing public key as a single JWK object.
+// Use this for consumers that expect one JSON Web Key, such as PostgREST's JWT
+// secret configuration and agent upstream verification config.
 func PublicJWK() (string, error) {
 	pub, id, err := PublicKey()
 	if err != nil {
