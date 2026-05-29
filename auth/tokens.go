@@ -89,7 +89,7 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		claims = collections.MergeMap(claims, jwtClaim)
 	}
 
-	token, err := newPostgRESTJWT(config.Postgrest.JWTSecret, claims)
+	token, err := newPostgRESTJWT(config.Postgrest, claims)
 	if err != nil {
 		return "", ctx.Oops().Wrap(err)
 	}
@@ -102,14 +102,14 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 	return token, nil
 }
 
-func newPostgRESTJWT(secret string, claims jwt.MapClaims) (string, error) {
-	if duty.IsEmbeddedPostgREST(api.DefaultConfig.Postgrest) {
+func newPostgRESTJWT(config api.PostgrestConfig, claims jwt.MapClaims) (string, error) {
+	if config.URL == "" || config.Disable || duty.IsEmbeddedPostgREST(config) {
 		return signing.NewJWT(signing.AudiencePostgREST, claims)
 	}
-	if secret == "" {
+	if config.JWTSecret == "" {
 		return "", fmt.Errorf("postgrest JWT secret is required")
 	}
-	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(config.JWTSecret))
 }
 
 func getJWTKeyFunc(jwksURL string) jwt.Keyfunc {

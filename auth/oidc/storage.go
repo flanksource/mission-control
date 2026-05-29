@@ -2,12 +2,10 @@ package oidc
 
 import (
 	gocontext "context"
-	"crypto"
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
-	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"time"
@@ -300,18 +298,6 @@ func parseRSAPublicKey(pemData []byte) (*rsa.PublicKey, error) {
 		return nil, fmt.Errorf("not an RSA public key")
 	}
 	return rsaPub, nil
-}
-
-// generateKeyID returns a deterministic key ID from the public key.
-func generateKeyID(pub *rsa.PublicKey) (string, error) {
-	b, err := json.Marshal(pub)
-	if err != nil {
-		// fallback
-		return uuid.New().String(), nil
-	}
-	h := crypto.SHA256.New()
-	h.Write(b)
-	return fmt.Sprintf("%x", h.Sum(nil))[:16], nil
 }
 
 func hashToken(token string) string {
