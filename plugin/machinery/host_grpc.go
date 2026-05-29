@@ -60,15 +60,14 @@ func (s *Service) GetConfigItem(ctx context.Context, req *pluginpb.GetConfigItem
 		return nil, fmt.Errorf("id is required")
 	}
 
+	if _, ok := upstreamInvocationClaims(ctx); ok {
+		return getConfigItem(invocationDutyContext(s.ctx, ctx), ctx, req.Id)
+	}
+
 	var out *pluginpb.ConfigItem
 	err := auth.WithRLS(s.ctx.Wrap(ctx), func(rlsCtx dutyContext.Context) error {
-		var item models.ConfigItem
-		if err := rlsCtx.DB().WithContext(ctx).Where("id = ?", req.Id).First(&item).Error; err != nil {
-			return fmt.Errorf("config item %s: %w", req.Id, err)
-		}
-
 		var err error
-		out, err = pluginpb.FromConfigItem(item)
+		out, err = getConfigItem(rlsCtx, ctx, req.Id)
 		return err
 	})
 	if err != nil {
@@ -78,12 +77,20 @@ func (s *Service) GetConfigItem(ctx context.Context, req *pluginpb.GetConfigItem
 	return out, nil
 }
 
+func getConfigItem(ctx dutyContext.Context, queryCtx context.Context, id string) (*pluginpb.ConfigItem, error) {
+	var item models.ConfigItem
+	if err := ctx.DB().WithContext(queryCtx).Where("id = ?", id).First(&item).Error; err != nil {
+		return nil, fmt.Errorf("config item %s: %w", id, err)
+	}
+	return pluginpb.FromConfigItem(item)
+}
+
 func (s *Service) ListConfigs(ctx context.Context, req *pluginpb.ListConfigsRequest) (*pluginpb.ConfigItemList, error) {
 	sel := req.Selector.ToDuty()
-
 	out := &pluginpb.ConfigItemList{}
-	err := auth.WithRLS(s.ctx.Wrap(ctx), func(rlsCtx dutyContext.Context) error {
-		items, err := query.FindConfigsByResourceSelector(rlsCtx, int(req.Limit), sel)
+
+	list := func(listCtx dutyContext.Context) error {
+		items, err := query.FindConfigsByResourceSelector(listCtx, int(req.Limit), sel)
 		if err != nil {
 			return err
 		}
@@ -96,13 +103,18 @@ func (s *Service) ListConfigs(ctx context.Context, req *pluginpb.ListConfigsRequ
 
 			out.Items = append(out.Items, ci)
 		}
-
 		return nil
-	})
+	}
+
+	var err error
+	if _, ok := upstreamInvocationClaims(ctx); ok {
+		err = list(invocationDutyContext(s.ctx, ctx))
+	} else {
+		err = auth.WithRLS(s.ctx.Wrap(ctx), list)
+	}
 	if err != nil {
 		return nil, err
 	}
-
 	return out, nil
 }
 
@@ -156,16 +168,20 @@ func (s *Service) InvokePlugin(ctx context.Context, req *pluginpb.InvokePluginRe
 		depth = claims.Depth + 1
 	}
 
+	_, upstreamInvoked := upstreamInvocationClaims(ctx)
+	configID := req.ConfigItemId
+
 	resp, _, err := InvokeOperation(dutyCtx, Request{
-		Context:      ctx,
-		PluginRef:    req.Plugin,
-		Operation:    req.Operation,
-		ParamsJSON:   req.ParamsJson,
-		ConfigItemID: req.ConfigItemId,
-		User:         dutyCtx.User(),
-		Subject:      PluginSubject(source.Namespace, source.Name),
-		Depth:        depth,
-		Deadline:     req.Deadline,
+		Context:    ctx,
+		PluginRef:  req.Plugin,
+		Operation:  req.Operation,
+		ParamsJSON: req.ParamsJson,
+		Subject:    PluginSubject(source.Namespace, source.Name),
+		Depth:      depth,
+		Deadline:   req.Deadline,
+
+		ConfigItemID:    configID,
+		UpstreamInvoked: upstreamInvoked,
 	})
 	return resp, err
 }

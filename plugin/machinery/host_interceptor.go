@@ -2,6 +2,7 @@ package machinery
 
 import (
 	"context"
+	"errors"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/auth"
@@ -10,6 +11,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"gorm.io/gorm"
 )
 
 func (s *Service) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
@@ -33,6 +35,11 @@ func invocationClaimsFromContext(ctx context.Context) (*auth.PluginInvocationCla
 	return claims, ok
 }
 
+func upstreamInvocationClaims(ctx context.Context) (*auth.PluginInvocationClaims, bool) {
+	claims, ok := invocationClaimsFromContext(ctx)
+	return claims, ok && claims.UpstreamInvoked
+}
+
 func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -49,13 +56,20 @@ func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, e
 		return nil, status.Errorf(codes.Unauthenticated, "invalid plugin invocation token: %v", err)
 	}
 
-	baseCtx := s.ctx.Wrap(ctx)
+	baseCtx := s.ctx.Wrap(ctx).WithSubject(claims.Subject).WithValue(invocationClaimsContextKey{}, claims)
+	if claims.UpstreamInvoked {
+		return baseCtx, nil
+	}
+
 	var person models.Person
 	if err := baseCtx.DB().WithContext(ctx).Where("id = ?", claims.Subject).First(&person).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, status.Errorf(codes.Unauthenticated, "plugin invocation subject %s not found", claims.Subject)
+		}
 		return nil, status.Errorf(codes.Unauthenticated, "plugin invocation subject %s: %v", claims.Subject, err)
 	}
 
-	return baseCtx.WithUser(&person).WithValue(invocationClaimsContextKey{}, claims), nil
+	return baseCtx.WithUser(&person), nil
 }
 
 func requiresInvocation(method string) bool {

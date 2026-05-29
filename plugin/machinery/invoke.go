@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/duty/query"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/google/uuid"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -22,17 +23,22 @@ import (
 const MaxInvokeDepth = 5
 
 type Request struct {
-	Context      context.Context
 	PluginRef    string
 	Operation    string
 	ParamsJSON   []byte
 	ConfigItemID string
-	User         *models.Person
 	Subject      string
 	Roles        []string
 	Depth        int
-	Deadline     *timestamppb.Timestamp
-	Timeout      time.Duration
+
+	// Deprecated. TODO: Remove this
+	Context context.Context
+
+	// Deprecated. TODO: Remove this
+	Deadline *timestamppb.Timestamp
+
+	// Deprecated. TODO: Remove this
+	Timeout time.Duration
 }
 
 func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeResponse, *plugin.Entry, error) {
@@ -42,7 +48,7 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeRespon
 	if req.Operation == "" {
 		return nil, nil, dutyAPI.Errorf(dutyAPI.EINVALID, "operation is required")
 	}
-	if req.User == nil {
+	if req.Subject == "" {
 		return nil, nil, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "not logged in")
 	}
 	if req.Depth > MaxInvokeDepth {
@@ -67,14 +73,11 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeRespon
 	}
 
 	subject := req.Subject
-	if subject == "" {
-		subject = req.User.ID.String()
-	}
 	if err := EnforceInvokePermission(ctx, subject, entry, req.Operation, req.ConfigItemID); err != nil {
 		return nil, entry, err
 	}
 
-	token, err := auth.MintPluginInvocationTokenWithDepth(*req.User, entry.ID, req.Depth, req.Roles...)
+	token, err := mintInvocationTokenForRequest(subject, entry.ID, req)
 	if err != nil {
 		return nil, entry, ctx.Oops().Wrapf(err, "mint plugin invocation token")
 	}
@@ -92,7 +95,10 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeRespon
 		invokeCtx, cancel = invokeCtx.WithTimeout(req.Timeout)
 		defer cancel()
 	}
-	invokeCtx = invokeCtx.Wrap(metadata.AppendToOutgoingContext(invokeCtx, plugin.InvocationTokenGRPCMetadataKey, token)).WithUser(req.User)
+
+	invokeCtx = invokeCtx.
+		Wrap(metadata.AppendToOutgoingContext(invokeCtx, plugin.InvocationTokenGRPCMetadataKey, token)).
+		WithSubject(subject)
 
 	resp, err := Invoke(invokeCtx, entry.ID, &plugin.InvokeRequest{
 		Operation:    req.Operation,
@@ -101,6 +107,10 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeRespon
 		Deadline:     req.Deadline,
 	})
 	return resp, entry, err
+}
+
+func mintInvocationTokenForRequest(subject string, pluginID uuid.UUID, req Request) (string, error) {
+	return auth.MintPluginInvocationToken(subject, pluginID, req.Depth, req.Roles...)
 }
 
 func ResolvePlugin(ctx dutyContext.Context, ref string) (*plugin.Entry, error) {

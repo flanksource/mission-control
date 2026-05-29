@@ -19,6 +19,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/playbook/runner"
+	"github.com/flanksource/incident-commander/plugin/gateway"
 	"github.com/flanksource/incident-commander/push"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/upstream/tunnel"
@@ -40,6 +41,7 @@ func RegisterRoutes(e *echo.Echo) {
 		rbac.Authorization(policy.ObjectAgentPush, policy.ActionUpdate),
 		upstream.AgentAuthMiddleware(agentCache),
 	)
+	upstreamGroup.POST("/plugin/register", gateway.RegisterProxiedPlugin)
 	upstreamGroup.GET("/ping", upstream.PingHandler)
 	upstreamGroup.GET(fmt.Sprintf("/%s", tunnel.SessionCreateHTTPEndpoint), tunnel.YamuxSessionCreate)
 	upstreamGroup.POST("/list-views", upstream.ListViewsHandler)

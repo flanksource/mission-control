@@ -41,6 +41,10 @@ type Entry struct {
 	Manifest      *PluginManifest
 	Runtime       Runtime
 	InstalledPath string
+
+	// An agent id implies this is a proxied plugin.
+	// The agent hosts it and mission-control must proxy all operation calls to it.
+	AgentID *uuid.UUID
 }
 
 // Registry is the host-side in-memory store of plugins.
@@ -70,14 +74,29 @@ func New() *Registry {
 	}
 }
 
-// Upsert replaces the spec for a plugin (called by the kopper reconciler when
-// a Plugin CRD is created or updated). Existing manifest/supervisor are
+// Upsert replaces the spec for a local plugin (called by the kopper reconciler
+// when a Plugin CRD is created or updated). Existing manifest/supervisor are
 // preserved so an in-flight plugin keeps running across CRD updates that
 // don't change the binary.
 func (r *Registry) Upsert(id uuid.UUID, namespace, name string, spec v1.PluginSpec) (*Entry, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
+	return r.upsertLocked(id, namespace, name, spec, PluginKindLocal, nil, nil)
+}
+
+// UpsertProxied registers a plugin runtime reported by an authenticated agent.
+func (r *Registry) UpsertProxied(id uuid.UUID, namespace, name string, spec v1.PluginSpec, manifest *PluginManifest, agentID uuid.UUID) (*Entry, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	if agentID == uuid.Nil {
+		return nil, fmt.Errorf("agent id is required")
+	}
+	return r.upsertLocked(id, namespace, name, spec, PluginKindProxied, &agentID, manifest)
+}
+
+func (r *Registry) upsertLocked(id uuid.UUID, namespace, name string, spec v1.PluginSpec, kind Kind, agentID *uuid.UUID, manifest *PluginManifest) (*Entry, error) {
 	if id == uuid.Nil {
 		return nil, fmt.Errorf("plugin id is required")
 	}
@@ -102,8 +121,10 @@ func (r *Registry) Upsert(id uuid.UUID, namespace, name string, spec v1.PluginSp
 	e.Name = name
 	e.Namespace = namespace
 	e.Spec = spec
-	if e.Kind == "" {
-		e.Kind = PluginKindLocal
+	e.Kind = kind
+	e.AgentID = agentID
+	if manifest != nil {
+		e.Manifest = manifest
 	}
 	r.addIndexes(e)
 	return e, nil

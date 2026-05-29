@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
@@ -29,11 +28,14 @@ func (c *PluginInvocationClaims) VerifyExpiresAt(cmp int64, req bool) bool {
 	return c.RegisteredClaims.VerifyExpiresAt(time.Unix(cmp, 0), req)
 }
 
-func MintPluginInvocationToken(user models.Person, pluginID uuid.UUID, roles ...string) (string, error) {
-	return MintPluginInvocationTokenWithDepth(user, pluginID, 0, roles...)
-}
+func MintPluginInvocationToken(subject string, pluginID uuid.UUID, depth int, roles ...string) (string, error) {
+	if subject == "" {
+		return "", fmt.Errorf("plugin invocation subject is required")
+	}
+	if pluginID == uuid.Nil {
+		return "", fmt.Errorf("plugin id is required")
+	}
 
-func MintPluginInvocationTokenWithDepth(user models.Person, pluginID uuid.UUID, depth int, roles ...string) (string, error) {
 	now := time.Now()
 	claims := PluginInvocationClaims{
 		Plugin: pluginID,
@@ -42,7 +44,7 @@ func MintPluginInvocationTokenWithDepth(user models.Person, pluginID uuid.UUID, 
 		Roles:  append([]string(nil), roles...),
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    signing.Issuer,
-			Subject:   user.ID.String(),
+			Subject:   subject,
 			Audience:  jwt.ClaimStrings{string(signing.AudiencePluginInvocation)},
 			IssuedAt:  jwt.NewNumericDate(now),
 			NotBefore: jwt.NewNumericDate(now),
