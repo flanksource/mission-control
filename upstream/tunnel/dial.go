@@ -18,8 +18,6 @@ import (
 	"github.com/flanksource/duty/upstream"
 	"github.com/hashicorp/yamux"
 	"github.com/sethvargo/go-retry"
-
-	"github.com/flanksource/incident-commander/auth"
 )
 
 func hasHeaderToken(value, token string) bool {
@@ -55,17 +53,6 @@ func (l yamuxListener) Close() error {
 
 func (l yamuxListener) Addr() net.Addr {
 	return tunnelAddr("yamux-agent-tunnel")
-}
-
-// trustedUpstreamHandler marks requests received over the agent tunnel as
-// trusted because the tunnel itself was established by an authenticated upstream.
-// Agent-side handlers can use this marker to skip normal end-user auth/RBAC for
-// requests that upstream has already authorized.
-func trustedUpstreamHandler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := auth.WithTrustedUpstream(r.Context())
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
 }
 
 func StartAgentTunnel(ctx dutyContext.Context, upstreamConfig upstream.UpstreamConfig, handler http.Handler) {
@@ -106,7 +93,7 @@ func runAgentTunnelSession(ctx gocontext.Context, upstreamConfig upstream.Upstre
 	}()
 
 	server := &http.Server{
-		Handler:           trustedUpstreamHandler(handler),
+		Handler:           authenticatedUpstreamHandler(upstreamConfig, handler),
 		ReadHeaderTimeout: 30 * time.Second,
 	}
 
