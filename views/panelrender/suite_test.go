@@ -10,7 +10,7 @@ import (
 
 func TestPanelRender(t *testing.T) {
 	RegisterFailHandler(ginkgo.Fail)
-	ginkgo.RunSpecs(t, "Panel Render")
+	ginkgo.RunSpecs(t, "Panel Render", ginkgo.Label("ignore_local"))
 }
 
 var _ = ginkgo.BeforeSuite(func() {

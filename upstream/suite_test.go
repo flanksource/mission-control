@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/auth/signing"
 )
 
 var (
@@ -30,6 +31,10 @@ func TestUpstream(t *testing.T) {
 
 var _ = ginkgo.BeforeSuite(func() {
 	DefaultContext = setup.BeforeSuiteFn()
+
+	if _, _, err := signing.Initialize("/tmp/dummy"); err != nil {
+		ginkgo.Fail(err.Error())
+	}
 })
 
 var _ = ginkgo.AfterSuite(func() {

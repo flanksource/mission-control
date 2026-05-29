@@ -12,6 +12,7 @@ import (
 	"github.com/MicahParks/keyfunc"
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -22,6 +23,7 @@ import (
 	"golang.org/x/crypto/argon2"
 	"gorm.io/gorm"
 
+	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/flanksource/incident-commander/db"
 )
 
@@ -68,9 +70,15 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		return token.(string), nil
 	}
 
+	now := time.Now()
+
 	// Postgrest makes this jwt available as a session parameter inside postgres.
 	// We inject the rls payload here and then access it inside postgres using request.jwt.claims parameter.
 	claims := jwt.MapClaims{
+		"aud":  string(signing.AudiencePostgREST),
+		"iss":  signing.Issuer,
+		"exp":  float64(now.Add(time.Hour).Unix()),
+		"iat":  float64(now.Unix()),
 		"role": config.Postgrest.DBRole,
 		"id":   user.ID.String(),
 	}
@@ -81,7 +89,7 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		claims = collections.MergeMap(claims, jwtClaim)
 	}
 
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(config.Postgrest.JWTSecret))
+	token, err := newPostgRESTJWT(config.Postgrest, claims)
 	if err != nil {
 		return "", ctx.Oops().Wrap(err)
 	}
@@ -92,6 +100,16 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 
 	tokenCache.SetDefault(key, token)
 	return token, nil
+}
+
+func newPostgRESTJWT(config api.PostgrestConfig, claims jwt.MapClaims) (string, error) {
+	if config.URL == "" || config.Disable || duty.IsEmbeddedPostgREST(config) {
+		return signing.NewJWT(signing.AudiencePostgREST, claims)
+	}
+	if config.JWTSecret == "" {
+		return "", fmt.Errorf("postgrest JWT secret is required")
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(config.JWTSecret))
 }
 
 func getJWTKeyFunc(jwksURL string) jwt.Keyfunc {

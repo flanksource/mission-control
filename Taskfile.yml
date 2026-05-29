@@ -46,6 +46,23 @@ tasks:
     generates:
       - plugin/plugin.pb.go
       - plugin/plugin_grpc.pb.go
+
+  signing-key:
+    desc: Generate an RSA private signing key at the default path
+    cmds:
+      - |
+        set -e
+        path=".mission-control-signing-key.pem"
+        if [ -e "$path" ]; then
+          echo "$path already exists"
+          exit 1
+        fi
+        openssl genrsa -out "$path" 2048
+        chmod 600 "$path"
+        echo "Generated $path"
+    generates:
+      - .mission-control-signing-key.pem
+
   build:
     desc: Build the full incident-commander binary with embedded UI
     deps:

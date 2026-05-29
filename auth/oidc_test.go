@@ -17,6 +17,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth/oidc"
+	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -30,16 +31,12 @@ import (
 
 var _ = ginkgo.Describe("OIDC", func() {
 	var (
-		keyPath  string
 		person   models.Person
 		provider *oidc.Provider
 	)
 
 	ginkgo.BeforeEach(func() {
 		ensureOIDCTables(DefaultContext)
-
-		dir := ginkgo.GinkgoT().TempDir()
-		keyPath = fmt.Sprintf("%s/oidc.pem", dir)
 
 		person = models.Person{
 			ID:    uuid.New(),
@@ -48,8 +45,14 @@ var _ = ginkgo.Describe("OIDC", func() {
 		}
 		Expect(DefaultContext.DB().Create(&person).Error).To(Succeed())
 
-		var err error
-		provider, err = oidc.NewProvider(DefaultContext, "http://localhost:8080", keyPath)
+		var key [32]byte
+		_, err := rand.Read(key[:])
+		Expect(err).ToNot(HaveOccurred())
+
+		privateKey, keyID, err := signing.PrivateKey()
+		Expect(err).ToNot(HaveOccurred())
+
+		provider, err = oidc.NewProvider(DefaultContext, "http://localhost:8080", key, privateKey, keyID)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(provider).ToNot(BeNil())
 	})
@@ -58,24 +61,6 @@ var _ = ginkgo.Describe("OIDC", func() {
 		DefaultContext.DB().Where("id = ?", person.ID).Delete(&models.Person{})
 		DefaultContext.DB().Exec("DELETE FROM oidc_auth_requests")
 		DefaultContext.DB().Exec("DELETE FROM oidc_refresh_tokens")
-	})
-
-	ginkgo.It("creates signing key file on first start", func() {
-		_, err := os.Stat(keyPath)
-		Expect(err).ToNot(HaveOccurred(), "signing key file should have been created")
-	})
-
-	ginkgo.It("reuses the same key on second load", func() {
-		dir := ginkgo.GinkgoT().TempDir()
-		keyPath2 := fmt.Sprintf("%s/oidc.pem", dir)
-
-		data, err := os.ReadFile(keyPath)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(os.WriteFile(keyPath2, data, 0600)).To(Succeed())
-
-		provider2, err := oidc.NewProvider(DefaultContext, "http://localhost:8080", keyPath2)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(provider2).ToNot(BeNil())
 	})
 
 	ginkgo.It("stores public key in oidc_public_keys table", func() {
@@ -265,11 +250,8 @@ var _ = ginkgo.Describe("OIDC", func() {
 
 	ginkgo.Describe("Token validation with real JWT", func() {
 		ginkgo.It("accepts a valid JWT signed by the provider's key", func() {
-			// Read the private key that the provider generated
-			keyData, err := os.ReadFile(keyPath)
-			Expect(err).ToNot(HaveOccurred())
-			privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(keyData)
-			Expect(err).ToNot(HaveOccurred())
+			privateKey, _, err := signing.PrivateKey()
+			Expect(err).To(BeNil())
 
 			// Clear the cache so it reloads from DB
 			oidcPublicKeyCache.Flush()
@@ -321,10 +303,8 @@ var _ = ginkgo.Describe("OIDC", func() {
 		})
 
 		ginkgo.It("rejects an expired JWT", func() {
-			keyData, err := os.ReadFile(keyPath)
-			Expect(err).ToNot(HaveOccurred())
-			privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(keyData)
-			Expect(err).ToNot(HaveOccurred())
+			privateKey, _, err := signing.PrivateKey()
+			Expect(err).To(BeNil())
 
 			oidcPublicKeyCache.Flush()
 			savedPublicURL := api.PublicURL
@@ -348,10 +328,8 @@ var _ = ginkgo.Describe("OIDC", func() {
 		})
 
 		ginkgo.It("rejects a JWT with wrong audience", func() {
-			keyData, err := os.ReadFile(keyPath)
-			Expect(err).ToNot(HaveOccurred())
-			privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(keyData)
-			Expect(err).ToNot(HaveOccurred())
+			privateKey, _, err := signing.PrivateKey()
+			Expect(err).To(BeNil())
 
 			oidcPublicKeyCache.Flush()
 			savedPublicURL := api.PublicURL
@@ -375,10 +353,8 @@ var _ = ginkgo.Describe("OIDC", func() {
 		})
 
 		ginkgo.It("rejects a JWT with unknown subject", func() {
-			keyData, err := os.ReadFile(keyPath)
-			Expect(err).ToNot(HaveOccurred())
-			privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(keyData)
-			Expect(err).ToNot(HaveOccurred())
+			privateKey, _, err := signing.PrivateKey()
+			Expect(err).To(BeNil())
 
 			oidcPublicKeyCache.Flush()
 			savedPublicURL := api.PublicURL
@@ -493,7 +469,6 @@ var _ = ginkgo.Describe("OIDC", func() {
 
 		ginkgo.BeforeAll(func() {
 			OIDCEnabled = true
-			OIDCSigningKeyPath = keyPath
 			HtpasswdFile = ""
 
 			e := newEchoInstance(DefaultContext)
@@ -540,7 +515,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 
 	ginkgo.It("requires an OIDC transaction cookie after authorize creates an auth request", func() {
 		e := newEchoInstance(DefaultContext)
-		Expect(oidc.MountRoutes(e, DefaultContext, "http://localhost:8080", keyPath, &mockChecker{}, nil, mockLookup)).To(Succeed())
+		Expect(oidc.MountRoutes(e, DefaultContext, "http://localhost:8080", &mockChecker{}, nil, mockLookup)).To(Succeed())
 
 		authorizeURL := "/authorize?" + url.Values{
 			"client_id":             {oidc.ClientID},
@@ -597,7 +572,6 @@ var _ = ginkgo.Describe("OIDC", func() {
 	ginkgo.It("mounts basic-auth OIDC discovery with the public endpoint issuer", func() {
 		oldAuthMode := vars.AuthMode
 		oldOIDCEnabled := OIDCEnabled
-		oldOIDCSigningKeyPath := OIDCSigningKeyPath
 		oldHtpasswdFile := HtpasswdFile
 		oldFrontendURL := api.FrontendURL
 		oldPublicURL := api.PublicURL
@@ -607,7 +581,6 @@ var _ = ginkgo.Describe("OIDC", func() {
 		defer func() {
 			vars.AuthMode = oldAuthMode
 			OIDCEnabled = oldOIDCEnabled
-			OIDCSigningKeyPath = oldOIDCSigningKeyPath
 			HtpasswdFile = oldHtpasswdFile
 			api.FrontendURL = oldFrontendURL
 			api.PublicURL = oldPublicURL
@@ -623,7 +596,6 @@ var _ = ginkgo.Describe("OIDC", func() {
 
 		vars.AuthMode = Basic
 		OIDCEnabled = true
-		OIDCSigningKeyPath = keyPath
 		HtpasswdFile = htpasswdPath
 		api.FrontendURL = "http://localhost:3000"
 		api.PublicURL = "http://localhost:8080"

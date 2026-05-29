@@ -22,6 +22,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/auth/signing"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/playbook/sdk"
@@ -49,6 +50,10 @@ var (
 )
 
 var _ = ginkgo.BeforeSuite(func() {
+	if _, _, err := signing.Initialize("/tmp/dummy"); err != nil {
+		ginkgo.Fail(err.Error())
+	}
+
 	format.RegisterCustomFormatter(func(value interface{}) (string, bool) {
 		switch v := value.(type) {
 		case error:

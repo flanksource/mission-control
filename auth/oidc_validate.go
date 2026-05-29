@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	oidcmodels "github.com/flanksource/incident-commander/auth/oidc"
+	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
@@ -39,12 +40,7 @@ func authenticateOIDCToken(c echo.Context, tokenStr string) (bool, error) {
 
 	var lastErr error
 	for _, pub := range keys {
-		token, err := jwt.Parse(tokenStr, func(t *jwt.Token) (any, error) {
-			if _, ok := t.Method.(*jwt.SigningMethodRSA); !ok {
-				return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
-			}
-			return pub, nil
-		})
+		token, err := jwt.Parse(tokenStr, signing.RSAKeyfunc(pub))
 		if err != nil {
 			lastErr = err
 			continue
