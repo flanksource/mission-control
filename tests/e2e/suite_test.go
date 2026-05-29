@@ -26,6 +26,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/auth/signing"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/metrics"
@@ -184,6 +185,10 @@ var _ = ginkgo.BeforeSuite(func() {
 	api.SystemUserID = &dummy.JohnDoe.ID
 
 	api.DefaultArtifactConnection = "connection://default/artifacts"
+
+	if _, _, err := signing.Initialize(signing.PrivateKeyPath); err != nil {
+		ginkgo.Fail(err.Error())
+	}
 
 	if err := rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter); err != nil {
 		ginkgo.Fail(err.Error())
