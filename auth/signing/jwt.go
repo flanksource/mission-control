@@ -3,6 +3,7 @@ package signing
 import (
 	"crypto/rsa"
 	"fmt"
+	"time"
 
 	"github.com/golang-jwt/jwt/v4"
 )
@@ -13,10 +14,12 @@ type Claims interface {
 	jwt.Claims
 	VerifyAudience(cmp string, req bool) bool
 	VerifyIssuer(cmp string, req bool) bool
+	VerifyExpiresAt(cmp int64, req bool) bool
 }
 
 const (
-	Issuer = "mission-control"
+	Issuer         = "mission-control"
+	MaxJWTValidity = 7 * 24 * time.Hour
 
 	AudiencePostgREST        Audience = "mission-control-postgrest"
 	AudienceBasicAuth        Audience = "mission-control-basic-auth"
@@ -82,6 +85,13 @@ func validateClaims(audience Audience, claims Claims) error {
 	}
 	if !claims.VerifyIssuer(Issuer, true) {
 		return fmt.Errorf("JWT claims missing expected issuer %q", Issuer)
+	}
+	now := time.Now()
+	if !claims.VerifyExpiresAt(now.Unix(), true) {
+		return fmt.Errorf("JWT claims missing or expired exp")
+	}
+	if claims.VerifyExpiresAt(now.Add(MaxJWTValidity).Add(time.Second).Unix(), true) {
+		return fmt.Errorf("JWT exp exceeds maximum validity of %s", MaxJWTValidity)
 	}
 	return nil
 }

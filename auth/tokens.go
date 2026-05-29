@@ -69,11 +69,15 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		return token.(string), nil
 	}
 
+	now := time.Now()
+
 	// Postgrest makes this jwt available as a session parameter inside postgres.
 	// We inject the rls payload here and then access it inside postgres using request.jwt.claims parameter.
 	claims := jwt.MapClaims{
 		"aud":  string(signing.AudiencePostgREST),
 		"iss":  signing.Issuer,
+		"exp":  float64(now.Add(time.Hour).Unix()),
+		"iat":  float64(now.Unix()),
 		"role": config.Postgrest.DBRole,
 		"id":   user.ID.String(),
 	}

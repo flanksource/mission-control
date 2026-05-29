@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
@@ -336,9 +337,12 @@ func BasicLogin(c echo.Context) error {
 		return loginErr(http.StatusUnauthorized, "user not found in database")
 	}
 
+	now := time.Now()
 	token, err := signing.NewJWT(signing.AudienceBasicAuth, jwt.MapClaims{
 		"aud": string(signing.AudienceBasicAuth),
 		"iss": signing.Issuer,
+		"exp": float64(now.Add(24 * time.Hour).Unix()),
+		"iat": float64(now.Unix()),
 		"id":  person.ID.String(),
 	})
 	if err != nil {

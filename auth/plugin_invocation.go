@@ -22,6 +22,13 @@ type PluginInvocationClaims struct {
 	jwt.RegisteredClaims
 }
 
+func (c *PluginInvocationClaims) VerifyExpiresAt(cmp int64, req bool) bool {
+	// NOTE: github.com/golang-jwt/jwt/v4 for whatever reason has a different function signature
+	// for VerifyExpiresAt for jwt.RegisteredClaims.
+	// That's why we need this adapter
+	return c.RegisteredClaims.VerifyExpiresAt(time.Unix(cmp, 0), req)
+}
+
 func MintPluginInvocationToken(user models.Person, pluginID uuid.UUID, roles ...string) (string, error) {
 	return MintPluginInvocationTokenWithDepth(user, pluginID, 0, roles...)
 }
