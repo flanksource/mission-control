@@ -68,6 +68,15 @@ func StartAgentTunnel(ctx dutyContext.Context, upstreamConfig upstream.UpstreamC
 	})
 }
 
+// runAgentTunnelSession connects this agent to upstream and serves the agent's
+// normal HTTP handler over the resulting yamux session.
+//
+// Upstream opens one yamux stream per HTTP request. On the agent side each
+// stream is accepted by yamuxListener and handed to http.Server, so requests are
+// routed through the same Echo handler stack as local HTTP traffic.
+//
+// The tunnel handler verifies the upstream-signed JWT on each request before marking the
+// request as trusted upstream traffic.
 func runAgentTunnelSession(ctx gocontext.Context, upstreamConfig upstream.UpstreamConfig, handler http.Handler) error {
 	conn, err := dialUpgrade(ctx, upstreamConfig, fmt.Sprintf("/upstream/%s", SessionCreateHTTPEndpoint))
 	if err != nil {
