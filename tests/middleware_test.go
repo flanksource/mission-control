@@ -17,6 +17,7 @@ import (
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/auth/signing"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
@@ -41,6 +42,10 @@ var server *httptest.Server
 
 var _ = BeforeSuite(func() {
 	DefaultContext = setup.BeforeSuiteFn(setup.WithoutDummyData)
+	if _, _, err := signing.Initialize("/tmp/dummy"); err != nil {
+		Fail(err.Error())
+	}
+
 	vars.AuthMode = ""
 	e = echoSrv.New(DefaultContext)
 	e.Use(auth.MockAuthMiddleware)

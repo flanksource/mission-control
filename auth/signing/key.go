@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -83,7 +84,8 @@ func KeyID(pub *rsa.PublicKey) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return base64.RawURLEncoding.EncodeToString(der[:16]), nil
+	sum := sha256.Sum256(der)
+	return base64.RawURLEncoding.EncodeToString(sum[:16]), nil
 }
 
 func ReadRSAPrivateKey(path string) (*rsa.PrivateKey, error) {
@@ -119,11 +121,6 @@ func ParseRSAPrivateKey(data []byte) (*rsa.PrivateKey, error) {
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrUnsupportedPEMBlock, block.Type)
 	}
-}
-
-func WriteRSAPrivateKey(path string, key *rsa.PrivateKey) error {
-	data := pem.EncodeToMemory(&pem.Block{Type: "RSA PRIVATE KEY", Bytes: x509.MarshalPKCS1PrivateKey(key)})
-	return os.WriteFile(path, data, 0600)
 }
 
 func loadOrGeneratePrivateKey(path string) (*rsa.PrivateKey, error) {

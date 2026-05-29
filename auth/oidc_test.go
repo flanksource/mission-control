@@ -31,16 +31,12 @@ import (
 
 var _ = ginkgo.Describe("OIDC", func() {
 	var (
-		keyPath  string
 		person   models.Person
 		provider *oidc.Provider
 	)
 
 	ginkgo.BeforeEach(func() {
 		ensureOIDCTables(DefaultContext)
-
-		dir := ginkgo.GinkgoT().TempDir()
-		keyPath = fmt.Sprintf("%s/oidc.pem", dir)
 
 		person = models.Person{
 			ID:    uuid.New(),
@@ -254,11 +250,8 @@ var _ = ginkgo.Describe("OIDC", func() {
 
 	ginkgo.Describe("Token validation with real JWT", func() {
 		ginkgo.It("accepts a valid JWT signed by the provider's key", func() {
-			// Read the private key that the provider generated
-			keyData, err := os.ReadFile(keyPath)
-			Expect(err).ToNot(HaveOccurred())
-			privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(keyData)
-			Expect(err).ToNot(HaveOccurred())
+			privateKey, _, err := signing.PrivateKey()
+			Expect(err).To(BeNil())
 
 			// Clear the cache so it reloads from DB
 			oidcPublicKeyCache.Flush()
@@ -310,10 +303,8 @@ var _ = ginkgo.Describe("OIDC", func() {
 		})
 
 		ginkgo.It("rejects an expired JWT", func() {
-			keyData, err := os.ReadFile(keyPath)
-			Expect(err).ToNot(HaveOccurred())
-			privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(keyData)
-			Expect(err).ToNot(HaveOccurred())
+			privateKey, _, err := signing.PrivateKey()
+			Expect(err).To(BeNil())
 
 			oidcPublicKeyCache.Flush()
 			savedPublicURL := api.PublicURL
@@ -337,10 +328,8 @@ var _ = ginkgo.Describe("OIDC", func() {
 		})
 
 		ginkgo.It("rejects a JWT with wrong audience", func() {
-			keyData, err := os.ReadFile(keyPath)
-			Expect(err).ToNot(HaveOccurred())
-			privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(keyData)
-			Expect(err).ToNot(HaveOccurred())
+			privateKey, _, err := signing.PrivateKey()
+			Expect(err).To(BeNil())
 
 			oidcPublicKeyCache.Flush()
 			savedPublicURL := api.PublicURL
@@ -364,10 +353,8 @@ var _ = ginkgo.Describe("OIDC", func() {
 		})
 
 		ginkgo.It("rejects a JWT with unknown subject", func() {
-			keyData, err := os.ReadFile(keyPath)
-			Expect(err).ToNot(HaveOccurred())
-			privateKey, err := jwt.ParseRSAPrivateKeyFromPEM(keyData)
-			Expect(err).ToNot(HaveOccurred())
+			privateKey, _, err := signing.PrivateKey()
+			Expect(err).To(BeNil())
 
 			oidcPublicKeyCache.Flush()
 			savedPublicURL := api.PublicURL
