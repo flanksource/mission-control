@@ -64,12 +64,18 @@ var Root = &cobra.Command{
 		if _, _, err := signing.Initialize(signing.PrivateKeyPath); err != nil {
 			logger.Fatalf("failed to initialize JWT signing key: %v", err)
 		}
-		jwk, err := signing.PublicJWK()
-		if err != nil {
-			logger.Fatalf("failed to generate PostgREST JWT public key: %v", err)
+
+		if duty.IsEmbeddedPostgREST(dutyApi.DefaultConfig.Postgrest) {
+			// For the sake of easier migration, we'll only use asymmetric key jwt for postgrest for embedded postgREST.
+			// external postgREST servers will still use the old HMAC based JWT
+			jwk, err := signing.PublicJWK()
+			if err != nil {
+				logger.Fatalf("failed to generate PostgREST JWT public key: %v", err)
+			}
+
+			dutyApi.DefaultConfig.Postgrest.JWTSecret = jwk
+			dutyApi.DefaultConfig.Postgrest.JWTAud = string(signing.AudiencePostgREST)
 		}
-		dutyApi.DefaultConfig.Postgrest.JWTSecret = jwk
-		dutyApi.DefaultConfig.Postgrest.JWTAud = string(signing.AudiencePostgREST)
 
 		if f := cmd.Flags().Lookup("artifact-connection"); f != nil && f.Changed {
 			properties.Set("artifacts.connection", f.Value.String())

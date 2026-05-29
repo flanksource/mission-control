@@ -12,6 +12,7 @@ import (
 	"github.com/MicahParks/keyfunc"
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -88,7 +89,7 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		claims = collections.MergeMap(claims, jwtClaim)
 	}
 
-	token, err := signing.NewJWT(signing.AudiencePostgREST, claims)
+	token, err := newPostgRESTJWT(config.Postgrest.JWTSecret, claims)
 	if err != nil {
 		return "", ctx.Oops().Wrap(err)
 	}
@@ -99,6 +100,16 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 
 	tokenCache.SetDefault(key, token)
 	return token, nil
+}
+
+func newPostgRESTJWT(secret string, claims jwt.MapClaims) (string, error) {
+	if duty.IsEmbeddedPostgREST(api.DefaultConfig.Postgrest) {
+		return signing.NewJWT(signing.AudiencePostgREST, claims)
+	}
+	if secret == "" {
+		return "", fmt.Errorf("postgrest JWT secret is required")
+	}
+	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(secret))
 }
 
 func getJWTKeyFunc(jwksURL string) jwt.Keyfunc {
