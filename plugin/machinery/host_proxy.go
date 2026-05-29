@@ -132,7 +132,7 @@ func (upstreamBasicAuthCredentials) RequireTransportSecurity() bool {
 	return false
 }
 
-func newUpstreamHostConn(ctx context.Context) (*grpc.ClientConn, error) {
+func newUpstreamHostConn() (*grpc.ClientConn, error) {
 	if !api.UpstreamConf.Valid() {
 		return nil, nil
 	}
@@ -145,7 +145,7 @@ func newUpstreamHostConn(ctx context.Context) (*grpc.ClientConn, error) {
 	if secure {
 		transportCredentials = credentials.NewTLS(&tls.Config{InsecureSkipVerify: api.UpstreamConf.InsecureSkipVerify})
 	}
-	return grpc.DialContext(ctx, target,
+	return grpc.NewClient(target,
 		grpc.WithTransportCredentials(transportCredentials),
 		grpc.WithPerRPCCredentials(upstreamBasicAuthCredentials{}),
 	)

@@ -261,7 +261,7 @@ var Serve = &cobra.Command{
 			go launchKopper(ctx)
 		}
 
-		if api.UpstreamGRPCPort > 0 {
+		if api.UpstreamGRPCPort > 0 && !api.UpstreamConf.Valid() {
 			grpcServer, err := machinery.StartUpstreamHostGRPCServer(ctx, api.UpstreamGRPCPort)
 			if err != nil {
 				shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to start upstream host grpc server: %v", err))

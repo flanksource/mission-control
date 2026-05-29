@@ -113,7 +113,16 @@ func InvokeOperation(c echo.Context) error {
 	case pluginpb.PluginKindProxied:
 		return invokeProxiedOperation(c, ctx, entry, pluginRef, op, configID, configUUID)
 	case "", pluginpb.PluginKindLocal:
-		return invokeLocalOperation(c, ctx, entry, pluginRef, op, configID, configUUID)
+		resp, err := invokeLocalOperation(ctx, c.Request(), entry, pluginRef, op, configID, configUUID)
+		if err != nil {
+			return dutyAPI.WriteError(c, err)
+		}
+		mime := resp.Mime
+		if mime == "" {
+			mime = "application/json"
+		}
+		c.Response().Header().Set(echo.HeaderContentType, mime)
+		return c.Blob(http.StatusOK, mime, resp.Result)
 	default:
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %q has unsupported connection kind %q", pluginRef, entry.Kind))
 	}
@@ -158,40 +167,34 @@ func invokeProxiedOperation(c echo.Context, ctx dutyContext.Context, entry *plug
 	return nil
 }
 
-func invokeLocalOperation(c echo.Context, ctx dutyContext.Context, entry *pluginpb.Entry, pluginRef, op, configID string, configUUID uuid.UUID) error {
-	trustedUpstream := auth.IsTrustedUpstream(c.Request().Context())
+func invokeLocalOperation(ctx dutyContext.Context, req *http.Request, entry *pluginpb.Entry, pluginRef, op, configID string, configUUID uuid.UUID) (*pluginpb.InvokeResponse, error) {
 	var roles []string
 	var subject string
-	var invocationToken string
-	if trustedUpstream {
-		invocationToken = c.Request().Header.Get(pluginpb.InvocationTokenHTTPHeader)
-		if invocationToken == "" {
-			return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("plugin invocation token is required"))
-		}
-	} else {
+	invocationToken := req.Header.Get(pluginpb.InvocationTokenHTTPHeader)
+	if invocationToken == "" {
 		var err error
 		roles, err = pluginRolesForUser(ctx, entry, configID)
 		if err != nil {
-			return dutyAPI.WriteError(c, err)
+			return nil, err
 		}
 
 		if ctx.User() == nil {
-			return ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("cannot invoke local operation")
+			return nil, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("cannot invoke local operation")
 		}
 		subject = ctx.User().ID.String()
 	}
-	return invokeLocalOperationWithRoles(c, ctx, entry, pluginRef, op, configID, configUUID, roles, subject, invocationToken)
+	return invokeLocalOperationWithRoles(ctx, req, entry, pluginRef, op, configID, configUUID, roles, subject, invocationToken)
 }
 
-func invokeLocalOperationWithRoles(c echo.Context, ctx dutyContext.Context, entry *pluginpb.Entry, pluginRef, op, configID string, configUUID uuid.UUID, roles []string, subject string, invocationToken string) error {
-	body, err := io.ReadAll(c.Request().Body)
+func invokeLocalOperationWithRoles(ctx dutyContext.Context, req *http.Request, entry *pluginpb.Entry, pluginRef, op, configID string, configUUID uuid.UUID, roles []string, subject string, invocationToken string) (*pluginpb.InvokeResponse, error) {
+	body, err := io.ReadAll(req.Body)
 	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "read request body"))
+		return nil, ctx.Oops().Wrapf(err, "read request body")
 	}
 
 	paramsHash := hashBytes(body)
-	resp, entry, err := machinery.InvokeOperation(ctx, machinery.Request{
-		Context:         c.Request().Context(),
+	resp, invokedEntry, err := machinery.InvokeOperation(ctx, machinery.Request{
+		Context:         req.Context(),
 		PluginRef:       pluginRef,
 		Operation:       op,
 		ConfigItemID:    configID,
@@ -202,23 +205,20 @@ func invokeLocalOperationWithRoles(c echo.Context, ctx dutyContext.Context, entr
 		Timeout:         60 * time.Second,
 		InvocationToken: invocationToken,
 	})
+	if invokedEntry != nil {
+		entry = invokedEntry
+	}
 	if err != nil {
 		if entry != nil {
-			recordPluginInvocation(ctx, entry, op, configUUID, "grpc", c.Request().Method, paramsHash, err.Error(), c.Request(), body)
+			recordPluginInvocation(ctx, entry, op, configUUID, "grpc", req.Method, paramsHash, err.Error(), req, body)
 		}
-		return dutyAPI.WriteError(c, err)
+		return nil, err
 	}
 	if resp.ErrorMessage != "" {
-		recordPluginInvocation(ctx, entry, op, configUUID, "grpc", c.Request().Method, paramsHash, resp.ErrorMessage, c.Request(), body)
-		return dutyAPI.WriteError(c, ctx.Oops().Code(resp.ErrorCode).Errorf("%s", resp.ErrorMessage))
+		recordPluginInvocation(ctx, entry, op, configUUID, "grpc", req.Method, paramsHash, resp.ErrorMessage, req, body)
+		return nil, ctx.Oops().Code(resp.ErrorCode).Errorf("%s", resp.ErrorMessage)
 	}
 
-	recordPluginInvocation(ctx, entry, op, configUUID, "grpc", c.Request().Method, paramsHash, "", c.Request(), body)
-
-	mime := resp.Mime
-	if mime == "" {
-		mime = "application/json"
-	}
-	c.Response().Header().Set(echo.HeaderContentType, mime)
-	return c.Blob(http.StatusOK, mime, resp.Result)
+	recordPluginInvocation(ctx, entry, op, configUUID, "grpc", req.Method, paramsHash, "", req, body)
+	return resp, nil
 }

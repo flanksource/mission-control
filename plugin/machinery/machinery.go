@@ -55,7 +55,7 @@ func startLocalPlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 				return
 			}
 
-			upstreamConn, err := newUpstreamHostConn(ctx)
+			upstreamConn, err := newUpstreamHostConn()
 			if err != nil {
 				ctx.Logger.Warnf("plugin %s: upstream host grpc unavailable: %v", entry.ID, err)
 			}

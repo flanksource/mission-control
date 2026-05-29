@@ -117,16 +117,11 @@ func operationHTTPProxy(c echo.Context) error {
 	}
 
 	paramsHash := httpParamsHash(c.Request().Method, c.QueryParams())
-	trustedUpstream := auth.IsTrustedUpstream(c.Request().Context())
 
 	var roles []string
 	var subject string
-	var invocationToken string
-	if trustedUpstream {
-		invocationToken = c.Request().Header.Get(plugin.InvocationTokenHTTPHeader)
-		if invocationToken == "" {
-			return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("plugin invocation token is required"))
-		}
+	invocationToken := c.Request().Header.Get(plugin.InvocationTokenHTTPHeader)
+	if invocationToken != "" {
 		claims, err := auth.VerifyPluginInvocationToken(invocationToken, entry.ID)
 		if err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("invalid plugin invocation token: %v", err))
@@ -267,6 +262,9 @@ func proxyToAgentPlugin(c echo.Context, entry *plugin.Entry) (agentPluginProxyRe
 			pr.Out.Header.Del(echo.HeaderAuthorization)
 			pr.Out.Header.Del(echo.HeaderCookie)
 			pr.Out.Header.Del("Proxy-Authorization")
+			if token := pr.In.Header.Get(plugin.InvocationTokenHTTPHeader); token != "" {
+				pr.Out.Header.Set(plugin.InvocationTokenHTTPHeader, token)
+			}
 		},
 	}
 	rp.ServeHTTP(c.Response().Writer, c.Request())

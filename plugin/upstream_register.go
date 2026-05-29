@@ -54,7 +54,10 @@ func RegisterWithUpstream(ctx context.Context, config upstream.UpstreamConfig, p
 	}
 
 	c := upstream.NewUpstreamClient(config)
-	resp, err := c.Client.R(ctx).Post("/plugin/register", bytes.NewReader(body))
+	resp, err := c.Client.R(ctx).
+		Header("Content-Type", "application/json").
+		QueryParam(upstream.AgentNameQueryParam, config.AgentName).
+		Post("/plugin/register", bytes.NewReader(body))
 	if err != nil {
 		return fmt.Errorf("register plugin with upstream: %w", err)
 	}
