@@ -76,16 +76,6 @@ func CreatePerson(ctx context.Context, name, email, personType string) (*models.
 	return &person, nil
 }
 
-const (
-	// The draft RFC(https://tools.ietf.org/html/draft-irtf-cfrg-argon2-03#section-9.3) recommends
-	// the following time and memory cost as sensible defaults.
-	timeCost    = 1
-	memoryCost  = 64 * 1024
-	parallelism = 4
-	keyLength   = 20
-	saltLength  = 12
-)
-
 func UpdateAccessTokenExpiry(ctx context.Context, tokenID uuid.UUID, newExpiry time.Time) error {
 	return ctx.DB().Model(&models.AccessToken{}).
 		Where("id = ?", tokenID).

@@ -1,11 +1,9 @@
 package auth
 
 import (
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,9 +18,9 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
-	"golang.org/x/crypto/argon2"
 	"gorm.io/gorm"
 
+	"github.com/flanksource/incident-commander/auth/accesstoken"
 	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/flanksource/incident-commander/db"
 )
@@ -147,37 +145,14 @@ func getAccessToken(ctx context.Context, token string) (*models.AccessToken, err
 		return accessToken, nil
 	}
 
-	fields := strings.Split(token, ".")
-	if len(fields) != 5 {
-		return nil, errInvalidTokenFormat
-	}
-
-	var (
-		password = fields[0]
-		salt     = fields[1]
-	)
-
-	timeCost, err := strconv.ParseUint(fields[2], 10, 32)
+	parsed, err := accesstoken.Parse(token)
 	if err != nil {
-		return nil, errInvalidTokenFormat
+		return nil, err
 	}
-
-	memoryCost, err := strconv.ParseUint(fields[3], 10, 32)
-	if err != nil {
-		return nil, errInvalidTokenFormat
-	}
-
-	parallelism, err := strconv.ParseUint(fields[4], 10, 8)
-	if err != nil {
-		return nil, errInvalidTokenFormat
-	}
-
-	hash := argon2.IDKey([]byte(password), []byte(salt), uint32(timeCost), uint32(memoryCost), uint8(parallelism), 20)
-	encodedHash := base64.URLEncoding.EncodeToString(hash)
 
 	query := `SELECT access_tokens.* FROM access_tokens WHERE value = ?`
 	var accessToken models.AccessToken
-	if err := ctx.DB().Raw(query, encodedHash).First(&accessToken).Error; err != nil {
+	if err := ctx.DB().Raw(query, parsed.Hash()).First(&accessToken).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}

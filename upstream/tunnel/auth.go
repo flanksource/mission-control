@@ -76,9 +76,10 @@ func authenticatedUpstreamHandler(config upstream.UpstreamConfig, next http.Hand
 
 		if err := verifyUpstreamToken(token, config.JWK); err != nil {
 			if errors.Is(err, ErrUpstreamJWKNotSet) {
-				http.Error(w, "upstream JWK is not configured", http.StatusInternalServerError)
+				http.Error(w, "upstream JWK is not configured on the agent. Cannot authenticate upstream.", http.StatusInternalServerError)
 				return
 			}
+
 			http.Error(w, "invalid upstream auth token", http.StatusUnauthorized)
 			return
 		}

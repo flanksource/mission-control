@@ -46,11 +46,10 @@ type IdentityMapperExprResult struct {
 }
 
 var (
-	errInvalidTokenFormat = errors.New("invalid access token format")
-	errTokenExpired       = errors.New("access token has expired")
-	Clerk                 = "clerk"
-	Kratos                = "kratos"
-	Basic                 = "basic"
+	errTokenExpired = errors.New("access token has expired")
+	Clerk           = "clerk"
+	Kratos          = "kratos"
+	Basic           = "basic"
 )
 
 var skipAuthPathPrefixes = []string{

@@ -14,6 +14,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	incAPI "github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/auth/accesstoken"
 	"github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
@@ -173,7 +174,7 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		session, err := k.validateSession(ctx, c.Request())
 		if err != nil {
 			ctx.GetSpan().RecordError(err)
-			if errors.Is(err, errInvalidTokenFormat) {
+			if errors.Is(err, accesstoken.ErrInvalidFormat) {
 				return c.String(http.StatusBadRequest, "invalid access token")
 			} else if errors.Is(err, errTokenExpired) {
 				setWWWAuthenticate(c)
