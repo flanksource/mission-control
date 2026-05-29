@@ -56,6 +56,17 @@ func MintPluginInvocationToken(subject string, pluginID uuid.UUID, depth int, ro
 }
 
 func VerifyPluginInvocationToken(tokenString string, pluginID uuid.UUID) (*PluginInvocationClaims, error) {
+	claims, err := VerifyAnyPluginInvocationToken(tokenString)
+	if err != nil {
+		return nil, err
+	}
+	if claims.Plugin != pluginID {
+		return nil, fmt.Errorf("plugin invocation token is for plugin %q, not %q", claims.Plugin, pluginID)
+	}
+	return claims, nil
+}
+
+func VerifyAnyPluginInvocationToken(tokenString string) (*PluginInvocationClaims, error) {
 	claims := &PluginInvocationClaims{}
 	if _, err := signing.ParseJWT(tokenString, claims, signing.AudiencePluginInvocation); err != nil {
 		return nil, err
@@ -64,8 +75,8 @@ func VerifyPluginInvocationToken(tokenString string, pluginID uuid.UUID) (*Plugi
 	if claims.Type != pluginInvocationTokenType {
 		return nil, fmt.Errorf("plugin invocation token has invalid type %q", claims.Type)
 	}
-	if claims.Plugin != pluginID {
-		return nil, fmt.Errorf("plugin invocation token is for plugin %q, not %q", claims.Plugin, pluginID)
+	if claims.Plugin == uuid.Nil {
+		return nil, fmt.Errorf("plugin invocation token plugin is required")
 	}
 	if claims.Subject == "" {
 		return nil, fmt.Errorf("plugin invocation token subject is required")

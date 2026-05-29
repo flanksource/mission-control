@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
 	"google.golang.org/grpc"
@@ -35,11 +36,6 @@ func invocationClaimsFromContext(ctx context.Context) (*auth.PluginInvocationCla
 	return claims, ok
 }
 
-func upstreamInvocationClaims(ctx context.Context) (*auth.PluginInvocationClaims, bool) {
-	claims, ok := invocationClaimsFromContext(ctx)
-	return claims, ok && claims.UpstreamInvoked
-}
-
 func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
@@ -57,7 +53,7 @@ func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, e
 	}
 
 	baseCtx := s.ctx.Wrap(ctx).WithSubject(claims.Subject).WithValue(invocationClaimsContextKey{}, claims)
-	if claims.UpstreamInvoked {
+	if api.UpstreamConf.Valid() {
 		return baseCtx, nil
 	}
 

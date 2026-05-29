@@ -54,10 +54,26 @@ func startLocalPlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 				ctx.Logger.Errorf("plugin %s: host broker accept: %v", entry.ID, err)
 				return
 			}
-			grpcServer := local.GRPCServerFactory([]grpc.ServerOption{
-				grpc.UnaryInterceptor(svc.UnaryServerInterceptor()),
-			})
-			svc.Register(grpcServer)
+
+			upstreamConn, err := newUpstreamHostConn(ctx)
+			if err != nil {
+				ctx.Logger.Warnf("plugin %s: upstream host grpc unavailable: %v", entry.ID, err)
+			}
+			if upstreamConn != nil {
+				defer upstreamConn.Close()
+			}
+
+			var opts []grpc.ServerOption
+			if upstreamConn != nil {
+				opts = append(opts, grpc.UnknownServiceHandler(agentHostUnknownServiceHandler(svc, upstreamConn)))
+			} else {
+				opts = append(opts, grpc.UnaryInterceptor(svc.UnaryServerInterceptor()))
+			}
+
+			grpcServer := local.GRPCServerFactory(opts)
+			if upstreamConn == nil {
+				svc.Register(grpcServer)
+			}
 			if err := grpcServer.Serve(lis); err != nil {
 				ctx.Logger.Debugf("plugin %s: host server stopped: %v", entry.ID, err)
 			}

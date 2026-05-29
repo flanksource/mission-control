@@ -139,6 +139,15 @@ func invokeProxiedOperation(c echo.Context, ctx dutyContext.Context, entry *plug
 	if err := machinery.EnforceInvokePermission(ctx, user.ID.String(), entry, op, configID); err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
+	roles, err := pluginRolesForUser(ctx, entry, configID)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+	invocationToken, err := auth.MintPluginInvocationToken(user.ID.String(), entry.ID, 0, roles...)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
+	}
+	c.Request().Header.Set(pluginpb.InvocationTokenHTTPHeader, invocationToken)
 
 	result, err := proxyToAgentPlugin(c, entry)
 	if err != nil {
@@ -150,11 +159,15 @@ func invokeProxiedOperation(c echo.Context, ctx dutyContext.Context, entry *plug
 }
 
 func invokeLocalOperation(c echo.Context, ctx dutyContext.Context, entry *pluginpb.Entry, pluginRef, op, configID string, configUUID uuid.UUID) error {
-	upstreamInvoked := auth.IsTrustedUpstream(c.Request().Context())
+	trustedUpstream := auth.IsTrustedUpstream(c.Request().Context())
 	var roles []string
 	var subject string
-	if upstreamInvoked {
-		subject = "upstream"
+	var invocationToken string
+	if trustedUpstream {
+		invocationToken = c.Request().Header.Get(pluginpb.InvocationTokenHTTPHeader)
+		if invocationToken == "" {
+			return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("plugin invocation token is required"))
+		}
 	} else {
 		var err error
 		roles, err = pluginRolesForUser(ctx, entry, configID)
@@ -167,10 +180,10 @@ func invokeLocalOperation(c echo.Context, ctx dutyContext.Context, entry *plugin
 		}
 		subject = ctx.User().ID.String()
 	}
-	return invokeLocalOperationWithRoles(c, ctx, entry, pluginRef, op, configID, configUUID, roles, subject, upstreamInvoked)
+	return invokeLocalOperationWithRoles(c, ctx, entry, pluginRef, op, configID, configUUID, roles, subject, invocationToken)
 }
 
-func invokeLocalOperationWithRoles(c echo.Context, ctx dutyContext.Context, entry *pluginpb.Entry, pluginRef, op, configID string, configUUID uuid.UUID, roles []string, subject string, upstreamInvoked bool) error {
+func invokeLocalOperationWithRoles(c echo.Context, ctx dutyContext.Context, entry *pluginpb.Entry, pluginRef, op, configID string, configUUID uuid.UUID, roles []string, subject string, invocationToken string) error {
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "read request body"))
@@ -178,15 +191,16 @@ func invokeLocalOperationWithRoles(c echo.Context, ctx dutyContext.Context, entr
 
 	paramsHash := hashBytes(body)
 	resp, entry, err := machinery.InvokeOperation(ctx, machinery.Request{
-		Context:      c.Request().Context(),
-		PluginRef:    pluginRef,
-		Operation:    op,
-		ConfigItemID: configID,
-		ParamsJSON:   body,
-		Subject:      subject,
-		Roles:        roles,
-		Depth:        0,
-		Timeout:      60 * time.Second,
+		Context:         c.Request().Context(),
+		PluginRef:       pluginRef,
+		Operation:       op,
+		ConfigItemID:    configID,
+		ParamsJSON:      body,
+		Subject:         subject,
+		Roles:           roles,
+		Depth:           0,
+		Timeout:         60 * time.Second,
+		InvocationToken: invocationToken,
 	})
 	if err != nil {
 		if entry != nil {

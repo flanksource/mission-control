@@ -20,6 +20,9 @@ var AllowedReconciliationTables = []string{
 
 var UpstreamConf upstream.UpstreamConfig
 
+// UpstreamGRPCPort is the port used by agents to call upstream plugin HostService gRPC.
+var UpstreamGRPCPort = 8081
+
 type CanaryPullResponse struct {
 	Before   time.Time       `json:"before"`
 	Canaries []models.Canary `json:"canaries,omitempty"`

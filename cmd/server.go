@@ -42,6 +42,7 @@ import (
 	_ "github.com/flanksource/incident-commander/connection"
 	_ "github.com/flanksource/incident-commander/playbook"
 	_ "github.com/flanksource/incident-commander/plugin/gateway"
+	"github.com/flanksource/incident-commander/plugin/machinery"
 	_ "github.com/flanksource/incident-commander/shorturl"
 	_ "github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/teams"
@@ -258,6 +259,17 @@ var Serve = &cobra.Command{
 
 		if !disableKubernetes && !api.DisableOperators {
 			go launchKopper(ctx)
+		}
+
+		if api.UpstreamGRPCPort > 0 {
+			grpcServer, err := machinery.StartUpstreamHostGRPCServer(ctx, api.UpstreamGRPCPort)
+			if err != nil {
+				shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to start upstream host grpc server: %v", err))
+			}
+			shutdown.AddHookWithPriority("upstream-host-grpc", shutdown.PriorityIngress, func() {
+				grpcServer.GracefulStop()
+			})
+			logger.Infof("Upstream plugin HostService gRPC listening on :%d", api.UpstreamGRPCPort)
 		}
 
 		listenAddr := fmt.Sprintf(":%d", httpPort)

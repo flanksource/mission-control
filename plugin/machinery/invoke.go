@@ -23,13 +23,14 @@ import (
 const MaxInvokeDepth = 5
 
 type Request struct {
-	PluginRef    string
-	Operation    string
-	ParamsJSON   []byte
-	ConfigItemID string
-	Subject      string
-	Roles        []string
-	Depth        int
+	PluginRef       string
+	Operation       string
+	ParamsJSON      []byte
+	ConfigItemID    string
+	Subject         string
+	Roles           []string
+	Depth           int
+	InvocationToken string
 
 	// Deprecated. TODO: Remove this
 	Context context.Context
@@ -48,7 +49,7 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeRespon
 	if req.Operation == "" {
 		return nil, nil, dutyAPI.Errorf(dutyAPI.EINVALID, "operation is required")
 	}
-	if req.Subject == "" {
+	if req.Subject == "" && req.InvocationToken == "" {
 		return nil, nil, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "not logged in")
 	}
 	if req.Depth > MaxInvokeDepth {
@@ -73,13 +74,23 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeRespon
 	}
 
 	subject := req.Subject
-	if err := EnforceInvokePermission(ctx, subject, entry, req.Operation, req.ConfigItemID); err != nil {
-		return nil, entry, err
-	}
-
-	token, err := mintInvocationTokenForRequest(subject, entry.ID, req)
-	if err != nil {
-		return nil, entry, ctx.Oops().Wrapf(err, "mint plugin invocation token")
+	token := req.InvocationToken
+	if token != "" {
+		claims, err := auth.VerifyPluginInvocationToken(token, entry.ID)
+		if err != nil {
+			return nil, entry, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "invalid plugin invocation token: %v", err)
+		}
+		subject = claims.Subject
+		req.Roles = claims.Roles
+	} else {
+		if err := EnforceInvokePermission(ctx, subject, entry, req.Operation, req.ConfigItemID); err != nil {
+			return nil, entry, err
+		}
+		var err error
+		token, err = mintInvocationTokenForRequest(subject, entry.ID, req)
+		if err != nil {
+			return nil, entry, ctx.Oops().Wrapf(err, "mint plugin invocation token")
+		}
 	}
 
 	invokeCtx := ctx

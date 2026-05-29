@@ -115,6 +115,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&api.Namespace, "namespace", utils.Coalesce(os.Getenv("NAMESPACE"), "default"), "Namespace to use for config/secret lookups")
 	flags.IntVar(&devGuiPort, "devGuiPort", 0, "Port used by a local Vite server in UI development mode (0 = random free port)")
 	flags.IntVar(&metricsPort, "metricsPort", 0, "Dedicated unauthenticated metrics port (0 disables). /metrics on main server unchanged")
+	flags.IntVar(&api.UpstreamGRPCPort, "upstream-grpc-port", api.UpstreamGRPCPort, "Port for upstream plugin HostService gRPC")
 	flags.BoolVar(&dev, "dev", false, "Run in development mode")
 	flags.BoolVar(&api.DisableOperators, "disable-operators", false, "Disable Kubernetes Operators")
 	flags.StringVar(&api.FrontendURL, "frontend-url", "http://localhost:3000", "URL of the frontend")

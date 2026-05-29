@@ -60,10 +60,6 @@ func (s *Service) GetConfigItem(ctx context.Context, req *pluginpb.GetConfigItem
 		return nil, fmt.Errorf("id is required")
 	}
 
-	if _, ok := upstreamInvocationClaims(ctx); ok {
-		return getConfigItem(invocationDutyContext(s.ctx, ctx), ctx, req.Id)
-	}
-
 	var out *pluginpb.ConfigItem
 	err := auth.WithRLS(s.ctx.Wrap(ctx), func(rlsCtx dutyContext.Context) error {
 		var err error
@@ -106,12 +102,7 @@ func (s *Service) ListConfigs(ctx context.Context, req *pluginpb.ListConfigsRequ
 		return nil
 	}
 
-	var err error
-	if _, ok := upstreamInvocationClaims(ctx); ok {
-		err = list(invocationDutyContext(s.ctx, ctx))
-	} else {
-		err = auth.WithRLS(s.ctx.Wrap(ctx), list)
-	}
+	err := auth.WithRLS(s.ctx.Wrap(ctx), list)
 	if err != nil {
 		return nil, err
 	}
@@ -168,7 +159,6 @@ func (s *Service) InvokePlugin(ctx context.Context, req *pluginpb.InvokePluginRe
 		depth = claims.Depth + 1
 	}
 
-	_, upstreamInvoked := upstreamInvocationClaims(ctx)
 	configID := req.ConfigItemId
 
 	resp, _, err := InvokeOperation(dutyCtx, Request{
@@ -180,8 +170,7 @@ func (s *Service) InvokePlugin(ctx context.Context, req *pluginpb.InvokePluginRe
 		Depth:      depth,
 		Deadline:   req.Deadline,
 
-		ConfigItemID:    configID,
-		UpstreamInvoked: upstreamInvoked,
+		ConfigItemID: configID,
 	})
 	return resp, err
 }

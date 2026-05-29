@@ -117,12 +117,22 @@ func operationHTTPProxy(c echo.Context) error {
 	}
 
 	paramsHash := httpParamsHash(c.Request().Method, c.QueryParams())
-	upstreamInvoked := auth.IsTrustedUpstream(c.Request().Context())
+	trustedUpstream := auth.IsTrustedUpstream(c.Request().Context())
 
 	var roles []string
 	var subject string
-	if upstreamInvoked {
-		subject = "upstream"
+	var invocationToken string
+	if trustedUpstream {
+		invocationToken = c.Request().Header.Get(plugin.InvocationTokenHTTPHeader)
+		if invocationToken == "" {
+			return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("plugin invocation token is required"))
+		}
+		claims, err := auth.VerifyPluginInvocationToken(invocationToken, entry.ID)
+		if err != nil {
+			return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("invalid plugin invocation token: %v", err))
+		}
+		subject = claims.Subject
+		roles = claims.Roles
 	} else {
 		user := ctx.User()
 		if user == nil {
@@ -140,6 +150,13 @@ func operationHTTPProxy(c echo.Context) error {
 	}
 
 	if entry.Kind == plugin.PluginKindProxied {
+		if invocationToken == "" {
+			invocationToken, err = auth.MintPluginInvocationToken(subject, entry.ID, 0, roles...)
+			if err != nil {
+				return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
+			}
+		}
+		c.Request().Header.Set(plugin.InvocationTokenHTTPHeader, invocationToken)
 		result, err := proxyToAgentPlugin(c, entry)
 		if err != nil {
 			recordPluginInvocation(ctx, entry, op, configUUID, "http", c.Request().Method, paramsHash, err.Error(), c.Request(), nil)
@@ -149,9 +166,11 @@ func operationHTTPProxy(c echo.Context) error {
 		return nil
 	}
 
-	invocationToken, err := auth.MintPluginInvocationToken(subject, entry.ID, 0, upstreamInvoked, roles...)
-	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
+	if invocationToken == "" {
+		invocationToken, err = auth.MintPluginInvocationToken(subject, entry.ID, 0, roles...)
+		if err != nil {
+			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
+		}
 	}
 
 	if err := proxyToPluginOperation(c, entry, op, invocationToken); err != nil {
