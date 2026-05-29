@@ -11,7 +11,6 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/zitadel/oidc/v3/pkg/op"
 )
 
@@ -22,22 +21,7 @@ type Provider struct {
 	Storage *Storage
 }
 
-// NewProvider creates an OIDC OpenID Provider.
-// It loads or generates the RSA signing key, upserts the public key to DB,
-// and returns a Provider containing the OpenIDProvider and http.Handler.
-func NewProvider(ctx context.Context, issuerURL, signingKeyPath string) (*Provider, error) {
-	cryptoKey, err := generateCryptoKey()
-	if err != nil {
-		return nil, fmt.Errorf("oidc crypto key: %w", err)
-	}
-	privateKey, keyID, err := loadOrGenerateKey(ctx, signingKeyPath)
-	if err != nil {
-		return nil, fmt.Errorf("oidc signing key: %w", err)
-	}
-	return newProviderWithCryptoKey(ctx, issuerURL, cryptoKey, privateKey, keyID)
-}
-
-func newProviderWithCryptoKey(ctx context.Context, issuerURL string, cryptoKey [32]byte, privateKey *rsa.PrivateKey, keyID string) (*Provider, error) {
+func NewProvider(ctx context.Context, issuerURL string, cryptoKey [32]byte, privateKey *rsa.PrivateKey, keyID string) (*Provider, error) {
 	if err := upsertPublicKey(ctx, keyID, &privateKey.PublicKey); err != nil {
 		return nil, fmt.Errorf("upsert public key: %w", err)
 	}
@@ -67,10 +51,6 @@ func newProviderWithCryptoKey(ctx context.Context, issuerURL string, cryptoKey [
 		Handler:        oidcProvider,
 		Storage:        storage,
 	}, nil
-}
-
-func loadOrGenerateKey(_ context.Context, keyPath string) (*rsa.PrivateKey, string, error) {
-	return signing.Initialize(keyPath)
 }
 
 func upsertPublicKey(ctx context.Context, keyID string, pub *rsa.PublicKey) error {

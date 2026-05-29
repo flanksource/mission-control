@@ -54,10 +54,6 @@ func NewJWT(audience Audience, claims Claims) (string, error) {
 }
 
 func ParseJWT(tokenString string, claims Claims, audience Audience) (*jwt.Token, error) {
-	if err := audience.Valid(); err != nil {
-		return nil, err
-	}
-
 	pub, _, err := PublicKey()
 	if err != nil {
 		return nil, err

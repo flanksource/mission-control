@@ -28,7 +28,7 @@ func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL string, passwordCh
 		return fmt.Errorf("oidc signing key: %w", err)
 	}
 
-	provider, err := newProviderWithCryptoKey(ctx, oidcIssuer, cryptoKey, privateKey, keyID)
+	provider, err := NewProvider(ctx, oidcIssuer, cryptoKey, privateKey, keyID)
 	if err != nil {
 		return err
 	}

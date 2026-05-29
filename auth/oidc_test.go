@@ -17,6 +17,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth/oidc"
+	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -48,8 +49,14 @@ var _ = ginkgo.Describe("OIDC", func() {
 		}
 		Expect(DefaultContext.DB().Create(&person).Error).To(Succeed())
 
-		var err error
-		provider, err = oidc.NewProvider(DefaultContext, "http://localhost:8080", keyPath)
+		var key [32]byte
+		_, err := rand.Read(key[:])
+		Expect(err).ToNot(HaveOccurred())
+
+		privateKey, keyID, err := signing.PrivateKey()
+		Expect(err).ToNot(HaveOccurred())
+
+		provider, err = oidc.NewProvider(DefaultContext, "http://localhost:8080", key, privateKey, keyID)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(provider).ToNot(BeNil())
 	})
@@ -58,24 +65,6 @@ var _ = ginkgo.Describe("OIDC", func() {
 		DefaultContext.DB().Where("id = ?", person.ID).Delete(&models.Person{})
 		DefaultContext.DB().Exec("DELETE FROM oidc_auth_requests")
 		DefaultContext.DB().Exec("DELETE FROM oidc_refresh_tokens")
-	})
-
-	ginkgo.It("creates signing key file on first start", func() {
-		_, err := os.Stat(keyPath)
-		Expect(err).ToNot(HaveOccurred(), "signing key file should have been created")
-	})
-
-	ginkgo.It("reuses the same key on second load", func() {
-		dir := ginkgo.GinkgoT().TempDir()
-		keyPath2 := fmt.Sprintf("%s/oidc.pem", dir)
-
-		data, err := os.ReadFile(keyPath)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(os.WriteFile(keyPath2, data, 0600)).To(Succeed())
-
-		provider2, err := oidc.NewProvider(DefaultContext, "http://localhost:8080", keyPath2)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(provider2).ToNot(BeNil())
 	})
 
 	ginkgo.It("stores public key in oidc_public_keys table", func() {
