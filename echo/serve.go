@@ -39,6 +39,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/logs"
 	mcMiddleware "github.com/flanksource/incident-commander/middleware"
@@ -93,6 +94,11 @@ func stripUpstreamCORS(resp *http.Response) error {
 
 func New(ctx context.Context) *echov4.Echo {
 	ctx.ClearCache()
+	if _, _, err := signing.PrivateKey(); err != nil {
+		if _, _, err := signing.Initialize(signing.PrivateKeyPath); err != nil {
+			logger.Fatalf("failed to initialize JWT signing key: %v", err)
+		}
+	}
 	e := echov4.New()
 	e.HideBanner = true
 
