@@ -17,6 +17,10 @@ const (
 	UpstreamAuthHeader = "X-Flanksource-Upstream-JWT"
 	upstreamSubject    = "mission-control-upstream"
 	upstreamTokenTTL   = time.Minute
+
+	// allowedClockSkew backdates iat/nbf so freshly minted tokens are not
+	// rejected by an agent whose clock is slightly behind upstream's.
+	allowedClockSkew = 5 * time.Second
 )
 
 var ErrUpstreamJWKNotSet = errors.New("upstream JWK is not configured")
@@ -36,8 +40,8 @@ func mintUpstreamToken() (string, error) {
 			Issuer:    signing.Issuer,
 			Subject:   upstreamSubject,
 			Audience:  jwt.ClaimStrings{string(signing.AudienceAgent)},
-			IssuedAt:  jwt.NewNumericDate(now),
-			NotBefore: jwt.NewNumericDate(now),
+			IssuedAt:  jwt.NewNumericDate(now.Add(-allowedClockSkew)),
+			NotBefore: jwt.NewNumericDate(now.Add(-allowedClockSkew)),
 			ExpiresAt: jwt.NewNumericDate(now.Add(upstreamTokenTTL)),
 		},
 	}
@@ -71,6 +75,10 @@ func authenticatedUpstreamHandler(config upstream.UpstreamConfig, next http.Hand
 		r.Header.Del(UpstreamAuthHeader)
 
 		if err := verifyUpstreamToken(token, config.JWK); err != nil {
+			if errors.Is(err, ErrUpstreamJWKNotSet) {
+				http.Error(w, "upstream JWK is not configured", http.StatusInternalServerError)
+				return
+			}
 			http.Error(w, "invalid upstream auth token", http.StatusUnauthorized)
 			return
 		}
