@@ -16,12 +16,15 @@
 package gateway
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"time"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -51,6 +54,7 @@ type PluginListing struct {
 	Name        string                   `json:"name"`
 	Description string                   `json:"description,omitempty"`
 	Version     string                   `json:"version,omitempty"`
+	Agent       *models.Agent            `json:"agent,omitempty"`
 	Tabs        []*pluginpb.TabSpec      `json:"tabs,omitempty"`
 	Operations  []*pluginpb.OperationDef `json:"operations,omitempty"`
 }
@@ -66,6 +70,7 @@ func ListPlugins(c echo.Context) error {
 		if e.Manifest == nil {
 			continue
 		}
+
 		if configID != "" {
 			matches, err := machinery.SelectorMatches(ctx, e, configID)
 			if err != nil {
@@ -75,14 +80,27 @@ func ListPlugins(c echo.Context) error {
 				continue
 			}
 		}
-		out = append(out, PluginListing{
+
+		item := PluginListing{
 			Name:        e.Name,
 			Description: e.Manifest.Description,
 			Version:     e.Manifest.Version,
 			Tabs:        e.Manifest.Tabs,
 			Operations:  e.Manifest.Operations,
-		})
+		}
+
+		if e.AgentID != nil {
+			agent, err := query.FindCachedAgent(ctx, e.AgentID.String())
+			if err != nil {
+				return fmt.Errorf("failed to get agent for plugin %q: %w", e.Name, err)
+			}
+
+			item.Agent = agent
+		}
+
+		out = append(out, item)
 	}
+
 	return c.JSON(http.StatusOK, out)
 }
 
