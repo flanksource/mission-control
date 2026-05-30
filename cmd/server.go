@@ -262,6 +262,7 @@ var Serve = &cobra.Command{
 		}
 
 		if api.UpstreamGRPCPort > 0 && !api.UpstreamConf.Valid() {
+			// Upstream server opens up a plugin host grpc server for the plugins running in agents
 			grpcServer, err := machinery.StartUpstreamHostGRPCServer(ctx, api.UpstreamGRPCPort)
 			if err != nil {
 				shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to start upstream host grpc server: %v", err))

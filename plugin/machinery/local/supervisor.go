@@ -139,6 +139,8 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 		// Not fatal — the registry might have been recreated, but the supervisor still works.
 		ctx.Logger.Warnf("plugin %s: register manifest: %v", s.Name, err)
 	} else if api.UpstreamConf.Valid() {
+		// Right after the plugin is registered locally on the agent
+		// It immediately informs the upstream about the plugin
 		go func() {
 			if err := plugin.RegisterWithUpstream(ctx, api.UpstreamConf, s.ID); err != nil {
 				ctx.Logger.Warnf("plugin %s: register with upstream: %v", s.Name, err)
