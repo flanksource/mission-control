@@ -59,7 +59,9 @@ func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, e
 		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
 
-	claims, err := plugin.ValidateInvocationToken(values[0])
+	invocationToken := values[0]
+
+	claims, err := plugin.ValidateHostInvocationToken(invocationToken)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid plugin invocation token: %v", err)
 	}

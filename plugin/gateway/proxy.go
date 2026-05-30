@@ -1,10 +1,8 @@
 package gateway
 
 import (
-	"context"
 	"errors"
 	"fmt"
-	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -122,21 +120,27 @@ func operationHTTPProxy(c echo.Context) error {
 	var subject string
 	invocationToken := c.Request().Header.Get(plugin.InvocationTokenHTTPHeader)
 	if invocationToken != "" {
-		claims, err := plugin.ValidateInvocationTokenForPlugin(invocationToken, entry.ID)
+		// Proxied operations arriving on an agent already carry an upstream-minted
+		// invocation token. Validate and reuse it rather than minting an agent-signed token.
+		claims, err := plugin.ValidateRequestInvocationToken(c.Request().Context(), invocationToken, entry.ID)
 		if err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("invalid plugin invocation token: %v", err))
 		}
+
 		subject = claims.Subject
 		roles = claims.Roles
 	} else {
+		// No invocation token was supplied, so authorize locally before minting one.
 		user := ctx.User()
 		if user == nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in"))
 		}
+
 		subject = user.ID.String()
 		if err := machinery.EnforceInvokePermission(ctx, subject, entry, op, configID); err != nil {
 			return dutyAPI.WriteError(c, err)
 		}
+
 		var err error
 		roles, err = pluginRolesForUser(ctx, entry, configID)
 		if err != nil {
@@ -145,18 +149,18 @@ func operationHTTPProxy(c echo.Context) error {
 	}
 
 	if entry.Kind == plugin.PluginKindProxied {
-		if invocationToken == "" {
-			invocationToken, err = plugin.MintInvocationToken(subject, entry.ID, 0, roles...)
-			if err != nil {
-				return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
-			}
+		invocationToken, err = plugin.MintInvocationToken(subject, entry.ID, 0, roles...)
+		if err != nil {
+			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 		}
+
 		c.Request().Header.Set(plugin.InvocationTokenHTTPHeader, invocationToken)
 		result, err := proxyToAgentPlugin(c, entry)
 		if err != nil {
 			recordPluginInvocation(ctx, entry, op, configUUID, "http", c.Request().Method, paramsHash, err.Error(), c.Request(), nil)
 			return dutyAPI.WriteError(c, err)
 		}
+
 		recordPluginInvocation(ctx, entry, op, configUUID, "http", c.Request().Method, paramsHash, result.ErrorMessage, c.Request(), nil)
 		return nil
 	}
@@ -228,13 +232,7 @@ func proxyToAgentPlugin(c echo.Context, entry *plugin.Entry) (agentPluginProxyRe
 	result := agentPluginProxyResult{}
 	target := &url.URL{Scheme: "http", Host: "agent.local"}
 	rp := &httputil.ReverseProxy{
-		Transport: &http.Transport{
-			ForceAttemptHTTP2: false,
-			DisableKeepAlives: true,
-			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-				return tunnel.Open(ctx, agentID)
-			},
-		},
+		Transport:     tunnel.NewTransport(agentID),
 		FlushInterval: -1,
 		ModifyResponse: func(resp *http.Response) error {
 			result.StatusCode = resp.StatusCode

@@ -9,7 +9,6 @@ import (
 	"github.com/flanksource/duty/models"
 	dutyUpstream "github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/plugin"
-	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -20,7 +19,7 @@ type upstreamHostService struct {
 	*Service
 }
 
-func (upstreamHostService) GetConnection(context.Context, *pluginpb.GetConnectionRequest) (*pluginpb.ResolvedConnection, error) {
+func (upstreamHostService) GetConnection(context.Context, *plugin.GetConnectionRequest) (*plugin.ResolvedConnection, error) {
 	return nil, status.Error(codes.FailedPrecondition, "GetConnection must be served by the agent")
 }
 
@@ -32,7 +31,7 @@ func StartUpstreamHostGRPCServer(ctx dutyContext.Context, port int) (*grpc.Serve
 
 	svc := NewGRPCService(ctx)
 	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(upstreamHostUnaryInterceptor(ctx)))
-	pluginpb.RegisterHostServiceServer(grpcServer, upstreamHostService{Service: svc})
+	plugin.RegisterHostServiceServer(grpcServer, upstreamHostService{Service: svc})
 
 	go func() {
 		_ = grpcServer.Serve(lis)
@@ -42,7 +41,7 @@ func StartUpstreamHostGRPCServer(ctx dutyContext.Context, port int) (*grpc.Serve
 
 func upstreamHostUnaryInterceptor(base dutyContext.Context) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if info.FullMethod == pluginpb.HostService_GetConnection_FullMethodName {
+		if info.FullMethod == plugin.HostService_GetConnection_FullMethodName {
 			return nil, status.Error(codes.FailedPrecondition, "GetConnection must be served by the agent")
 		}
 
@@ -60,7 +59,7 @@ func upstreamHostContextWithInvocation(base dutyContext.Context, ctx context.Con
 		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
 
-	values := md.Get(pluginpb.InvocationTokenGRPCMetadataKey)
+	values := md.Get(plugin.InvocationTokenGRPCMetadataKey)
 	if len(values) == 0 || values[0] == "" {
 		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
@@ -81,7 +80,7 @@ func upstreamHostContextWithInvocation(base dutyContext.Context, ctx context.Con
 		return nil, status.Errorf(codes.Unauthenticated, "agent %s: %v", agentName, err)
 	}
 
-	entry := pluginpb.DefaultRegistry.Get(claims.Plugin)
+	entry := plugin.DefaultRegistry.Get(claims.Plugin)
 	if entry == nil || entry.AgentID == nil || *entry.AgentID != agent.ID {
 		return nil, status.Error(codes.PermissionDenied, "agent does not own proxied plugin")
 	}

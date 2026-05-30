@@ -12,7 +12,6 @@ import (
 	"github.com/flanksource/duty/query"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
-	"github.com/google/uuid"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
@@ -75,18 +74,22 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeRespon
 	subject := req.Subject
 	token := req.InvocationToken
 	if token != "" {
-		claims, err := plugin.ValidateInvocationTokenForPlugin(token, entry.ID)
+		// Proxied operations arriving on an agent already carry an upstream-minted
+		// invocation token. Validate and reuse it rather than minting an agent-signed token.
+		claims, err := plugin.ValidateRequestInvocationToken(req.Context, token, entry.ID)
 		if err != nil {
 			return nil, entry, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "invalid plugin invocation token: %v", err)
 		}
 		subject = claims.Subject
 		req.Roles = claims.Roles
 	} else {
+		// No invocation token was supplied, so authorize locally before minting one.
 		if err := EnforceInvokePermission(ctx, subject, entry, req.Operation, req.ConfigItemID); err != nil {
 			return nil, entry, err
 		}
+
 		var err error
-		token, err = mintInvocationTokenForRequest(subject, entry.ID, req)
+		token, err = plugin.MintInvocationToken(subject, entry.ID, req.Depth, req.Roles...)
 		if err != nil {
 			return nil, entry, ctx.Oops().Wrapf(err, "mint plugin invocation token")
 		}
@@ -117,10 +120,6 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeRespon
 		Deadline:     req.Deadline,
 	})
 	return resp, entry, err
-}
-
-func mintInvocationTokenForRequest(subject string, pluginID uuid.UUID, req Request) (string, error) {
-	return plugin.MintInvocationToken(subject, pluginID, req.Depth, req.Roles...)
 }
 
 func ResolvePlugin(ctx dutyContext.Context, ref string) (*plugin.Entry, error) {
