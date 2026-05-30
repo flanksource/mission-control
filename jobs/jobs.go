@@ -38,6 +38,7 @@ func agentJobs(ctx context.Context) []*job.Job {
 	return []*job.Job{
 		PingUpstream,
 		ReconcileAllJob(api.UpstreamConf),
+		RegisterPluginsWithUpstream,
 		SyncArtifactData,
 		ResetIsPushed,
 		PushPlaybookActions(ctx),
