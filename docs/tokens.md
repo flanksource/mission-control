@@ -15,19 +15,25 @@ They are different from the short-lived signed JWTs described below: access toke
 
 ### Token format
 
-The returned token currently has this format:
+The returned token has this v1 format:
 
 ```text
 password.salt.timeCost.memoryCost.parallelism
 ```
 
-Only the Argon2id hash is stored in the database. The raw token is shown once to the caller.
+New tokens use a v2 format that binds extra token material into the hashed secret:
+
+```text
+password.salt.timeCost.memoryCost.parallelism.binding
+```
+
+Only the Argon2id hash is stored in the database. For v2 tokens, the hash input includes both the password and binding, so replacing the appended binding invalidates the token. Agent tokens use `base64url(jwk-json)` as the binding; other tokens use a generated random binding. The raw token is shown once to the caller.
 
 ### Issuance flows
 
 | Flow                 | Where                                          | Subject                               | Lifetime                                                                 | Use case                                                                             |
 | -------------------- | ---------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| Agent token          | `agent/agent.go`                               | Agent `Person`                        | 365d                                                                     | Primary intended long-lived credential for agents.                                   |
+| Agent token          | `agent/agent.go`                               | Agent `Person`                        | 365d                                                                     | Primary intended long-lived credential for agents. v2 tokens append the public JWK agents use to verify upstream tunnel JWTs. |
 | Delegated user token | `auth/controllers.go` → `/auth/create_token`   | New `Person` with type `access_token` | Default 90d via `access_token.default_expiry`; request can supply expiry | Scoped/delegated token, mainly used by MCP clients that need restricted permissions. |
 | CLI-created token    | `cmd/token.go`                                 | Existing user `Person`                | Default 4h unless `--expiry` supplied                                    | Admin/operator-created token from CLI.                                               |
 | Kubeconfig token     | `echo/kube_config_download.go` → `/kubeconfig` | Current user `Person`                 | Currently non-expiring (`expiry=nil`)                                    | Embedded in kubeconfig as `username: token`, `password: <token>` for `/kubeproxy`.   |
@@ -82,6 +88,7 @@ They are different from long-lived access tokens, which are opaque, stored hashe
 | Internal PostgREST/session JWT | `auth.GetOrCreateJWTToken(...)` in `auth/tokens.go`                  |                                                      Cached 1h; | Mission Control/PostgREST/RLS                                | Injected after successful auth. Carries `role`, `id`, and RLS claims used by PostgREST and DB row-level security.                           |
 | Basic login cookie JWT         | `auth.BasicLogin(...)` in `auth/basic.go`                            | Browser session cookie; same JWT format as internal session JWT | Mission Control browser auth                                 | Stores the internal JWT in an HTTP-only cookie for basic-auth UI sessions.                                                                  |
 | Plugin invocation JWT          | `auth.MintPluginInvocationToken(...)` in `auth/plugin_invocation.go` |                Default 5m; configurable with `--plugin-jwt-ttl` | Plugin host/runtime                                          | Short-lived proof that Mission Control authorized a plugin operation. Sent via `X-Flanksource-Plugin-Invocation` or gRPC metadata.          |
+| Upstream tunnel JWT            | `upstream/tunnel`                                                     |                                                             1m | Mission Control agent                                       | Upstream signs each yamux HTTP stream request. Sent via `X-Flanksource-Upstream-JWT`; agents verify with the JWK embedded in v2 agent access tokens, requiring issuer `mission-control`, audience `mission-control-agent`, and subject `mission-control-upstream`. |
 | Embedded OIDC access/ID JWT    | Embedded OIDC provider in `auth/oidc`                                |                                                              1h | MCP/native OAuth clients and Mission Control auth middleware | Standards-compliant OAuth/OIDC token for MCP/native clients. Mission Control validates it and converts it into normal request auth context. |
 
 ### Not counted here

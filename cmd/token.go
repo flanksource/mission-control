@@ -9,7 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
@@ -35,10 +34,7 @@ var Token = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		password, err := rand.GenerateRandHex(32)
-		if err != nil {
-			return err
-		}
+
 		if tokenUser == "" {
 			return errors.New("must specify --user")
 		}
@@ -48,7 +44,7 @@ var Token = &cobra.Command{
 			return errors.New("user not found")
 		}
 
-		token, _, err := db.CreateAccessToken(ctx, user.ID, "default", password, &tokenExpiry, nil, false)
+		token, _, err := db.CreateAccessToken(ctx, user.ID, "default", &tokenExpiry, nil, false)
 		if err != nil {
 			return fmt.Errorf("failed to create a new access token: %w", err)
 		}

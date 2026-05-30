@@ -10,7 +10,6 @@ import (
 	"path"
 	"strings"
 
-	"github.com/flanksource/commons/rand"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac"
@@ -55,12 +54,7 @@ func DownloadKubeConfig(c echo.Context) error {
 	}
 	parsed.Path = path.Join(parsed.Path, "kubeproxy")
 
-	seed, err := rand.GenerateRandHex(32)
-	if err != nil {
-		return err
-	}
-
-	token, _, err := db.CreateAccessToken(ctx, ctx.User().ID, ctx.User().Email, seed, nil, nil, false)
+	token, _, err := db.CreateAccessToken(ctx, ctx.User().ID, ctx.User().Email, nil, nil, false)
 	if err != nil {
 		return fmt.Errorf("failed to create a new access token: %w", err)
 	}
@@ -71,7 +65,7 @@ func DownloadKubeConfig(c echo.Context) error {
 		Server:      parsed.String(),
 		ClusterName: fmt.Sprintf("mission-control-%s", tenantSlug),
 		ContextName: "default",
-		Password:    token,
+		Password:    token.PlainText(),
 	}
 
 	tmpl, err := template.New("kubeconfig").Parse(kubeConfigTemplate)

@@ -14,6 +14,7 @@ import (
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/auth/accesstoken"
 	"github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
@@ -263,8 +264,8 @@ func (h ClerkHandler) authenticateBearerOrCookie(ctx context.Context, c echo.Con
 		return AuthResult{}, c.String(http.StatusUnauthorized, "Unauthorized")
 	}
 
-	// Check if it's our custom token format (4 dots) or Clerk JWT (2 dots)
-	if strings.Count(sessionToken, ".") == 4 {
+	// Check if it's our custom token format or Clerk JWT
+	if _, err := accesstoken.Parse(sessionToken); err == nil {
 		return h.authenticateWithToken(ctx, c, sessionToken)
 	}
 
@@ -282,7 +283,7 @@ func (h ClerkHandler) authenticateBearerOrCookie(ctx context.Context, c echo.Con
 func (h ClerkHandler) authenticateWithToken(ctx context.Context, c echo.Context, token string) (AuthResult, error) {
 	accessToken, err := getAccessToken(ctx, token)
 	if err != nil {
-		if errors.Is(err, errInvalidTokenFormat) || errors.Is(err, errTokenExpired) {
+		if errors.Is(err, accesstoken.ErrInvalidFormat) || errors.Is(err, errTokenExpired) {
 			ctx.GetSpan().RecordError(err)
 			return AuthResult{}, c.String(http.StatusUnauthorized, fmt.Sprintf("Unauthorized: %s", err.Error()))
 		}
@@ -367,7 +368,7 @@ func (c *ClerkCredentialChecker) CallbackSubject(ec echo.Context) (string, error
 	if sessionToken == "" {
 		return "", fmt.Errorf("no Clerk session token found")
 	}
-	if strings.Count(sessionToken, ".") == 4 {
+	if _, err := accesstoken.Parse(sessionToken); err == nil {
 		return "", fmt.Errorf("access tokens cannot complete Clerk browser login")
 	}
 

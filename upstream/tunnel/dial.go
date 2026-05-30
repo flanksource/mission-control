@@ -18,8 +18,6 @@ import (
 	"github.com/flanksource/duty/upstream"
 	"github.com/hashicorp/yamux"
 	"github.com/sethvargo/go-retry"
-
-	"github.com/flanksource/incident-commander/auth"
 )
 
 func hasHeaderToken(value, token string) bool {
@@ -57,17 +55,6 @@ func (l yamuxListener) Addr() net.Addr {
 	return tunnelAddr("yamux-agent-tunnel")
 }
 
-// trustedUpstreamHandler marks requests received over the agent tunnel as
-// trusted because the tunnel itself was established by an authenticated upstream.
-// Agent-side handlers can use this marker to skip normal end-user auth/RBAC for
-// requests that upstream has already authorized.
-func trustedUpstreamHandler(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ctx := auth.WithTrustedUpstream(r.Context())
-		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
 func StartAgentTunnel(ctx dutyContext.Context, upstreamConfig upstream.UpstreamConfig, handler http.Handler) {
 	backoff := retry.NewConstant(2 * time.Second)
 	_ = retry.Do(ctx, backoff, func(retryCtx gocontext.Context) error {
@@ -81,6 +68,15 @@ func StartAgentTunnel(ctx dutyContext.Context, upstreamConfig upstream.UpstreamC
 	})
 }
 
+// runAgentTunnelSession connects this agent to upstream and serves the agent's
+// normal HTTP handler over the resulting yamux session.
+//
+// Upstream opens one yamux stream per HTTP request. On the agent side each
+// stream is accepted by yamuxListener and handed to http.Server, so requests are
+// routed through the same Echo handler stack as local HTTP traffic.
+//
+// The tunnel handler verifies the upstream-signed JWT on each request before marking the
+// request as trusted upstream traffic.
 func runAgentTunnelSession(ctx gocontext.Context, upstreamConfig upstream.UpstreamConfig, handler http.Handler) error {
 	conn, err := dialUpgrade(ctx, upstreamConfig, fmt.Sprintf("/upstream/%s", SessionCreateHTTPEndpoint))
 	if err != nil {
@@ -106,7 +102,7 @@ func runAgentTunnelSession(ctx gocontext.Context, upstreamConfig upstream.Upstre
 	}()
 
 	server := &http.Server{
-		Handler:           trustedUpstreamHandler(handler),
+		Handler:           authenticatedUpstreamHandler(upstreamConfig, handler),
 		ReadHeaderTimeout: 30 * time.Second,
 	}
 

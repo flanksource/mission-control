@@ -20,6 +20,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/auth/accesstoken"
 	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/jobs"
@@ -32,6 +33,14 @@ func PreRun(cmd *cobra.Command, args []string) {
 
 	if isPartial, err := api.UpstreamConf.IsPartiallyFilled(); isPartial && err != nil {
 		logger.Warnf("Please ensure that all the required flags for upstream is supplied: %v", err)
+	}
+
+	if api.UpstreamConf.Valid() {
+		if token, err := accesstoken.Parse(api.UpstreamConf.Password); err != nil {
+			logger.Fatalf("invalid upstream access token: %v", err)
+		} else if token.JWK != "" {
+			api.UpstreamConf.JWK = token.JWK
+		}
 	}
 
 	if vars.AuthMode == auth.Clerk && auth.ClerkOrgID != "" {

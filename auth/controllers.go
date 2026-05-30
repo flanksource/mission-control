@@ -208,7 +208,7 @@ func CreateToken(c echo.Context) error {
 		}
 	}
 
-	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success", Payload: map[string]string{"token": tokenResult.Token}})
+	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success", Payload: map[string]string{"token": tokenResult.Token.PlainText()}})
 }
 
 func ListTokens(c echo.Context) error {
