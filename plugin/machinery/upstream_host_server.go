@@ -8,7 +8,7 @@ import (
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyUpstream "github.com/flanksource/duty/upstream"
-	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/plugin"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -65,7 +65,7 @@ func upstreamHostContextWithInvocation(base dutyContext.Context, ctx context.Con
 		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
 
-	claims, err := auth.VerifyAnyPluginInvocationToken(values[0])
+	claims, err := plugin.ValidateInvocationToken(values[0])
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid plugin invocation token: %v", err)
 	}

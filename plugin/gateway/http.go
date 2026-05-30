@@ -26,7 +26,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
-	"github.com/flanksource/incident-commander/auth"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/machinery"
@@ -152,7 +151,7 @@ func invokeProxiedOperation(c echo.Context, ctx dutyContext.Context, entry *plug
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
-	invocationToken, err := auth.MintPluginInvocationToken(user.ID.String(), entry.ID, 0, roles...)
+	invocationToken, err := pluginpb.MintInvocationToken(user.ID.String(), entry.ID, 0, roles...)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 	}

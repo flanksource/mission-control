@@ -130,7 +130,6 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&auth.HtpasswdFile, "htpasswd-file", "htpasswd", "Path to htpasswd file for basic authentication")
 	flags.BoolVar(&auth.OIDCEnabled, "oidc", false, "Enable embedded OIDC provider (requires --auth basic)")
 	flags.StringVar(&signing.PrivateKeyPath, "signing-private-key", "", "Path to RSA private key PEM used to sign Mission Control JWTs (ephemeral key generated on startup if missing)")
-	flags.DurationVar(&auth.PluginJWTTTL, "plugin-jwt-ttl", auth.PluginJWTTTL, "TTL for plugin invocation tokens")
 	flags.StringVar(&emailFromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
 	flags.StringVar(&emailFromName, "email-from-name", "Mission Control", "Email name of the sender")
 	flags.StringSliceVar(&echo.AllowedCORS, "allowed-cors", []string{"https://app.flanksource.com", "https://beta.flanksource.com"}, "Allowed CORS credential origins")

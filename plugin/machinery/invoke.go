@@ -16,7 +16,6 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
 )
 
@@ -76,7 +75,7 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeRespon
 	subject := req.Subject
 	token := req.InvocationToken
 	if token != "" {
-		claims, err := auth.VerifyPluginInvocationToken(token, entry.ID)
+		claims, err := plugin.ValidateInvocationTokenForPlugin(token, entry.ID)
 		if err != nil {
 			return nil, entry, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "invalid plugin invocation token: %v", err)
 		}
@@ -121,7 +120,7 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeRespon
 }
 
 func mintInvocationTokenForRequest(subject string, pluginID uuid.UUID, req Request) (string, error) {
-	return auth.MintPluginInvocationToken(subject, pluginID, req.Depth, req.Roles...)
+	return plugin.MintInvocationToken(subject, pluginID, req.Depth, req.Roles...)
 }
 
 func ResolvePlugin(ctx dutyContext.Context, ref string) (*plugin.Entry, error) {

@@ -122,7 +122,7 @@ func operationHTTPProxy(c echo.Context) error {
 	var subject string
 	invocationToken := c.Request().Header.Get(plugin.InvocationTokenHTTPHeader)
 	if invocationToken != "" {
-		claims, err := auth.VerifyPluginInvocationToken(invocationToken, entry.ID)
+		claims, err := plugin.ValidateInvocationTokenForPlugin(invocationToken, entry.ID)
 		if err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("invalid plugin invocation token: %v", err))
 		}
@@ -146,7 +146,7 @@ func operationHTTPProxy(c echo.Context) error {
 
 	if entry.Kind == plugin.PluginKindProxied {
 		if invocationToken == "" {
-			invocationToken, err = auth.MintPluginInvocationToken(subject, entry.ID, 0, roles...)
+			invocationToken, err = plugin.MintInvocationToken(subject, entry.ID, 0, roles...)
 			if err != nil {
 				return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 			}
@@ -162,7 +162,7 @@ func operationHTTPProxy(c echo.Context) error {
 	}
 
 	if invocationToken == "" {
-		invocationToken, err = auth.MintPluginInvocationToken(subject, entry.ID, 0, roles...)
+		invocationToken, err = plugin.MintInvocationToken(subject, entry.ID, 0, roles...)
 		if err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 		}

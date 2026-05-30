@@ -6,7 +6,6 @@ import (
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
 	"github.com/google/uuid"
 	"google.golang.org/grpc"
@@ -32,8 +31,8 @@ func (s *Service) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 
 type invocationClaimsContextKey struct{}
 
-func invocationClaimsFromContext(ctx context.Context) (*auth.PluginInvocationClaims, bool) {
-	claims, ok := ctx.Value(invocationClaimsContextKey{}).(*auth.PluginInvocationClaims)
+func invocationClaimsFromContext(ctx context.Context) (*plugin.InvocationTokenClaims, bool) {
+	claims, ok := ctx.Value(invocationClaimsContextKey{}).(*plugin.InvocationTokenClaims)
 	return claims, ok
 }
 
@@ -60,7 +59,7 @@ func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, e
 		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
 
-	claims, err := auth.VerifyAnyPluginInvocationToken(values[0])
+	claims, err := plugin.ValidateInvocationToken(values[0])
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid plugin invocation token: %v", err)
 	}
