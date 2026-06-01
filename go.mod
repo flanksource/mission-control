@@ -9,9 +9,9 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.41.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.34.0 // indirect
-	github.com/flanksource/commons v1.51.6
-	github.com/flanksource/duty v1.0.1316
-	github.com/flanksource/gomplate/v3 v3.24.81
+	github.com/flanksource/commons v1.52.0
+	github.com/flanksource/duty v1.0.1318
+	github.com/flanksource/gomplate/v3 v3.24.82
 	github.com/flanksource/kopper v1.0.22
 	github.com/gomarkdown/markdown v0.0.0-20260411013819-759bbc3e3207
 	github.com/google/cel-go v0.28.1
@@ -29,8 +29,8 @@ require (
 	github.com/spf13/pflag v1.0.10
 	gorm.io/gorm v1.31.1
 	k8s.io/apimachinery v0.36.1
-	k8s.io/client-go v0.35.4
-	sigs.k8s.io/controller-runtime v0.23.3
+	k8s.io/client-go v0.36.1
+	sigs.k8s.io/controller-runtime v0.24.1
 )
 
 require (
@@ -95,7 +95,7 @@ require (
 	golang.org/x/sync v0.20.0
 	google.golang.org/genai v1.56.0
 	gorm.io/hints v1.1.2
-	k8s.io/api v0.35.4
+	k8s.io/api v0.36.1
 )
 
 require (
@@ -195,7 +195,7 @@ require (
 	github.com/exaring/otelpgx v0.10.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/flanksource/is-healthy v1.0.87 // indirect
+	github.com/flanksource/is-healthy v1.0.88 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/flanksource/sandbox-runtime v1.0.2 // indirect
 	github.com/fluxcd/gitkit v0.6.0 // indirect
@@ -250,7 +250,6 @@ require (
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
-	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
 	github.com/hairyhenderson/yaml v0.0.0-20220618171115-2d35fca545ce // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
@@ -376,7 +375,7 @@ require (
 	gorm.io/driver/sqlserver v1.6.3 // indirect
 	gorm.io/plugin/dbresolver v1.6.2 // indirect
 	gorm.io/plugin/prometheus v0.1.0 // indirect
-	k8s.io/apiextensions-apiserver v0.35.2 // indirect
+	k8s.io/apiextensions-apiserver v0.36.1 // indirect
 	k8s.io/klog/v2 v2.140.0 // indirect
 	k8s.io/kube-openapi v0.0.0-20260317180543-43fb72c5454a // indirect
 	k8s.io/streaming v0.36.1 // indirect
