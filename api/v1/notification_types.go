@@ -213,7 +213,3 @@ type NotificationList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Notification `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&Notification{}, &NotificationList{})
-}

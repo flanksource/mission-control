@@ -69,7 +69,3 @@ type IncidentRuleList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []IncidentRule `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&IncidentRule{}, &IncidentRuleList{})
-}
