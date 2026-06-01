@@ -2,21 +2,29 @@
 // ABOUTME: Switching to old UI deletes the new-UI opt-in cookie and reloads root.
 import { useState } from "react";
 import { Icon, IconMenuPicker, useDensity, useTheme, type IconMenuOption } from "@flanksource/clicky-ui";
+import {
+  UiDesktop,
+  UiListDashes,
+  UiListFlat,
+  UiMoon,
+  UiRows,
+  UiSun,
+} from "@flanksource/clicky-ui/icons";
 import type { Density, Theme } from "@flanksource/clicky-ui/hooks";
 import { deleteCookie, getCookie } from "../cookies";
 
 const NEW_UI_COOKIE = "flanksource_use_new_ui";
 
 const THEME_OPTIONS: IconMenuOption<Theme>[] = [
-  { value: "light", icon: "ph:sun", label: "Light" },
-  { value: "dark", icon: "ph:moon", label: "Dark" },
-  { value: "system", icon: "ph:desktop", label: "System" },
+  { value: "light", icon: UiSun, label: "Light" },
+  { value: "dark", icon: UiMoon, label: "Dark" },
+  { value: "system", icon: UiDesktop, label: "System" },
 ];
 
 const DENSITY_OPTIONS: IconMenuOption<Density>[] = [
-  { value: "compact", icon: "ph:rows", label: "Compact" },
-  { value: "comfortable", icon: "ph:list", label: "Comfortable" },
-  { value: "spacious", icon: "ph:list-dashes", label: "Spacious" },
+  { value: "compact", icon: UiRows, label: "Compact" },
+  { value: "comfortable", icon: UiListFlat, label: "Comfortable" },
+  { value: "spacious", icon: UiListDashes, label: "Spacious" },
 ];
 
 const menuClassName = "top-auto bottom-[calc(100%+0.375rem)]";
@@ -58,7 +66,7 @@ export function SettingsMenu() {
             <button
               type="button"
               onClick={switchToOldUI}
-              className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+              className="flex w-full items-center gap-2 rounded px-control-px py-2 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
             >
               <Icon name="lucide:arrow-left-right" className="h-4 w-4 shrink-0 text-foreground" />
               <span className="min-w-0 flex-1 truncate text-left">Switch to old UI</span>
