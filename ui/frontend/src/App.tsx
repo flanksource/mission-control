@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
 import {
-  DensitySwitcher,
   Icon,
-  ThemeSwitcher,
   type ClickyCommandRuntime,
   type ClickyResolvedCommand,
   type RenderLink,
@@ -18,6 +16,7 @@ import { AccessBrowser, type AccessBrowserMode } from "./access/AccessBrowser";
 import { CommandPalette, CommandPaletteButton } from "./CommandPalette";
 import { PlaybookBrowser } from "./playbooks/PlaybookBrowser";
 import { SettingsBrowser } from "./settings/SettingsBrowser";
+import { SettingsMenu } from "./settings/SettingsMenu";
 import { UI_BASE, routerPathFromHref } from "./navigation";
 
 const renderLink: RenderLink = ({ to, className, children, title, key }) => (
@@ -102,8 +101,7 @@ export function App() {
             <Icon name="lucide:database-zap" className="h-4 w-4 shrink-0 text-muted-foreground" />
             <span>API Explorer</span>
           </NavLink>
-          <ThemeSwitcher className="w-full justify-between" />
-          <DensitySwitcher className="w-full justify-between" />
+          <SettingsMenu />
         </div>
       </aside>
 
