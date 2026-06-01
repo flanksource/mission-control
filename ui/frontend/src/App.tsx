@@ -5,7 +5,7 @@ import {
   type ClickyResolvedCommand,
   type RenderLink,
 } from "@flanksource/clicky-ui";
-import { EntityExplorerApp } from "@flanksource/clicky-ui/api-explorer";
+import { EntityExplorerApp } from "@flanksource/clicky-ui/rpc";
 import { MissionControlLogo } from "@flanksource/icons/mi";
 import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { apiClient } from "./api";
