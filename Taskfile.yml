@@ -197,6 +197,7 @@ tasks:
       - tsconfig.json
       - vite.config.ts
       # Clicky-ui is linked via pnpm workspace; rebuild when its dist changes.
+      - ../../../clicky-ui/packages/ui/dist/**/*.mjs
       - ../../../clicky-ui/packages/ui/dist/**/*.js
       - ../../../clicky-ui/packages/ui/dist/**/*.css
     generates:
