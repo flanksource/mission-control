@@ -85,7 +85,7 @@ jobs:
           cache: true
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v5
+        uses: aws-actions/configure-aws-credentials@99214aa6889fcddfa57764031d71add364327e59 # v5
         with:
           aws-access-key-id: ${{ secrets.ECR_AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
@@ -126,11 +126,11 @@ jobs:
           token: ${{ secrets.FLANKBOT }}
           path: ./incident-commander-chart
       - name: Update image tags in chart
-        uses: mikefarah/yq@cb9793555487aafb501e1a9d85c28b812aeadfab # master
+        uses: mikefarah/yq@8f3291d3165497b360b8ffee3c887624bb6fa1cf # master
         with:
           cmd: yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' incident-commander-chart/chart/values.yaml
       - name: Update image tags in agent chart
-        uses: mikefarah/yq@cb9793555487aafb501e1a9d85c28b812aeadfab # master
+        uses: mikefarah/yq@8f3291d3165497b360b8ffee3c887624bb6fa1cf # master
         with:
           cmd: yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' incident-commander-chart/agent-chart/values.yaml
       - name: Update CRDs
