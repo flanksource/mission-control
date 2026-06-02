@@ -2,14 +2,17 @@ package machinery
 
 import (
 	"context"
+	"errors"
 
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/plugin"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
+	"gorm.io/gorm"
 )
 
 func (s *Service) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
@@ -28,9 +31,21 @@ func (s *Service) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 
 type invocationClaimsContextKey struct{}
 
-func invocationClaimsFromContext(ctx context.Context) (*auth.PluginInvocationClaims, bool) {
-	claims, ok := ctx.Value(invocationClaimsContextKey{}).(*auth.PluginInvocationClaims)
+func invocationClaimsFromContext(ctx context.Context) (*plugin.InvocationTokenClaims, bool) {
+	claims, ok := ctx.Value(invocationClaimsContextKey{}).(*plugin.InvocationTokenClaims)
 	return claims, ok
+}
+
+func pluginEntryFromInvocation(ctx context.Context) (*plugin.Entry, error) {
+	claims, ok := invocationClaimsFromContext(ctx)
+	if !ok || claims.Plugin == uuid.Nil {
+		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
+	}
+	entry := plugin.DefaultRegistry.Get(claims.Plugin)
+	if entry == nil {
+		return nil, status.Errorf(codes.NotFound, "plugin %s is not registered", claims.Plugin)
+	}
+	return entry, nil
 }
 
 func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, error) {
@@ -44,18 +59,27 @@ func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, e
 		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
 
-	claims, err := auth.VerifyPluginInvocationToken(values[0], s.pluginID)
+	invocationToken := values[0]
+
+	claims, err := plugin.ValidateHostInvocationToken(invocationToken)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid plugin invocation token: %v", err)
 	}
 
-	baseCtx := s.ctx.Wrap(ctx)
+	baseCtx := s.ctx.Wrap(ctx).WithSubject(claims.Subject).WithValue(invocationClaimsContextKey{}, claims)
+	if api.UpstreamConf.Valid() {
+		return baseCtx, nil
+	}
+
 	var person models.Person
 	if err := baseCtx.DB().WithContext(ctx).Where("id = ?", claims.Subject).First(&person).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, status.Errorf(codes.Unauthenticated, "plugin invocation subject %s not found", claims.Subject)
+		}
 		return nil, status.Errorf(codes.Unauthenticated, "plugin invocation subject %s: %v", claims.Subject, err)
 	}
 
-	return baseCtx.WithUser(&person).WithValue(invocationClaimsContextKey{}, claims), nil
+	return baseCtx.WithUser(&person), nil
 }
 
 func requiresInvocation(method string) bool {

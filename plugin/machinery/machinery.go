@@ -21,8 +21,10 @@ func StartPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 	}
 
 	switch entry.Kind {
-	case "", plugin.PluginKindLocal:
+	case plugin.PluginKindLocal:
 		return startLocalPlugin(ctx, entry)
+	case plugin.PluginKindProxied:
+		return nil
 	default:
 		return fmt.Errorf("plugin %s: unsupported connection kind %q", id, entry.Kind)
 	}
@@ -38,7 +40,7 @@ func startLocalPlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 	}
 	entry.InstalledPath = installedPath
 
-	svc := NewGRPCService(ctx, entry.ID)
+	svc := NewGRPCService(ctx)
 
 	// startHost is invoked after Dispense() so the broker is live. It opens
 	// a listener on the broker, starts a gRPC server for this plugin's
@@ -52,10 +54,26 @@ func startLocalPlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 				ctx.Logger.Errorf("plugin %s: host broker accept: %v", entry.ID, err)
 				return
 			}
-			grpcServer := local.GRPCServerFactory([]grpc.ServerOption{
-				grpc.UnaryInterceptor(svc.UnaryServerInterceptor()),
-			})
-			svc.Register(grpcServer)
+
+			upstreamConn, err := newUpstreamHostConn()
+			if err != nil {
+				ctx.Logger.Warnf("plugin %s: upstream host grpc unavailable: %v", entry.ID, err)
+			}
+			if upstreamConn != nil {
+				defer upstreamConn.Close()
+			}
+
+			var opts []grpc.ServerOption
+			if upstreamConn != nil {
+				opts = append(opts, grpc.UnknownServiceHandler(agentHostUnknownServiceHandler(svc, upstreamConn)))
+			} else {
+				opts = append(opts, grpc.UnaryInterceptor(svc.UnaryServerInterceptor()))
+			}
+
+			grpcServer := local.GRPCServerFactory(opts)
+			if upstreamConn == nil {
+				svc.Register(grpcServer)
+			}
 			if err := grpcServer.Serve(lis); err != nil {
 				ctx.Logger.Debugf("plugin %s: host server stopped: %v", entry.ID, err)
 			}
@@ -99,7 +117,7 @@ func Invoke(ctx dutyContext.Context, pluginID uuid.UUID, req *plugin.InvokeReque
 	}
 
 	switch entry.Kind {
-	case "", plugin.PluginKindLocal:
+	case plugin.PluginKindLocal:
 		if entry.Runtime == nil {
 			return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
 		}
@@ -116,7 +134,7 @@ func HTTPURL(ctx dutyContext.Context, pluginID uuid.UUID) (*url.URL, error) {
 	}
 
 	switch entry.Kind {
-	case "", plugin.PluginKindLocal:
+	case plugin.PluginKindLocal:
 		if entry.Runtime == nil {
 			return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
 		}

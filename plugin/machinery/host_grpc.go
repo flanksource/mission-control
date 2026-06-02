@@ -9,7 +9,6 @@ import (
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
-	"github.com/google/uuid"
 	lru "github.com/hashicorp/golang-lru/v2/expirable"
 	"google.golang.org/grpc"
 
@@ -24,27 +23,21 @@ type connKey struct {
 	connectionID string
 }
 
-// Service is the host-side gRPC server. There is one per plugin process —
-// the supervisor instantiates it during Start() so it can stamp the plugin
-// id into requests for allowlist enforcement.
+// Service is the host-side gRPC server.
 type Service struct {
 	pluginpb.UnimplementedHostServiceServer
 
-	pluginID uuid.UUID
-	ctx      dutyContext.Context
+	ctx dutyContext.Context
 
 	// connCache memoises named connection resolutions across calls within a single
 	// plugin process. Authorization is checked before serving cached results.
 	connCache *lru.LRU[connKey, *pluginpb.ResolvedConnection]
 }
 
-// NewGRPCService creates a host Service for one plugin id. Multiple plugins running
-// concurrently get separate Services so the connection allowlist (read off
-// the Plugin CRD via the registry) is enforced per-plugin.
-func NewGRPCService(ctx dutyContext.Context, pluginID uuid.UUID) *Service {
+// NewGRPCService creates a host Service.
+func NewGRPCService(ctx dutyContext.Context) *Service {
 	cache := lru.NewLRU[connKey, *pluginpb.ResolvedConnection](256, nil, connectionCacheTTL)
 	return &Service{
-		pluginID:  pluginID,
 		ctx:       ctx,
 		connCache: cache,
 	}
@@ -62,13 +55,8 @@ func (s *Service) GetConfigItem(ctx context.Context, req *pluginpb.GetConfigItem
 
 	var out *pluginpb.ConfigItem
 	err := auth.WithRLS(s.ctx.Wrap(ctx), func(rlsCtx dutyContext.Context) error {
-		var item models.ConfigItem
-		if err := rlsCtx.DB().WithContext(ctx).Where("id = ?", req.Id).First(&item).Error; err != nil {
-			return fmt.Errorf("config item %s: %w", req.Id, err)
-		}
-
 		var err error
-		out, err = pluginpb.FromConfigItem(item)
+		out, err = getConfigItem(rlsCtx, ctx, req.Id)
 		return err
 	})
 	if err != nil {
@@ -78,12 +66,20 @@ func (s *Service) GetConfigItem(ctx context.Context, req *pluginpb.GetConfigItem
 	return out, nil
 }
 
+func getConfigItem(ctx dutyContext.Context, queryCtx context.Context, id string) (*pluginpb.ConfigItem, error) {
+	var item models.ConfigItem
+	if err := ctx.DB().WithContext(queryCtx).Where("id = ?", id).First(&item).Error; err != nil {
+		return nil, fmt.Errorf("config item %s: %w", id, err)
+	}
+	return pluginpb.FromConfigItem(item)
+}
+
 func (s *Service) ListConfigs(ctx context.Context, req *pluginpb.ListConfigsRequest) (*pluginpb.ConfigItemList, error) {
 	sel := req.Selector.ToDuty()
-
 	out := &pluginpb.ConfigItemList{}
-	err := auth.WithRLS(s.ctx.Wrap(ctx), func(rlsCtx dutyContext.Context) error {
-		items, err := query.FindConfigsByResourceSelector(rlsCtx, int(req.Limit), sel)
+
+	list := func(listCtx dutyContext.Context) error {
+		items, err := query.FindConfigsByResourceSelector(listCtx, int(req.Limit), sel)
 		if err != nil {
 			return err
 		}
@@ -96,13 +92,13 @@ func (s *Service) ListConfigs(ctx context.Context, req *pluginpb.ListConfigsRequ
 
 			out.Items = append(out.Items, ci)
 		}
-
 		return nil
-	})
+	}
+
+	err := auth.WithRLS(s.ctx.Wrap(ctx), list)
 	if err != nil {
 		return nil, err
 	}
-
 	return out, nil
 }
 
@@ -111,9 +107,9 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 		return nil, fmt.Errorf("connection lookup is required")
 	}
 
-	entry := pluginpb.DefaultRegistry.Get(s.pluginID)
-	if entry == nil {
-		return nil, fmt.Errorf("plugin %s is not registered", s.pluginID)
+	entry, err := pluginEntryFromInvocation(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	pluginCtx := s.ctx.Wrap(ctx).WithNamespace(entry.Namespace).WithSubject(pluginRBACSubject(entry))
@@ -146,9 +142,9 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 
 func (s *Service) InvokePlugin(ctx context.Context, req *pluginpb.InvokePluginRequest) (*pluginpb.InvokeResponse, error) {
 	dutyCtx := invocationDutyContext(s.ctx, ctx)
-	source := pluginpb.DefaultRegistry.Get(s.pluginID)
-	if source == nil {
-		return nil, fmt.Errorf("plugin %s is not registered", s.pluginID)
+	source, err := pluginEntryFromInvocation(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	depth := 1
@@ -156,16 +152,18 @@ func (s *Service) InvokePlugin(ctx context.Context, req *pluginpb.InvokePluginRe
 		depth = claims.Depth + 1
 	}
 
+	configID := req.ConfigItemId
+
 	resp, _, err := InvokeOperation(dutyCtx, Request{
-		Context:      ctx,
-		PluginRef:    req.Plugin,
-		Operation:    req.Operation,
-		ParamsJSON:   req.ParamsJson,
-		ConfigItemID: req.ConfigItemId,
-		User:         dutyCtx.User(),
-		Subject:      PluginSubject(source.Namespace, source.Name),
-		Depth:        depth,
-		Deadline:     req.Deadline,
+		Context:    ctx,
+		PluginRef:  req.Plugin,
+		Operation:  req.Operation,
+		ParamsJSON: req.ParamsJson,
+		Subject:    PluginSubject(source.Namespace, source.Name),
+		Depth:      depth,
+		Deadline:   req.Deadline,
+
+		ConfigItemID: configID,
 	})
 	return resp, err
 }
@@ -183,7 +181,11 @@ func (s *Service) Log(ctx context.Context, e *pluginpb.LogEntry) (*pluginpb.Empt
 	for k, v := range e.Fields {
 		args = append(args, k, v)
 	}
-	prefix := fmt.Sprintf("[plugin %s] %s", s.pluginID, e.Message)
+	pluginID := "unknown"
+	if claims, ok := invocationClaimsFromContext(ctx); ok {
+		pluginID = claims.Plugin.String()
+	}
+	prefix := fmt.Sprintf("[plugin %s] %s", pluginID, e.Message)
 	switch e.Level {
 	case "debug":
 		logger.Debugf(prefix, args...)

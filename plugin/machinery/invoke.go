@@ -15,24 +15,29 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
 )
 
 const MaxInvokeDepth = 5
 
 type Request struct {
-	Context      context.Context
-	PluginRef    string
-	Operation    string
-	ParamsJSON   []byte
-	ConfigItemID string
-	User         *models.Person
-	Subject      string
-	Roles        []string
-	Depth        int
-	Deadline     *timestamppb.Timestamp
-	Timeout      time.Duration
+	PluginRef       string
+	Operation       string
+	ParamsJSON      []byte
+	ConfigItemID    string
+	Subject         string
+	Roles           []string
+	Depth           int
+	InvocationToken string
+
+	// Deprecated. TODO: Remove this
+	Context context.Context
+
+	// Deprecated. TODO: Remove this
+	Deadline *timestamppb.Timestamp
+
+	// Deprecated. TODO: Remove this
+	Timeout time.Duration
 }
 
 func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeResponse, *plugin.Entry, error) {
@@ -42,7 +47,7 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeRespon
 	if req.Operation == "" {
 		return nil, nil, dutyAPI.Errorf(dutyAPI.EINVALID, "operation is required")
 	}
-	if req.User == nil {
+	if req.Subject == "" && req.InvocationToken == "" {
 		return nil, nil, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "not logged in")
 	}
 	if req.Depth > MaxInvokeDepth {
@@ -67,16 +72,27 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeRespon
 	}
 
 	subject := req.Subject
-	if subject == "" {
-		subject = req.User.ID.String()
-	}
-	if err := EnforceInvokePermission(ctx, subject, entry, req.Operation, req.ConfigItemID); err != nil {
-		return nil, entry, err
-	}
+	token := req.InvocationToken
+	if token != "" {
+		// Proxied operations arriving on an agent already carry an upstream-minted
+		// invocation token. Validate and reuse it rather than minting an agent-signed token.
+		claims, err := plugin.ValidateRequestInvocationToken(req.Context, token, entry.ID)
+		if err != nil {
+			return nil, entry, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "invalid plugin invocation token: %v", err)
+		}
+		subject = claims.Subject
+		req.Roles = claims.Roles
+	} else {
+		// No invocation token was supplied, so authorize locally before minting one.
+		if err := EnforceInvokePermission(ctx, subject, entry, req.Operation, req.ConfigItemID); err != nil {
+			return nil, entry, err
+		}
 
-	token, err := auth.MintPluginInvocationTokenWithDepth(*req.User, entry.ID, req.Depth, req.Roles...)
-	if err != nil {
-		return nil, entry, ctx.Oops().Wrapf(err, "mint plugin invocation token")
+		var err error
+		token, err = plugin.MintInvocationToken(subject, entry.ID, req.Depth, req.Roles...)
+		if err != nil {
+			return nil, entry, ctx.Oops().Wrapf(err, "mint plugin invocation token")
+		}
 	}
 
 	invokeCtx := ctx
@@ -92,7 +108,10 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeRespon
 		invokeCtx, cancel = invokeCtx.WithTimeout(req.Timeout)
 		defer cancel()
 	}
-	invokeCtx = invokeCtx.Wrap(metadata.AppendToOutgoingContext(invokeCtx, plugin.InvocationTokenGRPCMetadataKey, token)).WithUser(req.User)
+
+	invokeCtx = invokeCtx.
+		Wrap(metadata.AppendToOutgoingContext(invokeCtx, plugin.InvocationTokenGRPCMetadataKey, token)).
+		WithSubject(subject)
 
 	resp, err := Invoke(invokeCtx, entry.ID, &plugin.InvokeRequest{
 		Operation:    req.Operation,

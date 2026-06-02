@@ -16,12 +16,15 @@
 package gateway
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"time"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -51,6 +54,7 @@ type PluginListing struct {
 	Name        string                   `json:"name"`
 	Description string                   `json:"description,omitempty"`
 	Version     string                   `json:"version,omitempty"`
+	Agent       *models.Agent            `json:"agent,omitempty"`
 	Tabs        []*pluginpb.TabSpec      `json:"tabs,omitempty"`
 	Operations  []*pluginpb.OperationDef `json:"operations,omitempty"`
 }
@@ -66,6 +70,7 @@ func ListPlugins(c echo.Context) error {
 		if e.Manifest == nil {
 			continue
 		}
+
 		if configID != "" {
 			matches, err := machinery.SelectorMatches(ctx, e, configID)
 			if err != nil {
@@ -75,19 +80,33 @@ func ListPlugins(c echo.Context) error {
 				continue
 			}
 		}
-		out = append(out, PluginListing{
+
+		item := PluginListing{
 			Name:        e.Name,
 			Description: e.Manifest.Description,
 			Version:     e.Manifest.Version,
 			Tabs:        e.Manifest.Tabs,
 			Operations:  e.Manifest.Operations,
-		})
+		}
+
+		if e.AgentID != nil {
+			agent, err := query.FindCachedAgent(ctx, e.AgentID.String())
+			if err != nil {
+				return fmt.Errorf("failed to get agent for plugin %q: %w", e.Name, err)
+			}
+
+			item.Agent = agent
+		}
+
+		out = append(out, item)
 	}
+
 	return c.JSON(http.StatusOK, out)
 }
 
-// InvokeOperation proxies a request to the plugin's gRPC Invoke endpoint.
-// The plugin returns raw bytes plus a MIME type; we forward both verbatim.
+// InvokeOperation invokes a plugin operation. Local plugins are invoked through
+// the in-process gRPC machinery; proxied plugins are forwarded to their owning
+// agent over the plugin tunnel.
 func InvokeOperation(c echo.Context) error {
 	ctx := c.Request().Context().(dutyContext.Context)
 	pluginRef := c.Param("name")
@@ -101,49 +120,122 @@ func InvokeOperation(c echo.Context) error {
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("config_id is invalid"))
 	}
+
 	entry, err := machinery.ResolvePlugin(ctx, pluginRef)
 	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	switch entry.Kind {
+	case pluginpb.PluginKindProxied:
+		return invokeProxiedOperation(c, ctx, entry, pluginRef, op, configID, configUUID)
+	case "", pluginpb.PluginKindLocal:
+		resp, err := invokeLocalOperation(ctx, c.Request(), entry, pluginRef, op, configID, configUUID)
+		if err != nil {
+			return dutyAPI.WriteError(c, err)
+		}
+		mime := resp.Mime
+		if mime == "" {
+			mime = "application/json"
+		}
+		c.Response().Header().Set(echo.HeaderContentType, mime)
+		return c.Blob(http.StatusOK, mime, resp.Result)
+	default:
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %q has unsupported connection kind %q", pluginRef, entry.Kind))
+	}
+}
+
+func invokeProxiedOperation(c echo.Context, ctx dutyContext.Context, entry *pluginpb.Entry, pluginRef, op, configID string, configUUID uuid.UUID) error {
+	if machinery.OperationDef(entry, op) == nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q operation %q not found", pluginRef, op))
+	}
+
+	matches, err := machinery.SelectorMatches(ctx, entry, configID)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+	if !matches {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, configID))
+	}
+
+	user := ctx.User()
+	if user == nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in"))
+	}
+	if err := machinery.EnforceInvokePermission(ctx, user.ID.String(), entry, op, configID); err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
 	roles, err := pluginRolesForUser(ctx, entry, configID)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
-
-	body, err := io.ReadAll(c.Request().Body)
+	invocationToken, err := pluginpb.MintInvocationToken(user.ID.String(), entry.ID, 0, roles...)
 	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "read request body"))
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
+	}
+	c.Request().Header.Set(pluginpb.InvocationTokenHTTPHeader, invocationToken)
+
+	result, err := proxyToAgentPlugin(c, entry)
+	if err != nil {
+		recordPluginInvocation(ctx, entry, op, configUUID, "http", c.Request().Method, "", err.Error(), c.Request(), nil)
+		return dutyAPI.WriteError(c, err)
+	}
+	recordPluginInvocation(ctx, entry, op, configUUID, "http", c.Request().Method, "", result.ErrorMessage, c.Request(), nil)
+	return nil
+}
+
+func invokeLocalOperation(ctx dutyContext.Context, req *http.Request, entry *pluginpb.Entry, pluginRef, op, configID string, configUUID uuid.UUID) (*pluginpb.InvokeResponse, error) {
+	var roles []string
+	var subject string
+	invocationToken := req.Header.Get(pluginpb.InvocationTokenHTTPHeader)
+	if invocationToken == "" {
+		var err error
+		roles, err = pluginRolesForUser(ctx, entry, configID)
+		if err != nil {
+			return nil, err
+		}
+
+		if ctx.User() == nil {
+			return nil, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("cannot invoke local operation")
+		}
+		subject = ctx.User().ID.String()
+	}
+	return invokeLocalOperationWithRoles(ctx, req, entry, pluginRef, op, configID, configUUID, roles, subject, invocationToken)
+}
+
+func invokeLocalOperationWithRoles(ctx dutyContext.Context, req *http.Request, entry *pluginpb.Entry, pluginRef, op, configID string, configUUID uuid.UUID, roles []string, subject string, invocationToken string) (*pluginpb.InvokeResponse, error) {
+	body, err := io.ReadAll(req.Body)
+	if err != nil {
+		return nil, ctx.Oops().Wrapf(err, "read request body")
 	}
 
 	paramsHash := hashBytes(body)
-	resp, entry, err := machinery.InvokeOperation(ctx, machinery.Request{
-		Context:      c.Request().Context(),
-		PluginRef:    pluginRef,
-		Operation:    op,
-		ConfigItemID: configID,
-		ParamsJSON:   body,
-		User:         ctx.User(),
-		Roles:        roles,
-		Depth:        0,
-		Timeout:      60 * time.Second,
+	resp, invokedEntry, err := machinery.InvokeOperation(ctx, machinery.Request{
+		Context:         req.Context(),
+		PluginRef:       pluginRef,
+		Operation:       op,
+		ConfigItemID:    configID,
+		ParamsJSON:      body,
+		Subject:         subject,
+		Roles:           roles,
+		Depth:           0,
+		Timeout:         60 * time.Second,
+		InvocationToken: invocationToken,
 	})
+	if invokedEntry != nil {
+		entry = invokedEntry
+	}
 	if err != nil {
 		if entry != nil {
-			recordPluginInvocation(ctx, entry, op, configUUID, "grpc", c.Request().Method, paramsHash, err.Error(), c.Request(), body)
+			recordPluginInvocation(ctx, entry, op, configUUID, "grpc", req.Method, paramsHash, err.Error(), req, body)
 		}
-		return dutyAPI.WriteError(c, err)
+		return nil, err
 	}
 	if resp.ErrorMessage != "" {
-		recordPluginInvocation(ctx, entry, op, configUUID, "grpc", c.Request().Method, paramsHash, resp.ErrorMessage, c.Request(), body)
-		return dutyAPI.WriteError(c, ctx.Oops().Code(resp.ErrorCode).Errorf("%s", resp.ErrorMessage))
+		recordPluginInvocation(ctx, entry, op, configUUID, "grpc", req.Method, paramsHash, resp.ErrorMessage, req, body)
+		return nil, ctx.Oops().Code(resp.ErrorCode).Errorf("%s", resp.ErrorMessage)
 	}
 
-	recordPluginInvocation(ctx, entry, op, configUUID, "grpc", c.Request().Method, paramsHash, "", c.Request(), body)
-
-	mime := resp.Mime
-	if mime == "" {
-		mime = "application/json"
-	}
-	c.Response().Header().Set(echo.HeaderContentType, mime)
-	return c.Blob(http.StatusOK, mime, resp.Result)
+	recordPluginInvocation(ctx, entry, op, configUUID, "grpc", req.Method, paramsHash, "", req, body)
+	return resp, nil
 }
