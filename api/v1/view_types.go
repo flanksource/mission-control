@@ -372,7 +372,3 @@ func ViewFromModel(model *models.View) (*View, error) {
 
 	return &view, nil
 }
-
-func init() {
-	SchemeBuilder.Register(&View{}, &ViewList{})
-}

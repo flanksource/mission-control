@@ -106,7 +106,3 @@ type PermissionGroupList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []PermissionGroup `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&PermissionGroup{}, &PermissionGroupList{})
-}
