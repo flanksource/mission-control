@@ -6,6 +6,8 @@ COPY go.mod /app/go.mod
 COPY go.sum /app/go.sum
 COPY plugin/api/go.mod /app/plugin/api/go.mod
 COPY plugin/api/go.sum /app/plugin/api/go.sum
+COPY plugin/sdk/go.mod /app/plugin/sdk/go.mod
+COPY plugin/sdk/go.sum /app/plugin/sdk/go.sum
 RUN go mod download
 COPY ./ ./
 RUN make build

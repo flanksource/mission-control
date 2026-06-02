@@ -111,7 +111,8 @@ docker-push:
 .PHONY: tidy
 tidy:
 	go mod tidy
-	git add go.mod go.sum
+	cd plugin/api && go mod tidy
+	cd plugin/sdk && go mod tidy
 
 .PHONY: compress
 compress: .bin/upx

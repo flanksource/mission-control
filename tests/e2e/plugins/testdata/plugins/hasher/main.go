@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"net/http"
 
-	pluginpb "github.com/flanksource/incident-commander/plugin"
+	pluginpb "github.com/flanksource/incident-commander/plugin/api"
 	"github.com/flanksource/incident-commander/plugin/sdk"
 )
 
