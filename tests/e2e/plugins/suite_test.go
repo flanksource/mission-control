@@ -84,9 +84,9 @@ func createPerson(name, email string) models.Person {
 }
 
 func buildHasherPlugin(binDir string) {
-	repoRoot := findRepoRoot()
-	cmd := exec.Command("go", "build", "-o", filepath.Join(binDir, "hasher"), "./tests/e2e/plugins/testdata/plugins/hasher")
-	cmd.Dir = repoRoot
+	pluginDir := filepath.Join(findRepoRoot(), "tests", "e2e", "plugins", "testdata", "plugins", "hasher")
+	cmd := exec.Command("go", "build", "-o", filepath.Join(binDir, "hasher"), ".")
+	cmd.Dir = pluginDir
 	cmd.Stdout = ginkgo.GinkgoWriter
 	cmd.Stderr = ginkgo.GinkgoWriter
 	Expect(cmd.Run()).To(Succeed())

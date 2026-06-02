@@ -57,3 +57,7 @@ type InvokeCtx struct {
 func (c InvokeCtx) HasRole(role string) bool {
 	return hasRole(c.Roles, role)
 }
+
+type PluginManifest = api.PluginManifest
+type OperationDef = api.OperationDef
+type HTTPBinding = api.HTTPBinding
