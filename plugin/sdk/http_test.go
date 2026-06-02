@@ -8,7 +8,7 @@ import (
 	"testing/fstest"
 	"time"
 
-	pluginpb "github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/api"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -17,8 +17,8 @@ type httpTestPlugin struct {
 	ops []Operation
 }
 
-func (p httpTestPlugin) Manifest() *pluginpb.PluginManifest {
-	return &pluginpb.PluginManifest{Name: "http-test", Version: "1.0.0"}
+func (p httpTestPlugin) Manifest() *api.PluginManifest {
+	return &api.PluginManifest{Name: "http-test", Version: "1.0.0"}
 }
 func (httpTestPlugin) Configure(context.Context, map[string]any) error { return nil }
 func (p httpTestPlugin) Operations() []Operation                       { return p.ops }
@@ -41,9 +41,9 @@ var _ = ginkgo.Describe("HTTP server routing", func() {
 
 	ginkgo.It("serves only declared HTTP operation bindings under /__mc/operations", func() {
 		plugin := httpTestPlugin{ops: []Operation{{
-			Def: &pluginpb.OperationDef{
+			Def: &api.OperationDef{
 				Name: "logs",
-				Http: []*pluginpb.HTTPBinding{{Method: http.MethodGet}},
+				Http: []*api.HTTPBinding{{Method: http.MethodGet}},
 			},
 			HTTPHandler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				Expect(OperationFromContext(r.Context())).To(Equal("logs"))

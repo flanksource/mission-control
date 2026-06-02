@@ -6,7 +6,7 @@ import (
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	pluginpb "github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/api"
 )
 
 var _ = ginkgo.Describe("FormatVersion", func() {
@@ -33,37 +33,37 @@ var _ = ginkgo.Describe("FormatVersion", func() {
 
 // stubPlugin lets us drive RegisterPlugin without a host.
 type stubPlugin struct {
-	manifest *pluginpb.PluginManifest
+	manifest *api.PluginManifest
 }
 
-func (s stubPlugin) Manifest() *pluginpb.PluginManifest            { return s.manifest }
+func (s stubPlugin) Manifest() *api.PluginManifest                 { return s.manifest }
 func (stubPlugin) Configure(context.Context, map[string]any) error { return nil }
 func (stubPlugin) Operations() []Operation                         { return nil }
 
 var _ = ginkgo.Describe("RegisterPlugin version guard", func() {
 	ginkgo.It("rejects an empty Version", func() {
 		srv := newPluginServer(stubPlugin{
-			manifest: &pluginpb.PluginManifest{Name: "demo", Version: ""},
+			manifest: &api.PluginManifest{Name: "demo", Version: ""},
 		}, 0)
-		_, err := srv.RegisterPlugin(context.Background(), &pluginpb.RegisterRequest{})
+		_, err := srv.RegisterPlugin(context.Background(), &api.RegisterRequest{})
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("Manifest().Version is required"))
 	})
 
 	ginkgo.It("rejects an empty Name", func() {
 		srv := newPluginServer(stubPlugin{
-			manifest: &pluginpb.PluginManifest{Name: "", Version: "1.0.0"},
+			manifest: &api.PluginManifest{Name: "", Version: "1.0.0"},
 		}, 0)
-		_, err := srv.RegisterPlugin(context.Background(), &pluginpb.RegisterRequest{})
+		_, err := srv.RegisterPlugin(context.Background(), &api.RegisterRequest{})
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("Manifest().Name is required"))
 	})
 
 	ginkgo.It("accepts a populated manifest and stamps UiPort", func() {
 		srv := newPluginServer(stubPlugin{
-			manifest: &pluginpb.PluginManifest{Name: "demo", Version: "1.0.0"},
+			manifest: &api.PluginManifest{Name: "demo", Version: "1.0.0"},
 		}, 4242)
-		got, err := srv.RegisterPlugin(context.Background(), &pluginpb.RegisterRequest{})
+		got, err := srv.RegisterPlugin(context.Background(), &api.RegisterRequest{})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(got.Name).To(Equal("demo"))
 		Expect(got.Version).To(Equal("1.0.0"))

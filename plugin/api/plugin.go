@@ -1,4 +1,4 @@
-package plugin
+package api
 
 // Kind describes how Mission Control reaches the plugin.
 type Kind string

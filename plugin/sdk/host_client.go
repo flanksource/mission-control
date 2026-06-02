@@ -5,11 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/flanksource/duty/types"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	pluginpb "github.com/flanksource/incident-commander/plugin"
+	pluginpb "github.com/flanksource/incident-commander/plugin/api"
 )
 
 // HostClient is the plugin-side handle to call back into the mission-control
@@ -18,9 +17,6 @@ import (
 type HostClient interface {
 	// GetConfigItem fetches a single config item by id.
 	GetConfigItem(ctx context.Context, id string) (*pluginpb.ConfigItem, error)
-
-	// ListConfigs returns config items matching the given ResourceSelector.
-	ListConfigs(ctx context.Context, selector types.ResourceSelector, limit int) (*pluginpb.ConfigItemList, error)
 
 	// GetConnectionByType resolves a connection using spec.connections.types.
 	GetConnectionByType(ctx context.Context, typ ConnectionType) (*pluginpb.ResolvedConnection, error)
@@ -62,13 +58,6 @@ func (h *hostClient) authContext(ctx context.Context) context.Context {
 
 func (h *hostClient) GetConfigItem(ctx context.Context, id string) (*pluginpb.ConfigItem, error) {
 	return h.c.GetConfigItem(h.authContext(ctx), &pluginpb.GetConfigItemRequest{Id: id})
-}
-
-func (h *hostClient) ListConfigs(ctx context.Context, selector types.ResourceSelector, limit int) (*pluginpb.ConfigItemList, error) {
-	return h.c.ListConfigs(h.authContext(ctx), &pluginpb.ListConfigsRequest{
-		Selector: pluginpb.ResourceSelectorFromDuty(selector),
-		Limit:    int32(limit),
-	})
 }
 
 func (h *hostClient) GetConnectionByType(ctx context.Context, typ ConnectionType) (*pluginpb.ResolvedConnection, error) {

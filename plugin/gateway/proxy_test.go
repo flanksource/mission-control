@@ -6,6 +6,7 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/api"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -22,10 +23,10 @@ var _ = ginkgo.Describe("plugin HTTP proxy", func() {
 	})
 
 	ginkgo.It("allows declared HTTP operation methods", func() {
-		def := &pluginpb.OperationDef{Http: []*pluginpb.HTTPBinding{{Method: http.MethodGet}}}
+		def := &api.OperationDef{Http: []*api.HTTPBinding{{Method: http.MethodGet}}}
 		Expect(operationHTTPBindingAllowed(def, http.MethodGet)).To(BeTrue())
 		Expect(operationHTTPBindingAllowed(def, http.MethodPost)).To(BeFalse())
-		Expect(operationHTTPBindingAllowed(&pluginpb.OperationDef{}, http.MethodGet)).To(BeFalse())
+		Expect(operationHTTPBindingAllowed(&api.OperationDef{}, http.MethodGet)).To(BeFalse())
 	})
 
 	ginkgo.It("excludes config_id and sorts query values for HTTP params hashes", func() {

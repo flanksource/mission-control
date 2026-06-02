@@ -11,7 +11,7 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
 
-	pluginpb "github.com/flanksource/incident-commander/plugin"
+	pluginpb "github.com/flanksource/incident-commander/plugin/api"
 )
 
 // pluginServer adapts the user's Plugin interface onto the generated

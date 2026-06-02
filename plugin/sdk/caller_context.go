@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/api"
 	"google.golang.org/grpc/metadata"
 )
 
@@ -15,7 +15,7 @@ func invocationTokenFromIncomingContext(ctx context.Context) string {
 	if !ok {
 		return ""
 	}
-	values := md.Get(plugin.InvocationTokenGRPCMetadataKey)
+	values := md.Get(api.InvocationTokenGRPCMetadataKey)
 	if len(values) == 0 {
 		return ""
 	}
@@ -26,7 +26,7 @@ func withInvocationToken(ctx context.Context, token string) context.Context {
 	if token == "" {
 		return ctx
 	}
-	return metadata.AppendToOutgoingContext(ctx, plugin.InvocationTokenGRPCMetadataKey, token)
+	return metadata.AppendToOutgoingContext(ctx, api.InvocationTokenGRPCMetadataKey, token)
 }
 
 type httpRequestContext struct {
