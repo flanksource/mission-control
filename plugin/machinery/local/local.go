@@ -22,8 +22,16 @@ func PluginPath() string {
 	return filepath.Join(home, ".mission-control", "plugins")
 }
 
+// VersionedBinDirFor returns the install directory for one plugin version.
+func VersionedBinDirFor(name, version string) string {
+	if version == "" {
+		version = "latest"
+	}
+	return filepath.Join(PluginPath(), name, version)
+}
+
 // BinaryPathFor returns the on-disk path for a plugin's binary. The
 // supervisor uses this to exec the process.
-func BinaryPathFor(name string) string {
-	return filepath.Join(PluginPath(), name)
+func BinaryPathFor(name, version string) string {
+	return filepath.Join(VersionedBinDirFor(name, version), name)
 }

@@ -18,13 +18,18 @@ func InstallPlugin(ctx dutyContext.Context, name, source, version string) (strin
 	if binName == "" {
 		binName = name
 	}
-	binPath := BinaryPathFor(binName)
+	versionedBinDir := VersionedBinDirFor(binName, version)
+	if err := os.MkdirAll(versionedBinDir, 0o755); err != nil {
+		return "", fmt.Errorf("create plugin version dir %s: %w", versionedBinDir, err)
+	}
+
+	binPath := BinaryPathFor(binName, version)
 	if info, err := os.Stat(binPath); err == nil && !info.IsDir() {
-		ctx.Logger.V(3).Infof("plugin %s: using existing binary at %s, skipping install", name, binPath)
+		ctx.Logger.V(3).Infof("plugin %s@%s: using existing binary at %s, skipping install", name, version, binPath)
 		return binPath, nil
 	}
 
-	res, err := deps.InstallWithContext(ctx, source, version, deps.WithBinDir(binDir))
+	res, err := deps.InstallWithContext(ctx, source, version, deps.WithBinDir(versionedBinDir))
 	if err != nil {
 		return "", fmt.Errorf("install plugin %s: %w", name, err)
 	}

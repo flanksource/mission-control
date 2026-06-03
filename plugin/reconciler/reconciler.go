@@ -38,10 +38,21 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 		return err
 	}
 
+	binaryChanged := previous != nil && (previous.Spec.Source != p.Spec.Source || previous.Spec.Version != p.Spec.Version)
+	if binaryChanged {
+		if err := machinery.StopPlugin(id); err != nil {
+			return err
+		}
+	}
+
 	if err := machinery.StartPlugin(ctx, id); err != nil {
 		if previous != nil {
 			if _, rollbackErr := plugin.DefaultRegistry.Upsert(previous.ID, previous.Namespace, previous.Name, previous.Spec); rollbackErr != nil {
 				ctx.Logger.Errorf("plugin %s: rollback registry entry: %v", id, rollbackErr)
+			} else if binaryChanged {
+				if restartErr := machinery.StartPlugin(ctx, previous.ID); restartErr != nil {
+					ctx.Logger.Errorf("plugin %s: restart previous version after rollback: %v", id, restartErr)
+				}
 			}
 		} else {
 			plugin.DefaultRegistry.Remove(id)
@@ -58,7 +69,7 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 
 // DeletePlugin is the kopper delete callback. It stops the supervised
 // process and drops the registry entry. The binary is left on disk —
-// re-creating the CRD won't re-download a binary that already exists.
+// re-creating the CRD with the same version won't re-download it.
 func DeletePlugin(ctx context.Context, id string) error {
 	pluginID, err := parsePluginID(id)
 	if err != nil {
