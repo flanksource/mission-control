@@ -3,7 +3,7 @@ OS   = $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH = $(shell uname -m | sed 's/x86_64/amd64/')
 DATE = $(shell date  "+%Y-%m-%d %H:%M:%S")
 ifeq ($(VERSION),)
-  VERSION_TAG=$(shell git describe --abbrev=0 --tags --exact-match 2>/dev/null || echo latest)
+  VERSION_TAG=$(shell git describe --abbrev=0 --tags --exact-match --match 'v[0-9]*' 2>/dev/null || echo latest)
 else
   VERSION_TAG=$(VERSION)
 endif
