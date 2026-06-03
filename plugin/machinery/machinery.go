@@ -94,6 +94,7 @@ func StopPlugin(id uuid.UUID) error {
 }
 
 func Invoke(ctx dutyContext.Context, pluginID uuid.UUID, req *api.InvokeRequest) (*api.InvokeResponse, error) {
+
 	entry := plugin.DefaultRegistry.Get(pluginID)
 	if entry == nil {
 		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not registered", pluginID)
@@ -107,6 +108,21 @@ func Invoke(ctx dutyContext.Context, pluginID uuid.UUID, req *api.InvokeRequest)
 		return entry.Runtime.Invoke(ctx, req)
 	default:
 		return nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has unsupported connection kind %q", pluginID, entry.Kind)
+	}
+}
+
+// StopAll gracefully stops every running plugin. It is wired into the host's
+// shutdown sequence so plugin binaries are torn down with the host instead of
+// being left as orphans.
+func StopAll(ctx dutyContext.Context) {
+	for _, entry := range plugin.DefaultRegistry.List() {
+		if entry.Runtime == nil {
+			continue
+		}
+		ctx.Logger.Infof("stopping plugin %s", entry.ID)
+		if err := StopPlugin(entry.ID); err != nil {
+			ctx.Logger.Warnf("plugin %s: stop on shutdown: %v", entry.ID, err)
+		}
 	}
 }
 
