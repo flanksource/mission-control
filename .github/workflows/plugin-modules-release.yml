@@ -1,0 +1,82 @@
+name: Release Plugin Modules
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - plugin/api/**
+      - plugin/sdk/**
+permissions:
+  contents: write
+
+# Serialize tag creation so concurrent main merges don't compute and push the same next tag.
+concurrency:
+  group: plugin-modules-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Install Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version: v1.26.x
+          cache: false
+
+      - name: Release changed plugin modules
+        env:
+          GOPROXY: direct
+        run: |
+          set -euo pipefail
+
+          git fetch --force --tags origin
+
+          next_version() {
+            local latest_tag="$1"
+            local version="v0.0.0"
+
+            if [ -n "$latest_tag" ]; then
+              version="${latest_tag##*/}"
+            fi
+
+            local raw="${version#v}"
+            IFS=. read -r major minor patch <<< "$raw"
+            echo "v${major}.${minor}.$((patch + 1))"
+          }
+
+          release_module() {
+            local module="$1"
+            local latest_tag
+            latest_tag="$(git tag --list "${module}/v*" --sort=-v:refname | head -n1)"
+
+            if [ -n "$latest_tag" ] && git diff --quiet "${latest_tag}..HEAD" -- "$module"; then
+              echo "No ${module} changes since ${latest_tag}; skipping"
+              return
+            fi
+
+            local version
+            version="$(next_version "$latest_tag")"
+            local tag="${module}/${version}"
+
+            if git rev-parse -q --verify "refs/tags/${tag}" >/dev/null; then
+              echo "Tag ${tag} already exists; skipping"
+              return
+            fi
+
+            echo "Validating ${module}"
+            (cd "$module" && go mod download && go list ./...)
+
+            echo "Creating ${tag}"
+            git tag "$tag" HEAD
+            git push origin "refs/tags/${tag}"
+          }
+
+          release_module plugin/api
+          release_module plugin/sdk

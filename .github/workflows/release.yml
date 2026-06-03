@@ -69,10 +69,10 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Set version
-        # Always use git tags as semantic release can fail due to rate limit
+        # Always use root git tags as semantic release can fail due to rate limit
         run: |
           git fetch --prune --unshallow
-          echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags | sed -e 's/^v//')" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags --match 'v[0-9]*' | sed -e 's/^v//')" >> $GITHUB_ENV
 
       - name: Publish to Registry
         uses: elgohr/Publish-Docker-Github-Action@a173d53c3077a33d5877ca4d93d853a1de31f357 # v5
@@ -116,10 +116,10 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Set version
-        # Always use git tags as semantic release can fail due to rate limit
+        # Always use root git tags as semantic release can fail due to rate limit
         run: |
           git fetch --prune --unshallow
-          echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags | sed -e 's/^v//')" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags --match 'v[0-9]*' | sed -e 's/^v//')" >> $GITHUB_ENV
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: "${{ github.repository_owner }}/mission-control-chart"
