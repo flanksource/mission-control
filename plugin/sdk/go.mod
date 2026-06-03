@@ -3,7 +3,7 @@ module github.com/flanksource/incident-commander/plugin/sdk
 go 1.26.1
 
 require (
-	github.com/flanksource/incident-commander/plugin/api v0.0.0
+	github.com/flanksource/incident-commander/plugin/api v0.0.1
 	github.com/hashicorp/go-plugin v1.8.0
 	github.com/onsi/ginkgo/v2 v2.28.3
 	github.com/onsi/gomega v1.40.0
@@ -40,5 +40,3 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260427160629-7cedc36a6bc4 // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 )
-
-replace github.com/flanksource/incident-commander/plugin/api => ../api
