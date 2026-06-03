@@ -2,10 +2,13 @@ package machinery
 
 import (
 	"context"
+	"errors"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin/api"
+	"github.com/samber/oops"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -15,14 +18,66 @@ import (
 func (s *Service) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if !requiresInvocation(info.FullMethod) {
-			return handler(ctx, req)
+			resp, err := handler(ctx, req)
+			return resp, grpcErrorFromError(err)
 		}
 
 		invocationCtx, err := s.contextWithInvocation(ctx)
 		if err != nil {
-			return nil, err
+			return nil, grpcErrorFromError(err)
 		}
-		return handler(invocationCtx, req)
+		resp, err := handler(invocationCtx, req)
+		return resp, grpcErrorFromError(err)
+	}
+}
+
+func grpcErrorFromError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if _, ok := status.FromError(err); ok {
+		return err
+	}
+
+	if errors.Is(err, context.Canceled) {
+		return status.Error(codes.Canceled, err.Error())
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return status.Error(codes.DeadlineExceeded, err.Error())
+	}
+
+	var oopsErr oops.OopsError
+	if errors.As(err, &oopsErr) {
+		if code, ok := dutyAPI.DomainCodeFromDBError(err); ok {
+			return status.Error(grpcCodeFromDomainCode(code), oopsErr.Error())
+		}
+
+		code, _ := oopsErr.Code().(string)
+		return status.Error(grpcCodeFromDomainCode(code), oopsErr.Error())
+	}
+
+	return status.Error(grpcCodeFromDomainCode(dutyAPI.ErrorCode(err)), dutyAPI.ErrorMessage(err))
+}
+
+func grpcCodeFromDomainCode(code string) codes.Code {
+	switch code {
+	case dutyAPI.ECONFLICT:
+		return codes.AlreadyExists
+	case dutyAPI.EINVALID:
+		return codes.InvalidArgument
+	case dutyAPI.ENOTFOUND:
+		return codes.NotFound
+	case dutyAPI.EFORBIDDEN:
+		return codes.PermissionDenied
+	case dutyAPI.ENOTIMPLEMENTED:
+		return codes.Unimplemented
+	case dutyAPI.EUNAUTHORIZED:
+		return codes.Unauthenticated
+	case dutyAPI.EINTERNAL:
+		return codes.Internal
+	default:
+		return codes.Internal
 	}
 }
 
