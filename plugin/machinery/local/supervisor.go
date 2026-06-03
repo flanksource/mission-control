@@ -20,12 +20,13 @@ import (
 
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/api"
 )
 
 // pluginMap is the host-side go-plugin registry used to dispense the
 // mission-control plugin client.
 var pluginMap = map[string]goplugin.Plugin{
-	PluginName: &GRPCPlugin{},
+	api.PluginName: &GRPCPlugin{},
 }
 
 // Supervisor owns the lifecycle of one plugin process.
@@ -40,7 +41,7 @@ type Supervisor struct {
 	mu        sync.Mutex
 	client    *goplugin.Client
 	pluginCLI *Client
-	manifest  *plugin.PluginManifest
+	manifest  *api.PluginManifest
 	hostBrkID uint32
 	startHost func(*goplugin.GRPCBroker) (uint32, error)
 	stopped   bool
@@ -81,11 +82,11 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 
 	cmd := exec.Command(s.BinaryPath)
 	cmd.Env = append(cmd.Env,
-		fmt.Sprintf("%s=%s", Handshake.MagicCookieKey, Handshake.MagicCookieValue),
+		fmt.Sprintf("%s=%s", api.Handshake.MagicCookieKey, api.Handshake.MagicCookieValue),
 	)
 
 	cli := goplugin.NewClient(&goplugin.ClientConfig{
-		HandshakeConfig:  Handshake,
+		HandshakeConfig:  api.Handshake,
 		Plugins:          pluginMap,
 		Cmd:              cmd,
 		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolGRPC},
@@ -101,7 +102,7 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 		return fmt.Errorf("plugin %s rpc client: %w", s.Name, err)
 	}
 
-	raw, err := rpcClient.Dispense(PluginName)
+	raw, err := rpcClient.Dispense(api.PluginName)
 	if err != nil {
 		cli.Kill()
 		return fmt.Errorf("plugin %s dispense: %w", s.Name, err)
@@ -120,8 +121,8 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 	}
 	s.hostBrkID = hostBrkID
 
-	manifest, err := pluginCli.Service.RegisterPlugin(dialCtx, &plugin.RegisterRequest{
-		HostProtocolVersion: uint32(ProtocolVersion),
+	manifest, err := pluginCli.Service.RegisterPlugin(dialCtx, &api.RegisterRequest{
+		HostProtocolVersion: uint32(api.ProtocolVersion),
 		HostBrokerId:        hostBrkID,
 	})
 	if err != nil {
@@ -322,7 +323,7 @@ func (s *Supervisor) Stop() {
 }
 
 // Manifest returns the most recent PluginManifest received from the plugin.
-func (s *Supervisor) Manifest() *plugin.PluginManifest {
+func (s *Supervisor) Manifest() *api.PluginManifest {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.manifest
@@ -338,7 +339,7 @@ func (s *Supervisor) UIPort() uint32 {
 }
 
 // Invoke calls the plugin's Invoke RPC.
-func (s *Supervisor) Invoke(ctx gocontext.Context, req *plugin.InvokeRequest) (*plugin.InvokeResponse, error) {
+func (s *Supervisor) Invoke(ctx gocontext.Context, req *api.InvokeRequest) (*api.InvokeResponse, error) {
 	s.mu.Lock()
 	pluginCli := s.pluginCLI
 	s.mu.Unlock()
@@ -349,12 +350,12 @@ func (s *Supervisor) Invoke(ctx gocontext.Context, req *plugin.InvokeRequest) (*
 }
 
 // ListOperations calls the plugin's ListOperations RPC.
-func (s *Supervisor) ListOperations(ctx gocontext.Context) (*plugin.OperationList, error) {
+func (s *Supervisor) ListOperations(ctx gocontext.Context) (*api.OperationList, error) {
 	s.mu.Lock()
 	pluginCli := s.pluginCLI
 	s.mu.Unlock()
 	if pluginCli == nil {
 		return nil, fmt.Errorf("plugin %s not running", s.Name)
 	}
-	return pluginCli.Service.ListOperations(ctx, &plugin.Empty{})
+	return pluginCli.Service.ListOperations(ctx, &api.Empty{})
 }

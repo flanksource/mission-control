@@ -27,7 +27,8 @@ import (
 	"github.com/labstack/echo/v4"
 
 	echoSrv "github.com/flanksource/incident-commander/echo"
-	pluginpb "github.com/flanksource/incident-commander/plugin"
+	plugin "github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/api"
 	"github.com/flanksource/incident-commander/plugin/machinery"
 	"github.com/flanksource/incident-commander/rbac"
 )
@@ -48,11 +49,11 @@ func RegisterRoutes(e *echo.Echo) {
 // PluginListing is what GET /api/plugins returns: a flat list of plugins
 // applicable to the current config item, with their tabs and operations.
 type PluginListing struct {
-	Name        string                   `json:"name"`
-	Description string                   `json:"description,omitempty"`
-	Version     string                   `json:"version,omitempty"`
-	Tabs        []*pluginpb.TabSpec      `json:"tabs,omitempty"`
-	Operations  []*pluginpb.OperationDef `json:"operations,omitempty"`
+	Name        string              `json:"name"`
+	Description string              `json:"description,omitempty"`
+	Version     string              `json:"version,omitempty"`
+	Tabs        []*api.TabSpec      `json:"tabs,omitempty"`
+	Operations  []*api.OperationDef `json:"operations,omitempty"`
 }
 
 // ListPlugins returns every running plugin whose CRD selector matches the
@@ -62,7 +63,7 @@ func ListPlugins(c echo.Context) error {
 	ctx := c.Request().Context().(dutyContext.Context)
 	configID := c.QueryParam("config_id")
 	out := []PluginListing{}
-	for _, e := range pluginpb.DefaultRegistry.List() {
+	for _, e := range plugin.DefaultRegistry.List() {
 		if e.Manifest == nil {
 			continue
 		}

@@ -11,6 +11,7 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/api"
 	"github.com/flanksource/incident-commander/plugin/machinery/local"
 )
 
@@ -21,7 +22,7 @@ func StartPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 	}
 
 	switch entry.Kind {
-	case "", plugin.PluginKindLocal:
+	case "", api.PluginKindLocal:
 		return startLocalPlugin(ctx, entry)
 	default:
 		return fmt.Errorf("plugin %s: unsupported connection kind %q", id, entry.Kind)
@@ -52,7 +53,7 @@ func startLocalPlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 				ctx.Logger.Errorf("plugin %s: host broker accept: %v", entry.ID, err)
 				return
 			}
-			grpcServer := local.GRPCServerFactory([]grpc.ServerOption{
+			grpcServer := api.GRPCServerFactory([]grpc.ServerOption{
 				grpc.UnaryInterceptor(svc.UnaryServerInterceptor()),
 			})
 			svc.Register(grpcServer)
@@ -92,14 +93,14 @@ func StopPlugin(id uuid.UUID) error {
 	return nil
 }
 
-func Invoke(ctx dutyContext.Context, pluginID uuid.UUID, req *plugin.InvokeRequest) (*plugin.InvokeResponse, error) {
+func Invoke(ctx dutyContext.Context, pluginID uuid.UUID, req *api.InvokeRequest) (*api.InvokeResponse, error) {
 	entry := plugin.DefaultRegistry.Get(pluginID)
 	if entry == nil {
 		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not registered", pluginID)
 	}
 
 	switch entry.Kind {
-	case "", plugin.PluginKindLocal:
+	case "", api.PluginKindLocal:
 		if entry.Runtime == nil {
 			return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
 		}
@@ -116,7 +117,7 @@ func HTTPURL(ctx dutyContext.Context, pluginID uuid.UUID) (*url.URL, error) {
 	}
 
 	switch entry.Kind {
-	case "", plugin.PluginKindLocal:
+	case "", api.PluginKindLocal:
 		if entry.Runtime == nil {
 			return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
 		}

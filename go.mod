@@ -12,6 +12,7 @@ require (
 	github.com/flanksource/commons v1.52.0
 	github.com/flanksource/duty v1.0.1321
 	github.com/flanksource/gomplate/v3 v3.24.82
+	github.com/flanksource/incident-commander/plugin/api v0.0.0
 	github.com/flanksource/kopper v1.0.22
 	github.com/gomarkdown/markdown v0.0.0-20260411013819-759bbc3e3207
 	github.com/google/cel-go v0.28.1
@@ -444,13 +445,15 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/api v0.279.0
 	google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7 // indirect
-	google.golang.org/grpc v1.81.0
+	google.golang.org/grpc v1.81.1
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0
 	gopkg.in/yaml.v3 v3.0.1
 	sigs.k8s.io/yaml v1.6.0
 )
+
+replace github.com/flanksource/incident-commander/plugin/api => ./plugin/api
 
 // replace github.com/flanksource/clicky => ../clicky
 
@@ -461,3 +464,5 @@ require (
 // replace github.com/flanksource/duty => ../duty
 
 replace github.com/glebarez/sqlite => github.com/clarkmcc/gorm-sqlite v0.0.0-20240426202654-00ed082c0311
+
+replace github.com/flanksource/incident-commander/plugin/sdk => ./plugin/sdk

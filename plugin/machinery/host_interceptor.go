@@ -5,7 +5,7 @@ import (
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/auth"
-	"github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/api"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -39,7 +39,7 @@ func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, e
 		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
 
-	values := md.Get(plugin.InvocationTokenGRPCMetadataKey)
+	values := md.Get(api.InvocationTokenGRPCMetadataKey)
 	if len(values) == 0 || values[0] == "" {
 		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
@@ -60,10 +60,10 @@ func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, e
 
 func requiresInvocation(method string) bool {
 	switch method {
-	case plugin.HostService_GetConfigItem_FullMethodName,
-		plugin.HostService_ListConfigs_FullMethodName,
-		plugin.HostService_GetConnection_FullMethodName,
-		plugin.HostService_InvokePlugin_FullMethodName:
+	case api.HostService_GetConfigItem_FullMethodName,
+		api.HostService_ListConfigs_FullMethodName,
+		api.HostService_GetConnection_FullMethodName,
+		api.HostService_InvokePlugin_FullMethodName:
 		return true
 	default:
 		return false

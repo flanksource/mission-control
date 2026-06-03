@@ -14,6 +14,7 @@ import (
 
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/api"
 	"github.com/flanksource/incident-commander/plugin/machinery"
 	"github.com/flanksource/incident-commander/rbac"
 )
@@ -147,7 +148,7 @@ func proxyToPluginOperation(c echo.Context, entry *plugin.Entry, op, invocationT
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
 			pr.Out.URL.Path = pluginOperationTargetPath(op)
-			pr.Out.Header.Set(plugin.InvocationTokenHTTPHeader, invocationToken)
+			pr.Out.Header.Set(api.InvocationTokenHTTPHeader, invocationToken)
 			pr.Out.URL.RawPath = ""
 		},
 	}
@@ -177,7 +178,7 @@ func pluginUITargetPath(prefix, requestPath string) string {
 	return "/__mc/ui" + pluginPath
 }
 
-func operationHTTPBindingAllowed(def *plugin.OperationDef, method string) bool {
+func operationHTTPBindingAllowed(def *api.OperationDef, method string) bool {
 	for _, binding := range def.Http {
 		if binding != nil && strings.EqualFold(binding.Method, method) {
 			return true

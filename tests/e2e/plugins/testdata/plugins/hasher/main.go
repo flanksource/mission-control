@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"net/http"
 
-	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/sdk"
 )
 
@@ -19,8 +18,8 @@ type hashResult struct {
 	SHA256 string `json:"sha256"`
 }
 
-func (hasherPlugin) Manifest() *pluginpb.PluginManifest {
-	return &pluginpb.PluginManifest{
+func (hasherPlugin) Manifest() *sdk.PluginManifest {
+	return &sdk.PluginManifest{
 		Name:        "hasher",
 		Version:     "1.0.0",
 		Description: "E2E test plugin that hashes config names",
@@ -30,11 +29,11 @@ func (hasherPlugin) Manifest() *pluginpb.PluginManifest {
 func (hasherPlugin) Configure(context.Context, map[string]any) error { return nil }
 
 func (hasherPlugin) Operations() []sdk.Operation {
-	def := &pluginpb.OperationDef{
+	def := &sdk.OperationDef{
 		Name:        "sha256",
 		Description: "returns the sha256 of the config name",
 		ResultMime:  "application/json",
-		Http:        []*pluginpb.HTTPBinding{{Method: http.MethodGet}},
+		Http:        []*sdk.HTTPBinding{{Method: http.MethodGet}},
 	}
 
 	return []sdk.Operation{{

@@ -7,13 +7,14 @@ import (
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/incident-commander/plugin/api"
 	"github.com/google/uuid"
 	structpb "google.golang.org/protobuf/types/known/structpb"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // ToDuty converts the protobuf selector into duty's ResourceSelector.
-func (x *ResourceSelector) ToDuty() types.ResourceSelector {
+func ToDutyResourceSelector(x *api.ResourceSelector) types.ResourceSelector {
 	if x == nil {
 		return types.ResourceSelector{}
 	}
@@ -38,8 +39,8 @@ func (x *ResourceSelector) ToDuty() types.ResourceSelector {
 }
 
 // ResourceSelectorFromDuty converts duty's ResourceSelector into its protobuf representation.
-func ResourceSelectorFromDuty(selector types.ResourceSelector) *ResourceSelector {
-	return &ResourceSelector{
+func ResourceSelectorFromDuty(selector types.ResourceSelector) *api.ResourceSelector {
+	return &api.ResourceSelector{
 		Agent:          selector.Agent,
 		Scope:          selector.Scope,
 		Cache:          selector.Cache,
@@ -59,7 +60,7 @@ func ResourceSelectorFromDuty(selector types.ResourceSelector) *ResourceSelector
 }
 
 // ConnectionToProto converts a duty connection into its protobuf representation.
-func ConnectionToProto(conn *models.Connection) *ResolvedConnection {
+func ConnectionToProto(conn *models.Connection) *api.ResolvedConnection {
 	props := map[string]any{
 		"type":        conn.Type,
 		"name":        conn.Name,
@@ -79,7 +80,7 @@ func ConnectionToProto(conn *models.Connection) *ResolvedConnection {
 	}
 	pbProps, _ := structpb.NewStruct(props)
 
-	return &ResolvedConnection{
+	return &api.ResolvedConnection{
 		Type:        conn.Type,
 		Url:         conn.URL,
 		Username:    conn.Username,
@@ -115,8 +116,8 @@ func connectionToken(conn *models.Connection) string {
 	return ""
 }
 
-func FromConfigItem(item models.ConfigItem) (*ConfigItem, error) {
-	out := &ConfigItem{
+func FromConfigItem(item models.ConfigItem) (*api.ConfigItem, error) {
+	out := &api.ConfigItem{
 		Id: item.ID.String(),
 	}
 	if item.Name != nil {

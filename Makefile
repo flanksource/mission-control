@@ -111,7 +111,8 @@ docker-push:
 .PHONY: tidy
 tidy:
 	go mod tidy
-	git add go.mod go.sum
+	cd plugin/api && go mod tidy
+	cd plugin/sdk && go mod tidy
 
 .PHONY: compress
 compress: .bin/upx
@@ -147,6 +148,7 @@ gen-schemas:
 	go mod edit -module=github.com/flanksource/incident-commander/hack/generate-schemas && \
 	go mod edit -require=github.com/flanksource/incident-commander@v1.0.0 && \
 	go mod edit -replace=github.com/flanksource/incident-commander=../../ && \
+	go mod edit -replace=github.com/flanksource/incident-commander/plugin/api=../../plugin/api && \
 	if grep -v "^//" ../../go.mod | grep -q "replace.*github.com/flanksource/duty.*=>"; then \
 		go mod edit -replace=github.com/flanksource/duty=../../../duty; \
 	fi && \

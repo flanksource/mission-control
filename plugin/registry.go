@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/plugin/api"
 	"github.com/google/uuid"
 )
 
@@ -23,7 +24,7 @@ var ErrAmbiguousPlugin = errors.New("ambiguous plugin reference")
 
 // Runtime is the host-side handle for a reachable plugin.
 type Runtime interface {
-	Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error)
+	Invoke(context.Context, *api.InvokeRequest) (*api.InvokeResponse, error)
 	UIPort() uint32
 	Stop()
 }
@@ -37,8 +38,8 @@ type Entry struct {
 	Name          string
 	Namespace     string
 	Spec          v1.PluginSpec
-	Kind          Kind
-	Manifest      *PluginManifest
+	Kind          api.Kind
+	Manifest      *api.PluginManifest
 	Runtime       Runtime
 	InstalledPath string
 }
@@ -103,14 +104,14 @@ func (r *Registry) Upsert(id uuid.UUID, namespace, name string, spec v1.PluginSp
 	e.Namespace = namespace
 	e.Spec = spec
 	if e.Kind == "" {
-		e.Kind = PluginKindLocal
+		e.Kind = api.PluginKindLocal
 	}
 	r.addIndexes(e)
 	return e, nil
 }
 
 // SetManifest stores the manifest a plugin returned from RegisterPlugin.
-func (r *Registry) SetManifest(id uuid.UUID, m *PluginManifest) error {
+func (r *Registry) SetManifest(id uuid.UUID, m *api.PluginManifest) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	e, ok := r.plugins[id]
