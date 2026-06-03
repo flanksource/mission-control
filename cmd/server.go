@@ -32,6 +32,7 @@ import (
 	"github.com/flanksource/incident-commander/mcp"
 	"github.com/flanksource/incident-commander/metrics"
 	"github.com/flanksource/incident-commander/notification"
+	"github.com/flanksource/incident-commander/plugin/machinery"
 	pluginReconciler "github.com/flanksource/incident-commander/plugin/reconciler"
 	"github.com/flanksource/incident-commander/upstream/tunnel"
 	echov4 "github.com/labstack/echo/v4"
@@ -238,6 +239,10 @@ var Serve = &cobra.Command{
 				}
 			})
 		}
+
+		shutdown.AddHookWithPriority("plugins", shutdown.PriorityIngress, func() {
+			machinery.StopAll(ctx)
+		})
 
 		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 
