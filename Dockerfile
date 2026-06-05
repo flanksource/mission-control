@@ -17,7 +17,10 @@ WORKDIR /app
 
 ARG TARGETARCH
 ARG NODE_VERSION=24.11.0
-ARG FACET_VERSION=v0.1.40
+# Pin to a version where both the release binary and the matching
+# @flanksource/facet npm package (installed into .facet/ at render time) exist.
+# v0.1.40 ships a binary but no npm package, so the render-time pnpm install fails.
+ARG FACET_VERSION=v0.1.39
 
 # Facet renders report PDFs via a headless Chrome launched by Puppeteer.
 # Install the shared libraries Chrome needs plus fonts for correct rendering.
