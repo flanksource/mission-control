@@ -91,7 +91,7 @@ modernize: ## Run modernize against code.
 	$(MODERNIZE) ./...
 
 docker:
-	docker build . -t ${IMG}
+	DOCKER_BUILDKIT=1 docker build . -t ${IMG} $(if $(GITHUB_TOKEN),--secret id=GITHUB_TOKEN,env=GITHUB_TOKEN)
 
 # Build the docker image
 docker-dev: linux

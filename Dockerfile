@@ -56,8 +56,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* && apt-get clean
 
 # Node (with npm/npx) is needed to install Puppeteer's Chrome. deps is already
-# present in the base image and is the same installer the Makefile uses.
-RUN deps install node@${NODE_VERSION} --bin-dir /usr/bin --app-dir /usr/lib/node --tmp-dir /tmp
+# present in the base image and is the same installer the Makefile uses. The
+# GITHUB_TOKEN secret lifts the GitHub API rate limit deps hits resolving
+# nodejs/node releases.
+RUN --mount=type=secret,id=GITHUB_TOKEN,env=GITHUB_TOKEN \
+    deps install node@${NODE_VERSION} --bin-dir /usr/bin --app-dir /usr/lib/node --tmp-dir /tmp
 
 # Install the facet standalone binary (bun-compiled, self-contained). The npm
 # package has no bin entry and unbundled deps, so the release binary is the
