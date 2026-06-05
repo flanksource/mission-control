@@ -9,8 +9,8 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.41.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.34.0 // indirect
-	github.com/flanksource/commons v1.52.0
-	github.com/flanksource/duty v1.0.1322
+	github.com/flanksource/commons v1.53.0
+	github.com/flanksource/duty v1.0.1325
 	github.com/flanksource/gomplate/v3 v3.24.82
 	github.com/flanksource/incident-commander/plugin/api v0.0.0
 	github.com/flanksource/kopper v1.0.22
