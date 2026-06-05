@@ -59,8 +59,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # present in the base image and is the same installer the Makefile uses. The
 # GITHUB_TOKEN secret lifts the GitHub API rate limit deps hits resolving
 # nodejs/node releases.
+# facet installs report template deps with pnpm at render time, so it must be
+# on PATH. Symlink it into /usr/bin since npm's global bin dir is not.
+ARG PNPM_VERSION=9.15.9
 RUN --mount=type=secret,id=GITHUB_TOKEN,env=GITHUB_TOKEN \
-    deps install node@${NODE_VERSION} --bin-dir /usr/bin --app-dir /usr/lib/node --tmp-dir /tmp
+    deps install node@${NODE_VERSION} --bin-dir /usr/bin --app-dir /usr/lib/node --tmp-dir /tmp && \
+    npm install -g pnpm@${PNPM_VERSION} && \
+    ln -sf "$(npm prefix -g)/bin/pnpm" /usr/bin/pnpm && \
+    pnpm --version
 
 # Install the facet standalone binary (bun-compiled, self-contained). The npm
 # package has no bin entry and unbundled deps, so the release binary is the
