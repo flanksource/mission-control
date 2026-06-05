@@ -31,7 +31,13 @@ func StartPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 }
 
 func startLocalPlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
-	installedPath, err := local.InstallPlugin(ctx, entry.Name, entry.Spec.Source, entry.Spec.Version)
+	var installedPath string
+	var err error
+	if local.IsLatest(entry.Spec.Version) {
+		installedPath, _, err = local.ResolveAndInstallLatest(ctx, entry.Name, entry.Spec.Source)
+	} else {
+		installedPath, err = local.InstallPlugin(ctx, entry.Name, entry.Spec.Source, entry.Spec.Version)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to install plugin %s: %w", entry.Name, err)
 	}
