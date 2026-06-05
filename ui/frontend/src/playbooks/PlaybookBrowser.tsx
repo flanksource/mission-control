@@ -15,6 +15,7 @@ import {
   type ErrorDiagnostics,
 } from "@flanksource/clicky-ui";
 import { errorDiagnosticsFromUnknown } from "../api/http";
+import { addRecent } from "../lib/recents";
 import { ConfigIcon } from "../ConfigIcon";
 import {
   DetailPageLayout,
@@ -271,6 +272,21 @@ function PlaybookRunDetailPage({ runId }: { runId: string }) {
   const runDiagnostics = run ? errorDiagnosticsFromRun(run) : null;
   const runStateData = !runId ? null : query.data ? run ?? null : query.data;
   const queryClient = useQueryClient();
+
+  const playbookId = run?.playbooks?.id;
+  const playbookName = run?.playbooks ? displayPlaybookName(run.playbooks) : "";
+  const playbookIcon = run?.playbooks?.icon ?? undefined;
+  useEffect(() => {
+    if (!playbookId) return;
+    addRecent({
+      kind: "playbook",
+      id: playbookId,
+      name: playbookName,
+      icon: playbookIcon,
+      href: `/ui/playbooks/runs/${encodeURIComponent(runId)}`,
+    });
+  }, [playbookId, playbookName, playbookIcon, runId]);
+
   const [rerun, setRerun] = useState<RunDialogSelection | null>(null);
   const approveMutation = useMutation({
     mutationFn: () => approvePlaybookRun(runId),
@@ -2683,6 +2699,27 @@ function errorDiagnosticsFromSources(fallback: string | null | undefined, candid
 // PlaybookRunAction.result reuses generic context fields like `stdout` / `stderr`
 // for native action output. Keep them out of the compact context badge row so
 // the badges stay focused on the cause-of-failure metadata.
+const NATIVE_ACTION_OUTPUT_CONTEXT_FIELDS = new Set([
+  "stdout",
+  "stdOut",
+  "out",
+  "output",
+  "logs",
+  "log",
+  "stderr",
+  "stdErr",
+  "err",
+]);
+
+function objectRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function jsonLineCount(value: unknown) {
+  return JSON.stringify(value, null, 2).split("\n").length;
+}
+
 const NATIVE_ACTION_OUTPUT_CONTEXT_FIELDS = new Set([
   "stdout",
   "stdOut",

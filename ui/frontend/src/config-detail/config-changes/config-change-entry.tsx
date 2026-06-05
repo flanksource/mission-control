@@ -12,6 +12,7 @@ import {
   type TypedChangeDiff,
 } from './change-section-utils.ts';
 import { formatDateTime, formatEntryDate, humanizeSize, type TimeBucketFormat } from './utils.ts';
+import { resolveChangeAccent, type ChangeBadgeStyle } from './change-accent.ts';
 
 const SEVERITY_ICON_STYLE: Record<ConfigSeverity, { className: string; shape: 'triangle' | 'diamond' | 'square' | 'circle' | 'ring' }> = {
   critical: { className: 'text-red-600', shape: 'triangle' },
@@ -21,36 +22,15 @@ const SEVERITY_ICON_STYLE: Record<ConfigSeverity, { className: string; shape: 't
   info: { className: 'text-slate-400', shape: 'ring' },
 };
 
-type ChangeBadgeStyle = { color: string; textColor: string; borderColor: string };
 const LABEL_BADGE_CLASS = 'max-w-full';
 
-const CHANGE_BADGE_STYLES: Record<string, ChangeBadgeStyle> = {
-  default: { color: 'bg-slate-100', textColor: 'text-slate-700', borderColor: 'border-slate-200' },
-  diff: { color: 'bg-indigo-50', textColor: 'text-indigo-700', borderColor: 'border-indigo-200' },
-  policy: { color: 'bg-orange-50', textColor: 'text-orange-700', borderColor: 'border-orange-200' },
-  scale: { color: 'bg-blue-50', textColor: 'text-blue-700', borderColor: 'border-blue-200' },
-  backup: { color: 'bg-emerald-50', textColor: 'text-emerald-700', borderColor: 'border-emerald-200' },
-  permission: { color: 'bg-violet-50', textColor: 'text-violet-700', borderColor: 'border-violet-200' },
-  release: { color: 'bg-indigo-50', textColor: 'text-indigo-700', borderColor: 'border-indigo-200' },
-  artifact: { color: 'bg-sky-50', textColor: 'text-sky-700', borderColor: 'border-sky-200' },
-  cost: { color: 'bg-amber-50', textColor: 'text-amber-700', borderColor: 'border-amber-200' },
-};
-
 function getChangeAccent(change: ConfigChange, label: string): ChangeBadgeStyle {
-  const kind = getResolvedTypedChange(change)?.kind ?? '';
-  const type = (change.changeType || '').toLowerCase();
-  const category = (change.category || '').toLowerCase();
-  const normalizedLabel = label.toLowerCase();
-
-  if (kind === 'Screenshot/v1' || type.includes('screenshot')) return CHANGE_BADGE_STYLES.artifact;
-  if (kind === 'PermissionChange/v1' || category.startsWith('rbac') || type.includes('permission')) return CHANGE_BADGE_STYLES.permission;
-  if (kind === 'Backup/v1' || kind === 'Restore/v1' || category.startsWith('backup') || type.includes('backup') || type.includes('restore')) return CHANGE_BADGE_STYLES.backup;
-  if (kind === 'CostChange/v1' || type.includes('cost')) return CHANGE_BADGE_STYLES.cost;
-  if (kind === 'Promotion/v1' || kind === 'Approval/v1' || kind === 'Rollback/v1' || kind === 'PipelineRun/v1' || kind === 'PlaybookExecution/v1') return CHANGE_BADGE_STYLES.release;
-  if (kind === 'Scale/v1' || kind === 'Scaling/v1' || type.includes('replica') || type.includes('scaling')) return CHANGE_BADGE_STYLES.scale;
-  if (kind === 'ConfigChange/v1' || kind === 'Change/v1' || kind === 'Deployment/v1' || type === 'diff' || category.startsWith('deployment')) return CHANGE_BADGE_STYLES.diff;
-  if (type.includes('policy') || normalizedLabel.includes('policy')) return CHANGE_BADGE_STYLES.policy;
-  return CHANGE_BADGE_STYLES.default;
+  return resolveChangeAccent({
+    kind: getResolvedTypedChange(change)?.kind,
+    changeType: change.changeType,
+    category: change.category,
+    label,
+  });
 }
 
 export function SeverityIcon({ severity }: { severity: ConfigSeverity }) {

@@ -1,10 +1,10 @@
 package cmd
 
 import (
+	gocontext "context"
 	"encoding/json"
 	"fmt"
 	"io"
-	nethttp "net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -338,35 +338,11 @@ func ensureAPIBase(ctx *MCContext) (bool, error) {
 		return false, nil
 	}
 
-	probeURL := strings.TrimRight(ctx.Server, "/") + "/api/db/connections?limit=0"
-	req, err := nethttp.NewRequest(nethttp.MethodGet, probeURL, nil)
+	ok, err := newAPIClientForServer(ctx.Server, ctx.Token).ProbeAPIBase(gocontext.Background())
 	if err != nil {
 		return false, err
 	}
-	if ctx.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+ctx.Token)
-	}
-	req.Header.Set("Accept", "application/json")
-
-	resp, err := nethttp.DefaultClient.Do(req)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-
-	buf := make([]byte, 512)
-	n, _ := resp.Body.Read(buf)
-	body := strings.TrimLeft(string(buf[:n]), " \t\r\n")
-	switch resp.StatusCode {
-	case nethttp.StatusOK, nethttp.StatusUnauthorized, nethttp.StatusForbidden:
-	default:
-		return false, nil
-	}
-	ct := strings.ToLower(resp.Header.Get("Content-Type"))
-	if strings.Contains(ct, "text/html") || strings.HasPrefix(body, "<") {
-		return false, nil
-	}
-	if !strings.Contains(ct, "json") && !strings.HasPrefix(body, "[") && !strings.HasPrefix(body, "{") {
+	if !ok {
 		return false, nil
 	}
 

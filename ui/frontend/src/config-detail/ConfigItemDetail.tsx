@@ -16,6 +16,7 @@ import {
   type MatrixTableRow,
 } from "@flanksource/clicky-ui";
 import { errorDiagnosticsFromUnknown } from "../api/http";
+import { addRecent } from "../lib/recents";
 import { ConfigIcon } from "../ConfigIcon";
 import {
   useConfigAccess,
@@ -92,6 +93,17 @@ export function ConfigItemDetail({ id }: ConfigItemDetailProps) {
   const access = accessQuery.data?.summary ?? [];
   const parents = parentsQuery.data ?? [];
   const { plugins: pluginListings } = usePluginTabs(id);
+
+  useEffect(() => {
+    if (!config?.id) return;
+    addRecent({
+      kind: "config",
+      id: config.id,
+      name: config.name || config.id,
+      type: config.type,
+      href: `/ui/item/${encodeURIComponent(config.id)}`,
+    });
+  }, [config?.id, config?.name, config?.type]);
 
   if (configQuery.isLoading) {
     return <LoadingState label="Loading config item" />;
