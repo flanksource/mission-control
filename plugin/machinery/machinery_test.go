@@ -11,13 +11,14 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/api"
 )
 
 type fakeRuntime struct {
 	stopped atomic.Bool
 }
 
-func (f *fakeRuntime) Invoke(context.Context, *plugin.InvokeRequest) (*plugin.InvokeResponse, error) {
+func (f *fakeRuntime) Invoke(context.Context, *api.InvokeRequest) (*api.InvokeResponse, error) {
 	return nil, nil
 }
 func (f *fakeRuntime) UIPort() uint32 { return 0 }
