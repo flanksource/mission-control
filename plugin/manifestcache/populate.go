@@ -133,13 +133,31 @@ func FindBinaryFor(name string) (string, error) {
 	return findBinary(dir, name)
 }
 
-// findBinary locates a plugin binary by name within dir. It mirrors
-// cmd/plugin.go:findPluginBinary so cache populate matches CLI dispatch.
+// findBinary locates a plugin binary by name within dir. It supports both
+// the old flat layout ($dir/name) and the current versioned install layout
+// ($dir/name/latest/name or $dir/name/<version>/name).
 func findBinary(dir, name string) (string, error) {
-	exact := filepath.Join(dir, name)
-	if info, err := os.Stat(exact); err == nil && !info.IsDir() {
-		return exact, nil
+	for _, candidate := range []string{
+		filepath.Join(dir, name),
+		filepath.Join(dir, name, "latest"),
+		filepath.Join(dir, name, "latest", name),
+		filepath.Join(dir, name, name),
+	} {
+		if isBinaryFile(candidate) {
+			return candidate, nil
+		}
 	}
+
+	pluginDir := filepath.Join(dir, name)
+	if entries, err := os.ReadDir(pluginDir); err == nil {
+		for _, e := range entries {
+			candidate := filepath.Join(pluginDir, e.Name(), name)
+			if isBinaryFile(candidate) {
+				return candidate, nil
+			}
+		}
+	}
+
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return "", fmt.Errorf("manifestcache: scan %s: %w", dir, err)
@@ -153,6 +171,11 @@ func findBinary(dir, name string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("manifestcache: plugin %q not found in %s", name, dir)
+}
+
+func isBinaryFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 // dialAndCaptureManifest spawns the plugin, completes RegisterPlugin, and
