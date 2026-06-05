@@ -168,7 +168,7 @@ func launchKopper(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Plugin: %v", err))
 	}
 
-	if err := db.ReplayPlugins(ctx); err != nil {
+	if err := pluginReconciler.ReplayPlugins(ctx); err != nil {
 		ctx.Logger.Errorf("plugin replay from DB failed: %v", err)
 	}
 

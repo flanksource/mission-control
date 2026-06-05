@@ -7,7 +7,7 @@ import (
 
 const maxGRPCMessageSize = 64 * 1024 * 1024 // 64MB
 
-// ProtocolVersion is bumped whenever the gRPC contract in plugin/plugin.proto
+// ProtocolVersion is bumped whenever the gRPC contract in plugin/api/plugin.proto
 // changes in a non-additive way. Plugins reporting a different version
 // are rejected by the supervisor.
 const ProtocolVersion = uint(1)

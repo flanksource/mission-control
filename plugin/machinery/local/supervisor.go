@@ -61,8 +61,11 @@ const (
 )
 
 // New creates a Supervisor for a plugin binary.
-func New(id uuid.UUID, binaryPath string) *Supervisor {
-	return &Supervisor{ID: id, Name: id.String(), BinaryPath: binaryPath}
+func New(id uuid.UUID, name, binaryPath string) *Supervisor {
+	if name == "" {
+		name = id.String()
+	}
+	return &Supervisor{ID: id, Name: name, BinaryPath: binaryPath}
 }
 
 // Start launches the plugin process and completes the RegisterPlugin

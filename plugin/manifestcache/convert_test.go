@@ -5,7 +5,7 @@ import (
 	. "github.com/onsi/gomega"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	"github.com/flanksource/incident-commander/plugin/api"
 )
 
 var _ = ginkgo.Describe("ManifestToService", func() {
@@ -16,11 +16,11 @@ var _ = ginkgo.Describe("ManifestToService", func() {
 	})
 
 	ginkgo.It("translates name, version, description, and operation list", func() {
-		m := &pluginpb.PluginManifest{
+		m := &api.PluginManifest{
 			Name:        "golang",
 			Version:     "v0.1.0",
 			Description: "Go diagnostics",
-			Operations: []*pluginpb.OperationDef{
+			Operations: []*api.OperationDef{
 				{Name: "pods-list", Description: "list pods", Scope: "config"},
 				{Name: "session-create", Description: "create session", Scope: "config"},
 			},
@@ -36,7 +36,7 @@ var _ = ginkgo.Describe("ManifestToService", func() {
 	})
 
 	ginkgo.It("yields zero parameters when params_schema is empty", func() {
-		op := operationDefToRPC(&pluginpb.OperationDef{Name: "x"})
+		op := operationDefToRPC(&api.OperationDef{Name: "x"})
 		Expect(op.Parameters).To(BeEmpty())
 		Expect(op.Schema.Type).To(Equal("object"))
 		Expect(op.Schema.Properties).To(BeEmpty())
@@ -63,7 +63,7 @@ var _ = ginkgo.Describe("ManifestToService", func() {
 		})
 		Expect(err).NotTo(HaveOccurred())
 
-		op := operationDefToRPC(&pluginpb.OperationDef{
+		op := operationDefToRPC(&api.OperationDef{
 			Name:         "profile-collect",
 			Description:  "collect a profile",
 			ParamsSchema: schema,

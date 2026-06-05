@@ -152,7 +152,7 @@ var _ = ginkgo.Describe("Plugin operation server errors", func() {
 			"trace": "01KR0Z7BNP92W83AEQ1MMATATA"
 		}`
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			Expect(r.URL.Path).To(Equal("/api/plugins/arthas/operations/session"))
+			Expect(r.URL.Path).To(Equal("/api/plugins/arthas/invoke/session"))
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte(payload))

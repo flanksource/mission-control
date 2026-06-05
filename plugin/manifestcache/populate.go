@@ -15,8 +15,8 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 
 	"github.com/flanksource/incident-commander/pkg/httpobservability"
-	icplugin "github.com/flanksource/incident-commander/plugin"
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	"github.com/flanksource/incident-commander/plugin/api"
+	"github.com/flanksource/incident-commander/plugin/machinery/local"
 	"github.com/flanksource/incident-commander/sdk"
 )
 
@@ -157,17 +157,19 @@ func findBinary(dir, name string) (string, error) {
 
 // dialAndCaptureManifest spawns the plugin, completes RegisterPlugin, and
 // returns the manifest. The plugin is killed before this function returns.
-func dialAndCaptureManifest(ctx gocontext.Context, binPath string, timeout time.Duration) (*pluginpb.PluginManifest, error) {
+func dialAndCaptureManifest(ctx gocontext.Context, binPath string, timeout time.Duration) (*api.PluginManifest, error) {
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
 	cmd := osExec.Command(binPath)
 	cmd.Env = append(os.Environ(),
-		fmt.Sprintf("%s=%s", icplugin.Handshake.MagicCookieKey, icplugin.Handshake.MagicCookieValue),
+		fmt.Sprintf("%s=%s", api.Handshake.MagicCookieKey, api.Handshake.MagicCookieValue),
 	)
 	cli := goplugin.NewClient(&goplugin.ClientConfig{
-		HandshakeConfig:  icplugin.Handshake,
-		Plugins:          icplugin.PluginMap,
+		HandshakeConfig: api.Handshake,
+		Plugins: map[string]goplugin.Plugin{
+			api.PluginName: &local.GRPCPlugin{},
+		},
 		Cmd:              cmd,
 		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolGRPC},
 		Managed:          true,
@@ -178,11 +180,11 @@ func dialAndCaptureManifest(ctx gocontext.Context, binPath string, timeout time.
 	if err != nil {
 		return nil, fmt.Errorf("manifestcache: rpc client: %w", err)
 	}
-	raw, err := rpcClient.Dispense(icplugin.PluginName)
+	raw, err := rpcClient.Dispense(api.PluginName)
 	if err != nil {
 		return nil, fmt.Errorf("manifestcache: dispense: %w", err)
 	}
-	pluginCli, ok := raw.(*icplugin.Client)
+	pluginCli, ok := raw.(*local.Client)
 	if !ok {
 		return nil, fmt.Errorf("manifestcache: unexpected dispense type %T", raw)
 	}
@@ -190,8 +192,8 @@ func dialAndCaptureManifest(ctx gocontext.Context, binPath string, timeout time.
 	dialCtx, cancel := gocontext.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	manifest, err := pluginCli.Service.RegisterPlugin(dialCtx, &pluginpb.RegisterRequest{
-		HostProtocolVersion: uint32(icplugin.ProtocolVersion),
+	manifest, err := pluginCli.Service.RegisterPlugin(dialCtx, &api.RegisterRequest{
+		HostProtocolVersion: uint32(api.ProtocolVersion),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("manifestcache: RegisterPlugin: %w", err)

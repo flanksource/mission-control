@@ -1,11 +1,10 @@
 package db
 
 import (
-	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
-	. "github.com/onsi/ginkgo/v2"
+	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -13,20 +12,23 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
-var _ = Describe("Plugin CRD persistence", func() {
-	Describe("PluginFromCRD round-trip", func() {
-		It("preserves every spec field through encode and decode", func() {
+var _ = ginkgo.Describe("Plugin CRD persistence", func() {
+	ginkgo.Describe("PluginFromCRD round-trip", func() {
+		ginkgo.It("preserves every spec field through encode and decode", func() {
 			id := uuid.New()
 			selector := types.ResourceSelector{
 				Name:      "kube-pod",
 				Namespace: "kube-system",
 				Types:     types.Items{"Kubernetes::Pod", "Kubernetes::Deployment"},
 			}
-			conns := connection.ExecConnections{
-				FromConfigItem: strPtr("config-uuid"),
-			}
-			sql := connection.SQLConnection{
-				ConnectionName: "postgres://localhost/plugin",
+			connections := v1.PluginConnectionMappings{
+				Types: map[string]string{
+					"kubernetes": "connection://default/kubernetes",
+					"sql":        "connection://default/postgres",
+				},
+				Labels: map[string]string{
+					"logs": "connection://default/loki",
+				},
 			}
 			crd := &v1.Plugin{
 				ObjectMeta: metav1.ObjectMeta{
@@ -35,13 +37,13 @@ var _ = Describe("Plugin CRD persistence", func() {
 					UID:       k8stypes.UID(id.String()),
 				},
 				Spec: v1.PluginSpec{
-					Source:        "github.com/flanksource/plugin-k8s-logs",
-					Version:       "v0.4.2",
-					Checksum:      "sha256:cafef00d",
-					Selector:      selector,
-					Connections:   conns,
-					SQLConnection: &sql,
-					Properties:    map[string]string{"region": "us-east-1", "log_level": "debug"},
+					Source:      "github.com/flanksource/plugin-k8s-logs",
+					Version:     "v0.4.2",
+					Checksum:    "sha256:cafef00d",
+					Selector:    selector,
+					Connections: connections,
+					Audit:       []string{"logs-*", "!debug"},
+					Properties:  map[string]string{"region": "us-east-1", "log_level": "debug"},
 				},
 			}
 
@@ -53,22 +55,21 @@ var _ = Describe("Plugin CRD persistence", func() {
 			Expect(row.Source).To(Equal(models.SourceCRD))
 			Expect(string(row.Spec)).To(ContainSubstring(`"source":"github.com/flanksource/plugin-k8s-logs"`))
 			Expect(string(row.Spec)).To(ContainSubstring(`"name":"kube-pod"`))
-			Expect(string(row.Spec)).To(ContainSubstring("config-uuid"))
-			Expect(string(row.Spec)).To(ContainSubstring(`"connection":"postgres://localhost/plugin"`))
+			Expect(string(row.Spec)).To(ContainSubstring("connection://default/postgres"))
+			Expect(string(row.Spec)).To(ContainSubstring(`"audit":["logs-*","!debug"]`))
 
-			spec, err := pluginToSpec(row)
+			spec, err := PluginToSpec(row)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(spec.Source).To(Equal(crd.Spec.Source))
 			Expect(spec.Version).To(Equal(crd.Spec.Version))
 			Expect(spec.Checksum).To(Equal(crd.Spec.Checksum))
 			Expect(spec.Selector).To(Equal(crd.Spec.Selector))
 			Expect(spec.Connections).To(Equal(crd.Spec.Connections))
-			Expect(spec.SQLConnection).ToNot(BeNil())
-			Expect(spec.SQLConnection.ConnectionName).To(Equal(crd.Spec.SQLConnection.ConnectionName))
+			Expect(spec.Audit).To(Equal(crd.Spec.Audit))
 			Expect(spec.Properties).To(Equal(crd.Spec.Properties))
 		})
 
-		It("rejects an invalid UID", func() {
+		ginkgo.It("rejects an invalid UID", func() {
 			crd := &v1.Plugin{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: "bad-uid",
@@ -80,31 +81,15 @@ var _ = Describe("Plugin CRD persistence", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("failed to parse uid"))
 		})
-
-		It("leaves SQLConnection unset when the CRD does not pin one", func() {
-			crd := &v1.Plugin{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: "no-sql",
-					UID:  k8stypes.UID(uuid.NewString()),
-				},
-				Spec: v1.PluginSpec{Source: "x"},
-			}
-			row, err := PluginFromCRD(crd)
-			Expect(err).ToNot(HaveOccurred())
-
-			spec, err := pluginToSpec(row)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(spec.SQLConnection).To(BeNil())
-		})
 	})
 
-	Describe("Soft-delete callbacks", Ordered, func() {
+	ginkgo.Describe("Soft-delete callbacks", ginkgo.Ordered, func() {
 		var staleUID, otherUID uuid.UUID
 		newerUID := uuid.New()
 		const name = "stale-test-plugin"
 		const namespace = "default"
 
-		BeforeAll(func() {
+		ginkgo.BeforeAll(func() {
 			staleUID = uuid.New()
 			otherUID = uuid.New()
 			rows := []models.Plugin{
@@ -116,11 +101,11 @@ var _ = Describe("Plugin CRD persistence", func() {
 			}
 		})
 
-		AfterAll(func() {
+		ginkgo.AfterAll(func() {
 			DefaultContext.DB().Unscoped().Where("namespace = ? AND name IN ?", namespace, []string{name, "other-plugin"}).Delete(&models.Plugin{})
 		})
 
-		It("DeleteStalePlugin only soft-deletes rows with the same name/namespace and a different UID", func() {
+		ginkgo.It("DeleteStalePlugin only soft-deletes rows with the same name/namespace and a different UID", func() {
 			newer := &v1.Plugin{
 				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, UID: k8stypes.UID(newerUID.String())},
 				Spec:       v1.PluginSpec{Source: "new"},
@@ -147,7 +132,7 @@ var _ = Describe("Plugin CRD persistence", func() {
 			Expect(names["other-plugin"]).To(Equal(1))
 		})
 
-		It("DeletePlugin soft-deletes the surviving row by id", func() {
+		ginkgo.It("DeletePlugin soft-deletes the surviving row by id", func() {
 			Expect(DeletePlugin(DefaultContext, otherUID.String())).To(Succeed())
 
 			var row models.Plugin
@@ -156,5 +141,3 @@ var _ = Describe("Plugin CRD persistence", func() {
 		})
 	})
 })
-
-func strPtr(s string) *string { return &s }

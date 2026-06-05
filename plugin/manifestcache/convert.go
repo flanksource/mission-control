@@ -4,7 +4,7 @@ import (
 	"github.com/flanksource/clicky/rpc"
 	"google.golang.org/protobuf/types/known/structpb"
 
-	pluginpb "github.com/flanksource/incident-commander/plugin/proto"
+	"github.com/flanksource/incident-commander/plugin/api"
 )
 
 // ManifestToService translates a plugin's protobuf manifest into the clicky
@@ -12,7 +12,7 @@ import (
 // only the fields needed for `--help` rendering and CLI dispatch survive
 // (name, version, description, operations[], scope tag, params_schema as
 // a JSON-Schema-shaped struct).
-func ManifestToService(m *pluginpb.PluginManifest) rpc.RPCService {
+func ManifestToService(m *api.PluginManifest) rpc.RPCService {
 	if m == nil {
 		return rpc.RPCService{}
 	}
@@ -28,7 +28,7 @@ func ManifestToService(m *pluginpb.PluginManifest) rpc.RPCService {
 	}
 }
 
-func operationDefToRPC(d *pluginpb.OperationDef) rpc.RPCOperation {
+func operationDefToRPC(d *api.OperationDef) rpc.RPCOperation {
 	if d == nil {
 		return rpc.RPCOperation{}
 	}

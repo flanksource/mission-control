@@ -38,14 +38,14 @@ tasks:
       - task --list
 
   proto:
-    desc: Regenerate plugin gRPC stubs from plugin/plugin.proto
+    desc: Regenerate plugin gRPC stubs from plugin/api/plugin.proto
     cmds:
       - make proto
     sources:
-      - plugin/plugin.proto
+      - plugin/api/plugin.proto
     generates:
-      - plugin/plugin.pb.go
-      - plugin/plugin_grpc.pb.go
+      - plugin/api/plugin.pb.go
+      - plugin/api/plugin_grpc.pb.go
 
   signing-key:
     desc: Generate an RSA private signing key at the default path

@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/flanksource/clicky/rpc"
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac/policy"
@@ -30,6 +31,7 @@ import (
 	plugin "github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/api"
 	"github.com/flanksource/incident-commander/plugin/machinery"
+	"github.com/flanksource/incident-commander/plugin/manifestcache"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
@@ -56,10 +58,19 @@ type PluginListing struct {
 	Operations  []*api.OperationDef `json:"operations,omitempty"`
 }
 
+type ClickyRPCListing struct {
+	Name    string         `json:"name"`
+	Service rpc.RPCService `json:"service"`
+}
+
 // ListPlugins returns every running plugin whose CRD selector matches the
 // (optional) config_id query parameter. With no config_id, returns every
 // plugin (useful for global tabs).
 func ListPlugins(c echo.Context) error {
+	if c.QueryParam("format") == "clicky-rpc" {
+		return listPluginsClickyRPC(c)
+	}
+
 	ctx := c.Request().Context().(dutyContext.Context)
 	configID := c.QueryParam("config_id")
 	out := []PluginListing{}
@@ -82,6 +93,31 @@ func ListPlugins(c echo.Context) error {
 			Version:     e.Manifest.Version,
 			Tabs:        e.Manifest.Tabs,
 			Operations:  e.Manifest.Operations,
+		})
+	}
+	return c.JSON(http.StatusOK, out)
+}
+
+func listPluginsClickyRPC(c echo.Context) error {
+	ctx := c.Request().Context().(dutyContext.Context)
+	configID := c.QueryParam("config_id")
+	out := []ClickyRPCListing{}
+	for _, e := range plugin.DefaultRegistry.List() {
+		if e.Manifest == nil {
+			continue
+		}
+		if configID != "" {
+			matches, err := machinery.SelectorMatches(ctx, e, configID)
+			if err != nil {
+				return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+			}
+			if !matches {
+				continue
+			}
+		}
+		out = append(out, ClickyRPCListing{
+			Name:    e.Name,
+			Service: manifestcache.ManifestToService(e.Manifest),
 		})
 	}
 	return c.JSON(http.StatusOK, out)

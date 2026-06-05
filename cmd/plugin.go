@@ -2,13 +2,11 @@ package cmd
 
 import (
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
 	"strings"
 
-	"github.com/flanksource/incident-commander/sdk"
 	"github.com/spf13/cobra"
 )
 
@@ -62,47 +60,12 @@ func init() {
 	PluginCmd.Flags().StringVar(&pluginOpts.ConfigID, "config-id", "", "Catalog/config item id passed to the operation")
 	PluginCmd.Flags().BoolVar(&pluginOpts.RawJSON, "json", false, "Emit raw response instead of pretty-printing JSON")
 	PluginCmd.Flags().Var(&pluginOpts.Params, "param", "Key=value parameters (repeatable)")
+	registerPluginHARFlag(Root)
 	Root.AddCommand(PluginCmd)
 }
 
 func runPluginOp(cmd *cobra.Command, args []string) error {
-	server, authHeader, err := pluginServerAndAuth()
-	if err != nil {
-		return err
-	}
-
-	params := pluginOpts.Params.values
-	if params == nil {
-		params = map[string]string{}
-	}
-	body, err := json.Marshal(params)
-	if err != nil {
-		return err
-	}
-
-	client := sdk.NewWithAuthHeader(server, authHeader)
-	respBody, err := client.InvokePluginOperation(args[0], args[1], pluginOpts.ConfigID, body)
-	if err != nil {
-		return err
-	}
-
-	if pluginOpts.RawJSON {
-		_, err = cmd.OutOrStdout().Write(respBody)
-		return err
-	}
-
-	var pretty any
-	if err := json.Unmarshal(respBody, &pretty); err == nil {
-		out, err := json.MarshalIndent(pretty, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(cmd.OutOrStdout(), string(out))
-		return nil
-	}
-
-	_, err = cmd.OutOrStdout().Write(respBody)
-	return err
+	return dispatchOperation(cmd, args[0], args[1], pluginOpts.Params.values, pluginOpts.ConfigID, pluginOpts.RawJSON)
 }
 
 func pluginServerAndAuth() (string, string, error) {

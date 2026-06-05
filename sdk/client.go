@@ -24,18 +24,26 @@ import (
 // user-facing frontend rather than the /api backend.
 var ErrHTMLResponse = errors.New("server returned HTML instead of JSON (is the backend at /api?)")
 
+type TokenProvider func(context.Context) (string, error)
+
+type ClientOption func(*Client)
+
 type Client struct {
 	*http.Client
 	serverURL     string
 	tokenProvider TokenProvider
 }
 
-func New(serverURL, token string) *Client {
-	return NewWithAuthHeader(serverURL, "Bearer "+token)
+func New(serverURL, token string, opts ...ClientOption) *Client {
+	authHeader := ""
+	if token != "" {
+		authHeader = "Bearer " + token
+	}
+	return NewWithAuthHeader(serverURL, authHeader, opts...)
 }
 
 // NewWithAuthHeader returns a client using the provided Authorization header.
-func NewWithAuthHeader(serverURL, authHeader string) *Client {
+func NewWithAuthHeader(serverURL, authHeader string, opts ...ClientOption) *Client {
 	client := http.NewClient().
 		BaseURL(serverURL).
 		Header("Content-Type", "application/json").
@@ -43,7 +51,67 @@ func NewWithAuthHeader(serverURL, authHeader string) *Client {
 	if authHeader != "" {
 		client = client.Header("Authorization", authHeader)
 	}
-	return &Client{Client: httpobservability.Apply(client)}
+	out := &Client{Client: httpobservability.Apply(client), serverURL: strings.TrimRight(serverURL, "/")}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(out)
+		}
+	}
+	if out.tokenProvider != nil {
+		out.Client = out.Client.Use(tokenProviderMiddleware(out.tokenProvider))
+	}
+	return out
+}
+
+func WithTokenProvider(provider TokenProvider) ClientOption {
+	return func(c *Client) {
+		c.tokenProvider = provider
+	}
+}
+
+func WithUserAgent(userAgent string) ClientOption {
+	return func(c *Client) {
+		if c.Client != nil && userAgent != "" {
+			c.Client.UserAgent(userAgent)
+		}
+	}
+}
+
+func WithAccept(accept string) ClientOption {
+	return func(c *Client) {
+		if c.Client != nil && accept != "" {
+			c.Client.Header("Accept", accept)
+		}
+	}
+}
+
+func tokenProviderMiddleware(provider TokenProvider) func(stdhttp.RoundTripper) stdhttp.RoundTripper {
+	return func(next stdhttp.RoundTripper) stdhttp.RoundTripper {
+		return roundTripperFunc(func(req *stdhttp.Request) (*stdhttp.Response, error) {
+			token, err := provider(req.Context())
+			if err != nil {
+				return nil, err
+			}
+			if token != "" {
+				req = req.Clone(req.Context())
+				req.Header.Set("Authorization", "Bearer "+token)
+			}
+			return next.RoundTrip(req)
+		})
+	}
+}
+
+type roundTripperFunc func(*stdhttp.Request) (*stdhttp.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *stdhttp.Request) (*stdhttp.Response, error) {
+	return f(req)
+}
+
+func (c *Client) apiPath(path string) string {
+	if strings.HasSuffix(c.serverURL, "/api") && strings.HasPrefix(path, "/api/") {
+		return strings.TrimPrefix(path, "/api")
+	}
+	return path
 }
 
 // decodeJSON parses a response body as JSON, returning ErrHTMLResponse if the
@@ -69,27 +137,31 @@ func looksLikeHTML(contentType, body string) bool {
 	return strings.HasPrefix(strings.TrimLeft(body, " \t\r\n"), "<")
 }
 
-// decodeJSON parses a response body as JSON, returning ErrHTMLResponse if the
-// body looks like HTML (frontend served instead of backend JSON).
-func decodeJSON(r *http.Response, out any) error {
-	body, err := r.AsString()
-	if err != nil {
-		return err
-	}
-	if looksLikeHTML(r.Header.Get("Content-Type"), body) {
-		return ErrHTMLResponse
-	}
-	if err := json.Unmarshal([]byte(body), out); err != nil {
-		return fmt.Errorf("failed to decode JSON response: %w", err)
-	}
-	return nil
+type ServerError struct {
+	StatusCode int
+	Body       []byte
+	Code       string
+	Message    string
+	Trace      string
+	Time       string
+	Context    map[string]any
+	Hint       string
+	Public     string
+	Stacktrace string
 }
 
-func looksLikeHTML(contentType, body string) bool {
-	if strings.Contains(strings.ToLower(contentType), "text/html") {
-		return true
+func (e *ServerError) Error() string {
+	if e == nil {
+		return ""
 	}
-	return strings.HasPrefix(strings.TrimLeft(body, " \t\r\n"), "<")
+	message := strings.TrimSpace(e.Message)
+	if message == "" {
+		message = strings.TrimSpace(string(e.Body))
+	}
+	if message == "" {
+		return fmt.Sprintf("server %d", e.StatusCode)
+	}
+	return fmt.Sprintf("server %d: %s", e.StatusCode, message)
 }
 
 func newServerError(statusCode int, body []byte) *ServerError {
@@ -268,7 +340,7 @@ func (c *Client) DispatchPluginOperation(ctx context.Context, plugin, op string,
 	if configID != "" {
 		req = req.QueryParam("config_id", configID)
 	}
-	resp, err := req.Post(c.apiPath(fmt.Sprintf("/api/plugins/%s/operations/%s", plugin, op)), params)
+	resp, err := req.Post(c.apiPath(fmt.Sprintf("/api/plugins/%s/invoke/%s", url.PathEscape(plugin), url.PathEscape(op))), params)
 	if err != nil {
 		return nil, 0, err
 	}

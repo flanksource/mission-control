@@ -11,8 +11,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/flanksource/incident-commander/plugin/machinery/local"
 	"github.com/flanksource/incident-commander/plugin/manifestcache"
-	"github.com/flanksource/incident-commander/plugin/registry"
 	"github.com/flanksource/incident-commander/sdk"
 )
 
@@ -35,7 +35,7 @@ func resolveMode() (pluginMode, *MCContext, error) {
 	if mc, ok := contextHasAPI(); ok {
 		return modeAPI, mc, nil
 	}
-	if registry.PluginPath() == "" {
+	if local.PluginPath() == "" {
 		return modeNone, nil, errors.New("no API context and no MISSION_CONTROL_PLUGIN_PATH; configure one with `mission-control auth login` or set MISSION_CONTROL_PLUGIN_PATH")
 	}
 	return modeLocal, nil, nil
@@ -46,7 +46,7 @@ func resolveMode() (pluginMode, *MCContext, error) {
 func refreshAllFromServer(cmd *cobra.Command, mc *MCContext) ([]string, error) {
 	ctx, cancel := gocontext.WithTimeout(cmd.Context(), 30*time.Second)
 	defer cancel()
-	_, flush := startHAR()
+	collector, flush := startHAR()
 	defer func() {
 		if err := flush(); err != nil {
 			fmt.Fprintln(cmd.ErrOrStderr(), err)
@@ -55,6 +55,7 @@ func refreshAllFromServer(cmd *cobra.Command, mc *MCContext) ([]string, error) {
 	return manifestcache.PopulateAPI(ctx, manifestcache.PopulateOptions{
 		Server: mc.Server,
 		Token:  mc.Token,
+		HAR:    collector,
 	})
 }
 
@@ -64,7 +65,7 @@ func refreshOneFromBinary(cmd *cobra.Command, name string) (*manifestcache.Entry
 	ctx, cancel := gocontext.WithTimeout(cmd.Context(), 30*time.Second)
 	defer cancel()
 	return manifestcache.PopulateLocal(ctx, name, manifestcache.PopulateOptions{
-		BinaryDir: registry.PluginPath(),
+		BinaryDir: local.PluginPath(),
 	})
 }
 

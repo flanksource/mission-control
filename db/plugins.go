@@ -12,12 +12,9 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/plugin/manifestcache"
-	"github.com/flanksource/incident-commander/plugin/registry"
 )
 
-// PluginFromCRD converts a v1.Plugin CRD into the persisted models.Plugin
-// row. The full PluginSpec is JSON-encoded into the spec jsonb column;
-// pluginToSpec reverses this when rehydrating the registry on startup.
+// PluginFromCRD converts a Plugin CRD into the persisted plugins table row.
 func PluginFromCRD(obj *v1.Plugin) (models.Plugin, error) {
 	dbObj := models.Plugin{
 		Name:          obj.Name,
@@ -44,10 +41,8 @@ func PluginFromCRD(obj *v1.Plugin) (models.Plugin, error) {
 	return dbObj, nil
 }
 
-// pluginToSpec is the reverse of PluginFromCRD: it reconstructs a
-// v1.PluginSpec from the stored jsonb column so cold-start replay can hand
-// it to the registry helper.
-func pluginToSpec(row models.Plugin) (v1.PluginSpec, error) {
+// PluginToSpec reconstructs a PluginSpec from the persisted spec jsonb column.
+func PluginToSpec(row models.Plugin) (v1.PluginSpec, error) {
 	var spec v1.PluginSpec
 	if len(row.Spec) == 0 {
 		return spec, nil
@@ -58,49 +53,45 @@ func pluginToSpec(row models.Plugin) (v1.PluginSpec, error) {
 	return spec, nil
 }
 
-// PersistPluginFromCRD is the kopper persist callback. It upserts the
-// plugins table row, then asks the registry to install the binary and start
-// the supervisor.
+// PersistPluginFromCRD persists the Plugin CRD row. Runtime startup is handled
+// by plugin/reconciler, which calls this as part of its reconcile flow.
 func PersistPluginFromCRD(ctx context.Context, obj *v1.Plugin) error {
 	if obj == nil {
 		return ctx.Oops().Errorf("nil Plugin")
 	}
-
 	dbObj, err := PluginFromCRD(obj)
 	if err != nil {
 		return ctx.Oops().Wrap(err)
 	}
-
 	if err := ctx.DB().Save(&dbObj).Error; err != nil {
 		return ctx.Oops().Wrapf(err, "failed to persist plugin %s/%s", obj.Namespace, obj.Name)
 	}
-
-	binPath, err := registry.ApplyToRegistry(ctx, obj.Name, obj.Spec)
-	if err != nil {
-		return ctx.Oops().Wrap(err)
-	}
-
-	if binPath != "" && binPath != dbObj.InstalledPath {
-		if err := ctx.DB().Model(&models.Plugin{}).
-			Where("id = ?", dbObj.ID).
-			Update("installed_path", binPath).Error; err != nil {
-			ctx.Logger.V(2).Infof("plugin %s: failed to write installed_path: %v", obj.Name, err)
-		}
-	}
-
 	return nil
 }
 
-// DeletePlugin is the kopper delete callback. It soft-deletes the row, then
-// stops the supervised process and drops the registry entry.
+// UpdatePluginStatus persists runtime status fields reported after startup.
+func UpdatePluginStatus(ctx context.Context, id uuid.UUID, status v1.PluginStatus) error {
+	updates := map[string]any{}
+	if status.InstalledPath != "" {
+		updates["installed_path"] = status.InstalledPath
+	}
+	if status.PluginVersion != "" {
+		updates["plugin_version"] = status.PluginVersion
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	return ctx.DB().Model(&models.Plugin{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// DeletePlugin soft-deletes the persisted plugin row.
 func DeletePlugin(ctx context.Context, id string) error {
 	var row models.Plugin
-	if err := ctx.DB().Where("id = ?", id).First(&row).Error; err == nil {
-		registry.RemoveFromRegistry(row.Name)
+	if err := ctx.DB().Where("id = ?", id).First(&row).Error; err == nil && row.Name != "" {
 		if err := manifestcache.Delete(row.Name); err != nil {
 			ctx.Logger.V(2).Infof("plugin %s: drop manifest cache: %v", row.Name, err)
 		}
-	} else {
+	} else if err != nil {
 		ctx.Logger.V(3).Infof("delete plugin %s: no DB row to look up name from: %v", id, err)
 	}
 
@@ -110,16 +101,14 @@ func DeletePlugin(ctx context.Context, id string) error {
 }
 
 // DeleteStalePlugin soft-deletes prior rows that share the new CRD's
-// (name, namespace) but have a different UID — the result of a CRD being
-// renamed or recreated.
+// name/namespace but have a different UID.
 func DeleteStalePlugin(ctx context.Context, newer *v1.Plugin) error {
 	if newer == nil {
 		return nil
 	}
-	registry.StaleFromRegistry(newer)
 	return ctx.DB().Model(&models.Plugin{}).
 		Where("name = ? AND namespace = ?", newer.Name, newer.Namespace).
-		Where("id != ?", newer.UID).
+		Where("id != ?", string(newer.UID)).
 		Where("deleted_at IS NULL").
 		Update("deleted_at", duty.Now()).Error
 }
@@ -131,26 +120,4 @@ func ListPlugins(ctx context.Context) ([]models.Plugin, error) {
 		return nil, ctx.Oops().Wrapf(err, "list plugins")
 	}
 	return rows, nil
-}
-
-// ReplayPlugins rehydrates the in-memory registry from the plugins table.
-// Called once at boot, after WireSupervisor and before mgr.Start, so
-// pre-existing plugins are running before kopper events arrive.
-func ReplayPlugins(ctx context.Context) error {
-	rows, err := ListPlugins(ctx)
-	if err != nil {
-		return err
-	}
-
-	for _, row := range rows {
-		spec, err := pluginToSpec(row)
-		if err != nil {
-			ctx.Logger.Errorf("plugin %s: replay decode failed: %v", row.Name, err)
-			continue
-		}
-		if _, err := registry.ApplyToRegistry(ctx, row.Name, spec); err != nil {
-			ctx.Logger.Errorf("plugin %s: replay apply failed: %v", row.Name, err)
-		}
-	}
-	return nil
 }
