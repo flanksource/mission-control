@@ -17,6 +17,12 @@ func IsLatest(version string) bool {
 	return version == "" || version == "latest"
 }
 
+// isFile reports whether path exists and is a regular file (not a directory).
+func isFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
 // binaryName returns the on-disk name used for a plugin's binary and version
 // directories. The deps package name (source) is preferred, falling back to
 // the plugin name.
@@ -59,7 +65,7 @@ func InstallPlugin(ctx dutyContext.Context, name, source, version string) (strin
 	}
 
 	binPath := BinaryPathFor(binName, version)
-	if info, err := os.Stat(binPath); err == nil && !info.IsDir() {
+	if isFile(binPath) {
 		ctx.Logger.V(3).Infof("plugin %s@%s: using existing binary at %s, skipping install", name, version, binPath)
 		return binPath, nil
 	}
@@ -99,11 +105,18 @@ func ResolveAndInstallLatest(ctx dutyContext.Context, name, source string) (stri
 	}
 
 	res, err := deps.InstallWithContext(ctx, source, "latest", deps.WithBinDir(staging))
-	if err != nil {
-		return "", "", fmt.Errorf("resolve latest for plugin %s: %w", name, err)
+	if err == nil && res != nil {
+		err = res.Error
 	}
-	if res != nil && res.Error != nil {
-		return "", "", fmt.Errorf("resolve latest for plugin %s: %w", name, res.Error)
+	if err != nil {
+		// deps can't resolve this source (e.g. a locally-built plugin that
+		// isn't in any registry). Fall back to a binary already staged in the
+		// plugin path so local development and pre-installed plugins still run.
+		if staged := BinaryPathFor(binName, "latest"); isFile(staged) {
+			ctx.Logger.V(3).Infof("plugin %s: deps could not resolve latest (%v); using staged binary %s", name, err, staged)
+			return staged, "latest", nil
+		}
+		return "", "", fmt.Errorf("resolve latest for plugin %s: %w", name, err)
 	}
 
 	version := strings.TrimSpace(res.Version.String())
@@ -124,7 +137,7 @@ func ResolveAndInstallLatest(ctx dutyContext.Context, name, source string) (stri
 // binary is reused and the staged copy is left untouched.
 func pinVersion(binName, version string) (string, error) {
 	target := BinaryPathFor(binName, version)
-	if info, err := os.Stat(target); err == nil && !info.IsDir() {
+	if isFile(target) {
 		return target, nil
 	}
 

@@ -64,6 +64,37 @@ var _ = ginkgo.Describe("RemoveVersion", func() {
 	})
 })
 
+var _ = ginkgo.Describe("ResolveAndInstallLatest", func() {
+	var root string
+
+	ginkgo.BeforeEach(func() {
+		root = ginkgo.GinkgoT().TempDir()
+		Expect(os.Setenv(EnvPluginPath, root)).To(Succeed())
+		ginkgo.DeferCleanup(func() { _ = os.Unsetenv(EnvPluginPath) })
+	})
+
+	ginkgo.It("falls back to a staged binary when deps cannot resolve the source", func() {
+		Expect(os.MkdirAll(VersionedBinDirFor("local-only", "latest"), 0o755)).To(Succeed())
+		Expect(os.WriteFile(BinaryPathFor("local-only", "latest"), []byte("staged"), 0o755)).To(Succeed())
+
+		ctx, cancel := newTestContext()
+		defer cancel()
+
+		path, version, err := ResolveAndInstallLatest(ctx, "local-only", "local-only")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(path).To(Equal(BinaryPathFor("local-only", "latest")))
+		Expect(version).To(Equal("latest"))
+	})
+
+	ginkgo.It("errors when deps cannot resolve and nothing is staged", func() {
+		ctx, cancel := newTestContext()
+		defer cancel()
+
+		_, _, err := ResolveAndInstallLatest(ctx, "local-only", "local-only")
+		Expect(err).To(HaveOccurred())
+	})
+})
+
 var _ = ginkgo.Describe("pinVersion", func() {
 	var root string
 
