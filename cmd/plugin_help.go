@@ -7,7 +7,81 @@ import (
 
 	"github.com/flanksource/clicky/rpc"
 	"github.com/spf13/cobra"
+
+	"github.com/flanksource/incident-commander/plugin/manifestcache"
 )
+
+func registerCachedPluginCommands(pluginRoot, root *cobra.Command) error {
+	entries, err := manifestcache.List()
+	if err != nil {
+		return err
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		return entries[i].Service.Name < entries[j].Service.Name
+	})
+	for _, entry := range entries {
+		if entry == nil || entry.Service.Name == "" {
+			continue
+		}
+		nested, top := buildPluginCommands(*entry)
+		if pluginRoot != nil && !commandExists(pluginRoot, nested.Name()) {
+			pluginRoot.AddCommand(nested)
+		}
+		if root != nil && !commandExists(root, top.Name()) {
+			root.AddCommand(top)
+		}
+	}
+	return nil
+}
+
+func commandExists(parent *cobra.Command, name string) bool {
+	if parent == nil || name == "" {
+		return false
+	}
+	for _, cmd := range parent.Commands() {
+		if cmd.Name() == name {
+			return true
+		}
+	}
+	return false
+}
+
+func buildPluginCommands(entry manifestcache.Entry) (nested, top *cobra.Command) {
+	return newPluginRoot(entry, false), newPluginRoot(entry, true)
+}
+
+func newPluginRoot(entry manifestcache.Entry, topLevel bool) *cobra.Command {
+	short := entry.Service.Description
+	if short == "" {
+		short = fmt.Sprintf("Operations for the %q plugin", entry.Service.Name)
+	}
+	var (
+		params   pluginParams
+		configID string
+		raw      bool
+	)
+	root := &cobra.Command{
+		Use:          entry.Service.Name + " <operation>",
+		Short:        short,
+		Long:         formatPluginLong(entry, topLevel),
+		Args:         cobra.ExactArgs(1),
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return dispatchOperation(cmd, entry.Service.Name, args[0], params.values, configID, raw)
+		},
+	}
+	root.Flags().Var(&params, "param", "Operation parameter (repeatable, key=value)")
+	root.Flags().StringVar(&configID, "config-id", "", "Catalog config item id passed to the operation")
+	root.Flags().BoolVar(&raw, "json", false, "Emit raw JSON instead of pretty-printing")
+	for _, op := range entry.Service.Operations {
+		root.AddCommand(newOperationCommand(entry.Service.Name, op))
+	}
+	return root
+}
+
+func newOperationCommand(plugin string, op rpc.RPCOperation) *cobra.Command {
+	return newOperationCommandWithDispatcher(plugin, op, dispatchOperation)
+}
 
 type operationDispatcher func(cmd *cobra.Command, plugin, op string, params map[string]string, configID string, raw bool) error
 
@@ -62,6 +136,30 @@ func operationRequiresConfigID(op rpc.RPCOperation) bool {
 		}
 	}
 	return false
+}
+
+func formatPluginLong(entry manifestcache.Entry, topLevel bool) string {
+	var b strings.Builder
+	if entry.Service.Description != "" {
+		b.WriteString(entry.Service.Description)
+		b.WriteString("\n\n")
+	}
+	if entry.Service.Version != "" {
+		fmt.Fprintf(&b, "Version: %s\n", entry.Service.Version)
+	}
+	switch entry.Source {
+	case manifestcache.SourceRemoteServer:
+		fmt.Fprintf(&b, "Source: remote server (%s)\n", entry.ServerURL)
+	case manifestcache.SourceLocalBinary:
+		fmt.Fprintf(&b, "Source: local binary (%s)\n", entry.BinaryPath)
+	}
+	if !entry.CachedAt.IsZero() {
+		fmt.Fprintf(&b, "Cached: %s\n", entry.CachedAt.Format("2006-01-02 15:04:05 MST"))
+	}
+	if !topLevel {
+		fmt.Fprintf(&b, "\nThe same operations are also reachable as `incident-commander %s <operation>`.\n", entry.Service.Name)
+	}
+	return strings.TrimRight(b.String(), "\n")
 }
 
 // formatOperationLong renders the per-op help: description, then a table
