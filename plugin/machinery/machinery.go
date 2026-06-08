@@ -70,6 +70,9 @@ func startLocalPlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 
 func startLocalPluginWithHost(ctx dutyContext.Context, entry *plugin.Entry, startHost func(*goplugin.GRPCBroker) (uint32, error)) error {
 	sup := local.New(entry.ID, entry.Name, entry.InstalledPath)
+	sup.OnStart = func(ctx dutyContext.Context) {
+		writeManifestCache(ctx, entry, sup)
+	}
 	started, err := plugin.DefaultRegistry.SetRuntimeIfAbsent(entry.ID, sup)
 	if err != nil {
 		return err
@@ -83,7 +86,6 @@ func startLocalPluginWithHost(ctx dutyContext.Context, entry *plugin.Entry, star
 		return fmt.Errorf("plugin %s: start supervisor: %w", entry.ID, err)
 	}
 
-	writeManifestCache(ctx, entry, sup)
 	return nil
 }
 
