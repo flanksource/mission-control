@@ -24,6 +24,7 @@ export type PlaybookRunsOptions = {
   checkId?: string;
   playbookId?: string;
   status?: string;
+  createdBy?: string;
   limit?: number;
   offset?: number;
 };
@@ -288,6 +289,7 @@ export function buildPlaybookRunsPath(options: PlaybookRunsOptions = {}) {
   if (options.checkId) params.push(`check_id=eq.${encodeURIComponent(options.checkId)}`);
   if (options.playbookId) params.push(`playbook_id=eq.${encodeURIComponent(options.playbookId)}`);
   if (options.status) params.push(`status=eq.${encodeURIComponent(options.status)}`);
+  if (options.createdBy) params.push(`created_by=eq.${encodeURIComponent(options.createdBy)}`);
   params.push("order=created_at.desc");
   params.push(`limit=${options.limit ?? 50}`);
   if (options.offset) params.push(`offset=${options.offset}`);

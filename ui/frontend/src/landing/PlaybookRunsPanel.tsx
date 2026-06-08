@@ -22,16 +22,15 @@ export function PlaybookRunsPanel() {
   const meQuery = useQuery({ queryKey: ["whoami"], queryFn: getWhoAmI, staleTime: 60_000 });
   const userId = meQuery.data?.id;
 
-  const effectiveScope: Scope = scope === "mine" && !userId ? "all" : scope;
+  const effectiveScope: Scope = scope;
   const runsQuery = useQuery({
     queryKey: ["landing", "playbook-runs", effectiveScope, userId ?? null],
     queryFn: async () => {
-      const result = await getPlaybookRuns({ limit: 10 });
-      const all = result.data ?? [];
-      if (effectiveScope === "mine" && userId) {
-        return all.filter((run) => run.created_by === userId);
+      if (effectiveScope === "mine" && !userId) {
+        return [];
       }
-      return all;
+      const result = await getPlaybookRuns({ limit: 10, createdBy: effectiveScope === "mine" ? userId : undefined });
+      return result.data ?? [];
     },
   });
 
