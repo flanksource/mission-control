@@ -21,8 +21,7 @@ var _ = ginkgo.Describe("UI dev server helpers", func() {
 		Expect(cmd.Args).To(Equal([]string{
 			"pnpm", "exec", "vite", "--host", viteHost, "--port", "4321", "--strictPort",
 		}))
-		Expect(cmd.SysProcAttr).NotTo(BeNil())
-		Expect(cmd.SysProcAttr.Setpgid).To(BeTrue())
+		expectProcessGroupSet(cmd)
 		Expect(cmd.Env).To(ContainElement("INCIDENT_COMMANDER_API_URL=http://127.0.0.1:8080"))
 	})
 
