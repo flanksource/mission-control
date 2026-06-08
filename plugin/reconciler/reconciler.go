@@ -115,7 +115,7 @@ func DeletePlugin(ctx context.Context, id string) error {
 			ctx.Logger.V(2).Infof("plugin %s: drop manifest cache: %v", entry.Name, err)
 		}
 	}
-	return db.DeletePlugin(ctx, id)
+	return db.DeletePlugin(ctx, pluginID.String())
 }
 
 // DeleteStalePlugin removes registry entries for plugins whose CRD has been
