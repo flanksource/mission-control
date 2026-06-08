@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"time"
@@ -20,7 +21,7 @@ var _ = ginkgo.Describe("whoami command", func() {
 		}))
 		defer server.Close()
 
-		report := probeAuth(nil, &MCConfig{}, &MCContext{
+		report := probeAuth(context.TODO(), &MCConfig{}, &MCContext{
 			Name:   "test",
 			Server: server.URL,
 			Token:  "test-token",
@@ -44,7 +45,7 @@ var _ = ginkgo.Describe("whoami command", func() {
 		}))
 		defer server.Close()
 
-		_, _, endpoint, _, err := callWhoami(nil, server.URL, "test-token")
+		_, _, endpoint, _, err := callWhoami(context.TODO(), server.URL, "test-token")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(endpoint).To(Equal(server.URL + "/api/auth/whoami"))
 	})

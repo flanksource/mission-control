@@ -60,9 +60,7 @@ func paramsSchemaToRPC(s *structpb.Struct) (rpc.Schema, []rpc.RPCParameter) {
 	if t := stringField(s, "type"); t != "" {
 		schema.Type = t
 	}
-	for _, name := range stringListField(s, "required") {
-		schema.Required = append(schema.Required, name)
-	}
+	schema.Required = append(schema.Required, stringListField(s, "required")...)
 
 	props := structField(s, "properties")
 	if props == nil {
@@ -86,9 +84,7 @@ func paramsSchemaToRPC(s *structpb.Struct) (rpc.Schema, []rpc.RPCParameter) {
 			if def := fs.Fields["default"]; def != nil {
 				prop.Default = def.AsInterface()
 			}
-			for _, e := range stringListField(fs, "enum") {
-				prop.Enum = append(prop.Enum, e)
-			}
+			prop.Enum = append(prop.Enum, stringListField(fs, "enum")...)
 		}
 		schema.Properties[fieldName] = prop
 		params = append(params, rpc.RPCParameter{

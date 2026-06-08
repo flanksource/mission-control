@@ -1,10 +1,7 @@
 package cmd
 
 import (
-	"encoding/base64"
 	"fmt"
-	"net/url"
-	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -66,43 +63,4 @@ func init() {
 
 func runPluginOp(cmd *cobra.Command, args []string) error {
 	return dispatchOperation(cmd, args[0], args[1], pluginOpts.Params.values, pluginOpts.ConfigID, pluginOpts.RawJSON)
-}
-
-func pluginServerAndAuth() (string, string, error) {
-	cfg, err := LoadConfig()
-	if err != nil {
-		return "", "", err
-	}
-
-	mcCtx := cfg.CurrentMCContext()
-	if mcCtx == nil || mcCtx.Server == "" {
-		return "", "", fmt.Errorf("no Mission Control server configured; select a context with server")
-	}
-	server := mcCtx.Server
-
-	if _, err := url.ParseRequestURI(server); err != nil {
-		return "", "", fmt.Errorf("invalid Mission Control server URL %q: %w", server, err)
-	}
-
-	if mcCtx.Token != "" {
-		return server, "Bearer " + mcCtx.Token, nil
-	}
-
-	basicAuth := strings.TrimSpace(os.Getenv("PLUGIN_SERVER_AUTH"))
-	if strings.HasPrefix(strings.ToLower(basicAuth), "basic ") {
-		basicAuth = strings.TrimSpace(basicAuth[len("basic "):])
-	}
-	if basicAuth == "" {
-		return server, "", nil
-	}
-
-	decoded, err := base64.StdEncoding.DecodeString(basicAuth)
-	if err != nil {
-		return "", "", fmt.Errorf("PLUGIN_SERVER_AUTH must be base64(username:password): %w", err)
-	}
-	if !strings.Contains(string(decoded), ":") {
-		return "", "", fmt.Errorf("PLUGIN_SERVER_AUTH must decode to username:password")
-	}
-
-	return server, "Basic " + basicAuth, nil
 }

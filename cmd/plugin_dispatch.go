@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/flanksource/incident-commander/plugin/machinery/local"
-	"github.com/flanksource/incident-commander/plugin/manifestcache"
 	"github.com/flanksource/incident-commander/sdk"
 )
 
@@ -39,34 +38,6 @@ func resolveMode() (pluginMode, *MCContext, error) {
 		return modeNone, nil, errors.New("no API context and no MISSION_CONTROL_PLUGIN_PATH; configure one with `mission-control auth login` or set MISSION_CONTROL_PLUGIN_PATH")
 	}
 	return modeLocal, nil, nil
-}
-
-// refreshAllFromServer fetches every plugin schema the server exposes and
-// writes a sidecar entry per plugin. Returns the names written.
-func refreshAllFromServer(cmd *cobra.Command, mc *MCContext) ([]string, error) {
-	ctx, cancel := gocontext.WithTimeout(cmd.Context(), 30*time.Second)
-	defer cancel()
-	collector, flush := startHAR()
-	defer func() {
-		if err := flush(); err != nil {
-			fmt.Fprintln(cmd.ErrOrStderr(), err)
-		}
-	}()
-	return manifestcache.PopulateAPI(ctx, manifestcache.PopulateOptions{
-		Server: mc.Server,
-		Token:  mc.Token,
-		HAR:    collector,
-	})
-}
-
-// refreshOneFromBinary spawns the named plugin once, captures its manifest,
-// and writes the sidecar.
-func refreshOneFromBinary(cmd *cobra.Command, name string) (*manifestcache.Entry, error) {
-	ctx, cancel := gocontext.WithTimeout(cmd.Context(), 30*time.Second)
-	defer cancel()
-	return manifestcache.PopulateLocal(ctx, name, manifestcache.PopulateOptions{
-		BinaryDir: local.PluginPath(),
-	})
 }
 
 // dispatchOperation routes an operation invocation to either the HTTP API

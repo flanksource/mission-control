@@ -7,53 +7,7 @@ import (
 
 	"github.com/flanksource/clicky/rpc"
 	"github.com/spf13/cobra"
-
-	"github.com/flanksource/incident-commander/plugin/manifestcache"
 )
-
-// buildPluginCommands returns two cobra command trees built from a cached
-// manifestcache entry: a "nested" tree to attach under PluginCmd
-// (`mission-control plugin <name> ...`) and a "top" tree to attach under
-// Root (`mission-control <name> ...`). Both trees expose one subcommand
-// per cached operation; their RunE delegates to dispatchOperation.
-func buildPluginCommands(entry manifestcache.Entry) (nested, top *cobra.Command) {
-	nested = newPluginRoot(entry, false)
-	top = newPluginRoot(entry, true)
-	return nested, top
-}
-
-// newPluginRoot builds the per-plugin parent command. topLevel toggles the
-// short-form usage shown in --help (whether the user typed `plugin <name>`
-// or just `<name>`).
-func newPluginRoot(entry manifestcache.Entry, topLevel bool) *cobra.Command {
-	use := entry.Service.Name
-	if !topLevel {
-		use = entry.Service.Name
-	}
-	short := entry.Service.Description
-	if short == "" {
-		short = fmt.Sprintf("Operations for the %q plugin", entry.Service.Name)
-	}
-	root := &cobra.Command{
-		Use:          use,
-		Short:        short,
-		Long:         formatPluginLong(entry, topLevel),
-		SilenceUsage: true,
-	}
-	for _, op := range entry.Service.Operations {
-		root.AddCommand(newOperationCommand(entry.Service.Name, op))
-	}
-	return root
-}
-
-// newOperationCommand builds a single operation subcommand. The RunE wires
-// in the dispatcher; flags are limited to the always-applicable
-// `--param k=v`, `--config-id`, `--json`. Per-operation parameters
-// declared in the manifest are surfaced in Long: text only — they map to
-// `--param <name>=<value>`.
-func newOperationCommand(plugin string, op rpc.RPCOperation) *cobra.Command {
-	return newOperationCommandWithDispatcher(plugin, op, dispatchOperation)
-}
 
 type operationDispatcher func(cmd *cobra.Command, plugin, op string, params map[string]string, configID string, raw bool) error
 
@@ -108,35 +62,6 @@ func operationRequiresConfigID(op rpc.RPCOperation) bool {
 		}
 	}
 	return false
-}
-
-// formatPluginLong builds the description shown above the subcommand list
-// for `mission-control <plugin> --help`. Includes the cache provenance so
-// users can tell whether help is coming from a server or a local binary.
-func formatPluginLong(entry manifestcache.Entry, topLevel bool) string {
-	var b strings.Builder
-	if entry.Service.Description != "" {
-		b.WriteString(entry.Service.Description)
-		b.WriteString("\n\n")
-	}
-	if entry.Service.Version != "" {
-		fmt.Fprintf(&b, "Version: %s\n", entry.Service.Version)
-	}
-	switch entry.Source {
-	case manifestcache.SourceRemoteServer:
-		fmt.Fprintf(&b, "Source:  remote server (%s)\n", entry.ServerURL)
-	case manifestcache.SourceLocalBinary:
-		fmt.Fprintf(&b, "Source:  local binary (%s)\n", entry.BinaryPath)
-	}
-	if !entry.CachedAt.IsZero() {
-		fmt.Fprintf(&b, "Cached:  %s\n", entry.CachedAt.Format("2006-01-02 15:04:05 MST"))
-	}
-	if !topLevel {
-		b.WriteString("\nThis is the nested form. The same operations are also reachable as `mission-control ")
-		b.WriteString(entry.Service.Name)
-		b.WriteString(" <op>`.\n")
-	}
-	return strings.TrimRight(b.String(), "\n")
 }
 
 // formatOperationLong renders the per-op help: description, then a table
