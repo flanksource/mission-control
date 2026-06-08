@@ -2720,27 +2720,6 @@ function jsonLineCount(value: unknown) {
   return JSON.stringify(value, null, 2).split("\n").length;
 }
 
-const NATIVE_ACTION_OUTPUT_CONTEXT_FIELDS = new Set([
-  "stdout",
-  "stdOut",
-  "out",
-  "output",
-  "logs",
-  "log",
-  "stderr",
-  "stdErr",
-  "err",
-]);
-
-function objectRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
-}
-
-function jsonLineCount(value: unknown) {
-  return JSON.stringify(value, null, 2).split("\n").length;
-}
-
 function actionParameters(action: PlaybookRunAction) {
   const record = action as PlaybookRunAction & {
     parameters?: unknown;
