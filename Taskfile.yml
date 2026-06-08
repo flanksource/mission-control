@@ -38,14 +38,14 @@ tasks:
       - task --list
 
   proto:
-    desc: Regenerate plugin gRPC stubs from plugin/plugin.proto
+    desc: Regenerate plugin gRPC stubs from plugin/api/plugin.proto
     cmds:
       - make proto
     sources:
-      - plugin/plugin.proto
+      - plugin/api/plugin.proto
     generates:
-      - plugin/plugin.pb.go
-      - plugin/plugin_grpc.pb.go
+      - plugin/api/plugin.pb.go
+      - plugin/api/plugin_grpc.pb.go
 
   signing-key:
     desc: Generate an RSA private signing key at the default path
@@ -181,6 +181,19 @@ tasks:
       - test node_modules/.modules.yaml -nt pnpm-lock.yaml
       - test node_modules/.modules.yaml -nt package.json
 
+  ui:install:local:
+    desc: |
+      Reinstall ui/frontend with @flanksource/clicky-ui linked to the sibling
+      ../clicky-ui checkout. Used by `task dev`. No caching — runs every time
+      so the link is fresh. Restores pnpm-lock.yaml afterwards so the
+      committed lockfile keeps its registry-resolved entries.
+    dir: ui/frontend
+    env:
+      CLICKY_UI_LOCAL: "1"
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+      - git restore pnpm-lock.yaml
+
   ui:build:
     desc: Build the embedded UI bundle (tsc --noEmit + vite) into ui/frontend/dist
     dir: ui/frontend
@@ -272,6 +285,416 @@ tasks:
     generates:
       - "{{.BINARY}}"
 
+  # ────────────── Plugins ──────────────
+
+  ui:install:plugin:kubernetes-logs:
+    desc: Install pnpm deps for the kubernetes-logs plugin UI workspace
+    dir: plugins/kubernetes-logs/ui-src
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+    sources:
+      - package.json
+      - pnpm-workspace.yaml
+    status:
+      # `.modules.yaml` only exists after a successful install — guards
+      # against a half-populated node_modules/ that contains only `.pnpm/`.
+      - test -f node_modules/.modules.yaml
+      - test node_modules/.modules.yaml -nt package.json
+
+  ui:install:plugin:kubernetes-logs:local:
+    desc: |
+      Reinstall the kubernetes-logs plugin UI with @flanksource/clicky-ui
+      linked to the sibling ../clicky-ui checkout. Used by `task dev:plugins`.
+      No caching; restores pnpm-lock.yaml afterwards.
+    dir: plugins/kubernetes-logs/ui-src
+    env:
+      CLICKY_UI_LOCAL: "1"
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+      - git restore pnpm-lock.yaml
+
+  ui:build:plugin:kubernetes-logs:
+    desc: Build the kubernetes-logs plugin UI bundle into plugins/kubernetes-logs/ui
+    dir: plugins/kubernetes-logs/ui-src
+    deps: [ui:install:plugin:kubernetes-logs]
+    env:
+      PLUGIN_VERSION: "{{.VERSION}}"
+      PLUGIN_BUILD_DATE: "{{.BUILD_DATE}}"
+    cmds:
+      - pnpm run build
+    sources:
+      - src/**/*.ts
+      - src/**/*.tsx
+      - src/**/*.css
+      - index.html
+      - package.json
+      - tsconfig.json
+      - vite.config.ts
+      # Rebuild when clicky-ui dist or its style tokens change.
+      - ../../../../clicky-ui/packages/ui/dist/index.mjs
+      - ../../../../clicky-ui/packages/ui/src/styles/**/*.css
+    generates:
+      - ../ui/index.html
+
+  generate:plugin:kubernetes-logs:
+    desc: Regenerate ui_checksum.go (sha256 of the embedded UI bundle)
+    deps: [ui:build:plugin:kubernetes-logs]
+    cmds:
+      - go generate ./plugins/kubernetes-logs/...
+    sources:
+      - plugins/kubernetes-logs/ui/**
+      - plugins/kubernetes-logs/internal/gen-checksum/main.go
+    generates:
+      - plugins/kubernetes-logs/ui_checksum.go
+
+  build:plugin:kubernetes-logs:
+    desc: Build the kubernetes-logs reference plugin (UI + checksum + Go binary) into $MISSION_CONTROL_PLUGIN_PATH
+    deps: [generate:plugin:kubernetes-logs]
+    vars:
+      PLUGIN_NAME: kubernetes-logs
+      PLUGIN_DIR: "{{.ROOT_DIR}}/plugins/kubernetes-logs"
+      PLUGIN_PATH:
+        sh: echo "${MISSION_CONTROL_PLUGIN_PATH:-$HOME/.mission-control/plugins}"
+    cmds:
+      - mkdir -p {{.PLUGIN_PATH}}
+      - >-
+        go build -o {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}
+        -ldflags "-X 'main.Version={{.VERSION}}' -X 'main.BuildDate={{.BUILD_DATE}}'"
+        ./plugins/{{.PLUGIN_NAME}}
+      - echo "Installed {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}} version={{.VERSION}} built={{.BUILD_DATE}}"
+    sources:
+      - plugins/kubernetes-logs/**/*.go
+      - plugins/kubernetes-logs/ui/**
+      - plugins/kubernetes-logs/ui_checksum.go
+      - plugin/**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}"
+
+  ui:install:plugin:sql-server:
+    desc: Install pnpm deps for the sql-server plugin UI workspace
+    dir: plugins/sql-server/ui-src
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+    sources:
+      - package.json
+    status:
+      # `.modules.yaml` only exists after a successful install — guards
+      # against a half-populated node_modules/ that contains only `.pnpm/`.
+      - test -f node_modules/.modules.yaml
+      - test node_modules/.modules.yaml -nt package.json
+
+  ui:install:plugin:sql-server:local:
+    desc: |
+      Reinstall the sql-server plugin UI with @flanksource/clicky-ui linked
+      to the sibling ../clicky-ui checkout. Used by `task dev:plugins`.
+      No caching; restores pnpm-lock.yaml afterwards.
+    dir: plugins/sql-server/ui-src
+    env:
+      CLICKY_UI_LOCAL: "1"
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+      - git restore pnpm-lock.yaml
+
+  ui:build:plugin:sql-server:
+    desc: Build the sql-server plugin UI bundle into plugins/sql-server/ui
+    dir: plugins/sql-server/ui-src
+    deps: [ui:install:plugin:sql-server]
+    env:
+      PLUGIN_VERSION: "{{.VERSION}}"
+      PLUGIN_BUILD_DATE: "{{.BUILD_DATE}}"
+    cmds:
+      - pnpm run build
+    sources:
+      - src/**/*.ts
+      - src/**/*.tsx
+      - index.html
+      - package.json
+      - tsconfig.json
+      - vite.config.ts
+      # Rebuild when locally-linked clicky-ui dist or its style tokens change.
+      - ../../../../clicky-ui/packages/ui/dist/index.mjs
+      - ../../../../clicky-ui/packages/ui/src/styles/**/*.css
+    generates:
+      - ../ui/index.html
+
+  generate:plugin:sql-server:
+    desc: Regenerate ui_checksum.go (sha256 of the embedded UI bundle)
+    deps: [ui:build:plugin:sql-server]
+    cmds:
+      - go generate ./plugins/sql-server/...
+    sources:
+      - plugins/sql-server/ui/**
+      - plugins/sql-server/internal/gen-checksum/main.go
+    generates:
+      - plugins/sql-server/ui_checksum.go
+
+  build:plugin:sql-server:
+    desc: Build the sql-server plugin (UI + checksum + Go binary) into $MISSION_CONTROL_PLUGIN_PATH
+    deps: [generate:plugin:sql-server]
+    vars:
+      PLUGIN_NAME: sql-server
+      PLUGIN_DIR: "{{.ROOT_DIR}}/plugins/sql-server"
+      PLUGIN_PATH:
+        sh: echo "${MISSION_CONTROL_PLUGIN_PATH:-$HOME/.mission-control/plugins}"
+    cmds:
+      - mkdir -p {{.PLUGIN_PATH}}
+      - >-
+        go build -o {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}
+        -ldflags "-X 'main.Version={{.VERSION}}' -X 'main.BuildDate={{.BUILD_DATE}}'"
+        ./plugins/{{.PLUGIN_NAME}}
+      - echo "Installed {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}} version={{.VERSION}} built={{.BUILD_DATE}}"
+    sources:
+      - plugins/sql-server/**/*.go
+      - plugins/sql-server/ui/**
+      - plugins/sql-server/ui_checksum.go
+      - plugin/**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}"
+
+  ui:install:plugin:postgres:
+    desc: Install pnpm deps for the postgres plugin UI workspace
+    dir: plugins/postgres/ui-src
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+    sources:
+      - package.json
+    status:
+      - test -f node_modules/.modules.yaml
+      - test node_modules/.modules.yaml -nt package.json
+
+  ui:install:plugin:postgres:local:
+    desc: |
+      Reinstall the postgres plugin UI with @flanksource/clicky-ui linked
+      to the sibling ../clicky-ui checkout. Used by `task dev:plugins`.
+      No caching; restores pnpm-lock.yaml afterwards.
+    dir: plugins/postgres/ui-src
+    env:
+      CLICKY_UI_LOCAL: "1"
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+      - git restore pnpm-lock.yaml
+
+  ui:build:plugin:postgres:
+    desc: Build the postgres plugin UI bundle into plugins/postgres/ui
+    dir: plugins/postgres/ui-src
+    deps: [ui:install:plugin:postgres]
+    env:
+      PLUGIN_VERSION: "{{.VERSION}}"
+      PLUGIN_BUILD_DATE: "{{.BUILD_DATE}}"
+    cmds:
+      - pnpm run build
+    sources:
+      - src/**/*.ts
+      - src/**/*.tsx
+      - index.html
+      - package.json
+      - tsconfig.json
+      - vite.config.ts
+      - ../../../../clicky-ui/packages/ui/dist/index.mjs
+      - ../../../../clicky-ui/packages/ui/src/styles/**/*.css
+    generates:
+      - ../ui/index.html
+
+  generate:plugin:postgres:
+    desc: Regenerate ui_checksum.go (sha256 of the embedded UI bundle)
+    deps: [ui:build:plugin:postgres]
+    cmds:
+      - go generate ./plugins/postgres/...
+    sources:
+      - plugins/postgres/ui/**
+      - plugins/postgres/internal/gen-checksum/main.go
+    generates:
+      - plugins/postgres/ui_checksum.go
+
+  build:plugin:postgres:
+    desc: Build the postgres plugin (UI + checksum + Go binary) into $MISSION_CONTROL_PLUGIN_PATH
+    deps: [generate:plugin:postgres]
+    vars:
+      PLUGIN_NAME: postgres
+      PLUGIN_DIR: "{{.ROOT_DIR}}/plugins/postgres"
+      PLUGIN_PATH:
+        sh: echo "${MISSION_CONTROL_PLUGIN_PATH:-$HOME/.mission-control/plugins}"
+    cmds:
+      - mkdir -p {{.PLUGIN_PATH}}
+      - >-
+        go build -o {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}
+        -ldflags "-X 'main.Version={{.VERSION}}' -X 'main.BuildDate={{.BUILD_DATE}}'"
+        ./plugins/{{.PLUGIN_NAME}}
+      - echo "Installed {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}} version={{.VERSION}} built={{.BUILD_DATE}}"
+    sources:
+      - plugins/postgres/**/*.go
+      - plugins/postgres/ui/**
+      - plugins/postgres/ui_checksum.go
+      - plugin/**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}"
+
+  ui:install:plugin:arthas:
+    desc: Install pnpm deps for the arthas plugin UI workspace
+    dir: plugins/arthas/ui-src
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+    sources:
+      - package.json
+    status:
+      - test -f node_modules/.modules.yaml
+      - test node_modules/.modules.yaml -nt package.json
+
+  ui:install:plugin:arthas:local:
+    desc: |
+      Reinstall the arthas plugin UI with @flanksource/clicky-ui linked
+      to the sibling ../clicky-ui checkout. Used by `task dev:plugins`.
+      No caching; restores pnpm-lock.yaml afterwards.
+    dir: plugins/arthas/ui-src
+    env:
+      CLICKY_UI_LOCAL: "1"
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+      - git restore pnpm-lock.yaml
+
+  ui:build:plugin:arthas:
+    desc: Build the arthas plugin UI bundle into plugins/arthas/ui
+    dir: plugins/arthas/ui-src
+    deps: [ui:install:plugin:arthas]
+    env:
+      PLUGIN_VERSION: "{{.VERSION}}"
+      PLUGIN_BUILD_DATE: "{{.BUILD_DATE}}"
+    cmds:
+      - pnpm run build
+    sources:
+      - src/**/*.ts
+      - src/**/*.tsx
+      - index.html
+      - package.json
+      - tsconfig.json
+      - vite.config.ts
+      - ../../../../clicky-ui/packages/ui/dist/index.mjs
+      - ../../../../clicky-ui/packages/ui/src/styles/**/*.css
+    generates:
+      - ../ui/index.html
+
+  generate:plugin:arthas:
+    desc: Regenerate ui_checksum.go (sha256 of the embedded UI bundle)
+    deps: [ui:build:plugin:arthas]
+    cmds:
+      - go generate ./plugins/arthas/...
+    sources:
+      - plugins/arthas/ui/**
+      - plugins/arthas/internal/gen-checksum/main.go
+    generates:
+      - plugins/arthas/ui_checksum.go
+
+  build:plugin:arthas:
+    desc: Build the arthas plugin (UI + checksum + Go binary) into $MISSION_CONTROL_PLUGIN_PATH
+    deps: [generate:plugin:arthas]
+    vars:
+      PLUGIN_NAME: arthas
+      PLUGIN_DIR: "{{.ROOT_DIR}}/plugins/arthas"
+      PLUGIN_PATH:
+        sh: echo "${MISSION_CONTROL_PLUGIN_PATH:-$HOME/.mission-control/plugins}"
+    cmds:
+      - mkdir -p {{.PLUGIN_PATH}}
+      - >-
+        go build -o {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}
+        -ldflags "-X 'main.Version={{.VERSION}}' -X 'main.BuildDate={{.BUILD_DATE}}'"
+        ./plugins/{{.PLUGIN_NAME}}
+      - echo "Installed {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}} version={{.VERSION}} built={{.BUILD_DATE}}"
+    sources:
+      - plugins/arthas/**/*.go
+      - plugins/arthas/ui/**
+      - plugins/arthas/ui_checksum.go
+      - plugin/**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}"
+
+  ui:install:plugin:golang:
+    desc: Install pnpm deps for the golang plugin UI workspace
+    dir: plugins/golang/ui-src
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+    sources:
+      - package.json
+    status:
+      - test -f node_modules/.modules.yaml
+      - test node_modules/.modules.yaml -nt package.json
+
+  ui:install:plugin:golang:local:
+    desc: |
+      Reinstall the golang plugin UI with @flanksource/clicky-ui linked
+      to the sibling ../clicky-ui checkout. Used by `task dev:plugins`.
+      No caching; restores pnpm-lock.yaml afterwards.
+    dir: plugins/golang/ui-src
+    env:
+      CLICKY_UI_LOCAL: "1"
+    cmds:
+      - CI=true pnpm install --no-frozen-lockfile --prefer-offline
+      - git restore pnpm-lock.yaml
+
+  ui:build:plugin:golang:
+    desc: Build the golang plugin UI bundle into plugins/golang/ui
+    dir: plugins/golang/ui-src
+    deps: [ui:install:plugin:golang]
+    env:
+      PLUGIN_VERSION: "{{.VERSION}}"
+      PLUGIN_BUILD_DATE: "{{.BUILD_DATE}}"
+    cmds:
+      - pnpm run build
+    sources:
+      - src/**/*.ts
+      - src/**/*.tsx
+      - src/**/*.css
+      - index.html
+      - package.json
+      - tsconfig.json
+      - vite.config.ts
+      - ../../../../clicky-ui/packages/ui/dist/index.mjs
+      - ../../../../clicky-ui/packages/ui/src/styles/**/*.css
+    generates:
+      - ../ui/index.html
+
+  generate:plugin:golang:
+    desc: Regenerate ui_checksum.go for the golang plugin
+    deps: [ui:build:plugin:golang]
+    cmds:
+      - go generate ./plugins/golang/...
+    sources:
+      - plugins/golang/ui/**
+      - plugins/golang/internal/gen-checksum/main.go
+    generates:
+      - plugins/golang/ui_checksum.go
+
+  build:plugin:golang:
+    desc: Build the golang plugin into $MISSION_CONTROL_PLUGIN_PATH
+    deps: [generate:plugin:golang]
+    vars:
+      PLUGIN_NAME: golang
+      PLUGIN_PATH:
+        sh: echo "${MISSION_CONTROL_PLUGIN_PATH:-$HOME/.mission-control/plugins}"
+    cmds:
+      - mkdir -p {{.PLUGIN_PATH}}
+      - >-
+        go build -o {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}
+        -ldflags "-X 'main.Version={{.VERSION}}' -X 'main.BuildDate={{.BUILD_DATE}}'"
+        ./plugins/{{.PLUGIN_NAME}}
+      - echo "Installed {{.PLUGIN_PATH}}/{{.PLUGIN_NAME}} version={{.VERSION}} built={{.BUILD_DATE}}"
+    sources:
+      - plugins/golang/**/*.go
+      - plugins/golang/ui/**
+      - plugins/golang/ui_checksum.go
+      - plugin/**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.PLUGIN_PATH}}/{{.PLUGIN_NAME}}"
+
   # ────────────── Developer loops ──────────────
 
   run:
@@ -299,16 +722,38 @@ tasks:
 
   dev:
     desc: |
-      Rebuild clicky-ui + incident-commander UI + the Go binary, then start
-      `serve --ui --dev` with a local htpasswd. The Go server proxies /ui to
-      Vite so frontend changes are served from Vite watch mode instead of the
-      embedded bundle.
-    deps: [clicky-ui:build, ui:build, go:build-fast]
+      Rebuild clicky-ui + incident-commander UI (linked to local clicky-ui)
+      + the Go binary, then start `serve --ui --dev` with a local htpasswd.
+      The Go server proxies /ui to Vite so frontend changes are served from
+      Vite watch mode instead of the embedded bundle.
     env:
       PGRST_VERSION: any
     cmds:
+      # Order matters: build clicky-ui dist, link it into ui/frontend, then
+      # build the embedded bundle + Go binary that consume the linked dist.
+      - task: clicky-ui:build
+      - task: ui:install:local
+      - task: go:build-fast
       # secret is hardcoded for dev purposes and is save to
       - "{{.BINARY}} serve --htpasswd-file .htpasswd --disable-operators -vv      --postgrest-uri http://localhost:0  --ui --dev  {{.CLI_ARGS}}"
+
+  dev:plugins:
+    desc: |
+      Build the sql-server, postgres, kubernetes-logs, and arthas plugin binaries with their
+      UIs linked to the sibling ../clicky-ui checkout. Use this loop when
+      iterating on clicky-ui changes that need to surface in the plugin UIs.
+    cmds:
+      - task: clicky-ui:build
+      - task: ui:install:plugin:kubernetes-logs:local
+      - task: ui:install:plugin:sql-server:local
+      - task: ui:install:plugin:postgres:local
+      - task: ui:install:plugin:arthas:local
+      - task: ui:install:plugin:golang:local
+      - task: build:plugin:kubernetes-logs
+      - task: build:plugin:sql-server
+      - task: build:plugin:postgres
+      - task: build:plugin:arthas
+      - task: build:plugin:golang
 
   test:
     desc: Run Ginkgo tests (skips e2e)

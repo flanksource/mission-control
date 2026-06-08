@@ -17,16 +17,13 @@ import { ConfigIcon } from "./ConfigIcon";
 import type { ConfigItem } from "./api/types";
 import {
   BASE_GROUP_BY_OPTIONS,
-  buildConfigListQuery,
-  getConfigLabels,
-  getConfigList,
-  getConfigStatuses,
-  getConfigTags,
-  getConfigTypes,
+  configLabelOptionsFromRows,
   groupConfigItems,
   healthOptions,
   parseConfigListFilters,
+  searchConfigItems,
   serializeTriStateParam,
+  statusOptionsFromRows,
   type ConfigLabelOption,
   type TriStateFilterValue,
 } from "./config-list";
@@ -50,56 +47,36 @@ export function TypeView({ configType }: TypeViewProps) {
     () => parseConfigListFilters(searchParams, configType),
     [configType, searchParamsKey],
   );
-  const query = useMemo(() => buildConfigListQuery(filters), [filters]);
 
   const listQuery = useQuery({
-    queryKey: ["config-list", query],
-    queryFn: () => getConfigList(query),
-  });
-  const configTypesQuery = useQuery({
-    queryKey: ["config-types"],
-    queryFn: getConfigTypes,
-    staleTime: 60_000,
-  });
-  const statusesQuery = useQuery({
-    queryKey: ["config-statuses"],
-    queryFn: getConfigStatuses,
-    staleTime: 60_000,
-  });
-  const tagsQuery = useQuery({
-    queryKey: ["config-tags"],
-    queryFn: getConfigTags,
-    staleTime: 60_000,
-  });
-  const labelsQuery = useQuery({
-    queryKey: ["config-labels"],
-    queryFn: getConfigLabels,
-    staleTime: 60_000,
+    queryKey: ["config-list", filters],
+    queryFn: () => searchConfigItems(filters),
   });
 
   const configTypeOptions = useMemo(() => {
-    const values = new Set([configType, ...(configTypesQuery.data ?? []).map((item) => item.type)].filter(Boolean));
-    return Array.from(values)
-      .sort((a, b) => a.localeCompare(b))
-      .map((value) => ({ value, label: shortConfigTypeLabel(value) }));
-  }, [configType, configTypesQuery.data]);
+    return [{ value: configType, label: shortConfigTypeLabel(configType) }];
+  }, [configType]);
+
+  const rows = listQuery.data ?? [];
+  const rowLabelOptions = useMemo(() => configLabelOptionsFromRows(rows), [rows]);
+  const rowStatusOptions = useMemo(() => statusOptionsFromRows(rows), [rows]);
 
   const labelOptions = useMemo(
-    () => configLabelOptions(tagsQuery.data ?? [], labelsQuery.data ?? []),
-    [labelsQuery.data, tagsQuery.data],
+    () => configLabelOptions(rowLabelOptions, []),
+    [rowLabelOptions],
   );
   const groupByOptions = useMemo(
-    () => configGroupByOptions(tagsQuery.data ?? []),
-    [tagsQuery.data],
+    () => configGroupByOptions(rowLabelOptions),
+    [rowLabelOptions],
   );
   const statusOptions = useMemo(
     () =>
-      (statusesQuery.data ?? [])
+      rowStatusOptions
         .map((item) => item.status)
         .filter(Boolean)
         .sort((a, b) => a.localeCompare(b))
         .map((value) => ({ value, label: value })),
-    [statusesQuery.data],
+    [rowStatusOptions],
   );
 
   const updateParam = useCallback(
@@ -189,7 +166,6 @@ export function TypeView({ configType }: TypeViewProps) {
     ],
   );
 
-  const rows = listQuery.data ?? [];
   const groups = useMemo(() => groupConfigItems(rows, filters.groupBy), [filters.groupBy, rows]);
   const total = rows.length;
 

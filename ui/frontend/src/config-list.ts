@@ -1,4 +1,4 @@
-import { fetchPostgrest } from "./api/http";
+import { fetchJSON, fetchPostgrest } from "./api/http";
 import type { ConfigItem } from "./api/types";
 
 export type TriStateMode = "include" | "exclude";
@@ -26,6 +26,19 @@ export type ConfigStatusOption = {
 export type ConfigLabelOption = {
   key: string;
   value: string | number | boolean | null;
+};
+
+type SearchResourcesResponse = {
+  configs?: Array<{
+    id: string;
+    agent?: string;
+    name: string;
+    namespace?: string;
+    type?: string;
+    tags?: Record<string, string>;
+    health?: string;
+    status?: string;
+  }>;
 };
 
 export type ConfigListGroup = {
@@ -128,6 +141,31 @@ export function buildConfigListQuery(filters: ConfigListFilterState): string {
   return params.toString();
 }
 
+export async function searchConfigItems(filters: ConfigListFilterState): Promise<ConfigItem[]> {
+  const result = await fetchJSON<SearchResourcesResponse>("/resources/search", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      limit: filters.limit,
+      configs: [{ types: [filters.configType] }],
+    }),
+  });
+
+  return filterConfigItems((result.configs ?? []).map(searchResourceToConfigItem), filters);
+}
+
+export function filterConfigItems(rows: ConfigItem[], filters: ConfigListFilterState): ConfigItem[] {
+  const search = filters.search.trim().toLowerCase();
+  return rows.filter((row) => {
+    if (search && !configSearchText(row).includes(search)) return false;
+    if (!matchesTriState(row.status, filters.status)) return false;
+    if (!matchesTriState(row.health, filters.health)) return false;
+    if (!matchesLabels(row, filters.labels)) return false;
+    if (!filters.showDeleted && row.deleted_at) return false;
+    return true;
+  });
+}
+
 export function buildLabelAndTagClause(value: TriStateFilterValue): string | undefined {
   const clauses: string[] = [];
 
@@ -206,6 +244,25 @@ export async function getConfigList(query: string): Promise<ConfigItem[]> {
   return result.data ?? [];
 }
 
+export function configLabelOptionsFromRows(rows: ConfigItem[]): ConfigLabelOption[] {
+  const out = new Map<string, ConfigLabelOption>();
+  for (const row of rows) {
+    for (const [key, value] of Object.entries(row.tags ?? {})) {
+      if (key && value != null) out.set(`tag:${key}:${value}`, { key, value });
+    }
+    for (const [key, value] of Object.entries(row.labels ?? {})) {
+      if (key && value != null) out.set(`label:${key}:${value}`, { key, value });
+    }
+  }
+  return Array.from(out.values()).sort((a, b) => `${a.key}:${a.value}`.localeCompare(`${b.key}:${b.value}`));
+}
+
+export function statusOptionsFromRows(rows: ConfigItem[]): ConfigStatusOption[] {
+  return Array.from(new Set(rows.map((row) => row.status).filter((value): value is string => Boolean(value))))
+    .sort((a, b) => a.localeCompare(b))
+    .map((status) => ({ status }));
+}
+
 export async function getConfigTypes(): Promise<ConfigTypeOption[]> {
   const result = await fetchPostgrest<ConfigTypeOption[]>(
     "/db/config_types?select=type&order=type.asc",
@@ -237,6 +294,55 @@ export async function getConfigLabels(): Promise<ConfigLabelOption[]> {
 function hasAnalysis(value: unknown): boolean {
   if (!value || typeof value !== "object") return false;
   return Object.values(value as Record<string, unknown>).some((entry) => Number(entry ?? 0) > 0);
+}
+
+function searchResourceToConfigItem(item: NonNullable<SearchResourcesResponse["configs"]>[number]): ConfigItem {
+  return {
+    id: item.id,
+    name: item.name,
+    namespace: item.namespace,
+    type: item.type,
+    tags: item.tags ?? {},
+    health: item.health,
+    status: item.status,
+    agent_id: item.agent,
+  };
+}
+
+function configSearchText(row: ConfigItem): string {
+  return [row.name, row.type, row.description, row.namespace, row.status, row.health, ...tagEntriesForSearch(row.tags), ...tagEntriesForSearch(row.labels)]
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
+    .toLowerCase();
+}
+
+function tagEntriesForSearch(values: Record<string, string> | null | undefined): string[] {
+  return Object.entries(values ?? {}).map(([key, value]) => `${key}=${value}`);
+}
+
+function matchesTriState(value: unknown, filter: TriStateFilterValue): boolean {
+  const entries = Object.entries(filter);
+  if (entries.length === 0) return true;
+  const text = String(value ?? "");
+  let included = false;
+  for (const [key, mode] of entries) {
+    if (mode === "exclude" && text === key) return false;
+    if (mode === "include" && text === key) included = true;
+  }
+  return entries.some(([, mode]) => mode === "include") ? included : true;
+}
+
+function matchesLabels(row: ConfigItem, filter: TriStateFilterValue): boolean {
+  const entries = Object.entries(filter);
+  if (entries.length === 0) return true;
+  let included = false;
+  for (const [rawKeyValue, mode] of entries) {
+    const [key, value] = rawKeyValue.split("____");
+    const matches = row.labels?.[key] === value || row.tags?.[key] === value;
+    if (mode === "exclude" && matches) return false;
+    if (mode === "include" && matches) included = true;
+  }
+  return entries.some(([, mode]) => mode === "include") ? included : true;
 }
 
 function titleCase(value: string): string {

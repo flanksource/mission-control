@@ -1,14 +1,9 @@
 package cmd
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"net/url"
-	"os"
 	"strings"
 
-	"github.com/flanksource/incident-commander/sdk"
 	"github.com/spf13/cobra"
 )
 
@@ -62,84 +57,10 @@ func init() {
 	PluginCmd.Flags().StringVar(&pluginOpts.ConfigID, "config-id", "", "Catalog/config item id passed to the operation")
 	PluginCmd.Flags().BoolVar(&pluginOpts.RawJSON, "json", false, "Emit raw response instead of pretty-printing JSON")
 	PluginCmd.Flags().Var(&pluginOpts.Params, "param", "Key=value parameters (repeatable)")
+	registerPluginHARFlag(Root)
 	Root.AddCommand(PluginCmd)
 }
 
 func runPluginOp(cmd *cobra.Command, args []string) error {
-	server, authHeader, err := pluginServerAndAuth()
-	if err != nil {
-		return err
-	}
-
-	params := pluginOpts.Params.values
-	if params == nil {
-		params = map[string]string{}
-	}
-	body, err := json.Marshal(params)
-	if err != nil {
-		return err
-	}
-
-	client := sdk.NewWithAuthHeader(server, authHeader)
-	respBody, err := client.InvokePluginOperation(args[0], args[1], pluginOpts.ConfigID, body)
-	if err != nil {
-		return err
-	}
-
-	if pluginOpts.RawJSON {
-		_, err = cmd.OutOrStdout().Write(respBody)
-		return err
-	}
-
-	var pretty any
-	if err := json.Unmarshal(respBody, &pretty); err == nil {
-		out, err := json.MarshalIndent(pretty, "", "  ")
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(cmd.OutOrStdout(), string(out))
-		return nil
-	}
-
-	_, err = cmd.OutOrStdout().Write(respBody)
-	return err
-}
-
-func pluginServerAndAuth() (string, string, error) {
-	cfg, err := LoadConfig()
-	if err != nil {
-		return "", "", err
-	}
-
-	mcCtx := cfg.CurrentMCContext()
-	if mcCtx == nil || mcCtx.Server == "" {
-		return "", "", fmt.Errorf("no Mission Control server configured; select a context with server")
-	}
-	server := mcCtx.Server
-
-	if _, err := url.ParseRequestURI(server); err != nil {
-		return "", "", fmt.Errorf("invalid Mission Control server URL %q: %w", server, err)
-	}
-
-	if mcCtx.Token != "" {
-		return server, "Bearer " + mcCtx.Token, nil
-	}
-
-	basicAuth := strings.TrimSpace(os.Getenv("PLUGIN_SERVER_AUTH"))
-	if strings.HasPrefix(strings.ToLower(basicAuth), "basic ") {
-		basicAuth = strings.TrimSpace(basicAuth[len("basic "):])
-	}
-	if basicAuth == "" {
-		return server, "", nil
-	}
-
-	decoded, err := base64.StdEncoding.DecodeString(basicAuth)
-	if err != nil {
-		return "", "", fmt.Errorf("PLUGIN_SERVER_AUTH must be base64(username:password): %w", err)
-	}
-	if !strings.Contains(string(decoded), ":") {
-		return "", "", fmt.Errorf("PLUGIN_SERVER_AUTH must decode to username:password")
-	}
-
-	return server, "Basic " + basicAuth, nil
+	return dispatchOperation(cmd, args[0], args[1], pluginOpts.Params.values, pluginOpts.ConfigID, pluginOpts.RawJSON)
 }

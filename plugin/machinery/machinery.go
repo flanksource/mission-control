@@ -13,6 +13,7 @@ import (
 	"github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/api"
 	"github.com/flanksource/incident-commander/plugin/machinery/local"
+	"github.com/flanksource/incident-commander/plugin/manifestcache"
 )
 
 func StartPlugin(ctx dutyContext.Context, id uuid.UUID) error {
@@ -68,7 +69,10 @@ func startLocalPlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 }
 
 func startLocalPluginWithHost(ctx dutyContext.Context, entry *plugin.Entry, startHost func(*goplugin.GRPCBroker) (uint32, error)) error {
-	sup := local.New(entry.ID, entry.InstalledPath)
+	sup := local.New(entry.ID, entry.Name, entry.InstalledPath)
+	sup.OnStart = func(ctx dutyContext.Context) {
+		writeManifestCache(ctx, entry, sup)
+	}
 	started, err := plugin.DefaultRegistry.SetRuntimeIfAbsent(entry.ID, sup)
 	if err != nil {
 		return err
@@ -83,6 +87,30 @@ func startLocalPluginWithHost(ctx dutyContext.Context, entry *plugin.Entry, star
 	}
 
 	return nil
+}
+
+func writeManifestCache(ctx dutyContext.Context, entry *plugin.Entry, sup *local.Supervisor) {
+	if entry == nil || sup == nil || sup.Manifest() == nil {
+		return
+	}
+	checksum, err := manifestcache.SHA256File(entry.InstalledPath)
+	if err != nil {
+		ctx.Logger.V(2).Infof("plugin %s: skip manifest cache (hash %s: %v)", entry.Name, entry.InstalledPath, err)
+		return
+	}
+	service := manifestcache.ManifestToService(sup.Manifest())
+	if service.Name == "" {
+		service.Name = entry.Name
+	}
+	cacheEntry := manifestcache.Entry{
+		Source:         manifestcache.SourceLocalBinary,
+		BinaryPath:     entry.InstalledPath,
+		BinaryChecksum: checksum,
+		Service:        service,
+	}
+	if err := manifestcache.Write(cacheEntry); err != nil {
+		ctx.Logger.V(2).Infof("plugin %s: write manifest cache: %v", entry.Name, err)
+	}
 }
 
 func StopPlugin(id uuid.UUID) error {

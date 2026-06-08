@@ -99,7 +99,12 @@ func ExchangeCode(tokenEndpoint, code, redirectURI, verifier string) (*Tokens, e
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token endpoint returned %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		msg := strings.TrimSpace(string(body))
+		if msg == "" {
+			return nil, fmt.Errorf("token endpoint returned %d", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("token endpoint returned %d: %s", resp.StatusCode, msg)
 	}
 
 	var result struct {
@@ -136,7 +141,12 @@ func RefreshToken(tokenEndpoint, refreshToken string) (*Tokens, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token endpoint returned %d", resp.StatusCode)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		msg := strings.TrimSpace(string(body))
+		if msg == "" {
+			return nil, fmt.Errorf("token endpoint returned %d", resp.StatusCode)
+		}
+		return nil, fmt.Errorf("token endpoint returned %d: %s", resp.StatusCode, msg)
 	}
 
 	var result struct {

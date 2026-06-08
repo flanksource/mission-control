@@ -5,11 +5,15 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/query/grammar"
+	"github.com/google/uuid"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/machinery"
-	"github.com/google/uuid"
+	"github.com/flanksource/incident-commander/plugin/manifestcache"
 )
 
 func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
@@ -25,6 +29,10 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 
 	id, err := parsePluginID(string(p.UID))
 	if err != nil {
+		return err
+	}
+
+	if err := db.PersistPluginFromCRD(ctx, p); err != nil {
 		return err
 	}
 
@@ -63,6 +71,9 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 		p.Status.PluginVersion = entry.Manifest.Version
 		p.Status.InstalledPath = entry.InstalledPath
 	}
+	if err := db.UpdatePluginStatus(ctx, id, p.Status); err != nil {
+		ctx.Logger.V(2).Infof("plugin %s: failed to update persisted status: %v", p.Name, err)
+	}
 
 	return nil
 }
@@ -82,20 +93,29 @@ func DeletePlugin(ctx context.Context, id string) error {
 		}
 		pluginID = entry.ID
 	}
-	if plugin.DefaultRegistry.Get(pluginID) == nil {
-		entry, err := plugin.DefaultRegistry.Resolve(id)
+
+	entry := plugin.DefaultRegistry.Get(pluginID)
+	if entry == nil {
+		resolved, err := plugin.DefaultRegistry.Resolve(id)
 		if err != nil {
 			return err
 		}
-		if entry != nil {
-			pluginID = entry.ID
+		if resolved != nil {
+			entry = resolved
+			pluginID = resolved.ID
 		}
 	}
+
 	if err := machinery.StopPlugin(pluginID); err != nil {
 		return err
 	}
 	plugin.DefaultRegistry.Remove(pluginID)
-	return nil
+	if entry != nil && entry.Name != "" {
+		if err := manifestcache.Delete(entry.Name); err != nil {
+			ctx.Logger.V(2).Infof("plugin %s: drop manifest cache: %v", entry.Name, err)
+		}
+	}
+	return db.DeletePlugin(ctx, pluginID.String())
 }
 
 // DeleteStalePlugin removes registry entries for plugins whose CRD has been
@@ -119,6 +139,40 @@ func DeleteStalePlugin(ctx context.Context, newer *v1.Plugin) error {
 			return err
 		}
 		plugin.DefaultRegistry.Remove(e.ID)
+		if err := manifestcache.Delete(e.Name); err != nil {
+			ctx.Logger.V(2).Infof("plugin %s: drop manifest cache: %v", e.Name, err)
+		}
+	}
+	return db.DeleteStalePlugin(ctx, newer)
+}
+
+// ReplayPlugins rehydrates the in-memory registry from persisted plugin rows.
+func ReplayPlugins(ctx context.Context) error {
+	rows, err := db.ListPlugins(ctx)
+	if err != nil {
+		return err
+	}
+	for _, row := range rows {
+		spec, err := db.PluginToSpec(row)
+		if err != nil {
+			ctx.Logger.Errorf("plugin %s: replay decode failed: %v", row.Name, err)
+			continue
+		}
+		obj := &v1.Plugin{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      row.Name,
+				Namespace: row.Namespace,
+				UID:       k8stypes.UID(row.ID.String()),
+			},
+			Spec: spec,
+			Status: v1.PluginStatus{
+				InstalledPath: row.InstalledPath,
+				PluginVersion: row.PluginVersion,
+			},
+		}
+		if err := PersistPluginFromCRD(ctx, obj); err != nil {
+			ctx.Logger.Errorf("plugin %s: replay apply failed: %v", row.Name, err)
+		}
 	}
 	return nil
 }

@@ -49,6 +49,9 @@ type Supervisor struct {
 	restarts int
 	window   time.Time
 
+	// OnStart is invoked after every successful plugin start, including restarts.
+	OnStart func(dutyContext.Context)
+
 	// restartFn is invoked when the binary watcher decides to respawn the
 	// plugin. Tests can substitute a counter; production uses (*Supervisor).restart.
 	restartFn func(dutyContext.Context) error
@@ -61,8 +64,11 @@ const (
 )
 
 // New creates a Supervisor for a plugin binary.
-func New(id uuid.UUID, binaryPath string) *Supervisor {
-	return &Supervisor{ID: id, Name: id.String(), BinaryPath: binaryPath}
+func New(id uuid.UUID, name, binaryPath string) *Supervisor {
+	if name == "" {
+		name = id.String()
+	}
+	return &Supervisor{ID: id, Name: name, BinaryPath: binaryPath}
 }
 
 // Start launches the plugin process and completes the RegisterPlugin
@@ -75,7 +81,14 @@ func New(id uuid.UUID, binaryPath string) *Supervisor {
 // plugin can dial back through it.
 func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplugin.GRPCBroker) (uint32, error)) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	var started bool
+	defer func() {
+		onStart := s.OnStart
+		s.mu.Unlock()
+		if started && onStart != nil {
+			onStart(ctx)
+		}
+	}()
 	if s.client != nil {
 		return errors.New("supervisor already started")
 	}
@@ -145,6 +158,7 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 
 	ctx.Logger.Infof("plugin %s loaded: version=%q ops=%d ui_port=%d",
 		s.Name, manifest.Version, len(manifest.Operations), manifest.UiPort)
+	started = true
 	return nil
 }
 
