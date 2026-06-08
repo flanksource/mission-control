@@ -137,7 +137,7 @@ windows:
 binaries: linux darwin windows compress
 
 .PHONY: release
-release: binaries
+release: ui binaries
 	mkdir -p .release
 	cp .bin/incident-commander* .release/
 
