@@ -10,6 +10,7 @@ endif
 
 # Image URL to use all building/pushing image targets
 IMG ?= docker.io/flanksource/$(NAME):${VERSION_TAG}
+COMMA := ,
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -91,7 +92,7 @@ modernize: ## Run modernize against code.
 	$(MODERNIZE) ./...
 
 docker:
-	docker build . -t ${IMG}
+	DOCKER_BUILDKIT=1 docker build -t ${IMG} $(if $(GITHUB_TOKEN),--secret id=GITHUB_TOKEN$(COMMA)env=GITHUB_TOKEN) .
 
 # Build the docker image
 docker-dev: linux
