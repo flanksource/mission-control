@@ -106,7 +106,7 @@ func devServerCommand(ctx gocontext.Context, frontendDir string, port int, backe
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Env = os.Environ()
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	setProcessGroup(cmd)
 	cmd.Cancel = func() error {
 		_ = signalProcessGroup(cmd.Process, syscall.SIGTERM)
 		return nil
@@ -148,18 +148,6 @@ func waitProcessExit(wait *processWait, timeout time.Duration) bool {
 	case <-time.After(timeout):
 		return false
 	}
-}
-
-func signalProcessGroup(proc *os.Process, sig syscall.Signal) error {
-	if proc == nil {
-		return nil
-	}
-	if pgid, err := syscall.Getpgid(proc.Pid); err == nil {
-		if err := syscall.Kill(-pgid, sig); err == nil {
-			return nil
-		}
-	}
-	return proc.Signal(sig)
 }
 
 func findFrontendDir() (string, error) {

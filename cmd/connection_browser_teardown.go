@@ -64,15 +64,6 @@ func browserProcess(ctx gocontext.Context) *os.Process {
 	return c.Browser.Process()
 }
 
-func signalProcess(proc *os.Process, sig syscall.Signal) {
-	if pgid, err := syscall.Getpgid(proc.Pid); err == nil {
-		if err := syscall.Kill(-pgid, sig); err == nil {
-			return
-		}
-	}
-	_ = proc.Signal(sig)
-}
-
 func waitProcessExit(proc *os.Process, d time.Duration) bool {
 	done := make(chan struct{})
 	go func() {

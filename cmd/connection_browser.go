@@ -7,12 +7,10 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"os/exec"
 	"os/signal"
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	gocontext "context"
@@ -222,13 +220,8 @@ func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*b
 		// Put Chromium in its own process group so we can signal the whole
 		// group (including renderers/helpers) during teardown. Linux already
 		// sets Pdeathsig=SIGKILL; darwin does nothing, so Setpgid is required
-		// there for pgid-kill to be meaningful.
-		chromedp.ModifyCmdFunc(func(cmd *exec.Cmd) {
-			if cmd.SysProcAttr == nil {
-				cmd.SysProcAttr = &syscall.SysProcAttr{}
-			}
-			cmd.SysProcAttr.Setpgid = true
-		}),
+		// there for pgid-kill to be meaningful. No-op on Windows.
+		browserProcessGroupOption(),
 	)
 
 	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, opts...)
