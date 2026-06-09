@@ -270,14 +270,16 @@ func (s *Supervisor) watchBinary(ctx dutyContext.Context) {
 			ctx.Logger.Warnf("plugin %s: fsnotify error: %v", s.Name, err)
 
 		case <-fire:
-			ctx.Logger.Infof("plugin %s: binary changed, restarting", s.Name)
+			ctx.Logger.Infof("plugin %s: binary changed on disk, restarting via file watcher", s.Name)
 			restartFn := s.restartFn
 			if restartFn == nil {
 				restartFn = s.restart
 			}
 			if err := restartFn(ctx); err != nil {
 				ctx.Logger.Errorf("plugin %s: restart failed: %v", s.Name, err)
+				return
 			}
+			ctx.Logger.Infof("plugin %s: restarted after binary change", s.Name)
 			return
 		}
 	}
