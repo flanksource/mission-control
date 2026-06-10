@@ -1,7 +1,7 @@
 apiVersion: mission-control.flanksource.com/v1
 kind: Notification
 metadata:
-  name: pod-with-incoming-inhibition
+  name: node-with-pod-inhibition
 spec:
   events:
     - config.unhealthy
@@ -10,9 +10,9 @@ spec:
   to:
     connection: connection://mission-control/slack
   inhibitions:
-    - direction: incoming
-      from: Kubernetes::Pod
+    - direction: outgoing
+      from: Kubernetes::Node
       to:
-        - Kubernetes::Deployment
-        - Kubernetes::ReplicaSet
-      depth: 2
+        - Kubernetes::Pod
+      soft: true
+      depth: 1
