@@ -416,8 +416,8 @@ github.com/flanksource/commons-test v0.1.13 h1:DLb3q1a7d+BpfxZDy2bdY8ZA5z1+UTYFE
 github.com/flanksource/commons-test v0.1.13/go.mod h1:T0zLA9F55jlaOhtvjj1Ot7QZQhtn2baAuflT+27ueG8=
 github.com/flanksource/deps v1.0.35 h1:tHxhkJSsJBWRmx7lR/X1rI8diz6tu0dsGb7GCROfuIQ=
 github.com/flanksource/deps v1.0.35/go.mod h1:2YRfP32WZrMxGVMYV51RlVHZfgerxf8DT3TqSgjzmTQ=
-github.com/flanksource/duty v1.0.1326 h1:OtM6sb67SW4pcpx237/o+1N75RADTYojAZpRUsCjrQE=
-github.com/flanksource/duty v1.0.1326/go.mod h1:Na3uJzwlGyoKfM4xRfXVH/ehLbCQiVzVoq/VPJqNfko=
+github.com/flanksource/duty v1.0.1327 h1:YuILb6RJyUDLOPpB7UkZglFJN2Q+SqD0ZaojZXOTOQk=
+github.com/flanksource/duty v1.0.1327/go.mod h1:Na3uJzwlGyoKfM4xRfXVH/ehLbCQiVzVoq/VPJqNfko=
 github.com/flanksource/gomplate/v3 v3.24.82 h1:22HOZYeNRMX40G8OF3qRAqRoR5Lkf8Vm4x3WDqugZkE=
 github.com/flanksource/gomplate/v3 v3.24.82/go.mod h1:NMMZkFsjbLy/8iY8Fip5N86Y0PP6lZeq+kmPwpVVIL0=
 github.com/flanksource/is-healthy v1.0.88 h1:ATQuKoNdp8Qfzf41/eMFajmT0qzOmZlZNG5eLK41RFo=
