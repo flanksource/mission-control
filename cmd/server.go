@@ -18,7 +18,6 @@ import (
 	"github.com/flanksource/kopper"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
-	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -172,7 +171,7 @@ func launchKopper(ctx context.Context) {
 		ctx.Logger.Errorf("plugin replay from DB failed: %v", err)
 	}
 
-	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+	if err := mgr.Start(ctx); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("error running controller manager: %v", err))
 	}
 }
@@ -231,7 +230,7 @@ var Serve = &cobra.Command{
 		mcpServer := mcp.Server(ctx)
 		e.Any("/mcp", echov4.WrapHandler(mcpServer.HTTPHandler), mcp.AuthMiddleware)
 
-		shutdown.AddHookWithPriority("echo", shutdown.PriorityIngress, func() {
+		shutdown.AddHookWithPriority("echo", shutdown.PriorityCritical, func() {
 			echo.Shutdown(e)
 		})
 
@@ -244,11 +243,11 @@ var Serve = &cobra.Command{
 			})
 		}
 
-		shutdown.AddHookWithPriority("plugins", shutdown.PriorityIngress, func() {
+		shutdown.AddHookWithPriority("plugins", 0, func() {
 			machinery.StopAll(ctx)
 		})
 
-		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
+		shutdown.AddHookWithPriority("database", 0, stop)
 
 		shutdown.WaitForSignal()
 
