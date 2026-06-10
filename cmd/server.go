@@ -231,7 +231,7 @@ var Serve = &cobra.Command{
 		mcpServer := mcp.Server(ctx)
 		e.Any("/mcp", echov4.WrapHandler(mcpServer.HTTPHandler), mcp.AuthMiddleware)
 
-		shutdown.AddHookWithPriority("echo", shutdown.PriorityIngress, func() {
+		shutdown.AddHookWithPriority("echo", shutdown.PriorityCritical, func() {
 			echo.Shutdown(e)
 		})
 
@@ -244,16 +244,23 @@ var Serve = &cobra.Command{
 			})
 		}
 
-		shutdown.AddHookWithPriority("plugins", shutdown.PriorityIngress, func() {
+		shutdown.AddHookWithPriority("plugins", shutdown.PriorityJobs+1, func() {
 			machinery.StopAll(ctx)
 		})
 
-		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
+		// The database pool must close last (after workers have drained), but
+		// before echo unblocks main and the process exits.
+		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical-1, stop)
 
 		shutdown.WaitForSignal()
 
 		ctx.WithTracer(otel.GetTracerProvider().Tracer("mission-control"))
 		ctx = ctx.WithNamespace(api.Namespace)
+
+		// Cancel the context on shutdown so background workers (jobs, event
+		// consumers, kopper) stop before the database pool is closed.
+		ctx, cancel := ctx.WithCancel()
+		shutdown.AddHookWithPriority("workers", shutdown.PriorityJobs, func() { cancel() })
 
 		if api.UpstreamConf.Valid() {
 			go tunnel.StartAgentTunnel(ctx, api.UpstreamConf, e)
