@@ -18,6 +18,7 @@ import (
 	"github.com/flanksource/kopper"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -171,7 +172,7 @@ func launchKopper(ctx context.Context) {
 		ctx.Logger.Errorf("plugin replay from DB failed: %v", err)
 	}
 
-	if err := mgr.Start(ctx); err != nil {
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("error running controller manager: %v", err))
 	}
 }
@@ -243,16 +244,23 @@ var Serve = &cobra.Command{
 			})
 		}
 
-		shutdown.AddHookWithPriority("plugins", 0, func() {
+		shutdown.AddHookWithPriority("plugins", shutdown.PriorityJobs+1, func() {
 			machinery.StopAll(ctx)
 		})
 
-		shutdown.AddHookWithPriority("database", 0, stop)
+		// The database pool must close last (after workers have drained), but
+		// before echo unblocks main and the process exits.
+		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical-1, stop)
 
 		shutdown.WaitForSignal()
 
 		ctx.WithTracer(otel.GetTracerProvider().Tracer("mission-control"))
 		ctx = ctx.WithNamespace(api.Namespace)
+
+		// Cancel the context on shutdown so background workers (jobs, event
+		// consumers, kopper) stop before the database pool is closed.
+		ctx, cancel := ctx.WithCancel()
+		shutdown.AddHookWithPriority("workers", shutdown.PriorityJobs, func() { cancel() })
 
 		if api.UpstreamConf.Valid() {
 			go tunnel.StartAgentTunnel(ctx, api.UpstreamConf, e)
