@@ -25,6 +25,17 @@ type StatusAccessor interface {
 	GetStatus() models.PlaybookActionStatus
 }
 
+// resultStatus returns the status reported by a typed action result,
+// defaulting to completed for results that don't implement StatusAccessor.
+func resultStatus(result any) models.PlaybookActionStatus {
+	// the interface can hold a typed nil, so a reflect check is needed.
+	if accessor, ok := result.(StatusAccessor); ok && !reflect.ValueOf(accessor).IsNil() {
+		return accessor.GetStatus()
+	}
+
+	return models.PlaybookActionStatusCompleted
+}
+
 // SecretScrubber can scrub secrets from action results.
 type SecretScrubber interface {
 	ScrubSecrets(output string) string
