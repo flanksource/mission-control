@@ -10,7 +10,6 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api"
 	oidcmodels "github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/golang-jwt/jwt/v4"
@@ -36,7 +35,7 @@ func authenticateOIDCToken(c echo.Context, tokenStr string) (bool, error) {
 		return false, nil
 	}
 
-	issuer := strings.TrimRight(api.PublicURL, "/")
+	issuer := OIDCIssuerURL()
 
 	var lastErr error
 	for _, pub := range keys {
