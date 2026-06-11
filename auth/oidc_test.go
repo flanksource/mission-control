@@ -569,7 +569,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 		Expect(loginRec.Code).To(Equal(http.StatusOK))
 	})
 
-	ginkgo.It("mounts basic-auth OIDC discovery with the public endpoint issuer", func() {
+	ginkgo.It("mounts basic-auth OIDC discovery with the frontend issuer", func() {
 		oldAuthMode := vars.AuthMode
 		oldOIDCEnabled := OIDCEnabled
 		oldHtpasswdFile := HtpasswdFile
@@ -612,8 +612,47 @@ var _ = ginkgo.Describe("OIDC", func() {
 		Expect(rec.Code).To(Equal(http.StatusOK))
 		var discovery map[string]any
 		Expect(json.Unmarshal(rec.Body.Bytes(), &discovery)).To(Succeed())
-		Expect(discovery).To(HaveKeyWithValue("issuer", "http://localhost:8080"))
-		Expect(discovery["authorization_endpoint"]).To(ContainSubstring("http://localhost:8080"))
+		Expect(discovery).To(HaveKeyWithValue("issuer", "http://localhost:3000"))
+		Expect(discovery["authorization_endpoint"]).To(ContainSubstring("http://localhost:3000"))
+	})
+
+	ginkgo.Describe("OIDCIssuerURL", func() {
+		var oldAuthMode, oldFrontendURL, oldPublicURL string
+
+		ginkgo.BeforeEach(func() {
+			oldAuthMode = vars.AuthMode
+			oldFrontendURL = api.FrontendURL
+			oldPublicURL = api.PublicURL
+			api.FrontendURL = "https://frontend.example.com/"
+			api.PublicURL = "https://backend.example.com/"
+		})
+
+		ginkgo.AfterEach(func() {
+			vars.AuthMode = oldAuthMode
+			api.FrontendURL = oldFrontendURL
+			api.PublicURL = oldPublicURL
+		})
+
+		ginkgo.It("uses the frontend URL for basic auth", func() {
+			vars.AuthMode = Basic
+			Expect(OIDCIssuerURL()).To(Equal("https://frontend.example.com"))
+		})
+
+		ginkgo.It("uses the frontend URL for kratos auth", func() {
+			vars.AuthMode = Kratos
+			Expect(OIDCIssuerURL()).To(Equal("https://frontend.example.com"))
+		})
+
+		ginkgo.It("uses the public endpoint for clerk auth", func() {
+			vars.AuthMode = Clerk
+			Expect(OIDCIssuerURL()).To(Equal("https://backend.example.com"))
+		})
+
+		ginkgo.It("falls back to the public endpoint when the frontend URL is unset", func() {
+			vars.AuthMode = Kratos
+			api.FrontendURL = ""
+			Expect(OIDCIssuerURL()).To(Equal("https://backend.example.com"))
+		})
 	})
 
 	ginkgo.Describe("ClerkCredentialChecker", func() {
