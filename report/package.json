@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@flanksource/clicky-ui": "^0.2.1",
-    "@flanksource/facet": "^0.1.39",
+    "@flanksource/facet": "0.1.43",
     "@flanksource/icons": "^1.0.53",
     "@radix-ui/react-compose-refs": "^1.1.2",
     "@radix-ui/react-slot": "^1.2.3",
