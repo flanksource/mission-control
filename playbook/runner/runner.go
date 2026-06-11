@@ -377,6 +377,10 @@ func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.Pl
 
 	result, err := executeAction(ctx, playbookID, action.PlaybookRunID, *action, actionSpec, templateEnv)
 
+	// The status must be read off the typed result before the transformations
+	// below marshal it into a generic map, which doesn't implement StatusAccessor.
+	status := resultStatus(result.data)
+
 	// Scrub secrets from action output before saving to DB
 	result.data = scrubActionResult(&templateEnv, result.data)
 	result.data = extractContentType(result.data, actionSpec.ActionType(), actionSpec.ContentType)
@@ -390,8 +394,8 @@ func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.Pl
 		if err := action.Skip(db); err != nil {
 			return ctx.Oops("db").Wrap(err)
 		}
-	} else if accessor, ok := result.data.(StatusAccessor); ok {
-		switch accessor.GetStatus() {
+	} else {
+		switch status {
 		case models.PlaybookActionStatusFailed:
 			ctx.Warnf("action returned failure\n%v", logger.Pretty(result.data))
 			if err := action.Fail(db, result.data, nil); err != nil {
@@ -404,16 +408,11 @@ func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.Pl
 				return ctx.Oops("db").Wrap(err)
 			}
 
-		case models.PlaybookActionStatusCompleted:
+		default:
 			ctx.Tracef("action completed\n%v", logger.Pretty(result.data))
 			if err := action.Complete(db, result.data); err != nil {
 				return ctx.Oops("db").Wrap(err)
 			}
-		}
-	} else {
-		ctx.Tracef("action completed\n%v", logger.Pretty(result.data))
-		if err := action.Complete(db, result.data); err != nil {
-			return ctx.Oops("db").Wrap(err)
 		}
 	}
 
