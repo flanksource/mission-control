@@ -1,4 +1,4 @@
-package cmd
+package clientcmd
 
 import (
 	"github.com/flanksource/duty/models"
@@ -9,12 +9,12 @@ import (
 var _ = ginkgo.Describe("BuildConnectionCRD", func() {
 	tests := []struct {
 		name     string
-		flags    connectionFlags
+		flags    ConnectionFlags
 		expected string
 	}{
 		{
 			name: "postgres with URL",
-			flags: connectionFlags{
+			flags: ConnectionFlags{
 				Name:      "mydb",
 				Namespace: "default",
 				Type:      models.ConnectionTypePostgres,
@@ -33,7 +33,7 @@ spec:
 		},
 		{
 			name: "http with only URL",
-			flags: connectionFlags{
+			flags: ConnectionFlags{
 				Name:      "httpbin",
 				Namespace: "mc",
 				Type:      models.ConnectionTypeHTTP,
@@ -51,7 +51,7 @@ spec:
 		},
 		{
 			name: "gemini with model",
-			flags: connectionFlags{
+			flags: ConnectionFlags{
 				Name:      "my-gemini",
 				Namespace: "default",
 				Type:      models.ConnectionTypeGemini,
@@ -72,7 +72,7 @@ spec:
 		},
 		{
 			name: "slack",
-			flags: connectionFlags{
+			flags: ConnectionFlags{
 				Name:      "test-slack",
 				Namespace: "mc",
 				Type:      models.ConnectionTypeSlack,
@@ -93,7 +93,7 @@ spec:
 		},
 		{
 			name: "aws",
-			flags: connectionFlags{
+			flags: ConnectionFlags{
 				Name:      "my-aws",
 				Namespace: "default",
 				Type:      models.ConnectionTypeAWS,
@@ -117,7 +117,7 @@ spec:
 		},
 		{
 			name: "folder",
-			flags: connectionFlags{
+			flags: ConnectionFlags{
 				Name:      "artifacts",
 				Namespace: "default",
 				Type:      models.ConnectionTypeFolder,
@@ -148,12 +148,12 @@ spec:
 var _ = ginkgo.Describe("MarshalDryRunOutput", func() {
 	tests := []struct {
 		name     string
-		flags    connectionFlags
+		flags    ConnectionFlags
 		expected string
 	}{
 		{
 			name: "aws from-profile with session token",
-			flags: connectionFlags{
+			flags: ConnectionFlags{
 				Name:         "my-aws",
 				Namespace:    "mc",
 				Type:         models.ConnectionTypeAWS,
@@ -200,7 +200,7 @@ spec:
 		},
 		{
 			name: "aws from-profile without session token",
-			flags: connectionFlags{
+			flags: ConnectionFlags{
 				Name:        "my-aws",
 				Namespace:   "mc",
 				Type:        models.ConnectionTypeAWS,
@@ -240,7 +240,7 @@ spec:
 		},
 		{
 			name: "aws dry-run without from-profile",
-			flags: connectionFlags{
+			flags: ConnectionFlags{
 				Name:      "my-aws",
 				Namespace: "default",
 				Type:      models.ConnectionTypeAWS,
@@ -264,7 +264,7 @@ spec:
 		},
 		{
 			name: "s3 from-profile",
-			flags: connectionFlags{
+			flags: ConnectionFlags{
 				Name:        "my-s3",
 				Namespace:   "mc",
 				Type:        models.ConnectionTypeS3,

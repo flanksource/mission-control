@@ -1,4 +1,4 @@
-package cmd
+package clientcmd
 
 import (
 	gocontext "context"
@@ -9,9 +9,17 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/flanksource/incident-commander/plugin/machinery/local"
 	"github.com/flanksource/incident-commander/plugin/manifestcache"
 )
+
+// LocalPluginRefresh, when set by the full mission-control binary, refreshes
+// the plugin command cache from a locally-installed plugin binary. The slim
+// faro client leaves it nil and refreshes exclusively from the server.
+var LocalPluginRefresh func(cmd *cobra.Command, args []string) ([]string, error)
+
+// pluginHostRoot is the root command that cached plugin commands are attached
+// to (set by RegisterClientCommands), so refresh-cache can re-register them.
+var pluginHostRoot *cobra.Command
 
 // pluginParams accumulates repeated --param key=value flags.
 type pluginParams struct {
@@ -73,9 +81,6 @@ func init() {
 	PluginCmd.Flags().BoolVar(&pluginOpts.RawJSON, "json", false, "Emit raw response instead of pretty-printing JSON")
 	PluginCmd.Flags().Var(&pluginOpts.Params, "param", "Key=value parameters (repeatable)")
 	PluginCmd.AddCommand(pluginRefreshCacheCmd)
-	registerPluginHARFlag(Root)
-	Root.AddCommand(PluginCmd)
-	_ = registerCachedPluginCommands(PluginCmd, Root)
 }
 
 func runPluginOp(cmd *cobra.Command, args []string) error {
@@ -83,42 +88,27 @@ func runPluginOp(cmd *cobra.Command, args []string) error {
 }
 
 func runPluginRefreshCache(cmd *cobra.Command, args []string) error {
-	mode, mc, err := resolveMode()
-	if err != nil {
-		return err
-	}
-
 	var names []string
-	if len(args) == 0 {
-		if mode != modeAPI {
+	var err error
+
+	if mc, ok := ContextHasAPI(); ok {
+		names, err = refreshPluginCacheFromServer(cmd, mc)
+		if err == nil && len(args) > 0 && !containsString(names, args[0]) {
+			return fmt.Errorf("plugin %q was not returned by %s", args[0], mc.Server)
+		}
+	} else if LocalPluginRefresh != nil {
+		if len(args) == 0 {
 			return fmt.Errorf("plugin name is required when refreshing from local binaries")
 		}
-		names, err = refreshPluginCacheFromServer(cmd, mc)
+		names, err = LocalPluginRefresh(cmd, args)
 	} else {
-		name := args[0]
-		switch mode {
-		case modeAPI:
-			names, err = refreshPluginCacheFromServer(cmd, mc)
-			if err == nil && !containsString(names, name) {
-				return fmt.Errorf("plugin %q was not returned by %s", name, mc.Server)
-			}
-		case modeLocal:
-			var entry *manifestcache.Entry
-			entry, err = refreshPluginCacheFromBinary(cmd, name)
-			if entry != nil && entry.Service.Name != "" {
-				names = []string{entry.Service.Name}
-			} else {
-				names = []string{name}
-			}
-		default:
-			return fmt.Errorf("unable to determine dispatch mode")
-		}
+		return fmt.Errorf("no API context and no local plugin support; configure one with `auth login` or use the full mission-control binary")
 	}
 	if err != nil {
 		return err
 	}
 
-	_ = registerCachedPluginCommands(PluginCmd, Root)
+	_ = registerCachedPluginCommands(PluginCmd, pluginHostRoot)
 	sort.Strings(names)
 	fmt.Fprintf(cmd.OutOrStdout(), "Refreshed plugin command cache: %s\n", strings.Join(names, ", "))
 	return nil
@@ -128,7 +118,7 @@ func refreshPluginCacheFromServer(cmd *cobra.Command, mc *MCContext) ([]string, 
 	if mc == nil || mc.Server == "" {
 		return nil, fmt.Errorf("no Mission Control server configured")
 	}
-	token, err := resolveContextToken(mc)
+	token, err := ResolveContextToken(mc)
 	if err != nil {
 		return nil, err
 	}
@@ -144,14 +134,6 @@ func refreshPluginCacheFromServer(cmd *cobra.Command, mc *MCContext) ([]string, 
 		Server: mc.Server,
 		Token:  token,
 		HAR:    collector,
-	})
-}
-
-func refreshPluginCacheFromBinary(cmd *cobra.Command, name string) (*manifestcache.Entry, error) {
-	ctx, cancel := gocontext.WithTimeout(cmd.Context(), 30*time.Second)
-	defer cancel()
-	return manifestcache.PopulateLocal(ctx, name, manifestcache.PopulateOptions{
-		BinaryDir: local.PluginPath(),
 	})
 }
 

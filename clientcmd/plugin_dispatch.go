@@ -1,4 +1,4 @@
-package cmd
+package clientcmd
 
 import (
 	gocontext "context"
@@ -11,49 +11,24 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/flanksource/incident-commander/plugin/machinery/local"
 	"github.com/flanksource/incident-commander/sdk"
 )
 
-// pluginMode is the dispatch mode resolved from MCContext at the start of
-// each plugin command. Mode selection is not memoized: the user can switch
-// contexts between commands, and each subcommand re-resolves to keep the
-// behavior obvious.
-type pluginMode int
-
-const (
-	modeNone  pluginMode = iota
-	modeAPI              // Server + Token: forward HTTP to /api/plugins
-	modeLocal            // DB / no-API: spawn the plugin binary
-)
-
-// resolveMode picks API mode if the current context has Server+Token, else
-// falls back to local-binary mode. Returns the resolved MCContext (may be
-// nil for local mode).
-func resolveMode() (pluginMode, *MCContext, error) {
-	if mc, ok := contextHasAPI(); ok {
-		return modeAPI, mc, nil
-	}
-	if local.PluginPath() == "" {
-		return modeNone, nil, errors.New("no API context and no MISSION_CONTROL_PLUGIN_PATH; configure one with `mission-control auth login` or set MISSION_CONTROL_PLUGIN_PATH")
-	}
-	return modeLocal, nil, nil
-}
+// LocalPluginDispatch, when set by the full mission-control binary, invokes a
+// plugin operation against a locally-spawned plugin binary (go-plugin). The
+// slim faro client leaves it nil and dispatches exclusively via the API.
+var LocalPluginDispatch func(cmd *cobra.Command, plugin, op string, params map[string]string, configID string, raw bool) error
 
 // dispatchOperation routes an operation invocation to either the HTTP API
 // (when an API context is configured) or a locally-spawned plugin binary.
 func dispatchOperation(cmd *cobra.Command, plugin, op string, params map[string]string, configID string, raw bool) error {
-	mode, mc, err := resolveMode()
-	if err != nil {
-		return err
-	}
-	switch mode {
-	case modeAPI:
+	if mc, ok := ContextHasAPI(); ok {
 		return dispatchAPI(cmd, mc, plugin, op, params, configID, raw)
-	case modeLocal:
-		return dispatchLocal(cmd, plugin, op, params, configID, raw)
 	}
-	return fmt.Errorf("unable to determine dispatch mode")
+	if LocalPluginDispatch != nil {
+		return LocalPluginDispatch(cmd, plugin, op, params, configID, raw)
+	}
+	return errors.New("no API context and no local plugin support; configure one with `auth login` or use the full mission-control binary with MISSION_CONTROL_PLUGIN_PATH")
 }
 
 // dispatchAPI forwards the operation to the configured Mission Control
@@ -74,7 +49,7 @@ func dispatchAPI(cmd *cobra.Command, mc *MCContext, plugin, op string, params ma
 			fmt.Fprintln(cmd.ErrOrStderr(), err)
 		}
 	}()
-	client := newAPIClient(mc, sdk.WithAccept("application/clicky+json,application/json"))
+	client := NewAPIClient(mc, sdk.WithAccept("application/clicky+json,application/json"))
 
 	ctx, cancel := gocontext.WithTimeout(cmd.Context(), 60*time.Second)
 	defer cancel()
@@ -87,7 +62,7 @@ func dispatchAPI(cmd *cobra.Command, mc *MCContext, plugin, op string, params ma
 		}
 		return fmt.Errorf("forward to %s: %w", mc.Server, err)
 	}
-	return renderResult(cmd, bodyBytes, raw)
+	return RenderResult(cmd, bodyBytes, raw)
 }
 
 func formatPluginServerError(err *sdk.ServerError) string {
@@ -148,9 +123,9 @@ func formatPluginServerError(err *sdk.ServerError) string {
 	return b.String()
 }
 
-// renderResult pretty-prints a clicky+json / application/json response,
+// RenderResult pretty-prints a clicky+json / application/json response,
 // or writes raw bytes when --json is set or the body isn't JSON.
-func renderResult(cmd *cobra.Command, body []byte, raw bool) error {
+func RenderResult(cmd *cobra.Command, body []byte, raw bool) error {
 	out := cmd.OutOrStdout()
 	if raw {
 		_, err := out.Write(body)

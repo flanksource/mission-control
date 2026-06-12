@@ -117,7 +117,7 @@ tidy:
 
 .PHONY: compress
 compress: .bin/upx
-	upx -5 ./.bin/$(NAME)_linux_amd64 ./.bin/$(NAME)_linux_arm64
+	upx -5 ./.bin/$(NAME)_linux_amd64 ./.bin/$(NAME)_linux_arm64 ./.bin/faro_linux_amd64 ./.bin/faro_linux_arm64
 
 .PHONY: linux
 linux: $(TAILWIND_JS)
@@ -133,13 +133,32 @@ darwin:
 windows:
 	GOOS=windows GOARCH=amd64 go build -o ./.bin/$(NAME).exe -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
 
+# faro is a slim Mission Control client (remote-only surfaces). Built for the
+# requested matrix: linux amd64/arm64, darwin arm64, windows amd64.
+.PHONY: faro-linux
+faro-linux: $(TAILWIND_JS)
+	GOOS=linux GOARCH=amd64 go build -o ./.bin/faro_linux_amd64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=linux GOARCH=arm64 go build -o ./.bin/faro_linux_arm64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
+
+.PHONY: faro-darwin
+faro-darwin: $(TAILWIND_JS)
+	GOOS=darwin GOARCH=arm64 go build -o ./.bin/faro_darwin_arm64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
+
+.PHONY: faro-windows
+faro-windows: $(TAILWIND_JS)
+	GOOS=windows GOARCH=amd64 go build -o ./.bin/faro.exe -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
+
+.PHONY: faro
+faro: faro-linux faro-darwin faro-windows
+
 .PHONY: binaries
-binaries: linux darwin windows compress
+binaries: linux darwin windows faro compress
 
 .PHONY: release
 release: ui binaries
 	mkdir -p .release
 	cp .bin/incident-commander* .release/
+	cp .bin/faro* .release/
 
 # Generate OpenAPI schema
 .PHONY: gen-schemas
