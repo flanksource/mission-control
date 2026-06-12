@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -257,7 +258,11 @@ Examples:
 			ctx = *existingCtx
 		}
 		if cmd.Flags().Changed("server") {
-			ctx.Server = strings.TrimRight(contextAddServer, "/")
+			server, err := ResolveAPIBase(contextAddServer)
+			if err != nil {
+				return err
+			}
+			ctx.Server = server
 		}
 		if cmd.Flags().Changed("db-url") {
 			ctx.DB = contextAddDB
@@ -303,63 +308,97 @@ func EnsureContextToken(cmd *cobra.Command, ctx *MCContext, status io.Writer) er
 		return fmt.Errorf("failed to load stored tokens for %s: %w", ctx.Server, err)
 	}
 
-	fmt.Fprintf(status, "No token configured for context %q; starting OIDC login for %s\n", ctx.Name, ctx.Server)
-	tokens, _, err := oidcLogin(cmd, ctx.Server, status)
-	if err != nil {
-		return fmt.Errorf("OAuth login failed for %s: %w", ctx.Server, err)
+	var lastErr error
+	for _, loginServer := range oidcLoginServerCandidates(ctx.Server) {
+		fmt.Fprintf(status, "No token configured for context %q; starting OIDC login for %s\n", ctx.Name, loginServer)
+		tokens, _, err := oidcLogin(cmd, loginServer, status)
+		if err == nil {
+			ctx.Token = tokens.AccessToken
+			return nil
+		}
+		lastErr = err
 	}
-	ctx.Token = tokens.AccessToken
-	return nil
+	return fmt.Errorf("OAuth login failed for %s: %w", ctx.Server, lastErr)
 }
 
 func storedAccessToken(serverURL string) (string, error) {
-	tokens, err := LoadStoredTokens(serverURL)
+	stored, err := loadStoredOIDCTokens(serverURL)
 	if err != nil {
 		return "", err
 	}
-	if tokens.AccessToken == "" {
+	if stored == nil || stored.Tokens == nil || stored.Tokens.AccessToken == "" {
 		return "", nil
 	}
-	if !tokens.ExpiresAt.IsZero() && time.Until(tokens.ExpiresAt) < time.Minute {
+	if !stored.Tokens.ExpiresAt.IsZero() && time.Until(stored.Tokens.ExpiresAt) < time.Minute {
 		return "", nil
 	}
-	return tokens.AccessToken, nil
+	return stored.Tokens.AccessToken, nil
 }
 
-// EnsureAPIBase probes serverURL + "/api/db/connections" and, if that path
-// returns JSON, appends "/api" to the stored server URL and saves the config.
-// Returns true when the context was upgraded. Used to self-heal after the SDK
-// reports ErrHTMLResponse.
-func EnsureAPIBase(ctx *MCContext) (bool, error) {
-	if ctx == nil || ctx.Server == "" {
-		return false, nil
+func oidcLoginServerCandidates(serverURL string) []string {
+	serverURL = strings.TrimRight(serverURL, "/")
+	if strings.HasSuffix(serverURL, "/api") {
+		return uniqueStrings([]string{strings.TrimSuffix(serverURL, "/api"), serverURL})
 	}
-	if strings.HasSuffix(strings.TrimRight(ctx.Server, "/"), "/api") {
-		return false, nil
+	return uniqueStrings([]string{serverURL})
+}
+
+// ResolveAPIBase probes both the frontend proxy API path and the direct backend
+// path, returning the base URL that serves Mission Control's unauthenticated
+// /health endpoint.
+func ResolveAPIBase(serverURL string) (string, error) {
+	serverURL = strings.TrimRight(serverURL, "/")
+	if serverURL == "" {
+		return "", fmt.Errorf("server URL is required")
 	}
 
-	ok, err := NewAPIClientForServer(ctx.Server, ctx.Token).ProbeAPIBase(gocontext.Background())
+	var failures []string
+	for _, candidate := range apiBaseCandidates(serverURL) {
+		ok, err := probeAPIHealth(gocontext.Background(), candidate)
+		if err == nil && ok {
+			return candidate, nil
+		}
+		if err != nil {
+			failures = append(failures, fmt.Sprintf("%s: %v", candidate, err))
+		} else {
+			failures = append(failures, fmt.Sprintf("%s: /health did not return OK", candidate))
+		}
+	}
+	return "", fmt.Errorf("could not find Mission Control API for %s (%s)", serverURL, strings.Join(failures, "; "))
+}
+
+func apiBaseCandidates(serverURL string) []string {
+	serverURL = strings.TrimRight(serverURL, "/")
+	if strings.HasSuffix(serverURL, "/api") {
+		return uniqueStrings([]string{serverURL, strings.TrimSuffix(serverURL, "/api")})
+	}
+	return uniqueStrings([]string{serverURL + "/api", serverURL})
+}
+
+func probeAPIHealth(ctx gocontext.Context, baseURL string) (bool, error) {
+	healthURL, err := url.JoinPath(baseURL, "health")
 	if err != nil {
 		return false, err
 	}
-	if !ok {
-		return false, nil
-	}
-
-	cfg, err := LoadConfig()
+	ctx, cancel := gocontext.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
 	if err != nil {
 		return false, err
 	}
-	stored := cfg.GetContext(ctx.Name)
-	if stored == nil {
-		return false, nil
-	}
-	stored.Server = strings.TrimRight(stored.Server, "/") + "/api"
-	ctx.Server = stored.Server
-	if err := SaveConfig(cfg); err != nil {
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
 		return false, err
 	}
-	return true, nil
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return false, nil
+	}
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64))
+	if err != nil {
+		return false, err
+	}
+	return strings.TrimSpace(string(body)) == "OK", nil
 }
 
 func init() {

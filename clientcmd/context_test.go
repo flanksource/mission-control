@@ -124,4 +124,118 @@ var _ = ginkgo.Describe("context token resolution", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(reloaded.GetContext("local").Token).To(Equal("new-token"))
 	})
+
+	ginkgo.It("reuses frontend OIDC tokens for resolved /api contexts", func() {
+		server := "http://mission-control.local"
+		_, err := storeTokens(server, &oidcclient.Tokens{
+			AccessToken: "stored-token",
+			ExpiresAt:   time.Now().Add(time.Hour),
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		oidcLogin = func(*cobra.Command, string, io.Writer) (*oidcclient.Tokens, string, error) {
+			return nil, "", fmt.Errorf("unexpected login")
+		}
+
+		ctx := &MCContext{Name: "local", Server: server + "/api"}
+		Expect(EnsureContextToken(&cobra.Command{}, ctx, io.Discard)).To(Succeed())
+		Expect(ctx.Token).To(Equal("stored-token"))
+	})
+
+	ginkgo.It("starts OIDC login against the frontend URL for resolved /api contexts", func() {
+		var loginServer string
+		oidcLogin = func(_ *cobra.Command, server string, status io.Writer) (*oidcclient.Tokens, string, error) {
+			loginServer = server
+			return &oidcclient.Tokens{AccessToken: "oauth-token"}, "", nil
+		}
+
+		ctx := &MCContext{Name: "local", Server: "http://mission-control.local/api"}
+		Expect(EnsureContextToken(&cobra.Command{}, ctx, io.Discard)).To(Succeed())
+		Expect(ctx.Token).To(Equal("oauth-token"))
+		Expect(loginServer).To(Equal("http://mission-control.local"))
+	})
+})
+
+var _ = ginkgo.Describe("API base resolution", func() {
+	ginkgo.BeforeEach(func() {
+		configDir := ginkgo.GinkgoT().TempDir()
+		ginkgo.GinkgoT().Setenv("HOME", configDir)
+		ginkgo.GinkgoT().Setenv("XDG_CONFIG_HOME", configDir)
+	})
+
+	ginkgo.AfterEach(func() {
+		contextAddName = ""
+		contextAddServer = ""
+		contextAddDB = ""
+		contextAddToken = ""
+		contextAddUse = false
+	})
+
+	ginkgo.It("prefers the frontend /api health endpoint", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/api/health":
+				_, _ = w.Write([]byte("OK"))
+			case "/health":
+				_, _ = w.Write([]byte("frontend OK"))
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer server.Close()
+
+		resolved, err := ResolveAPIBase(server.URL)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(resolved).To(Equal(server.URL + "/api"))
+	})
+
+	ginkgo.It("falls back to direct backend health", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/health":
+				_, _ = w.Write([]byte("OK"))
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer server.Close()
+
+		resolved, err := ResolveAPIBase(server.URL)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(resolved).To(Equal(server.URL))
+	})
+
+	ginkgo.It("stores the resolved API base for context add", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/api/health" {
+				_, _ = w.Write([]byte("OK"))
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		defer server.Close()
+
+		contextAddName = "beta"
+		contextAddServer = server.URL
+		contextAddToken = "token"
+		contextAddUse = true
+
+		cmd := &cobra.Command{}
+		cmd.SetOut(io.Discard)
+		cmd.Flags().String("server", "", "")
+		cmd.Flags().String("token", "", "")
+		cmd.Flags().String("db-url", "", "")
+		Expect(cmd.Flags().Set("server", server.URL)).To(Succeed())
+		Expect(cmd.Flags().Set("token", "token")).To(Succeed())
+
+		Expect(contextAddCmd.RunE(cmd, nil)).To(Succeed())
+
+		cfg, err := LoadConfig()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cfg.CurrentContext).To(Equal("beta"))
+		ctx := cfg.GetContext("beta")
+		Expect(ctx.Server).To(Equal(server.URL + "/api"))
+	})
 })
