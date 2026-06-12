@@ -1,14 +1,10 @@
 package clientcmd
 
 import (
-	"errors"
 	"fmt"
-	"os"
 
 	"github.com/flanksource/clicky"
 	"github.com/spf13/cobra"
-
-	"github.com/flanksource/incident-commander/sdk"
 )
 
 var ConnectionTest = &cobra.Command{
@@ -51,19 +47,6 @@ func runConnectionTestFromDB(name, namespace string, overrides *ConnectionFlags)
 }
 
 func runConnectionTestViaAPI(mcCtx *MCContext, name, namespace string) (any, error) {
-	result, err := callConnectionTestAPI(mcCtx, name, namespace)
-	if !errors.Is(err, sdk.ErrHTMLResponse) {
-		return result, err
-	}
-
-	upgraded, upErr := EnsureAPIBase(mcCtx)
-	if upErr != nil {
-		return nil, fmt.Errorf("%w (probe failed: %v)", err, upErr)
-	}
-	if !upgraded {
-		return nil, err
-	}
-	fmt.Fprintf(os.Stderr, "Upgraded context %q server to %s\n", mcCtx.Name, mcCtx.Server)
 	return callConnectionTestAPI(mcCtx, name, namespace)
 }
 

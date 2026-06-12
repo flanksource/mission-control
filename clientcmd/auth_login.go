@@ -38,29 +38,72 @@ func init() {
 }
 
 func runAuthLogin(cmd *cobra.Command, _ []string) error {
-	serverURL := strings.TrimRight(loginServer, "/")
+	apiServer, err := ResolveAPIBase(loginServer)
+	if err != nil {
+		return err
+	}
+	loginServerURL := oidcLoginServerCandidates(apiServer)[0]
 
 	if loginToken != "" {
-		path, err := storeTokens(serverURL, &oidcclient.Tokens{AccessToken: loginToken})
+		path, err := storeTokens(loginServerURL, &oidcclient.Tokens{AccessToken: loginToken})
 		if err != nil {
 			return fmt.Errorf("failed to save token: %w", err)
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Token stored for %s\n", serverURL)
+		contextName, err := saveLoginContext(apiServer, loginToken)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Token stored for %s\n", loginServerURL)
 		fmt.Fprintf(cmd.OutOrStdout(), "Tokens saved to: %s\n", path)
+		fmt.Fprintf(cmd.OutOrStdout(), "Context %q saved for %s\n", contextName, apiServer)
 		fmt.Fprintf(cmd.OutOrStdout(), "Run `whoami` to verify connectivity.\n")
 		return nil
 	}
 
-	tokens, tokenPath, err := PerformOIDCLogin(cmd, serverURL, cmd.OutOrStdout())
+	tokens, tokenPath, err := performOIDCLoginForAPIBase(cmd, apiServer, cmd.OutOrStdout())
+	if err != nil {
+		return err
+	}
+	contextName, err := saveLoginContext(apiServer, tokens.AccessToken)
 	if err != nil {
 		return err
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "\nLogin successful!\n\n")
 	fmt.Fprintf(cmd.OutOrStdout(), "Tokens saved to: %s\n", tokenPath)
+	fmt.Fprintf(cmd.OutOrStdout(), "Context %q saved for %s\n", contextName, apiServer)
 	fmt.Fprintf(cmd.OutOrStdout(), "Access token expires: %s\n", tokens.ExpiresAt.Format(time.RFC3339))
 
 	return nil
+}
+
+func performOIDCLoginForAPIBase(cmd *cobra.Command, apiServer string, status io.Writer) (*oidcclient.Tokens, string, error) {
+	var lastErr error
+	for _, loginServer := range oidcLoginServerCandidates(apiServer) {
+		tokens, tokenPath, err := oidcLogin(cmd, loginServer, status)
+		if err == nil {
+			return tokens, tokenPath, nil
+		}
+		lastErr = err
+	}
+	return nil, "", fmt.Errorf("OIDC login failed for %s: %w", apiServer, lastErr)
+}
+
+func saveLoginContext(serverURL, token string) (string, error) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return "", err
+	}
+	name := ServerToContextName(serverURL)
+	ctx := MCContext{Name: name, Server: serverURL, Token: token}
+	if existing := cfg.GetContext(name); existing != nil {
+		ctx = *existing
+		ctx.Server = serverURL
+		ctx.Token = token
+	}
+	cfg.SetContext(ctx)
+	cfg.CurrentContext = name
+	return name, SaveConfig(cfg)
 }
 
 var oidcLogin = PerformOIDCLogin

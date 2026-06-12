@@ -250,30 +250,6 @@ func (c *Client) Whoami(ctx context.Context) (*WhoamiResponse, int, error) {
 	return &result, r.StatusCode, nil
 }
 
-func (c *Client) ProbeAPIBase(ctx context.Context) (bool, error) {
-	r, err := c.R(ctx).
-		QueryParam("limit", "0").
-		Get(c.apiPath("/api/db/connections"))
-	if err != nil {
-		return false, err
-	}
-	body, err := r.AsString()
-	if err != nil {
-		return false, err
-	}
-	switch r.StatusCode {
-	case 200, 401, 403:
-	default:
-		return false, nil
-	}
-	if looksLikeHTML(r.Header.Get("Content-Type"), body) {
-		return false, nil
-	}
-	contentType := strings.ToLower(r.Header.Get("Content-Type"))
-	trimmed := strings.TrimLeft(body, " \t\r\n")
-	return strings.Contains(contentType, "json") || strings.HasPrefix(trimmed, "[") || strings.HasPrefix(trimmed, "{"), nil
-}
-
 func (c *Client) GetConnection(name, namespace string) (*models.Connection, error) {
 	var connections []models.Connection
 	r, err := c.R(context.Background()).
