@@ -20,6 +20,7 @@ import (
 	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/flanksource/incident-commander/connection"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/sdk"
 )
 
 // localConnectionOps implements clientcmd.LocalConnectionOps using a direct
@@ -112,6 +113,7 @@ func (localConnectionOps) TestSaved(name, namespace string, overrides *clientcmd
 		return nil, err
 	}
 	shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
+	defer stop()
 
 	var conn models.Connection
 	if err := ctx.DB().Where("name = ? AND namespace = ? AND deleted_at IS NULL", name, namespace).First(&conn).Error; err != nil {
@@ -187,7 +189,10 @@ func (localConnectionOps) GetConnection(name, namespace string) (*models.Connect
 
 	var conn models.Connection
 	if err := ctx.DB().Where("name = ? AND namespace = ? AND deleted_at IS NULL", name, namespace).First(&conn).Error; err != nil {
-		return nil, fmt.Errorf("connection %s/%s not found: %w", namespace, name, err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("connection %s/%s not found: %w", namespace, name, sdk.ErrNotFound)
+		}
+		return nil, fmt.Errorf("failed to load connection %s/%s: %w", namespace, name, err)
 	}
 	return &conn, nil
 }

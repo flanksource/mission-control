@@ -297,12 +297,13 @@ tasks:
       - >-
         go build -o {{.FARO_BINARY}} -ldflags "-X \"main.version={{.VERSION_TAG}} built at {{.BUILD_DATE}}\"" ./faro
     sources:
-      - "faro/**/*.go"
-      - "clientcmd/**/*.go"
-      - "sdk/**/*.go"
+      - "**/*.go"
       - "{{.TAILWIND_JS}}"
       - go.mod
       - go.sum
+      - exclude: ui/frontend/**
+      - exclude: .bin/**
+      - exclude: .task/**
     generates:
       - "{{.FARO_BINARY}}"
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/sdk"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
@@ -392,7 +393,12 @@ func runConnectionAdd(flags *ConnectionFlags) error {
 func runConnectionAddViaAPI(mcCtx *MCContext, flags *ConnectionFlags, conn *models.Connection) error {
 	client := NewAPIClient(mcCtx)
 
-	existing, _ := client.GetConnection(flags.Name, flags.Namespace)
+	existing, err := client.GetConnection(flags.Name, flags.Namespace)
+	if err != nil {
+		if !sdk.IsNotFound(err) {
+			return fmt.Errorf("failed to check existing connection: %w", err)
+		}
+	}
 	if existing != nil {
 		conn.ID = existing.ID
 		conn.CreatedAt = existing.CreatedAt

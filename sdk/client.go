@@ -19,10 +19,24 @@ import (
 	"github.com/flanksource/incident-commander/pkg/httpobservability"
 )
 
-// ErrHTMLResponse is returned when the server responded with HTML on a JSON
-// endpoint — typically because the configured server URL points at the
-// user-facing frontend rather than the /api backend.
-var ErrHTMLResponse = errors.New("server returned HTML instead of JSON (is the backend at /api?)")
+var (
+	// ErrHTMLResponse is returned when the server responded with HTML on a JSON
+	// endpoint — typically because the configured server URL points at the
+	// user-facing frontend rather than the /api backend.
+	ErrHTMLResponse = errors.New("server returned HTML instead of JSON (is the backend at /api?)")
+
+	// ErrNotFound is returned when a requested resource does not exist.
+	ErrNotFound = errors.New("not found")
+)
+
+// IsNotFound reports whether err represents a missing resource.
+func IsNotFound(err error) bool {
+	if errors.Is(err, ErrNotFound) {
+		return true
+	}
+	var serverErr *ServerError
+	return errors.As(err, &serverErr) && serverErr.StatusCode == stdhttp.StatusNotFound
+}
 
 type TokenProvider func(context.Context) (string, error)
 
@@ -278,7 +292,7 @@ func (c *Client) GetConnection(name, namespace string) (*models.Connection, erro
 		return nil, err
 	}
 	if len(connections) == 0 {
-		return nil, fmt.Errorf("connection %s/%s not found", namespace, name)
+		return nil, fmt.Errorf("connection %s/%s not found: %w", namespace, name, ErrNotFound)
 	}
 	return &connections[0], nil
 }

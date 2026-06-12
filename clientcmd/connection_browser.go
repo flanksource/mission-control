@@ -29,6 +29,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/flanksource/incident-commander/connection"
+	"github.com/flanksource/incident-commander/sdk"
 )
 
 type loginWaitResult struct {
@@ -834,7 +835,12 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 		Properties: props,
 	}
 
-	existing, _ := browserGetConnection(flags.Name, flags.Namespace)
+	existing, err := browserGetConnection(flags.Name, flags.Namespace)
+	if err != nil {
+		if !sdk.IsNotFound(err) {
+			return fmt.Errorf("failed to check existing connection: %w", err)
+		}
+	}
 	if existing != nil && existing.ID != uuid.Nil {
 		conn.ID = existing.ID
 		conn.CreatedAt = existing.CreatedAt
