@@ -1,4 +1,4 @@
-package cmd
+package clientcmd
 
 import (
 	"bytes"
@@ -25,7 +25,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 	var savedPollInterval time.Duration
 
 	ginkgo.BeforeEach(func() {
-		savedParamFile = paramFile
+		savedParamFile = ParamFile
 		savedConfigID = playbookConfigID
 		savedComponentID = playbookComponentID
 		savedCheckID = playbookCheckID
@@ -33,7 +33,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 	})
 
 	ginkgo.AfterEach(func() {
-		paramFile = savedParamFile
+		ParamFile = savedParamFile
 		playbookConfigID = savedConfigID
 		playbookComponentID = savedComponentID
 		playbookCheckID = savedCheckID
@@ -66,7 +66,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		playbookID := uuid.New()
 		file := ginkgo.GinkgoT().TempDir() + "/params.yaml"
 		Expect(os.WriteFile(file, []byte("name: api\n"), 0600)).To(Succeed())
-		paramFile = file
+		ParamFile = file
 		playbookConfigID = configID.String()
 
 		params, err := buildRemoteRunParams(playbookID, []string{"region=eu-west-1"})

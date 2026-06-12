@@ -22,6 +22,7 @@ import (
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/auth/accesstoken"
 	"github.com/flanksource/incident-commander/auth/signing"
+	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/mail"
@@ -168,7 +169,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 }
 
 func applyContext() {
-	cfg, err := LoadConfig()
+	cfg, err := clientcmd.LoadConfig()
 	if err != nil {
 		return
 	}
@@ -189,4 +190,6 @@ func init() {
 
 	Root.PersistentFlags().StringVar(&api.CanaryCheckerPath, "canary-checker", "http://canary-checker:8080", "Canary Checker URL")
 	Root.AddCommand(Serve, Sync, GoOffline, ApplicationCmd, RBACCmd, ViewCmd)
+
+	clientcmd.RegisterClientCommands(Root)
 }

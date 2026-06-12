@@ -21,6 +21,7 @@ vars:
   # Build locations
   BIN_DIR: "{{.ROOT_DIR}}/.bin"
   BINARY: "{{.BIN_DIR}}/{{.APP_NAME}}"
+  FARO_BINARY: "{{.BIN_DIR}}/faro"
   TAILWIND_VERSION: 3.4.17
   TAILWIND_JS: auth/oidc/static/tailwind.min.js
   CONTROLLER_GEN_VERSION: v0.19.0
@@ -284,6 +285,41 @@ tasks:
       - exclude: .task/**
     generates:
       - "{{.BINARY}}"
+
+  # ────────────── faro (slim remote client) ──────────────
+
+  faro:build:
+    desc: Build the slim faro client binary (no embedded UI / server)
+    deps:
+      - tailwind-asset
+    cmds:
+      - mkdir -p {{.BIN_DIR}}
+      - >-
+        go build -o {{.FARO_BINARY}} -ldflags "-X \"main.version={{.VERSION_TAG}} built at {{.BUILD_DATE}}\"" ./faro
+    sources:
+      - "faro/**/*.go"
+      - "clientcmd/**/*.go"
+      - "sdk/**/*.go"
+      - "{{.TAILWIND_JS}}"
+      - go.mod
+      - go.sum
+    generates:
+      - "{{.FARO_BINARY}}"
+
+  faro:install:
+    desc: Build and install the faro client to /usr/local/bin
+    deps:
+      - faro:build
+    cmds:
+      - cp {{.FARO_BINARY}} /usr/local/bin/faro
+
+  faro:run:
+    desc: Build and run faro (pass args after --, e.g. `task faro:run -- whoami`)
+    deps:
+      - faro:build
+    interactive: true
+    cmds:
+      - "{{.FARO_BINARY}} {{.CLI_ARGS}}"
 
   # ────────────── Plugins ──────────────
 

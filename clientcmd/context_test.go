@@ -1,4 +1,4 @@
-package cmd
+package clientcmd
 
 import (
 	"bytes"
@@ -43,7 +43,7 @@ var _ = ginkgo.Describe("context token resolution", func() {
 		}
 
 		ctx := &MCContext{Name: "local", Server: server}
-		Expect(ensureContextToken(&cobra.Command{}, ctx, io.Discard)).To(Succeed())
+		Expect(EnsureContextToken(&cobra.Command{}, ctx, io.Discard)).To(Succeed())
 		Expect(ctx.Token).To(Equal("stored-token"))
 	})
 
@@ -56,7 +56,7 @@ var _ = ginkgo.Describe("context token resolution", func() {
 		}
 
 		ctx := &MCContext{Name: "local", Server: "http://mission-control.local"}
-		Expect(ensureContextToken(&cobra.Command{}, ctx, &stderr)).To(Succeed())
+		Expect(EnsureContextToken(&cobra.Command{}, ctx, &stderr)).To(Succeed())
 		Expect(ctx.Token).To(Equal("oauth-token"))
 		Expect(stderr.String()).To(ContainSubstring("starting OIDC login"))
 		Expect(stderr.String()).To(ContainSubstring("login started"))
@@ -115,7 +115,7 @@ var _ = ginkgo.Describe("context token resolution", func() {
 		Expect(mcCtx.Token).To(Equal("new-token"))
 		Expect(tokenRequests).To(Equal(1))
 
-		stored, err := loadStoredTokens(server.URL)
+		stored, err := LoadStoredTokens(server.URL)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(stored.AccessToken).To(Equal("new-token"))
 		Expect(stored.RefreshToken).To(Equal("next-refresh-token"))

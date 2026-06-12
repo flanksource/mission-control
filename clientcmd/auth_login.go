@@ -1,4 +1,4 @@
-package cmd
+package clientcmd
 
 import (
 	"context"
@@ -20,23 +20,38 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var authLoginCmd = &cobra.Command{
+var AuthLoginCmd = &cobra.Command{
 	Use:   "login",
-	Short: "Log in via OIDC browser flow",
+	Short: "Log in via OIDC browser flow, or store an access token with --token",
 	RunE:  runAuthLogin,
 }
 
-var loginServer string
+var (
+	loginServer string
+	loginToken  string
+)
 
 func init() {
-	authLoginCmd.Flags().StringVar(&loginServer, "server", "", "Mission Control server URL (required)")
-	_ = authLoginCmd.MarkFlagRequired("server")
-	Auth.AddCommand(authLoginCmd)
+	AuthLoginCmd.Flags().StringVar(&loginServer, "server", "", "Mission Control server URL (required)")
+	AuthLoginCmd.Flags().StringVar(&loginToken, "token", "", "Store this access token instead of starting the OIDC browser flow")
+	_ = AuthLoginCmd.MarkFlagRequired("server")
 }
 
 func runAuthLogin(cmd *cobra.Command, _ []string) error {
 	serverURL := strings.TrimRight(loginServer, "/")
-	tokens, tokenPath, err := performOIDCLogin(cmd, serverURL, cmd.OutOrStdout())
+
+	if loginToken != "" {
+		path, err := storeTokens(serverURL, &oidcclient.Tokens{AccessToken: loginToken})
+		if err != nil {
+			return fmt.Errorf("failed to save token: %w", err)
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Token stored for %s\n", serverURL)
+		fmt.Fprintf(cmd.OutOrStdout(), "Tokens saved to: %s\n", path)
+		fmt.Fprintf(cmd.OutOrStdout(), "Run `whoami` to verify connectivity.\n")
+		return nil
+	}
+
+	tokens, tokenPath, err := PerformOIDCLogin(cmd, serverURL, cmd.OutOrStdout())
 	if err != nil {
 		return err
 	}
@@ -48,9 +63,9 @@ func runAuthLogin(cmd *cobra.Command, _ []string) error {
 	return nil
 }
 
-var oidcLogin = performOIDCLogin
+var oidcLogin = PerformOIDCLogin
 
-func performOIDCLogin(cmd *cobra.Command, serverURL string, status io.Writer) (*oidcclient.Tokens, string, error) {
+func PerformOIDCLogin(cmd *cobra.Command, serverURL string, status io.Writer) (*oidcclient.Tokens, string, error) {
 	if status == nil {
 		status = io.Discard
 	}
@@ -176,7 +191,7 @@ func tokenPath(serverURL string) (string, error) {
 	return filepath.Join(dir, "mission-control", fmt.Sprintf("tokens_%s.json", host)), nil
 }
 
-func loadStoredTokens(serverURL string) (*oidcclient.Tokens, error) {
+func LoadStoredTokens(serverURL string) (*oidcclient.Tokens, error) {
 	path, err := tokenPath(serverURL)
 	if err != nil {
 		return nil, err

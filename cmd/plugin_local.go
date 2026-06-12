@@ -11,10 +11,38 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 	"github.com/spf13/cobra"
 
+	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/flanksource/incident-commander/plugin/api"
 	"github.com/flanksource/incident-commander/plugin/machinery/local"
 	"github.com/flanksource/incident-commander/plugin/manifestcache"
 )
+
+func init() {
+	clientcmd.LocalPluginDispatch = dispatchLocal
+	clientcmd.LocalPluginRefresh = localPluginRefresh
+}
+
+// localPluginRefresh refreshes the plugin command cache from a locally
+// installed plugin binary. Wired into clientcmd.LocalPluginRefresh.
+func localPluginRefresh(cmd *cobra.Command, args []string) ([]string, error) {
+	name := args[0]
+	entry, err := refreshPluginCacheFromBinary(cmd, name)
+	if err != nil {
+		return nil, err
+	}
+	if entry != nil && entry.Service.Name != "" {
+		return []string{entry.Service.Name}, nil
+	}
+	return []string{name}, nil
+}
+
+func refreshPluginCacheFromBinary(cmd *cobra.Command, name string) (*manifestcache.Entry, error) {
+	ctx, cancel := gocontext.WithTimeout(cmd.Context(), 30*time.Second)
+	defer cancel()
+	return manifestcache.PopulateLocal(ctx, name, manifestcache.PopulateOptions{
+		BinaryDir: local.PluginPath(),
+	})
+}
 
 // dispatchLocal spawns the plugin binary, completes the gRPC handshake,
 // invokes the operation, and shuts the plugin down. Used when the CLI has
@@ -61,7 +89,7 @@ func dispatchLocal(cmd *cobra.Command, pluginName, op string, params map[string]
 		return fmt.Errorf("plugin error: %s (%s)", resp.ErrorMessage, resp.ErrorCode)
 	}
 
-	return renderResult(cmd, resp.Result, raw)
+	return clientcmd.RenderResult(cmd, resp.Result, raw)
 }
 
 // dialPlugin spawns binPath, completes the go-plugin handshake, and returns

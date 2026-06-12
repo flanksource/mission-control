@@ -1,4 +1,4 @@
-package cmd
+package clientcmd
 
 import (
 	"encoding/json"
@@ -17,19 +17,37 @@ import (
 // this path.
 var pluginHARPath string
 
-// startHAR returns a fresh HAR collector if --har was passed and a writer
-// closure that persists it once the command finishes; otherwise returns
-// (nil, no-op).
+// harActive guards against nested HAR activation: once a capture is running
+// (e.g. faro's global StartHAR), inner activations (the plugin dispatch path)
+// become no-ops so the active collector captures their traffic too.
+var harActive bool
+
+// StartHAR activates HAR capture for the configured --har path and returns a
+// flush that restores the previous collector and writes the file. It is
+// idempotent: when --har is unset or a capture is already active it returns a
+// no-op. faro wraps command execution with this so every command's HTTP is
+// captured; the flush should run unconditionally (including on error).
+func StartHAR() func() error {
+	collector, flush := startHAR()
+	_ = collector
+	return flush
+}
+
+// startHAR returns a fresh HAR collector if --har was passed (and no capture is
+// already active) plus a writer closure that persists it once the command
+// finishes; otherwise returns (nil, no-op).
 func startHAR() (*har.Collector, func() error) {
-	if pluginHARPath == "" {
+	if pluginHARPath == "" || harActive {
 		return nil, func() error { return nil }
 	}
+	harActive = true
 	collector := har.NewCollector(har.HARConfig{
 		MaxBodySize:         64 * 1024,
 		CaptureContentTypes: []string{"application/json", "application/clicky+json", "application/x-www-form-urlencoded"},
 	})
 	restore := httpobservability.SetHARCollector(collector)
 	return collector, func() error {
+		harActive = false
 		restore()
 		return writeHAR(pluginHARPath, collector)
 	}
@@ -60,5 +78,5 @@ func writeHAR(path string, collector *har.Collector) error {
 // once at init() time.
 func registerPluginHARFlag(root *cobra.Command) {
 	root.PersistentFlags().StringVar(&pluginHARPath, "har", "",
-		"Write outbound HTTP traffic as a HAR file (path) for plugin commands")
+		"Write outbound HTTP traffic as a HAR file at this path")
 }

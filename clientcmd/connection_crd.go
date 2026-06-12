@@ -1,4 +1,4 @@
-package cmd
+package clientcmd
 
 import (
 	"encoding/json"
@@ -36,7 +36,7 @@ func envVarSecretRef(secretName, key string) types.EnvVar {
 	}
 }
 
-func buildConnectionCRD(flags *connectionFlags) v1.Connection {
+func buildConnectionCRD(flags *ConnectionFlags) v1.Connection {
 	conn := v1.Connection{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "mission-control.flanksource.com/v1",
@@ -362,7 +362,7 @@ func marshalConnectionCRD(conn v1.Connection) ([]byte, error) {
 	return yaml.Marshal(raw)
 }
 
-func buildAWSSpec(flags *connectionFlags) *v1.ConnectionAWS {
+func buildAWSSpec(flags *ConnectionFlags) *v1.ConnectionAWS {
 	aws := &v1.ConnectionAWS{
 		URL:    envVar(flags.URL),
 		Region: flags.Region,
@@ -381,7 +381,7 @@ func buildAWSSpec(flags *connectionFlags) *v1.ConnectionAWS {
 	return aws
 }
 
-func buildSecret(flags *connectionFlags) corev1.Secret {
+func buildSecret(flags *ConnectionFlags) corev1.Secret {
 	data := map[string]string{
 		"AWS_ACCESS_KEY_ID":     flags.AccessKey,
 		"AWS_SECRET_ACCESS_KEY": flags.SecretKey,
@@ -402,7 +402,7 @@ func buildSecret(flags *connectionFlags) corev1.Secret {
 	}
 }
 
-func marshalDryRunOutput(flags *connectionFlags) ([]byte, error) {
+func marshalDryRunOutput(flags *ConnectionFlags) ([]byte, error) {
 	conn := buildConnectionCRD(flags)
 	connYAML, err := marshalConnectionCRD(conn)
 	if err != nil {

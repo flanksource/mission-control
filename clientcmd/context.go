@@ -1,4 +1,4 @@
-package cmd
+package clientcmd
 
 import (
 	gocontext "context"
@@ -110,7 +110,7 @@ func ServerToContextName(serverURL string) string {
 	return u.Hostname()
 }
 
-func contextHasAPI() (*MCContext, bool) {
+func ContextHasAPI() (*MCContext, bool) {
 	cfg, _ := LoadConfig()
 	if cfg == nil {
 		return nil, false
@@ -266,7 +266,7 @@ Examples:
 			ctx.Token = contextAddToken
 		}
 		if ctx.Server != "" && !cmd.Flags().Changed("token") && (ctx.Token == "" || cmd.Flags().Changed("server")) {
-			if err := ensureContextToken(cmd, &ctx, cmd.ErrOrStderr()); err != nil {
+			if err := EnsureContextToken(cmd, &ctx, cmd.ErrOrStderr()); err != nil {
 				return err
 			}
 		}
@@ -292,7 +292,7 @@ Examples:
 	},
 }
 
-func ensureContextToken(cmd *cobra.Command, ctx *MCContext, status io.Writer) error {
+func EnsureContextToken(cmd *cobra.Command, ctx *MCContext, status io.Writer) error {
 	if ctx == nil || ctx.Server == "" || ctx.Token != "" {
 		return nil
 	}
@@ -313,7 +313,7 @@ func ensureContextToken(cmd *cobra.Command, ctx *MCContext, status io.Writer) er
 }
 
 func storedAccessToken(serverURL string) (string, error) {
-	tokens, err := loadStoredTokens(serverURL)
+	tokens, err := LoadStoredTokens(serverURL)
 	if err != nil {
 		return "", err
 	}
@@ -326,11 +326,11 @@ func storedAccessToken(serverURL string) (string, error) {
 	return tokens.AccessToken, nil
 }
 
-// ensureAPIBase probes serverURL + "/api/db/connections" and, if that path
+// EnsureAPIBase probes serverURL + "/api/db/connections" and, if that path
 // returns JSON, appends "/api" to the stored server URL and saves the config.
 // Returns true when the context was upgraded. Used to self-heal after the SDK
 // reports ErrHTMLResponse.
-func ensureAPIBase(ctx *MCContext) (bool, error) {
+func EnsureAPIBase(ctx *MCContext) (bool, error) {
 	if ctx == nil || ctx.Server == "" {
 		return false, nil
 	}
@@ -338,7 +338,7 @@ func ensureAPIBase(ctx *MCContext) (bool, error) {
 		return false, nil
 	}
 
-	ok, err := newAPIClientForServer(ctx.Server, ctx.Token).ProbeAPIBase(gocontext.Background())
+	ok, err := NewAPIClientForServer(ctx.Server, ctx.Token).ProbeAPIBase(gocontext.Background())
 	if err != nil {
 		return false, err
 	}
@@ -370,6 +370,4 @@ func init() {
 	contextAddCmd.Flags().BoolVar(&contextAddUse, "use", false, "Switch to this context after adding")
 
 	ContextCmd.AddCommand(contextUseCmd, contextListCmd, contextCurrentCmd, contextAddCmd)
-	Root.AddCommand(ContextCmd)
-	Root.PersistentFlags().StringVar(&contextFlag, "context", "", "Mission Control context to use")
 }

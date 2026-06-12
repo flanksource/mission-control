@@ -1,4 +1,4 @@
-package cmd
+package clientcmd
 
 import (
 	"context"
@@ -10,15 +10,15 @@ import (
 	"github.com/flanksource/incident-commander/sdk"
 )
 
-func newAPIClient(mcCtx *MCContext, opts ...sdk.ClientOption) *sdk.Client {
+func NewAPIClient(mcCtx *MCContext, opts ...sdk.ClientOption) *sdk.Client {
 	if mcCtx == nil {
 		return nil
 	}
 	opts = append([]sdk.ClientOption{sdk.WithTokenProvider(contextTokenProvider(mcCtx))}, opts...)
-	return newAPIClientForServer(mcCtx.Server, mcCtx.Token, opts...)
+	return NewAPIClientForServer(mcCtx.Server, mcCtx.Token, opts...)
 }
 
-func newAPIClientForServer(server, token string, opts ...sdk.ClientOption) *sdk.Client {
+func NewAPIClientForServer(server, token string, opts ...sdk.ClientOption) *sdk.Client {
 	return sdk.New(server, token, opts...)
 }
 
@@ -27,11 +27,11 @@ func contextTokenProvider(mcCtx *MCContext) sdk.TokenProvider {
 	return func(context.Context) (string, error) {
 		mu.Lock()
 		defer mu.Unlock()
-		return resolveContextToken(mcCtx)
+		return ResolveContextToken(mcCtx)
 	}
 }
 
-func resolveContextToken(mcCtx *MCContext) (string, error) {
+func ResolveContextToken(mcCtx *MCContext) (string, error) {
 	if mcCtx == nil {
 		return "", nil
 	}

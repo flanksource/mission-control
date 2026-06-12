@@ -1,0 +1,233 @@
+package clientcmd
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"time"
+
+	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/sdk"
+	"github.com/spf13/cobra"
+)
+
+// Playbook is the parent command for playbook operations. The client owns the
+// remote surfaces (list, run); the server binary attaches local execution via
+// LocalRunHandler and the Submit subcommand.
+var Playbook = &cobra.Command{
+	Use: "playbook",
+}
+
+// LocalRunHandler, when set by the full mission-control binary, executes a
+// playbook from a local YAML file. The slim faro client leaves it nil and
+// only supports running playbooks by id/name against a remote server.
+var LocalRunHandler func(cmd *cobra.Command, args []string) error
+
+// Shared output flags (read by both the remote client and local execution).
+var (
+	ParamFile string
+	OutFile   string
+	OutFormat string
+)
+
+var (
+	playbookNamespace       string
+	playbookWait            bool
+	playbookPollInterval    time.Duration
+	playbookConfigID        string
+	playbookComponentID     string
+	playbookCheckID         string
+	playbookListConfigID    string
+	playbookListComponentID string
+	playbookListCheckID     string
+	playbookListJSON        bool
+	playbookListOutFormat   string
+)
+
+var Run = &cobra.Command{
+	Use:          "run <playbook.yaml|playbook-id|namespace/name|name> [key=value ...]",
+	Short:        "Run a playbook from a local YAML file or the configured Mission Control API",
+	Args:         cobra.MinimumNArgs(1),
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if isExistingFile(args[0]) {
+			if LocalRunHandler == nil {
+				return fmt.Errorf("local playbook execution is not supported by this binary; provide a playbook id or namespace/name")
+			}
+			return LocalRunHandler(cmd, args)
+		}
+		if f := cmd.Flags().Lookup("debug-port"); f != nil && f.Changed {
+			return fmt.Errorf("--debug-port is only supported for local YAML playbook runs")
+		}
+		return runRemotePlaybook(cmd, args)
+	},
+}
+
+var ListPlaybooks = &cobra.Command{
+	Use:          "list",
+	Short:        "List playbooks from the configured Mission Control API",
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if targetCount(playbookListConfigID, playbookListComponentID, playbookListCheckID) > 1 {
+			return fmt.Errorf("provide at most one of --config-id, --component-id, or --check-id")
+		}
+
+		items, err := listRemotePlaybooks(cmd, sdk.PlaybookListOptions{
+			ConfigID:    playbookListConfigID,
+			CheckID:     playbookListCheckID,
+			ComponentID: playbookListComponentID,
+		})
+		if err != nil {
+			return err
+		}
+		return savePlaybookList(cmd.OutOrStdout(), items, OutFile, playbookListJSON || playbookListOutFormat == "json")
+	},
+}
+
+func isExistingFile(path string) bool {
+	stat, err := os.Stat(path)
+	return err == nil && !stat.IsDir()
+}
+
+func currentAPIContext(cmd *cobra.Command) (*MCContext, error) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	mcCtx := cfg.CurrentMCContext()
+	if mcCtx == nil {
+		return nil, fmt.Errorf("no Mission Control context configured; run `context add --server <url> --use`")
+	}
+	if mcCtx.Server == "" {
+		return nil, fmt.Errorf("current context %q must define a server for API playbook commands", mcCtx.Name)
+	}
+	if mcCtx.Token == "" {
+		if err := EnsureContextToken(cmd, mcCtx, cmd.ErrOrStderr()); err != nil {
+			return nil, err
+		}
+		cfg.SetContext(*mcCtx)
+		if err := SaveConfig(cfg); err != nil {
+			return nil, err
+		}
+	}
+	return mcCtx, nil
+}
+
+func retryAfterAPIBaseUpgrade(mcCtx *MCContext, err error) (bool, error) {
+	if !errors.Is(err, sdk.ErrHTMLResponse) {
+		return false, err
+	}
+	upgraded, upErr := EnsureAPIBase(mcCtx)
+	if upErr != nil {
+		return false, fmt.Errorf("%w (probe failed: %v)", err, upErr)
+	}
+	if !upgraded {
+		return false, err
+	}
+	return true, nil
+}
+
+func playbookAPIClient(cmd *cobra.Command) (*MCContext, *sdk.Client, error) {
+	mcCtx, err := currentAPIContext(cmd)
+	if err != nil {
+		return nil, nil, err
+	}
+	return mcCtx, NewAPIClient(mcCtx), nil
+}
+
+func listRemotePlaybooks(cmd *cobra.Command, opts sdk.PlaybookListOptions) ([]api.PlaybookListItem, error) {
+	mcCtx, client, err := playbookAPIClient(cmd)
+	if err != nil {
+		return nil, err
+	}
+	items, err := client.ListPlaybooks(opts)
+	if upgraded, upgradeErr := retryAfterAPIBaseUpgrade(mcCtx, err); upgradeErr != nil {
+		return nil, upgradeErr
+	} else if upgraded {
+		items, err = NewAPIClient(mcCtx).ListPlaybooks(opts)
+	}
+	return items, err
+}
+
+func runRemotePlaybook(cmd *cobra.Command, args []string) error {
+	if targetCount(playbookConfigID, playbookComponentID, playbookCheckID) > 1 {
+		return fmt.Errorf("provide at most one of --config-id, --component-id, or --check-id")
+	}
+
+	mcCtx, client, err := playbookAPIClient(cmd)
+	if err != nil {
+		return err
+	}
+
+	playbooks, err := client.ListPlaybooks(sdk.PlaybookListOptions{})
+	if upgraded, upgradeErr := retryAfterAPIBaseUpgrade(mcCtx, err); upgradeErr != nil {
+		return upgradeErr
+	} else if upgraded {
+		client = NewAPIClient(mcCtx)
+		playbooks, err = client.ListPlaybooks(sdk.PlaybookListOptions{})
+	}
+	if err != nil {
+		return err
+	}
+
+	item, err := resolvePlaybookRef(playbooks, args[0], playbookNamespace)
+	if err != nil {
+		return err
+	}
+
+	params, err := buildRemoteRunParams(item.ID, args[1:])
+	if err != nil {
+		return err
+	}
+
+	response, err := client.RunPlaybook(params)
+	if upgraded, upgradeErr := retryAfterAPIBaseUpgrade(mcCtx, err); upgradeErr != nil {
+		return upgradeErr
+	} else if upgraded {
+		client = NewAPIClient(mcCtx)
+		response, err = client.RunPlaybook(params)
+	}
+	if err != nil {
+		return err
+	}
+
+	if !playbookWait {
+		return SaveOutputToWriter(cmd.OutOrStdout(), response, OutFile, OutFormat)
+	}
+
+	fmt.Fprintf(cmd.ErrOrStderr(), "playbook %s/%s run %s scheduled for %s\n", item.Namespace, item.Name, response.RunID, response.StartsAt)
+	summary, err := waitForRemotePlaybookRun(cmd.ErrOrStderr(), client, response.RunID)
+	if err != nil {
+		return err
+	}
+	if err := SaveOutputToWriter(cmd.OutOrStdout(), summary, OutFile, OutFormat); err != nil {
+		return err
+	}
+	if summary.Run.Status != models.PlaybookRunStatusCompleted {
+		return fmt.Errorf("playbook run status: %s", summary.Run.Status)
+	}
+	return nil
+}
+
+func init() {
+	Playbook.PersistentFlags().StringVarP(&playbookNamespace, "namespace", "n", "default", "Namespace for playbook to run under")
+	Playbook.PersistentFlags().StringVarP(&ParamFile, "params", "p", "", "YAML/JSON file containing parameters")
+	Run.Flags().BoolVar(&playbookWait, "wait", true, "Wait for the playbook run to finish")
+	Run.Flags().DurationVar(&playbookPollInterval, "poll-interval", 2*time.Second, "Polling interval used with --wait")
+	Run.Flags().StringVar(&playbookConfigID, "config-id", "", "Config ID to run the playbook against")
+	Run.Flags().StringVar(&playbookComponentID, "component-id", "", "Component ID to run the playbook against")
+	Run.Flags().StringVar(&playbookCheckID, "check-id", "", "Check ID to run the playbook against")
+	Run.Flags().StringVarP(&OutFile, "out-file", "o", "", "Write playbook summary to file instead of stdout")
+	Run.Flags().StringVarP(&OutFormat, "out-format", "f", "yaml", "Format of output file or stdout (yaml or json)")
+
+	ListPlaybooks.Flags().StringVar(&playbookListConfigID, "config-id", "", "Only list playbooks runnable for this config ID")
+	ListPlaybooks.Flags().StringVar(&playbookListComponentID, "component-id", "", "Only list playbooks runnable for this component ID")
+	ListPlaybooks.Flags().StringVar(&playbookListCheckID, "check-id", "", "Only list playbooks runnable for this check ID")
+	ListPlaybooks.Flags().StringVarP(&OutFile, "out-file", "o", "", "Write playbook list to file instead of stdout")
+	ListPlaybooks.Flags().BoolVar(&playbookListJSON, "json", false, "Print the full playbook list as JSON")
+	ListPlaybooks.Flags().StringVarP(&playbookListOutFormat, "out-format", "f", "table", "Format of output file or stdout (table or json)")
+
+	Playbook.AddCommand(ListPlaybooks, Run)
+}

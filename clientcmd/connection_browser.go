@@ -1,9 +1,8 @@
-package cmd
+package clientcmd
 
 import (
 	"bufio"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -24,13 +23,10 @@ import (
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/clicky/api"
 	"github.com/flanksource/clicky/api/icons"
-	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
-	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/connection"
 )
@@ -73,8 +69,7 @@ and/or bearer tokens, then saves them on an HTTP connection.
 Examples:
   mission-control connection login --name my-site --url https://example.com --cookies
   mission-control connection login azure --name my-azure`,
-	PersistentPreRun: PreRun,
-	SilenceUsage:     true,
+	SilenceUsage: true,
 }
 
 var browserFlags browserLoginFlags
@@ -101,9 +96,8 @@ Examples:
 
   # Default screenshot URL for connections with portal.azure.com
   app connection test browser --name my-azure`,
-	PersistentPreRun: PreRun,
-	SilenceUsage:     true,
-	RunE:             runBrowserTest,
+	SilenceUsage: true,
+	RunE:         runBrowserTest,
 }
 
 var connectionLoginAzureCmd = &cobra.Command{
@@ -761,12 +755,6 @@ func sortedAudiences(tokens map[string]string) []string {
 }
 
 func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSessionData) error {
-	ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)
-	if err != nil {
-		return err
-	}
-	shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
-
 	props := make(map[string]string)
 
 	// Convert chromedp cookies to connection.Cookies
@@ -846,23 +834,20 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 		Properties: props,
 	}
 
-	var existing models.Connection
-	err = ctx.DB().Where("name = ? AND namespace = ? AND deleted_at IS NULL", flags.Name, flags.Namespace).First(&existing).Error
-	if err == nil {
+	existing, _ := browserGetConnection(flags.Name, flags.Namespace)
+	if existing != nil && existing.ID != uuid.Nil {
 		conn.ID = existing.ID
 		conn.CreatedAt = existing.CreatedAt
-	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
-		return fmt.Errorf("failed to check existing connection: %w", err)
 	} else {
 		conn.ID = uuid.New()
 	}
 
-	if err := ctx.DB().Save(&conn).Error; err != nil {
+	if err := browserSaveConnection(&conn); err != nil {
 		return fmt.Errorf("failed to save connection: %w", err)
 	}
 
 	action := "created"
-	if existing.ID != uuid.Nil {
+	if existing != nil && existing.ID != uuid.Nil {
 		action = "updated"
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Connection '%s' %s in namespace '%s'\n", flags.Name, action, flags.Namespace)
@@ -901,21 +886,16 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 }
 
 func runBrowserTest(cmd *cobra.Command, args []string) error {
-	ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)
-	if err != nil {
-		return err
-	}
-	shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
-
 	verbose := clicky.Flags.LevelCount
 
-	var conn models.Connection
-	if err := ctx.DB().Where("name = ? AND namespace = ? AND deleted_at IS NULL", browserTestName, browserTestNamespace).First(&conn).Error; err != nil {
+	connPtr, err := browserGetConnection(browserTestName, browserTestNamespace)
+	if err != nil {
 		return fmt.Errorf("connection %s/%s not found: %w", browserTestNamespace, browserTestName, err)
 	}
+	conn := *connPtr
 
 	if verbose >= 1 {
-		printConnectionState(conn, verbose)
+		PrintConnectionState(conn, verbose)
 	}
 
 	screenshotURL := browserTestScreenshotURL
@@ -1089,7 +1069,7 @@ func injectSessionStorage(browserCtx gocontext.Context, origin string, items map
 	return chromedp.Run(browserCtx, chromedp.Evaluate(js, nil))
 }
 
-func printConnectionState(conn models.Connection, verbose int) {
+func PrintConnectionState(conn models.Connection, verbose int) {
 	fmt.Fprintf(os.Stderr, "Connection: %s/%s (type=%s)\n", conn.Namespace, conn.Name, conn.Type)
 
 	if bearer := conn.Properties["bearer"]; bearer != "" {
