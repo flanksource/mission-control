@@ -131,10 +131,10 @@ darwin:
 
 .PHONY: windows
 windows:
-	GOOS=windows GOARCH=amd64 go build -o ./.bin/$(NAME).exe -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
+	GOOS=windows GOARCH=amd64 go build -o ./.bin/$(NAME)_windows_amd64.exe -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
 
 # faro is a slim Mission Control client (remote-only surfaces). Built for the
-# requested matrix: linux amd64/arm64, darwin arm64, windows amd64.
+# requested matrix: linux amd64/arm64, darwin amd64/arm64, windows amd64/arm64.
 .PHONY: faro-linux
 faro-linux: $(TAILWIND_JS)
 	GOOS=linux GOARCH=amd64 go build -o ./.bin/faro_linux_amd64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
@@ -142,11 +142,13 @@ faro-linux: $(TAILWIND_JS)
 
 .PHONY: faro-darwin
 faro-darwin: $(TAILWIND_JS)
+	GOOS=darwin GOARCH=amd64 go build -o ./.bin/faro_darwin_amd64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
 	GOOS=darwin GOARCH=arm64 go build -o ./.bin/faro_darwin_arm64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
 
 .PHONY: faro-windows
 faro-windows: $(TAILWIND_JS)
-	GOOS=windows GOARCH=amd64 go build -o ./.bin/faro.exe -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=windows GOARCH=amd64 go build -o ./.bin/faro_windows_amd64.exe -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=windows GOARCH=arm64 go build -o ./.bin/faro_windows_arm64.exe -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
 
 .PHONY: faro
 faro: faro-linux faro-darwin faro-windows
