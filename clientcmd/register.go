@@ -2,7 +2,6 @@ package clientcmd
 
 import "github.com/spf13/cobra"
 
-
 // AuthCmd is the parent for authentication subcommands. The client owns `auth
 // login`; the server binary attaches its own token/check/password-reset
 // subcommands to this same parent.

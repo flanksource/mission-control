@@ -93,8 +93,8 @@ func main() {
 	root.SetUsageTemplate(root.UsageTemplate() + fmt.Sprintf("\nversion: %s\n ", version))
 
 	logger.BindFlags(root.PersistentFlags())
-	clientcmd.PreselectContextFromArgs(os.Args[1:])
 	clientcmd.RegisterClientCommands(root)
+	clientcmd.PreselectContextFromArgs(os.Args[1:])
 	root.AddCommand(refreshCacheCmd())
 
 	if !clientcmd.IsRefreshCacheCommand(os.Args[1:]) {
