@@ -161,9 +161,7 @@ func RebuildCurrentContextCache(ctx gocontext.Context) (*ContextCacheResult, err
 // can log refresh failures while still using an existing cache.
 func SetupContextCachedPluginCommands(ctx gocontext.Context, root *cobra.Command, args []string) (refreshErr, registerErr error) {
 	PreselectContextFromArgs(args)
-	if !IsRefreshCacheCommand(args) {
-		_, refreshErr = EnsureCurrentContextCache(ctx)
-	}
+	_, refreshErr = EnsureCurrentContextCache(ctx)
 	registerErr = RegisterContextCachedPluginCommands(root)
 	return refreshErr, registerErr
 }
@@ -220,27 +218,4 @@ func RegisterContextCachedPluginCommands(root *cobra.Command) error {
 		return nil
 	}
 	return registerCachedPluginCommandsFromDir(PluginCmd, root, contextPluginCacheDir(mc))
-}
-
-// IsRefreshCacheCommand reports whether argv targets faro's root refresh-cache
-// command, so startup can avoid doing an automatic refresh immediately before a
-// forced refresh.
-func IsRefreshCacheCommand(args []string) bool {
-	for i := 0; i < len(args); i++ {
-		arg := args[i]
-		if arg == "--" {
-			return false
-		}
-		if strings.HasPrefix(arg, "-") {
-			switch arg {
-			case "--context", "--har", "--log-level":
-				if i+1 < len(args) {
-					i++
-				}
-			}
-			continue
-		}
-		return arg == "refresh-cache"
-	}
-	return false
 }
