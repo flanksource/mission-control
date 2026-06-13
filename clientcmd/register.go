@@ -19,8 +19,6 @@ func init() {
 func RegisterClientCommands(root *cobra.Command) {
 	root.PersistentFlags().StringVar(&contextFlag, "context", "", "Mission Control context to use")
 	root.AddCommand(AuthCmd, ContextCmd, WhoamiCmd, Playbook, Connection, PluginCmd)
-
 	pluginHostRoot = root
 	registerPluginHARFlag(root)
-	_ = registerCachedPluginCommands(PluginCmd, root)
 }

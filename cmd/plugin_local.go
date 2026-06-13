@@ -37,10 +37,16 @@ func localPluginRefresh(cmd *cobra.Command, args []string) ([]string, error) {
 }
 
 func refreshPluginCacheFromBinary(cmd *cobra.Command, name string) (*manifestcache.Entry, error) {
+	cacheDir, err := clientcmd.CurrentContextPluginCacheDir()
+	if err != nil {
+		return nil, err
+	}
+
 	ctx, cancel := gocontext.WithTimeout(cmd.Context(), 30*time.Second)
 	defer cancel()
 	return manifestcache.PopulateLocal(ctx, name, manifestcache.PopulateOptions{
 		BinaryDir: local.PluginPath(),
+		CacheDir:  cacheDir,
 	})
 }
 

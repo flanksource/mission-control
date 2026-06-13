@@ -35,6 +35,13 @@ type PopulateOptions struct {
 	// StartupTimeout caps the local-mode dial (defaults to 30s).
 	StartupTimeout time.Duration
 
+	// CacheDir overrides the default manifest cache directory.
+	CacheDir string
+
+	// ClearExisting removes existing cached sidecars in CacheDir before writing
+	// freshly fetched services. The clear happens only after a successful fetch.
+	ClearExisting bool
+
 	// HAR is an optional collector that captures the API-mode HTTP traffic
 	// (cache refresh hits one endpoint). Local-mode populate ignores it
 	// because the gRPC handshake doesn't go through net/http.
@@ -57,12 +64,22 @@ func PopulateAPI(ctx gocontext.Context, opts PopulateOptions) ([]string, error) 
 	if err != nil {
 		return nil, err
 	}
+	cacheDir := opts.CacheDir
+	if cacheDir == "" {
+		cacheDir = Dir()
+	}
+	if opts.ClearExisting {
+		if err := ClearDir(cacheDir); err != nil {
+			return nil, err
+		}
+	}
+
 	written := make([]string, 0, len(services))
 	for _, svc := range services {
 		if svc.Name == "" {
 			continue
 		}
-		if err := Write(Entry{
+		if err := WriteToDir(cacheDir, Entry{
 			Source:    SourceRemoteServer,
 			ServerURL: opts.Server,
 			CachedAt:  time.Now(),
@@ -104,7 +121,11 @@ func PopulateLocal(ctx gocontext.Context, name string, opts PopulateOptions) (*E
 	if entry.Service.Name == "" {
 		entry.Service.Name = name
 	}
-	if err := Write(entry); err != nil {
+	cacheDir := opts.CacheDir
+	if cacheDir == "" {
+		cacheDir = Dir()
+	}
+	if err := WriteToDir(cacheDir, entry); err != nil {
 		return nil, err
 	}
 	return &entry, nil

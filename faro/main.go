@@ -1,8 +1,13 @@
 package main
 
 import (
+	gocontext "context"
 	"fmt"
+	"log"
 	"os"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/commons/logger"
@@ -27,7 +32,43 @@ func silenceUsage(cmd *cobra.Command) {
 	}
 }
 
+func refreshCacheCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:          "refresh-cache",
+		Short:        "Refresh cached metadata for the current Mission Control context",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			ctx, cancel := gocontext.WithTimeout(cmd.Context(), 30*time.Second)
+			defer cancel()
+
+			result, err := clientcmd.RebuildCurrentContextCache(ctx)
+			if err != nil {
+				return err
+			}
+			if result == nil {
+				fmt.Fprintln(cmd.OutOrStdout(), "No Mission Control server context configured")
+				return nil
+			}
+
+			if err := clientcmd.RegisterContextCachedPluginCommands(cmd.Root()); err != nil {
+				return err
+			}
+			sort.Strings(result.Plugins)
+			plugins := strings.Join(result.Plugins, ", ")
+			if plugins == "" {
+				plugins = "none"
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Refreshed cache for context %q\nCache: %s\nPlugins: %s\n", result.ContextName, result.CacheDir, plugins)
+			return nil
+		},
+	}
+}
+
 func main() {
+	ctx, cancel := gocontext.WithTimeout(gocontext.Background(), 30*time.Second)
+	defer cancel()
+
 	if len(commit) > 8 {
 		version = fmt.Sprintf("%v, commit %v, built at %v", version, commit[0:8], date)
 	}
@@ -53,6 +94,15 @@ func main() {
 
 	logger.BindFlags(root.PersistentFlags())
 	clientcmd.RegisterClientCommands(root)
+	root.AddCommand(refreshCacheCmd())
+
+	refreshErr, registerErr := clientcmd.SetupContextCachedPluginCommands(ctx, root, os.Args[1:])
+	if refreshErr != nil {
+		log.Printf("failed to ensure context cache is upto date: %v\n", refreshErr)
+	}
+	if registerErr != nil {
+		fmt.Fprintln(os.Stderr, registerErr)
+	}
 
 	// clicky.GenerateCLI materializes the registered remote "catalog" entity
 	// (see catalog.go) into `catalog list` / `catalog get` commands.

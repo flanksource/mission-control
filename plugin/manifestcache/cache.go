@@ -84,7 +84,12 @@ func Dir() string {
 
 // Path returns the sidecar path for a given plugin name.
 func Path(name string) string {
-	return filepath.Join(Dir(), name+".json")
+	return PathInDir(Dir(), name)
+}
+
+// PathInDir returns the sidecar path for a plugin name in dir.
+func PathInDir(dir, name string) string {
+	return filepath.Join(dir, name+".json")
 }
 
 // Get reads the sidecar for `name`. For local-binary entries the binary
@@ -120,13 +125,17 @@ func Get(name string) (*Entry, error) {
 // Write atomically replaces the sidecar for entry.Service.Name. CachedAt
 // is set to time.Now if zero.
 func Write(entry Entry) error {
+	return WriteToDir(Dir(), entry)
+}
+
+// WriteToDir atomically replaces the sidecar for entry.Service.Name in dir.
+func WriteToDir(dir string, entry Entry) error {
 	if entry.Service.Name == "" {
 		return errors.New("manifestcache: entry has empty service name")
 	}
 	if entry.CachedAt.IsZero() {
 		entry.CachedAt = time.Now()
 	}
-	dir := Dir()
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return fmt.Errorf("manifestcache: mkdir %s: %w", dir, err)
 	}
@@ -134,7 +143,7 @@ func Write(entry Entry) error {
 	if err != nil {
 		return fmt.Errorf("manifestcache: marshal: %w", err)
 	}
-	final := Path(entry.Service.Name)
+	final := PathInDir(dir, entry.Service.Name)
 	tmp := final + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o644); err != nil {
 		return fmt.Errorf("manifestcache: write %s: %w", tmp, err)
@@ -148,7 +157,12 @@ func Write(entry Entry) error {
 
 // Delete removes the sidecar for `name`. Missing files are not an error.
 func Delete(name string) error {
-	if err := os.Remove(Path(name)); err != nil && !errors.Is(err, os.ErrNotExist) {
+	return DeleteFromDir(Dir(), name)
+}
+
+// DeleteFromDir removes the sidecar for `name` from dir. Missing files are not an error.
+func DeleteFromDir(dir, name string) error {
+	if err := os.Remove(PathInDir(dir, name)); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("manifestcache: remove %s: %w", name, err)
 	}
 	return nil
@@ -157,7 +171,11 @@ func Delete(name string) error {
 // List returns every cached entry. Corrupt files are skipped silently —
 // callers that need strict reads should use Get on a known name.
 func List() ([]*Entry, error) {
-	dir := Dir()
+	return ListFromDir(Dir())
+}
+
+// ListFromDir returns every cached entry in dir. Corrupt files are skipped silently.
+func ListFromDir(dir string) ([]*Entry, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -181,6 +199,27 @@ func List() ([]*Entry, error) {
 		out = append(out, &e)
 	}
 	return out, nil
+}
+
+// ClearDir removes cached plugin sidecars from dir without removing the directory itself.
+func ClearDir(dir string) error {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("manifestcache: mkdir %s: %w", dir, err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("manifestcache: readdir %s: %w", dir, err)
+	}
+	for _, de := range entries {
+		if de.IsDir() || filepath.Ext(de.Name()) != ".json" {
+			continue
+		}
+		path := filepath.Join(dir, de.Name())
+		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("manifestcache: remove %s: %w", path, err)
+		}
+	}
+	return nil
 }
 
 // SHA256File hashes a file. Exported for the supervisor and CLI populate

@@ -1,11 +1,15 @@
 package main
 
 import (
+	gocontext "context"
 	"fmt"
+	"log"
 	"os"
+	"time"
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/flanksource/incident-commander/cmd"
 	"github.com/spf13/cobra"
 )
@@ -33,6 +37,17 @@ func main() {
 		},
 	})
 	cmd.Root.SetUsageTemplate(cmd.Root.UsageTemplate() + fmt.Sprintf("\nversion: %s\n ", version))
+
+	ctx, cancel := gocontext.WithTimeout(gocontext.Background(), 30*time.Second)
+	defer cancel()
+
+	refreshErr, registerErr := clientcmd.SetupContextCachedPluginCommands(ctx, cmd.Root, os.Args[1:])
+	if refreshErr != nil {
+		log.Printf("failed to ensure context cache is upto date: %v\n", refreshErr)
+	}
+	if registerErr != nil {
+		fmt.Fprintln(os.Stderr, registerErr)
+	}
 
 	clicky.GenerateCLI(cmd.Root)
 	if catalogCmd, _, err := cmd.Root.Find([]string{"catalog"}); err == nil && catalogCmd != nil {

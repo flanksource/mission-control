@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-
-	"github.com/flanksource/incident-commander/plugin/manifestcache"
 )
 
 // LocalPluginRefresh, when set by the full mission-control binary, refreshes
@@ -92,7 +90,15 @@ func runPluginRefreshCache(cmd *cobra.Command, args []string) error {
 	var err error
 
 	if mc, ok := ContextHasAPI(); ok {
-		names, err = refreshPluginCacheFromServer(cmd, mc)
+		ctx, cancel := gocontext.WithTimeout(cmd.Context(), 30*time.Second)
+		defer cancel()
+
+		var result *ContextCacheResult
+		result, err = RebuildCurrentContextCache(ctx)
+		if result != nil {
+			names = result.Plugins
+		}
+
 		if err == nil && len(args) > 0 && !containsString(names, args[0]) {
 			return fmt.Errorf("plugin %q was not returned by %s", args[0], mc.Server)
 		}
@@ -108,33 +114,12 @@ func runPluginRefreshCache(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	_ = registerCachedPluginCommands(PluginCmd, pluginHostRoot)
+	if err := RegisterContextCachedPluginCommands(pluginHostRoot); err != nil {
+		return err
+	}
 	sort.Strings(names)
 	fmt.Fprintf(cmd.OutOrStdout(), "Refreshed plugin command cache: %s\n", strings.Join(names, ", "))
 	return nil
-}
-
-func refreshPluginCacheFromServer(cmd *cobra.Command, mc *MCContext) ([]string, error) {
-	if mc == nil || mc.Server == "" {
-		return nil, fmt.Errorf("no Mission Control server configured")
-	}
-	token, err := ResolveContextToken(mc)
-	if err != nil {
-		return nil, err
-	}
-	ctx, cancel := gocontext.WithTimeout(cmd.Context(), 30*time.Second)
-	defer cancel()
-	collector, flush := startHAR()
-	defer func() {
-		if err := flush(); err != nil {
-			fmt.Fprintln(cmd.ErrOrStderr(), err)
-		}
-	}()
-	return manifestcache.PopulateAPI(ctx, manifestcache.PopulateOptions{
-		Server: mc.Server,
-		Token:  token,
-		HAR:    collector,
-	})
 }
 
 func containsString(values []string, needle string) bool {
