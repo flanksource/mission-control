@@ -94,18 +94,14 @@ func main() {
 
 	logger.BindFlags(root.PersistentFlags())
 	clientcmd.RegisterClientCommands(root)
-	clientcmd.PreselectContextFromArgs(os.Args[1:])
 	root.AddCommand(refreshCacheCmd())
 
-	if !clientcmd.IsRefreshCacheCommand(os.Args[1:]) {
-		_, err := clientcmd.EnsureCurrentContextCache(ctx)
-		if err != nil {
-			log.Printf("failed to ensure context cache is upto date: %v\n", err)
-		}
+	refreshErr, registerErr := clientcmd.SetupContextCachedPluginCommands(ctx, root, os.Args[1:])
+	if refreshErr != nil {
+		log.Printf("failed to ensure context cache is upto date: %v\n", refreshErr)
 	}
-
-	if err := clientcmd.RegisterContextCachedPluginCommands(root); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	if registerErr != nil {
+		fmt.Fprintln(os.Stderr, registerErr)
 	}
 
 	// clicky.GenerateCLI materializes the registered remote "catalog" entity
