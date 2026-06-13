@@ -115,6 +115,8 @@ func storeContext(name, serverURL string) {
 
 func pluginListServer(names func() []string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer ginkgo.GinkgoRecover()
+
 		Expect(r.Method).To(Equal(http.MethodGet))
 		Expect(r.URL.Path).To(Equal("/api/plugins"))
 		Expect(r.URL.Query().Get("format")).To(Equal("clicky-rpc"))

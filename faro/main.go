@@ -50,7 +50,9 @@ func refreshCacheCmd() *cobra.Command {
 				return nil
 			}
 
-			_ = clientcmd.RegisterContextCachedPluginCommands(cmd.Root())
+			if err := clientcmd.RegisterContextCachedPluginCommands(cmd.Root()); err != nil {
+				return err
+			}
 			sort.Strings(result.Plugins)
 			plugins := strings.Join(result.Plugins, ", ")
 			if plugins == "" {
@@ -96,7 +98,9 @@ func main() {
 		_, _ = clientcmd.EnsureCurrentContextCache(ctx)
 		cancel()
 	}
-	_ = clientcmd.RegisterContextCachedPluginCommands(root)
+	if err := clientcmd.RegisterContextCachedPluginCommands(root); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+	}
 
 	// clicky.GenerateCLI materializes the registered remote "catalog" entity
 	// (see catalog.go) into `catalog list` / `catalog get` commands.

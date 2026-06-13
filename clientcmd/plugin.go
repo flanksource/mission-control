@@ -120,10 +120,14 @@ func runPluginRefreshCache(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	var registerErr error
 	if pluginCacheContextScoped {
-		_ = RegisterContextCachedPluginCommands(pluginHostRoot)
+		registerErr = RegisterContextCachedPluginCommands(pluginHostRoot)
 	} else {
-		_ = registerCachedPluginCommands(PluginCmd, pluginHostRoot)
+		registerErr = registerCachedPluginCommands(PluginCmd, pluginHostRoot)
+	}
+	if registerErr != nil {
+		return registerErr
 	}
 	sort.Strings(names)
 	fmt.Fprintf(cmd.OutOrStdout(), "Refreshed plugin command cache: %s\n", strings.Join(names, ", "))
