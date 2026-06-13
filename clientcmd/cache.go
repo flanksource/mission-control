@@ -20,6 +20,7 @@ type ContextCacheResult struct {
 	ContextName string
 	CacheDir    string
 	Plugins     []string
+	Playbooks   []string
 	Refreshed   bool
 }
 
@@ -156,13 +157,18 @@ func RebuildCurrentContextCache(ctx gocontext.Context) (*ContextCacheResult, err
 }
 
 // SetupContextCachedPluginCommands selects the requested context from raw argv,
-// refreshes that context's plugin cache when needed, and registers cached plugin
+// refreshes that context's cache when needed, and registers cached dynamic
 // commands. Refresh and registration errors are returned separately so callers
 // can log refresh failures while still using an existing cache.
 func SetupContextCachedPluginCommands(ctx gocontext.Context, root *cobra.Command, args []string) (refreshErr, registerErr error) {
 	PreselectContextFromArgs(args)
 	_, refreshErr = EnsureCurrentContextCache(ctx)
-	registerErr = RegisterContextCachedPluginCommands(root)
+	if err := RegisterContextCachedPluginCommands(root); err != nil {
+		registerErr = err
+	}
+	if err := RegisterContextCachedPlaybookCommands(root); err != nil && registerErr == nil {
+		registerErr = err
+	}
 	return refreshErr, registerErr
 }
 
@@ -199,10 +205,18 @@ func refreshCurrentContextCache(ctx gocontext.Context, force bool) (*ContextCach
 	if err != nil {
 		return result, err
 	}
+	result.Plugins = names
+
+	cmd := &cobra.Command{}
+	playbooks, err := populatePlaybookCache(cmd, contextPlaybookCacheDir(mc))
+	if err != nil {
+		return result, err
+	}
+	result.Playbooks = playbooks
+
 	if err := writeContextLastRan(mc, now); err != nil {
 		return result, err
 	}
-	result.Plugins = names
 	result.Refreshed = true
 	return result, nil
 }
