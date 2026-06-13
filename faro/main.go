@@ -3,6 +3,7 @@ package main
 import (
 	gocontext "context"
 	"fmt"
+	"log"
 	"os"
 	"sort"
 	"strings"
@@ -65,6 +66,9 @@ func refreshCacheCmd() *cobra.Command {
 }
 
 func main() {
+	ctx, cancel := gocontext.WithTimeout(gocontext.Background(), 30*time.Second)
+	defer cancel()
+
 	if len(commit) > 8 {
 		version = fmt.Sprintf("%v, commit %v, built at %v", version, commit[0:8], date)
 	}
@@ -90,14 +94,16 @@ func main() {
 
 	logger.BindFlags(root.PersistentFlags())
 	clientcmd.PreselectContextFromArgs(os.Args[1:])
-	clientcmd.RegisterClientCommands(root, clientcmd.WithContextScopedPluginCache())
+	clientcmd.RegisterClientCommands(root)
 	root.AddCommand(refreshCacheCmd())
 
 	if !clientcmd.IsRefreshCacheCommand(os.Args[1:]) {
-		ctx, cancel := gocontext.WithTimeout(gocontext.Background(), 30*time.Second)
-		_, _ = clientcmd.EnsureCurrentContextCache(ctx)
-		cancel()
+		_, err := clientcmd.EnsureCurrentContextCache(ctx)
+		if err != nil {
+			log.Printf("failed to ensure context cache is upto date: %v\n", err)
+		}
 	}
+
 	if err := clientcmd.RegisterContextCachedPluginCommands(root); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 	}
