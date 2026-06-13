@@ -2,6 +2,7 @@ package clientcmd
 
 import (
 	gocontext "context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,8 +15,6 @@ import (
 
 const contextCacheTTL = 24 * time.Hour
 
-var contextCacheDirOverride string
-
 // ContextCacheResult describes a faro context cache refresh/check.
 type ContextCacheResult struct {
 	ContextName string
@@ -24,51 +23,41 @@ type ContextCacheResult struct {
 	Refreshed   bool
 }
 
-// SetContextCacheDirForTest overrides the faro context cache root for tests.
-func SetContextCacheDirForTest(dir string) func() {
-	prev := contextCacheDirOverride
-	contextCacheDirOverride = dir
-	return func() { contextCacheDirOverride = prev }
-}
-
 // PreselectContextFromArgs extracts --context from raw argv before cobra parses
 // flags. Dynamic plugin commands are registered before Execute(), so faro needs
 // this to select the correct per-context cache for `faro --context X --help`.
 func PreselectContextFromArgs(args []string) string {
-	for i := 0; i < len(args); i++ {
+	for i := range args {
 		arg := args[i]
 		if arg == "--" {
 			break
 		}
+
 		if arg == "--context" && i+1 < len(args) {
 			contextFlag = args[i+1]
 			return contextFlag
 		}
-		if strings.HasPrefix(arg, "--context=") {
-			contextFlag = strings.TrimPrefix(arg, "--context=")
+
+		if after, ok := strings.CutPrefix(arg, "--context="); ok {
+			contextFlag = after
 			return contextFlag
 		}
 	}
+
 	return contextFlag
 }
 
 func contextCacheBaseDir() string {
-	if contextCacheDirOverride != "" {
-		return contextCacheDirOverride
-	}
 	base, err := os.UserCacheDir()
 	if err != nil {
-		home, _ := os.UserHomeDir()
-		base = filepath.Join(home, ".cache")
+		panic(fmt.Errorf("failed to get user cache dir"))
 	}
+
 	return filepath.Join(base, "mission-control")
 }
 
 func safeContextName(name string) string {
 	name = strings.TrimSpace(name)
-	if name == "" {
-		return "default"
-	}
 	var b strings.Builder
 	for _, r := range name {
 		switch {
@@ -85,8 +74,9 @@ func safeContextName(name string) string {
 		}
 	}
 	if b.Len() == 0 {
-		return "default"
+		panic(fmt.Errorf("context name is empty"))
 	}
+
 	return b.String()
 }
 
@@ -108,10 +98,12 @@ func currentMCContext() (*MCContext, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	mc := cfg.CurrentMCContext()
 	if mc == nil {
 		return nil, nil
 	}
+
 	return mc, nil
 }
 
