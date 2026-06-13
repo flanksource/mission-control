@@ -54,12 +54,20 @@ func refreshCacheCmd() *cobra.Command {
 			if err := clientcmd.RegisterContextCachedPluginCommands(cmd.Root()); err != nil {
 				return err
 			}
+			if err := clientcmd.RegisterContextCachedPlaybookCommands(cmd.Root()); err != nil {
+				return err
+			}
 			sort.Strings(result.Plugins)
+			sort.Strings(result.Playbooks)
 			plugins := strings.Join(result.Plugins, ", ")
 			if plugins == "" {
 				plugins = "none"
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Refreshed cache for context %q\nCache: %s\nPlugins: %s\n", result.ContextName, result.CacheDir, plugins)
+			playbooks := strings.Join(result.Playbooks, ", ")
+			if playbooks == "" {
+				playbooks = "none"
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Refreshed cache for context %q\nCache: %s\nPlugins: %s\nPlaybooks: %s\n", result.ContextName, result.CacheDir, plugins, playbooks)
 			return nil
 		},
 	}
