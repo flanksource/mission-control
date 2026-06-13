@@ -21,6 +21,8 @@ var LocalPluginRefresh func(cmd *cobra.Command, args []string) ([]string, error)
 // to (set by RegisterClientCommands), so refresh-cache can re-register them.
 var pluginHostRoot *cobra.Command
 
+var pluginCacheContextScoped bool
+
 // pluginParams accumulates repeated --param key=value flags.
 type pluginParams struct {
 	values map[string]string
@@ -92,7 +94,17 @@ func runPluginRefreshCache(cmd *cobra.Command, args []string) error {
 	var err error
 
 	if mc, ok := ContextHasAPI(); ok {
-		names, err = refreshPluginCacheFromServer(cmd, mc)
+		if pluginCacheContextScoped {
+			ctx, cancel := gocontext.WithTimeout(cmd.Context(), 30*time.Second)
+			defer cancel()
+			var result *ContextCacheResult
+			result, err = RebuildCurrentContextCache(ctx)
+			if result != nil {
+				names = result.Plugins
+			}
+		} else {
+			names, err = refreshPluginCacheFromServer(cmd, mc)
+		}
 		if err == nil && len(args) > 0 && !containsString(names, args[0]) {
 			return fmt.Errorf("plugin %q was not returned by %s", args[0], mc.Server)
 		}
@@ -108,7 +120,11 @@ func runPluginRefreshCache(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	_ = registerCachedPluginCommands(PluginCmd, pluginHostRoot)
+	if pluginCacheContextScoped {
+		_ = RegisterContextCachedPluginCommands(pluginHostRoot)
+	} else {
+		_ = registerCachedPluginCommands(PluginCmd, pluginHostRoot)
+	}
 	sort.Strings(names)
 	fmt.Fprintf(cmd.OutOrStdout(), "Refreshed plugin command cache: %s\n", strings.Join(names, ", "))
 	return nil

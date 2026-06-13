@@ -1,8 +1,12 @@
 package main
 
 import (
+	gocontext "context"
 	"fmt"
 	"os"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/commons/logger"
@@ -24,6 +28,37 @@ func silenceUsage(cmd *cobra.Command) {
 	cmd.SilenceUsage = true
 	for _, child := range cmd.Commands() {
 		silenceUsage(child)
+	}
+}
+
+func refreshCacheCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:          "refresh-cache",
+		Short:        "Refresh cached metadata for the current Mission Control context",
+		Args:         cobra.NoArgs,
+		SilenceUsage: true,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			ctx, cancel := gocontext.WithTimeout(cmd.Context(), 30*time.Second)
+			defer cancel()
+
+			result, err := clientcmd.RebuildCurrentContextCache(ctx)
+			if err != nil {
+				return err
+			}
+			if result == nil {
+				fmt.Fprintln(cmd.OutOrStdout(), "No Mission Control server context configured")
+				return nil
+			}
+
+			_ = clientcmd.RegisterContextCachedPluginCommands(cmd.Root())
+			sort.Strings(result.Plugins)
+			plugins := strings.Join(result.Plugins, ", ")
+			if plugins == "" {
+				plugins = "none"
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Refreshed cache for context %q\nCache: %s\nPlugins: %s\n", result.ContextName, result.CacheDir, plugins)
+			return nil
+		},
 	}
 }
 
@@ -52,7 +87,16 @@ func main() {
 	root.SetUsageTemplate(root.UsageTemplate() + fmt.Sprintf("\nversion: %s\n ", version))
 
 	logger.BindFlags(root.PersistentFlags())
-	clientcmd.RegisterClientCommands(root)
+	clientcmd.PreselectContextFromArgs(os.Args[1:])
+	clientcmd.RegisterClientCommands(root, clientcmd.WithContextScopedPluginCache())
+	root.AddCommand(refreshCacheCmd())
+
+	if !clientcmd.IsRefreshCacheCommand(os.Args[1:]) {
+		ctx, cancel := gocontext.WithTimeout(gocontext.Background(), 30*time.Second)
+		_, _ = clientcmd.EnsureCurrentContextCache(ctx)
+		cancel()
+	}
+	_ = clientcmd.RegisterContextCachedPluginCommands(root)
 
 	// clicky.GenerateCLI materializes the registered remote "catalog" entity
 	// (see catalog.go) into `catalog list` / `catalog get` commands.

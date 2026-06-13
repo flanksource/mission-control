@@ -16,6 +16,18 @@ func registerCachedPluginCommands(pluginRoot, root *cobra.Command) error {
 	if err != nil {
 		return err
 	}
+	return registerCachedPluginCommandEntries(pluginRoot, root, entries)
+}
+
+func registerCachedPluginCommandsFromDir(pluginRoot, root *cobra.Command, dir string) error {
+	entries, err := manifestcache.ListFromDir(dir)
+	if err != nil {
+		return err
+	}
+	return registerCachedPluginCommandEntries(pluginRoot, root, entries)
+}
+
+func registerCachedPluginCommandEntries(pluginRoot, root *cobra.Command, entries []*manifestcache.Entry) error {
 	sort.SliceStable(entries, func(i, j int) bool {
 		return entries[i].Service.Name < entries[j].Service.Name
 	})
