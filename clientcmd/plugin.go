@@ -117,6 +117,9 @@ func runPluginRefreshCache(cmd *cobra.Command, args []string) error {
 	if err := RegisterContextCachedPluginCommands(pluginHostRoot); err != nil {
 		return err
 	}
+	if err := RegisterContextCachedPlaybookCommands(pluginHostRoot); err != nil {
+		return err
+	}
 	sort.Strings(names)
 	fmt.Fprintf(cmd.OutOrStdout(), "Refreshed plugin command cache: %s\n", strings.Join(names, ", "))
 	return nil

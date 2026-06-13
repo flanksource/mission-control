@@ -68,7 +68,11 @@ func resolvePlaybookRef(playbooks []api.PlaybookListItem, ref string, namespace 
 }
 
 func buildRemoteRunParams(playbookID uuid.UUID, args []string) (sdk.PlaybookRunParams, error) {
-	params, err := readParamFile(ParamFile)
+	return buildRemoteRunParamsWithOptions(playbookID, args, ParamFile, playbookConfigID, playbookComponentID, playbookCheckID)
+}
+
+func buildRemoteRunParamsWithOptions(playbookID uuid.UUID, args []string, paramFile, configID, componentID, checkID string) (sdk.PlaybookRunParams, error) {
+	params, err := readParamFile(paramFile)
 	if err != nil {
 		return sdk.PlaybookRunParams{}, err
 	}
@@ -77,13 +81,13 @@ func buildRemoteRunParams(playbookID uuid.UUID, args []string) (sdk.PlaybookRunP
 		Params: params,
 	}
 
-	if err := applyTargetID(&req.ConfigID, playbookConfigID, "config_id"); err != nil {
+	if err := applyTargetID(&req.ConfigID, configID, "config_id"); err != nil {
 		return sdk.PlaybookRunParams{}, err
 	}
-	if err := applyTargetID(&req.ComponentID, playbookComponentID, "component_id"); err != nil {
+	if err := applyTargetID(&req.ComponentID, componentID, "component_id"); err != nil {
 		return sdk.PlaybookRunParams{}, err
 	}
-	if err := applyTargetID(&req.CheckID, playbookCheckID, "check_id"); err != nil {
+	if err := applyTargetID(&req.CheckID, checkID, "check_id"); err != nil {
 		return sdk.PlaybookRunParams{}, err
 	}
 
@@ -168,6 +172,10 @@ func targetCount(values ...string) int {
 }
 
 func waitForRemotePlaybookRun(stderr io.Writer, client *sdk.Client, runID string) (*sdk.PlaybookSummary, error) {
+	return waitForRemotePlaybookRunWithInterval(stderr, client, runID, playbookPollInterval)
+}
+
+func waitForRemotePlaybookRunWithInterval(stderr io.Writer, client *sdk.Client, runID string, pollInterval time.Duration) (*sdk.PlaybookSummary, error) {
 	lastRunStatus := ""
 	lastActions := make(map[string]string)
 	for {
@@ -198,7 +206,7 @@ func waitForRemotePlaybookRun(stderr io.Writer, client *sdk.Client, runID string
 		if lo.Contains(models.PlaybookRunStatusFinalStates, summary.Run.Status) {
 			return summary, nil
 		}
-		time.Sleep(playbookPollInterval)
+		time.Sleep(pollInterval)
 	}
 }
 
