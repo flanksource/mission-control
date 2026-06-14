@@ -59,7 +59,7 @@ import { TagList } from "./TagList";
 import { CatalogReportDialog } from "./CatalogReportDialog";
 import ConfigChangesSection from "./config-changes/ConfigChangesSection";
 import { defaultConfigChangesExtensions } from "./config-changes/config-changes-builtin-extensions";
-import { ConfigPlaybooksTab } from "../playbooks/PlaybookBrowser";
+import { ConfigPlaybooksDropdown, ConfigPlaybooksTab } from "../playbooks/PlaybookBrowser";
 import { DetailPageLayout, EntityHeader, PageBreadcrumbs } from "../layout/DetailPageLayout";
 import type {
   ConfigChange as UIConfigChange,
@@ -305,6 +305,7 @@ function ConfigHeaderActions({ config, onReport }: { config: ConfigItem; onRepor
           <Badge variant="metric" label="Scraped" value={timeAgo(config.last_scraped_time)} size="xs" icon="lucide:refresh-cw" />
         </AccessMatrixTooltip>
       )}
+      <ConfigPlaybooksDropdown config={config} />
       <button
         type="button"
         onClick={onReport}
