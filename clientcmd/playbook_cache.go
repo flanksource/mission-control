@@ -126,7 +126,7 @@ func newCachedPlaybookCommand(item api.PlaybookListItem, name string) *cobra.Com
 	values := map[string]*string{}
 	var wait = true
 	var pollInterval = 2 * time.Second
-	var configID, componentID, checkID, paramFile, outFile, outFormat string
+	var configID, componentID, checkID, paramFile string
 	short := item.Description
 	if short == "" {
 		short = item.Title
@@ -169,15 +169,26 @@ func newCachedPlaybookCommand(item api.PlaybookListItem, name string) *cobra.Com
 			if err != nil {
 				return err
 			}
+			ref := playbookRef(item)
 			if !wait {
-				return SaveOutputToWriter(cmd.OutOrStdout(), response, outFile, outFormat)
+				return Log(cmd.OutOrStdout(), map[string]any{
+					"type":      "playbook_run_scheduled",
+					"playbook":  ref,
+					"run_id":    response.RunID,
+					"starts_at": response.StartsAt,
+				})
 			}
-			fmt.Fprintf(cmd.ErrOrStderr(), "playbook %s run %s scheduled for %s\n", playbookRef(item), response.RunID, response.StartsAt)
+			_ = Log(cmd.ErrOrStderr(), map[string]any{
+				"type":      "playbook_run_scheduled",
+				"playbook":  ref,
+				"run_id":    response.RunID,
+				"starts_at": response.StartsAt,
+			})
 			summary, err := waitForRemotePlaybookRunWithInterval(cmd.ErrOrStderr(), client, response.RunID, pollInterval)
 			if err != nil {
 				return err
 			}
-			if err := SaveOutputToWriter(cmd.OutOrStdout(), summary, outFile, outFormat); err != nil {
+			if err := LogYAML(cmd.OutOrStdout(), PlaybookActionResults(summary)); err != nil {
 				return err
 			}
 			if summary.Run.Status != "completed" {
@@ -192,8 +203,6 @@ func newCachedPlaybookCommand(item api.PlaybookListItem, name string) *cobra.Com
 	cmd.Flags().StringVar(&componentID, "component-id", "", "Component ID to run the playbook against")
 	cmd.Flags().StringVar(&checkID, "check-id", "", "Check ID to run the playbook against")
 	cmd.Flags().StringVarP(&paramFile, "params", "p", "", "YAML/JSON file containing parameters")
-	cmd.Flags().StringVarP(&outFile, "out-file", "o", "", "Write playbook summary to file instead of stdout")
-	cmd.Flags().StringVarP(&outFormat, "out-format", "f", "yaml", "Format of output file or stdout (yaml or json)")
 	for _, p := range params {
 		if p.Name == "" || cmd.Flags().Lookup(p.Name) != nil {
 			continue

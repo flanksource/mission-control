@@ -185,8 +185,9 @@ func waitForRemotePlaybookRunWithInterval(stderr io.Writer, client *sdk.Client, 
 		}
 
 		runStatus := string(summary.Run.Status)
-		if runStatus != lastRunStatus {
-			fmt.Fprintf(stderr, "run %s status=%s\n", runID, runStatus)
+		isFinal := lo.Contains(models.PlaybookRunStatusFinalStates, summary.Run.Status)
+		if runStatus != lastRunStatus && !isFinal {
+			_ = Log(stderr, map[string]any{"type": "playbook_run_status", "run_id": runID, "status": runStatus})
 			lastRunStatus = runStatus
 		}
 		for _, action := range summary.Actions {
@@ -195,15 +196,19 @@ func waitForRemotePlaybookRunWithInterval(stderr io.Writer, client *sdk.Client, 
 			if lastActions[key] == status {
 				continue
 			}
+			event := map[string]any{"type": "playbook_action_status", "action": action.Name, "status": status}
 			if action.Error != nil && *action.Error != "" {
-				fmt.Fprintf(stderr, "action %s status=%s error=%s\n", action.Name, status, *action.Error)
-			} else {
-				fmt.Fprintf(stderr, "action %s status=%s\n", action.Name, status)
+				event["error"] = *action.Error
 			}
+			_ = Log(stderr, event)
 			lastActions[key] = status
 		}
+		if runStatus != lastRunStatus && isFinal {
+			_ = Log(stderr, map[string]any{"type": "playbook_run_status", "run_id": runID, "status": runStatus})
+			lastRunStatus = runStatus
+		}
 
-		if lo.Contains(models.PlaybookRunStatusFinalStates, summary.Run.Status) {
+		if isFinal {
 			return summary, nil
 		}
 		time.Sleep(pollInterval)
@@ -228,7 +233,7 @@ func SaveOutputToWriter(w io.Writer, object any, file string, format string) err
 	return err
 }
 
-func savePlaybookList(w io.Writer, items []api.PlaybookListItem, file string, asJSON bool) error {
+func savePlaybookList(w io.Writer, items []api.PlaybookListItem, asJSON bool) error {
 	var out bytes.Buffer
 	if asJSON {
 		b, _ := json.MarshalIndent(items, "", "  ")
@@ -245,9 +250,6 @@ func savePlaybookList(w io.Writer, items []api.PlaybookListItem, file string, as
 		}
 	}
 
-	if file != "" {
-		return os.WriteFile(file, out.Bytes(), 0600)
-	}
 	_, err := w.Write(out.Bytes())
 	return err
 }

@@ -23,12 +23,8 @@ var Playbook = &cobra.Command{
 // only supports running playbooks by id/name against a remote server.
 var LocalRunHandler func(cmd *cobra.Command, args []string) error
 
-// Shared output flags (read by both the remote client and local execution).
-var (
-	ParamFile string
-	OutFile   string
-	OutFormat string
-)
+// Shared parameter flag (read by both the remote client and local execution).
+var ParamFile string
 
 var (
 	playbookNamespace       string
@@ -41,7 +37,6 @@ var (
 	playbookListComponentID string
 	playbookListCheckID     string
 	playbookListJSON        bool
-	playbookListOutFormat   string
 )
 
 var Run = &cobra.Command{
@@ -81,7 +76,7 @@ var ListPlaybooks = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return savePlaybookList(cmd.OutOrStdout(), items, OutFile, playbookListJSON || playbookListOutFormat == "json")
+		return savePlaybookList(cmd.OutOrStdout(), items, playbookListJSON)
 	},
 }
 
@@ -160,16 +155,27 @@ func runRemotePlaybook(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	playbookRef := item.Namespace + "/" + item.Name
 	if !playbookWait {
-		return SaveOutputToWriter(cmd.OutOrStdout(), response, OutFile, OutFormat)
+		return Log(cmd.OutOrStdout(), map[string]any{
+			"type":      "playbook_run_scheduled",
+			"playbook":  playbookRef,
+			"run_id":    response.RunID,
+			"starts_at": response.StartsAt,
+		})
 	}
 
-	fmt.Fprintf(cmd.ErrOrStderr(), "playbook %s/%s run %s scheduled for %s\n", item.Namespace, item.Name, response.RunID, response.StartsAt)
+	_ = Log(cmd.ErrOrStderr(), map[string]any{
+		"type":      "playbook_run_scheduled",
+		"playbook":  playbookRef,
+		"run_id":    response.RunID,
+		"starts_at": response.StartsAt,
+	})
 	summary, err := waitForRemotePlaybookRun(cmd.ErrOrStderr(), client, response.RunID)
 	if err != nil {
 		return err
 	}
-	if err := SaveOutputToWriter(cmd.OutOrStdout(), summary, OutFile, OutFormat); err != nil {
+	if err := LogYAML(cmd.OutOrStdout(), PlaybookActionResults(summary)); err != nil {
 		return err
 	}
 	if summary.Run.Status != models.PlaybookRunStatusCompleted {
@@ -186,15 +192,30 @@ func init() {
 	Run.Flags().StringVar(&playbookConfigID, "config-id", "", "Config ID to run the playbook against")
 	Run.Flags().StringVar(&playbookComponentID, "component-id", "", "Component ID to run the playbook against")
 	Run.Flags().StringVar(&playbookCheckID, "check-id", "", "Check ID to run the playbook against")
-	Run.Flags().StringVarP(&OutFile, "out-file", "o", "", "Write playbook summary to file instead of stdout")
-	Run.Flags().StringVarP(&OutFormat, "out-format", "f", "yaml", "Format of output file or stdout (yaml or json)")
 
 	ListPlaybooks.Flags().StringVar(&playbookListConfigID, "config-id", "", "Only list playbooks runnable for this config ID")
 	ListPlaybooks.Flags().StringVar(&playbookListComponentID, "component-id", "", "Only list playbooks runnable for this component ID")
 	ListPlaybooks.Flags().StringVar(&playbookListCheckID, "check-id", "", "Only list playbooks runnable for this check ID")
-	ListPlaybooks.Flags().StringVarP(&OutFile, "out-file", "o", "", "Write playbook list to file instead of stdout")
 	ListPlaybooks.Flags().BoolVar(&playbookListJSON, "json", false, "Print the full playbook list as JSON")
-	ListPlaybooks.Flags().StringVarP(&playbookListOutFormat, "out-format", "f", "table", "Format of output file or stdout (table or json)")
 
 	Playbook.AddCommand(ListPlaybooks, Run)
+}
+
+func PlaybookActionResults(summary *sdk.PlaybookSummary) map[string]any {
+	if summary == nil || len(summary.Actions) == 0 {
+		return map[string]any{"result": map[string]any{}}
+	}
+
+	if len(summary.Actions) == 1 {
+		return map[string]any{"result": summary.Actions[0].Result}
+	}
+
+	results := make([]map[string]any, 0, len(summary.Actions))
+	for _, action := range summary.Actions {
+		results = append(results, map[string]any{
+			"name":   action.Name,
+			"result": action.Result,
+		})
+	}
+	return map[string]any{"results": results}
 }
