@@ -93,6 +93,22 @@ func (c *MCConfig) SetContext(ctx MCContext) {
 	c.Contexts = append(c.Contexts, ctx)
 }
 
+func (c *MCConfig) RemoveContext(name string) bool {
+	for i := range c.Contexts {
+		if c.Contexts[i].Name == name {
+			c.Contexts = append(c.Contexts[:i], c.Contexts[i+1:]...)
+			if c.CurrentContext == name {
+				c.CurrentContext = ""
+				if len(c.Contexts) == 1 {
+					c.CurrentContext = c.Contexts[0].Name
+				}
+			}
+			return true
+		}
+	}
+	return false
+}
+
 func (c *MCConfig) CurrentMCContext() *MCContext {
 	if contextFlag != "" {
 		return c.GetContext(contextFlag)
@@ -197,6 +213,59 @@ var contextListCmd = &cobra.Command{
 				info = "(db only)"
 			}
 			fmt.Fprintf(cmd.OutOrStdout(), "%s%s\t%s\n", marker, c.Name, info)
+		}
+		return nil
+	},
+}
+
+var contextRemoveCmd = &cobra.Command{
+	Use:     "remove [name]",
+	Aliases: []string{"rm", "delete"},
+	Short:   "Remove a Mission Control context",
+	Args:    cobra.MaximumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		cfg, err := LoadConfig()
+		if err != nil {
+			return err
+		}
+
+		var name string
+		if len(args) > 0 {
+			name = args[0]
+		} else {
+			if len(cfg.Contexts) == 0 {
+				return fmt.Errorf("no contexts configured")
+			}
+			options := make([]huh.Option[string], len(cfg.Contexts))
+			for i, c := range cfg.Contexts {
+				label := c.Name
+				if c.Name == cfg.CurrentContext {
+					label += " (current)"
+				}
+				if c.Server != "" {
+					label += "  " + c.Server
+				}
+				options[i] = huh.NewOption(label, c.Name)
+			}
+			if err := huh.NewSelect[string]().
+				Title("Remove context").
+				Options(options...).
+				Value(&name).
+				Run(); err != nil {
+				return err
+			}
+		}
+
+		previousCurrent := cfg.CurrentContext
+		if !cfg.RemoveContext(name) {
+			return fmt.Errorf("context %q not found", name)
+		}
+		if err := SaveConfig(cfg); err != nil {
+			return err
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Removed context %q\n", name)
+		if previousCurrent == name && cfg.CurrentContext != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "Switched to context %q\n", cfg.CurrentContext)
 		}
 		return nil
 	},
@@ -408,5 +477,5 @@ func init() {
 	contextAddCmd.Flags().StringVar(&contextAddToken, "token", "", "API token for the server")
 	contextAddCmd.Flags().BoolVar(&contextAddUse, "use", false, "Switch to this context after adding")
 
-	ContextCmd.AddCommand(contextUseCmd, contextListCmd, contextCurrentCmd, contextAddCmd)
+	ContextCmd.AddCommand(contextUseCmd, contextListCmd, contextCurrentCmd, contextAddCmd, contextRemoveCmd)
 }
