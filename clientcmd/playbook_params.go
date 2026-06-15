@@ -187,7 +187,7 @@ func waitForRemotePlaybookRunWithInterval(stderr io.Writer, client *sdk.Client, 
 		runStatus := string(summary.Run.Status)
 		isFinal := lo.Contains(models.PlaybookRunStatusFinalStates, summary.Run.Status)
 		if runStatus != lastRunStatus && !isFinal {
-			writeEvent(stderr, map[string]any{"type": "playbook_run_status", "run_id": runID, "status": runStatus})
+			Log(stderr, map[string]any{"type": "playbook_run_status", "run_id": runID, "status": runStatus})
 			lastRunStatus = runStatus
 		}
 		for _, action := range summary.Actions {
@@ -200,11 +200,11 @@ func waitForRemotePlaybookRunWithInterval(stderr io.Writer, client *sdk.Client, 
 			if action.Error != nil && *action.Error != "" {
 				event["error"] = *action.Error
 			}
-			writeEvent(stderr, event)
+			Log(stderr, event)
 			lastActions[key] = status
 		}
 		if runStatus != lastRunStatus && isFinal {
-			writeEvent(stderr, map[string]any{"type": "playbook_run_status", "run_id": runID, "status": runStatus})
+			Log(stderr, map[string]any{"type": "playbook_run_status", "run_id": runID, "status": runStatus})
 			lastRunStatus = runStatus
 		}
 
@@ -233,7 +233,7 @@ func SaveOutputToWriter(w io.Writer, object any, file string, format string) err
 	return err
 }
 
-func savePlaybookList(w io.Writer, items []api.PlaybookListItem, file string, asJSON bool) error {
+func savePlaybookList(w io.Writer, items []api.PlaybookListItem, asJSON bool) error {
 	var out bytes.Buffer
 	if asJSON {
 		b, _ := json.MarshalIndent(items, "", "  ")
@@ -250,9 +250,6 @@ func savePlaybookList(w io.Writer, items []api.PlaybookListItem, file string, as
 		}
 	}
 
-	if file != "" {
-		return os.WriteFile(file, out.Bytes(), 0600)
-	}
 	_, err := w.Write(out.Bytes())
 	return err
 }

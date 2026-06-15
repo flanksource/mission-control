@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 
 	"github.com/flanksource/clicky"
@@ -16,11 +15,7 @@ func shouldLogJSON() bool {
 	return clicky.Flags.JsonLogs || logger.IsJsonLogs()
 }
 
-func writeEvent(w io.Writer, data map[string]any) {
-	_ = WriteEventOutput(w, "", data)
-}
-
-func WriteEventOutput(w io.Writer, file string, data map[string]any) error {
+func Log(w io.Writer, data map[string]any) error {
 	var out []byte
 	if shouldLogJSON() {
 		out, _ = json.Marshal(data)
@@ -29,9 +24,6 @@ func WriteEventOutput(w io.Writer, file string, data map[string]any) error {
 	}
 	out = append(out, '\n')
 
-	if file != "" {
-		return os.WriteFile(file, out, 0600)
-	}
 	_, err := w.Write(out)
 	return err
 }

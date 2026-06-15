@@ -23,11 +23,8 @@ var Playbook = &cobra.Command{
 // only supports running playbooks by id/name against a remote server.
 var LocalRunHandler func(cmd *cobra.Command, args []string) error
 
-// Shared output flags (read by both the remote client and local execution).
-var (
-	ParamFile string
-	OutFile   string
-)
+// Shared parameter flag (read by both the remote client and local execution).
+var ParamFile string
 
 var (
 	playbookNamespace       string
@@ -79,7 +76,7 @@ var ListPlaybooks = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return savePlaybookList(cmd.OutOrStdout(), items, OutFile, playbookListJSON)
+		return savePlaybookList(cmd.OutOrStdout(), items, playbookListJSON)
 	},
 }
 
@@ -160,7 +157,7 @@ func runRemotePlaybook(cmd *cobra.Command, args []string) error {
 
 	playbookRef := item.Namespace + "/" + item.Name
 	if !playbookWait {
-		return WriteEventOutput(cmd.OutOrStdout(), OutFile, map[string]any{
+		return Log(cmd.OutOrStdout(), map[string]any{
 			"type":      "playbook_run_scheduled",
 			"playbook":  playbookRef,
 			"run_id":    response.RunID,
@@ -168,7 +165,7 @@ func runRemotePlaybook(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	writeEvent(cmd.ErrOrStderr(), map[string]any{
+	Log(cmd.ErrOrStderr(), map[string]any{
 		"type":      "playbook_run_scheduled",
 		"playbook":  playbookRef,
 		"run_id":    response.RunID,
@@ -178,7 +175,7 @@ func runRemotePlaybook(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := WriteEventOutput(cmd.OutOrStdout(), OutFile, PlaybookActionResults(summary)); err != nil {
+	if err := Log(cmd.OutOrStdout(), PlaybookActionResults(summary)); err != nil {
 		return err
 	}
 	if summary.Run.Status != models.PlaybookRunStatusCompleted {
@@ -195,12 +192,10 @@ func init() {
 	Run.Flags().StringVar(&playbookConfigID, "config-id", "", "Config ID to run the playbook against")
 	Run.Flags().StringVar(&playbookComponentID, "component-id", "", "Component ID to run the playbook against")
 	Run.Flags().StringVar(&playbookCheckID, "check-id", "", "Check ID to run the playbook against")
-	Run.Flags().StringVarP(&OutFile, "out-file", "o", "", "Write playbook summary to file instead of stdout")
 
 	ListPlaybooks.Flags().StringVar(&playbookListConfigID, "config-id", "", "Only list playbooks runnable for this config ID")
 	ListPlaybooks.Flags().StringVar(&playbookListComponentID, "component-id", "", "Only list playbooks runnable for this component ID")
 	ListPlaybooks.Flags().StringVar(&playbookListCheckID, "check-id", "", "Only list playbooks runnable for this check ID")
-	ListPlaybooks.Flags().StringVarP(&OutFile, "out-file", "o", "", "Write playbook list to file instead of stdout")
 	ListPlaybooks.Flags().BoolVar(&playbookListJSON, "json", false, "Print the full playbook list as JSON")
 
 	Playbook.AddCommand(ListPlaybooks, Run)

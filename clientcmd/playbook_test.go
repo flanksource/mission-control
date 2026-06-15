@@ -117,7 +117,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		actionID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 		var stdout bytes.Buffer
 
-		err := WriteEventOutput(&stdout, "", PlaybookActionResults(&sdk.PlaybookSummary{
+		err := Log(&stdout, PlaybookActionResults(&sdk.PlaybookSummary{
 			Playbook: models.Playbook{Namespace: "ops", Name: "diagnose"},
 			Run:      models.PlaybookRun{ID: uuid.New(), Status: models.PlaybookRunStatusCompleted},
 			Actions: []models.PlaybookRunAction{{
@@ -141,7 +141,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		clicky.Flags.JsonLogs = true
 		var stdout bytes.Buffer
 
-		err := WriteEventOutput(&stdout, "", PlaybookActionResults(&sdk.PlaybookSummary{
+		err := Log(&stdout, PlaybookActionResults(&sdk.PlaybookSummary{
 			Actions: []models.PlaybookRunAction{{
 				Name:   "HTTP Request",
 				Status: models.PlaybookActionStatusCompleted,
@@ -162,7 +162,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 			Category:  "Kubernetes",
 			Namespace: "monitoring",
 			Name:      "restart-pod",
-		}}, "", false)
+		}}, false)
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(stdout.String()).To(ContainSubstring("CATEGORY"))
@@ -186,7 +186,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 			Namespace:   "monitoring",
 			Name:        "restart-pod",
 			Description: "Restarts a pod",
-		}}, "", true)
+		}}, true)
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(stdout.String()).To(ContainSubstring(`"id": "` + id.String() + `"`))
