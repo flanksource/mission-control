@@ -178,7 +178,7 @@ func newCachedPlaybookCommand(item api.PlaybookListItem, name string) *cobra.Com
 					"starts_at": response.StartsAt,
 				})
 			}
-			Log(cmd.ErrOrStderr(), map[string]any{
+			_ = Log(cmd.ErrOrStderr(), map[string]any{
 				"type":      "playbook_run_scheduled",
 				"playbook":  ref,
 				"run_id":    response.RunID,
@@ -188,7 +188,7 @@ func newCachedPlaybookCommand(item api.PlaybookListItem, name string) *cobra.Com
 			if err != nil {
 				return err
 			}
-			if err := Log(cmd.OutOrStdout(), PlaybookActionResults(summary)); err != nil {
+			if err := LogYAML(cmd.OutOrStdout(), PlaybookActionResults(summary)); err != nil {
 				return err
 			}
 			if summary.Run.Status != "completed" {

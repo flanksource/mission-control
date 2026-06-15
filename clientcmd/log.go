@@ -9,6 +9,7 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/commons/logger"
+	"sigs.k8s.io/yaml"
 )
 
 func shouldLogJSON() bool {
@@ -25,6 +26,19 @@ func Log(w io.Writer, data map[string]any) error {
 	out = append(out, '\n')
 
 	_, err := w.Write(out)
+	return err
+}
+
+func LogYAML(w io.Writer, data map[string]any) error {
+	if shouldLogJSON() {
+		return Log(w, data)
+	}
+
+	out, err := yaml.Marshal(data)
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(out)
 	return err
 }
 

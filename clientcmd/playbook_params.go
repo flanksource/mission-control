@@ -187,7 +187,7 @@ func waitForRemotePlaybookRunWithInterval(stderr io.Writer, client *sdk.Client, 
 		runStatus := string(summary.Run.Status)
 		isFinal := lo.Contains(models.PlaybookRunStatusFinalStates, summary.Run.Status)
 		if runStatus != lastRunStatus && !isFinal {
-			Log(stderr, map[string]any{"type": "playbook_run_status", "run_id": runID, "status": runStatus})
+			_ = Log(stderr, map[string]any{"type": "playbook_run_status", "run_id": runID, "status": runStatus})
 			lastRunStatus = runStatus
 		}
 		for _, action := range summary.Actions {
@@ -200,11 +200,11 @@ func waitForRemotePlaybookRunWithInterval(stderr io.Writer, client *sdk.Client, 
 			if action.Error != nil && *action.Error != "" {
 				event["error"] = *action.Error
 			}
-			Log(stderr, event)
+			_ = Log(stderr, event)
 			lastActions[key] = status
 		}
 		if runStatus != lastRunStatus && isFinal {
-			Log(stderr, map[string]any{"type": "playbook_run_status", "run_id": runID, "status": runStatus})
+			_ = Log(stderr, map[string]any{"type": "playbook_run_status", "run_id": runID, "status": runStatus})
 			lastRunStatus = runStatus
 		}
 

@@ -202,7 +202,7 @@ func runLocalPlaybook(cmd *cobra.Command, args []string) error {
 		shutdown.ShutdownAndExit(1, err.Error())
 	}
 
-	if err := clientcmd.Log(cmd.OutOrStdout(), clientcmd.PlaybookActionResults(&sdk.PlaybookSummary{
+	if err := clientcmd.LogYAML(cmd.OutOrStdout(), clientcmd.PlaybookActionResults(&sdk.PlaybookSummary{
 		Playbook: summary.Playbook,
 		Run:      summary.Run,
 		Actions:  summary.Actions,

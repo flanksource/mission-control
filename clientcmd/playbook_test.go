@@ -117,7 +117,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		actionID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 		var stdout bytes.Buffer
 
-		err := Log(&stdout, PlaybookActionResults(&sdk.PlaybookSummary{
+		err := LogYAML(&stdout, PlaybookActionResults(&sdk.PlaybookSummary{
 			Playbook: models.Playbook{Namespace: "ops", Name: "diagnose"},
 			Run:      models.PlaybookRun{ID: uuid.New(), Status: models.PlaybookRunStatusCompleted},
 			Actions: []models.PlaybookRunAction{{
@@ -129,9 +129,9 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		}))
 
 		Expect(err).ToNot(HaveOccurred())
-		Expect(stdout.String()).To(ContainSubstring("result=map"))
-		Expect(stdout.String()).To(ContainSubstring("code:200"))
-		Expect(stdout.String()).To(ContainSubstring("content:37.59.119.142"))
+		Expect(stdout.String()).To(ContainSubstring("result:"))
+		Expect(stdout.String()).To(ContainSubstring("code: 200"))
+		Expect(stdout.String()).To(ContainSubstring("content: 37.59.119.142"))
 		Expect(stdout.String()).ToNot(ContainSubstring("playbook"))
 		Expect(stdout.String()).ToNot(ContainSubstring("actions"))
 		Expect(stdout.String()).ToNot(ContainSubstring(actionID.String()))
@@ -141,7 +141,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		clicky.Flags.JsonLogs = true
 		var stdout bytes.Buffer
 
-		err := Log(&stdout, PlaybookActionResults(&sdk.PlaybookSummary{
+		err := LogYAML(&stdout, PlaybookActionResults(&sdk.PlaybookSummary{
 			Actions: []models.PlaybookRunAction{{
 				Name:   "HTTP Request",
 				Status: models.PlaybookActionStatusCompleted,

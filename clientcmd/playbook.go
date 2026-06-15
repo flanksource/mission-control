@@ -165,7 +165,7 @@ func runRemotePlaybook(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	Log(cmd.ErrOrStderr(), map[string]any{
+	_ = Log(cmd.ErrOrStderr(), map[string]any{
 		"type":      "playbook_run_scheduled",
 		"playbook":  playbookRef,
 		"run_id":    response.RunID,
@@ -175,7 +175,7 @@ func runRemotePlaybook(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := Log(cmd.OutOrStdout(), PlaybookActionResults(summary)); err != nil {
+	if err := LogYAML(cmd.OutOrStdout(), PlaybookActionResults(summary)); err != nil {
 		return err
 	}
 	if summary.Run.Status != models.PlaybookRunStatusCompleted {
