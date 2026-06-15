@@ -4,9 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"time"
 
-	"github.com/flanksource/incident-commander/auth/oidcclient"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -64,27 +62,5 @@ var _ = ginkgo.Describe("whoami command", func() {
 			Auth:     whoamiAuth{Status: "invalid"},
 		})
 		Expect(err).To(MatchError("whoami status failed: database=ok auth=invalid"))
-	})
-
-	ginkgo.It("prefers a valid stored OIDC token over a stale context JWT", func() {
-		Expect(shouldUseStoredOIDCToken(
-			"old.jwt.token",
-			"previous.jwt.token",
-			&oidcclient.Tokens{
-				AccessToken: "fresh.jwt.token",
-				ExpiresAt:   time.Now().Add(time.Hour),
-			},
-		)).To(BeTrue())
-	})
-
-	ginkgo.It("does not replace Mission Control access tokens with stored OIDC tokens", func() {
-		Expect(shouldUseStoredOIDCToken(
-			"password.salt.1.8192.1",
-			"previous.jwt.token",
-			&oidcclient.Tokens{
-				AccessToken: "fresh.jwt.token",
-				ExpiresAt:   time.Now().Add(time.Hour),
-			},
-		)).To(BeFalse())
 	})
 })

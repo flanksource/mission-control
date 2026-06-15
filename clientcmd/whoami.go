@@ -6,13 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/flanksource/duty"
 	dutyAPI "github.com/flanksource/duty/api"
-	"github.com/flanksource/incident-commander/auth/oidcclient"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/spf13/cobra"
 )
@@ -79,12 +77,6 @@ type accessTokenStatus struct {
 	Status      string `json:"status"`
 	Error       string `json:"error,omitempty"`
 	expiresTime *time.Time
-}
-
-type storedOIDCToken struct {
-	Tokens *oidcclient.Tokens
-	Server string
-	Path   string
 }
 
 func runWhoami(cmd *cobra.Command, _ []string) error {
@@ -202,41 +194,32 @@ func probeAuth(parent gocontext.Context, cfg *MCConfig, mcCtx *MCContext, dbConn
 
 	out.Configured = true
 	out.Server = mcCtx.Server
-	token := mcCtx.Token
-	if token != "" {
-		out.TokenSource = "context"
-	}
-
-	stored, storedErr := loadStoredOIDCTokens(mcCtx.Server)
-	if storedErr != nil && !os.IsNotExist(storedErr) {
-		out.RefreshStatus = "stored OIDC token unavailable: " + storedErr.Error()
-	}
-	if stored != nil && stored.Tokens != nil {
-		oldAccessToken := stored.Tokens.AccessToken
-		out.TokenExpires = formatTime(stored.Tokens.ExpiresAt)
-		out.TokenTTL = formatTTL(stored.Tokens.ExpiresAt)
-		if refresh && oidcTokenExpiring(stored.Tokens) && stored.Tokens.RefreshToken != "" {
-			refreshed, err := refreshOIDCTokens(mcCtx.Server, stored)
+	token := mcCtx.AccessToken()
+	if mcCtx.OIDC != nil {
+		out.TokenSource = "oidc"
+		out.TokenExpires = formatTime(mcCtx.OIDC.ExpiresAt)
+		out.TokenTTL = formatTTL(mcCtx.OIDC.ExpiresAt)
+		if refresh && oidcTokenExpiring(mcCtx.OIDC) && mcCtx.OIDC.RefreshToken != "" {
+			refreshed, err := refreshOIDCTokens(mcCtx.Server, mcCtx.OIDC)
 			if err != nil {
 				out.RefreshStatus = "failed: " + err.Error()
 			} else {
-				stored = refreshed
+				mcCtx.SetOIDCTokens(refreshed)
+				token = mcCtx.AccessToken()
 				out.RefreshStatus = "refreshed"
-				out.TokenExpires = formatTime(stored.Tokens.ExpiresAt)
-				out.TokenTTL = formatTTL(stored.Tokens.ExpiresAt)
+				out.TokenExpires = formatTime(mcCtx.OIDC.ExpiresAt)
+				out.TokenTTL = formatTTL(mcCtx.OIDC.ExpiresAt)
+				updateContextOIDCTokens(cfg, mcCtx.Name, refreshed)
 			}
-		} else if oidcTokenExpiring(stored.Tokens) && stored.Tokens.RefreshToken == "" {
+		} else if oidcTokenExpiring(mcCtx.OIDC) && mcCtx.OIDC.RefreshToken == "" {
 			out.RefreshStatus = "unavailable: no refresh token"
-		} else if oidcTokenExpiring(stored.Tokens) {
+		} else if oidcTokenExpiring(mcCtx.OIDC) {
 			out.RefreshStatus = "needed"
 		} else {
 			out.RefreshStatus = "not needed"
 		}
-		if shouldUseStoredOIDCToken(token, oldAccessToken, stored.Tokens) {
-			token = stored.Tokens.AccessToken
-			out.TokenSource = "stored_oidc"
-			updateContextToken(cfg, mcCtx.Name, token)
-		}
+	} else if token != "" {
+		out.TokenSource = "context"
 	}
 
 	if token == "" {
@@ -331,5 +314,5 @@ func whoamiEndpointCandidates(server string) []string {
 
 func init() {
 	WhoamiCmd.Flags().BoolVar(&whoamiJSON, "json", false, "Print status as JSON")
-	WhoamiCmd.Flags().BoolVar(&whoamiRefresh, "refresh", true, "Refresh stored OIDC tokens before validating")
+	WhoamiCmd.Flags().BoolVar(&whoamiRefresh, "refresh", true, "Refresh OIDC tokens before validating")
 }

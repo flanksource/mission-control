@@ -13,7 +13,7 @@ import (
 )
 
 var _ = ginkgo.Describe("auth login", func() {
-	var oldOIDCLogin func(*cobra.Command, string, io.Writer) (*oidcclient.Tokens, string, error)
+	var oldOIDCLogin func(*cobra.Command, string, io.Writer) (*oidcclient.Tokens, error)
 
 	ginkgo.BeforeEach(func() {
 		oldOIDCLogin = oidcLogin
@@ -38,10 +38,7 @@ var _ = ginkgo.Describe("auth login", func() {
 		cmd.SetOut(io.Discard)
 		Expect(runAuthLogin(cmd, nil)).To(Succeed())
 
-		stored, err := LoadStoredTokens(server.URL)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(stored.AccessToken).To(Equal("my-access-token"))
-		expectLoginContext(server.URL+"/api", "my-access-token")
+		expectTokenContext(server.URL+"/api", "my-access-token")
 	})
 
 	ginkgo.It("stores token contexts with the direct backend base", func() {
@@ -54,10 +51,7 @@ var _ = ginkgo.Describe("auth login", func() {
 		cmd.SetOut(io.Discard)
 		Expect(runAuthLogin(cmd, nil)).To(Succeed())
 
-		stored, err := LoadStoredTokens(server.URL)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(stored.AccessToken).To(Equal("tok2"))
-		expectLoginContext(server.URL, "tok2")
+		expectTokenContext(server.URL, "tok2")
 	})
 
 	ginkgo.It("runs OIDC login against the frontend URL for resolved /api contexts", func() {
@@ -66,9 +60,9 @@ var _ = ginkgo.Describe("auth login", func() {
 		loginServer = server.URL
 
 		var gotLoginServer string
-		oidcLogin = func(_ *cobra.Command, server string, _ io.Writer) (*oidcclient.Tokens, string, error) {
+		oidcLogin = func(_ *cobra.Command, server string, _ io.Writer) (*oidcclient.Tokens, error) {
 			gotLoginServer = server
-			return &oidcclient.Tokens{AccessToken: "oauth-token", ExpiresAt: time.Now().Add(time.Hour)}, "tokens.json", nil
+			return &oidcclient.Tokens{AccessToken: "oauth-token", ExpiresAt: time.Now().Add(time.Hour)}, nil
 		}
 
 		cmd := &cobra.Command{}
@@ -76,7 +70,7 @@ var _ = ginkgo.Describe("auth login", func() {
 		Expect(runAuthLogin(cmd, nil)).To(Succeed())
 
 		Expect(gotLoginServer).To(Equal(server.URL))
-		expectLoginContext(server.URL+"/api", "oauth-token")
+		expectOIDCContext(server.URL+"/api", "oauth-token")
 	})
 })
 
@@ -97,7 +91,20 @@ func authHealthServer(frontend bool) *httptest.Server {
 	}))
 }
 
-func expectLoginContext(serverURL, token string) {
+func expectTokenContext(serverURL, token string) {
+	ctx := expectContext(serverURL)
+	Expect(ctx.Token).To(Equal(token))
+	Expect(ctx.OIDC).To(BeNil())
+}
+
+func expectOIDCContext(serverURL, token string) {
+	ctx := expectContext(serverURL)
+	Expect(ctx.Token).To(BeEmpty())
+	Expect(ctx.OIDC).ToNot(BeNil())
+	Expect(ctx.OIDC.AccessToken).To(Equal(token))
+}
+
+func expectContext(serverURL string) *MCContext {
 	cfg, err := LoadConfig()
 	Expect(err).ToNot(HaveOccurred())
 	name := ServerToContextName(serverURL)
@@ -105,5 +112,5 @@ func expectLoginContext(serverURL, token string) {
 	ctx := cfg.GetContext(name)
 	Expect(ctx).ToNot(BeNil())
 	Expect(ctx.Server).To(Equal(serverURL))
-	Expect(ctx.Token).To(Equal(token))
+	return ctx
 }
