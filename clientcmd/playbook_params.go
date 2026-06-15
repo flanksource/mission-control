@@ -185,8 +185,9 @@ func waitForRemotePlaybookRunWithInterval(stderr io.Writer, client *sdk.Client, 
 		}
 
 		runStatus := string(summary.Run.Status)
-		if runStatus != lastRunStatus {
-			fmt.Fprintf(stderr, "run %s status=%s\n", runID, runStatus)
+		isFinal := lo.Contains(models.PlaybookRunStatusFinalStates, summary.Run.Status)
+		if runStatus != lastRunStatus && !isFinal {
+			writeEvent(stderr, map[string]any{"type": "playbook_run_status", "run_id": runID, "status": runStatus})
 			lastRunStatus = runStatus
 		}
 		for _, action := range summary.Actions {
@@ -195,15 +196,19 @@ func waitForRemotePlaybookRunWithInterval(stderr io.Writer, client *sdk.Client, 
 			if lastActions[key] == status {
 				continue
 			}
+			event := map[string]any{"type": "playbook_action_status", "action": action.Name, "status": status}
 			if action.Error != nil && *action.Error != "" {
-				fmt.Fprintf(stderr, "action %s status=%s error=%s\n", action.Name, status, *action.Error)
-			} else {
-				fmt.Fprintf(stderr, "action %s status=%s\n", action.Name, status)
+				event["error"] = *action.Error
 			}
+			writeEvent(stderr, event)
 			lastActions[key] = status
 		}
+		if runStatus != lastRunStatus && isFinal {
+			writeEvent(stderr, map[string]any{"type": "playbook_run_status", "run_id": runID, "status": runStatus})
+			lastRunStatus = runStatus
+		}
 
-		if lo.Contains(models.PlaybookRunStatusFinalStates, summary.Run.Status) {
+		if isFinal {
 			return summary, nil
 		}
 		time.Sleep(pollInterval)

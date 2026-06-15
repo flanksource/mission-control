@@ -19,6 +19,7 @@ import (
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/playbook/runner"
+	"github.com/flanksource/incident-commander/sdk"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
@@ -201,7 +202,11 @@ func runLocalPlaybook(cmd *cobra.Command, args []string) error {
 		shutdown.ShutdownAndExit(1, err.Error())
 	}
 
-	if err := clientcmd.SaveOutputToWriter(cmd.OutOrStdout(), summary, clientcmd.OutFile, clientcmd.OutFormat); err != nil {
+	if err := clientcmd.WriteEventOutput(cmd.OutOrStdout(), clientcmd.OutFile, clientcmd.PlaybookActionResults(&sdk.PlaybookSummary{
+		Playbook: summary.Playbook,
+		Run:      summary.Run,
+		Actions:  summary.Actions,
+	})); err != nil {
 		shutdown.ShutdownAndExit(1, err.Error())
 	}
 

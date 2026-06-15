@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/flanksource/clicky"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -23,6 +24,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 	var savedComponentID string
 	var savedCheckID string
 	var savedPollInterval time.Duration
+	var savedJSONLogs bool
 
 	ginkgo.BeforeEach(func() {
 		savedParamFile = ParamFile
@@ -30,6 +32,8 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		savedComponentID = playbookComponentID
 		savedCheckID = playbookCheckID
 		savedPollInterval = playbookPollInterval
+		savedJSONLogs = clicky.Flags.JsonLogs
+		clicky.Flags.JsonLogs = false
 	})
 
 	ginkgo.AfterEach(func() {
@@ -38,6 +42,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		playbookComponentID = savedComponentID
 		playbookCheckID = savedCheckID
 		playbookPollInterval = savedPollInterval
+		clicky.Flags.JsonLogs = savedJSONLogs
 	})
 
 	ginkgo.It("resolves playbook refs by id, namespace/name, and unambiguous name", func() {
@@ -101,8 +106,51 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		summary, err := waitForRemotePlaybookRun(&stderr, sdk.New(server.URL, "fake-token"), runID.String())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(summary.Run.Status).To(Equal(models.PlaybookRunStatusCompleted))
-		Expect(stderr.String()).To(ContainSubstring("run " + runID.String() + " status=completed"))
-		Expect(stderr.String()).To(ContainSubstring("action echo status=completed"))
+		Expect(stderr.String()).To(ContainSubstring("run_id=" + runID.String()))
+		Expect(stderr.String()).To(ContainSubstring("status=completed"))
+		Expect(stderr.String()).To(ContainSubstring("type=playbook_run_status"))
+		Expect(stderr.String()).To(ContainSubstring("action=echo"))
+		Expect(stderr.String()).To(ContainSubstring("type=playbook_action_status"))
+	})
+
+	ginkgo.It("prints only the action result for playbook run summaries", func() {
+		actionID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
+		var stdout bytes.Buffer
+
+		err := WriteEventOutput(&stdout, "", PlaybookActionResults(&sdk.PlaybookSummary{
+			Playbook: models.Playbook{Namespace: "ops", Name: "diagnose"},
+			Run:      models.PlaybookRun{ID: uuid.New(), Status: models.PlaybookRunStatusCompleted},
+			Actions: []models.PlaybookRunAction{{
+				ID:     actionID,
+				Name:   "HTTP Request",
+				Status: models.PlaybookActionStatusCompleted,
+				Result: map[string]any{"code": 200, "content": "37.59.119.142"},
+			}},
+		}))
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(stdout.String()).To(ContainSubstring("result=map"))
+		Expect(stdout.String()).To(ContainSubstring("code:200"))
+		Expect(stdout.String()).To(ContainSubstring("content:37.59.119.142"))
+		Expect(stdout.String()).ToNot(ContainSubstring("playbook"))
+		Expect(stdout.String()).ToNot(ContainSubstring("actions"))
+		Expect(stdout.String()).ToNot(ContainSubstring(actionID.String()))
+	})
+
+	ginkgo.It("prints action results as JSON when json logs are enabled", func() {
+		clicky.Flags.JsonLogs = true
+		var stdout bytes.Buffer
+
+		err := WriteEventOutput(&stdout, "", PlaybookActionResults(&sdk.PlaybookSummary{
+			Actions: []models.PlaybookRunAction{{
+				Name:   "HTTP Request",
+				Status: models.PlaybookActionStatusCompleted,
+				Result: map[string]any{"code": 200},
+			}},
+		}))
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(stdout.String()).To(ContainSubstring(`"result":{"code":200}`))
 	})
 
 	ginkgo.It("prints playbook lists as a compact table by default", func() {
