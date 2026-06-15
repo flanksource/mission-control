@@ -13,8 +13,10 @@ import (
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/spf13/cobra"
 
 	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/sdk"
 )
 
@@ -191,5 +193,42 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(stdout.String()).To(ContainSubstring(`"id": "` + id.String() + `"`))
 		Expect(stdout.String()).To(ContainSubstring(`"description": "Restarts a pod"`))
+	})
+
+	ginkgo.It("requires config id for cached playbooks with config selectors", func() {
+		id := uuid.MustParse("11111111-1111-1111-1111-111111111111")
+		spec := []byte(`{"configs":[{"types":["Kubernetes::Deployment"]}],"actions":[{"exec":{"script":"echo ok"}}]}`)
+		cmd := newCachedPlaybookCommand(api.PlaybookListItem{
+			ID:        id,
+			Namespace: "mission-control",
+			Name:      "kubernetes-update-image",
+			Spec:      spec,
+		}, "kubernetes-update-image")
+
+		_, errOut, err := executeCommand(cmd)
+
+		Expect(err).To(MatchError(ContainSubstring(`required flag(s) "config-id" not set`)))
+		Expect(errOut).NotTo(ContainSubstring("Usage:"))
+	})
+
+	ginkgo.It("does not send templated defaults unless the cached playbook flag is changed", func() {
+		param := v1.PlaybookParameter{
+			Name:    "container",
+			Type:    v1.PlaybookParameterTypeText,
+			Default: `$( .config.config | jq ".spec.template.spec.containers[0].name" )`,
+		}
+		cmd := &cobra.Command{Use: "kubernetes-update-image"}
+		value := string(param.Default)
+		values := map[string]*string{"container": &value}
+		cmd.Flags().StringVar(values["container"], "container", value, "")
+
+		args, err := cachedPlaybookParamArgs(cmd, []v1.PlaybookParameter{param}, values)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(args).To(BeEmpty())
+
+		Expect(cmd.Flags().Set("container", "api")).To(Succeed())
+		args, err = cachedPlaybookParamArgs(cmd, []v1.PlaybookParameter{param}, values)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(args).To(Equal([]string{"container=api"}))
 	})
 })
