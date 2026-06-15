@@ -186,7 +186,29 @@ var _ = ginkgo.Describe("context remove", func() {
 		Expect(stdout.String()).To(ContainSubstring(`Removed context "beta"`))
 	})
 
-	ginkgo.It("clears the current context when removing it", func() {
+	ginkgo.It("switches to the only remaining context when removing the current context", func() {
+		Expect(SaveConfig(&MCConfig{
+			CurrentContext: "local",
+			Contexts: []MCContext{
+				{Name: "local", Server: "http://local"},
+				{Name: "beta", Server: "http://beta"},
+			},
+		})).To(Succeed())
+
+		var stdout bytes.Buffer
+		cmd := &cobra.Command{}
+		cmd.SetOut(&stdout)
+		Expect(contextRemoveCmd.RunE(cmd, []string{"local"})).To(Succeed())
+
+		cfg, err := LoadConfig()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cfg.Contexts).To(HaveLen(1))
+		Expect(cfg.GetContext("beta")).ToNot(BeNil())
+		Expect(cfg.CurrentContext).To(Equal("beta"))
+		Expect(stdout.String()).To(ContainSubstring(`Switched to context "beta"`))
+	})
+
+	ginkgo.It("clears the current context when no contexts remain", func() {
 		Expect(SaveConfig(&MCConfig{
 			CurrentContext: "local",
 			Contexts:       []MCContext{{Name: "local", Server: "http://local"}},

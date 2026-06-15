@@ -99,6 +99,9 @@ func (c *MCConfig) RemoveContext(name string) bool {
 			c.Contexts = append(c.Contexts[:i], c.Contexts[i+1:]...)
 			if c.CurrentContext == name {
 				c.CurrentContext = ""
+				if len(c.Contexts) == 1 {
+					c.CurrentContext = c.Contexts[0].Name
+				}
 			}
 			return true
 		}
@@ -253,6 +256,7 @@ var contextRemoveCmd = &cobra.Command{
 			}
 		}
 
+		previousCurrent := cfg.CurrentContext
 		if !cfg.RemoveContext(name) {
 			return fmt.Errorf("context %q not found", name)
 		}
@@ -260,6 +264,9 @@ var contextRemoveCmd = &cobra.Command{
 			return err
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Removed context %q\n", name)
+		if previousCurrent == name && cfg.CurrentContext != "" {
+			fmt.Fprintf(cmd.OutOrStdout(), "Switched to context %q\n", cfg.CurrentContext)
+		}
 		return nil
 	},
 }
