@@ -156,6 +156,63 @@ var _ = ginkgo.Describe("context token resolution", func() {
 	})
 })
 
+var _ = ginkgo.Describe("context remove", func() {
+	ginkgo.BeforeEach(func() {
+		configDir := ginkgo.GinkgoT().TempDir()
+		ginkgo.GinkgoT().Setenv("HOME", configDir)
+		ginkgo.GinkgoT().Setenv("XDG_CONFIG_HOME", configDir)
+	})
+
+	ginkgo.It("removes the named context", func() {
+		Expect(SaveConfig(&MCConfig{
+			CurrentContext: "local",
+			Contexts: []MCContext{
+				{Name: "local", Server: "http://local"},
+				{Name: "beta", Server: "http://beta"},
+			},
+		})).To(Succeed())
+
+		var stdout bytes.Buffer
+		cmd := &cobra.Command{}
+		cmd.SetOut(&stdout)
+
+		Expect(contextRemoveCmd.RunE(cmd, []string{"beta"})).To(Succeed())
+
+		cfg, err := LoadConfig()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cfg.GetContext("beta")).To(BeNil())
+		Expect(cfg.GetContext("local")).ToNot(BeNil())
+		Expect(cfg.CurrentContext).To(Equal("local"))
+		Expect(stdout.String()).To(ContainSubstring(`Removed context "beta"`))
+	})
+
+	ginkgo.It("clears the current context when removing it", func() {
+		Expect(SaveConfig(&MCConfig{
+			CurrentContext: "local",
+			Contexts:       []MCContext{{Name: "local", Server: "http://local"}},
+		})).To(Succeed())
+
+		cmd := &cobra.Command{}
+		cmd.SetOut(io.Discard)
+		Expect(contextRemoveCmd.RunE(cmd, []string{"local"})).To(Succeed())
+
+		cfg, err := LoadConfig()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cfg.Contexts).To(BeEmpty())
+		Expect(cfg.CurrentContext).To(BeEmpty())
+	})
+
+	ginkgo.It("returns an error for missing contexts", func() {
+		Expect(SaveConfig(&MCConfig{
+			Contexts: []MCContext{{Name: "local", Server: "http://local"}},
+		})).To(Succeed())
+
+		err := contextRemoveCmd.RunE(&cobra.Command{}, []string{"missing"})
+
+		Expect(err).To(MatchError(`context "missing" not found`))
+	})
+})
+
 var _ = ginkgo.Describe("API base resolution", func() {
 	ginkgo.BeforeEach(func() {
 		configDir := ginkgo.GinkgoT().TempDir()
