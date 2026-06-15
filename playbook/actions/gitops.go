@@ -174,36 +174,8 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 			return ctx.Oops().Errorf("connection %s not found", action.Repo.Connection)
 		}
 
-		switch conn.Type {
-		case models.ConnectionTypeGithub, models.ConnectionTypeGitlab, models.ConnectionTypeAzureDevops:
-			ctx.Logger.V(6).Infof("Using %s authentication token %v", conn.Type, logger.PrintableSecret(conn.Password))
-			t.spec.AccessToken = conn.Password
-			t.shouldCreatePR = true
-			switch conn.Type {
-			case models.ConnectionTypeGithub:
-				t.spec.Service = connectors.ServiceGithub
-			case models.ConnectionTypeGitlab:
-				t.spec.Service = connectors.ServiceGitlab
-			case models.ConnectionTypeAzureDevops:
-				t.spec.Service = connectors.ServiceAzure
-			}
-
-		case models.ConnectionTypeHTTP:
-			ctx.Logger.V(6).Infof("Using http basic auth %s:%s", logger.PrintableSecret(conn.Username), logger.PrintableSecret(conn.Password))
-
-			t.spec.User = conn.Username
-			t.spec.Password = conn.Password
-
-		case models.ConnectionTypeGit:
-			ctx.Logger.V(6).Infof("Using git:// user=%s key=%s password=%s", logger.PrintableSecret(conn.Username), logger.PrintableSecret(conn.Certificate), logger.PrintableSecret(conn.Password))
-
-			t.spec.User = conn.Username
-			t.spec.Password = conn.Password
-			t.spec.SSHPrivateKey = conn.Certificate
-			t.spec.SSHPrivateKeyPassword = conn.Password
-
-		default:
-			return ctx.Oops().Errorf("unsupported connection type: %s", conn.Type)
+		if err := applyGitConnection(ctx, t.spec, conn); err != nil {
+			return err
 		}
 	}
 
@@ -244,6 +216,42 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 				Rebase:  action.PullRequest.AutoMerge.Rebase,
 			},
 		}
+	}
+
+	return nil
+}
+
+// applyGitConnection maps a connection's credentials onto a git clone spec.
+func applyGitConnection(ctx context.Context, spec *connectors.GitopsAPISpec, conn *models.Connection) error {
+	switch conn.Type {
+	case models.ConnectionTypeGithub, models.ConnectionTypeGitlab, models.ConnectionTypeAzureDevops:
+		ctx.Logger.V(6).Infof("Using %s authentication token %v", conn.Type, logger.PrintableSecret(conn.Password))
+		spec.AccessToken = conn.Password
+		switch conn.Type {
+		case models.ConnectionTypeGithub:
+			spec.Service = connectors.ServiceGithub
+		case models.ConnectionTypeGitlab:
+			spec.Service = connectors.ServiceGitlab
+		case models.ConnectionTypeAzureDevops:
+			spec.Service = connectors.ServiceAzure
+		}
+
+	case models.ConnectionTypeHTTP:
+		ctx.Logger.V(6).Infof("Using http basic auth %s:%s", logger.PrintableSecret(conn.Username), logger.PrintableSecret(conn.Password))
+
+		spec.User = conn.Username
+		spec.Password = conn.Password
+
+	case models.ConnectionTypeGit:
+		ctx.Logger.V(6).Infof("Using git:// user=%s key=%s password=%s", logger.PrintableSecret(conn.Username), logger.PrintableSecret(conn.Certificate), logger.PrintableSecret(conn.Password))
+
+		spec.User = conn.Username
+		spec.Password = conn.Password
+		spec.SSHPrivateKey = conn.Certificate
+		spec.SSHPrivateKeyPassword = conn.Password
+
+	default:
+		return ctx.Oops().Errorf("unsupported connection type: %s", conn.Type)
 	}
 
 	return nil

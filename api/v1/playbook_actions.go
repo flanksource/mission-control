@@ -704,18 +704,53 @@ type CatalogAction struct {
 	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty" template:"true"`
 }
 
-// +kubebuilder:validation:XValidation:rule="!(has(self.view) && self.view != \"\" && has(self.configs))",message="view and configs are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="!(has(self.view) && self.view != \"\" && (has(self.configs) || has(self.file)))",message="view is mutually exclusive with configs and file"
 type ReportAction struct {
 	// Reference an existing View by namespace/name or just name
 	View string `json:"view,omitempty" yaml:"view,omitempty" template:"true"`
-	// Inline catalog query (alternative to View)
+	// Inline catalog query for the catalog report (alternative to View)
 	Configs *types.ResourceSelector `json:"configs,omitempty" yaml:"configs,omitempty" template:"true"`
+	// File selects the TSX template that renders the catalog report.
+	// When unset, the embedded CatalogReport.tsx is used.
+	File *ReportFile `json:"file,omitempty" yaml:"file,omitempty" template:"true"`
 	// Output format: json, csv, facet-html, facet-pdf, markdown, slack, html, pdf
 	Format string `json:"format,omitempty" yaml:"format,omitempty" template:"true"`
 	// Variables passed to the view queries
 	Variables map[string]string `json:"variables,omitempty" yaml:"variables,omitempty" template:"true"`
 	// Facet rendering options for facet-html and facet-pdf formats
 	Facet *FacetOptions `json:"facet,omitempty" yaml:"facet,omitempty" template:"true"`
+
+	// Since is the time range for changes and access logs (e.g. "30d"). Defaults to 30d.
+	Since string `json:"since,omitempty" yaml:"since,omitempty" template:"true"`
+	// Recursive includes all descendant config items in the catalog report.
+	Recursive bool `json:"recursive,omitempty" yaml:"recursive,omitempty"`
+	// GroupBy controls descendant grouping: "none" (default), "merged", or "config".
+	GroupBy string `json:"groupBy,omitempty" yaml:"groupBy,omitempty" template:"true"`
+	// Sections selects which catalog report sections to include.
+	Sections *api.CatalogReportSections `json:"sections,omitempty" yaml:"sections,omitempty"`
+}
+
+// ReportFile selects the TSX template used to render the catalog report,
+// either from a git repository or a local file path.
+// +kubebuilder:validation:XValidation:rule="has(self.path) != has(self.git)",message="exactly one of path or git must be set"
+type ReportFile struct {
+	// Path to a local TSX file. A relative path is resolved against the
+	// working directory (e.g. "report/CatalogReport.tsx"); an absolute path is
+	// used as-is. The file's directory must contain the report scaffold.
+	Path string `json:"path,omitempty" yaml:"path,omitempty" template:"true"`
+	// Git references a TSX file inside a git repository.
+	Git *ReportGitFile `json:"git,omitempty" yaml:"git,omitempty" template:"true"`
+}
+
+type ReportGitFile struct {
+	// Connection name used for credentials to the git repo.
+	Connection string `json:"connection,omitempty" yaml:"connection,omitempty" template:"true"`
+	// URL of the git repository.
+	URL string `json:"url" yaml:"url" template:"true"`
+	// Base is the branch to clone. Defaults to "main".
+	Base string `json:"base,omitempty" yaml:"base,omitempty" template:"true"`
+	// File is the path to the TSX file within the repository.
+	File string `json:"file" yaml:"file" template:"true"`
 }
 
 func (p *PlaybookAction) ActionType() string {

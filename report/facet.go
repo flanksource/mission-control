@@ -32,20 +32,26 @@ type RenderResult struct {
 // With -v (log level 1): prints the facet command and tees stdout/stderr.
 // With -vv (log level 2): also keeps the data file and report dir for re-rendering.
 func RenderCLI(data any, format, entryFile string) (*RenderResult, error) {
-	verbose := logger.IsLevelEnabled(1)
-	keepFiles := logger.IsLevelEnabled(2)
-
-	facetBin, err := exec.LookPath("facet")
-	if err != nil {
-		return nil, fmt.Errorf("facet not found on PATH: install with 'npm install -g @flanksource/facet'")
-	}
-
 	srcDir, err := SrcDir()
 	if err != nil {
 		return nil, fmt.Errorf("prepare facet src dir: %w", err)
 	}
 	if _, override := ResolveSource(); override != "" {
 		entryFile = override
+	}
+	return RenderCLIFromDir(data, format, srcDir, entryFile)
+}
+
+// RenderCLIFromDir renders data using the facet CLI binary against an explicit
+// source directory and entry file. The directory must contain the report
+// scaffold (package.json, components, etc.) needed to compile the entry file.
+func RenderCLIFromDir(data any, format, srcDir, entryFile string) (*RenderResult, error) {
+	verbose := logger.IsLevelEnabled(1)
+	keepFiles := logger.IsLevelEnabled(2)
+
+	facetBin, err := exec.LookPath("facet")
+	if err != nil {
+		return nil, fmt.Errorf("facet not found on PATH: install with 'npm install -g @flanksource/facet'")
 	}
 
 	dataJSON, err := json.MarshalIndent(data, "", "  ")
@@ -121,13 +127,27 @@ type RenderHTTPOptions struct {
 	TimestampURL string
 }
 
-// RenderHTTP renders data via a remote facet rendering service.
+// RenderHTTP renders data via a remote facet rendering service using the
+// embedded report files.
 func RenderHTTP(ctx context.Context, baseURL, token string, data any, format, entryFile string, opts ...RenderHTTPOptions) ([]byte, error) {
 	archive, err := BuildArchive()
 	if err != nil {
 		return nil, fmt.Errorf("build report archive: %w", err)
 	}
+	return renderHTTPWithArchive(ctx, baseURL, token, archive, data, format, entryFile, opts...)
+}
 
+// RenderHTTPFromDir renders data via a remote facet rendering service using the
+// report files in srcDir.
+func RenderHTTPFromDir(ctx context.Context, baseURL, token string, data any, format, srcDir, entryFile string, opts ...RenderHTTPOptions) ([]byte, error) {
+	archive, err := BuildArchiveFromDir(srcDir)
+	if err != nil {
+		return nil, fmt.Errorf("build report archive: %w", err)
+	}
+	return renderHTTPWithArchive(ctx, baseURL, token, archive, data, format, entryFile, opts...)
+}
+
+func renderHTTPWithArchive(ctx context.Context, baseURL, token string, archive []byte, data any, format, entryFile string, opts ...RenderHTTPOptions) ([]byte, error) {
 	dataJSON, err := json.Marshal(data)
 	if err != nil {
 		return nil, fmt.Errorf("marshal data: %w", err)
@@ -286,6 +306,53 @@ func BuildArchive() ([]byte, error) {
 		}
 		if err := tw.WriteHeader(&tar.Header{
 			Name: path,
+			Size: int64(len(data)),
+			Mode: 0600,
+		}); err != nil {
+			return err
+		}
+		_, err = tw.Write(data)
+		return err
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+	if err := gw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+// BuildArchiveFromDir creates a tar.gz archive of all report files in srcDir.
+func BuildArchiveFromDir(srcDir string) ([]byte, error) {
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gw)
+
+	err := filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, err := filepath.Rel(srcDir, path)
+		if err != nil {
+			return err
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if rel == "package.json" {
+			data, err = sanitizeReportPackageJSON(data, false)
+			if err != nil {
+				return err
+			}
+		}
+		if err := tw.WriteHeader(&tar.Header{
+			Name: filepath.ToSlash(rel),
 			Size: int64(len(data)),
 			Mode: 0600,
 		}); err != nil {
