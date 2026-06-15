@@ -13,15 +13,17 @@ import (
 	"time"
 
 	"github.com/charmbracelet/huh"
+	"github.com/flanksource/incident-commander/auth/oidcclient"
 	"github.com/spf13/cobra"
 )
 
 type MCContext struct {
-	Name       string            `json:"name"`
-	Server     string            `json:"server,omitempty"`
-	DB         string            `json:"db,omitempty"`
-	Token      string            `json:"token,omitempty"`
-	Properties map[string]string `json:"properties,omitempty"`
+	Name       string             `json:"name"`
+	Server     string             `json:"server,omitempty"`
+	DB         string             `json:"db,omitempty"`
+	Token      string             `json:"token,omitempty"`
+	OIDC       *oidcclient.Tokens `json:"oidc,omitempty"`
+	Properties map[string]string  `json:"properties,omitempty"`
 }
 
 type MCConfig struct {
@@ -133,7 +135,39 @@ func ContextHasAPI() (*MCContext, bool) {
 		return nil, false
 	}
 	ctx := cfg.CurrentMCContext()
-	return ctx, ctx != nil && ctx.Server != "" && ctx.Token != ""
+	return ctx, ctx != nil && ctx.Server != "" && ctx.HasAuth()
+}
+
+func (c *MCContext) HasAuth() bool {
+	return c != nil && (c.AccessToken() != "" || (c.OIDC != nil && c.OIDC.RefreshToken != ""))
+}
+
+func (c *MCContext) AccessToken() string {
+	if c == nil {
+		return ""
+	}
+	if c.OIDC != nil && c.OIDC.AccessToken != "" {
+		return c.OIDC.AccessToken
+	}
+	return c.Token
+}
+
+func (c *MCContext) SetOIDCTokens(tokens *oidcclient.Tokens) {
+	if c == nil {
+		return
+	}
+	c.OIDC = cloneOIDCTokens(tokens)
+	if tokens != nil && tokens.AccessToken != "" {
+		c.Token = ""
+	}
+}
+
+func cloneOIDCTokens(tokens *oidcclient.Tokens) *oidcclient.Tokens {
+	if tokens == nil {
+		return nil
+	}
+	clone := *tokens
+	return &clone
 }
 
 var ContextCmd = &cobra.Command{
@@ -332,14 +366,19 @@ Examples:
 				return err
 			}
 			ctx.Server = server
+			if !cmd.Flags().Changed("token") {
+				ctx.Token = ""
+				ctx.OIDC = nil
+			}
 		}
 		if cmd.Flags().Changed("db-url") {
 			ctx.DB = contextAddDB
 		}
 		if cmd.Flags().Changed("token") {
 			ctx.Token = contextAddToken
+			ctx.OIDC = nil
 		}
-		if ctx.Server != "" && !cmd.Flags().Changed("token") && (ctx.Token == "" || cmd.Flags().Changed("server")) {
+		if ctx.Server != "" && !cmd.Flags().Changed("token") && !ctx.HasAuth() {
 			if err := EnsureContextToken(cmd, &ctx, cmd.ErrOrStderr()); err != nil {
 				return err
 			}
@@ -367,41 +406,26 @@ Examples:
 }
 
 func EnsureContextToken(cmd *cobra.Command, ctx *MCContext, status io.Writer) error {
-	if ctx == nil || ctx.Server == "" || ctx.Token != "" {
+	if ctx == nil || ctx.Server == "" || ctx.AccessToken() != "" {
 		return nil
 	}
-	if token, err := storedAccessToken(ctx.Server); err == nil && token != "" {
-		ctx.Token = token
-		return nil
-	} else if err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("failed to load stored tokens for %s: %w", ctx.Server, err)
+	if ctx.OIDC != nil && ctx.OIDC.RefreshToken != "" {
+		if token, err := resolveContextToken(ctx); err == nil && token != "" {
+			return nil
+		}
 	}
 
 	var lastErr error
 	for _, loginServer := range oidcLoginServerCandidates(ctx.Server) {
 		fmt.Fprintf(status, "No token configured for context %q; starting OIDC login for %s\n", ctx.Name, loginServer)
-		tokens, _, err := oidcLogin(cmd, loginServer, status)
+		tokens, err := oidcLogin(cmd, loginServer, status)
 		if err == nil {
-			ctx.Token = tokens.AccessToken
+			ctx.SetOIDCTokens(tokens)
 			return nil
 		}
 		lastErr = err
 	}
 	return fmt.Errorf("OAuth login failed for %s: %w", ctx.Server, lastErr)
-}
-
-func storedAccessToken(serverURL string) (string, error) {
-	stored, err := loadStoredOIDCTokens(serverURL)
-	if err != nil {
-		return "", err
-	}
-	if stored == nil || stored.Tokens == nil || stored.Tokens.AccessToken == "" {
-		return "", nil
-	}
-	if !stored.Tokens.ExpiresAt.IsZero() && time.Until(stored.Tokens.ExpiresAt) < time.Minute {
-		return "", nil
-	}
-	return stored.Tokens.AccessToken, nil
 }
 
 func oidcLoginServerCandidates(serverURL string) []string {

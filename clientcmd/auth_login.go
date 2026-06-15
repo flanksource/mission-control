@@ -2,15 +2,12 @@ package clientcmd
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -42,65 +39,71 @@ func runAuthLogin(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return err
 	}
-	loginServerURL := oidcLoginServerCandidates(apiServer)[0]
-
 	if loginToken != "" {
-		path, err := storeTokens(loginServerURL, &oidcclient.Tokens{AccessToken: loginToken})
-		if err != nil {
-			return fmt.Errorf("failed to save token: %w", err)
-		}
-		contextName, err := saveLoginContext(apiServer, loginToken)
+		contextName, err := saveTokenContext(apiServer, loginToken)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Token stored for %s\n", loginServerURL)
-		fmt.Fprintf(cmd.OutOrStdout(), "Tokens saved to: %s\n", path)
+		fmt.Fprintf(cmd.OutOrStdout(), "Token stored for %s\n", apiServer)
 		fmt.Fprintf(cmd.OutOrStdout(), "Context %q saved for %s\n", contextName, apiServer)
 		fmt.Fprintf(cmd.OutOrStdout(), "Run `whoami` to verify connectivity.\n")
 		return nil
 	}
 
-	tokens, tokenPath, err := performOIDCLoginForAPIBase(cmd, apiServer, cmd.OutOrStdout())
+	tokens, err := performOIDCLoginForAPIBase(cmd, apiServer, cmd.OutOrStdout())
 	if err != nil {
 		return err
 	}
-	contextName, err := saveLoginContext(apiServer, tokens.AccessToken)
+	contextName, err := saveLoginContext(apiServer, tokens)
 	if err != nil {
 		return err
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "\nLogin successful!\n\n")
-	fmt.Fprintf(cmd.OutOrStdout(), "Tokens saved to: %s\n", tokenPath)
+	fmt.Fprintf(cmd.OutOrStdout(), "OIDC tokens saved to: %s\n", configPath())
 	fmt.Fprintf(cmd.OutOrStdout(), "Context %q saved for %s\n", contextName, apiServer)
 	fmt.Fprintf(cmd.OutOrStdout(), "Access token expires: %s\n", tokens.ExpiresAt.Format(time.RFC3339))
 
 	return nil
 }
 
-func performOIDCLoginForAPIBase(cmd *cobra.Command, apiServer string, status io.Writer) (*oidcclient.Tokens, string, error) {
+func performOIDCLoginForAPIBase(cmd *cobra.Command, apiServer string, status io.Writer) (*oidcclient.Tokens, error) {
 	var lastErr error
 	for _, loginServer := range oidcLoginServerCandidates(apiServer) {
-		tokens, tokenPath, err := oidcLogin(cmd, loginServer, status)
+		tokens, err := oidcLogin(cmd, loginServer, status)
 		if err == nil {
-			return tokens, tokenPath, nil
+			return tokens, nil
 		}
 		lastErr = err
 	}
-	return nil, "", fmt.Errorf("OIDC login failed for %s: %w", apiServer, lastErr)
+	return nil, fmt.Errorf("OIDC login failed for %s: %w", apiServer, lastErr)
 }
 
-func saveLoginContext(serverURL, token string) (string, error) {
+func saveLoginContext(serverURL string, tokens *oidcclient.Tokens) (string, error) {
+	return saveAuthContext(serverURL, func(ctx *MCContext) {
+		ctx.SetOIDCTokens(tokens)
+	})
+}
+
+func saveTokenContext(serverURL, token string) (string, error) {
+	return saveAuthContext(serverURL, func(ctx *MCContext) {
+		ctx.Token = token
+		ctx.OIDC = nil
+	})
+}
+
+func saveAuthContext(serverURL string, apply func(*MCContext)) (string, error) {
 	cfg, err := LoadConfig()
 	if err != nil {
 		return "", err
 	}
 	name := ServerToContextName(serverURL)
-	ctx := MCContext{Name: name, Server: serverURL, Token: token}
+	ctx := MCContext{Name: name, Server: serverURL}
 	if existing := cfg.GetContext(name); existing != nil {
 		ctx = *existing
 		ctx.Server = serverURL
-		ctx.Token = token
 	}
+	apply(&ctx)
 	cfg.SetContext(ctx)
 	cfg.CurrentContext = name
 	return name, SaveConfig(cfg)
@@ -108,25 +111,25 @@ func saveLoginContext(serverURL, token string) (string, error) {
 
 var oidcLogin = PerformOIDCLogin
 
-func PerformOIDCLogin(cmd *cobra.Command, serverURL string, status io.Writer) (*oidcclient.Tokens, string, error) {
+func PerformOIDCLogin(cmd *cobra.Command, serverURL string, status io.Writer) (*oidcclient.Tokens, error) {
 	if status == nil {
 		status = io.Discard
 	}
 	endpoints, err := oidcclient.Discover(serverURL + "/.well-known/openid-configuration")
 	if err != nil {
-		return nil, "", fmt.Errorf("OIDC discovery failed: %w", err)
+		return nil, fmt.Errorf("OIDC discovery failed: %w", err)
 	}
 
 	verifier, challenge, err := oidcclient.GeneratePKCE()
 	if err != nil {
-		return nil, "", fmt.Errorf("PKCE generation failed: %w", err)
+		return nil, fmt.Errorf("PKCE generation failed: %w", err)
 	}
 	state := oidcclient.RandomBase64(16)
 	nonce := oidcclient.RandomBase64(16)
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to start local server: %w", err)
+		return nil, fmt.Errorf("failed to start local server: %w", err)
 	}
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", listener.Addr().(*net.TCPAddr).Port)
 
@@ -189,65 +192,20 @@ func PerformOIDCLogin(cmd *cobra.Command, serverURL string, status io.Writer) (*
 	select {
 	case code = <-codeCh:
 	case err = <-errCh:
-		return nil, "", err
+		return nil, err
 	case <-time.After(5 * time.Minute):
-		return nil, "", fmt.Errorf("login timed out")
+		return nil, fmt.Errorf("login timed out")
 	}
 
 	tokens, err := oidcclient.ExchangeCode(endpoints.TokenEndpoint, code, redirectURI, verifier)
 	if err != nil {
-		return nil, "", fmt.Errorf("token exchange failed: %w", err)
+		return nil, fmt.Errorf("token exchange failed: %w", err)
 	}
 
 	if err := oidcclient.ValidateNonce(tokens.IDToken, nonce); err != nil {
-		return nil, "", fmt.Errorf("nonce validation failed: %w", err)
+		return nil, fmt.Errorf("nonce validation failed: %w", err)
 	}
-
-	tokenPath, err := storeTokens(serverURL, tokens)
-	if err != nil {
-		return nil, "", fmt.Errorf("failed to save tokens: %w", err)
-	}
-	return tokens, tokenPath, nil
-}
-
-func storeTokens(serverURL string, tokens *oidcclient.Tokens) (string, error) {
-	path, err := tokenPath(serverURL)
-	if err != nil {
-		return "", err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return "", err
-	}
-	data, err := json.MarshalIndent(tokens, "", "  ")
-	if err != nil {
-		return "", err
-	}
-	return path, os.WriteFile(path, data, 0600)
-}
-
-func tokenPath(serverURL string) (string, error) {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		return "", err
-	}
-	host := strings.NewReplacer("://", "_", "/", "_", ":", "_").Replace(serverURL)
-	return filepath.Join(dir, "mission-control", fmt.Sprintf("tokens_%s.json", host)), nil
-}
-
-func LoadStoredTokens(serverURL string) (*oidcclient.Tokens, error) {
-	path, err := tokenPath(serverURL)
-	if err != nil {
-		return nil, err
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-	var tokens oidcclient.Tokens
-	if err := json.Unmarshal(data, &tokens); err != nil {
-		return nil, err
-	}
-	return &tokens, nil
+	return tokens, nil
 }
 
 func openBrowser(url string) error {

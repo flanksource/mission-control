@@ -191,7 +191,7 @@ func refreshCurrentContextCache(ctx gocontext.Context, force bool) (*ContextCach
 		return result, nil
 	}
 
-	token, err := ResolveContextToken(mc)
+	token, err := resolveContextToken(mc)
 	if err != nil {
 		return result, err
 	}

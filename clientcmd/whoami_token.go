@@ -15,24 +15,6 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
-func loadStoredOIDCTokens(server string) (*storedOIDCToken, error) {
-	var firstErr error
-	for _, candidate := range oidcServerCandidates(server) {
-		tokens, err := LoadStoredTokens(candidate)
-		if err == nil {
-			path, _ := tokenPath(candidate)
-			return &storedOIDCToken{Tokens: tokens, Server: candidate, Path: path}, nil
-		}
-		if firstErr == nil {
-			firstErr = err
-		}
-	}
-	if firstErr == nil {
-		firstErr = os.ErrNotExist
-	}
-	return nil, firstErr
-}
-
 func oidcServerCandidates(server string) []string {
 	server = strings.TrimRight(server, "/")
 	candidates := []string{server}
@@ -49,62 +31,48 @@ func oidcTokenExpiring(tokens *oidcclient.Tokens) bool {
 	return tokens.AccessToken == "" || (!tokens.ExpiresAt.IsZero() && time.Until(tokens.ExpiresAt) < time.Minute)
 }
 
-func shouldUseStoredOIDCToken(contextToken, previousStoredToken string, tokens *oidcclient.Tokens) bool {
-	if tokens == nil || tokens.AccessToken == "" || oidcTokenExpiring(tokens) {
-		return false
+func refreshOIDCTokens(server string, tokens *oidcclient.Tokens) (*oidcclient.Tokens, error) {
+	if tokens == nil {
+		return nil, fmt.Errorf("no OIDC tokens")
 	}
-	if contextToken == "" || contextToken == previousStoredToken {
-		return true
-	}
-	return !isMissionControlAccessTokenFormat(contextToken)
-}
-
-func refreshOIDCTokens(server string, stored *storedOIDCToken) (*storedOIDCToken, error) {
-	if stored == nil || stored.Tokens == nil {
-		return nil, fmt.Errorf("no stored OIDC tokens")
-	}
-	if stored.Tokens.RefreshToken == "" {
+	if tokens.RefreshToken == "" {
 		return nil, fmt.Errorf("no refresh token")
 	}
 
 	var lastErr error
-	for _, candidate := range oidcServerCandidates(firstNonEmpty(stored.Server, server)) {
+	for _, candidate := range oidcServerCandidates(server) {
 		endpoints, err := oidcclient.Discover(strings.TrimRight(candidate, "/") + "/.well-known/openid-configuration")
 		if err != nil {
 			lastErr = err
 			continue
 		}
-		refreshed, err := oidcclient.RefreshToken(endpoints.TokenEndpoint, stored.Tokens.RefreshToken)
+		refreshed, err := oidcclient.RefreshToken(endpoints.TokenEndpoint, tokens.RefreshToken)
 		if err != nil {
 			lastErr = err
 			continue
 		}
 		if refreshed.RefreshToken == "" {
-			refreshed.RefreshToken = stored.Tokens.RefreshToken
+			refreshed.RefreshToken = tokens.RefreshToken
 		}
 		if refreshed.IDToken == "" {
-			refreshed.IDToken = stored.Tokens.IDToken
+			refreshed.IDToken = tokens.IDToken
 		}
-		path, err := storeTokens(candidate, refreshed)
-		if err != nil {
-			return nil, err
-		}
-		return &storedOIDCToken{Tokens: refreshed, Server: candidate, Path: path}, nil
+		return refreshed, nil
 	}
 	return nil, lastErr
 }
 
-func updateContextToken(cfg *MCConfig, name, token string) {
-	if cfg == nil || name == "" || token == "" {
+func updateContextOIDCTokens(cfg *MCConfig, name string, tokens *oidcclient.Tokens) {
+	if cfg == nil || name == "" || tokens == nil {
 		return
 	}
 	ctx := cfg.GetContext(name)
-	if ctx == nil || ctx.Token == token {
+	if ctx == nil {
 		return
 	}
-	ctx.Token = token
+	ctx.SetOIDCTokens(tokens)
 	if err := SaveConfig(cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to update context token: %v\n", err)
+		fmt.Fprintf(os.Stderr, "failed to update context OIDC tokens: %v\n", err)
 	}
 }
 
@@ -183,23 +151,6 @@ func hashMissionControlAccessToken(token string) (string, error) {
 
 	hash := argon2.IDKey([]byte(fields[0]), []byte(fields[1]), timeCost, memoryCost, parallelism, 20)
 	return base64.URLEncoding.EncodeToString(hash), nil
-}
-
-func isMissionControlAccessTokenFormat(token string) bool {
-	fields := strings.Split(token, ".")
-	if len(fields) != 5 {
-		return false
-	}
-	if _, err := parseUint32(fields[2]); err != nil {
-		return false
-	}
-	if _, err := parseUint32(fields[3]); err != nil {
-		return false
-	}
-	if _, err := parseUint8(fields[4]); err != nil {
-		return false
-	}
-	return true
 }
 
 func parseUint32(s string) (uint32, error) {

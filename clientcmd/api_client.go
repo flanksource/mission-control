@@ -3,10 +3,10 @@ package clientcmd
 import (
 	"context"
 	"fmt"
-	"os"
 	"sync"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/incident-commander/auth/oidcclient"
 	"github.com/flanksource/incident-commander/sdk"
 )
 
@@ -15,7 +15,7 @@ func NewAPIClient(mcCtx *MCContext, opts ...sdk.ClientOption) *sdk.Client {
 		return nil
 	}
 	opts = append([]sdk.ClientOption{sdk.WithTokenProvider(contextTokenProvider(mcCtx))}, opts...)
-	return NewAPIClientForServer(mcCtx.Server, mcCtx.Token, opts...)
+	return NewAPIClientForServer(mcCtx.Server, mcCtx.AccessToken(), opts...)
 }
 
 func NewAPIClientForServer(server, token string, opts ...sdk.ClientOption) *sdk.Client {
@@ -27,61 +27,42 @@ func contextTokenProvider(mcCtx *MCContext) sdk.TokenProvider {
 	return func(context.Context) (string, error) {
 		mu.Lock()
 		defer mu.Unlock()
-		return ResolveContextToken(mcCtx)
+		return resolveContextToken(mcCtx)
 	}
 }
 
-func ResolveContextToken(mcCtx *MCContext) (string, error) {
+func resolveContextToken(mcCtx *MCContext) (string, error) {
 	if mcCtx == nil {
 		return "", nil
 	}
-	token := mcCtx.Token
-	if mcCtx.Server == "" {
-		return token, nil
+	if mcCtx.Server == "" || mcCtx.OIDC == nil {
+		return mcCtx.AccessToken(), nil
+	}
+	if !shouldRefreshOIDCToken(mcCtx.OIDC) {
+		return mcCtx.AccessToken(), nil
 	}
 
-	stored, err := loadStoredOIDCTokens(mcCtx.Server)
+	previousAccessToken := mcCtx.OIDC.AccessToken
+	logger.Debugf("refreshing OIDC token for context %q server %s", mcCtx.Name, mcCtx.Server)
+	refreshed, err := refreshOIDCTokens(mcCtx.Server, mcCtx.OIDC)
 	if err != nil {
-		if token != "" || os.IsNotExist(err) {
-			return token, nil
+		logger.Debugf("failed to refresh OIDC token for context %q server %s: %v", mcCtx.Name, mcCtx.Server, err)
+		if mcCtx.Token != "" && mcCtx.Token != previousAccessToken {
+			return mcCtx.Token, nil
 		}
-		return "", fmt.Errorf("failed to load stored tokens for %s: %w", mcCtx.Server, err)
-	}
-	if stored == nil || stored.Tokens == nil {
-		return token, nil
+		return "", fmt.Errorf("refresh OIDC token for %s: %w", mcCtx.Server, err)
 	}
 
-	previousStoredToken := stored.Tokens.AccessToken
-	if shouldRefreshStoredToken(token, previousStoredToken, stored) {
-		logger.Debugf("refreshing OIDC token for context %q server %s", mcCtx.Name, mcCtx.Server)
-		refreshed, err := refreshOIDCTokens(mcCtx.Server, stored)
-		if err != nil {
-			logger.Debugf("failed to refresh OIDC token for context %q server %s: %v", mcCtx.Name, mcCtx.Server, err)
-			if token != "" && token != previousStoredToken {
-				return token, nil
-			}
-			return "", fmt.Errorf("refresh OIDC token for %s: %w", mcCtx.Server, err)
-		}
-		logger.Debugf("refreshed OIDC token for context %q server %s", mcCtx.Name, mcCtx.Server)
-		stored = refreshed
+	logger.Debugf("refreshed OIDC token for context %q server %s", mcCtx.Name, mcCtx.Server)
+	mcCtx.SetOIDCTokens(refreshed)
+	if cfg, err := LoadConfig(); err == nil {
+		updateContextOIDCTokens(cfg, mcCtx.Name, refreshed)
+	} else {
+		return "", fmt.Errorf("failed to update context OIDC tokens: %w", err)
 	}
-
-	if shouldUseStoredOIDCToken(token, previousStoredToken, stored.Tokens) {
-		token = stored.Tokens.AccessToken
-		mcCtx.Token = token
-		if cfg, err := LoadConfig(); err == nil {
-			updateContextToken(cfg, mcCtx.Name, token)
-		} else {
-			return "", fmt.Errorf("failed to update context token: %w", err)
-		}
-	}
-
-	return token, nil
+	return mcCtx.AccessToken(), nil
 }
 
-func shouldRefreshStoredToken(contextToken, previousStoredToken string, stored *storedOIDCToken) bool {
-	if stored == nil || stored.Tokens == nil || !oidcTokenExpiring(stored.Tokens) || stored.Tokens.RefreshToken == "" {
-		return false
-	}
-	return contextToken == "" || contextToken == previousStoredToken || !isMissionControlAccessTokenFormat(contextToken)
+func shouldRefreshOIDCToken(tokens *oidcclient.Tokens) bool {
+	return tokens != nil && oidcTokenExpiring(tokens) && tokens.RefreshToken != ""
 }

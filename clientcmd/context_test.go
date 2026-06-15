@@ -17,7 +17,7 @@ import (
 )
 
 var _ = ginkgo.Describe("context token resolution", func() {
-	var oldOIDCLogin func(*cobra.Command, string, io.Writer) (*oidcclient.Tokens, string, error)
+	var oldOIDCLogin func(*cobra.Command, string, io.Writer) (*oidcclient.Tokens, error)
 
 	ginkgo.BeforeEach(func() {
 		oldOIDCLogin = oidcLogin
@@ -28,41 +28,41 @@ var _ = ginkgo.Describe("context token resolution", func() {
 
 	ginkgo.AfterEach(func() {
 		oidcLogin = oldOIDCLogin
+		contextAddName = ""
+		contextAddServer = ""
+		contextAddDB = ""
+		contextAddToken = ""
+		contextAddUse = false
 	})
 
-	ginkgo.It("reuses a stored access token before starting OIDC login", func() {
+	ginkgo.It("uses embedded OIDC tokens before starting OIDC login", func() {
 		server := "http://mission-control.local"
-		_, err := storeTokens(server, &oidcclient.Tokens{
-			AccessToken: "stored-token",
-			ExpiresAt:   time.Now().Add(time.Hour),
-		})
-		Expect(err).ToNot(HaveOccurred())
-
-		oidcLogin = func(*cobra.Command, string, io.Writer) (*oidcclient.Tokens, string, error) {
-			return nil, "", fmt.Errorf("unexpected login")
+		oidcLogin = func(*cobra.Command, string, io.Writer) (*oidcclient.Tokens, error) {
+			return nil, fmt.Errorf("unexpected login")
 		}
 
-		ctx := &MCContext{Name: "local", Server: server}
+		ctx := &MCContext{Name: "local", Server: server, OIDC: &oidcclient.Tokens{AccessToken: "stored-token"}}
 		Expect(EnsureContextToken(&cobra.Command{}, ctx, io.Discard)).To(Succeed())
-		Expect(ctx.Token).To(Equal("stored-token"))
+		Expect(ctx.AccessToken()).To(Equal("stored-token"))
 	})
 
 	ginkgo.It("starts OIDC login when no usable token is available", func() {
 		var stderr bytes.Buffer
-		oidcLogin = func(_ *cobra.Command, server string, status io.Writer) (*oidcclient.Tokens, string, error) {
+		oidcLogin = func(_ *cobra.Command, server string, status io.Writer) (*oidcclient.Tokens, error) {
 			Expect(server).To(Equal("http://mission-control.local"))
 			fmt.Fprint(status, "login started")
-			return &oidcclient.Tokens{AccessToken: "oauth-token"}, "", nil
+			return &oidcclient.Tokens{AccessToken: "oauth-token"}, nil
 		}
 
 		ctx := &MCContext{Name: "local", Server: "http://mission-control.local"}
 		Expect(EnsureContextToken(&cobra.Command{}, ctx, &stderr)).To(Succeed())
-		Expect(ctx.Token).To(Equal("oauth-token"))
+		Expect(ctx.Token).To(BeEmpty())
+		Expect(ctx.OIDC.AccessToken).To(Equal("oauth-token"))
 		Expect(stderr.String()).To(ContainSubstring("starting OIDC login"))
 		Expect(stderr.String()).To(ContainSubstring("login started"))
 	})
 
-	ginkgo.It("refreshes expiring stored OIDC tokens for API clients", func() {
+	ginkgo.It("refreshes expiring embedded OIDC tokens for API clients", func() {
 		var tokenRequests int
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			switch r.URL.Path {
@@ -96,63 +96,123 @@ var _ = ginkgo.Describe("context token resolution", func() {
 			Contexts: []MCContext{{
 				Name:   "local",
 				Server: server.URL,
-				Token:  "old-token",
+				OIDC: &oidcclient.Tokens{
+					AccessToken:  "old-token",
+					RefreshToken: "refresh-token",
+					ExpiresAt:    time.Now().Add(-time.Minute),
+				},
 			}},
 		}
 		Expect(SaveConfig(cfg)).To(Succeed())
-		_, err := storeTokens(server.URL, &oidcclient.Tokens{
-			AccessToken:  "old-token",
-			RefreshToken: "refresh-token",
-			ExpiresAt:    time.Now().Add(-time.Minute),
-		})
-		Expect(err).ToNot(HaveOccurred())
 
 		mcCtx := cfg.GetContext("local")
 		token, err := contextTokenProvider(mcCtx)(context.Background())
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(token).To(Equal("new-token"))
-		Expect(mcCtx.Token).To(Equal("new-token"))
+		Expect(mcCtx.Token).To(BeEmpty())
+		Expect(mcCtx.OIDC.AccessToken).To(Equal("new-token"))
+		Expect(mcCtx.OIDC.RefreshToken).To(Equal("next-refresh-token"))
 		Expect(tokenRequests).To(Equal(1))
-
-		stored, err := LoadStoredTokens(server.URL)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(stored.AccessToken).To(Equal("new-token"))
-		Expect(stored.RefreshToken).To(Equal("next-refresh-token"))
 
 		reloaded, err := LoadConfig()
 		Expect(err).ToNot(HaveOccurred())
-		Expect(reloaded.GetContext("local").Token).To(Equal("new-token"))
-	})
-
-	ginkgo.It("reuses frontend OIDC tokens for resolved /api contexts", func() {
-		server := "http://mission-control.local"
-		_, err := storeTokens(server, &oidcclient.Tokens{
-			AccessToken: "stored-token",
-			ExpiresAt:   time.Now().Add(time.Hour),
-		})
-		Expect(err).ToNot(HaveOccurred())
-
-		oidcLogin = func(*cobra.Command, string, io.Writer) (*oidcclient.Tokens, string, error) {
-			return nil, "", fmt.Errorf("unexpected login")
-		}
-
-		ctx := &MCContext{Name: "local", Server: server + "/api"}
-		Expect(EnsureContextToken(&cobra.Command{}, ctx, io.Discard)).To(Succeed())
-		Expect(ctx.Token).To(Equal("stored-token"))
+		Expect(reloaded.GetContext("local").Token).To(BeEmpty())
+		Expect(reloaded.GetContext("local").OIDC.AccessToken).To(Equal("new-token"))
 	})
 
 	ginkgo.It("starts OIDC login against the frontend URL for resolved /api contexts", func() {
 		var loginServer string
-		oidcLogin = func(_ *cobra.Command, server string, status io.Writer) (*oidcclient.Tokens, string, error) {
+		oidcLogin = func(_ *cobra.Command, server string, status io.Writer) (*oidcclient.Tokens, error) {
 			loginServer = server
-			return &oidcclient.Tokens{AccessToken: "oauth-token"}, "", nil
+			return &oidcclient.Tokens{AccessToken: "oauth-token"}, nil
 		}
 
 		ctx := &MCContext{Name: "local", Server: "http://mission-control.local/api"}
 		Expect(EnsureContextToken(&cobra.Command{}, ctx, io.Discard)).To(Succeed())
-		Expect(ctx.Token).To(Equal("oauth-token"))
+		Expect(ctx.OIDC.AccessToken).To(Equal("oauth-token"))
 		Expect(loginServer).To(Equal("http://mission-control.local"))
+	})
+
+	ginkgo.It("uses a manual context token when no OIDC tokens are configured", func() {
+		ctx := &MCContext{Name: "user-b", Server: "http://mission-control.local", Token: "user-b.jwt.token"}
+		token, err := resolveContextToken(ctx)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(token).To(Equal("user-b.jwt.token"))
+		Expect(ctx.Token).To(Equal("user-b.jwt.token"))
+	})
+
+	ginkgo.It("uses embedded OIDC tokens for same-server contexts", func() {
+		server := "http://mission-control.local"
+		cfg := &MCConfig{Contexts: []MCContext{
+			{Name: "user-a", Server: server, OIDC: &oidcclient.Tokens{AccessToken: "user-a.jwt.token", ExpiresAt: time.Now().Add(time.Hour)}},
+			{Name: "user-b", Server: server, OIDC: &oidcclient.Tokens{AccessToken: "user-b.jwt.token", ExpiresAt: time.Now().Add(time.Hour)}},
+		}}
+
+		ctx := cfg.GetContext("user-a")
+		token, err := resolveContextToken(ctx)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(token).To(Equal("user-a.jwt.token"))
+		Expect(ctx.OIDC.AccessToken).To(Equal("user-a.jwt.token"))
+	})
+
+	ginkgo.It("starts a fresh OIDC login when adding another context for the same server", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/api/health" {
+				_, _ = w.Write([]byte("OK"))
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		defer server.Close()
+
+		Expect(SaveConfig(&MCConfig{
+			CurrentContext: "admin",
+			Contexts: []MCContext{{
+				Name:   "admin",
+				Server: server.URL + "/api",
+				OIDC: &oidcclient.Tokens{
+					AccessToken:  "admin.jwt.token",
+					RefreshToken: "admin-refresh-token",
+					ExpiresAt:    time.Now().Add(time.Hour),
+				},
+			}},
+		})).To(Succeed())
+
+		var loginCount int
+		oidcLogin = func(_ *cobra.Command, loginServer string, _ io.Writer) (*oidcclient.Tokens, error) {
+			loginCount++
+			Expect(loginServer).To(Equal(server.URL))
+			return &oidcclient.Tokens{
+				AccessToken:  "viewer.jwt.token",
+				RefreshToken: "viewer-refresh-token",
+				ExpiresAt:    time.Now().Add(time.Hour),
+			}, nil
+		}
+
+		contextAddName = "viewer"
+		contextAddServer = server.URL
+		contextAddUse = true
+
+		cmd := &cobra.Command{}
+		cmd.SetOut(io.Discard)
+		cmd.SetErr(io.Discard)
+		cmd.Flags().String("server", "", "")
+		cmd.Flags().String("token", "", "")
+		cmd.Flags().String("db-url", "", "")
+		Expect(cmd.Flags().Set("server", server.URL)).To(Succeed())
+
+		Expect(contextAddCmd.RunE(cmd, nil)).To(Succeed())
+
+		Expect(loginCount).To(Equal(1))
+		cfg, err := LoadConfig()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(cfg.CurrentContext).To(Equal("viewer"))
+		Expect(cfg.GetContext("admin").OIDC.AccessToken).To(Equal("admin.jwt.token"))
+		Expect(cfg.GetContext("viewer").Token).To(BeEmpty())
+		Expect(cfg.GetContext("viewer").OIDC.AccessToken).To(Equal("viewer.jwt.token"))
 	})
 })
 

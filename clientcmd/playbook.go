@@ -97,7 +97,7 @@ func currentAPIContext(cmd *cobra.Command) (*MCContext, error) {
 	if mcCtx.Server == "" {
 		return nil, fmt.Errorf("current context %q must define a server for API playbook commands", mcCtx.Name)
 	}
-	if mcCtx.Token == "" {
+	if !mcCtx.HasAuth() {
 		if err := EnsureContextToken(cmd, mcCtx, cmd.ErrOrStderr()); err != nil {
 			return nil, err
 		}
