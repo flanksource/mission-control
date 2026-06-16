@@ -454,13 +454,6 @@ func RunAction(ctx context.Context, run *models.PlaybookRun, action *models.Play
 	defer span.End()
 
 	if err := TemplateAndExecuteAction(ctx, spec, playbook, run, action); err != nil {
-		if e, ok := oops.AsOops(err); ok {
-			if lo.Contains(e.Tags(), "db") {
-				// DB errors are retryable
-				return err
-			}
-		}
-
 		if ctx.IsTrace() {
 			ctx.Errorf("action failed: %+v", err)
 		} else if ctx.IsDebug() {
