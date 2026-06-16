@@ -43,7 +43,6 @@ import (
 	_ "github.com/flanksource/incident-commander/connection"
 	_ "github.com/flanksource/incident-commander/playbook"
 	_ "github.com/flanksource/incident-commander/plugin/gateway"
-	"github.com/flanksource/incident-commander/plugin/machinery"
 	_ "github.com/flanksource/incident-commander/shorturl"
 	_ "github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/teams"

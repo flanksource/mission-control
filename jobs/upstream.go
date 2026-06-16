@@ -12,6 +12,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 
+	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
+
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/artifacts"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
@@ -120,7 +122,7 @@ var RegisterPluginsWithUpstream = &job.Job{
 
 		var errs []string
 		for _, entry := range pluginpb.DefaultRegistry.List() {
-			if entry.Kind != pluginpb.PluginKindLocal || entry.Runtime == nil || entry.Manifest == nil {
+			if entry.Kind != pluginAPI.PluginKindLocal || entry.Runtime == nil || entry.Manifest == nil {
 				continue
 			}
 
