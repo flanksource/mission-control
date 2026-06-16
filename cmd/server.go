@@ -24,6 +24,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/application"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/connection"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
@@ -40,7 +41,6 @@ import (
 	// register event handlers & echo routers
 	_ "github.com/flanksource/incident-commander/artifacts"
 	_ "github.com/flanksource/incident-commander/catalog"
-	_ "github.com/flanksource/incident-commander/connection"
 	_ "github.com/flanksource/incident-commander/playbook"
 	_ "github.com/flanksource/incident-commander/plugin/gateway"
 	_ "github.com/flanksource/incident-commander/shorturl"
@@ -51,6 +51,10 @@ import (
 	"github.com/flanksource/incident-commander/vars"
 	"github.com/flanksource/incident-commander/views"
 )
+
+func init() {
+	echo.RegisterRoutes(connection.RegisterRoutes)
+}
 
 func launchKopper(ctx context.Context) {
 	mgr, err := kopper.Manager(&kopper.ManagerOptions{
