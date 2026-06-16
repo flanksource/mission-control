@@ -15,10 +15,11 @@ import (
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/api"
 	"google.golang.org/protobuf/proto"
 )
 
-func (s *Service) getConnectionByRef(ctx dutyContext.Context, ref string) (*pluginpb.ResolvedConnection, error) {
+func (s *Service) getConnectionByRef(ctx dutyContext.Context, ref string) (*api.ResolvedConnection, error) {
 	conn, err := dutyContext.FindConnectionByURL(ctx, ref)
 	if err != nil {
 		return nil, fmt.Errorf("find connection %q: %w", ref, err)
@@ -46,7 +47,7 @@ func (s *Service) getConnectionByRef(ctx dutyContext.Context, ref string) (*plug
 	return cloneResolvedConnection(resolved), nil
 }
 
-func (s *Service) getConnectionByID(ctx dutyContext.Context, connectionID string) (*pluginpb.ResolvedConnection, error) {
+func (s *Service) getConnectionByID(ctx dutyContext.Context, connectionID string) (*api.ResolvedConnection, error) {
 	if connectionID == "" {
 		return nil, fmt.Errorf("connection id is required")
 	}
@@ -58,7 +59,7 @@ func (s *Service) getConnectionByID(ctx dutyContext.Context, connectionID string
 	return pluginpb.ConnectionToProto(conn), nil
 }
 
-func (s *Service) getConnectionForConfig(ctx dutyContext.Context, configItemID string) (*pluginpb.ResolvedConnection, error) {
+func (s *Service) getConnectionForConfig(ctx dutyContext.Context, configItemID string) (*api.ResolvedConnection, error) {
 	scraper, err := models.FindScraperByConfigId(ctx.DB(), configItemID)
 	if err != nil {
 		return nil, fmt.Errorf("connection for config: find scraper for config %s: %w", configItemID, err)
@@ -81,7 +82,7 @@ func (s *Service) getConnectionForConfig(ctx dutyContext.Context, configItemID s
 	return nil, fmt.Errorf("connection for scraper %s: unsupported scraper type or no supported connection found", scraper.ID)
 }
 
-func (s *Service) connectionFromKubernetesScraper(ctx dutyContext.Context, specJSON string) (*pluginpb.ResolvedConnection, bool, error) {
+func (s *Service) connectionFromKubernetesScraper(ctx dutyContext.Context, specJSON string) (*api.ResolvedConnection, bool, error) {
 	var spec struct {
 		Kubernetes []dutyConn.KubernetesConnection `json:"kubernetes"`
 	}
@@ -122,7 +123,7 @@ func (s *Service) connectionFromKubernetesScraper(ctx dutyContext.Context, specJ
 	}), true, nil
 }
 
-func (s *Service) connectionFromSQLScraper(ctx dutyContext.Context, specJSON string) (*pluginpb.ResolvedConnection, bool, error) {
+func (s *Service) connectionFromSQLScraper(ctx dutyContext.Context, specJSON string) (*api.ResolvedConnection, bool, error) {
 	var spec struct {
 		SQL []struct {
 			Connection     string `json:"connection"`
@@ -171,11 +172,11 @@ func (s *Service) connectionFromSQLScraper(ctx dutyContext.Context, specJSON str
 	return nil, true, fmt.Errorf("no sql.connection set")
 }
 
-func cloneResolvedConnection(conn *pluginpb.ResolvedConnection) *pluginpb.ResolvedConnection {
+func cloneResolvedConnection(conn *api.ResolvedConnection) *api.ResolvedConnection {
 	if conn == nil {
 		return nil
 	}
-	return proto.Clone(conn).(*pluginpb.ResolvedConnection)
+	return proto.Clone(conn).(*api.ResolvedConnection)
 }
 
 func parseRawSQLConnection(connection string) *models.Connection {

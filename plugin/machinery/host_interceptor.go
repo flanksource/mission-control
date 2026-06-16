@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api"
+	commanderAPI "github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/plugin"
+	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
 	"github.com/google/uuid"
+	"github.com/samber/oops"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -18,14 +21,66 @@ import (
 func (s *Service) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		if !requiresInvocation(info.FullMethod) {
-			return handler(ctx, req)
+			resp, err := handler(ctx, req)
+			return resp, grpcErrorFromError(err)
 		}
 
 		invocationCtx, err := s.contextWithInvocation(ctx)
 		if err != nil {
-			return nil, err
+			return nil, grpcErrorFromError(err)
 		}
-		return handler(invocationCtx, req)
+		resp, err := handler(invocationCtx, req)
+		return resp, grpcErrorFromError(err)
+	}
+}
+
+func grpcErrorFromError(err error) error {
+	if err == nil {
+		return nil
+	}
+
+	if _, ok := status.FromError(err); ok {
+		return err
+	}
+
+	if errors.Is(err, context.Canceled) {
+		return status.Error(codes.Canceled, err.Error())
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return status.Error(codes.DeadlineExceeded, err.Error())
+	}
+
+	var oopsErr oops.OopsError
+	if errors.As(err, &oopsErr) {
+		if code, ok := dutyAPI.DomainCodeFromDBError(err); ok {
+			return status.Error(grpcCodeFromDomainCode(code), oopsErr.Error())
+		}
+
+		code, _ := oopsErr.Code().(string)
+		return status.Error(grpcCodeFromDomainCode(code), oopsErr.Error())
+	}
+
+	return status.Error(grpcCodeFromDomainCode(dutyAPI.ErrorCode(err)), dutyAPI.ErrorMessage(err))
+}
+
+func grpcCodeFromDomainCode(code string) codes.Code {
+	switch code {
+	case dutyAPI.ECONFLICT:
+		return codes.AlreadyExists
+	case dutyAPI.EINVALID:
+		return codes.InvalidArgument
+	case dutyAPI.ENOTFOUND:
+		return codes.NotFound
+	case dutyAPI.EFORBIDDEN:
+		return codes.PermissionDenied
+	case dutyAPI.ENOTIMPLEMENTED:
+		return codes.Unimplemented
+	case dutyAPI.EUNAUTHORIZED:
+		return codes.Unauthenticated
+	case dutyAPI.EINTERNAL:
+		return codes.Internal
+	default:
+		return codes.Internal
 	}
 }
 
@@ -54,7 +109,7 @@ func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, e
 		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
 
-	values := md.Get(plugin.InvocationTokenGRPCMetadataKey)
+	values := md.Get(pluginAPI.InvocationTokenGRPCMetadataKey)
 	if len(values) == 0 || values[0] == "" {
 		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
@@ -67,7 +122,7 @@ func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, e
 	}
 
 	baseCtx := s.ctx.Wrap(ctx).WithSubject(claims.Subject).WithValue(invocationClaimsContextKey{}, claims)
-	if api.UpstreamConf.Valid() {
+	if commanderAPI.UpstreamConf.Valid() {
 		return baseCtx, nil
 	}
 
@@ -84,10 +139,10 @@ func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, e
 
 func requiresInvocation(method string) bool {
 	switch method {
-	case plugin.HostService_GetConfigItem_FullMethodName,
-		plugin.HostService_ListConfigs_FullMethodName,
-		plugin.HostService_GetConnection_FullMethodName,
-		plugin.HostService_InvokePlugin_FullMethodName:
+	case pluginAPI.HostService_GetConfigItem_FullMethodName,
+		pluginAPI.HostService_ListConfigs_FullMethodName,
+		pluginAPI.HostService_GetConnection_FullMethodName,
+		pluginAPI.HostService_InvokePlugin_FullMethodName:
 		return true
 	default:
 		return false

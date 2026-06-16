@@ -21,6 +21,8 @@ jobs:
           go-version: 1.26.x
           cache: false
       - run: make -B manifests
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # For deps
       - run: make auth/oidc/static/tailwind.min.js
       - run: make ui
       - name: golangci-lint

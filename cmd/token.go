@@ -18,13 +18,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/vars"
 )
-
-var Auth = &cobra.Command{
-	Use: "auth",
-}
 
 var Token = &cobra.Command{
 	Use:    "token",
@@ -178,7 +175,7 @@ func resetBasicPassword(user, password, htpasswdFile string) error {
 }
 
 func init() {
-	Auth.AddCommand(Token, Check, PasswordReset)
+	clientcmd.AuthCmd.AddCommand(Token, Check, PasswordReset)
 
 	Token.Flags().StringVar(&tokenUser, "user", "", "User to generate a token for")
 	Token.Flags().DurationVar(&tokenExpiry, "expiry", time.Hour*4, "Expiry duration for token")
@@ -187,6 +184,4 @@ func init() {
 	PasswordReset.Flags().StringVar(&vars.AuthMode, "auth", "", "Auth type: kratos, basic")
 	PasswordReset.Flags().StringVar(&auth.KratosAdminAPI, "kratos-admin", "http://kratos-admin:80", "Kratos Admin API service")
 	PasswordReset.Flags().StringVar(&auth.HtpasswdFile, "htpasswd-file", "htpasswd", "Path to htpasswd file for basic authentication")
-
-	Root.AddCommand(Auth)
 }

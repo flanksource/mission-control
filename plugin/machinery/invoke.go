@@ -16,6 +16,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/api"
 )
 
 const MaxInvokeDepth = 5
@@ -40,7 +41,7 @@ type Request struct {
 	Timeout time.Duration
 }
 
-func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeResponse, *plugin.Entry, error) {
+func InvokeOperation(ctx dutyContext.Context, req Request) (*api.InvokeResponse, *plugin.Entry, error) {
 	if req.PluginRef == "" {
 		return nil, nil, dutyAPI.Errorf(dutyAPI.EINVALID, "plugin is required")
 	}
@@ -110,10 +111,10 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*plugin.InvokeRespon
 	}
 
 	invokeCtx = invokeCtx.
-		Wrap(metadata.AppendToOutgoingContext(invokeCtx, plugin.InvocationTokenGRPCMetadataKey, token)).
+		Wrap(metadata.AppendToOutgoingContext(invokeCtx, api.InvocationTokenGRPCMetadataKey, token)).
 		WithSubject(subject)
 
-	resp, err := Invoke(invokeCtx, entry.ID, &plugin.InvokeRequest{
+	resp, err := Invoke(invokeCtx, entry.ID, &api.InvokeRequest{
 		Operation:    req.Operation,
 		ParamsJson:   req.ParamsJSON,
 		ConfigItemId: req.ConfigItemID,
@@ -136,7 +137,7 @@ func ResolvePlugin(ctx dutyContext.Context, ref string) (*plugin.Entry, error) {
 	return entry, nil
 }
 
-func OperationDef(entry *plugin.Entry, op string) *plugin.OperationDef {
+func OperationDef(entry *plugin.Entry, op string) *api.OperationDef {
 	if entry == nil || entry.Manifest == nil {
 		return nil
 	}

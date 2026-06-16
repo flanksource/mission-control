@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
@@ -77,21 +76,20 @@ func ValidateInvocationToken(tokenString string) (*InvocationTokenClaims, error)
 // operation request where the route already determines the expected plugin. If
 // the request came from upstream over the trusted tunnel, the upstream JWK is
 // used; otherwise the local signing key is used.
-func ValidateRequestInvocationToken(ctx context.Context, token string, pluginID uuid.UUID) (*InvocationTokenClaims, error) {
-	if ctx != nil && auth.IsTrustedUpstream(ctx) && api.UpstreamConf.JWK != "" {
+func ValidateRequestInvocationToken(_ context.Context, token string, pluginID uuid.UUID) (*InvocationTokenClaims, error) {
+	claims, err := ValidateInvocationToken(token)
+	if err == nil {
+		if claims.Plugin != pluginID {
+			return nil, fmt.Errorf("plugin invocation token is for plugin %q, not %q", claims.Plugin, pluginID)
+		}
+		return claims, nil
+	}
+
+	if api.UpstreamConf.JWK != "" {
 		return validateInvocationTokenWithJWK(token, api.UpstreamConf.JWK, &pluginID)
 	}
 
-	claims, err := ValidateInvocationToken(token)
-	if err != nil {
-		return nil, err
-	}
-
-	if claims.Plugin != pluginID {
-		return nil, fmt.Errorf("plugin invocation token is for plugin %q, not %q", claims.Plugin, pluginID)
-	}
-
-	return claims, nil
+	return nil, err
 }
 
 // ValidateHostInvocationToken validates tokens presented by a plugin to the host

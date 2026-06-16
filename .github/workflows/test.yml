@@ -69,10 +69,18 @@ jobs:
           /usr/local/bin/bun --version
 
       - name: Install facet
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          curl -sL $(curl -s https://api.github.com/repos/flanksource/facet/releases/latest | jq -r '.assets[] | select(.name == "facet-linux-x64") | .browser_download_url') -o /usr/local/bin/facet
+          set -euo pipefail
+          # Authenticate the API call so it doesn't hit the anonymous rate limit
+          # (which returns an HTML error page that then gets saved as the binary).
+          url=$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            https://api.github.com/repos/flanksource/facet/releases/latest \
+            | jq -r '.assets[] | select(.name == "facet-linux-x64") | .browser_download_url')
+          [ -n "$url" ] || { echo "::error::could not resolve facet download URL"; exit 1; }
+          curl -fsSL "$url" -o /usr/local/bin/facet
           chmod +x /usr/local/bin/facet
-          facet --help
           facet --version
 
       - name: Inject GEMINI_API_KEY
@@ -82,6 +90,8 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Test
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make static ci-test
 
       - name: Publish Unit Test Results

@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	stdhttp "net/http"
 	"net/url"
 	"strings"
 
+	"github.com/flanksource/clicky/rpc"
 	"github.com/flanksource/commons/http"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
@@ -16,21 +19,45 @@ import (
 	"github.com/flanksource/incident-commander/pkg/httpobservability"
 )
 
-// ErrHTMLResponse is returned when the server responded with HTML on a JSON
-// endpoint — typically because the configured server URL points at the
-// user-facing frontend rather than the /api backend.
-var ErrHTMLResponse = errors.New("server returned HTML instead of JSON (is the backend at /api?)")
+var (
+	// ErrHTMLResponse is returned when the server responded with HTML on a JSON
+	// endpoint — typically because the configured server URL points at the
+	// user-facing frontend rather than the /api backend.
+	ErrHTMLResponse = errors.New("server returned HTML instead of JSON (is the backend at /api?)")
+
+	// ErrNotFound is returned when a requested resource does not exist.
+	ErrNotFound = errors.New("not found")
+)
+
+// IsNotFound reports whether err represents a missing resource.
+func IsNotFound(err error) bool {
+	if errors.Is(err, ErrNotFound) {
+		return true
+	}
+	var serverErr *ServerError
+	return errors.As(err, &serverErr) && serverErr.StatusCode == stdhttp.StatusNotFound
+}
+
+type TokenProvider func(context.Context) (string, error)
+
+type ClientOption func(*Client)
 
 type Client struct {
 	*http.Client
+	serverURL     string
+	tokenProvider TokenProvider
 }
 
-func New(serverURL, token string) *Client {
-	return NewWithAuthHeader(serverURL, "Bearer "+token)
+func New(serverURL, token string, opts ...ClientOption) *Client {
+	authHeader := ""
+	if token != "" {
+		authHeader = "Bearer " + token
+	}
+	return NewWithAuthHeader(serverURL, authHeader, opts...)
 }
 
 // NewWithAuthHeader returns a client using the provided Authorization header.
-func NewWithAuthHeader(serverURL, authHeader string) *Client {
+func NewWithAuthHeader(serverURL, authHeader string, opts ...ClientOption) *Client {
 	client := http.NewClient().
 		BaseURL(serverURL).
 		Header("Content-Type", "application/json").
@@ -38,7 +65,67 @@ func NewWithAuthHeader(serverURL, authHeader string) *Client {
 	if authHeader != "" {
 		client = client.Header("Authorization", authHeader)
 	}
-	return &Client{Client: httpobservability.Apply(client)}
+	out := &Client{Client: httpobservability.Apply(client), serverURL: strings.TrimRight(serverURL, "/")}
+	for _, opt := range opts {
+		if opt != nil {
+			opt(out)
+		}
+	}
+	if out.tokenProvider != nil {
+		out.Client = out.Client.Use(tokenProviderMiddleware(out.tokenProvider))
+	}
+	return out
+}
+
+func WithTokenProvider(provider TokenProvider) ClientOption {
+	return func(c *Client) {
+		c.tokenProvider = provider
+	}
+}
+
+func WithUserAgent(userAgent string) ClientOption {
+	return func(c *Client) {
+		if c.Client != nil && userAgent != "" {
+			c.Client.UserAgent(userAgent)
+		}
+	}
+}
+
+func WithAccept(accept string) ClientOption {
+	return func(c *Client) {
+		if c.Client != nil && accept != "" {
+			c.Client.Header("Accept", accept)
+		}
+	}
+}
+
+func tokenProviderMiddleware(provider TokenProvider) func(stdhttp.RoundTripper) stdhttp.RoundTripper {
+	return func(next stdhttp.RoundTripper) stdhttp.RoundTripper {
+		return roundTripperFunc(func(req *stdhttp.Request) (*stdhttp.Response, error) {
+			token, err := provider(req.Context())
+			if err != nil {
+				return nil, err
+			}
+			if token != "" {
+				req = req.Clone(req.Context())
+				req.Header.Set("Authorization", "Bearer "+token)
+			}
+			return next.RoundTrip(req)
+		})
+	}
+}
+
+type roundTripperFunc func(*stdhttp.Request) (*stdhttp.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *stdhttp.Request) (*stdhttp.Response, error) {
+	return f(req)
+}
+
+func (c *Client) apiPath(path string) string {
+	if strings.HasSuffix(c.serverURL, "/api") && strings.HasPrefix(path, "/api/") {
+		return strings.TrimPrefix(path, "/api")
+	}
+	return path
 }
 
 // decodeJSON parses a response body as JSON, returning ErrHTMLResponse if the
@@ -64,6 +151,105 @@ func looksLikeHTML(contentType, body string) bool {
 	return strings.HasPrefix(strings.TrimLeft(body, " \t\r\n"), "<")
 }
 
+type ServerError struct {
+	StatusCode int
+	Body       []byte
+	Code       string
+	Message    string
+	Trace      string
+	Time       string
+	Context    map[string]any
+	Hint       string
+	Public     string
+	Stacktrace string
+}
+
+func (e *ServerError) Error() string {
+	if e == nil {
+		return ""
+	}
+	message := strings.TrimSpace(e.Message)
+	if message == "" {
+		message = strings.TrimSpace(string(e.Body))
+	}
+	if message == "" {
+		return fmt.Sprintf("server %d", e.StatusCode)
+	}
+	return fmt.Sprintf("server %d: %s", e.StatusCode, message)
+}
+
+func newServerError(statusCode int, body []byte) *ServerError {
+	err := &ServerError{
+		StatusCode: statusCode,
+		Body:       append([]byte(nil), body...),
+	}
+	var payload struct {
+		Code       any            `json:"code"`
+		Error      string         `json:"error"`
+		Message    string         `json:"message"`
+		Trace      string         `json:"trace"`
+		Time       any            `json:"time"`
+		Context    map[string]any `json:"context"`
+		Hint       string         `json:"hint"`
+		Public     string         `json:"public"`
+		Stacktrace string         `json:"stacktrace"`
+	}
+	if json.Unmarshal(body, &payload) != nil {
+		return err
+	}
+	err.Code = stringifyServerErrorField(payload.Code)
+	err.Message = payload.Error
+	if err.Message == "" {
+		err.Message = payload.Message
+	}
+	err.Trace = payload.Trace
+	err.Time = stringifyServerErrorField(payload.Time)
+	err.Context = payload.Context
+	err.Hint = payload.Hint
+	err.Public = payload.Public
+	err.Stacktrace = payload.Stacktrace
+	return err
+}
+
+func stringifyServerErrorField(value any) string {
+	switch v := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return v
+	case fmt.Stringer:
+		return v.String()
+	default:
+		return fmt.Sprint(v)
+	}
+}
+
+type WhoamiResponse struct {
+	Payload struct {
+		User  map[string]any `json:"user"`
+		Roles []string       `json:"roles"`
+	} `json:"payload"`
+}
+
+func (c *Client) Whoami(ctx context.Context) (*WhoamiResponse, int, error) {
+	var result WhoamiResponse
+	r, err := c.R(ctx).Get("/auth/whoami")
+	if err != nil {
+		return nil, 0, err
+	}
+	if !r.IsOK() {
+		body, _ := r.AsString()
+		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
+			return nil, r.StatusCode, ErrHTMLResponse
+		}
+		return nil, r.StatusCode, fmt.Errorf("whoami failed (%d): %s", r.StatusCode, strings.TrimSpace(body))
+	}
+	if err := decodeJSON(r, &result); err != nil {
+		return nil, r.StatusCode, err
+	}
+	return &result, r.StatusCode, nil
+}
+
 func (c *Client) GetConnection(name, namespace string) (*models.Connection, error) {
 	var connections []models.Connection
 	r, err := c.R(context.Background()).
@@ -82,7 +268,7 @@ func (c *Client) GetConnection(name, namespace string) (*models.Connection, erro
 		return nil, err
 	}
 	if len(connections) == 0 {
-		return nil, fmt.Errorf("connection %s/%s not found", namespace, name)
+		return nil, fmt.Errorf("connection %s/%s not found: %w", namespace, name, ErrNotFound)
 	}
 	return &connections[0], nil
 }
@@ -99,6 +285,68 @@ func (c *Client) SaveConnection(conn *models.Connection) error {
 		return fmt.Errorf("server returned %d: %s", r.StatusCode, body)
 	}
 	return nil
+}
+
+type pluginRPCListItem struct {
+	Name    string         `json:"name"`
+	Service rpc.RPCService `json:"service"`
+}
+
+func (c *Client) ListPluginRPCServices(ctx context.Context) ([]rpc.RPCService, error) {
+	resp, err := c.R(ctx).
+		QueryParam("format", "clicky-rpc").
+		Get(c.apiPath("/api/plugins"))
+	if err != nil {
+		return nil, fmt.Errorf("GET /api/plugins: %w", err)
+	}
+	if !resp.IsOK() {
+		body, _ := resp.AsString()
+		if looksLikeHTML(resp.Header.Get("Content-Type"), body) {
+			return nil, ErrHTMLResponse
+		}
+		return nil, fmt.Errorf("server returned %d: %s", resp.StatusCode, body)
+	}
+	body, err := resp.AsString()
+	if err != nil {
+		return nil, fmt.Errorf("read body: %w", err)
+	}
+	var items []pluginRPCListItem
+	if err := json.Unmarshal([]byte(body), &items); err != nil {
+		return nil, fmt.Errorf("decode listing: %w", err)
+	}
+	out := make([]rpc.RPCService, 0, len(items))
+	for _, it := range items {
+		svc := it.Service
+		if svc.Name == "" {
+			svc.Name = it.Name
+		}
+		out = append(out, svc)
+	}
+	return out, nil
+}
+
+func (c *Client) DispatchPluginOperation(ctx context.Context, plugin, op string, params []byte, configID string) ([]byte, int, error) {
+	req := c.R(ctx).Header("Content-Type", "application/json")
+	if configID != "" {
+		req = req.QueryParam("config_id", configID)
+	}
+	resp, err := req.Post(c.apiPath(fmt.Sprintf("/api/plugins/%s/invoke/%s", url.PathEscape(plugin), url.PathEscape(op))), params)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, resp.StatusCode, err
+	}
+	if resp.StatusCode >= 400 {
+		if looksLikeHTML(resp.Header.Get("Content-Type"), string(body)) {
+			return body, resp.StatusCode, ErrHTMLResponse
+		}
+		return body, resp.StatusCode, newServerError(resp.StatusCode, body)
+	}
+	return body, resp.StatusCode, nil
 }
 
 type TestResult struct {

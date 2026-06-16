@@ -81,9 +81,10 @@ describe("playbook API helpers", () => {
       configId: "cfg-1",
       playbookId: "pb-1",
       status: "pending_approval",
+      createdBy: "user-1",
       limit: 25,
       offset: 50,
-    })).toContain("config_id=eq.cfg-1&playbook_id=eq.pb-1&status=eq.pending_approval");
+    })).toContain("config_id=eq.cfg-1&playbook_id=eq.pb-1&status=eq.pending_approval&created_by=eq.user-1");
     expect(buildPlaybookRunsPath({ limit: 25, offset: 50 })).toContain("limit=25&offset=50");
   });
 

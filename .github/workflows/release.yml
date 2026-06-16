@@ -55,6 +55,7 @@ jobs:
       - run: make release
         env:
           VERSION: v${{ needs.semantic-release.outputs.release-version }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Upload binaries to draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -69,20 +70,19 @@ jobs:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Set version
-        # Always use git tags as semantic release can fail due to rate limit
+        # Always use root git tags as semantic release can fail due to rate limit
         run: |
           git fetch --prune --unshallow
-          echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags | sed -e 's/^v//')" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags --match 'v[0-9]*' | sed -e 's/^v//')" >> $GITHUB_ENV
 
-      - name: Publish to Registry
-        uses: elgohr/Publish-Docker-Github-Action@a173d53c3077a33d5877ca4d93d853a1de31f357 # v5
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
         with:
-          name: flanksource/incident-commander
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
-          snapshot: true
-          tags: "latest,v${{ env.RELEASE_VERSION }}"
-          cache: true
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v5
@@ -97,15 +97,24 @@ jobs:
         with:
           registry-type: public
 
-      - name: Publish to ECR Public
-        env:
-          REGISTRY: ${{ steps.login-ecr-public.outputs.registry }}
-          REGISTRY_ALIAS: k4y9r6y5
-          REPOSITORY: incident-commander
-          IMAGE_TAG: "v${{ env.RELEASE_VERSION }}"
-        run: |
-          docker build -t $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG .
-          docker push $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG
+      # Build once and push to both registries. The GITHUB_TOKEN BuildKit secret
+      # lifts the GitHub API rate limit that `deps install node` (facet/Chrome
+      # provisioning) hits resolving nodejs/node releases; the Dockerfile reads
+      # it via --mount=type=secret,id=GITHUB_TOKEN.
+      - name: Build and push
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: .
+          push: true
+          provenance: false
+          tags: |
+            flanksource/incident-commander:latest
+            flanksource/incident-commander:v${{ env.RELEASE_VERSION }}
+            ${{ steps.login-ecr-public.outputs.registry }}/k4y9r6y5/incident-commander:v${{ env.RELEASE_VERSION }}
+          secrets: |
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
   update-incident-commander-chart:
     if: needs.semantic-release.outputs.new-release-published == 'true'
@@ -116,10 +125,10 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Set version
-        # Always use git tags as semantic release can fail due to rate limit
+        # Always use root git tags as semantic release can fail due to rate limit
         run: |
           git fetch --prune --unshallow
-          echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags | sed -e 's/^v//')" >> $GITHUB_ENV
+          echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags --match 'v[0-9]*' | sed -e 's/^v//')" >> $GITHUB_ENV
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: "${{ github.repository_owner }}/mission-control-chart"

@@ -3,13 +3,14 @@ OS   = $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH = $(shell uname -m | sed 's/x86_64/amd64/')
 DATE = $(shell date  "+%Y-%m-%d %H:%M:%S")
 ifeq ($(VERSION),)
-  VERSION_TAG=$(shell git describe --abbrev=0 --tags --exact-match 2>/dev/null || echo latest)
+  VERSION_TAG=$(shell git describe --abbrev=0 --tags --exact-match --match 'v[0-9]*' 2>/dev/null || echo latest)
 else
   VERSION_TAG=$(VERSION)
 endif
 
 # Image URL to use all building/pushing image targets
 IMG ?= docker.io/flanksource/$(NAME):${VERSION_TAG}
+COMMA := ,
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -91,7 +92,7 @@ modernize: ## Run modernize against code.
 	$(MODERNIZE) ./...
 
 docker:
-	docker build . -t ${IMG}
+	DOCKER_BUILDKIT=1 docker build -t ${IMG} $(if $(GITHUB_TOKEN),--secret id=GITHUB_TOKEN$(COMMA)env=GITHUB_TOKEN) .
 
 # Build the docker image
 docker-dev: linux
@@ -111,11 +112,12 @@ docker-push:
 .PHONY: tidy
 tidy:
 	go mod tidy
-	git add go.mod go.sum
+	cd plugin/api && go mod tidy
+	cd plugin/sdk && go mod tidy
 
 .PHONY: compress
 compress: .bin/upx
-	upx -5 ./.bin/$(NAME)_linux_amd64 ./.bin/$(NAME)_linux_arm64
+	upx -5 ./.bin/$(NAME)_linux_amd64 ./.bin/$(NAME)_linux_arm64 ./.bin/faro_linux_amd64 ./.bin/faro_linux_arm64
 
 .PHONY: linux
 linux: $(TAILWIND_JS)
@@ -129,15 +131,36 @@ darwin:
 
 .PHONY: windows
 windows:
-	GOOS=windows GOARCH=amd64 go build -o ./.bin/$(NAME).exe -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
+	GOOS=windows GOARCH=amd64 go build -o ./.bin/$(NAME)_windows_amd64.exe -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
+
+# faro is a slim Mission Control client (remote-only surfaces). Built for the
+# requested matrix: linux amd64/arm64, darwin amd64/arm64, windows amd64/arm64.
+.PHONY: faro-linux
+faro-linux: $(TAILWIND_JS)
+	GOOS=linux GOARCH=amd64 go build -o ./.bin/faro_linux_amd64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=linux GOARCH=arm64 go build -o ./.bin/faro_linux_arm64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
+
+.PHONY: faro-darwin
+faro-darwin: $(TAILWIND_JS)
+	GOOS=darwin GOARCH=amd64 go build -o ./.bin/faro_darwin_amd64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=darwin GOARCH=arm64 go build -o ./.bin/faro_darwin_arm64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
+
+.PHONY: faro-windows
+faro-windows: $(TAILWIND_JS)
+	GOOS=windows GOARCH=amd64 go build -o ./.bin/faro_windows_amd64.exe -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=windows GOARCH=arm64 go build -o ./.bin/faro_windows_arm64.exe -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
+
+.PHONY: faro
+faro: faro-linux faro-darwin faro-windows
 
 .PHONY: binaries
-binaries: linux darwin windows compress
+binaries: linux darwin windows faro compress
 
 .PHONY: release
-release: binaries
+release: ui binaries
 	mkdir -p .release
 	cp .bin/incident-commander* .release/
+	cp .bin/faro* .release/
 
 # Generate OpenAPI schema
 .PHONY: gen-schemas
@@ -147,6 +170,7 @@ gen-schemas:
 	go mod edit -module=github.com/flanksource/incident-commander/hack/generate-schemas && \
 	go mod edit -require=github.com/flanksource/incident-commander@v1.0.0 && \
 	go mod edit -replace=github.com/flanksource/incident-commander=../../ && \
+	go mod edit -replace=github.com/flanksource/incident-commander/plugin/api=../../plugin/api && \
 	if grep -v "^//" ../../go.mod | grep -q "replace.*github.com/flanksource/duty.*=>"; then \
 		go mod edit -replace=github.com/flanksource/duty=../../../duty; \
 	fi && \
@@ -279,10 +303,10 @@ $(PROTOC_GEN_GO_GRPC): $(LOCALBIN)
 	GOBIN=$(LOCALBIN) go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@$(PROTOC_GEN_GO_GRPC_VERSION)
 
 .PHONY: proto
-proto: protoc $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC) ## Regenerate plugin gRPC stubs from plugin/plugin.proto
+proto: protoc $(PROTOC_GEN_GO) $(PROTOC_GEN_GO_GRPC) ## Regenerate plugin gRPC stubs from plugin/api/plugin.proto
 	$(PROTOC) \
-		--proto_path=plugin \
+		--proto_path=plugin/api \
 		--proto_path=$(PROTOC_INCLUDE) \
-		--go_out=plugin --go_opt=paths=source_relative \
-		--go-grpc_out=plugin --go-grpc_opt=paths=source_relative \
-		plugin/plugin.proto
+		--go_out=plugin/api --go_opt=paths=source_relative \
+		--go-grpc_out=plugin/api --go-grpc_opt=paths=source_relative \
+		plugin.proto

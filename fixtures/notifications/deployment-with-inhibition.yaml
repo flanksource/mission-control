@@ -1,11 +1,12 @@
 apiVersion: mission-control.flanksource.com/v1
 kind: Notification
 metadata:
-  name: pod-with-outgoing-inhibition
+  name: pod-with-incoming-inhibition
 spec:
   events:
     - config.unhealthy
     - config.warning
+  repeatInterval: 4h
   to:
     connection: connection://mission-control/slack
   inhibitions:

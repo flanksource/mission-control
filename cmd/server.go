@@ -32,6 +32,7 @@ import (
 	"github.com/flanksource/incident-commander/mcp"
 	"github.com/flanksource/incident-commander/metrics"
 	"github.com/flanksource/incident-commander/notification"
+	"github.com/flanksource/incident-commander/plugin/machinery"
 	pluginReconciler "github.com/flanksource/incident-commander/plugin/reconciler"
 	"github.com/flanksource/incident-commander/upstream/tunnel"
 	echov4 "github.com/labstack/echo/v4"
@@ -168,6 +169,10 @@ func launchKopper(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Plugin: %v", err))
 	}
 
+	if err := pluginReconciler.ReplayPlugins(ctx); err != nil {
+		ctx.Logger.Errorf("plugin replay from DB failed: %v", err)
+	}
+
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("error running controller manager: %v", err))
 	}
@@ -227,7 +232,7 @@ var Serve = &cobra.Command{
 		mcpServer := mcp.Server(ctx)
 		e.Any("/mcp", echov4.WrapHandler(mcpServer.HTTPHandler), mcp.AuthMiddleware)
 
-		shutdown.AddHookWithPriority("echo", shutdown.PriorityIngress, func() {
+		shutdown.AddHookWithPriority("echo", shutdown.PriorityCritical, func() {
 			echo.Shutdown(e)
 		})
 
@@ -240,12 +245,23 @@ var Serve = &cobra.Command{
 			})
 		}
 
-		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
+		shutdown.AddHookWithPriority("plugins", shutdown.PriorityJobs+1, func() {
+			machinery.StopAll(ctx)
+		})
+
+		// The database pool must close last (after workers have drained), but
+		// before echo unblocks main and the process exits.
+		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical-1, stop)
 
 		shutdown.WaitForSignal()
 
 		ctx.WithTracer(otel.GetTracerProvider().Tracer("mission-control"))
 		ctx = ctx.WithNamespace(api.Namespace)
+
+		// Cancel the context on shutdown so background workers (jobs, event
+		// consumers, kopper) stop before the database pool is closed.
+		ctx, cancel := ctx.WithCancel()
+		shutdown.AddHookWithPriority("workers", shutdown.PriorityJobs, func() { cancel() })
 
 		if api.UpstreamConf.Valid() {
 			go tunnel.StartAgentTunnel(ctx, api.UpstreamConf, e)

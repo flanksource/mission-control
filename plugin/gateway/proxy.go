@@ -17,6 +17,7 @@ import (
 
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/api"
 	"github.com/flanksource/incident-commander/plugin/machinery"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/upstream/tunnel"
@@ -71,7 +72,7 @@ func uiProxy(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin UI path %q not found", pluginPath))
 	}
 
-	if entry.Kind == plugin.PluginKindProxied {
+	if entry.Kind == api.PluginKindProxied {
 		if _, err := proxyToAgentPlugin(c, entry); err != nil {
 			return dutyAPI.WriteError(c, err)
 		}
@@ -118,7 +119,7 @@ func operationHTTPProxy(c echo.Context) error {
 
 	var roles []string
 	var subject string
-	invocationToken := c.Request().Header.Get(plugin.InvocationTokenHTTPHeader)
+	invocationToken := c.Request().Header.Get(api.InvocationTokenHTTPHeader)
 	if invocationToken != "" {
 		// Proxied operations arriving on an agent already carry an upstream-minted
 		// invocation token. Validate and reuse it rather than minting an agent-signed token.
@@ -148,13 +149,13 @@ func operationHTTPProxy(c echo.Context) error {
 		}
 	}
 
-	if entry.Kind == plugin.PluginKindProxied {
+	if entry.Kind == api.PluginKindProxied {
 		invocationToken, err = plugin.MintInvocationToken(subject, entry.ID, 0, roles...)
 		if err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 		}
 
-		c.Request().Header.Set(plugin.InvocationTokenHTTPHeader, invocationToken)
+		c.Request().Header.Set(api.InvocationTokenHTTPHeader, invocationToken)
 		result, err := proxyToAgentPlugin(c, entry)
 		if err != nil {
 			recordPluginInvocation(ctx, entry, op, configUUID, "http", c.Request().Method, paramsHash, err.Error(), c.Request(), nil)
@@ -209,7 +210,7 @@ func proxyToPluginOperation(c echo.Context, entry *plugin.Entry, op, invocationT
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
 			pr.Out.URL.Path = pluginOperationTargetPath(op)
-			pr.Out.Header.Set(plugin.InvocationTokenHTTPHeader, invocationToken)
+			pr.Out.Header.Set(api.InvocationTokenHTTPHeader, invocationToken)
 			pr.Out.URL.RawPath = ""
 		},
 	}
@@ -260,8 +261,8 @@ func proxyToAgentPlugin(c echo.Context, entry *plugin.Entry) (agentPluginProxyRe
 			pr.Out.Header.Del(echo.HeaderAuthorization)
 			pr.Out.Header.Del(echo.HeaderCookie)
 			pr.Out.Header.Del("Proxy-Authorization")
-			if token := pr.In.Header.Get(plugin.InvocationTokenHTTPHeader); token != "" {
-				pr.Out.Header.Set(plugin.InvocationTokenHTTPHeader, token)
+			if token := pr.In.Header.Get(api.InvocationTokenHTTPHeader); token != "" {
+				pr.Out.Header.Set(api.InvocationTokenHTTPHeader, token)
 			}
 		},
 	}
@@ -298,7 +299,7 @@ func pluginUITargetPath(prefix, requestPath string) string {
 	return "/__mc/ui" + pluginPath
 }
 
-func operationHTTPBindingAllowed(def *plugin.OperationDef, method string) bool {
+func operationHTTPBindingAllowed(def *api.OperationDef, method string) bool {
 	for _, binding := range def.Http {
 		if binding != nil && strings.EqualFold(binding.Method, method) {
 			return true

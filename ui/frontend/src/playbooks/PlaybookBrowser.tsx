@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
@@ -15,6 +15,7 @@ import {
   type ErrorDiagnostics,
 } from "@flanksource/clicky-ui";
 import { errorDiagnosticsFromUnknown } from "../api/http";
+import { addRecent } from "../lib/recents";
 import { ConfigIcon } from "../ConfigIcon";
 import {
   DetailPageLayout,
@@ -114,6 +115,80 @@ export function PlaybookBrowser({ mode, runId }: PlaybookBrowserProps) {
 
 export function stepOutputMaxHeight(stepCount: number): CSSProperties {
   return { maxHeight: `min(20vh, calc((100vh - 200px) / ${Math.max(1, stepCount)}))` };
+}
+
+export function ConfigPlaybooksDropdown({ config }: { config: ConfigItem }) {
+  const runnableQuery = useRunnablePlaybooksForConfig(config.id);
+  const runnable = (runnableQuery.data ?? []).map(runnableListItemToPlaybook);
+  const [open, setOpen] = useState(false);
+  const [selected, setSelected] = useState<RunDialogSelection | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, [open]);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((current) => !current)}
+        className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-background px-3 text-sm font-medium shadow-sm hover:bg-accent/50 disabled:cursor-not-allowed disabled:opacity-60"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        disabled={runnableQuery.isLoading}
+      >
+        <Icon name={runnableQuery.isLoading ? "lucide:loader-2" : "lucide:play-square"} className={runnableQuery.isLoading ? "animate-spin" : undefined} />
+        <span>Playbooks</span>
+        {runnable.length > 0 && <Badge size="xxs">{runnable.length}</Badge>}
+        <Icon name="lucide:chevron-down" className="text-xs text-muted-foreground" />
+      </button>
+      {open && (
+        <div
+          role="menu"
+          className="absolute right-0 top-10 z-30 w-64 overflow-hidden rounded-md border border-border bg-popover py-1 text-popover-foreground shadow-lg"
+        >
+          {runnableQuery.error ? (
+            <div className="px-3 py-2 text-sm text-destructive">Failed to load playbooks</div>
+          ) : runnable.length === 0 ? (
+            <div className="px-3 py-2 text-sm text-muted-foreground">No runnable playbooks</div>
+          ) : (
+            runnable.map((playbook) => (
+              <button
+                key={playbook.id}
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  setOpen(false);
+                  setSelected({ playbook, target: { config_id: config.id }, resourceLabel: config.name || config.id });
+                }}
+                className="flex h-9 w-full min-w-0 items-center gap-2 px-3 text-left text-sm hover:bg-accent/50"
+              >
+                <PlaybookIcon playbook={playbook} className="h-4 max-w-4 shrink-0" />
+                <span className="truncate">{displayPlaybookName(playbook)}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+      {selected && (
+        <SubmitPlaybookRunDialog
+          open
+          playbook={selected.playbook}
+          target={selected.target}
+          resourceLabel={selected.resourceLabel}
+          onClose={() => setSelected(null)}
+        />
+      )}
+    </div>
+  );
 }
 
 export function ConfigPlaybooksTab({ config }: { config: ConfigItem }) {
@@ -271,6 +346,21 @@ function PlaybookRunDetailPage({ runId }: { runId: string }) {
   const runDiagnostics = run ? errorDiagnosticsFromRun(run) : null;
   const runStateData = !runId ? null : query.data ? run ?? null : query.data;
   const queryClient = useQueryClient();
+
+  const playbookId = run?.playbooks?.id;
+  const playbookName = run?.playbooks ? displayPlaybookName(run.playbooks) : "";
+  const playbookIcon = run?.playbooks?.icon ?? undefined;
+  useEffect(() => {
+    if (!playbookId) return;
+    addRecent({
+      kind: "playbook",
+      id: playbookId,
+      name: playbookName,
+      icon: playbookIcon,
+      href: `/ui/playbooks/runs/${encodeURIComponent(runId)}`,
+    });
+  }, [playbookId, playbookName, playbookIcon, runId]);
+
   const [rerun, setRerun] = useState<RunDialogSelection | null>(null);
   const approveMutation = useMutation({
     mutationFn: () => approvePlaybookRun(runId),

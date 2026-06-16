@@ -19,14 +19,15 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 
 	dutyContext "github.com/flanksource/duty/context"
-	"github.com/flanksource/incident-commander/api"
+	commanderAPI "github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/plugin"
+	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
 )
 
 // pluginMap is the host-side go-plugin registry used to dispense the
 // mission-control plugin client.
 var pluginMap = map[string]goplugin.Plugin{
-	PluginName: &GRPCPlugin{},
+	pluginAPI.PluginName: &GRPCPlugin{},
 }
 
 // Supervisor owns the lifecycle of one plugin process.
@@ -41,13 +42,16 @@ type Supervisor struct {
 	mu        sync.Mutex
 	client    *goplugin.Client
 	pluginCLI *Client
-	manifest  *plugin.PluginManifest
+	manifest  *pluginAPI.PluginManifest
 	hostBrkID uint32
 	startHost func(*goplugin.GRPCBroker) (uint32, error)
 	stopped   bool
 
 	restarts int
 	window   time.Time
+
+	// OnStart is invoked after every successful plugin start, including restarts.
+	OnStart func(dutyContext.Context)
 
 	// restartFn is invoked when the binary watcher decides to respawn the
 	// plugin. Tests can substitute a counter; production uses (*Supervisor).restart.
@@ -61,8 +65,11 @@ const (
 )
 
 // New creates a Supervisor for a plugin binary.
-func New(id uuid.UUID, binaryPath string) *Supervisor {
-	return &Supervisor{ID: id, Name: id.String(), BinaryPath: binaryPath}
+func New(id uuid.UUID, name, binaryPath string) *Supervisor {
+	if name == "" {
+		name = id.String()
+	}
+	return &Supervisor{ID: id, Name: name, BinaryPath: binaryPath}
 }
 
 // Start launches the plugin process and completes the RegisterPlugin
@@ -75,18 +82,25 @@ func New(id uuid.UUID, binaryPath string) *Supervisor {
 // plugin can dial back through it.
 func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplugin.GRPCBroker) (uint32, error)) error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	var started bool
+	defer func() {
+		onStart := s.OnStart
+		s.mu.Unlock()
+		if started && onStart != nil {
+			onStart(ctx)
+		}
+	}()
 	if s.client != nil {
 		return errors.New("supervisor already started")
 	}
 
 	cmd := exec.Command(s.BinaryPath)
 	cmd.Env = append(cmd.Env,
-		fmt.Sprintf("%s=%s", Handshake.MagicCookieKey, Handshake.MagicCookieValue),
+		fmt.Sprintf("%s=%s", pluginAPI.Handshake.MagicCookieKey, pluginAPI.Handshake.MagicCookieValue),
 	)
 
 	cli := goplugin.NewClient(&goplugin.ClientConfig{
-		HandshakeConfig:  Handshake,
+		HandshakeConfig:  pluginAPI.Handshake,
 		Plugins:          pluginMap,
 		Cmd:              cmd,
 		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolGRPC},
@@ -102,7 +116,7 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 		return fmt.Errorf("plugin %s rpc client: %w", s.Name, err)
 	}
 
-	raw, err := rpcClient.Dispense(PluginName)
+	raw, err := rpcClient.Dispense(pluginAPI.PluginName)
 	if err != nil {
 		cli.Kill()
 		return fmt.Errorf("plugin %s dispense: %w", s.Name, err)
@@ -121,8 +135,8 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 	}
 	s.hostBrkID = hostBrkID
 
-	manifest, err := pluginCli.Service.RegisterPlugin(dialCtx, &plugin.RegisterRequest{
-		HostProtocolVersion: uint32(ProtocolVersion),
+	manifest, err := pluginCli.Service.RegisterPlugin(dialCtx, &pluginAPI.RegisterRequest{
+		HostProtocolVersion: uint32(pluginAPI.ProtocolVersion),
 		HostBrokerId:        hostBrkID,
 	})
 	if err != nil {
@@ -138,11 +152,11 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 	if err := plugin.DefaultRegistry.SetManifest(s.ID, manifest); err != nil {
 		// Not fatal — the registry might have been recreated, but the supervisor still works.
 		ctx.Logger.Warnf("plugin %s: register manifest: %v", s.Name, err)
-	} else if api.UpstreamConf.Valid() {
+	} else if commanderAPI.UpstreamConf.Valid() {
 		// Right after the plugin is registered locally on the agent
 		// It immediately informs the upstream about the plugin
 		go func() {
-			if err := plugin.RegisterWithUpstream(ctx, api.UpstreamConf, s.ID); err != nil {
+			if err := plugin.RegisterWithUpstream(ctx, commanderAPI.UpstreamConf, s.ID); err != nil {
 				ctx.Logger.Warnf("plugin %s: register with upstream: %v", s.Name, err)
 			}
 		}()
@@ -153,6 +167,7 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 
 	ctx.Logger.Infof("plugin %s loaded: version=%q ops=%d ui_port=%d",
 		s.Name, manifest.Version, len(manifest.Operations), manifest.UiPort)
+	started = true
 	return nil
 }
 
@@ -264,14 +279,16 @@ func (s *Supervisor) watchBinary(ctx dutyContext.Context) {
 			ctx.Logger.Warnf("plugin %s: fsnotify error: %v", s.Name, err)
 
 		case <-fire:
-			ctx.Logger.Infof("plugin %s: binary changed, restarting", s.Name)
+			ctx.Logger.Infof("plugin %s: binary changed on disk, restarting via file watcher", s.Name)
 			restartFn := s.restartFn
 			if restartFn == nil {
 				restartFn = s.restart
 			}
 			if err := restartFn(ctx); err != nil {
 				ctx.Logger.Errorf("plugin %s: restart failed: %v", s.Name, err)
+				return
 			}
+			ctx.Logger.Infof("plugin %s: restarted after binary change", s.Name)
 			return
 		}
 	}
@@ -331,7 +348,7 @@ func (s *Supervisor) Stop() {
 }
 
 // Manifest returns the most recent PluginManifest received from the plugin.
-func (s *Supervisor) Manifest() *plugin.PluginManifest {
+func (s *Supervisor) Manifest() *pluginAPI.PluginManifest {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.manifest
@@ -347,7 +364,7 @@ func (s *Supervisor) UIPort() uint32 {
 }
 
 // Invoke calls the plugin's Invoke RPC.
-func (s *Supervisor) Invoke(ctx gocontext.Context, req *plugin.InvokeRequest) (*plugin.InvokeResponse, error) {
+func (s *Supervisor) Invoke(ctx gocontext.Context, req *pluginAPI.InvokeRequest) (*pluginAPI.InvokeResponse, error) {
 	s.mu.Lock()
 	pluginCli := s.pluginCLI
 	s.mu.Unlock()
@@ -358,12 +375,12 @@ func (s *Supervisor) Invoke(ctx gocontext.Context, req *plugin.InvokeRequest) (*
 }
 
 // ListOperations calls the plugin's ListOperations RPC.
-func (s *Supervisor) ListOperations(ctx gocontext.Context) (*plugin.OperationList, error) {
+func (s *Supervisor) ListOperations(ctx gocontext.Context) (*pluginAPI.OperationList, error) {
 	s.mu.Lock()
 	pluginCli := s.pluginCLI
 	s.mu.Unlock()
 	if pluginCli == nil {
 		return nil, fmt.Errorf("plugin %s not running", s.Name)
 	}
-	return pluginCli.Service.ListOperations(ctx, &plugin.Empty{})
+	return pluginCli.Service.ListOperations(ctx, &pluginAPI.Empty{})
 }

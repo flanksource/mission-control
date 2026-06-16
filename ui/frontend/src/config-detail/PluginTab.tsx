@@ -44,7 +44,7 @@ export function PluginTab({ pluginName, tabPath, configId }: PluginTabProps) {
         src={pluginIframeSrc(pluginName, tabPath, configId)}
         title={`${pluginName} – ${tabPath}`}
         className="h-full w-full border-0"
-        sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+        sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-downloads"
         onLoad={() => setReady(true)}
       />
     </div>

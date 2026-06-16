@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/flanksource/clicky/rpc"
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -30,8 +31,10 @@ import (
 	"github.com/labstack/echo/v4"
 
 	echoSrv "github.com/flanksource/incident-commander/echo"
-	pluginpb "github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/api"
 	"github.com/flanksource/incident-commander/plugin/machinery"
+	"github.com/flanksource/incident-commander/plugin/manifestcache"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
@@ -51,22 +54,31 @@ func RegisterRoutes(e *echo.Echo) {
 // PluginListing is what GET /api/plugins returns: a flat list of plugins
 // applicable to the current config item, with their tabs and operations.
 type PluginListing struct {
-	Name        string                   `json:"name"`
-	Description string                   `json:"description,omitempty"`
-	Version     string                   `json:"version,omitempty"`
-	Agent       *models.Agent            `json:"agent,omitempty"`
-	Tabs        []*pluginpb.TabSpec      `json:"tabs,omitempty"`
-	Operations  []*pluginpb.OperationDef `json:"operations,omitempty"`
+	Name        string              `json:"name"`
+	Description string              `json:"description,omitempty"`
+	Version     string              `json:"version,omitempty"`
+	Agent       *models.Agent       `json:"agent,omitempty"`
+	Tabs        []*api.TabSpec      `json:"tabs,omitempty"`
+	Operations  []*api.OperationDef `json:"operations,omitempty"`
+}
+
+type ClickyRPCListing struct {
+	Name    string         `json:"name"`
+	Service rpc.RPCService `json:"service"`
 }
 
 // ListPlugins returns every running plugin whose CRD selector matches the
 // (optional) config_id query parameter. With no config_id, returns every
 // plugin (useful for global tabs).
 func ListPlugins(c echo.Context) error {
+	if c.QueryParam("format") == "clicky-rpc" {
+		return listPluginsClickyRPC(c)
+	}
+
 	ctx := c.Request().Context().(dutyContext.Context)
 	configID := c.QueryParam("config_id")
 	out := []PluginListing{}
-	for _, e := range pluginpb.DefaultRegistry.List() {
+	for _, e := range plugin.DefaultRegistry.List() {
 		if e.Manifest == nil {
 			continue
 		}
@@ -104,6 +116,31 @@ func ListPlugins(c echo.Context) error {
 	return c.JSON(http.StatusOK, out)
 }
 
+func listPluginsClickyRPC(c echo.Context) error {
+	ctx := c.Request().Context().(dutyContext.Context)
+	configID := c.QueryParam("config_id")
+	out := []ClickyRPCListing{}
+	for _, e := range plugin.DefaultRegistry.List() {
+		if e.Manifest == nil {
+			continue
+		}
+		if configID != "" {
+			matches, err := machinery.SelectorMatches(ctx, e, configID)
+			if err != nil {
+				return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+			}
+			if !matches {
+				continue
+			}
+		}
+		out = append(out, ClickyRPCListing{
+			Name:    e.Name,
+			Service: manifestcache.ManifestToService(e.Manifest),
+		})
+	}
+	return c.JSON(http.StatusOK, out)
+}
+
 // InvokeOperation invokes a plugin operation. Local plugins are invoked through
 // the in-process gRPC machinery; proxied plugins are forwarded to their owning
 // agent over the plugin tunnel.
@@ -127,9 +164,9 @@ func InvokeOperation(c echo.Context) error {
 	}
 
 	switch entry.Kind {
-	case pluginpb.PluginKindProxied:
+	case api.PluginKindProxied:
 		return invokeProxiedOperation(c, ctx, entry, pluginRef, op, configID, configUUID)
-	case "", pluginpb.PluginKindLocal:
+	case "", api.PluginKindLocal:
 		resp, err := invokeLocalOperation(ctx, c.Request(), entry, pluginRef, op, configID, configUUID)
 		if err != nil {
 			return dutyAPI.WriteError(c, err)
@@ -145,7 +182,7 @@ func InvokeOperation(c echo.Context) error {
 	}
 }
 
-func invokeProxiedOperation(c echo.Context, ctx dutyContext.Context, entry *pluginpb.Entry, pluginRef, op, configID string, configUUID uuid.UUID) error {
+func invokeProxiedOperation(c echo.Context, ctx dutyContext.Context, entry *plugin.Entry, pluginRef, op, configID string, configUUID uuid.UUID) error {
 	if machinery.OperationDef(entry, op) == nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %q operation %q not found", pluginRef, op))
 	}
@@ -169,11 +206,11 @@ func invokeProxiedOperation(c echo.Context, ctx dutyContext.Context, entry *plug
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
-	invocationToken, err := pluginpb.MintInvocationToken(user.ID.String(), entry.ID, 0, roles...)
+	invocationToken, err := plugin.MintInvocationToken(user.ID.String(), entry.ID, 0, roles...)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 	}
-	c.Request().Header.Set(pluginpb.InvocationTokenHTTPHeader, invocationToken)
+	c.Request().Header.Set(api.InvocationTokenHTTPHeader, invocationToken)
 
 	result, err := proxyToAgentPlugin(c, entry)
 	if err != nil {
@@ -184,10 +221,10 @@ func invokeProxiedOperation(c echo.Context, ctx dutyContext.Context, entry *plug
 	return nil
 }
 
-func invokeLocalOperation(ctx dutyContext.Context, req *http.Request, entry *pluginpb.Entry, pluginRef, op, configID string, configUUID uuid.UUID) (*pluginpb.InvokeResponse, error) {
+func invokeLocalOperation(ctx dutyContext.Context, req *http.Request, entry *plugin.Entry, pluginRef, op, configID string, configUUID uuid.UUID) (*api.InvokeResponse, error) {
 	var roles []string
 	var subject string
-	invocationToken := req.Header.Get(pluginpb.InvocationTokenHTTPHeader)
+	invocationToken := req.Header.Get(api.InvocationTokenHTTPHeader)
 	if invocationToken == "" {
 		var err error
 		roles, err = pluginRolesForUser(ctx, entry, configID)
@@ -203,7 +240,7 @@ func invokeLocalOperation(ctx dutyContext.Context, req *http.Request, entry *plu
 	return invokeLocalOperationWithRoles(ctx, req, entry, pluginRef, op, configID, configUUID, roles, subject, invocationToken)
 }
 
-func invokeLocalOperationWithRoles(ctx dutyContext.Context, req *http.Request, entry *pluginpb.Entry, pluginRef, op, configID string, configUUID uuid.UUID, roles []string, subject string, invocationToken string) (*pluginpb.InvokeResponse, error) {
+func invokeLocalOperationWithRoles(ctx dutyContext.Context, req *http.Request, entry *plugin.Entry, pluginRef, op, configID string, configUUID uuid.UUID, roles []string, subject string, invocationToken string) (*api.InvokeResponse, error) {
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		return nil, ctx.Oops().Wrapf(err, "read request body")

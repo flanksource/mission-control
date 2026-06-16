@@ -11,7 +11,9 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin/api"
 	"github.com/flanksource/incident-commander/plugin/machinery/local"
+	"github.com/flanksource/incident-commander/plugin/manifestcache"
 )
 
 func StartPlugin(ctx dutyContext.Context, id uuid.UUID) error {
@@ -21,9 +23,9 @@ func StartPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 	}
 
 	switch entry.Kind {
-	case plugin.PluginKindLocal:
+	case "", api.PluginKindLocal:
 		return startLocalPlugin(ctx, entry)
-	case plugin.PluginKindProxied:
+	case api.PluginKindProxied:
 		return nil
 	default:
 		return fmt.Errorf("plugin %s: unsupported connection kind %q", id, entry.Kind)
@@ -31,7 +33,13 @@ func StartPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 }
 
 func startLocalPlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
-	installedPath, err := local.InstallPlugin(ctx, entry.Name, entry.Spec.Source, entry.Spec.Version)
+	var installedPath string
+	var err error
+	if local.IsLatest(entry.Spec.Version) {
+		installedPath, _, err = local.ResolveAndInstallLatest(ctx, entry.Name, entry.Spec.Source)
+	} else {
+		installedPath, err = local.InstallPlugin(ctx, entry.Name, entry.Spec.Source, entry.Spec.Version)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to install plugin %s: %w", entry.Name, err)
 	}
@@ -70,7 +78,7 @@ func startLocalPlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 				opts = append(opts, grpc.UnaryInterceptor(svc.UnaryServerInterceptor()))
 			}
 
-			grpcServer := local.GRPCServerFactory(opts)
+			grpcServer := api.GRPCServerFactory(opts)
 			if upstreamConn == nil {
 				svc.Register(grpcServer)
 			}
@@ -85,7 +93,10 @@ func startLocalPlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 }
 
 func startLocalPluginWithHost(ctx dutyContext.Context, entry *plugin.Entry, startHost func(*goplugin.GRPCBroker) (uint32, error)) error {
-	sup := local.New(entry.ID, entry.InstalledPath)
+	sup := local.New(entry.ID, entry.Name, entry.InstalledPath)
+	sup.OnStart = func(ctx dutyContext.Context) {
+		writeManifestCache(ctx, entry, sup)
+	}
 	started, err := plugin.DefaultRegistry.SetRuntimeIfAbsent(entry.ID, sup)
 	if err != nil {
 		return err
@@ -102,6 +113,30 @@ func startLocalPluginWithHost(ctx dutyContext.Context, entry *plugin.Entry, star
 	return nil
 }
 
+func writeManifestCache(ctx dutyContext.Context, entry *plugin.Entry, sup *local.Supervisor) {
+	if entry == nil || sup == nil || sup.Manifest() == nil {
+		return
+	}
+	checksum, err := manifestcache.SHA256File(entry.InstalledPath)
+	if err != nil {
+		ctx.Logger.V(2).Infof("plugin %s: skip manifest cache (hash %s: %v)", entry.Name, entry.InstalledPath, err)
+		return
+	}
+	service := manifestcache.ManifestToService(sup.Manifest())
+	if service.Name == "" {
+		service.Name = entry.Name
+	}
+	cacheEntry := manifestcache.Entry{
+		Source:         manifestcache.SourceLocalBinary,
+		BinaryPath:     entry.InstalledPath,
+		BinaryChecksum: checksum,
+		Service:        service,
+	}
+	if err := manifestcache.Write(cacheEntry); err != nil {
+		ctx.Logger.V(2).Infof("plugin %s: write manifest cache: %v", entry.Name, err)
+	}
+}
+
 func StopPlugin(id uuid.UUID) error {
 	runtime := plugin.DefaultRegistry.PopRuntime(id)
 	if runtime != nil {
@@ -110,20 +145,35 @@ func StopPlugin(id uuid.UUID) error {
 	return nil
 }
 
-func Invoke(ctx dutyContext.Context, pluginID uuid.UUID, req *plugin.InvokeRequest) (*plugin.InvokeResponse, error) {
+func Invoke(ctx dutyContext.Context, pluginID uuid.UUID, req *api.InvokeRequest) (*api.InvokeResponse, error) {
 	entry := plugin.DefaultRegistry.Get(pluginID)
 	if entry == nil {
 		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not registered", pluginID)
 	}
 
 	switch entry.Kind {
-	case plugin.PluginKindLocal:
+	case "", api.PluginKindLocal:
 		if entry.Runtime == nil {
 			return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
 		}
 		return entry.Runtime.Invoke(ctx, req)
 	default:
 		return nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has unsupported connection kind %q", pluginID, entry.Kind)
+	}
+}
+
+// StopAll gracefully stops every running plugin. It is wired into the host's
+// shutdown sequence so plugin binaries are torn down with the host instead of
+// being left as orphans.
+func StopAll(ctx dutyContext.Context) {
+	for _, entry := range plugin.DefaultRegistry.List() {
+		if entry.Runtime == nil {
+			continue
+		}
+		ctx.Logger.Infof("stopping plugin %s", entry.ID)
+		if err := StopPlugin(entry.ID); err != nil {
+			ctx.Logger.Warnf("plugin %s: stop on shutdown: %v", entry.ID, err)
+		}
 	}
 }
 
@@ -134,7 +184,7 @@ func HTTPURL(ctx dutyContext.Context, pluginID uuid.UUID) (*url.URL, error) {
 	}
 
 	switch entry.Kind {
-	case plugin.PluginKindLocal:
+	case "", api.PluginKindLocal:
 		if entry.Runtime == nil {
 			return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
 		}

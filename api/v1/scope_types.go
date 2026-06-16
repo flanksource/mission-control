@@ -128,7 +128,3 @@ type ScopeList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Scope `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&Scope{}, &ScopeList{})
-}

@@ -190,7 +190,3 @@ type ApplicationList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Application `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&Application{}, &ApplicationList{})
-}

@@ -14,7 +14,6 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	incAPI "github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth/basic_static"
 	"github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/flanksource/incident-commander/auth/signing"
@@ -205,7 +204,7 @@ func rejectUnauthenticated(c echo.Context) error {
 
 func setWWWAuthenticate(c echo.Context) {
 	if OIDCEnabled {
-		resourceMetadataURL := strings.TrimRight(incAPI.PublicURL, "/") + "/.well-known/oauth-protected-resource"
+		resourceMetadataURL := OIDCIssuerURL() + "/.well-known/oauth-protected-resource"
 		c.Response().Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer resource_metadata="%s"`, resourceMetadataURL))
 	}
 }

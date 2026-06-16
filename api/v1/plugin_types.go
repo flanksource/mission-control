@@ -141,7 +141,3 @@ type PluginList struct {
 	metav1.ListMeta `json:"metadata"`
 	Items           []Plugin `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&Plugin{}, &PluginList{})
-}

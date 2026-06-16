@@ -51,6 +51,7 @@ async function failResponse(method: string, path: string, response: Response): P
 export async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
     ...init,
+    credentials: init?.credentials ?? "same-origin",
     headers: {
       Accept: "application/json",
       Prefer: "return=representation",
@@ -71,6 +72,7 @@ export async function fetchJSON<T>(path: string, init?: RequestInit): Promise<T>
 
 export async function fetchPostgrest<T>(path: string): Promise<PaginatedResult<T>> {
   const response = await fetch(path, {
+    credentials: "same-origin",
     headers: {
       Accept: "application/json",
       Prefer: "count=exact,return=representation",

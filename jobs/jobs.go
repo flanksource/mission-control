@@ -21,6 +21,7 @@ import (
 	"github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/playbook"
+	"github.com/flanksource/incident-commander/plugin/machinery"
 	"github.com/flanksource/incident-commander/shorturl"
 )
 
@@ -124,6 +125,14 @@ func Start(ctx context.Context, mcpServer *server.MCPServer) {
 	if err := job.NewJob(ctx, "Cleanup Short URLs", CleanupExpiredShortURLsSchedule, shorturl.CleanupExpired).
 		AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up short URLs: %v", err)
+	}
+
+	if interval := ctx.Properties().Duration("plugin.interval", 0); interval > 0 {
+		if err := job.NewJob(ctx, "Plugin Refresh", fmt.Sprintf("@every %s", interval), func(jr job.JobRuntime) error {
+			return machinery.RefreshLatestPlugins(jr.Context)
+		}).AddToScheduler(FuncScheduler); err != nil {
+			logger.Errorf("Failed to schedule Plugin Refresh job: %v", err)
+		}
 	}
 
 	for _, job := range query.Jobs {

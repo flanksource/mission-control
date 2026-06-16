@@ -10,16 +10,17 @@ import (
 
 	"github.com/flanksource/duty/upstream"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
 	"github.com/google/uuid"
 )
 
 // A request an agent makes to register its plugin to the upstream
 type PluginRegisterRequest struct {
-	ID        uuid.UUID       `json:"id"`
-	Namespace string          `json:"namespace,omitempty"`
-	Name      string          `json:"name"`
-	Spec      v1.PluginSpec   `json:"spec"`
-	Manifest  *PluginManifest `json:"manifest,omitempty"`
+	ID        uuid.UUID                 `json:"id"`
+	Namespace string                    `json:"namespace,omitempty"`
+	Name      string                    `json:"name"`
+	Spec      v1.PluginSpec             `json:"spec"`
+	Manifest  *pluginAPI.PluginManifest `json:"manifest,omitempty"`
 }
 
 // RegisterWithUpstream reports a local plugin manifest to upstream so upstream
@@ -36,7 +37,7 @@ func RegisterWithUpstream(ctx context.Context, config upstream.UpstreamConfig, p
 	if entry.Manifest == nil {
 		return fmt.Errorf("plugin %s has no manifest", pluginID)
 	}
-	if entry.Kind == PluginKindProxied {
+	if entry.Kind == pluginAPI.PluginKindProxied {
 		return fmt.Errorf("cannot proxy an already proxied plugin. An agent can only proxy plugins that it runs locally")
 	}
 

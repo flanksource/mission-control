@@ -9,8 +9,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/flanksource/incident-commander/api"
-	pluginpb "github.com/flanksource/incident-commander/plugin"
+	commanderAPI "github.com/flanksource/incident-commander/api"
+	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -29,7 +29,7 @@ func agentHostUnknownServiceHandler(svc *Service, upstreamConn *grpc.ClientConn)
 			return status.Error(codes.Internal, "grpc method is required")
 		}
 
-		if method == pluginpb.HostService_GetConnection_FullMethodName {
+		if method == pluginAPI.HostService_GetConnection_FullMethodName {
 			return handleLocalGetConnection(svc, stream)
 		}
 		if upstreamConn == nil {
@@ -45,7 +45,7 @@ func handleLocalGetConnection(svc *Service, stream grpc.ServerStream) error {
 		return err
 	}
 
-	req := new(pluginpb.GetConnectionRequest)
+	req := new(pluginAPI.GetConnectionRequest)
 	if err := stream.RecvMsg(req); err != nil {
 		return err
 	}
@@ -76,8 +76,8 @@ func proxyHostUnaryCall(svc *Service, stream grpc.ServerStream, conn *grpc.Clien
 	if md, ok := metadata.FromIncomingContext(stream.Context()); ok {
 		callCtx = metadata.NewOutgoingContext(callCtx, md.Copy())
 	}
-	if api.UpstreamConf.AgentName != "" {
-		callCtx = metadata.AppendToOutgoingContext(callCtx, "agent_name", api.UpstreamConf.AgentName)
+	if commanderAPI.UpstreamConf.AgentName != "" {
+		callCtx = metadata.AppendToOutgoingContext(callCtx, "agent_name", commanderAPI.UpstreamConf.AgentName)
 	}
 	if err := conn.Invoke(callCtx, method, in, out); err != nil {
 		return err
@@ -115,16 +115,16 @@ func upstreamGRPCTarget(raw string) (string, error) {
 	if host == "" {
 		return "", fmt.Errorf("upstream host is required")
 	}
-	return net.JoinHostPort(host, fmt.Sprintf("%d", api.UpstreamGRPCPort)), nil
+	return net.JoinHostPort(host, fmt.Sprintf("%d", commanderAPI.UpstreamGRPCPort)), nil
 }
 
 type upstreamBasicAuthCredentials struct{}
 
 func (upstreamBasicAuthCredentials) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
-	if api.UpstreamConf.Username == "" && api.UpstreamConf.Password == "" {
+	if commanderAPI.UpstreamConf.Username == "" && commanderAPI.UpstreamConf.Password == "" {
 		return nil, nil
 	}
-	token := base64.StdEncoding.EncodeToString([]byte(api.UpstreamConf.Username + ":" + api.UpstreamConf.Password))
+	token := base64.StdEncoding.EncodeToString([]byte(commanderAPI.UpstreamConf.Username + ":" + commanderAPI.UpstreamConf.Password))
 	return map[string]string{"authorization": "Basic " + token}, nil
 }
 
@@ -133,17 +133,17 @@ func (upstreamBasicAuthCredentials) RequireTransportSecurity() bool {
 }
 
 func newUpstreamHostConn() (*grpc.ClientConn, error) {
-	if !api.UpstreamConf.Valid() {
+	if !commanderAPI.UpstreamConf.Valid() {
 		return nil, nil
 	}
-	secure := strings.HasPrefix(api.UpstreamConf.Host, "https://")
-	target, err := upstreamGRPCTarget(api.UpstreamConf.Host)
+	secure := strings.HasPrefix(commanderAPI.UpstreamConf.Host, "https://")
+	target, err := upstreamGRPCTarget(commanderAPI.UpstreamConf.Host)
 	if err != nil {
 		return nil, err
 	}
 	transportCredentials := credentials.TransportCredentials(insecure.NewCredentials())
 	if secure {
-		transportCredentials = credentials.NewTLS(&tls.Config{InsecureSkipVerify: api.UpstreamConf.InsecureSkipVerify})
+		transportCredentials = credentials.NewTLS(&tls.Config{InsecureSkipVerify: commanderAPI.UpstreamConf.InsecureSkipVerify})
 	}
 	return grpc.NewClient(target,
 		grpc.WithTransportCredentials(transportCredentials),

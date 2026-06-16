@@ -1,0 +1,18 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Notification
+metadata:
+  name: node-with-pod-inhibition
+spec:
+  events:
+    - config.unhealthy
+    - config.warning
+  repeatInterval: 4h
+  to:
+    connection: connection://mission-control/slack
+  inhibitions:
+    - direction: outgoing
+      from: Kubernetes::Node
+      to:
+        - Kubernetes::Pod
+      soft: true
+      depth: 1

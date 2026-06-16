@@ -13,7 +13,8 @@ import (
 	"google.golang.org/grpc"
 
 	"github.com/flanksource/incident-commander/auth"
-	pluginpb "github.com/flanksource/incident-commander/plugin"
+	"github.com/flanksource/incident-commander/plugin"
+	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
 )
 
 // connectionCacheTTL is how long a resolved connection stays cached on the host.
@@ -25,18 +26,18 @@ type connKey struct {
 
 // Service is the host-side gRPC server.
 type Service struct {
-	pluginpb.UnimplementedHostServiceServer
+	pluginAPI.UnimplementedHostServiceServer
 
 	ctx dutyContext.Context
 
 	// connCache memoises named connection resolutions across calls within a single
 	// plugin process. Authorization is checked before serving cached results.
-	connCache *lru.LRU[connKey, *pluginpb.ResolvedConnection]
+	connCache *lru.LRU[connKey, *pluginAPI.ResolvedConnection]
 }
 
 // NewGRPCService creates a host Service.
 func NewGRPCService(ctx dutyContext.Context) *Service {
-	cache := lru.NewLRU[connKey, *pluginpb.ResolvedConnection](256, nil, connectionCacheTTL)
+	cache := lru.NewLRU[connKey, *pluginAPI.ResolvedConnection](256, nil, connectionCacheTTL)
 	return &Service{
 		ctx:       ctx,
 		connCache: cache,
@@ -45,15 +46,15 @@ func NewGRPCService(ctx dutyContext.Context) *Service {
 
 // Register exposes the service on the given gRPC server.
 func (s *Service) Register(g *grpc.Server) {
-	pluginpb.RegisterHostServiceServer(g, s)
+	pluginAPI.RegisterHostServiceServer(g, s)
 }
 
-func (s *Service) GetConfigItem(ctx context.Context, req *pluginpb.GetConfigItemRequest) (*pluginpb.ConfigItem, error) {
+func (s *Service) GetConfigItem(ctx context.Context, req *pluginAPI.GetConfigItemRequest) (*pluginAPI.ConfigItem, error) {
 	if req.Id == "" {
 		return nil, fmt.Errorf("id is required")
 	}
 
-	var out *pluginpb.ConfigItem
+	var out *pluginAPI.ConfigItem
 	err := auth.WithRLS(s.ctx.Wrap(ctx), func(rlsCtx dutyContext.Context) error {
 		var err error
 		out, err = getConfigItem(rlsCtx, ctx, req.Id)
@@ -66,17 +67,17 @@ func (s *Service) GetConfigItem(ctx context.Context, req *pluginpb.GetConfigItem
 	return out, nil
 }
 
-func getConfigItem(ctx dutyContext.Context, queryCtx context.Context, id string) (*pluginpb.ConfigItem, error) {
+func getConfigItem(ctx dutyContext.Context, queryCtx context.Context, id string) (*pluginAPI.ConfigItem, error) {
 	var item models.ConfigItem
 	if err := ctx.DB().WithContext(queryCtx).Where("id = ?", id).First(&item).Error; err != nil {
 		return nil, fmt.Errorf("config item %s: %w", id, err)
 	}
-	return pluginpb.FromConfigItem(item)
+	return plugin.FromConfigItem(item)
 }
 
-func (s *Service) ListConfigs(ctx context.Context, req *pluginpb.ListConfigsRequest) (*pluginpb.ConfigItemList, error) {
-	sel := req.Selector.ToDuty()
-	out := &pluginpb.ConfigItemList{}
+func (s *Service) ListConfigs(ctx context.Context, req *pluginAPI.ListConfigsRequest) (*pluginAPI.ConfigItemList, error) {
+	sel := plugin.ToDutyResourceSelector(req.Selector)
+	out := &pluginAPI.ConfigItemList{}
 
 	list := func(listCtx dutyContext.Context) error {
 		items, err := query.FindConfigsByResourceSelector(listCtx, int(req.Limit), sel)
@@ -85,7 +86,7 @@ func (s *Service) ListConfigs(ctx context.Context, req *pluginpb.ListConfigsRequ
 		}
 
 		for i := range items {
-			ci, err := pluginpb.FromConfigItem(items[i])
+			ci, err := plugin.FromConfigItem(items[i])
 			if err != nil {
 				return err
 			}
@@ -102,7 +103,7 @@ func (s *Service) ListConfigs(ctx context.Context, req *pluginpb.ListConfigsRequ
 	return out, nil
 }
 
-func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnectionRequest) (*pluginpb.ResolvedConnection, error) {
+func (s *Service) GetConnection(ctx context.Context, req *pluginAPI.GetConnectionRequest) (*pluginAPI.ResolvedConnection, error) {
 	if req.GetLookup() == nil {
 		return nil, fmt.Errorf("connection lookup is required")
 	}
@@ -115,24 +116,24 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 	pluginCtx := s.ctx.Wrap(ctx).WithNamespace(entry.Namespace).WithSubject(pluginRBACSubject(entry))
 
 	switch lookup := req.GetLookup().(type) {
-	case *pluginpb.GetConnectionRequest_Type:
+	case *pluginAPI.GetConnectionRequest_Type:
 		ref, ok := entry.Spec.Connections.Types[lookup.Type]
 		if !ok || ref == "" {
 			return nil, pluginCtx.Oops().Code(api.EINVALID).Errorf("plugin did not declare a %s connection mapping", lookup.Type)
 		}
 		return s.getConnectionByRef(pluginCtx, ref)
 
-	case *pluginpb.GetConnectionRequest_Label:
+	case *pluginAPI.GetConnectionRequest_Label:
 		ref, ok := entry.Spec.Connections.Labels[lookup.Label]
 		if !ok || ref == "" {
 			return nil, pluginCtx.Oops().Code(api.EINVALID).Errorf("plugin did not declare connection label %q", lookup.Label)
 		}
 		return s.getConnectionByRef(pluginCtx, ref)
 
-	case *pluginpb.GetConnectionRequest_ConfigItemId:
+	case *pluginAPI.GetConnectionRequest_ConfigItemId:
 		return s.getConnectionForConfig(pluginCtx, lookup.ConfigItemId)
 
-	case *pluginpb.GetConnectionRequest_ConnectionId:
+	case *pluginAPI.GetConnectionRequest_ConnectionId:
 		return s.getConnectionByID(pluginCtx, lookup.ConnectionId)
 
 	default:
@@ -140,7 +141,7 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginpb.GetConnection
 	}
 }
 
-func (s *Service) InvokePlugin(ctx context.Context, req *pluginpb.InvokePluginRequest) (*pluginpb.InvokeResponse, error) {
+func (s *Service) InvokePlugin(ctx context.Context, req *pluginAPI.InvokePluginRequest) (*pluginAPI.InvokeResponse, error) {
 	dutyCtx := invocationDutyContext(s.ctx, ctx)
 	source, err := pluginEntryFromInvocation(ctx)
 	if err != nil {
@@ -175,7 +176,7 @@ func invocationDutyContext(base dutyContext.Context, ctx context.Context) dutyCo
 	return base.Wrap(ctx)
 }
 
-func (s *Service) Log(ctx context.Context, e *pluginpb.LogEntry) (*pluginpb.Empty, error) {
+func (s *Service) Log(ctx context.Context, e *pluginAPI.LogEntry) (*pluginAPI.Empty, error) {
 	logger := s.ctx.Logger
 	args := make([]any, 0, len(e.Fields)*2)
 	for k, v := range e.Fields {
@@ -196,16 +197,16 @@ func (s *Service) Log(ctx context.Context, e *pluginpb.LogEntry) (*pluginpb.Empt
 	default:
 		logger.Infof(prefix, args...)
 	}
-	return &pluginpb.Empty{}, nil
+	return &pluginAPI.Empty{}, nil
 }
 
 // WriteArtifact / ReadArtifact are stubbed for the MVP.
 // The artifact store integration is straight-forward (artifacts.Default in
 // this codebase) but is not exercised by Phase 0–4 of the plugin plan.
-func (s *Service) WriteArtifact(ctx context.Context, a *pluginpb.Artifact) (*pluginpb.ArtifactRef, error) {
+func (s *Service) WriteArtifact(ctx context.Context, a *pluginAPI.Artifact) (*pluginAPI.ArtifactRef, error) {
 	return nil, fmt.Errorf("WriteArtifact: not implemented")
 }
 
-func (s *Service) ReadArtifact(ctx context.Context, ref *pluginpb.ArtifactRef) (*pluginpb.Artifact, error) {
+func (s *Service) ReadArtifact(ctx context.Context, ref *pluginAPI.ArtifactRef) (*pluginAPI.Artifact, error) {
 	return nil, fmt.Errorf("ReadArtifact: not implemented")
 }

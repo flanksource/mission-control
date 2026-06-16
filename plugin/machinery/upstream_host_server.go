@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/duty/models"
 	dutyUpstream "github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/plugin"
+	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
@@ -19,7 +20,7 @@ type upstreamHostService struct {
 	*Service
 }
 
-func (upstreamHostService) GetConnection(context.Context, *plugin.GetConnectionRequest) (*plugin.ResolvedConnection, error) {
+func (upstreamHostService) GetConnection(context.Context, *pluginAPI.GetConnectionRequest) (*pluginAPI.ResolvedConnection, error) {
 	return nil, status.Error(codes.FailedPrecondition, "GetConnection must be served by the agent")
 }
 
@@ -31,7 +32,7 @@ func StartUpstreamHostGRPCServer(ctx dutyContext.Context, port int) (*grpc.Serve
 
 	svc := NewGRPCService(ctx)
 	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(upstreamHostUnaryInterceptor(ctx)))
-	plugin.RegisterHostServiceServer(grpcServer, upstreamHostService{Service: svc})
+	pluginAPI.RegisterHostServiceServer(grpcServer, upstreamHostService{Service: svc})
 
 	go func() {
 		_ = grpcServer.Serve(lis)
@@ -41,7 +42,7 @@ func StartUpstreamHostGRPCServer(ctx dutyContext.Context, port int) (*grpc.Serve
 
 func upstreamHostUnaryInterceptor(base dutyContext.Context) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
-		if info.FullMethod == plugin.HostService_GetConnection_FullMethodName {
+		if info.FullMethod == pluginAPI.HostService_GetConnection_FullMethodName {
 			return nil, status.Error(codes.FailedPrecondition, "GetConnection must be served by the agent")
 		}
 
@@ -59,7 +60,7 @@ func upstreamHostContextWithInvocation(base dutyContext.Context, ctx context.Con
 		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
 
-	values := md.Get(plugin.InvocationTokenGRPCMetadataKey)
+	values := md.Get(pluginAPI.InvocationTokenGRPCMetadataKey)
 	if len(values) == 0 || values[0] == "" {
 		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}

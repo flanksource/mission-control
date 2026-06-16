@@ -12,7 +12,7 @@ import (
 
 	goplugin "github.com/hashicorp/go-plugin"
 
-	"github.com/flanksource/incident-commander/plugin/machinery/local"
+	"github.com/flanksource/incident-commander/plugin/api"
 )
 
 // Option configures Serve.
@@ -44,6 +44,29 @@ func shutdownSignal() {
 	shutdownOnce.Do(func() { close(shutdownCh) })
 }
 
+// parentPollInterval is how often the plugin checks whether its host is still
+// alive.
+const parentPollInterval = time.Second
+
+// watchParentDeath calls onDeath the first time the parent pid changes from
+// original. The host launches the plugin as a direct child, so a changed ppid
+// means the host process is gone — it died abruptly (crash/SIGKILL) before it
+// could send the graceful Shutdown RPC. go-plugin offers no protection against
+// this, so without it an abruptly-killed host leaves orphaned plugin processes
+// holding their ports. Polling getppid works identically on Linux and macOS,
+// where there is no kernel mechanism (Pdeathsig is Linux-only) to tear a child
+// down with its parent.
+func watchParentDeath(original int, interval time.Duration, getppid func() int, onDeath func()) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	for range ticker.C {
+		if getppid() != original {
+			onDeath()
+			return
+		}
+	}
+}
+
 // Serve is the entry point for plugin binaries. It:
 //
 //  1. validates the magic-cookie env var (exits 1 if not set);
@@ -71,12 +94,17 @@ func Serve(impl Plugin, opts ...Option) {
 	uiPort, httpServer := startHTTPServer(cfg, srv)
 	srv.uiPort = uiPort
 
+	go watchParentDeath(os.Getppid(), parentPollInterval, os.Getppid, func() {
+		fmt.Fprintln(os.Stderr, "plugin: host process exited; shutting down")
+		os.Exit(1)
+	})
+
 	goplugin.Serve(&goplugin.ServeConfig{
-		HandshakeConfig: local.Handshake,
+		HandshakeConfig: api.Handshake,
 		Plugins: map[string]goplugin.Plugin{
-			local.PluginName: &grpcAdapter{srv: srv},
+			api.PluginName: &grpcAdapter{srv: srv},
 		},
-		GRPCServer: local.GRPCServerFactory,
+		GRPCServer: api.GRPCServerFactory,
 	})
 
 	// goplugin.Serve blocks until the host disconnects. Try to drain the

@@ -16,6 +16,7 @@ import (
 	"sync"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/plugin/api"
 	"github.com/google/uuid"
 )
 
@@ -23,7 +24,7 @@ var ErrAmbiguousPlugin = errors.New("ambiguous plugin reference")
 
 // Runtime is the host-side handle for a reachable plugin.
 type Runtime interface {
-	Invoke(context.Context, *InvokeRequest) (*InvokeResponse, error)
+	Invoke(context.Context, *api.InvokeRequest) (*api.InvokeResponse, error)
 	UIPort() uint32
 	Stop()
 }
@@ -37,8 +38,8 @@ type Entry struct {
 	Name          string
 	Namespace     string
 	Spec          v1.PluginSpec
-	Kind          Kind
-	Manifest      *PluginManifest
+	Kind          api.Kind
+	Manifest      *api.PluginManifest
 	Runtime       Runtime
 	InstalledPath string
 
@@ -82,21 +83,21 @@ func (r *Registry) Upsert(id uuid.UUID, namespace, name string, spec v1.PluginSp
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	return r.upsertLocked(id, namespace, name, spec, PluginKindLocal, nil, nil)
+	return r.upsertLocked(id, namespace, name, spec, api.PluginKindLocal, nil, nil)
 }
 
 // UpsertProxied registers a plugin runtime reported by an authenticated agent.
-func (r *Registry) UpsertProxied(id uuid.UUID, namespace, name string, spec v1.PluginSpec, manifest *PluginManifest, agentID uuid.UUID) (*Entry, error) {
+func (r *Registry) UpsertProxied(id uuid.UUID, namespace, name string, spec v1.PluginSpec, manifest *api.PluginManifest, agentID uuid.UUID) (*Entry, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if agentID == uuid.Nil {
 		return nil, fmt.Errorf("agent id is required")
 	}
-	return r.upsertLocked(id, namespace, name, spec, PluginKindProxied, &agentID, manifest)
+	return r.upsertLocked(id, namespace, name, spec, api.PluginKindProxied, &agentID, manifest)
 }
 
-func (r *Registry) upsertLocked(id uuid.UUID, namespace, name string, spec v1.PluginSpec, kind Kind, agentID *uuid.UUID, manifest *PluginManifest) (*Entry, error) {
+func (r *Registry) upsertLocked(id uuid.UUID, namespace, name string, spec v1.PluginSpec, kind api.Kind, agentID *uuid.UUID, manifest *api.PluginManifest) (*Entry, error) {
 	if id == uuid.Nil {
 		return nil, fmt.Errorf("plugin id is required")
 	}
@@ -131,7 +132,7 @@ func (r *Registry) upsertLocked(id uuid.UUID, namespace, name string, spec v1.Pl
 }
 
 // SetManifest stores the manifest a plugin returned from RegisterPlugin.
-func (r *Registry) SetManifest(id uuid.UUID, m *PluginManifest) error {
+func (r *Registry) SetManifest(id uuid.UUID, m *api.PluginManifest) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	e, ok := r.plugins[id]
