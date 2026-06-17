@@ -160,12 +160,8 @@ func runRemotePlaybook(cmd *cobra.Command, args []string) error {
 
 	playbookRef := item.Namespace + "/" + item.Name
 	if !playbookWait {
-		return Log(cmd.OutOrStdout(), map[string]any{
-			"type":      "playbook_run_scheduled",
-			"playbook":  playbookRef,
-			"run_id":    response.RunID,
-			"starts_at": response.StartsAt,
-		})
+		logger.V(1).Infof("type=playbook_run_scheduled playbook=%s run_id=%s starts_at=%s", playbookRef, response.RunID, response.StartsAt)
+		return nil
 	}
 
 	logger.V(1).Infof("type=playbook_run_scheduled playbook=%s run_id=%s starts_at=%s", playbookRef, response.RunID, response.StartsAt)

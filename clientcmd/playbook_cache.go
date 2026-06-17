@@ -168,12 +168,8 @@ func newCachedPlaybookCommand(item api.PlaybookListItem, name string) *cobra.Com
 			}
 			ref := playbookRef(item)
 			if !wait {
-				return Log(cmd.OutOrStdout(), map[string]any{
-					"type":      "playbook_run_scheduled",
-					"playbook":  ref,
-					"run_id":    response.RunID,
-					"starts_at": response.StartsAt,
-				})
+				logger.V(1).Infof("type=playbook_run_scheduled playbook=%s run_id=%s starts_at=%s", ref, response.RunID, response.StartsAt)
+				return nil
 			}
 			logger.V(1).Infof("type=playbook_run_scheduled playbook=%s run_id=%s starts_at=%s", ref, response.RunID, response.StartsAt)
 			summary, err := waitForRemotePlaybookRunWithInterval(cmd.ErrOrStderr(), client, response.RunID, pollInterval)
