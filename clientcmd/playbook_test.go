@@ -160,34 +160,6 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		Expect(stdout.String()).To(ContainSubstring(`"code": 200`))
 	})
 
-	for _, tt := range []struct {
-		name string
-		opts clicky.FormatOptions
-	}{
-		{name: "CSV", opts: clicky.FormatOptions{CSV: true}},
-		{name: "table", opts: clicky.FormatOptions{Table: true}},
-	} {
-		ginkgo.It("prints action results as "+tt.name+" with clicky", func() {
-			clicky.Flags.FormatOptions = tt.opts
-			var stdout bytes.Buffer
-
-			err := PrintPlaybookActionResults(&stdout, &sdk.PlaybookSummary{
-				Actions: []models.PlaybookRunAction{{
-					Name:   "HTTP Request",
-					Status: models.PlaybookActionStatusCompleted,
-					Result: map[string]any{
-						"code":        200,
-						"content":     "37.59.119.142",
-						"contentType": "text/plain",
-					},
-				}},
-			})
-
-			Expect(err).ToNot(HaveOccurred())
-			Expect(stdout.String()).ToNot(BeEmpty())
-		})
-	}
-
 	ginkgo.It("prints playbook lists as a compact table by default", func() {
 		id := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 		var stdout bytes.Buffer

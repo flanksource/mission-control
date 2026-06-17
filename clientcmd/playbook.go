@@ -4,12 +4,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/flanksource/clicky"
-	clickyapi "github.com/flanksource/clicky/api"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/sdk"
@@ -237,24 +235,17 @@ func PlaybookActionResults(summary *sdk.PlaybookSummary) PlaybookRunOutput {
 }
 
 func PrintPlaybookActionResults(w io.Writer, summary *sdk.PlaybookSummary) error {
-	output := PlaybookActionResults(summary)
-	return printClicky(w, "yaml", func(opts clicky.FormatOptions) any {
-		return playbookClickyData(output, opts)
-	})
+	return printClicky(w, PlaybookActionResults(summary), "yaml")
 }
 
-func printClicky(w io.Writer, defaultFormat string, formatData func(clicky.FormatOptions) any) error {
+func printClicky(w io.Writer, data any, defaultFormat string) error {
 	opts := clicky.Flags.FormatOptions
 	if err := opts.ParseFormatSpec(); err != nil {
 		return err
 	}
 
 	if len(opts.Sinks) == 0 {
-		base := clicky.FormatOptions{Format: defaultFormat}
-		if opts.Table && opts.Format == "" {
-			base.Format = "pretty"
-		}
-		return writeClickyOutput(w, formatData(opts), base, opts)
+		return writeClickyOutput(w, data, clicky.FormatOptions{Format: defaultFormat}, opts)
 	}
 
 	for _, sink := range opts.Sinks {
@@ -264,10 +255,6 @@ func printClicky(w io.Writer, defaultFormat string, formatData func(clicky.Forma
 		sinkOpts.JSON, sinkOpts.YAML, sinkOpts.CSV = false, false, false
 		sinkOpts.HTML, sinkOpts.Markdown, sinkOpts.Pretty = false, false, false
 		sinkOpts.PDF, sinkOpts.Slack = false, false
-		data := formatData(sinkOpts)
-		if sinkOpts.Format == "table" {
-			sinkOpts.Format = "pretty"
-		}
 		if sink.File == "" {
 			if err := writeClickyOutput(w, data, sinkOpts); err != nil {
 				return err
@@ -282,80 +269,6 @@ func printClicky(w io.Writer, defaultFormat string, formatData func(clicky.Forma
 	return nil
 }
 
-func playbookClickyData(output PlaybookRunOutput, opts clicky.FormatOptions) any {
-	format := strings.ToLower(opts.Format)
-	if opts.CSV || opts.Table || format == "csv" || format == "table" {
-		return playbookActionResultsTable(output)
-	}
-	return output
-}
-
-func playbookActionResultsTable(output PlaybookRunOutput) clickyapi.TextTable {
-	if len(output.Results) == 0 {
-		table := clicky.Table("Key", "Value")
-		for _, row := range flattenedRows("", output.Result) {
-			table.Rows = append(table.Rows, clickyapi.TableRow{
-				"Key":   clickyapi.NewTypedValue(row.key),
-				"Value": clickyapi.NewTypedValue(row.value),
-			})
-		}
-		return table
-	}
-
-	table := clicky.Table("Action", "Key", "Value")
-	for _, result := range output.Results {
-		for _, row := range flattenedRows("", result.Result) {
-			table.Rows = append(table.Rows, clickyapi.TableRow{
-				"Action": clickyapi.NewTypedValue(result.Name),
-				"Key":    clickyapi.NewTypedValue(row.key),
-				"Value":  clickyapi.NewTypedValue(row.value),
-			})
-		}
-	}
-	return table
-}
-
-type flattenedRow struct {
-	key   string
-	value string
-}
-
-func flattenedRows(prefix string, value any) []flattenedRow {
-	switch v := value.(type) {
-	case map[string]any:
-		keys := make([]string, 0, len(v))
-		for key := range v {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		rows := make([]flattenedRow, 0, len(keys))
-		for _, key := range keys {
-			next := key
-			if prefix != "" {
-				next = prefix + "." + key
-			}
-			rows = append(rows, flattenedRows(next, v[key])...)
-		}
-		return rows
-	case map[string]string:
-		keys := make([]string, 0, len(v))
-		for key := range v {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		rows := make([]flattenedRow, 0, len(keys))
-		for _, key := range keys {
-			next := key
-			if prefix != "" {
-				next = prefix + "." + key
-			}
-			rows = append(rows, flattenedRow{key: next, value: v[key]})
-		}
-		return rows
-	default:
-		return []flattenedRow{{key: prefix, value: fmt.Sprint(value)}}
-	}
-}
 func writeClickyOutput(w io.Writer, data any, opts ...clicky.FormatOptions) error {
 	out, err := clicky.Format(data, opts...)
 	if err != nil {
