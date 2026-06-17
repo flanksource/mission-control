@@ -27,6 +27,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 	var savedCheckID string
 	var savedPollInterval time.Duration
 	var savedJSONLogs bool
+	var savedFormatOptions clicky.FormatOptions
 
 	ginkgo.BeforeEach(func() {
 		savedParamFile = ParamFile
@@ -35,7 +36,9 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		savedCheckID = playbookCheckID
 		savedPollInterval = playbookPollInterval
 		savedJSONLogs = clicky.Flags.JsonLogs
+		savedFormatOptions = clicky.Flags.FormatOptions
 		clicky.Flags.JsonLogs = false
+		clicky.Flags.FormatOptions = clicky.FormatOptions{}
 	})
 
 	ginkgo.AfterEach(func() {
@@ -45,6 +48,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		playbookCheckID = savedCheckID
 		playbookPollInterval = savedPollInterval
 		clicky.Flags.JsonLogs = savedJSONLogs
+		clicky.Flags.FormatOptions = savedFormatOptions
 	})
 
 	ginkgo.It("resolves playbook refs by id, namespace/name, and unambiguous name", func() {
@@ -119,7 +123,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		actionID := uuid.MustParse("22222222-2222-2222-2222-222222222222")
 		var stdout bytes.Buffer
 
-		err := LogYAML(&stdout, PlaybookActionResults(&sdk.PlaybookSummary{
+		err := PrintPlaybookActionResults(&stdout, &sdk.PlaybookSummary{
 			Playbook: models.Playbook{Namespace: "ops", Name: "diagnose"},
 			Run:      models.PlaybookRun{ID: uuid.New(), Status: models.PlaybookRunStatusCompleted},
 			Actions: []models.PlaybookRunAction{{
@@ -128,7 +132,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 				Status: models.PlaybookActionStatusCompleted,
 				Result: map[string]any{"code": 200, "content": "37.59.119.142"},
 			}},
-		}))
+		})
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(stdout.String()).To(ContainSubstring("result:"))
@@ -139,20 +143,21 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		Expect(stdout.String()).ToNot(ContainSubstring(actionID.String()))
 	})
 
-	ginkgo.It("prints action results as JSON when json logs are enabled", func() {
-		clicky.Flags.JsonLogs = true
+	ginkgo.It("prints action results as JSON when clicky JSON output is enabled", func() {
+		clicky.Flags.FormatOptions.JSON = true
 		var stdout bytes.Buffer
 
-		err := LogYAML(&stdout, PlaybookActionResults(&sdk.PlaybookSummary{
+		err := PrintPlaybookActionResults(&stdout, &sdk.PlaybookSummary{
 			Actions: []models.PlaybookRunAction{{
 				Name:   "HTTP Request",
 				Status: models.PlaybookActionStatusCompleted,
 				Result: map[string]any{"code": 200},
 			}},
-		}))
+		})
 
 		Expect(err).ToNot(HaveOccurred())
-		Expect(stdout.String()).To(ContainSubstring(`"result":{"code":200}`))
+		Expect(stdout.String()).To(ContainSubstring(`"result": {`))
+		Expect(stdout.String()).To(ContainSubstring(`"code": 200`))
 	})
 
 	ginkgo.It("prints playbook lists as a compact table by default", func() {

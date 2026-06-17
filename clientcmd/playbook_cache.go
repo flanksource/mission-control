@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/clicky"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/sdk"
@@ -183,7 +184,7 @@ func newCachedPlaybookCommand(item api.PlaybookListItem, name string) *cobra.Com
 			if err != nil {
 				return err
 			}
-			if err := LogYAML(cmd.OutOrStdout(), PlaybookActionResults(summary)); err != nil {
+			if err := PrintPlaybookActionResults(cmd.OutOrStdout(), summary); err != nil {
 				return err
 			}
 			if summary.Run.Status != "completed" {
@@ -192,6 +193,7 @@ func newCachedPlaybookCommand(item api.PlaybookListItem, name string) *cobra.Com
 			return nil
 		},
 	}
+	clicky.BindAllFlags(cmd.Flags(), "format")
 	cmd.Flags().BoolVar(&wait, "wait", true, "Wait for the playbook run to finish")
 	cmd.Flags().DurationVar(&pollInterval, "poll-interval", 2*time.Second, "Polling interval used with --wait")
 	cmd.Flags().StringVar(&configID, "config-id", "", "Config ID to run the playbook against")
