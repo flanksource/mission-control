@@ -327,15 +327,24 @@ func BuildArchive() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// BuildArchiveFromDir creates a tar.gz archive of all report files in srcDir.
+// BuildArchiveFromDir creates a tar.gz archive of the report source files in
+// srcDir. Install and build state (node_modules, .facet, .git) is excluded so
+// the renderer installs dependencies cleanly instead of using shipped copies
+// that may be incomplete or symlinked to paths absent on the server.
 func BuildArchiveFromDir(srcDir string) ([]byte, error) {
 	var buf bytes.Buffer
 	gw := gzip.NewWriter(&buf)
 	tw := tar.NewWriter(gw)
 
 	err := filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil || d.IsDir() {
+		if err != nil {
 			return err
+		}
+		if d.IsDir() {
+			if path != srcDir && isArchiveExcludedDir(d.Name()) {
+				return filepath.SkipDir
+			}
+			return nil
 		}
 		rel, err := filepath.Rel(srcDir, path)
 		if err != nil {
@@ -372,6 +381,16 @@ func BuildArchiveFromDir(srcDir string) ([]byte, error) {
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// isArchiveExcludedDir reports whether a directory holds install or build state
+// that must not be shipped to the facet renderer.
+func isArchiveExcludedDir(name string) bool {
+	switch name {
+	case "node_modules", ".facet", ".git":
+		return true
+	}
+	return false
 }
 
 func sanitizeReportPackageJSON(data []byte, allowLocalLinks bool) ([]byte, error) {

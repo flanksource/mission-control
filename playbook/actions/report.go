@@ -123,9 +123,13 @@ func (r *Report) renderCatalogFacet(ctx context.Context, action v1.ReportAction,
 	}
 
 	if baseURL != "" {
-		return report.RenderHTTPFromDir(ctx, baseURL, token, data, facetFormat, srcDir, entryFile, report.RenderHTTPOptions{
-			TimestampURL: timestampURL,
-		})
+		opts := report.RenderHTTPOptions{TimestampURL: timestampURL}
+		// The embedded default ships the pristine embedded files; a custom file
+		// ships its own directory.
+		if action.File == nil {
+			return report.RenderHTTP(ctx, baseURL, token, data, facetFormat, entryFile, opts)
+		}
+		return report.RenderHTTPFromDir(ctx, baseURL, token, data, facetFormat, srcDir, entryFile, opts)
 	}
 
 	result, err := report.RenderCLIFromDir(data, facetFormat, srcDir, entryFile)
