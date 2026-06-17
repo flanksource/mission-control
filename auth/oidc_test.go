@@ -24,6 +24,7 @@ import (
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	oidclib "github.com/zitadel/oidc/v3/pkg/oidc"
+	"github.com/zitadel/oidc/v3/pkg/op"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/flanksource/incident-commander/vars"
@@ -187,6 +188,31 @@ var _ = ginkgo.Describe("OIDC", func() {
 			rt, err := provider.Storage.TokenRequestByRefreshToken(gocontext.TODO(), refreshToken)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(rt.GetSubject()).To(Equal(person.ID.String()))
+		})
+
+		ginkgo.It("includes subject in id tokens", func() {
+			req := &oidclib.AuthRequest{
+				ClientID:     oidc.ClientID,
+				RedirectURI:  "http://localhost:9999/callback",
+				Scopes:       []string{"openid", "profile", "email"},
+				ResponseType: "code",
+			}
+			ar, err := provider.Storage.CreateAuthRequest(gocontext.TODO(), req, "")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(provider.Storage.SetAuthRequestSubject(ar.GetID(), person.ID.String())).To(Succeed())
+
+			fetched, err := provider.Storage.AuthRequestByID(gocontext.TODO(), ar.GetID())
+			Expect(err).ToNot(HaveOccurred())
+			client, err := provider.Storage.GetClientByClientID(gocontext.TODO(), oidc.ClientID)
+			Expect(err).ToNot(HaveOccurred())
+
+			idToken, err := op.CreateIDToken(gocontext.TODO(), "http://localhost:8080", fetched, time.Hour, "access-token", "auth-code", provider.Storage, client)
+			Expect(err).ToNot(HaveOccurred())
+
+			claims := jwt.MapClaims{}
+			_, _, err = new(jwt.Parser).ParseUnverified(idToken, claims)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(claims["sub"]).To(Equal(person.ID.String()))
 		})
 
 		ginkgo.It("revokes refresh tokens", func() {
