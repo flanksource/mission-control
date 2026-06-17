@@ -407,6 +407,38 @@
       ],
       "description": "CatalogAction creates a config item in the catalog."
     },
+    "CatalogReportSections": {
+      "properties": {
+        "changes": {
+          "type": "boolean"
+        },
+        "insights": {
+          "type": "boolean"
+        },
+        "relationships": {
+          "type": "boolean"
+        },
+        "access": {
+          "type": "boolean"
+        },
+        "accessLogs": {
+          "type": "boolean"
+        },
+        "configJSON": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "changes",
+        "insights",
+        "relationships",
+        "access",
+        "accessLogs",
+        "configJSON"
+      ]
+    },
     "ConfigMapKeySelector": {
       "properties": {
         "name": {
@@ -2172,7 +2204,11 @@
         },
         "configs": {
           "$ref": "#/$defs/ResourceSelector",
-          "description": "Inline catalog query (alternative to View)"
+          "description": "Inline catalog query for the catalog report (alternative to View)"
+        },
+        "file": {
+          "$ref": "#/$defs/ReportFile",
+          "description": "File selects the TSX template that renders the catalog report.\nWhen unset, the embedded CatalogReport.tsx is used."
         },
         "format": {
           "type": "string",
@@ -2188,10 +2224,67 @@
         "facet": {
           "$ref": "#/$defs/FacetOptions",
           "description": "Facet rendering options for facet-html and facet-pdf formats"
+        },
+        "since": {
+          "type": "string",
+          "description": "Since is the time range for changes and access logs (e.g. \"30d\"). Defaults to 30d."
+        },
+        "recursive": {
+          "type": "boolean",
+          "description": "Recursive includes all descendant config items in the catalog report."
+        },
+        "groupBy": {
+          "type": "string",
+          "description": "GroupBy controls descendant grouping: \"none\" (default), \"merged\", or \"config\"."
+        },
+        "sections": {
+          "$ref": "#/$defs/CatalogReportSections",
+          "description": "Sections selects which catalog report sections to include."
         }
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "ReportFile": {
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path to a local TSX file. A relative path is resolved against the\nworking directory (e.g. \"report/CatalogReport.tsx\"); an absolute path is\nused as-is. The file's directory must contain the report scaffold."
+        },
+        "git": {
+          "$ref": "#/$defs/ReportGitFile",
+          "description": "Git references a TSX file inside a git repository."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "ReportFile selects the TSX template used to render the catalog report,\neither from a git repository or a local file path."
+    },
+    "ReportGitFile": {
+      "properties": {
+        "connection": {
+          "type": "string",
+          "description": "Connection name used for credentials to the git repo."
+        },
+        "url": {
+          "type": "string",
+          "description": "URL of the git repository."
+        },
+        "base": {
+          "type": "string",
+          "description": "Base is the branch to clone. Defaults to \"main\"."
+        },
+        "file": {
+          "type": "string",
+          "description": "File is the path to the TSX file within the repository."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "url",
+        "file"
+      ]
     },
     "ResourceSelector": {
       "properties": {

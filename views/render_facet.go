@@ -106,7 +106,7 @@ func renderFacetWithData(ctx context.Context, data any, format string, opts *v1.
 		return nil, fmt.Errorf("data must not be nil")
 	}
 
-	baseURL, token, timestampURL, err := resolveFacetConnection(ctx, opts)
+	baseURL, token, timestampURL, err := ResolveFacetConnection(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +124,10 @@ func renderFacetWithData(ctx context.Context, data any, format string, opts *v1.
 	return result.Data, nil
 }
 
-func resolveFacetConnection(ctx context.Context, opts *v1.FacetOptions) (baseURL, token, timestampURL string, err error) {
+// ResolveFacetConnection resolves the facet rendering server connection from
+// the action's facet options. Returns empty baseURL when no remote server is
+// configured (local CLI rendering should be used).
+func ResolveFacetConnection(ctx context.Context, opts *v1.FacetOptions) (baseURL, token, timestampURL string, err error) {
 	if opts == nil {
 		return "", "", "", nil
 	}

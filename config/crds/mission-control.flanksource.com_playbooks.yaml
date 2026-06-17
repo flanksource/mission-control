@@ -4295,7 +4295,8 @@ spec:
                     report:
                       properties:
                         configs:
-                          description: Inline catalog query (alternative to View)
+                          description: Inline catalog query for the catalog report
+                            (alternative to View)
                           properties:
                             agent:
                               description: |-
@@ -4383,9 +4384,83 @@ spec:
                             url:
                               type: string
                           type: object
+                        file:
+                          description: |-
+                            File selects the TSX template that renders the catalog report.
+                            When unset, the embedded CatalogReport.tsx is used.
+                          properties:
+                            git:
+                              description: Git references a TSX file inside a git
+                                repository.
+                              properties:
+                                base:
+                                  description: Base is the branch to clone. Defaults
+                                    to "main".
+                                  type: string
+                                connection:
+                                  description: Connection name used for credentials
+                                    to the git repo.
+                                  type: string
+                                file:
+                                  description: File is the path to the TSX file within
+                                    the repository.
+                                  type: string
+                                url:
+                                  description: URL of the git repository.
+                                  type: string
+                              required:
+                              - file
+                              - url
+                              type: object
+                            path:
+                              description: |-
+                                Path to a local TSX file. A relative path is resolved against the
+                                working directory (e.g. "report/CatalogReport.tsx"); an absolute path is
+                                used as-is. The file's directory must contain the report scaffold.
+                              type: string
+                          type: object
+                          x-kubernetes-validations:
+                          - message: exactly one of path or git must be set
+                            rule: has(self.path) != has(self.git)
                         format:
                           description: 'Output format: json, csv, facet-html, facet-pdf,
                             markdown, slack, html, pdf'
+                          type: string
+                        groupBy:
+                          description: 'GroupBy controls descendant grouping: "none"
+                            (default), "merged", or "config".'
+                          type: string
+                        recursive:
+                          description: Recursive includes all descendant config items
+                            in the catalog report.
+                          type: boolean
+                        sections:
+                          description: Sections selects which catalog report sections
+                            to include.
+                          properties:
+                            access:
+                              type: boolean
+                            accessLogs:
+                              type: boolean
+                            changes:
+                              type: boolean
+                            configJSON:
+                              type: boolean
+                            insights:
+                              type: boolean
+                            relationships:
+                              type: boolean
+                          required:
+                          - access
+                          - accessLogs
+                          - changes
+                          - configJSON
+                          - insights
+                          - relationships
+                          type: object
+                        since:
+                          description: Since is the time range for changes and access
+                            logs (e.g. "30d"). Defaults to 30d.
                           type: string
                         variables:
                           additionalProperties:
@@ -4398,8 +4473,9 @@ spec:
                           type: string
                       type: object
                       x-kubernetes-validations:
-                      - message: view and configs are mutually exclusive
-                        rule: '!(has(self.view) && self.view != "" && has(self.configs))'
+                      - message: view is mutually exclusive with configs and file
+                        rule: '!(has(self.view) && self.view != "" && (has(self.configs)
+                          || has(self.file)))'
                     retry:
                       description: Retry specifies the retry policy for the action.
                       properties:

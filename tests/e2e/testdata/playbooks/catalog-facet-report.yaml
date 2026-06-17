@@ -1,0 +1,37 @@
+# yaml-language-server: $schema=../playbook-fixture.schema.json
+config: LogisticsAPIPodConfig
+setup:
+  facet: true
+  permissions:
+    - ../fixtures/allow-artifacts.yaml
+params:
+  facet_url: "{{facetURL}}"
+
+playbook:
+  title: Catalog Facet HTML Test
+  configs:
+    - types:
+        - Kubernetes::Pod
+  parameters:
+    - name: facet_url
+      label: Facet server URL
+  actions:
+    - name: generate-catalog-facet-html
+      report:
+        configs:
+          types:
+            - Kubernetes::Pod
+        format: facet-html
+        facet:
+          url: $(.params.facet_url)
+
+output:
+  run:
+    status: completed
+  actions:
+    - name: generate-catalog-facet-html
+      status: completed
+      result:
+        format: facet-html
+      artifacts:
+        - content_type: text/html
