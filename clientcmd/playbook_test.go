@@ -166,7 +166,6 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 	}{
 		{name: "CSV", opts: clicky.FormatOptions{CSV: true}},
 		{name: "table", opts: clicky.FormatOptions{Table: true}},
-		{name: "tree", opts: clicky.FormatOptions{Tree: true}},
 	} {
 		ginkgo.It("prints action results as "+tt.name+" with clicky", func() {
 			clicky.Flags.FormatOptions = tt.opts

@@ -251,7 +251,7 @@ func printClicky(w io.Writer, defaultFormat string, formatData func(clicky.Forma
 
 	if len(opts.Sinks) == 0 {
 		base := clicky.FormatOptions{Format: defaultFormat}
-		if (opts.Table || opts.Tree) && opts.Format == "" {
+		if opts.Table && opts.Format == "" {
 			base.Format = "pretty"
 		}
 		return writeClickyOutput(w, formatData(opts), base, opts)
@@ -265,7 +265,7 @@ func printClicky(w io.Writer, defaultFormat string, formatData func(clicky.Forma
 		sinkOpts.HTML, sinkOpts.Markdown, sinkOpts.Pretty = false, false, false
 		sinkOpts.PDF, sinkOpts.Slack = false, false
 		data := formatData(sinkOpts)
-		if sinkOpts.Format == "table" || sinkOpts.Format == "tree" {
+		if sinkOpts.Format == "table" {
 			sinkOpts.Format = "pretty"
 		}
 		if sink.File == "" {
@@ -286,9 +286,6 @@ func playbookClickyData(output PlaybookRunOutput, opts clicky.FormatOptions) any
 	format := strings.ToLower(opts.Format)
 	if opts.CSV || opts.Table || format == "csv" || format == "table" {
 		return playbookActionResultsTable(output)
-	}
-	if opts.Tree || format == "tree" {
-		return playbookActionResultsTree(output)
 	}
 	return output
 }
@@ -316,18 +313,6 @@ func playbookActionResultsTable(output PlaybookRunOutput) clickyapi.TextTable {
 		}
 	}
 	return table
-}
-
-func playbookActionResultsTree(output PlaybookRunOutput) clickyapi.TextTree {
-	if len(output.Results) == 0 {
-		return clicky.Tree(clicky.Text("result"), resultTreeChildren(output.Result)...)
-	}
-
-	children := make([]clickyapi.TextTree, 0, len(output.Results))
-	for _, result := range output.Results {
-		children = append(children, clicky.Tree(clicky.Text(result.Name), resultTreeChildren(result.Result)...))
-	}
-	return clicky.Tree(clicky.Text("results"), children...)
 }
 
 type flattenedRow struct {
@@ -371,36 +356,6 @@ func flattenedRows(prefix string, value any) []flattenedRow {
 		return []flattenedRow{{key: prefix, value: fmt.Sprint(value)}}
 	}
 }
-
-func resultTreeChildren(value any) []clickyapi.TextTree {
-	switch v := value.(type) {
-	case map[string]any:
-		keys := make([]string, 0, len(v))
-		for key := range v {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		children := make([]clickyapi.TextTree, 0, len(keys))
-		for _, key := range keys {
-			children = append(children, clicky.Tree(clicky.Text(key), resultTreeChildren(v[key])...))
-		}
-		return children
-	case map[string]string:
-		keys := make([]string, 0, len(v))
-		for key := range v {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-		children := make([]clickyapi.TextTree, 0, len(keys))
-		for _, key := range keys {
-			children = append(children, clicky.Tree(clicky.Textf("%s: %s", key, v[key])))
-		}
-		return children
-	default:
-		return []clickyapi.TextTree{clicky.Tree(clicky.Text(fmt.Sprint(value)))}
-	}
-}
-
 func writeClickyOutput(w io.Writer, data any, opts ...clicky.FormatOptions) error {
 	out, err := clicky.Format(data, opts...)
 	if err != nil {
