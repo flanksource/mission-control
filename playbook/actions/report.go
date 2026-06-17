@@ -1,5 +1,3 @@
-// ABOUTME: Runs the report playbook action, exporting a view or a catalog report.
-// ABOUTME: Catalog reports render via the embedded, local, or git-sourced TSX template.
 package actions
 
 import (

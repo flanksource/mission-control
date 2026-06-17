@@ -1,5 +1,3 @@
-// ABOUTME: Tests for the report action's TSX template source resolution.
-// ABOUTME: Covers the embedded default, local file paths, and git sources.
 package actions
 
 import (
