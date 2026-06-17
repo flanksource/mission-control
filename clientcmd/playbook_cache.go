@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/flanksource/clicky"
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/sdk"
@@ -174,12 +175,7 @@ func newCachedPlaybookCommand(item api.PlaybookListItem, name string) *cobra.Com
 					"starts_at": response.StartsAt,
 				})
 			}
-			_ = Log(cmd.ErrOrStderr(), map[string]any{
-				"type":      "playbook_run_scheduled",
-				"playbook":  ref,
-				"run_id":    response.RunID,
-				"starts_at": response.StartsAt,
-			})
+			logger.V(1).Infof("type=playbook_run_scheduled playbook=%s run_id=%s starts_at=%s", ref, response.RunID, response.StartsAt)
 			summary, err := waitForRemotePlaybookRunWithInterval(cmd.ErrOrStderr(), client, response.RunID, pollInterval)
 			if err != nil {
 				return err

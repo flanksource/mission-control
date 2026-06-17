@@ -10,6 +10,7 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/sdk"
@@ -171,11 +172,11 @@ func targetCount(values ...string) int {
 	return count
 }
 
-func waitForRemotePlaybookRun(stderr io.Writer, client *sdk.Client, runID string) (*sdk.PlaybookSummary, error) {
-	return waitForRemotePlaybookRunWithInterval(stderr, client, runID, playbookPollInterval)
+func waitForRemotePlaybookRun(_ io.Writer, client *sdk.Client, runID string) (*sdk.PlaybookSummary, error) {
+	return waitForRemotePlaybookRunWithInterval(nil, client, runID, playbookPollInterval)
 }
 
-func waitForRemotePlaybookRunWithInterval(stderr io.Writer, client *sdk.Client, runID string, pollInterval time.Duration) (*sdk.PlaybookSummary, error) {
+func waitForRemotePlaybookRunWithInterval(_ io.Writer, client *sdk.Client, runID string, pollInterval time.Duration) (*sdk.PlaybookSummary, error) {
 	lastRunStatus := ""
 	lastActions := make(map[string]string)
 	for {
@@ -187,7 +188,7 @@ func waitForRemotePlaybookRunWithInterval(stderr io.Writer, client *sdk.Client, 
 		runStatus := string(summary.Run.Status)
 		isFinal := lo.Contains(models.PlaybookRunStatusFinalStates, summary.Run.Status)
 		if runStatus != lastRunStatus && !isFinal {
-			_ = Log(stderr, map[string]any{"type": "playbook_run_status", "run_id": runID, "status": runStatus})
+			logger.V(1).Infof("type=playbook_run_status run_id=%s status=%s", runID, runStatus)
 			lastRunStatus = runStatus
 		}
 		for _, action := range summary.Actions {
@@ -196,15 +197,15 @@ func waitForRemotePlaybookRunWithInterval(stderr io.Writer, client *sdk.Client, 
 			if lastActions[key] == status {
 				continue
 			}
-			event := map[string]any{"type": "playbook_action_status", "action": action.Name, "status": status}
 			if action.Error != nil && *action.Error != "" {
-				event["error"] = *action.Error
+				logger.V(1).Infof("type=playbook_action_status action=%s status=%s error=%s", action.Name, status, *action.Error)
+			} else {
+				logger.V(1).Infof("type=playbook_action_status action=%s status=%s", action.Name, status)
 			}
-			_ = Log(stderr, event)
 			lastActions[key] = status
 		}
 		if runStatus != lastRunStatus && isFinal {
-			_ = Log(stderr, map[string]any{"type": "playbook_run_status", "run_id": runID, "status": runStatus})
+			logger.V(1).Infof("type=playbook_run_status run_id=%s status=%s", runID, runStatus)
 			lastRunStatus = runStatus
 		}
 

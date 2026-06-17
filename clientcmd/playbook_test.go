@@ -88,7 +88,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		Expect(params.Params).To(HaveKeyWithValue("region", "eu-west-1"))
 	})
 
-	ginkgo.It("streams status transitions to stderr while waiting", func() {
+	ginkgo.It("does not stream status transitions by default while waiting", func() {
 		runID := uuid.New()
 		actionID := uuid.New()
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -112,11 +112,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		summary, err := waitForRemotePlaybookRun(&stderr, sdk.New(server.URL, "fake-token"), runID.String())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(summary.Run.Status).To(Equal(models.PlaybookRunStatusCompleted))
-		Expect(stderr.String()).To(ContainSubstring("run_id=" + runID.String()))
-		Expect(stderr.String()).To(ContainSubstring("status=completed"))
-		Expect(stderr.String()).To(ContainSubstring("type=playbook_run_status"))
-		Expect(stderr.String()).To(ContainSubstring("action=echo"))
-		Expect(stderr.String()).To(ContainSubstring("type=playbook_action_status"))
+		Expect(stderr.String()).To(BeEmpty())
 	})
 
 	ginkgo.It("prints only the action result for playbook run summaries", func() {
@@ -135,9 +131,10 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		})
 
 		Expect(err).ToNot(HaveOccurred())
-		Expect(stdout.String()).To(ContainSubstring("result:"))
-		Expect(stdout.String()).To(ContainSubstring("code: 200"))
-		Expect(stdout.String()).To(ContainSubstring("content: 37.59.119.142"))
+		Expect(stdout.String()).To(ContainSubstring("Result:"))
+		Expect(stdout.String()).To(ContainSubstring("Code:"))
+		Expect(stdout.String()).To(ContainSubstring("Content:"))
+		Expect(stdout.String()).To(ContainSubstring("37.59.119.142"))
 		Expect(stdout.String()).ToNot(ContainSubstring("playbook"))
 		Expect(stdout.String()).ToNot(ContainSubstring("actions"))
 		Expect(stdout.String()).ToNot(ContainSubstring(actionID.String()))

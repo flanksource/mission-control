@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flanksource/clicky"
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/sdk"
@@ -168,12 +169,7 @@ func runRemotePlaybook(cmd *cobra.Command, args []string) error {
 		})
 	}
 
-	_ = Log(cmd.ErrOrStderr(), map[string]any{
-		"type":      "playbook_run_scheduled",
-		"playbook":  playbookRef,
-		"run_id":    response.RunID,
-		"starts_at": response.StartsAt,
-	})
+	logger.V(1).Infof("type=playbook_run_scheduled playbook=%s run_id=%s starts_at=%s", playbookRef, response.RunID, response.StartsAt)
 	summary, err := waitForRemotePlaybookRun(cmd.ErrOrStderr(), client, response.RunID)
 	if err != nil {
 		return err
@@ -235,7 +231,7 @@ func PlaybookActionResults(summary *sdk.PlaybookSummary) PlaybookRunOutput {
 }
 
 func PrintPlaybookActionResults(w io.Writer, summary *sdk.PlaybookSummary) error {
-	return printClicky(w, PlaybookActionResults(summary), "yaml")
+	return printClicky(w, PlaybookActionResults(summary), "pretty")
 }
 
 func printClicky(w io.Writer, data any, defaultFormat string) error {
