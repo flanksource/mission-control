@@ -238,12 +238,12 @@ func PlaybookActionResults(summary *sdk.PlaybookSummary) PlaybookRunOutput {
 
 func PrintPlaybookActionResults(w io.Writer, summary *sdk.PlaybookSummary) error {
 	output := PlaybookActionResults(summary)
-	return printClicky(w, output, "yaml", func(opts clicky.FormatOptions) any {
+	return printClicky(w, "yaml", func(opts clicky.FormatOptions) any {
 		return playbookClickyData(output, opts)
 	})
 }
 
-func printClicky(w io.Writer, data any, defaultFormat string, formatData func(clicky.FormatOptions) any) error {
+func printClicky(w io.Writer, defaultFormat string, formatData func(clicky.FormatOptions) any) error {
 	opts := clicky.Flags.FormatOptions
 	if err := opts.ParseFormatSpec(); err != nil {
 		return err
