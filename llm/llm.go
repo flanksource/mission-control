@@ -156,7 +156,7 @@ func generationConfig(backend api.LLMBackend, model string) map[string]any {
 	config := map[string]any{}
 
 	// GPT-5.5 only accepts the default temperature, so omit temperature instead of sending 0.
-	if !(backend == api.LLMBackendOpenAI && isOpenAIDefaultTemperatureOnly(model)) {
+	if backend != api.LLMBackendOpenAI || !isOpenAIDefaultTemperatureOnly(model) {
 		config["temperature"] = 0
 	}
 	if backend == api.LLMBackendAnthropic {
