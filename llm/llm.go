@@ -96,6 +96,12 @@ func PromptWithHistory(ctx dutyctx.Context, config Config, history []*genkitai.M
 		return "", nil, nil, fmt.Errorf("failed to generate response: %w", err)
 	}
 
+	// Workaround: the third-party bedrock plugin does not populate resp.Request,
+	// but History() requires it. All official genkit plugins set this field.
+	if resp.Request == nil {
+		resp.Request = &genkitai.ModelRequest{Messages: messages}
+	}
+
 	aiResponse := resp.Text()
 	if aiResponse == "" {
 		return "", nil, nil, errors.New("no response from LLM")

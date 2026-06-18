@@ -25,6 +25,14 @@
           "type": "string",
           "description": "BaseURL or API url.\nExample: server URL for ollama or custom url for Anthropic if using a proxy"
         },
+        "awsRegion": {
+          "type": "string",
+          "description": "AWS region. Used when backend is bedrock."
+        },
+        "awsAccessKey": {
+          "$ref": "#/$defs/EnvVar",
+          "description": "AWS access key ID. Used when backend is bedrock."
+        },
         "config": {
           "type": "string"
         },
