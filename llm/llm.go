@@ -82,7 +82,7 @@ func PromptWithHistory(ctx dutyctx.Context, config Config, history []llms.Messag
 		// OpenAI does support function calling, but I don't think we can force the model to use that tool
 		// like we can with Anthropic.
 
-	case api.LLMBackendGemini:
+	case api.LLMBackendGemini, api.LLMBackendBedrock:
 		// Do nothing
 		// NOTE: Handled by the wrapper
 
@@ -331,7 +331,7 @@ func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 		}
 
 		client := bedrockruntime.NewFromConfig(cfg)
-		return newConverseModel(client, config.Model), nil
+		return newConverseModel(client, config.Model, config.ResponseFormat, config.CustomSchema), nil
 
 	default:
 		return nil, errors.New("unknown config.Backend")

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
@@ -17,18 +18,54 @@ import (
 // _converseModel implements llms.Model using the Bedrock Converse API,
 // which is provider-agnostic and works with any model ID on Bedrock.
 type _converseModel struct {
-	client  *bedrockruntime.Client
-	modelID string
+	client         *bedrockruntime.Client
+	modelID        string
+	responseFormat ResponseFormat
+	customSchema   string
 }
 
 var _ llms.Model = (*_converseModel)(nil)
 
-func newConverseModel(client *bedrockruntime.Client, modelID string) *_converseModel {
-	return &_converseModel{client: client, modelID: modelID}
+func newConverseModel(client *bedrockruntime.Client, modelID string, responseFormat ResponseFormat, customSchema string) *_converseModel {
+	return &_converseModel{
+		client:         client,
+		modelID:        modelID,
+		responseFormat: responseFormat,
+		customSchema:   customSchema,
+	}
 }
 
 func (m *_converseModel) Call(ctx context.Context, prompt string, options ...llms.CallOption) (string, error) {
 	return llms.GenerateFromSinglePrompt(ctx, m, prompt, options...)
+}
+
+func (m *_converseModel) formatInstruction() string {
+	switch m.responseFormat {
+	case ResponseFormatDiagnosis:
+		return `Respond with a JSON object containing these fields:
+- "headline": A short headline with emojis that clearly mentions the affected resource & the issue.
+- "summary": Brief slack flavored markdown summary (≤50 words) of the issue and impact.
+- "recommended_fix": Slack flavored markdown bullet array of 1-5 concise fixes (≤10 words each).
+
+Respond with ONLY the JSON object. No markdown code blocks, no explanatory text.`
+
+	case ResponseFormatPlaybookRecommendations:
+		return `Respond with a JSON object containing:
+- "playbooks": A list of recommended playbook objects sorted by relevance. Each with:
+  - "id": The UUID of the playbook
+  - "emoji": An emoji to represent it
+  - "title": The title of the playbook
+  - "parameters": A list of {key, value} parameter pairs
+  - "resource_id": The UUID of the resource to operate on
+
+Respond with ONLY the JSON object. No markdown code blocks, no explanatory text.`
+
+	case ResponseFormatCustomSchema:
+		return fmt.Sprintf("Respond with a JSON object matching this schema:\n%s\n\nRespond with ONLY the JSON object. No markdown code blocks, no explanatory text.", m.customSchema)
+
+	default:
+		return ""
+	}
 }
 
 func (m *_converseModel) GenerateContent(ctx context.Context, messages []llms.MessageContent, options ...llms.CallOption) (*llms.ContentResponse, error) {
@@ -40,6 +77,11 @@ func (m *_converseModel) GenerateContent(ctx context.Context, messages []llms.Me
 	var systemPrompts []types.SystemContentBlock
 	var bedrockMessages []types.Message
 	var lastRole types.ConversationRole
+
+	// Append JSON output instruction when a response format is set
+	if formatInstruction := m.formatInstruction(); formatInstruction != "" {
+		systemPrompts = append(systemPrompts, &types.SystemContentBlockMemberText{Value: formatInstruction})
+	}
 
 	for _, msg := range messages {
 		if msg.Role == llms.ChatMessageTypeSystem {
@@ -193,6 +235,8 @@ func convertConverseOutput(output *bedrockruntime.ConverseOutput) (*llms.Content
 
 	if len(choice.ToolCalls) > 0 {
 		choice.FuncCall = choice.ToolCalls[0].FunctionCall
+	} else {
+		choice.Content = cleanJSONResponse(choice.Content)
 	}
 
 	return &llms.ContentResponse{Choices: []*llms.ContentChoice{choice}}, nil
@@ -213,6 +257,27 @@ func unmarshalDocument(doc document.Interface) string {
 		}
 	}
 	return ""
+}
+
+func cleanJSONResponse(raw string) string {
+	raw = strings.TrimSpace(raw)
+
+	// Strip markdown code fences: ```json ... ``` or ``` ... ```
+	if strings.HasPrefix(raw, "```") {
+		raw = strings.TrimPrefix(raw, "```json")
+		raw = strings.TrimPrefix(raw, "```")
+		if idx := strings.LastIndex(raw, "```"); idx >= 0 {
+			raw = raw[:idx]
+		}
+		raw = strings.TrimSpace(raw)
+	}
+
+	// Strip surrounding single backticks
+	if strings.HasPrefix(raw, "`") && strings.HasSuffix(raw, "`") {
+		raw = strings.Trim(raw, "`")
+	}
+
+	return raw
 }
 
 func marshalToDocument(v any) (document.Interface, error) {
