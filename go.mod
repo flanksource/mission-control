@@ -73,7 +73,6 @@ require (
 	github.com/jenkins-x/go-scm v1.15.22
 	github.com/mark3labs/mcp-go v0.53.0
 	github.com/oklog/ulid/v2 v2.1.1
-	github.com/pb33f/ordered-map/v2 v2.3.1
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.68.1
 	github.com/redis/go-redis/v9 v9.19.0
@@ -85,6 +84,7 @@ require (
 	github.com/slack-go/slack v0.23.1
 	github.com/tg123/go-htpasswd v1.2.4
 	github.com/timberio/go-datemath v0.1.0
+	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/xeipuuv/gojsonschema v1.2.0
 	github.com/zitadel/oidc/v3 v3.47.5
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.68.0
@@ -273,6 +273,7 @@ require (
 	github.com/lrita/cmap v0.0.0-20231108122212-cb084a67f554 // indirect
 	github.com/lucasb-eyer/go-colorful v1.3.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20251013123823-9fd1530e3ec3 // indirect
+	github.com/mailru/easyjson v0.9.1 // indirect
 	github.com/mattn/go-localereader v0.0.1 // indirect
 	github.com/mattn/go-runewidth v0.0.21 // indirect
 	github.com/mbleigh/raymond v0.0.0-20250414171441-6b3a58ab9e0a // indirect
@@ -334,7 +335,6 @@ require (
 	github.com/vadimi/go-http-ntlm v1.0.3 // indirect
 	github.com/vadimi/go-http-ntlm/v2 v2.5.0 // indirect
 	github.com/vadimi/go-ntlm v1.2.1 // indirect
-	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
@@ -361,7 +361,6 @@ require (
 	go.uber.org/atomic v1.11.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
-	go.yaml.in/yaml/v4 v4.0.0-rc.2 // indirect
 	gocloud.dev v0.46.0 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
 	golang.org/x/mod v0.36.0 // indirect
@@ -472,4 +471,7 @@ replace github.com/glebarez/sqlite => github.com/clarkmcc/gorm-sqlite v0.0.0-202
 
 replace github.com/flanksource/incident-commander/plugin/sdk => ./plugin/sdk
 
-replace github.com/wk8/go-ordered-map/v2 => ./third_party/wk8-go-ordered-map
+// v0.14.0 switched ordered-map from wk8 to pb33f, which conflicts with
+// Genkit -> dotprompt (built against v0.13.0). Keep at v0.13.0 until fixed
+// upstream.
+replace github.com/invopop/jsonschema => github.com/invopop/jsonschema v0.13.0

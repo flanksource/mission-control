@@ -18,7 +18,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	orderedmap "github.com/pb33f/ordered-map/v2"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 
