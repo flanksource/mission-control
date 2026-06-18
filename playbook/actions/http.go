@@ -2,7 +2,10 @@ package actions
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
+	"github.com/flanksource/clicky"
 	"github.com/flanksource/commons/http"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
@@ -61,6 +64,45 @@ func (c *HTTP) Run(ctx context.Context, action v1.HTTPAction) (*HTTPResult, erro
 	}
 
 	return result, nil
+}
+
+func (r HTTPResult) String() string  { return r.plain(false) }
+func (r HTTPResult) ANSI() string    { return r.plain(true) }
+func (r HTTPResult) HTML() string    { return "<pre>" + r.plain(false) + "</pre>" }
+func (r HTTPResult) Markdown() string { return "```\n" + r.plain(false) + "\n```" }
+
+func (r HTTPResult) plain(colors bool) string {
+	var b strings.Builder
+
+	statusLabel := fmt.Sprintf("Status: %d", r.StatusCode)
+	if colors {
+		style := "text-green-600"
+		if r.StatusCode >= 400 {
+			style = "text-red-600"
+		}
+		b.WriteString(clicky.Text(statusLabel, "font-bold "+style).ANSI())
+	} else {
+		b.WriteString(statusLabel)
+	}
+	b.WriteString("\n")
+
+	if len(r.Headers) > 0 {
+		keys := make([]string, 0, len(r.Headers))
+		for k := range r.Headers {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			fmt.Fprintf(&b, "  %s: %s\n", k, r.Headers[k])
+		}
+	}
+
+	if r.Content != "" {
+		b.WriteString("\n")
+		b.WriteString(r.Content)
+	}
+
+	return strings.TrimRight(b.String(), "\n")
 }
 
 func (c *HTTP) makeRequest(ctx context.Context, action v1.HTTPAction, client *http.Client) (*http.Response, error) {

@@ -10,6 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/clicky"
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/sdk"
@@ -166,24 +168,15 @@ func newCachedPlaybookCommand(item api.PlaybookListItem, name string) *cobra.Com
 			}
 			ref := playbookRef(item)
 			if !wait {
-				return Log(cmd.OutOrStdout(), map[string]any{
-					"type":      "playbook_run_scheduled",
-					"playbook":  ref,
-					"run_id":    response.RunID,
-					"starts_at": response.StartsAt,
-				})
+				logger.V(1).Infof("type=playbook_run_scheduled playbook=%s run_id=%s starts_at=%s", ref, response.RunID, response.StartsAt)
+				return nil
 			}
-			_ = Log(cmd.ErrOrStderr(), map[string]any{
-				"type":      "playbook_run_scheduled",
-				"playbook":  ref,
-				"run_id":    response.RunID,
-				"starts_at": response.StartsAt,
-			})
+			logger.V(1).Infof("type=playbook_run_scheduled playbook=%s run_id=%s starts_at=%s", ref, response.RunID, response.StartsAt)
 			summary, err := waitForRemotePlaybookRunWithInterval(cmd.ErrOrStderr(), client, response.RunID, pollInterval)
 			if err != nil {
 				return err
 			}
-			if err := LogYAML(cmd.OutOrStdout(), PlaybookActionResults(summary)); err != nil {
+			if err := PrintPlaybookActionResults(cmd.OutOrStdout(), summary); err != nil {
 				return err
 			}
 			if summary.Run.Status != "completed" {
@@ -191,6 +184,11 @@ func newCachedPlaybookCommand(item api.PlaybookListItem, name string) *cobra.Com
 			}
 			return nil
 		},
+	}
+	clicky.BindAllFlags(cmd.Flags(), "format")
+	clicky.SetGroupedUsage(cmd)
+	for _, f := range hiddenFormatFlags {
+		_ = cmd.Flags().MarkHidden(f)
 	}
 	cmd.Flags().BoolVar(&wait, "wait", true, "Wait for the playbook run to finish")
 	cmd.Flags().DurationVar(&pollInterval, "poll-interval", 2*time.Second, "Polling interval used with --wait")

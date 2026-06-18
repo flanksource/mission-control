@@ -1,15 +1,27 @@
 package clientcmd
 
 import (
+	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
+	"github.com/flanksource/clicky"
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/spf13/cobra"
 )
+
+// hiddenFormatFlags lists format flags that clicky defines but aren't
+// functional for playbook output. They are hidden from --help on
+// playbook run and cached playbook subcommands.
+var hiddenFormatFlags = []string{"csv", "dump-schema", "filter", "format", "pdf", "table", "tree"}
 
 // Playbook is the parent command for playbook operations. The client owns the
 // remote surfaces (list, run); the server binary attaches local execution via
@@ -157,25 +169,16 @@ func runRemotePlaybook(cmd *cobra.Command, args []string) error {
 
 	playbookRef := item.Namespace + "/" + item.Name
 	if !playbookWait {
-		return Log(cmd.OutOrStdout(), map[string]any{
-			"type":      "playbook_run_scheduled",
-			"playbook":  playbookRef,
-			"run_id":    response.RunID,
-			"starts_at": response.StartsAt,
-		})
+		logger.V(1).Infof("type=playbook_run_scheduled playbook=%s run_id=%s starts_at=%s", playbookRef, response.RunID, response.StartsAt)
+		return nil
 	}
 
-	_ = Log(cmd.ErrOrStderr(), map[string]any{
-		"type":      "playbook_run_scheduled",
-		"playbook":  playbookRef,
-		"run_id":    response.RunID,
-		"starts_at": response.StartsAt,
-	})
+	logger.V(1).Infof("type=playbook_run_scheduled playbook=%s run_id=%s starts_at=%s", playbookRef, response.RunID, response.StartsAt)
 	summary, err := waitForRemotePlaybookRun(cmd.ErrOrStderr(), client, response.RunID)
 	if err != nil {
 		return err
 	}
-	if err := LogYAML(cmd.OutOrStdout(), PlaybookActionResults(summary)); err != nil {
+	if err := PrintPlaybookActionResults(cmd.OutOrStdout(), summary); err != nil {
 		return err
 	}
 	if summary.Run.Status != models.PlaybookRunStatusCompleted {
@@ -187,6 +190,12 @@ func runRemotePlaybook(cmd *cobra.Command, args []string) error {
 func init() {
 	Playbook.PersistentFlags().StringVarP(&playbookNamespace, "namespace", "n", "default", "Namespace for playbook to run under")
 	Playbook.PersistentFlags().StringVarP(&ParamFile, "params", "p", "", "YAML/JSON file containing parameters")
+
+	clicky.BindAllFlags(Run.Flags(), "format")
+	for _, f := range hiddenFormatFlags {
+		_ = Run.Flags().MarkHidden(f)
+	}
+
 	Run.Flags().BoolVar(&playbookWait, "wait", true, "Wait for the playbook run to finish")
 	Run.Flags().DurationVar(&playbookPollInterval, "poll-interval", 2*time.Second, "Polling interval used with --wait")
 	Run.Flags().StringVar(&playbookConfigID, "config-id", "", "Config ID to run the playbook against")
@@ -201,21 +210,90 @@ func init() {
 	Playbook.AddCommand(ListPlaybooks, Run)
 }
 
-func PlaybookActionResults(summary *sdk.PlaybookSummary) map[string]any {
+type PlaybookRunOutput struct {
+	Result  any                    `json:"result,omitempty" yaml:"result,omitempty"`
+	Results []PlaybookActionOutput `json:"results,omitempty" yaml:"results,omitempty"`
+}
+
+type PlaybookActionOutput struct {
+	Name   string `json:"name" yaml:"name"`
+	Result any    `json:"result" yaml:"result"`
+}
+
+func PlaybookActionResults(summary *sdk.PlaybookSummary) PlaybookRunOutput {
 	if summary == nil || len(summary.Actions) == 0 {
-		return map[string]any{"result": map[string]any{}}
+		return PlaybookRunOutput{Result: map[string]any{}}
 	}
+
+	actionTypes := resolveActionTypes(summary.Playbook.Spec)
 
 	if len(summary.Actions) == 1 {
-		return map[string]any{"result": summary.Actions[0].Result}
+		return PlaybookRunOutput{Result: resolveActionResult(actionTypes[summary.Actions[0].Name], summary.Actions[0].Result)}
 	}
 
-	results := make([]map[string]any, 0, len(summary.Actions))
+	results := make([]PlaybookActionOutput, 0, len(summary.Actions))
 	for _, action := range summary.Actions {
-		results = append(results, map[string]any{
-			"name":   action.Name,
-			"result": action.Result,
+		results = append(results, PlaybookActionOutput{
+			Name:   action.Name,
+			Result: resolveActionResult(actionTypes[action.Name], action.Result),
 		})
 	}
-	return map[string]any{"results": results}
+	return PlaybookRunOutput{Results: results}
+}
+
+// resolveActionTypes parses the playbook spec to build a map from action name
+// to action type, using the existing PlaybookAction.ActionType() method.
+func resolveActionTypes(spec types.JSON) map[string]string {
+	if len(spec) == 0 {
+		return nil
+	}
+	var ps v1.PlaybookSpec
+	if err := json.Unmarshal(spec, &ps); err != nil {
+		return nil
+	}
+	m := make(map[string]string, len(ps.Actions))
+	for _, a := range ps.Actions {
+		m[a.Name] = a.ActionType()
+	}
+	return m
+}
+
+// resolveActionResult unmarshals a raw result map into the concrete action
+// result type, which implements clicky.Textable for proper formatting.
+func resolveActionResult(actionType string, raw map[string]any) any {
+	if raw == nil {
+		return nil
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return raw
+	}
+	switch actionType {
+	case "sql":
+		var r actions.SQLResult
+		if err := json.Unmarshal(data, &r); err == nil {
+			return r
+		}
+	case "exec":
+		var r actions.ExecDetails
+		if err := json.Unmarshal(data, &r); err == nil {
+			return r
+		}
+	case "http":
+		var r actions.HTTPResult
+		if err := json.Unmarshal(data, &r); err == nil {
+			return r
+		}
+	}
+	return raw
+}
+
+func PrintPlaybookActionResults(w io.Writer, summary *sdk.PlaybookSummary) error {
+	output := PlaybookActionResults(summary)
+	if len(output.Results) == 0 {
+		if _, isMap := output.Result.(map[string]any); !isMap && output.Result != nil {
+			return printClicky(w, output.Result, "pretty")
+		}
+	}
+	return printClicky(w, output, "pretty")
 }
