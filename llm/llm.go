@@ -78,7 +78,9 @@ func PromptWithHistory(ctx dutyctx.Context, config Config, history []*genkitai.M
 	opts := []genkitai.GenerateOption{
 		genkitai.WithModelName(modelName),
 		genkitai.WithMessages(messages...),
-		genkitai.WithConfig(generationConfig(config.Backend)),
+	}
+	if genConfig := generationConfig(config.Backend, modelName); genConfig != nil {
+		opts = append(opts, genkitai.WithConfig(genConfig))
 	}
 	if schema != nil {
 		opts = append(opts, genkitai.WithOutputSchema(schema))
@@ -150,12 +152,25 @@ func initGenkit(ctx dutyctx.Context, config Config) (g *genkit.Genkit, modelName
 	return g, modelName, nil
 }
 
-func generationConfig(backend api.LLMBackend) map[string]any {
-	config := map[string]any{"temperature": 0}
+func generationConfig(backend api.LLMBackend, model string) map[string]any {
+	config := map[string]any{}
+
+	// GPT-5.5 only accepts the default temperature, so omit temperature instead of sending 0.
+	if !(backend == api.LLMBackendOpenAI && isOpenAIDefaultTemperatureOnly(model)) {
+		config["temperature"] = 0
+	}
 	if backend == api.LLMBackendAnthropic {
 		config["max_tokens"] = 2048
 	}
+	if len(config) == 0 {
+		return nil
+	}
 	return config
+}
+
+func isOpenAIDefaultTemperatureOnly(model string) bool {
+	model = unqualifiedModelName(model)
+	return model == "gpt-5.5" || strings.HasPrefix(model, "gpt-5.5-")
 }
 
 func defaultModel(backend api.LLMBackend, model string) string {
