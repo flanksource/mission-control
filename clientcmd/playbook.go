@@ -1,6 +1,7 @@
 package clientcmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -9,7 +10,10 @@ import (
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/spf13/cobra"
 )
@@ -221,20 +225,75 @@ func PlaybookActionResults(summary *sdk.PlaybookSummary) PlaybookRunOutput {
 		return PlaybookRunOutput{Result: map[string]any{}}
 	}
 
+	actionTypes := resolveActionTypes(summary.Playbook.Spec)
+
 	if len(summary.Actions) == 1 {
-		return PlaybookRunOutput{Result: summary.Actions[0].Result}
+		return PlaybookRunOutput{Result: resolveActionResult(actionTypes[summary.Actions[0].Name], summary.Actions[0].Result)}
 	}
 
 	results := make([]PlaybookActionOutput, 0, len(summary.Actions))
 	for _, action := range summary.Actions {
 		results = append(results, PlaybookActionOutput{
 			Name:   action.Name,
-			Result: action.Result,
+			Result: resolveActionResult(actionTypes[action.Name], action.Result),
 		})
 	}
 	return PlaybookRunOutput{Results: results}
 }
 
+// resolveActionTypes parses the playbook spec to build a map from action name
+// to action type, using the existing PlaybookAction.ActionType() method.
+func resolveActionTypes(spec types.JSON) map[string]string {
+	if len(spec) == 0 {
+		return nil
+	}
+	var ps v1.PlaybookSpec
+	if err := json.Unmarshal(spec, &ps); err != nil {
+		return nil
+	}
+	m := make(map[string]string, len(ps.Actions))
+	for _, a := range ps.Actions {
+		m[a.Name] = a.ActionType()
+	}
+	return m
+}
+
+// resolveActionResult unmarshals a raw result map into the concrete action
+// result type, which implements clicky.Textable for proper formatting.
+func resolveActionResult(actionType string, raw map[string]any) any {
+	if raw == nil {
+		return nil
+	}
+	data, err := json.Marshal(raw)
+	if err != nil {
+		return raw
+	}
+	switch actionType {
+	case "sql":
+		var r actions.SQLResult
+		if err := json.Unmarshal(data, &r); err == nil {
+			return r
+		}
+	case "exec":
+		var r actions.ExecDetails
+		if err := json.Unmarshal(data, &r); err == nil {
+			return r
+		}
+	case "http":
+		var r actions.HTTPResult
+		if err := json.Unmarshal(data, &r); err == nil {
+			return r
+		}
+	}
+	return raw
+}
+
 func PrintPlaybookActionResults(w io.Writer, summary *sdk.PlaybookSummary) error {
-	return printClicky(w, PlaybookActionResults(summary), "pretty")
+	output := PlaybookActionResults(summary)
+	if len(output.Results) == 0 {
+		if _, isMap := output.Result.(map[string]any); !isMap && output.Result != nil {
+			return printClicky(w, output.Result, "pretty")
+		}
+	}
+	return printClicky(w, output, "pretty")
 }
