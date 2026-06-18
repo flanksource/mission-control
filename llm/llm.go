@@ -1,17 +1,19 @@
 package llm
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 
+	genkitai "github.com/firebase/genkit/go/ai"
+	genkitapi "github.com/firebase/genkit/go/core/api"
+	"github.com/firebase/genkit/go/genkit"
+	anthropicplugin "github.com/firebase/genkit/go/plugins/anthropic"
+	openaiplugin "github.com/firebase/genkit/go/plugins/compat_oai"
+	"github.com/firebase/genkit/go/plugins/googlegenai"
+	ollamaplugin "github.com/firebase/genkit/go/plugins/ollama"
 	dutyctx "github.com/flanksource/duty/context"
 	"github.com/samber/lo"
-	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/llms/anthropic"
-	"github.com/tmc/langchaingo/llms/ollama"
-	"github.com/tmc/langchaingo/llms/openai"
-	"google.golang.org/genai"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -45,265 +47,193 @@ type GenerationInfo struct {
 	Model                string  `json:"model"`
 }
 
-func Prompt(ctx dutyctx.Context, config Config, systemPrompt string, promptParts ...string) (string, []llms.MessageContent, []GenerationInfo, error) {
-	content := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeSystem, systemPrompt),
+func Prompt(ctx dutyctx.Context, config Config, systemPrompt string, promptParts ...string) (string, []*genkitai.Message, []GenerationInfo, error) {
+	content := []*genkitai.Message{
+		genkitai.NewSystemTextMessage(systemPrompt),
 	}
 
 	for _, p := range promptParts {
-		content = append(content, llms.TextParts(llms.ChatMessageTypeHuman, p))
+		content = append(content, genkitai.NewUserTextMessage(p))
 	}
 
 	return PromptWithHistory(ctx, config, content, "")
 }
 
-func PromptWithHistory(ctx dutyctx.Context, config Config, history []llms.MessageContent, prompt string) (string, []llms.MessageContent, []GenerationInfo, error) {
-	model, err := getLLMModel(ctx, config)
+func PromptWithHistory(ctx dutyctx.Context, config Config, history []*genkitai.Message, prompt string) (string, []*genkitai.Message, []GenerationInfo, error) {
+	g, modelName, err := initGenkit(ctx, config)
 	if err != nil {
 		return "", nil, nil, err
 	}
 
-	var messages []llms.MessageContent
-	messages = append(messages, history...)
+	messages := append([]*genkitai.Message{}, history...)
 	if prompt != "" {
-		messages = append(messages, llms.TextParts(llms.ChatMessageTypeHuman, prompt))
+		messages = append(messages, genkitai.NewUserTextMessage(prompt))
 	}
 
-	options := []llms.CallOption{llms.WithTemperature(0)}
-
-	// Add backend-specific options for tool choice
-	switch config.Backend {
-	case api.LLMBackendOpenAI:
-		// Do nothing
-		// NOTE: we use `response_format` instead of function calling & that's configured during model creation not when prompting.
-		// OpenAI does support function calling, but I don't think we can force the model to use that tool
-		// like we can with Anthropic.
-
-	case api.LLMBackendGemini:
-		// Do nothing
-		// NOTE: Handled by the wrapper
-
-	default:
-		const forceToolUsePrompt = `You MUST use the %s tool to extract the diagnosis information.
-	Do not provide any other response format.
-	Only use the tool to respond.`
-
-		switch config.ResponseFormat {
-		case ResponseFormatDiagnosis:
-			options = append(options, llms.WithTools([]llms.Tool{tools.ExtractDiagnosis}))
-			messages = append(messages, llms.TextParts(llms.ChatMessageTypeHuman, fmt.Sprintf(forceToolUsePrompt, tools.ToolExtractDiagnosis)))
-		case ResponseFormatPlaybookRecommendations:
-			options = append(options, llms.WithTools([]llms.Tool{tools.RecommendPlaybook}))
-			messages = append(messages, llms.TextParts(llms.ChatMessageTypeHuman, fmt.Sprintf(forceToolUsePrompt, tools.ToolPlaybookRecommendations)))
-		case ResponseFormatCustomSchema:
-			tool, err := tools.CustomSchemaTool(config.CustomSchema)
-			if err != nil {
-				return "", nil, nil, fmt.Errorf("failed to create custom schema tool: %w", err)
-			}
-			options = append(options, llms.WithTools([]llms.Tool{tool}))
-			messages = append(messages, llms.TextParts(llms.ChatMessageTypeHuman, fmt.Sprintf(forceToolUsePrompt, tools.ToolCustomSchema)))
-		}
-		// NOTE: Anthropic has forced tool use, but it's not supported in LangChainGo.
-		// So, we force that with prompts for now.
-		//
-		// https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#forcing-tool-use
-		// options = append(options, llms.WithToolChoice(map[string]any{
-		// 	"type": "tool",
-		// 	"name": "extract_diagnosis",
-		// }))
+	schema, err := schemaForResponseFormat(config)
+	if err != nil {
+		return "", nil, nil, err
 	}
 
-	resp, err := model.GenerateContent(ctx, messages, options...)
+	opts := []genkitai.GenerateOption{
+		genkitai.WithModelName(modelName),
+		genkitai.WithMessages(messages...),
+		genkitai.WithConfig(generationConfig(config.Backend)),
+	}
+	if schema != nil {
+		opts = append(opts, genkitai.WithOutputSchema(schema))
+	}
+
+	resp, err := genkit.Generate(ctx, g, opts...)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("failed to generate response: %w", err)
 	}
 
-	if len(resp.Choices) == 0 {
+	aiResponse := resp.Text()
+	if aiResponse == "" {
 		return "", nil, nil, errors.New("no response from LLM")
 	}
 
-	aiResponse := resp.Choices[0].Content
-
-	// We prioritize response from tools if available
-	for _, choice := range resp.Choices {
-		if len(choice.ToolCalls) > 0 {
-			aiResponse = choice.ToolCalls[0].FunctionCall.Arguments
-			break
-		}
-	}
-
-	messages = append(messages, llms.TextParts(llms.ChatMessageTypeAI, aiResponse))
-	genInfo := calculateGenerationInfo(config.Backend, config.Model, resp)
+	messages = resp.History()
+	genInfo := calculateGenerationInfo(config.Backend, unqualifiedModelName(modelName), resp)
 	return aiResponse, messages, genInfo, nil
 }
 
-func calculateGenerationInfo(llmBackend api.LLMBackend, model string, resp *llms.ContentResponse) []GenerationInfo {
-	var generationInfoList []GenerationInfo
-	for _, choice := range resp.Choices {
-		if choice.GenerationInfo != nil {
-			genInfo := GenerationInfo{
-				Model: model,
-			}
-
-			switch llmBackend {
-			case api.LLMBackendOpenAI:
-				if inputTokens, ok := choice.GenerationInfo["PromptTokens"]; ok {
-					genInfo.InputTokens += inputTokens.(int)
-				}
-				if outputTokens, ok := choice.GenerationInfo["CompletionTokens"]; ok {
-					genInfo.OutputTokens += outputTokens.(int)
-				}
-				if reasoningTokens, ok := choice.GenerationInfo["ReasoningTokens"]; ok {
-					genInfo.ReasoningTokens = lo.ToPtr(reasoningTokens.(int))
-				}
-
-			case api.LLMBackendAnthropic:
-				if inputTokens, ok := choice.GenerationInfo["InputTokens"]; ok {
-					genInfo.InputTokens += inputTokens.(int)
-				}
-				if outputTokens, ok := choice.GenerationInfo["OutputTokens"]; ok {
-					genInfo.OutputTokens += outputTokens.(int)
-				}
-
-			case api.LLMBackendGemini:
-				if inputTokens, ok := choice.GenerationInfo["InputTokens"]; ok {
-					genInfo.InputTokens += int(inputTokens.(int32))
-				}
-				if outputTokens, ok := choice.GenerationInfo["OutputTokens"]; ok {
-					genInfo.OutputTokens += int(outputTokens.(int32))
-				}
-			}
-
-			cost, err := CalculateCost(llmBackend, model, genInfo)
-			if err != nil {
-				genInfo.CostCalculationError = lo.ToPtr(err.Error())
-			} else {
-				genInfo.Cost = cost
-			}
-
-			generationInfoList = append(generationInfoList, genInfo)
+func initGenkit(ctx dutyctx.Context, config Config) (g *genkit.Genkit, modelName string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("failed to initialize Genkit: %v", r)
 		}
+	}()
 
-		if llmBackend == api.LLMBackendAnthropic {
-			// NOTE: Anthropic returns two choices on tool use.
-			// Weirdly enough, the two choices have the same generation info (input/output tokens).
-			// So we only return the first one to avoid doubling the cost
-			break
-		}
-	}
+	var provider string
+	var plugin genkitapi.Plugin
 
-	return generationInfoList
-}
-
-func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 	switch config.Backend {
 	case api.LLMBackendOpenAI:
-		var opts []openai.Option
-		if !config.APIKey.IsEmpty() {
-			opts = append(opts, openai.WithToken(config.APIKey.ValueStatic))
+		provider = "openai"
+		plugin = &openaiplugin.OpenAICompatible{
+			Provider: provider,
+			APIKey:   config.APIKey.ValueStatic,
+			BaseURL:  config.APIURL,
 		}
-		if config.APIURL != "" {
-			opts = append(opts, openai.WithBaseURL(config.APIURL))
-		}
-		if config.Model != "" {
-			opts = append(opts, openai.WithModel(config.Model))
-		}
-
-		switch config.ResponseFormat {
-		case ResponseFormatDiagnosis, ResponseFormatPlaybookRecommendations:
-			schemaName := "diagnosis"
-			schemaObj := &tools.ExtractDiagnosisToolSchema
-
-			if config.ResponseFormat == ResponseFormatPlaybookRecommendations {
-				schemaName = "playbook_recommendations"
-				schemaObj = &tools.RecommendPlaybooksToolSchema
-			}
-
-			opts = append(opts, openai.WithResponseFormat(&openai.ResponseFormat{
-				Type: "json_schema",
-				JSONSchema: &openai.ResponseFormatJSONSchema{
-					Name:   schemaName,
-					Strict: true,
-					Schema: schemaObj,
-				},
-			}))
-
-		case ResponseFormatCustomSchema:
-			var schemaObj openai.ResponseFormatJSONSchemaProperty
-			if err := json.Unmarshal([]byte(config.CustomSchema), &schemaObj); err != nil {
-				return nil, fmt.Errorf("failed to parse custom output schema: %w", err)
-			}
-
-			opts = append(opts, openai.WithResponseFormat(&openai.ResponseFormat{
-				Type: "json_schema",
-				JSONSchema: &openai.ResponseFormatJSONSchema{
-					Name:   "custom_schema",
-					Strict: true,
-					Schema: &schemaObj,
-				},
-			}))
-		}
-
-		openaiLLM, err := openai.New(opts...)
-		if err != nil {
-			return nil, fmt.Errorf("failed to created openAI llm: %w", err)
-		}
-		return openaiLLM, nil
 
 	case api.LLMBackendOllama:
-		var opts []ollama.Option
-		if config.APIURL != "" {
-			opts = append(opts, ollama.WithServerURL(config.APIURL))
+		provider = "ollama"
+		serverAddress := config.APIURL
+		if serverAddress == "" {
+			serverAddress = "http://localhost:11434"
 		}
-		if config.Model != "" {
-			opts = append(opts, ollama.WithModel(config.Model))
-		}
-
-		openaiLLM, err := ollama.New(opts...)
-		if err != nil {
-			return nil, fmt.Errorf("failed to created ollama llm: %w", err)
-		}
-		return openaiLLM, nil
+		plugin = &ollamaplugin.Ollama{ServerAddress: serverAddress}
 
 	case api.LLMBackendAnthropic:
-		var opts []anthropic.Option
-		if !config.APIKey.IsEmpty() {
-			opts = append(opts, anthropic.WithToken(config.APIKey.ValueStatic))
+		provider = "anthropic"
+		plugin = &anthropicplugin.Anthropic{
+			APIKey:  config.APIKey.ValueStatic,
+			BaseURL: config.APIURL,
 		}
-		if config.APIURL != "" {
-			opts = append(opts, anthropic.WithBaseURL(config.APIURL))
-		}
-		if config.Model != "" {
-			opts = append(opts, anthropic.WithModel(config.Model))
-		}
-
-		anthropicLLM, err := anthropic.New(opts...)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create Anthropic llm: %w", err)
-		}
-		return anthropicLLM, nil
 
 	case api.LLMBackendGemini:
-		apiKey := config.APIKey.ValueStatic
-		client, err := genai.NewClient(ctx, &genai.ClientConfig{
-			APIKey:  apiKey,
-			Backend: genai.BackendGeminiAPI,
-		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create Gemini client: %w", err)
-		}
-
-		// Create a wrapper that implements the langchaingo Model interface
-		wrapper := &GeminiModelWrapper{
-			model:          config.Model,
-			client:         client,
-			ResponseFormat: config.ResponseFormat,
-			CustomSchema:   config.CustomSchema,
-		}
-
-		return wrapper, nil
+		provider = "googleai"
+		plugin = &googlegenai.GoogleAI{APIKey: config.APIKey.ValueStatic}
 
 	default:
-		return nil, errors.New("unknown config.Backend")
+		return nil, "", errors.New("unknown config.Backend")
 	}
+
+	modelName, err = qualifyModelName(provider, defaultModel(config.Backend, config.Model))
+	if err != nil {
+		return nil, "", err
+	}
+
+	g = genkit.Init(ctx, genkit.WithPlugins(plugin))
+	return g, modelName, nil
+}
+
+func generationConfig(backend api.LLMBackend) map[string]any {
+	config := map[string]any{"temperature": 0}
+	if backend == api.LLMBackendAnthropic {
+		config["max_tokens"] = 2048
+	}
+	return config
+}
+
+func defaultModel(backend api.LLMBackend, model string) string {
+	if strings.TrimSpace(model) != "" {
+		return model
+	}
+
+	switch backend {
+	case api.LLMBackendOpenAI:
+		return "gpt-4o-mini"
+	case api.LLMBackendAnthropic:
+		return "claude-3-5-sonnet-latest"
+	case api.LLMBackendGemini:
+		return "gemini-2.5-pro-exp-03-25"
+	default:
+		return model
+	}
+}
+
+func qualifyModelName(provider, model string) (string, error) {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return "", fmt.Errorf("llm model is required for backend %q", provider)
+	}
+
+	for _, knownProvider := range []string{"anthropic", "googleai", "ollama", "openai", "vertexai"} {
+		if strings.HasPrefix(model, knownProvider+"/") {
+			return model, nil
+		}
+	}
+
+	return provider + "/" + strings.TrimPrefix(model, "models/"), nil
+}
+
+func unqualifiedModelName(model string) string {
+	model = strings.TrimSpace(model)
+	if i := strings.Index(model, "/"); i >= 0 && i < len(model)-1 {
+		return model[i+1:]
+	}
+	return strings.TrimPrefix(model, "models/")
+}
+
+func schemaForResponseFormat(config Config) (map[string]any, error) {
+	switch config.ResponseFormat {
+	case ResponseFormatDiagnosis:
+		return tools.ExtractDiagnosisToolSchema, nil
+	case ResponseFormatPlaybookRecommendations:
+		return tools.RecommendPlaybooksToolSchema, nil
+	case ResponseFormatCustomSchema:
+		return tools.CustomSchema(config.CustomSchema)
+	default:
+		return nil, nil
+	}
+}
+
+func calculateGenerationInfo(llmBackend api.LLMBackend, model string, resp *genkitai.ModelResponse) []GenerationInfo {
+	if resp == nil || resp.Usage == nil {
+		return nil
+	}
+
+	genInfo := GenerationInfo{
+		InputTokens:  resp.Usage.InputTokens,
+		OutputTokens: resp.Usage.OutputTokens,
+		Model:        model,
+	}
+	if resp.Usage.ThoughtsTokens > 0 {
+		genInfo.ReasoningTokens = lo.ToPtr(resp.Usage.ThoughtsTokens)
+	}
+	if resp.Usage.CachedContentTokens > 0 {
+		genInfo.CacheReadTokens = lo.ToPtr(resp.Usage.CachedContentTokens)
+	}
+
+	cost, err := CalculateCost(llmBackend, model, genInfo)
+	if err != nil {
+		genInfo.CostCalculationError = lo.ToPtr(err.Error())
+	} else {
+		genInfo.Cost = cost
+	}
+
+	return []GenerationInfo{genInfo}
 }
