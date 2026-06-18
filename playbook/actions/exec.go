@@ -71,7 +71,7 @@ func (e ExecDetails) plain(colors bool) string {
 		if colors {
 			b.WriteString(clicky.Text(fmt.Sprintf("Exit Code: %d", e.ExitCode), "text-red-600").ANSI())
 		} else {
-			b.WriteString(fmt.Sprintf("Exit Code: %d", e.ExitCode))
+			fmt.Fprintf(&b, "Exit Code: %d", e.ExitCode)
 		}
 		b.WriteString("\n")
 	}

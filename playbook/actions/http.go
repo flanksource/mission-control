@@ -93,7 +93,7 @@ func (r HTTPResult) plain(colors bool) string {
 		}
 		sort.Strings(keys)
 		for _, k := range keys {
-			b.WriteString(fmt.Sprintf("  %s: %s\n", k, r.Headers[k]))
+			fmt.Fprintf(&b, "  %s: %s\n", k, r.Headers[k])
 		}
 	}
 
