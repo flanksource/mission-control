@@ -186,6 +186,10 @@ func newCachedPlaybookCommand(item api.PlaybookListItem, name string) *cobra.Com
 		},
 	}
 	clicky.BindAllFlags(cmd.Flags(), "format")
+	clicky.SetGroupedUsage(cmd)
+	for _, f := range hiddenFormatFlags {
+		_ = cmd.Flags().MarkHidden(f)
+	}
 	cmd.Flags().BoolVar(&wait, "wait", true, "Wait for the playbook run to finish")
 	cmd.Flags().DurationVar(&pollInterval, "poll-interval", 2*time.Second, "Polling interval used with --wait")
 	cmd.Flags().StringVar(&configID, "config-id", "", "Config ID to run the playbook against")

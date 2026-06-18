@@ -14,6 +14,11 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// hiddenFormatFlags lists format flags that clicky defines but aren't
+// functional for playbook output. They are hidden from --help on
+// playbook run and cached playbook subcommands.
+var hiddenFormatFlags = []string{"csv", "dump-schema", "filter", "format", "pdf", "table", "tree"}
+
 // Playbook is the parent command for playbook operations. The client owns the
 // remote surfaces (list, run); the server binary attaches local execution via
 // LocalRunHandler and the Submit subcommand.
@@ -179,9 +184,14 @@ func runRemotePlaybook(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	clicky.BindAllFlags(Playbook.PersistentFlags(), "format")
 	Playbook.PersistentFlags().StringVarP(&playbookNamespace, "namespace", "n", "default", "Namespace for playbook to run under")
 	Playbook.PersistentFlags().StringVarP(&ParamFile, "params", "p", "", "YAML/JSON file containing parameters")
+
+	clicky.BindAllFlags(Run.Flags(), "format")
+	for _, f := range hiddenFormatFlags {
+		_ = Run.Flags().MarkHidden(f)
+	}
+
 	Run.Flags().BoolVar(&playbookWait, "wait", true, "Wait for the playbook run to finish")
 	Run.Flags().DurationVar(&playbookPollInterval, "poll-interval", 2*time.Second, "Polling interval used with --wait")
 	Run.Flags().StringVar(&playbookConfigID, "config-id", "", "Config ID to run the playbook against")
