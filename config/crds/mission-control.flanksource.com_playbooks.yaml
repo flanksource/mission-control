@@ -108,7 +108,7 @@ spec:
                         backend:
                           description: |-
                             Optionally specify the LLM backend.
-                            Supported: anthropic (default), ollama, openai.
+                            Supported: anthropic (default), ollama, openai, bedrock, gemini.
                           type: string
                         changes:
                           description: Select changes for the config to provide as
@@ -305,6 +305,9 @@ spec:
                                 type: array
                             type: object
                           type: array
+                        region:
+                          description: Region for AWS Bedrock backend.
+                          type: string
                         relationships:
                           description: Select related configs to provide as an additional
                             context to the AI model.

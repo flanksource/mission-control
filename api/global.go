@@ -37,6 +37,7 @@ type LLMBackend string
 
 const (
 	LLMBackendAnthropic LLMBackend = "anthropic"
+	LLMBackendBedrock   LLMBackend = "bedrock"
 	LLMBackendOpenAI    LLMBackend = "openai"
 	LLMBackendOllama    LLMBackend = "ollama"
 	LLMBackendGemini    LLMBackend = "gemini"

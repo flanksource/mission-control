@@ -15,7 +15,7 @@
         },
         "backend": {
           "type": "string",
-          "description": "Optionally specify the LLM backend.\nSupported: anthropic (default), ollama, openai."
+          "description": "Optionally specify the LLM backend.\nSupported: anthropic (default), ollama, openai, bedrock, gemini."
         },
         "model": {
           "type": "string",
@@ -24,6 +24,10 @@
         "apiURL": {
           "type": "string",
           "description": "BaseURL or API url.\nExample: server URL for ollama or custom url for Anthropic if using a proxy"
+        },
+        "region": {
+          "type": "string",
+          "description": "Region for AWS Bedrock backend."
         },
         "config": {
           "type": "string"

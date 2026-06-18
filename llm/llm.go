@@ -5,10 +5,14 @@ import (
 	"errors"
 	"fmt"
 
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
 	dutyctx "github.com/flanksource/duty/context"
 	"github.com/samber/lo"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
+	"github.com/tmc/langchaingo/llms/bedrock"
 	"github.com/tmc/langchaingo/llms/ollama"
 	"github.com/tmc/langchaingo/llms/openai"
 	"google.golang.org/genai"
@@ -172,6 +176,14 @@ func calculateGenerationInfo(llmBackend api.LLMBackend, model string, resp *llms
 				if outputTokens, ok := choice.GenerationInfo["OutputTokens"]; ok {
 					genInfo.OutputTokens += int(outputTokens.(int32))
 				}
+
+			case api.LLMBackendBedrock:
+				if inputTokens, ok := choice.GenerationInfo["input_tokens"]; ok {
+					genInfo.InputTokens += inputTokens.(int)
+				}
+				if outputTokens, ok := choice.GenerationInfo["output_tokens"]; ok {
+					genInfo.OutputTokens += outputTokens.(int)
+				}
 			}
 
 			cost, err := CalculateCost(llmBackend, model, genInfo)
@@ -302,6 +314,36 @@ func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 		}
 
 		return wrapper, nil
+
+	case api.LLMBackendBedrock:
+		var opts []bedrock.Option
+		if config.Model != "" {
+			opts = append(opts, bedrock.WithModel(config.Model))
+		}
+
+		var cfgOpts []func(*awsconfig.LoadOptions) error
+		if config.Region != "" {
+			cfgOpts = append(cfgOpts, awsconfig.WithRegion(config.Region))
+		}
+		if config.AWSAccessKey != "" && config.AWSSecretKey != "" {
+			cfgOpts = append(cfgOpts, awsconfig.WithCredentialsProvider(
+				credentials.NewStaticCredentialsProvider(config.AWSAccessKey, config.AWSSecretKey, config.AWSSessionToken),
+			))
+		}
+
+		if len(cfgOpts) > 0 {
+			cfg, err := awsconfig.LoadDefaultConfig(ctx, cfgOpts...)
+			if err != nil {
+				return nil, fmt.Errorf("failed to load AWS config: %w", err)
+			}
+			opts = append(opts, bedrock.WithClient(bedrockruntime.NewFromConfig(cfg)))
+		}
+
+		bedrockLLM, err := bedrock.New(opts...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Bedrock llm: %w", err)
+		}
+		return bedrockLLM, nil
 
 	default:
 		return nil, errors.New("unknown config.Backend")

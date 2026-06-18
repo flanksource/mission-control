@@ -41,6 +41,7 @@ var modelRegistry = make(map[api.LLMBackend]map[string]ModelInfo)
 // init populates the modelRegistry with known model data.
 func init() {
 	populateAnthropicModels()
+	populateBedrockModels()
 	populateGeminiDirectModels() // Populating gemini under 'gemini' key
 	populateOpenAIModels()
 	// Add calls to populate other providers as needed
@@ -115,6 +116,94 @@ func populateAnthropicModels() {
 		OutputPrice:         1.25,
 		CacheWritesPrice:    0.3,
 		CacheReadsPrice:     0.03,
+	}
+
+	modelRegistry[provider] = models
+}
+
+func populateBedrockModels() {
+	provider := api.LLMBackendBedrock
+	models := make(map[string]ModelInfo)
+
+	// Claude models on Bedrock (priced same as direct Anthropic)
+	models["anthropic.claude-3-7-sonnet-20250219-v1:0"] = ModelInfo{
+		Provider:            provider,
+		ModelID:             "anthropic.claude-3-7-sonnet-20250219-v1:0",
+		MaxTokens:           8192,
+		ContextWindow:       200_000,
+		SupportsImages:      true,
+		SupportsPromptCache: false,
+		InputPrice:          3.0,
+		OutputPrice:         15.0,
+	}
+	models["anthropic.claude-3-5-sonnet-20241022-v1:0"] = ModelInfo{
+		Provider:            provider,
+		ModelID:             "anthropic.claude-3-5-sonnet-20241022-v1:0",
+		MaxTokens:           8192,
+		ContextWindow:       200_000,
+		SupportsImages:      true,
+		SupportsPromptCache: false,
+		InputPrice:          3.0,
+		OutputPrice:         15.0,
+	}
+	models["anthropic.claude-3-5-haiku-20241022-v1:0"] = ModelInfo{
+		Provider:            provider,
+		ModelID:             "anthropic.claude-3-5-haiku-20241022-v1:0",
+		MaxTokens:           8192,
+		ContextWindow:       200_000,
+		SupportsImages:      true,
+		SupportsPromptCache: false,
+		InputPrice:          0.8,
+		OutputPrice:         4.0,
+	}
+	models["anthropic.claude-3-sonnet-20240229-v1:0"] = ModelInfo{
+		Provider:            provider,
+		ModelID:             "anthropic.claude-3-sonnet-20240229-v1:0",
+		MaxTokens:           4096,
+		ContextWindow:       200_000,
+		SupportsImages:      true,
+		SupportsPromptCache: false,
+		InputPrice:          3.0,
+		OutputPrice:         15.0,
+	}
+	models["anthropic.claude-3-haiku-20240307-v1:0"] = ModelInfo{
+		Provider:            provider,
+		ModelID:             "anthropic.claude-3-haiku-20240307-v1:0",
+		MaxTokens:           4096,
+		ContextWindow:       200_000,
+		SupportsImages:      true,
+		SupportsPromptCache: false,
+		InputPrice:          0.25,
+		OutputPrice:         1.25,
+	}
+
+	// Amazon Nova models
+	models["us.amazon.nova-pro-v1:0"] = ModelInfo{
+		Provider:       provider,
+		ModelID:        "us.amazon.nova-pro-v1:0",
+		MaxTokens:      5120,
+		ContextWindow:  300_000,
+		SupportsImages: true,
+		InputPrice:     0.8,
+		OutputPrice:    3.2,
+	}
+	models["us.amazon.nova-lite-v1:0"] = ModelInfo{
+		Provider:       provider,
+		ModelID:        "us.amazon.nova-lite-v1:0",
+		MaxTokens:      5120,
+		ContextWindow:  300_000,
+		SupportsImages: true,
+		InputPrice:     0.06,
+		OutputPrice:    0.24,
+	}
+	models["us.amazon.nova-micro-v1:0"] = ModelInfo{
+		Provider:       provider,
+		ModelID:        "us.amazon.nova-micro-v1:0",
+		MaxTokens:      5120,
+		ContextWindow:  128_000,
+		SupportsImages: false,
+		InputPrice:     0.035,
+		OutputPrice:    0.14,
 	}
 
 	modelRegistry[provider] = models

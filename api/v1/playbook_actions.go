@@ -284,7 +284,7 @@ type AIActionClient struct {
 	APIKey types.EnvVar `json:"apiKey,omitempty"`
 
 	// Optionally specify the LLM backend.
-	// Supported: anthropic (default), ollama, openai.
+	// Supported: anthropic (default), ollama, openai, bedrock, gemini.
 	Backend api.LLMBackend `json:"backend,omitempty"`
 
 	// Model name based on the backend chosen.
@@ -294,6 +294,14 @@ type AIActionClient struct {
 	// BaseURL or API url.
 	// Example: server URL for ollama or custom url for Anthropic if using a proxy
 	APIURL string `json:"apiURL,omitempty"`
+
+	// Region for AWS Bedrock backend.
+	Region string `json:"region,omitempty"`
+
+	// AWS credentials for Bedrock, populated from an aws connection in Populate().
+	AWSAccessKey    string `json:"-"`
+	AWSSecretKey    string `json:"-"`
+	AWSSessionToken string `json:"-"`
 }
 
 func (t *AIActionClient) Populate(ctx context.Context) error {
@@ -305,30 +313,43 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 			return fmt.Errorf("connection(%s) was not found: %w", *t.Connection, err)
 		}
 
-		if err := t.APIKey.Scan(conn.Password); err != nil {
-			return err
+		// AWS connections provide bedrock credentials, not an API key
+		if conn.Type == models.ConnectionTypeAWS {
+			return t.populateFromAWSConnection(ctx, conn)
 		}
 
-		t.APIURL = conn.URL
-
-		if m, ok := conn.Properties["model"]; ok {
-			t.Model = m
+		if t.APIKey.IsEmpty() {
+			if err := t.APIKey.Scan(conn.Password); err != nil {
+				return err
+			}
 		}
 
-		switch conn.Type {
-		case models.ConnectionTypeOllama:
-			t.Backend = api.LLMBackendOllama
-		case models.ConnectionTypeAnthropic:
-			t.Backend = api.LLMBackendAnthropic
-		case models.ConnectionTypeOpenAI:
-			t.Backend = api.LLMBackendOpenAI
-		case models.ConnectionTypeGemini:
-			t.Backend = api.LLMBackendGemini
-		default:
-			return fmt.Errorf("connection of type %q is not supported. Supported types: [%s]",
-				conn.Type,
-				strings.Join([]string{models.ConnectionTypeOllama, models.ConnectionTypeAnthropic, models.ConnectionTypeOpenAI, models.ConnectionTypeGemini}, ", "),
-			)
+		if t.APIURL == "" {
+			t.APIURL = conn.URL
+		}
+
+		if t.Model == "" {
+			if m, ok := conn.Properties["model"]; ok {
+				t.Model = m
+			}
+		}
+
+		if t.Backend == "" {
+			switch conn.Type {
+			case models.ConnectionTypeOllama:
+				t.Backend = api.LLMBackendOllama
+			case models.ConnectionTypeAnthropic:
+				t.Backend = api.LLMBackendAnthropic
+			case models.ConnectionTypeOpenAI:
+				t.Backend = api.LLMBackendOpenAI
+			case models.ConnectionTypeGemini:
+				t.Backend = api.LLMBackendGemini
+			default:
+				return fmt.Errorf("connection of type %q is not supported. Supported types: [%s]",
+					conn.Type,
+					strings.Join([]string{models.ConnectionTypeOllama, models.ConnectionTypeAnthropic, models.ConnectionTypeOpenAI, models.ConnectionTypeGemini, models.ConnectionTypeAWS}, ", "),
+				)
+			}
 		}
 	}
 
@@ -345,6 +366,40 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 		} else {
 			t.APIKey.ValueStatic = v
 		}
+	}
+
+	return nil
+}
+
+func (t *AIActionClient) populateFromAWSConnection(ctx context.Context, conn *models.Connection) error {
+	if t.Backend != "" && t.Backend != api.LLMBackendBedrock {
+		return fmt.Errorf("aws connection %q cannot be used with backend %q; only bedrock is supported", conn.Name, t.Backend)
+	}
+
+	if t.Region == "" {
+		if r, ok := conn.Properties["region"]; ok {
+			t.Region = r
+		}
+	}
+	if t.Model == "" {
+		if m, ok := conn.Properties["model"]; ok {
+			t.Model = m
+		}
+	}
+	if t.AWSAccessKey == "" {
+		t.AWSAccessKey = conn.Username
+	}
+	if t.AWSSecretKey == "" {
+		t.AWSSecretKey = conn.Password
+	}
+	if t.AWSSessionToken == "" {
+		if st, ok := conn.Properties["sessionToken"]; ok {
+			t.AWSSessionToken = st
+		}
+	}
+
+	if t.Backend == "" {
+		t.Backend = api.LLMBackendBedrock
 	}
 
 	return nil
