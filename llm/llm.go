@@ -244,6 +244,9 @@ func calculateGenerationInfo(llmBackend api.LLMBackend, model string, resp *genk
 	if resp.Usage.CachedContentTokens > 0 {
 		genInfo.CacheReadTokens = lo.ToPtr(resp.Usage.CachedContentTokens)
 	}
+	if n, ok := resp.Usage.Custom["cacheCreationInputTokens"]; ok && n > 0 {
+		genInfo.CacheWriteTokens = lo.ToPtr(int(n))
+	}
 
 	cost, err := CalculateCost(llmBackend, model, genInfo)
 	if err != nil {
