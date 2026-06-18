@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -60,7 +61,7 @@ func Prompt(ctx dutyctx.Context, config Config, systemPrompt string, promptParts
 }
 
 func PromptWithHistory(ctx dutyctx.Context, config Config, history []*genkitai.Message, prompt string) (string, []*genkitai.Message, []GenerationInfo, error) {
-	g, modelName, err := initGenkit(ctx, config)
+	g, modelName, err := initGenkit(config)
 	if err != nil {
 		return "", nil, nil, err
 	}
@@ -101,7 +102,7 @@ func PromptWithHistory(ctx dutyctx.Context, config Config, history []*genkitai.M
 	return aiResponse, messages, genInfo, nil
 }
 
-func initGenkit(ctx dutyctx.Context, config Config) (g *genkit.Genkit, modelName string, err error) {
+func initGenkit(config Config) (g *genkit.Genkit, modelName string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("failed to initialize Genkit: %v", r)
@@ -148,7 +149,8 @@ func initGenkit(ctx dutyctx.Context, config Config) (g *genkit.Genkit, modelName
 		return nil, "", err
 	}
 
-	g = genkit.Init(ctx, genkit.WithPlugins(plugin))
+	// Use context.Background() so the genkit lifecycle isn't tied to any request context.
+	g = genkit.Init(context.Background(), genkit.WithPlugins(plugin))
 	return g, modelName, nil
 }
 
