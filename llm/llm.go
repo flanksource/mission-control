@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/aws/aws-sdk-go-v2/aws"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
 	genkitai "github.com/firebase/genkit/go/ai"
 	genkitapi "github.com/firebase/genkit/go/core/api"
 	"github.com/firebase/genkit/go/genkit"
@@ -15,6 +18,7 @@ import (
 	ollamaplugin "github.com/firebase/genkit/go/plugins/ollama"
 	dutyctx "github.com/flanksource/duty/context"
 	"github.com/samber/lo"
+	bedrockplugin "github.com/xavidop/genkit-aws-bedrock-go"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -111,6 +115,7 @@ func initGenkit(config Config) (g *genkit.Genkit, modelName string, err error) {
 
 	var provider string
 	var plugin genkitapi.Plugin
+	var bedrockPlugin *bedrockplugin.Bedrock
 
 	switch config.Backend {
 	case api.LLMBackendOpenAI:
@@ -140,18 +145,56 @@ func initGenkit(config Config) (g *genkit.Genkit, modelName string, err error) {
 		provider = "googleai"
 		plugin = &googlegenai.GoogleAI{APIKey: config.APIKey.ValueStatic}
 
+	case api.LLMBackendBedrock:
+		provider = "bedrock"
+		bedrockCfg, cfgErr := newBedrockAWSConfig(config)
+		if cfgErr != nil {
+			return nil, "", cfgErr
+		}
+		bedrockPlugin = &bedrockplugin.Bedrock{
+			AWSConfig: &bedrockCfg,
+		}
+		plugin = bedrockPlugin
+
 	default:
 		return nil, "", errors.New("unknown config.Backend")
 	}
 
-	modelName, err = qualifyModelName(provider, defaultModel(config.Backend, config.Model))
+	model := defaultModel(config.Backend, config.Model)
+	modelName, err = qualifyModelName(provider, model)
 	if err != nil {
 		return nil, "", err
 	}
 
 	// Use context.Background() so the genkit lifecycle isn't tied to any request context.
 	g = genkit.Init(context.Background(), genkit.WithPlugins(plugin))
+
+	// Bedrock requires explicit model registration via DefineModel after Init.
+	if bedrockPlugin != nil {
+		bedrockPlugin.DefineModel(g, bedrockplugin.ModelDefinition{
+			Name: model,
+			Type: "chat",
+		}, nil)
+	}
+
 	return g, modelName, nil
+}
+
+func newBedrockAWSConfig(cfg Config) (aws.Config, error) {
+	opts := []func(*awsconfig.LoadOptions) error{}
+	if cfg.AWSRegion != "" {
+		opts = append(opts, awsconfig.WithRegion(cfg.AWSRegion))
+	}
+	if cfg.AWSAccessKey.ValueStatic != "" {
+		opts = append(opts, awsconfig.WithCredentialsProvider(
+			credentials.NewStaticCredentialsProvider(
+				cfg.AWSAccessKey.ValueStatic,
+				cfg.APIKey.ValueStatic,
+				"",
+			),
+		))
+	}
+	return awsconfig.LoadDefaultConfig(context.Background(), opts...)
 }
 
 func generationConfig(backend api.LLMBackend, model string) map[string]any {
@@ -161,7 +204,7 @@ func generationConfig(backend api.LLMBackend, model string) map[string]any {
 	if backend != api.LLMBackendOpenAI || !isOpenAIDefaultTemperatureOnly(model) {
 		config["temperature"] = 0
 	}
-	if backend == api.LLMBackendAnthropic {
+	if backend == api.LLMBackendAnthropic || backend == api.LLMBackendBedrock {
 		config["max_tokens"] = 2048
 	}
 	if len(config) == 0 {
@@ -187,6 +230,8 @@ func defaultModel(backend api.LLMBackend, model string) string {
 		return "claude-3-5-sonnet-latest"
 	case api.LLMBackendGemini:
 		return "gemini-2.5-pro-exp-03-25"
+	case api.LLMBackendBedrock:
+		return "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
 	default:
 		return model
 	}
@@ -198,7 +243,7 @@ func qualifyModelName(provider, model string) (string, error) {
 		return "", fmt.Errorf("llm model is required for backend %q", provider)
 	}
 
-	for _, knownProvider := range []string{"anthropic", "googleai", "ollama", "openai", "vertexai"} {
+	for _, knownProvider := range []string{"anthropic", "bedrock", "googleai", "ollama", "openai", "vertexai"} {
 		if strings.HasPrefix(model, knownProvider+"/") {
 			return model, nil
 		}

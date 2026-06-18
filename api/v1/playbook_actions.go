@@ -294,6 +294,12 @@ type AIActionClient struct {
 	// BaseURL or API url.
 	// Example: server URL for ollama or custom url for Anthropic if using a proxy
 	APIURL string `json:"apiURL,omitempty"`
+
+	// AWS region. Used when backend is bedrock.
+	AWSRegion string `json:"awsRegion,omitempty"`
+
+	// AWS access key ID. Used when backend is bedrock.
+	AWSAccessKey types.EnvVar `json:"awsAccessKey,omitempty"`
 }
 
 func (t *AIActionClient) Populate(ctx context.Context) error {
@@ -324,10 +330,20 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 			t.Backend = api.LLMBackendOpenAI
 		case models.ConnectionTypeGemini:
 			t.Backend = api.LLMBackendGemini
+		case models.ConnectionTypeAWS:
+			t.Backend = api.LLMBackendBedrock
+			if t.AWSAccessKey.IsEmpty() {
+				t.AWSAccessKey.ValueStatic = conn.Username
+			}
+			if t.AWSRegion == "" {
+				if region, ok := conn.Properties["region"]; ok {
+					t.AWSRegion = region
+				}
+			}
 		default:
 			return fmt.Errorf("connection of type %q is not supported. Supported types: [%s]",
 				conn.Type,
-				strings.Join([]string{models.ConnectionTypeOllama, models.ConnectionTypeAnthropic, models.ConnectionTypeOpenAI, models.ConnectionTypeGemini}, ", "),
+				strings.Join([]string{models.ConnectionTypeOllama, models.ConnectionTypeAnthropic, models.ConnectionTypeOpenAI, models.ConnectionTypeGemini, models.ConnectionTypeAWS}, ", "),
 			)
 		}
 	}
