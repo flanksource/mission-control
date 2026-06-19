@@ -150,28 +150,23 @@
       "properties": {
         "connection": {
           "type": "string",
-          "description": "Git connection reference (e.g., \"connection://github/my-org\")"
+          "description": "Git connection reference (e.g., \"connection://github/my-org\").\nWhen empty, Path is read from the local filesystem."
         },
         "path": {
           "type": "string",
-          "description": "Path to the skill file within the repo (e.g., \"skills/access-auditor.md\")"
+          "description": "Path to the skill file within the repo or local filesystem (e.g., \"skills/access-auditor.md\")"
         },
         "branch": {
           "type": "string",
           "description": "Branch or tag to checkout (optional, defaults to the repo's default branch)"
-        },
-        "jsonSchemaPath": {
-          "type": "string",
-          "description": "JsonSchemaPath is the path to a JSON schema file in the repo.\nIf set, the AI response must conform to this schema (takes precedence over inline OutputSchema)."
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "connection",
         "path"
       ],
-      "description": "AISkill references a skill file in a git repository.\nThe repo is cloned at execution time and the skill file content is\nprepended to the system prompt."
+      "description": "AISkill references a skill file, either from a git repository (when Connection\nis set) or from the local filesystem (when Connection is empty). Skill content\nis exposed to the model as a loadable skill via the use_skill tool."
     },
     "AWSConnection": {
       "properties": {

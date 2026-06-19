@@ -438,28 +438,24 @@ spec:
                             If any skill has JsonSchemaPath set, that schema is used for output validation.
                           items:
                             description: |-
-                              AISkill references a skill file in a git repository.
-                              The repo is cloned at execution time and the skill file content is
-                              prepended to the system prompt.
+                              AISkill references a skill file, either from a git repository (when Connection
+                              is set) or from the local filesystem (when Connection is empty). Skill content
+                              is exposed to the model as a loadable skill via the use_skill tool.
                             properties:
                               branch:
                                 description: Branch or tag to checkout (optional,
                                   defaults to the repo's default branch)
                                 type: string
                               connection:
-                                description: Git connection reference (e.g., "connection://github/my-org")
-                                type: string
-                              jsonSchemaPath:
                                 description: |-
-                                  JsonSchemaPath is the path to a JSON schema file in the repo.
-                                  If set, the AI response must conform to this schema (takes precedence over inline OutputSchema).
+                                  Git connection reference (e.g., "connection://github/my-org").
+                                  When empty, Path is read from the local filesystem.
                                 type: string
                               path:
                                 description: Path to the skill file within the repo
-                                  (e.g., "skills/access-auditor.md")
+                                  or local filesystem (e.g., "skills/access-auditor.md")
                                 type: string
                             required:
-                            - connection
                             - path
                             type: object
                           type: array

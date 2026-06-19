@@ -127,22 +127,16 @@ type childRunResultContext struct {
 func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, error) {
 	var result AIActionResult
 
-	// When skills are specified, clone each skill into a temp directory as a
+	// When skills are specified, stage each skill into a temp directory as a
 	// SKILL.md so genkit's Skills middleware can surface them to the model.
 	var skillsPath string
 	if len(spec.Skills) > 0 {
-		dir, skillDir, schemaContent, err := stageSkills(ctx, spec.Skills)
+		dir, err := stageSkills(ctx, spec.Skills)
 		if err != nil {
 			return nil, fmt.Errorf("failed to stage skills: %w", err)
 		}
 		defer os.RemoveAll(dir)
-		skillsPath = skillDir
-
-		if schemaContent != "" {
-			spec.OutputSchema = &v1.AIOutputSchema{
-				EnvVar: types.EnvVar{ValueStatic: schemaContent},
-			}
-		}
+		skillsPath = dir
 	}
 
 	knowledgebase, prompt, err := buildPrompt(ctx, spec.Prompt, spec.LLMContextRequest)
@@ -586,76 +580,48 @@ func loadFileFromGit(ctx context.Context, connectionRef, filePath, branch string
 	return string(content), nil
 }
 
-// stageSkills clones each skill's git repo, writes the skill content as a
-// SKILL.md file into a temp directory, and returns (tempRoot, skillsDir, schemaContent, error).
-// The caller is responsible for cleaning up tempRoot with os.RemoveAll.
-func stageSkills(ctx context.Context, skills []v1.AISkill) (tempRoot, skillsDir string, schemaContent string, err error) {
-	tempRoot, err = os.MkdirTemp("", "mc-skills-*")
+// stageSkills stages each skill into a temp directory containing per-skill
+// subdirectories with SKILL.md files. When a skill has Connection set, the
+// repo is cloned; otherwise Path is read from the local filesystem.
+func stageSkills(ctx context.Context, skills []v1.AISkill) (string, error) {
+	tempRoot, err := os.MkdirTemp("", "mc-skills-*")
 	if err != nil {
-		return "", "", "", fmt.Errorf("failed to create temp dir: %w", err)
+		return "", fmt.Errorf("failed to create temp dir: %w", err)
 	}
 
 	for i, skill := range skills {
-		root, err := cloneGitRepo(ctx, skill.Connection, skill.Branch)
-		if err != nil {
-			os.RemoveAll(tempRoot)
-			return "", "", "", fmt.Errorf("skill[%d]: %w", i, err)
+		var content []byte
+		if skill.Connection != "" {
+			root, err := cloneGitRepo(ctx, skill.Connection, skill.Branch)
+			if err != nil {
+				os.RemoveAll(tempRoot)
+				return "", fmt.Errorf("skill[%d]: %w", i, err)
+			}
+			content, err = safeReadFile(root, skill.Path)
+			if err != nil {
+				os.RemoveAll(tempRoot)
+				return "", fmt.Errorf("skill[%d] %q: %w", i, skill.Path, err)
+			}
+		} else {
+			content, err = os.ReadFile(skill.Path)
+			if err != nil {
+				os.RemoveAll(tempRoot)
+				return "", fmt.Errorf("skill[%d] %q: %w", i, skill.Path, err)
+			}
 		}
 
-		content, err := safeReadFile(root, skill.Path)
-		if err != nil {
-			os.RemoveAll(tempRoot)
-			return "", "", "", fmt.Errorf("skill[%d] %q: %w", i, skill.Path, err)
-		}
-
-		// Each skill becomes a subdirectory named after its path (sanitized)
 		skillName := strings.TrimSuffix(filepath.Base(skill.Path), filepath.Ext(skill.Path))
 		skillDir := filepath.Join(tempRoot, skillName)
 		if err := os.MkdirAll(skillDir, 0755); err != nil {
 			os.RemoveAll(tempRoot)
-			return "", "", "", fmt.Errorf("skill[%d]: %w", i, err)
+			return "", fmt.Errorf("skill[%d]: %w", i, err)
 		}
 
 		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), content, 0644); err != nil {
 			os.RemoveAll(tempRoot)
-			return "", "", "", fmt.Errorf("skill[%d]: %w", i, err)
-		}
-
-		if skill.JsonSchemaPath != "" && schemaContent == "" {
-			schema, err := safeReadFile(root, skill.JsonSchemaPath)
-			if err != nil {
-				os.RemoveAll(tempRoot)
-				return "", "", "", fmt.Errorf("skill[%d] schema %q: %w", i, skill.JsonSchemaPath, err)
-			}
-			schemaContent = string(schema)
+			return "", fmt.Errorf("skill[%d]: %w", i, err)
 		}
 	}
 
-	return tempRoot, tempRoot, schemaContent, nil
-}
-
-// loadSkill clones a git repository using the provided connection, reads the skill file,
-// and optionally reads the JSON schema file if JsonSchemaPath is set.
-// Returns (skillContent, schemaContent, error).
-func loadSkill(ctx context.Context, skill v1.AISkill) (string, string, error) {
-	root, err := cloneGitRepo(ctx, skill.Connection, skill.Branch)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to clone skill repository: %w", err)
-	}
-
-	content, err := safeReadFile(root, skill.Path)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to read skill file %q: %w", skill.Path, err)
-	}
-
-	var schemaContent string
-	if skill.JsonSchemaPath != "" {
-		schema, err := safeReadFile(root, skill.JsonSchemaPath)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to read json schema file %q: %w", skill.JsonSchemaPath, err)
-		}
-		schemaContent = string(schema)
-	}
-
-	return string(content), schemaContent, nil
+	return tempRoot, nil
 }

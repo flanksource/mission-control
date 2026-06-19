@@ -413,19 +413,17 @@ type AIOutputSchemaGit struct {
 	Branch string `json:"branch,omitempty" yaml:"branch,omitempty"`
 }
 
-// AISkill references a skill file in a git repository.
-// The repo is cloned at execution time and the skill file content is
-// prepended to the system prompt.
+// AISkill references a skill file, either from a git repository (when Connection
+// is set) or from the local filesystem (when Connection is empty). Skill content
+// is exposed to the model as a loadable skill via the use_skill tool.
 type AISkill struct {
-	// Git connection reference (e.g., "connection://github/my-org")
-	Connection string `json:"connection" yaml:"connection"`
-	// Path to the skill file within the repo (e.g., "skills/access-auditor.md")
+	// Git connection reference (e.g., "connection://github/my-org").
+	// When empty, Path is read from the local filesystem.
+	Connection string `json:"connection,omitempty" yaml:"connection,omitempty"`
+	// Path to the skill file within the repo or local filesystem (e.g., "skills/access-auditor.md")
 	Path string `json:"path" yaml:"path"`
 	// Branch or tag to checkout (optional, defaults to the repo's default branch)
 	Branch string `json:"branch,omitempty" yaml:"branch,omitempty"`
-	// JsonSchemaPath is the path to a JSON schema file in the repo.
-	// If set, the AI response must conform to this schema (takes precedence over inline OutputSchema).
-	JsonSchemaPath string `json:"jsonSchemaPath,omitempty" yaml:"jsonSchemaPath,omitempty"`
 }
 
 type AIAction struct {
