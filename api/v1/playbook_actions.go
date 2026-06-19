@@ -294,6 +294,15 @@ type AIActionClient struct {
 	// BaseURL or API url.
 	// Example: server URL for ollama or custom url for Anthropic if using a proxy
 	APIURL string `json:"apiURL,omitempty"`
+
+	// AWS region. Used when backend is bedrock.
+	AWSRegion *string `json:"awsRegion,omitempty"`
+
+	// AWS access key ID. Used when backend is bedrock.
+	AWSAccessKeyID *types.EnvVar `json:"awsAccessKeyId,omitempty"`
+
+	// AWS secret access key. Used when backend is bedrock.
+	AWSSecretAccessKey *types.EnvVar `json:"awsSecretAccessKey,omitempty"`
 }
 
 func (t *AIActionClient) Populate(ctx context.Context) error {
@@ -305,10 +314,6 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 			return fmt.Errorf("connection(%s) was not found: %w", *t.Connection, err)
 		}
 
-		if err := t.APIKey.Scan(conn.Password); err != nil {
-			return err
-		}
-
 		t.APIURL = conn.URL
 
 		if m, ok := conn.Properties["model"]; ok {
@@ -318,16 +323,47 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 		switch conn.Type {
 		case models.ConnectionTypeOllama:
 			t.Backend = api.LLMBackendOllama
+			if err := t.APIKey.Scan(conn.Password); err != nil {
+				return err
+			}
 		case models.ConnectionTypeAnthropic:
 			t.Backend = api.LLMBackendAnthropic
+			if err := t.APIKey.Scan(conn.Password); err != nil {
+				return err
+			}
 		case models.ConnectionTypeOpenAI:
 			t.Backend = api.LLMBackendOpenAI
+			if err := t.APIKey.Scan(conn.Password); err != nil {
+				return err
+			}
 		case models.ConnectionTypeGemini:
 			t.Backend = api.LLMBackendGemini
+			if err := t.APIKey.Scan(conn.Password); err != nil {
+				return err
+			}
+		case models.ConnectionTypeAWS:
+			t.Backend = api.LLMBackendBedrock
+			if t.AWSAccessKeyID == nil {
+				t.AWSAccessKeyID = &types.EnvVar{}
+				if err := t.AWSAccessKeyID.Scan(conn.Username); err != nil {
+					return err
+				}
+			}
+			if t.AWSSecretAccessKey == nil {
+				t.AWSSecretAccessKey = &types.EnvVar{}
+				if err := t.AWSSecretAccessKey.Scan(conn.Password); err != nil {
+					return err
+				}
+			}
+			if t.AWSRegion == nil {
+				if region, ok := conn.Properties["region"]; ok {
+					t.AWSRegion = &region
+				}
+			}
 		default:
 			return fmt.Errorf("connection of type %q is not supported. Supported types: [%s]",
 				conn.Type,
-				strings.Join([]string{models.ConnectionTypeOllama, models.ConnectionTypeAnthropic, models.ConnectionTypeOpenAI, models.ConnectionTypeGemini}, ", "),
+				strings.Join([]string{models.ConnectionTypeOllama, models.ConnectionTypeAnthropic, models.ConnectionTypeOpenAI, models.ConnectionTypeGemini, models.ConnectionTypeAWS}, ", "),
 			)
 		}
 	}

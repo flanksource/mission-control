@@ -43,6 +43,7 @@ func init() {
 	populateAnthropicModels()
 	populateGeminiDirectModels() // Populating gemini under 'gemini' key
 	populateOpenAIModels()
+	populateBedrockModels()
 	// Add calls to populate other providers as needed
 }
 
@@ -422,6 +423,141 @@ func populateOpenAIModels() {
 		SupportsPromptCache: true,
 		InputPrice:          75.0,
 		OutputPrice:         150.0,
+	}
+
+	modelRegistry[provider] = models
+}
+
+func populateBedrockModels() {
+	provider := api.LLMBackendBedrock
+	models := make(map[string]ModelInfo)
+
+	// Claude models via Bedrock (same pricing as Anthropic direct)
+	sonnet37 := ModelInfo{
+		Provider:            provider,
+		ModelID:             "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
+		MaxTokens:           8192,
+		ContextWindow:       200_000,
+		SupportsImages:      true,
+		SupportsPromptCache: true,
+		InputPrice:          3.0,
+		OutputPrice:         15.0,
+		CacheWritesPrice:    3.75,
+		CacheReadsPrice:     0.3,
+	}
+	models["us.anthropic.claude-3-7-sonnet-20250219-v1:0"] = sonnet37
+	models["us.anthropic.claude-3-7-sonnet-latest-v1:0"] = sonnet37
+	models["anthropic.claude-3-7-sonnet-20250219-v1:0"] = sonnet37
+
+	sonnet35 := ModelInfo{
+		Provider:            provider,
+		ModelID:             "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
+		MaxTokens:           8192,
+		ContextWindow:       200_000,
+		SupportsImages:      true,
+		SupportsPromptCache: true,
+		InputPrice:          3.0,
+		OutputPrice:         15.0,
+		CacheWritesPrice:    3.75,
+		CacheReadsPrice:     0.3,
+	}
+	models["us.anthropic.claude-3-5-sonnet-20241022-v2:0"] = sonnet35
+	models["anthropic.claude-3-5-sonnet-20241022-v2:0"] = sonnet35
+
+	models["us.anthropic.claude-3-5-haiku-20241022-v1:0"] = ModelInfo{
+		Provider:            provider,
+		ModelID:             "us.anthropic.claude-3-5-haiku-20241022-v1:0",
+		MaxTokens:           8192,
+		ContextWindow:       200_000,
+		SupportsImages:      false,
+		SupportsPromptCache: true,
+		InputPrice:          0.8,
+		OutputPrice:         4.0,
+		CacheWritesPrice:    1.0,
+		CacheReadsPrice:     0.08,
+	}
+
+	models["us.anthropic.claude-3-opus-20240229-v1:0"] = ModelInfo{
+		Provider:            provider,
+		ModelID:             "us.anthropic.claude-3-opus-20240229-v1:0",
+		MaxTokens:           4096,
+		ContextWindow:       200_000,
+		SupportsImages:      true,
+		SupportsPromptCache: true,
+		InputPrice:          15.0,
+		OutputPrice:         75.0,
+		CacheWritesPrice:    18.75,
+		CacheReadsPrice:     1.5,
+	}
+
+	models["us.anthropic.claude-3-haiku-20240307-v1:0"] = ModelInfo{
+		Provider:            provider,
+		ModelID:             "us.anthropic.claude-3-haiku-20240307-v1:0",
+		MaxTokens:           4096,
+		ContextWindow:       200_000,
+		SupportsImages:      true,
+		SupportsPromptCache: true,
+		InputPrice:          0.25,
+		OutputPrice:         1.25,
+		CacheWritesPrice:    0.30,
+		CacheReadsPrice:     0.03,
+	}
+
+	// Amazon Nova models
+	models["amazon.nova-pro-v1:0"] = ModelInfo{
+		Provider:            provider,
+		ModelID:             "amazon.nova-pro-v1:0",
+		MaxTokens:           5120,
+		ContextWindow:       300_000,
+		SupportsImages:      true,
+		SupportsPromptCache: false,
+		InputPrice:          0.8,
+		OutputPrice:         3.2,
+	}
+
+	models["amazon.nova-lite-v1:0"] = ModelInfo{
+		Provider:            provider,
+		ModelID:             "amazon.nova-lite-v1:0",
+		MaxTokens:           5120,
+		ContextWindow:       300_000,
+		SupportsImages:      true,
+		SupportsPromptCache: false,
+		InputPrice:          0.06,
+		OutputPrice:         0.24,
+	}
+
+	models["amazon.nova-micro-v1:0"] = ModelInfo{
+		Provider:            provider,
+		ModelID:             "amazon.nova-micro-v1:0",
+		MaxTokens:           5120,
+		ContextWindow:       128_000,
+		SupportsImages:      false,
+		SupportsPromptCache: false,
+		InputPrice:          0.035,
+		OutputPrice:         0.14,
+	}
+
+	// Llama models via Bedrock
+	models["meta.llama3-1-70b-instruct-v1:0"] = ModelInfo{
+		Provider:            provider,
+		ModelID:             "meta.llama3-1-70b-instruct-v1:0",
+		MaxTokens:           2048,
+		ContextWindow:       128_000,
+		SupportsImages:      false,
+		SupportsPromptCache: false,
+		InputPrice:          0.99,
+		OutputPrice:         0.99,
+	}
+
+	models["meta.llama3-1-8b-instruct-v1:0"] = ModelInfo{
+		Provider:            provider,
+		ModelID:             "meta.llama3-1-8b-instruct-v1:0",
+		MaxTokens:           2048,
+		ContextWindow:       128_000,
+		SupportsImages:      false,
+		SupportsPromptCache: false,
+		InputPrice:          0.22,
+		OutputPrice:         0.22,
 	}
 
 	modelRegistry[provider] = models

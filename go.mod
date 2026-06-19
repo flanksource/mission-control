@@ -85,6 +85,7 @@ require (
 	github.com/tg123/go-htpasswd v1.2.4
 	github.com/timberio/go-datemath v0.1.0
 	github.com/wk8/go-ordered-map/v2 v2.1.8
+	github.com/xavidop/genkit-aws-bedrock-go v1.14.0
 	github.com/xeipuuv/gojsonschema v1.2.0
 	github.com/zitadel/oidc/v3 v3.47.5
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.68.0
@@ -142,6 +143,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.29 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.29 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.30 // indirect
+	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.54.0 // indirect
 	github.com/aws/aws-sdk-go-v2/service/eks v1.84.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.12 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.18 // indirect
@@ -241,7 +243,7 @@ require (
 	github.com/golang-sql/sqlexp v0.1.0 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/google/btree v1.1.3 // indirect
-	github.com/google/dotprompt/go v0.0.0-20251014011017-8d056e027254 // indirect
+	github.com/google/dotprompt/go v0.0.0-20251229072418-d79986469d4c // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-github/v57 v57.0.0 // indirect
 	github.com/google/gops v0.3.29 // indirect
