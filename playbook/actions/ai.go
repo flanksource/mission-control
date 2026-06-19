@@ -204,7 +204,15 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		}
 	}
 
-	llmConf := llm.Config{AIActionClient: spec.AIActionClient, ResponseFormat: llm.ResponseFormatDiagnosis}
+	llmConf := llm.Config{AIActionClient: spec.AIActionClient}
+
+	// Use diagnosis schema when the requested output format needs it.
+	for _, format := range spec.Formats {
+		if format == v1.AIActionFormatSlack || format == v1.AIActionFormatRecommendPlaybook {
+			llmConf.ResponseFormat = llm.ResponseFormatDiagnosis
+			break
+		}
+	}
 
 	// Resolve custom output schema if provided
 	customSchema := false
@@ -228,9 +236,9 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	result.JSON = response
 	result.GenerationInfo = append(result.GenerationInfo, genInfo...)
 
-	// When using a custom schema, skip DiagnosisReport unmarshaling
+	// Only unmarshal into DiagnosisReport when the response format is diagnosis.
 	var diagnosisReport llm.DiagnosisReport
-	if !customSchema {
+	if llmConf.ResponseFormat == llm.ResponseFormatDiagnosis {
 		if err := json.Unmarshal([]byte(response), &diagnosisReport); err != nil {
 			return nil, ctx.Oops().With("response", response).Wrapf(err, "failed to unmarshal diagnosis report")
 		}
