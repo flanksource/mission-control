@@ -244,13 +244,13 @@ func defaultModel(backend api.LLMBackend, model string) string {
 
 	switch backend {
 	case api.LLMBackendOpenAI:
-		return "gpt-4o-mini"
+		return "gpt-5.4-nano"
 	case api.LLMBackendAnthropic:
-		return "claude-3-5-sonnet-latest"
+		return "claude-sonnet-4-6"
 	case api.LLMBackendGemini:
-		return "gemini-2.5-pro-exp-03-25"
+		return "gemini-2.5-flash"
 	case api.LLMBackendBedrock:
-		return "us.anthropic.claude-3-5-sonnet-20241022-v2:0"
+		return "anthropic.claude-sonnet-4-6"
 	default:
 		return model
 	}
