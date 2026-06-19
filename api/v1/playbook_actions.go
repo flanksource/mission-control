@@ -316,7 +316,7 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 
 		t.APIURL = conn.URL
 
-		if m, ok := conn.Properties["model"]; ok {
+		if m, ok := conn.Properties["model"]; ok && t.Model == "" {
 			t.Model = m
 		}
 
