@@ -591,35 +591,63 @@ func stageSkills(ctx context.Context, skills []v1.AISkill) (string, error) {
 
 	for i, skill := range skills {
 		var content []byte
+		var srcDir string
+
 		if skill.Connection != "" {
 			root, err := cloneGitRepo(ctx, skill.Connection, skill.Branch)
 			if err != nil {
 				os.RemoveAll(tempRoot)
 				return "", fmt.Errorf("skill[%d]: %w", i, err)
 			}
-			content, err = safeReadFile(root, skill.Path)
+			resolved := filepath.Join(root, skill.Path)
+			fi, err := os.Stat(resolved)
 			if err != nil {
 				os.RemoveAll(tempRoot)
 				return "", fmt.Errorf("skill[%d] %q: %w", i, skill.Path, err)
 			}
+			if fi.IsDir() {
+				srcDir = resolved
+			} else {
+				content, err = safeReadFile(root, skill.Path)
+				if err != nil {
+					os.RemoveAll(tempRoot)
+					return "", fmt.Errorf("skill[%d] %q: %w", i, skill.Path, err)
+				}
+			}
 		} else {
-			content, err = os.ReadFile(skill.Path)
+			fi, err := os.Stat(skill.Path)
 			if err != nil {
 				os.RemoveAll(tempRoot)
 				return "", fmt.Errorf("skill[%d] %q: %w", i, skill.Path, err)
+			}
+			if fi.IsDir() {
+				srcDir = skill.Path
+			} else {
+				content, err = os.ReadFile(skill.Path)
+				if err != nil {
+					os.RemoveAll(tempRoot)
+					return "", fmt.Errorf("skill[%d] %q: %w", i, skill.Path, err)
+				}
 			}
 		}
 
 		skillName := strings.TrimSuffix(filepath.Base(skill.Path), filepath.Ext(skill.Path))
-		skillDir := filepath.Join(tempRoot, skillName)
-		if err := os.MkdirAll(skillDir, 0755); err != nil {
-			os.RemoveAll(tempRoot)
-			return "", fmt.Errorf("skill[%d]: %w", i, err)
-		}
+		linkPath := filepath.Join(tempRoot, skillName)
 
-		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), content, 0644); err != nil {
-			os.RemoveAll(tempRoot)
-			return "", fmt.Errorf("skill[%d]: %w", i, err)
+		if srcDir != "" {
+			if err := os.Symlink(srcDir, linkPath); err != nil {
+				os.RemoveAll(tempRoot)
+				return "", fmt.Errorf("skill[%d]: %w", i, err)
+			}
+		} else {
+			if err := os.MkdirAll(linkPath, 0755); err != nil {
+				os.RemoveAll(tempRoot)
+				return "", fmt.Errorf("skill[%d]: %w", i, err)
+			}
+			if err := os.WriteFile(filepath.Join(linkPath, "SKILL.md"), content, 0644); err != nil {
+				os.RemoveAll(tempRoot)
+				return "", fmt.Errorf("skill[%d]: %w", i, err)
+			}
 		}
 	}
 
