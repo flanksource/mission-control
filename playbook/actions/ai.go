@@ -127,16 +127,15 @@ type childRunResultContext struct {
 func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, error) {
 	var result AIActionResult
 
-	// When skills are specified, stage each skill into a temp directory as a
-	// SKILL.md so genkit's Skills middleware can surface them to the model.
-	var skillsPath string
+	// Resolve skill paths for the LLM skills middleware. Local paths are passed
+	// through directly; git paths are resolved inside the cloned repository.
+	var skillPaths []string
 	if len(spec.Skills) > 0 {
-		dir, err := stageSkills(ctx, spec.Skills)
+		paths, err := resolveSkillPaths(ctx, spec.Skills)
 		if err != nil {
-			return nil, fmt.Errorf("failed to stage skills: %w", err)
+			return nil, fmt.Errorf("failed to resolve skills: %w", err)
 		}
-		defer os.RemoveAll(dir)
-		skillsPath = dir
+		skillPaths = paths
 	}
 
 	knowledgebase, prompt, err := buildPrompt(ctx, spec.Prompt, spec.LLMContextRequest)
@@ -200,7 +199,7 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		}
 	}
 
-	llmConf := llm.Config{AIActionClient: spec.AIActionClient, SkillsPath: skillsPath}
+	llmConf := llm.Config{AIActionClient: spec.AIActionClient, SkillPaths: skillPaths}
 
 	// Use diagnosis schema when the requested output format needs it.
 	for _, format := range spec.Formats {
@@ -543,23 +542,32 @@ func cloneGitRepo(ctx context.Context, connectionRef, branch string) (string, er
 	return workTree.Filesystem.Root(), nil
 }
 
-// safeReadFile validates that filePath does not escape root via traversal,
-// then reads and returns the file content.
-func safeReadFile(root, filePath string) ([]byte, error) {
+// safeResolvePath validates that filePath does not escape root via traversal.
+func safeResolvePath(root, filePath string) (string, error) {
 	if filepath.IsAbs(filePath) {
-		return nil, fmt.Errorf("absolute paths are not allowed: %q", filePath)
+		return "", fmt.Errorf("absolute paths are not allowed: %q", filePath)
 	}
 
 	joined := filepath.Join(root, filepath.Clean(filePath))
-
 	resolved, err := filepath.EvalSymlinks(joined)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve path %q: %w", filePath, err)
+		return "", fmt.Errorf("failed to resolve path %q: %w", filePath, err)
 	}
 
 	rel, err := filepath.Rel(root, resolved)
-	if err != nil || strings.HasPrefix(rel, "..") {
-		return nil, fmt.Errorf("path %q resolves outside the repository root", filePath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return "", fmt.Errorf("path %q resolves outside the repository root", filePath)
+	}
+
+	return resolved, nil
+}
+
+// safeReadFile validates that filePath does not escape root via traversal,
+// then reads and returns the file content.
+func safeReadFile(root, filePath string) ([]byte, error) {
+	resolved, err := safeResolvePath(root, filePath)
+	if err != nil {
+		return nil, err
 	}
 
 	return os.ReadFile(resolved)
@@ -580,76 +588,35 @@ func loadFileFromGit(ctx context.Context, connectionRef, filePath, branch string
 	return string(content), nil
 }
 
-// stageSkills stages each skill into a temp directory containing per-skill
-// subdirectories with SKILL.md files. When a skill has Connection set, the
-// repo is cloned; otherwise Path is read from the local filesystem.
-func stageSkills(ctx context.Context, skills []v1.AISkill) (string, error) {
-	tempRoot, err := os.MkdirTemp("", "mc-skills-*")
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp dir: %w", err)
-	}
+// resolveSkillPaths resolves local and git skill paths for the LLM skills middleware.
+func resolveSkillPaths(ctx context.Context, skills []v1.AISkill) ([]string, error) {
+	paths := make([]string, 0, len(skills))
 
 	for i, skill := range skills {
-		var content []byte
-		var srcDir string
+		if strings.TrimSpace(skill.Path) == "" {
+			return nil, fmt.Errorf("skill[%d]: path is required", i)
+		}
 
 		if skill.Connection != "" {
 			root, err := cloneGitRepo(ctx, skill.Connection, skill.Branch)
 			if err != nil {
-				os.RemoveAll(tempRoot)
-				return "", fmt.Errorf("skill[%d]: %w", i, err)
+				return nil, fmt.Errorf("skill[%d]: %w", i, err)
 			}
-			resolved := filepath.Join(root, skill.Path)
-			fi, err := os.Stat(resolved)
+
+			resolved, err := safeResolvePath(root, skill.Path)
 			if err != nil {
-				os.RemoveAll(tempRoot)
-				return "", fmt.Errorf("skill[%d] %q: %w", i, skill.Path, err)
+				return nil, fmt.Errorf("skill[%d] %q: %w", i, skill.Path, err)
 			}
-			if fi.IsDir() {
-				srcDir = resolved
-			} else {
-				content, err = safeReadFile(root, skill.Path)
-				if err != nil {
-					os.RemoveAll(tempRoot)
-					return "", fmt.Errorf("skill[%d] %q: %w", i, skill.Path, err)
-				}
-			}
-		} else {
-			fi, err := os.Stat(skill.Path)
-			if err != nil {
-				os.RemoveAll(tempRoot)
-				return "", fmt.Errorf("skill[%d] %q: %w", i, skill.Path, err)
-			}
-			if fi.IsDir() {
-				srcDir = skill.Path
-			} else {
-				content, err = os.ReadFile(skill.Path)
-				if err != nil {
-					os.RemoveAll(tempRoot)
-					return "", fmt.Errorf("skill[%d] %q: %w", i, skill.Path, err)
-				}
-			}
+
+			paths = append(paths, resolved)
+			continue
 		}
 
-		skillName := strings.TrimSuffix(filepath.Base(skill.Path), filepath.Ext(skill.Path))
-		linkPath := filepath.Join(tempRoot, skillName)
-
-		if srcDir != "" {
-			if err := os.Symlink(srcDir, linkPath); err != nil {
-				os.RemoveAll(tempRoot)
-				return "", fmt.Errorf("skill[%d]: %w", i, err)
-			}
-		} else {
-			if err := os.MkdirAll(linkPath, 0755); err != nil {
-				os.RemoveAll(tempRoot)
-				return "", fmt.Errorf("skill[%d]: %w", i, err)
-			}
-			if err := os.WriteFile(filepath.Join(linkPath, "SKILL.md"), content, 0644); err != nil {
-				os.RemoveAll(tempRoot)
-				return "", fmt.Errorf("skill[%d]: %w", i, err)
-			}
+		if _, err := os.Stat(skill.Path); err != nil {
+			return nil, fmt.Errorf("skill[%d] %q: %w", i, skill.Path, err)
 		}
+		paths = append(paths, skill.Path)
 	}
 
-	return tempRoot, nil
+	return paths, nil
 }

@@ -40,9 +40,9 @@ type Config struct {
 	ResponseFormat ResponseFormat
 	// CustomSchema is the raw JSON schema string when ResponseFormat == ResponseFormatCustomSchema
 	CustomSchema string
-	// SkillsPath is a temp directory containing skill subdirectories (each with a
-	// SKILL.md). When non-empty, genkit's Skills middleware is activated.
-	SkillsPath string
+	// SkillPaths are local paths to skill libraries. When non-empty, Genkit's
+	// Skills middleware is activated.
+	SkillPaths []string
 }
 
 type GenerationInfo struct {
@@ -94,8 +94,8 @@ func PromptWithHistory(ctx dutyctx.Context, config Config, history []*genkitai.M
 	if schema != nil {
 		opts = append(opts, genkitai.WithOutputSchema(schema))
 	}
-	if config.SkillsPath != "" {
-		opts = append(opts, genkitai.WithUse(&middleware.Skills{SkillPaths: []string{config.SkillsPath}}))
+	if len(config.SkillPaths) > 0 {
+		opts = append(opts, genkitai.WithUse(&middleware.Skills{SkillPaths: config.SkillPaths}))
 	}
 
 	resp, err := genkit.Generate(ctx, g, opts...)

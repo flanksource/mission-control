@@ -89,7 +89,7 @@
             "$ref": "#/$defs/AISkill"
           },
           "type": "array",
-          "description": "Skills references reusable skill files from git repositories.\nEach skill file's content is prepended to the system prompt.\nIf any skill has JsonSchemaPath set, that schema is used for output validation."
+          "description": "Skills references reusable Genkit skill libraries."
         },
         "outputSchema": {
           "$ref": "#/$defs/AIOutputSchema",
@@ -154,7 +154,7 @@
         },
         "path": {
           "type": "string",
-          "description": "Path to the skill file within the repo or local filesystem (e.g., \"skills/access-auditor.md\")"
+          "description": "Path to the skill library directory within the repo or local filesystem (e.g., \"skills\")"
         },
         "branch": {
           "type": "string",
@@ -166,7 +166,7 @@
       "required": [
         "path"
       ],
-      "description": "AISkill references a skill file, either from a git repository (when Connection\nis set) or from the local filesystem (when Connection is empty). Skill content\nis exposed to the model as a loadable skill via the use_skill tool."
+      "description": "AISkill references a Genkit skill library directory, either from a git repository\n(when Connection is set) or from the local filesystem (when Connection is empty).\nSkills are exposed to the model as loadable skills via the use_skill tool."
     },
     "AWSConnection": {
       "properties": {

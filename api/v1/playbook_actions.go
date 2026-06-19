@@ -413,14 +413,14 @@ type AIOutputSchemaGit struct {
 	Branch string `json:"branch,omitempty" yaml:"branch,omitempty"`
 }
 
-// AISkill references a skill file, either from a git repository (when Connection
-// is set) or from the local filesystem (when Connection is empty). Skill content
-// is exposed to the model as a loadable skill via the use_skill tool.
+// AISkill references a Genkit skill library directory, either from a git repository
+// (when Connection is set) or from the local filesystem (when Connection is empty).
+// Skills are exposed to the model as loadable skills via the use_skill tool.
 type AISkill struct {
 	// Git connection reference (e.g., "connection://github/my-org").
 	// When empty, Path is read from the local filesystem.
 	Connection string `json:"connection,omitempty" yaml:"connection,omitempty"`
-	// Path to the skill file within the repo or local filesystem (e.g., "skills/access-auditor.md")
+	// Path to the skill library directory within the repo or local filesystem (e.g., "skills")
 	Path string `json:"path" yaml:"path"`
 	// Branch or tag to checkout (optional, defaults to the repo's default branch)
 	Branch string `json:"branch,omitempty" yaml:"branch,omitempty"`
@@ -450,9 +450,7 @@ type AIAction struct {
 	// Supported: markdown (default), slack, recommendPlaybook
 	Formats []AIActionFormat `json:"formats,omitempty"`
 
-	// Skills references reusable skill files from git repositories.
-	// Each skill file's content is prepended to the system prompt.
-	// If any skill has JsonSchemaPath set, that schema is used for output validation.
+	// Skills references reusable Genkit skill libraries.
 	Skills []AISkill `json:"skills,omitempty" yaml:"skills,omitempty"`
 
 	// OutputSchema is a JSON schema that the AI response must conform to.
