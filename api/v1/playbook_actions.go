@@ -420,10 +420,14 @@ type AISkill struct {
 	// Git connection reference (e.g., "connection://github/my-org").
 	// When empty, Path is read from the local filesystem.
 	Connection string `json:"connection,omitempty" yaml:"connection,omitempty"`
-	// Path to the skill library directory within the repo or local filesystem (e.g., "skills")
-	Path string `json:"path" yaml:"path"`
+
 	// Branch or tag to checkout (optional, defaults to the repo's default branch)
 	Branch string `json:"branch,omitempty" yaml:"branch,omitempty"`
+
+	// Path to a directory that contains skill subdirectories, each with a SKILL.md file.
+	// Must be the *parent* directory of the skill directories, not a skill directory itself.
+	// Example: if skills live at /home/user/my-skills/foo/SKILL.md, pass "/home/aditya/my-skills" — not "/home/aditya/my-skills/foo".
+	Path string `json:"path" yaml:"path"`
 }
 
 type AIAction struct {

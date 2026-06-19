@@ -152,13 +152,13 @@
           "type": "string",
           "description": "Git connection reference (e.g., \"connection://github/my-org\").\nWhen empty, Path is read from the local filesystem."
         },
-        "path": {
-          "type": "string",
-          "description": "Path to the skill library directory within the repo or local filesystem (e.g., \"skills\")"
-        },
         "branch": {
           "type": "string",
           "description": "Branch or tag to checkout (optional, defaults to the repo's default branch)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to a directory that contains skill subdirectories, each with a SKILL.md file.\nMust be the *parent* directory of the skill directories, not a skill directory itself.\nExample: if skills live at /home/user/my-skills/foo/SKILL.md, pass \"/home/aditya/my-skills\" — not \"/home/aditya/my-skills/foo\"."
         }
       },
       "additionalProperties": false,

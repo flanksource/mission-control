@@ -36,10 +36,11 @@ const (
 
 type Config struct {
 	v1.AIActionClient
-	UseAgent       bool
 	ResponseFormat ResponseFormat
+
 	// CustomSchema is the raw JSON schema string when ResponseFormat == ResponseFormatCustomSchema
 	CustomSchema string
+
 	// SkillPaths are local paths to skill libraries. When non-empty, Genkit's
 	// Skills middleware is activated.
 	SkillPaths []string

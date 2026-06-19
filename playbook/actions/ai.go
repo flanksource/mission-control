@@ -200,7 +200,6 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 			break
 		}
 	}
-	}
 
 	// Resolve custom output schema if provided
 	customSchema := false
