@@ -244,7 +244,7 @@ func defaultModel(backend api.LLMBackend, model string) string {
 
 	switch backend {
 	case api.LLMBackendOpenAI:
-		return "gpt-5.4-nano"
+		return "gpt-5.5"
 	case api.LLMBackendAnthropic:
 		return "claude-sonnet-4-6"
 	case api.LLMBackendGemini:
