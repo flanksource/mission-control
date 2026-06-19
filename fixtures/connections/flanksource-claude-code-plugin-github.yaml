@@ -1,0 +1,13 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Connection
+metadata:
+  name: flanksource-claude-code-plugin-github
+  namespace: mc
+spec:
+  github:
+    url: https://github.com/flanksource/claude-code-plugin
+    personalAccessToken:
+      valueFrom:
+        secretKeyRef:
+          name: flanksource-github
+          key: token
