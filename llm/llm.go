@@ -15,6 +15,7 @@ import (
 	anthropicplugin "github.com/firebase/genkit/go/plugins/anthropic"
 	openaiplugin "github.com/firebase/genkit/go/plugins/compat_oai"
 	"github.com/firebase/genkit/go/plugins/googlegenai"
+	middleware "github.com/firebase/genkit/go/plugins/middleware"
 	ollamaplugin "github.com/firebase/genkit/go/plugins/ollama"
 	dutyctx "github.com/flanksource/duty/context"
 	"github.com/samber/lo"
@@ -39,6 +40,9 @@ type Config struct {
 	ResponseFormat ResponseFormat
 	// CustomSchema is the raw JSON schema string when ResponseFormat == ResponseFormatCustomSchema
 	CustomSchema string
+	// SkillsPath is a temp directory containing skill subdirectories (each with a
+	// SKILL.md). When non-empty, genkit's Skills middleware is activated.
+	SkillsPath string
 }
 
 type GenerationInfo struct {
@@ -89,6 +93,9 @@ func PromptWithHistory(ctx dutyctx.Context, config Config, history []*genkitai.M
 	}
 	if schema != nil {
 		opts = append(opts, genkitai.WithOutputSchema(schema))
+	}
+	if config.SkillsPath != "" {
+		opts = append(opts, genkitai.WithUse(&middleware.Skills{SkillPaths: []string{config.SkillsPath}}))
 	}
 
 	resp, err := genkit.Generate(ctx, g, opts...)

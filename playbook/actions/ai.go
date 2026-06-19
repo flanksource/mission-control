@@ -127,14 +127,16 @@ type childRunResultContext struct {
 func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, error) {
 	var result AIActionResult
 
-	// Load skill files and prepend to system prompt.
-	// If any skill has a JsonSchemaPath, use it as the output schema.
-	for i, skill := range spec.Skills {
-		skillContent, schemaContent, err := loadSkill(ctx, skill)
+	// When skills are specified, clone each skill into a temp directory as a
+	// SKILL.md so genkit's Skills middleware can surface them to the model.
+	var skillsPath string
+	if len(spec.Skills) > 0 {
+		dir, skillDir, schemaContent, err := stageSkills(ctx, spec.Skills)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load skill[%d]: %w", i, err)
+			return nil, fmt.Errorf("failed to stage skills: %w", err)
 		}
-		spec.SystemPrompt = skillContent + "\n\n" + spec.SystemPrompt
+		defer os.RemoveAll(dir)
+		skillsPath = skillDir
 
 		if schemaContent != "" {
 			spec.OutputSchema = &v1.AIOutputSchema{
@@ -204,7 +206,7 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		}
 	}
 
-	llmConf := llm.Config{AIActionClient: spec.AIActionClient}
+	llmConf := llm.Config{AIActionClient: spec.AIActionClient, SkillsPath: skillsPath}
 
 	// Use diagnosis schema when the requested output format needs it.
 	for _, format := range spec.Formats {
@@ -582,6 +584,54 @@ func loadFileFromGit(ctx context.Context, connectionRef, filePath, branch string
 	}
 
 	return string(content), nil
+}
+
+// stageSkills clones each skill's git repo, writes the skill content as a
+// SKILL.md file into a temp directory, and returns (tempRoot, skillsDir, schemaContent, error).
+// The caller is responsible for cleaning up tempRoot with os.RemoveAll.
+func stageSkills(ctx context.Context, skills []v1.AISkill) (tempRoot, skillsDir string, schemaContent string, err error) {
+	tempRoot, err = os.MkdirTemp("", "mc-skills-*")
+	if err != nil {
+		return "", "", "", fmt.Errorf("failed to create temp dir: %w", err)
+	}
+
+	for i, skill := range skills {
+		root, err := cloneGitRepo(ctx, skill.Connection, skill.Branch)
+		if err != nil {
+			os.RemoveAll(tempRoot)
+			return "", "", "", fmt.Errorf("skill[%d]: %w", i, err)
+		}
+
+		content, err := safeReadFile(root, skill.Path)
+		if err != nil {
+			os.RemoveAll(tempRoot)
+			return "", "", "", fmt.Errorf("skill[%d] %q: %w", i, skill.Path, err)
+		}
+
+		// Each skill becomes a subdirectory named after its path (sanitized)
+		skillName := strings.TrimSuffix(filepath.Base(skill.Path), filepath.Ext(skill.Path))
+		skillDir := filepath.Join(tempRoot, skillName)
+		if err := os.MkdirAll(skillDir, 0755); err != nil {
+			os.RemoveAll(tempRoot)
+			return "", "", "", fmt.Errorf("skill[%d]: %w", i, err)
+		}
+
+		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), content, 0644); err != nil {
+			os.RemoveAll(tempRoot)
+			return "", "", "", fmt.Errorf("skill[%d]: %w", i, err)
+		}
+
+		if skill.JsonSchemaPath != "" && schemaContent == "" {
+			schema, err := safeReadFile(root, skill.JsonSchemaPath)
+			if err != nil {
+				os.RemoveAll(tempRoot)
+				return "", "", "", fmt.Errorf("skill[%d] schema %q: %w", i, skill.JsonSchemaPath, err)
+			}
+			schemaContent = string(schema)
+		}
+	}
+
+	return tempRoot, tempRoot, schemaContent, nil
 }
 
 // loadSkill clones a git repository using the provided connection, reads the skill file,
