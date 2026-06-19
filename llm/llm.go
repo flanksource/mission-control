@@ -206,13 +206,21 @@ func newBedrockAWSConfig(cfg Config) (aws.Config, error) {
 func generationConfig(backend api.LLMBackend, model string) map[string]any {
 	config := map[string]any{}
 
-	// GPT-5.5 only accepts the default temperature, so omit temperature instead of sending 0.
+	// Temperature 0 gives deterministic outputs, which is important because
+	// all response modes use structured JSON output (diagnosis, playbook
+	// recommendations, custom schema). Non‑deterministic sampling risks
+	// malformed or inconsistent JSON.
+	//
+	// GPT-5.5 only accepts the default temperature, so omit it entirely.
 	if backend != api.LLMBackendOpenAI || !isOpenAIDefaultTemperatureOnly(model) {
 		config["temperature"] = 0
 	}
-	if backend == api.LLMBackendAnthropic || backend == api.LLMBackendBedrock {
+
+	// Anthropic's API requires max_tokens. 2048 is a conservative ceiling:
+	if isAnthropicModel(model) {
 		config["max_tokens"] = 2048
 	}
+
 	if len(config) == 0 {
 		return nil
 	}
@@ -222,6 +230,11 @@ func generationConfig(backend api.LLMBackend, model string) map[string]any {
 func isOpenAIDefaultTemperatureOnly(model string) bool {
 	model = unqualifiedModelName(model)
 	return model == "gpt-5.5" || strings.HasPrefix(model, "gpt-5.5-")
+}
+
+func isAnthropicModel(model string) bool {
+	model = strings.ToLower(unqualifiedModelName(model))
+	return strings.Contains(model, "anthropic") || strings.Contains(model, "claude")
 }
 
 func defaultModel(backend api.LLMBackend, model string) string {
