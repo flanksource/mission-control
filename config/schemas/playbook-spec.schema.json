@@ -33,6 +33,10 @@
           "$ref": "#/$defs/EnvVar",
           "description": "AWS access key ID. Used when backend is bedrock."
         },
+        "awsSecretKey": {
+          "$ref": "#/$defs/EnvVar",
+          "description": "AWS secret access key. Used when backend is bedrock."
+        },
         "config": {
           "type": "string"
         },

@@ -296,10 +296,13 @@ type AIActionClient struct {
 	APIURL string `json:"apiURL,omitempty"`
 
 	// AWS region. Used when backend is bedrock.
-	AWSRegion string `json:"awsRegion,omitempty"`
+	AWSRegion *string `json:"awsRegion,omitempty"`
 
 	// AWS access key ID. Used when backend is bedrock.
-	AWSAccessKey types.EnvVar `json:"awsAccessKey,omitempty"`
+	AWSAccessKey *types.EnvVar `json:"awsAccessKey,omitempty"`
+
+	// AWS secret access key. Used when backend is bedrock.
+	AWSSecretKey *types.EnvVar `json:"awsSecretKey,omitempty"`
 }
 
 func (t *AIActionClient) Populate(ctx context.Context) error {
@@ -311,10 +314,6 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 			return fmt.Errorf("connection(%s) was not found: %w", *t.Connection, err)
 		}
 
-		if err := t.APIKey.Scan(conn.Password); err != nil {
-			return err
-		}
-
 		t.APIURL = conn.URL
 
 		if m, ok := conn.Properties["model"]; ok {
@@ -324,20 +323,41 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 		switch conn.Type {
 		case models.ConnectionTypeOllama:
 			t.Backend = api.LLMBackendOllama
+			if err := t.APIKey.Scan(conn.Password); err != nil {
+				return err
+			}
 		case models.ConnectionTypeAnthropic:
 			t.Backend = api.LLMBackendAnthropic
+			if err := t.APIKey.Scan(conn.Password); err != nil {
+				return err
+			}
 		case models.ConnectionTypeOpenAI:
 			t.Backend = api.LLMBackendOpenAI
+			if err := t.APIKey.Scan(conn.Password); err != nil {
+				return err
+			}
 		case models.ConnectionTypeGemini:
 			t.Backend = api.LLMBackendGemini
+			if err := t.APIKey.Scan(conn.Password); err != nil {
+				return err
+			}
 		case models.ConnectionTypeAWS:
 			t.Backend = api.LLMBackendBedrock
-			if t.AWSAccessKey.IsEmpty() {
-				t.AWSAccessKey.ValueStatic = conn.Username
+			if t.AWSAccessKey == nil {
+				t.AWSAccessKey = &types.EnvVar{}
+				if err := t.AWSAccessKey.Scan(conn.Username); err != nil {
+					return err
+				}
 			}
-			if t.AWSRegion == "" {
+			if t.AWSSecretKey == nil {
+				t.AWSSecretKey = &types.EnvVar{}
+				if err := t.AWSSecretKey.Scan(conn.Password); err != nil {
+					return err
+				}
+			}
+			if t.AWSRegion == nil {
 				if region, ok := conn.Properties["region"]; ok {
-					t.AWSRegion = region
+					t.AWSRegion = &region
 				}
 			}
 		default:

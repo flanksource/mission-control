@@ -188,14 +188,18 @@ func initGenkit(config Config) (g *genkit.Genkit, modelName string, err error) {
 
 func newBedrockAWSConfig(cfg Config) (aws.Config, error) {
 	opts := []func(*awsconfig.LoadOptions) error{}
-	if cfg.AWSRegion != "" {
-		opts = append(opts, awsconfig.WithRegion(cfg.AWSRegion))
+	if cfg.AWSRegion != nil {
+		opts = append(opts, awsconfig.WithRegion(*cfg.AWSRegion))
 	}
-	if cfg.AWSAccessKey.ValueStatic != "" {
+	if cfg.AWSAccessKey != nil && cfg.AWSAccessKey.ValueStatic != "" {
+		secret := ""
+		if cfg.AWSSecretKey != nil {
+			secret = cfg.AWSSecretKey.ValueStatic
+		}
 		opts = append(opts, awsconfig.WithCredentialsProvider(
 			credentials.NewStaticCredentialsProvider(
 				cfg.AWSAccessKey.ValueStatic,
-				cfg.APIKey.ValueStatic,
+				secret,
 				"",
 			),
 		))
