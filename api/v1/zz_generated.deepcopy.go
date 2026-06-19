@@ -71,13 +71,13 @@ func (in *AIActionClient) DeepCopyInto(out *AIActionClient) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.AWSAccessKey != nil {
-		in, out := &in.AWSAccessKey, &out.AWSAccessKey
+	if in.AWSAccessKeyID != nil {
+		in, out := &in.AWSAccessKeyID, &out.AWSAccessKeyID
 		*out = new(types.EnvVar)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.AWSSecretKey != nil {
-		in, out := &in.AWSSecretKey, &out.AWSSecretKey
+	if in.AWSSecretAccessKey != nil {
+		in, out := &in.AWSSecretAccessKey, &out.AWSSecretAccessKey
 		*out = new(types.EnvVar)
 		(*in).DeepCopyInto(*out)
 	}

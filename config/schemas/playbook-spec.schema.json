@@ -29,11 +29,11 @@
           "type": "string",
           "description": "AWS region. Used when backend is bedrock."
         },
-        "awsAccessKey": {
+        "awsAccessKeyId": {
           "$ref": "#/$defs/EnvVar",
           "description": "AWS access key ID. Used when backend is bedrock."
         },
-        "awsSecretKey": {
+        "awsSecretAccessKey": {
           "$ref": "#/$defs/EnvVar",
           "description": "AWS secret access key. Used when backend is bedrock."
         },

@@ -299,10 +299,10 @@ type AIActionClient struct {
 	AWSRegion *string `json:"awsRegion,omitempty"`
 
 	// AWS access key ID. Used when backend is bedrock.
-	AWSAccessKey *types.EnvVar `json:"awsAccessKey,omitempty"`
+	AWSAccessKeyID *types.EnvVar `json:"awsAccessKeyId,omitempty"`
 
 	// AWS secret access key. Used when backend is bedrock.
-	AWSSecretKey *types.EnvVar `json:"awsSecretKey,omitempty"`
+	AWSSecretAccessKey *types.EnvVar `json:"awsSecretAccessKey,omitempty"`
 }
 
 func (t *AIActionClient) Populate(ctx context.Context) error {
@@ -343,15 +343,15 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 			}
 		case models.ConnectionTypeAWS:
 			t.Backend = api.LLMBackendBedrock
-			if t.AWSAccessKey == nil {
-				t.AWSAccessKey = &types.EnvVar{}
-				if err := t.AWSAccessKey.Scan(conn.Username); err != nil {
+			if t.AWSAccessKeyID == nil {
+				t.AWSAccessKeyID = &types.EnvVar{}
+				if err := t.AWSAccessKeyID.Scan(conn.Username); err != nil {
 					return err
 				}
 			}
-			if t.AWSSecretKey == nil {
-				t.AWSSecretKey = &types.EnvVar{}
-				if err := t.AWSSecretKey.Scan(conn.Password); err != nil {
+			if t.AWSSecretAccessKey == nil {
+				t.AWSSecretAccessKey = &types.EnvVar{}
+				if err := t.AWSSecretAccessKey.Scan(conn.Password); err != nil {
 					return err
 				}
 			}

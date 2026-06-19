@@ -105,7 +105,7 @@ spec:
                             BaseURL or API url.
                             Example: server URL for ollama or custom url for Anthropic if using a proxy
                           type: string
-                        awsAccessKey:
+                        awsAccessKeyId:
                           description: AWS access key ID. Used when backend is bedrock.
                           properties:
                             name:
@@ -152,7 +152,7 @@ spec:
                         awsRegion:
                           description: AWS region. Used when backend is bedrock.
                           type: string
-                        awsSecretKey:
+                        awsSecretAccessKey:
                           description: AWS secret access key. Used when backend is
                             bedrock.
                           properties:

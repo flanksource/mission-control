@@ -191,14 +191,14 @@ func newBedrockAWSConfig(cfg Config) (aws.Config, error) {
 	if cfg.AWSRegion != nil {
 		opts = append(opts, awsconfig.WithRegion(*cfg.AWSRegion))
 	}
-	if cfg.AWSAccessKey != nil && cfg.AWSAccessKey.ValueStatic != "" {
+	if cfg.AWSAccessKeyID != nil && cfg.AWSAccessKeyID.ValueStatic != "" {
 		secret := ""
-		if cfg.AWSSecretKey != nil {
-			secret = cfg.AWSSecretKey.ValueStatic
+		if cfg.AWSSecretAccessKey != nil {
+			secret = cfg.AWSSecretAccessKey.ValueStatic
 		}
 		opts = append(opts, awsconfig.WithCredentialsProvider(
 			credentials.NewStaticCredentialsProvider(
-				cfg.AWSAccessKey.ValueStatic,
+				cfg.AWSAccessKeyID.ValueStatic,
 				secret,
 				"",
 			),
