@@ -1,0 +1,99 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: diagnose-and-classify
+spec:
+  title: Diagnose & Classify
+  description: |
+    AI-diagnose an unhealthy resource, classify severity, and route
+    notifications to the appropriate channel.
+  category: Incident Response
+  icon: alert-triangle
+  configs:
+    - health: unhealthy,warning
+  parameters:
+    - name: prompt
+      label: Additional Context
+      default: Diagnose why this resource is unhealthy and recommend a fix.
+      properties:
+        multiline: 'true'
+  actions:
+    # ── Step 1: AI diagnosis with structured output ──────────────────
+    - name: diagnose
+      ai:
+        connection: connection://mc/anthropic
+        systemPrompt: |
+          You are an SRE incident responder. Analyze the provided resource
+          manifests, recent changes, and related resources. Produce a concise,
+          actionable diagnosis.
+
+          Severity definitions:
+          - critical: user-facing outage, data loss, or security breach
+          - high:     degraded service, imminent failure, or SLA breach risk
+          - medium:   non-urgent misconfiguration or inefficiency
+          - low:      cosmetic issue or optimization suggestion
+        prompt: '{{.params.prompt}}'
+        outputSchema:
+          value: |
+            {
+              "type": "object",
+              "properties": {
+                "severity": {
+                  "type": "string",
+                  "enum": ["critical", "high", "medium", "low"],
+                  "description": "Incident severity classification"
+                },
+                "affected_service": {
+                  "type": "string",
+                  "description": "Name of the affected service or component"
+                },
+                "summary": {
+                  "type": "string",
+                  "description": "One-paragraph summary of the issue and its impact"
+                },
+                "root_cause": {
+                  "type": "string",
+                  "description": "Identified or suspected root cause"
+                },
+                "recommended_action": {
+                  "type": "string",
+                  "description": "Immediate remediation step (single concrete action)"
+                }
+              },
+              "required": ["severity", "affected_service", "summary", "recommended_action"]
+            }
+        changes:
+          since: 24h
+        relationships:
+          - depth: 3
+            direction: outgoing
+          - depth: 3
+            direction: incoming
+
+    # ── Step 2: Route based on severity ──────────────────────────────
+    - name: page-oncall
+      if: 'getAction("diagnose").result.json.JSON().severity == "critical"'
+      notification:
+        connection: connection://mc/pager
+        title: '🚨 CRITICAL: {{.config.name}}'
+        message: |
+          {{$diagnosis := (getAction "diagnose").result.json | json}}
+          *Severity:* {{index $diagnosis "severity"}}
+          *Affected service:* {{index $diagnosis "affected_service"}}
+          *Summary:* {{index $diagnosis "summary"}}
+          *Root cause:* {{index $diagnosis "root_cause"}}
+          *Recommended action:* {{index $diagnosis "recommended_action"}}
+
+    - name: notify-engineering
+      if: 'getAction("diagnose").result.json.JSON().severity == "high"'
+      notification:
+        connection: connection://mc/slack
+        title: '⚠️ HIGH: {{.config.name}} needs attention'
+        message: |
+          {{$diagnosis := (getAction "diagnose").result.json | json}}
+          *Severity:* {{index $diagnosis "severity"}}
+          *Affected service:* {{index $diagnosis "affected_service"}}
+          *Summary:* {{index $diagnosis "summary"}}
+          *Root cause:* {{index $diagnosis "root_cause"}}
+          *Recommended action:* {{index $diagnosis "recommended_action"}}
