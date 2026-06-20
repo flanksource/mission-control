@@ -19,34 +19,71 @@ func resolveSkillPaths(ctx context.Context, skills []v1.AISkill) ([]string, erro
 			return nil, fmt.Errorf("skill[%d]: path is required", i)
 		}
 
+		var root string
 		if skill.Connection != "" {
-			root, err := cloneGitRepo(ctx, skill.Connection, skill.Branch)
+			clonedRoot, err := cloneGitRepo(ctx, skill.Connection, skill.Branch)
 			if err != nil {
 				return nil, fmt.Errorf("skill[%d]: %w", i, err)
 			}
-
-			resolved, err := safeResolvePath(root, skill.Path)
-			if err != nil {
-				return nil, fmt.Errorf("skill[%d] %q: %w", i, skill.Path, err)
-			}
-
-			paths = append(paths, resolved)
-			continue
+			root = clonedRoot
 		}
 
-		fi, err := os.Stat(skill.Path)
+		resolved, err := resolveAndValidateSkillPath(root, skill.Path)
 		if err != nil {
 			return nil, fmt.Errorf("skill[%d] %q: %w", i, skill.Path, err)
-		} else if !fi.IsDir() {
-			return nil, fmt.Errorf("skill[%d] %q: path must be a directory containing skill subdirectories", i, skill.Path)
 		}
-
-		paths = append(paths, skill.Path)
+		paths = append(paths, resolved)
 	}
 
 	warnEmptySkillPaths(ctx, paths)
 
 	return paths, nil
+}
+
+// resolveAndValidateSkillPath resolves a skill path to an absolute directory and
+// validates it. The same constraints are applied to both git-backed and
+// local-filesystem skills:
+//
+//   - symlink verification: the path is resolved through filepath.EvalSymlinks
+//     so symlinked skill directories are followed to their real target.
+//   - directory traversal validation: when root is non-empty (git-backed
+//     skills), the path must be repo-relative and the resolved target must not
+//     escape root. When root is empty (local-filesystem skills), absolute paths
+//     are allowed and no traversal boundary is enforced, by design.
+//   - the resolved path must be a directory.
+func resolveAndValidateSkillPath(root, p string) (string, error) {
+	var resolved string
+	if root != "" {
+		if filepath.IsAbs(p) {
+			return "", fmt.Errorf("absolute paths are not allowed: %q", p)
+		}
+		joined := filepath.Join(root, filepath.Clean(p))
+		var err error
+		resolved, err = filepath.EvalSymlinks(joined)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve path %q: %w", p, err)
+		}
+		rel, err := filepath.Rel(root, resolved)
+		if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+			return "", fmt.Errorf("path %q resolves outside the repository root", p)
+		}
+	} else {
+		var err error
+		resolved, err = filepath.EvalSymlinks(p)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve path %q: %w", p, err)
+		}
+	}
+
+	fi, err := os.Stat(resolved)
+	if err != nil {
+		return "", fmt.Errorf("failed to stat path %q: %w", p, err)
+	}
+	if !fi.IsDir() {
+		return "", fmt.Errorf("path %q must be a directory containing skill subdirectories", p)
+	}
+
+	return resolved, nil
 }
 
 // warnEmptySkillPaths logs a warning for any resolved path that does not contain
