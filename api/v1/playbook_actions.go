@@ -426,7 +426,7 @@ type AISkill struct {
 
 	// Path to a directory that contains skill subdirectories, each with a SKILL.md file.
 	// Must be the *parent* directory of the skill directories, not a skill directory itself.
-	// Example: if skills live at /home/user/my-skills/foo/SKILL.md, pass "/home/aditya/my-skills" — not "/home/aditya/my-skills/foo".
+	// Example: if skills live at /data/skills/foo/SKILL.md, pass "/data/skills" — not "/data/skills/foo".
 	Path string `json:"path" yaml:"path"`
 }
 
