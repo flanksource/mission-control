@@ -60,6 +60,17 @@ func Export(ctx context.Context, configs []models.ConfigItem, opts Options, form
 	return result, err
 }
 
+// Build constructs the catalog report data for the given configs, ready for
+// rendering. Slices are initialized so the JSON output is stable, matching
+// what the embedded CatalogReport.tsx expects.
+func Build(ctx context.Context, configs []models.ConfigItem, opts Options) (api.CatalogReport, error) {
+	r, _, err := BuildReport(ctx, configs, opts)
+	if err != nil {
+		return api.CatalogReport{}, err
+	}
+	return initSlices(r), nil
+}
+
 func buildAudit(ctx context.Context, opts Options, configs []models.ConfigItem, scraperIDs []string, queryLog *query.QueryLog) *api.CatalogReportAudit {
 	audit := &api.CatalogReportAudit{
 		BuildCommit:  api.BuildCommit,

@@ -25,6 +25,18 @@
           "type": "string",
           "description": "BaseURL or API url.\nExample: server URL for ollama or custom url for Anthropic if using a proxy"
         },
+        "awsRegion": {
+          "type": "string",
+          "description": "AWS region. Used when backend is bedrock."
+        },
+        "awsAccessKeyId": {
+          "$ref": "#/$defs/EnvVar",
+          "description": "AWS access key ID. Used when backend is bedrock."
+        },
+        "awsSecretAccessKey": {
+          "$ref": "#/$defs/EnvVar",
+          "description": "AWS secret access key. Used when backend is bedrock."
+        },
         "config": {
           "type": "string"
         },
@@ -77,7 +89,7 @@
             "$ref": "#/$defs/AISkill"
           },
           "type": "array",
-          "description": "Skills references reusable skill files from git repositories.\nEach skill file's content is prepended to the system prompt.\nIf any skill has JsonSchemaPath set, that schema is used for output validation."
+          "description": "Skills references reusable Genkit skill libraries."
         },
         "outputSchema": {
           "$ref": "#/$defs/AIOutputSchema",
@@ -138,28 +150,23 @@
       "properties": {
         "connection": {
           "type": "string",
-          "description": "Git connection reference (e.g., \"connection://github/my-org\")"
-        },
-        "path": {
-          "type": "string",
-          "description": "Path to the skill file within the repo (e.g., \"skills/access-auditor.md\")"
+          "description": "Git connection reference (e.g., \"connection://github/my-org\").\nWhen empty, Path is read from the local filesystem."
         },
         "branch": {
           "type": "string",
           "description": "Branch or tag to checkout (optional, defaults to the repo's default branch)"
         },
-        "jsonSchemaPath": {
+        "path": {
           "type": "string",
-          "description": "JsonSchemaPath is the path to a JSON schema file in the repo.\nIf set, the AI response must conform to this schema (takes precedence over inline OutputSchema)."
+          "description": "Path to a directory that contains skill subdirectories, each with a SKILL.md file.\nMust be the *parent* directory of the skill directories, not a skill directory itself.\nExample: if skills live at /data/skills/foo/SKILL.md, pass \"/data/skills\" — not \"/data/skills/foo\"."
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "connection",
         "path"
       ],
-      "description": "AISkill references a skill file in a git repository.\nThe repo is cloned at execution time and the skill file content is\nprepended to the system prompt."
+      "description": "AISkill references a Genkit skill library directory, either from a git repository\n(when Connection is set) or from the local filesystem (when Connection is empty).\nSkills are exposed to the model as loadable skills via the use_skill tool."
     },
     "AWSConnection": {
       "properties": {
@@ -406,6 +413,38 @@
         "type"
       ],
       "description": "CatalogAction creates a config item in the catalog."
+    },
+    "CatalogReportSections": {
+      "properties": {
+        "changes": {
+          "type": "boolean"
+        },
+        "insights": {
+          "type": "boolean"
+        },
+        "relationships": {
+          "type": "boolean"
+        },
+        "access": {
+          "type": "boolean"
+        },
+        "accessLogs": {
+          "type": "boolean"
+        },
+        "configJSON": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "changes",
+        "insights",
+        "relationships",
+        "access",
+        "accessLogs",
+        "configJSON"
+      ]
     },
     "ConfigMapKeySelector": {
       "properties": {
@@ -2172,7 +2211,11 @@
         },
         "configs": {
           "$ref": "#/$defs/ResourceSelector",
-          "description": "Inline catalog query (alternative to View)"
+          "description": "Inline catalog query for the catalog report (alternative to View)"
+        },
+        "file": {
+          "$ref": "#/$defs/ReportFile",
+          "description": "File selects the TSX template that renders the catalog report.\nWhen unset, the embedded CatalogReport.tsx is used."
         },
         "format": {
           "type": "string",
@@ -2188,10 +2231,67 @@
         "facet": {
           "$ref": "#/$defs/FacetOptions",
           "description": "Facet rendering options for facet-html and facet-pdf formats"
+        },
+        "since": {
+          "type": "string",
+          "description": "Since is the time range for changes and access logs (e.g. \"30d\"). Defaults to 30d."
+        },
+        "recursive": {
+          "type": "boolean",
+          "description": "Recursive includes all descendant config items in the catalog report."
+        },
+        "groupBy": {
+          "type": "string",
+          "description": "GroupBy controls descendant grouping: \"none\" (default), \"merged\", or \"config\"."
+        },
+        "sections": {
+          "$ref": "#/$defs/CatalogReportSections",
+          "description": "Sections selects which catalog report sections to include."
         }
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "ReportFile": {
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path to a local TSX file. A relative path is resolved against the\nworking directory (e.g. \"report/CatalogReport.tsx\"); an absolute path is\nused as-is. The file's directory must contain the report scaffold."
+        },
+        "git": {
+          "$ref": "#/$defs/ReportGitFile",
+          "description": "Git references a TSX file inside a git repository."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "ReportFile selects the TSX template used to render the catalog report,\neither from a git repository or a local file path."
+    },
+    "ReportGitFile": {
+      "properties": {
+        "connection": {
+          "type": "string",
+          "description": "Connection name used for credentials to the git repo."
+        },
+        "url": {
+          "type": "string",
+          "description": "URL of the git repository."
+        },
+        "base": {
+          "type": "string",
+          "description": "Base is the branch to clone. Defaults to \"main\"."
+        },
+        "file": {
+          "type": "string",
+          "description": "File is the path to the TSX file within the repository."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "url",
+        "file"
+      ]
     },
     "ResourceSelector": {
       "properties": {

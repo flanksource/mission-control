@@ -6,13 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 	"text/template"
 
 	"github.com/flanksource/artifacts"
-	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -29,8 +26,6 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/llm"
 	llmContext "github.com/flanksource/incident-commander/llm/context"
-	"github.com/flanksource/incident-commander/pkg/clients/git"
-	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
 	"github.com/flanksource/incident-commander/utils"
 )
 
@@ -127,22 +122,6 @@ type childRunResultContext struct {
 func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, error) {
 	var result AIActionResult
 
-	// Load skill files and prepend to system prompt.
-	// If any skill has a JsonSchemaPath, use it as the output schema.
-	for i, skill := range spec.Skills {
-		skillContent, schemaContent, err := loadSkill(ctx, skill)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load skill[%d]: %w", i, err)
-		}
-		spec.SystemPrompt = skillContent + "\n\n" + spec.SystemPrompt
-
-		if schemaContent != "" {
-			spec.OutputSchema = &v1.AIOutputSchema{
-				EnvVar: types.EnvVar{ValueStatic: schemaContent},
-			}
-		}
-	}
-
 	knowledgebase, prompt, err := buildPrompt(ctx, spec.Prompt, spec.LLMContextRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to form prompt: %w", err)
@@ -204,7 +183,23 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		}
 	}
 
-	llmConf := llm.Config{AIActionClient: spec.AIActionClient, ResponseFormat: llm.ResponseFormatDiagnosis}
+	skillPaths, err := resolveSkillPaths(ctx, spec.Skills)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve skills: %w", err)
+	}
+
+	llmConf := llm.Config{
+		AIActionClient: spec.AIActionClient,
+		SkillPaths:     skillPaths,
+	}
+
+	// Use diagnosis schema when the requested output format needs it.
+	for _, format := range spec.Formats {
+		if format == v1.AIActionFormatSlack || format == v1.AIActionFormatRecommendPlaybook {
+			llmConf.ResponseFormat = llm.ResponseFormatDiagnosis
+			break
+		}
+	}
 
 	// Resolve custom output schema if provided
 	customSchema := false
@@ -228,9 +223,9 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	result.JSON = response
 	result.GenerationInfo = append(result.GenerationInfo, genInfo...)
 
-	// When using a custom schema, skip DiagnosisReport unmarshaling
+	// Only unmarshal into DiagnosisReport when the response format is diagnosis.
 	var diagnosisReport llm.DiagnosisReport
-	if !customSchema {
+	if llmConf.ResponseFormat == llm.ResponseFormatDiagnosis {
 		if err := json.Unmarshal([]byte(response), &diagnosisReport); err != nil {
 			return nil, ctx.Oops().With("response", response).Wrapf(err, "failed to unmarshal diagnosis report")
 		}
@@ -494,110 +489,4 @@ func resolveOutputSchema(ctx context.Context, schema v1.AIOutputSchema) (string,
 	}
 
 	return "", nil
-}
-
-// cloneGitRepo resolves a git connection and clones the repo, returning the worktree root path.
-func cloneGitRepo(ctx context.Context, connectionRef, branch string) (string, error) {
-	conn, err := pkgConnection.Get(ctx, connectionRef)
-	if err != nil {
-		return "", fmt.Errorf("failed to get git connection %q: %w", connectionRef, err)
-	} else if conn == nil {
-		return "", fmt.Errorf("git connection %q not found", connectionRef)
-	}
-
-	spec := &connectors.GitopsAPISpec{
-		Repository: conn.URL,
-		Base:       "main",
-		Branch:     "main",
-	}
-
-	if branch != "" {
-		spec.Base = branch
-		spec.Branch = branch
-	}
-
-	switch conn.Type {
-	case models.ConnectionTypeGithub, models.ConnectionTypeGitlab, models.ConnectionTypeAzureDevops:
-		spec.AccessToken = conn.Password
-	case models.ConnectionTypeHTTP:
-		spec.User = conn.Username
-		spec.Password = conn.Password
-	case models.ConnectionTypeGit:
-		spec.User = conn.Username
-		spec.Password = conn.Password
-		spec.SSHPrivateKey = conn.Certificate
-		spec.SSHPrivateKeyPassword = conn.Password
-	default:
-		return "", fmt.Errorf("unsupported connection type %q", conn.Type)
-	}
-
-	_, workTree, err := git.Clone(ctx, spec)
-	if err != nil {
-		return "", fmt.Errorf("failed to clone repository: %w", err)
-	}
-
-	return workTree.Filesystem.Root(), nil
-}
-
-// safeReadFile validates that filePath does not escape root via traversal,
-// then reads and returns the file content.
-func safeReadFile(root, filePath string) ([]byte, error) {
-	if filepath.IsAbs(filePath) {
-		return nil, fmt.Errorf("absolute paths are not allowed: %q", filePath)
-	}
-
-	joined := filepath.Join(root, filepath.Clean(filePath))
-
-	resolved, err := filepath.EvalSymlinks(joined)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve path %q: %w", filePath, err)
-	}
-
-	rel, err := filepath.Rel(root, resolved)
-	if err != nil || strings.HasPrefix(rel, "..") {
-		return nil, fmt.Errorf("path %q resolves outside the repository root", filePath)
-	}
-
-	return os.ReadFile(resolved)
-}
-
-// loadFileFromGit clones a git repo and reads a file at the given path.
-func loadFileFromGit(ctx context.Context, connectionRef, filePath, branch string) (string, error) {
-	root, err := cloneGitRepo(ctx, connectionRef, branch)
-	if err != nil {
-		return "", err
-	}
-
-	content, err := safeReadFile(root, filePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to read file %q: %w", filePath, err)
-	}
-
-	return string(content), nil
-}
-
-// loadSkill clones a git repository using the provided connection, reads the skill file,
-// and optionally reads the JSON schema file if JsonSchemaPath is set.
-// Returns (skillContent, schemaContent, error).
-func loadSkill(ctx context.Context, skill v1.AISkill) (string, string, error) {
-	root, err := cloneGitRepo(ctx, skill.Connection, skill.Branch)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to clone skill repository: %w", err)
-	}
-
-	content, err := safeReadFile(root, skill.Path)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to read skill file %q: %w", skill.Path, err)
-	}
-
-	var schemaContent string
-	if skill.JsonSchemaPath != "" {
-		schema, err := safeReadFile(root, skill.JsonSchemaPath)
-		if err != nil {
-			return "", "", fmt.Errorf("failed to read json schema file %q: %w", skill.JsonSchemaPath, err)
-		}
-		schemaContent = string(schema)
-	}
-
-	return string(content), schemaContent, nil
 }

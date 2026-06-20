@@ -1,0 +1,30 @@
+# Connection fixture at fixtures/connections/flanksource-claude-code-plugin-github.yaml
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: prompt-mc-ai-with-skills
+  namespace: mc
+spec:
+  title: Prompt AI With MissionControl Skills
+  category: AI
+  icon: robot
+  configs:
+    - name: "*"
+  parameters:
+    - name: prompt
+      label: Prompt
+      required: true
+      properties:
+        multiline: "true"
+  actions:
+    - name: query
+      ai:
+        backend: anthropic
+        connection: connection://mc/anthropic
+        systemPrompt: |
+          You are a seasoned Kubernetes engineer with extensive expertise in troubleshooting and optimizing Kubernetes resources. 
+          Your primary objective is to assist users in diagnosing issues with Kubernetes pods that are not performing as expected.
+        prompt: "{{.params.prompt}}"
+        skills:
+          - path: skills
+            connection: connection://mc/flanksource-claude-code-plugin-github

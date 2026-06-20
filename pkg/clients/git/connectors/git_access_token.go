@@ -76,7 +76,13 @@ func NewAccessTokenClient(url, service, accessToken string) (Connector, error) {
 		owner:      owner,
 		repoName:   repoName,
 		repository: owner + "/" + repoName,
-		auth:       &http.BasicAuth{Username: "token", Password: accessToken},
+	}
+	// Only attach BasicAuth when a token is configured. go-git cannot clone
+	// public repositories anonymously if an (empty) BasicAuth is supplied —
+	// GitHub rejects it with "authentication required". nil auth lets go-git
+	// clone public repos without credentials.
+	if accessToken != "" {
+		client.auth = &http.BasicAuth{Username: "token", Password: accessToken}
 	}
 	return client, nil
 }

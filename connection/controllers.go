@@ -14,13 +14,8 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/db"
-	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
 )
-
-func init() {
-	echoSrv.RegisterRoutes(RegisterRoutes)
-}
 
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /connection routes")

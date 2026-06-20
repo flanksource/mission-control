@@ -4,6 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/flanksource/clicky"
+	"github.com/flanksource/clicky/api"
 	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 
@@ -89,4 +91,35 @@ func querySQL(driver string, connection string, query string) (*SQLResult, error
 
 	result.Count = len(result.Rows)
 	return &result, nil
+}
+
+func (r SQLResult) String() string   { return r.table().String() }
+func (r SQLResult) ANSI() string     { return "\n" + r.table().ANSI() }
+func (r SQLResult) HTML() string     { return r.table().HTML() }
+func (r SQLResult) Markdown() string { return "\n" + r.table().Markdown() }
+
+func (r SQLResult) table() api.TextTable {
+	headers := make([]api.Textable, len(r.Columns))
+	for i, col := range r.Columns {
+		headers[i] = clicky.Text(col, "font-bold")
+	}
+
+	rows := make([]api.TableRow, len(r.Rows))
+	for i, row := range r.Rows {
+		tr := make(api.TableRow)
+		for _, col := range r.Columns {
+			val := "NULL"
+			if v, exists := row[col]; exists && v != nil {
+				val = fmt.Sprint(v)
+			}
+			tr[col] = api.TypedValue{Textable: clicky.Text(val, "")}
+		}
+		rows[i] = tr
+	}
+
+	return api.TextTable{
+		Headers:    headers,
+		Rows:       rows,
+		FieldNames: r.Columns,
+	}
 }

@@ -220,7 +220,8 @@ func (s *Storage) AuthorizeClientIDSecret(_ gocontext.Context, _, _ string) erro
 	return nil // public client, no secret
 }
 
-func (s *Storage) SetUserinfoFromScopes(_ gocontext.Context, _ *oidc.UserInfo, _, _ string, _ []string) error {
+func (s *Storage) SetUserinfoFromScopes(_ gocontext.Context, userinfo *oidc.UserInfo, subject, _ string, _ []string) error {
+	userinfo.Subject = subject
 	return nil // deprecated
 }
 

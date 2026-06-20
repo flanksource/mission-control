@@ -294,6 +294,15 @@ type AIActionClient struct {
 	// BaseURL or API url.
 	// Example: server URL for ollama or custom url for Anthropic if using a proxy
 	APIURL string `json:"apiURL,omitempty"`
+
+	// AWS region. Used when backend is bedrock.
+	AWSRegion *string `json:"awsRegion,omitempty"`
+
+	// AWS access key ID. Used when backend is bedrock.
+	AWSAccessKeyID *types.EnvVar `json:"awsAccessKeyId,omitempty"`
+
+	// AWS secret access key. Used when backend is bedrock.
+	AWSSecretAccessKey *types.EnvVar `json:"awsSecretAccessKey,omitempty"`
 }
 
 func (t *AIActionClient) Populate(ctx context.Context) error {
@@ -305,29 +314,56 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 			return fmt.Errorf("connection(%s) was not found: %w", *t.Connection, err)
 		}
 
-		if err := t.APIKey.Scan(conn.Password); err != nil {
-			return err
-		}
-
 		t.APIURL = conn.URL
 
-		if m, ok := conn.Properties["model"]; ok {
+		if m, ok := conn.Properties["model"]; ok && t.Model == "" {
 			t.Model = m
 		}
 
 		switch conn.Type {
 		case models.ConnectionTypeOllama:
 			t.Backend = api.LLMBackendOllama
+			if err := t.APIKey.Scan(conn.Password); err != nil {
+				return err
+			}
 		case models.ConnectionTypeAnthropic:
 			t.Backend = api.LLMBackendAnthropic
+			if err := t.APIKey.Scan(conn.Password); err != nil {
+				return err
+			}
 		case models.ConnectionTypeOpenAI:
 			t.Backend = api.LLMBackendOpenAI
+			if err := t.APIKey.Scan(conn.Password); err != nil {
+				return err
+			}
 		case models.ConnectionTypeGemini:
 			t.Backend = api.LLMBackendGemini
+			if err := t.APIKey.Scan(conn.Password); err != nil {
+				return err
+			}
+		case models.ConnectionTypeAWS:
+			t.Backend = api.LLMBackendBedrock
+			if t.AWSAccessKeyID == nil {
+				t.AWSAccessKeyID = &types.EnvVar{}
+				if err := t.AWSAccessKeyID.Scan(conn.Username); err != nil {
+					return err
+				}
+			}
+			if t.AWSSecretAccessKey == nil {
+				t.AWSSecretAccessKey = &types.EnvVar{}
+				if err := t.AWSSecretAccessKey.Scan(conn.Password); err != nil {
+					return err
+				}
+			}
+			if t.AWSRegion == nil {
+				if region, ok := conn.Properties["region"]; ok {
+					t.AWSRegion = &region
+				}
+			}
 		default:
 			return fmt.Errorf("connection of type %q is not supported. Supported types: [%s]",
 				conn.Type,
-				strings.Join([]string{models.ConnectionTypeOllama, models.ConnectionTypeAnthropic, models.ConnectionTypeOpenAI, models.ConnectionTypeGemini}, ", "),
+				strings.Join([]string{models.ConnectionTypeOllama, models.ConnectionTypeAnthropic, models.ConnectionTypeOpenAI, models.ConnectionTypeGemini, models.ConnectionTypeAWS}, ", "),
 			)
 		}
 	}
@@ -377,19 +413,21 @@ type AIOutputSchemaGit struct {
 	Branch string `json:"branch,omitempty" yaml:"branch,omitempty"`
 }
 
-// AISkill references a skill file in a git repository.
-// The repo is cloned at execution time and the skill file content is
-// prepended to the system prompt.
+// AISkill references a Genkit skill library directory, either from a git repository
+// (when Connection is set) or from the local filesystem (when Connection is empty).
+// Skills are exposed to the model as loadable skills via the use_skill tool.
 type AISkill struct {
-	// Git connection reference (e.g., "connection://github/my-org")
-	Connection string `json:"connection" yaml:"connection"`
-	// Path to the skill file within the repo (e.g., "skills/access-auditor.md")
-	Path string `json:"path" yaml:"path"`
+	// Git connection reference (e.g., "connection://github/my-org").
+	// When empty, Path is read from the local filesystem.
+	Connection string `json:"connection,omitempty" yaml:"connection,omitempty"`
+
 	// Branch or tag to checkout (optional, defaults to the repo's default branch)
 	Branch string `json:"branch,omitempty" yaml:"branch,omitempty"`
-	// JsonSchemaPath is the path to a JSON schema file in the repo.
-	// If set, the AI response must conform to this schema (takes precedence over inline OutputSchema).
-	JsonSchemaPath string `json:"jsonSchemaPath,omitempty" yaml:"jsonSchemaPath,omitempty"`
+
+	// Path to a directory that contains skill subdirectories, each with a SKILL.md file.
+	// Must be the *parent* directory of the skill directories, not a skill directory itself.
+	// Example: if skills live at /data/skills/foo/SKILL.md, pass "/data/skills" — not "/data/skills/foo".
+	Path string `json:"path" yaml:"path"`
 }
 
 type AIAction struct {
@@ -416,9 +454,7 @@ type AIAction struct {
 	// Supported: markdown (default), slack, recommendPlaybook
 	Formats []AIActionFormat `json:"formats,omitempty"`
 
-	// Skills references reusable skill files from git repositories.
-	// Each skill file's content is prepended to the system prompt.
-	// If any skill has JsonSchemaPath set, that schema is used for output validation.
+	// Skills references reusable Genkit skill libraries.
 	Skills []AISkill `json:"skills,omitempty" yaml:"skills,omitempty"`
 
 	// OutputSchema is a JSON schema that the AI response must conform to.
@@ -704,18 +740,53 @@ type CatalogAction struct {
 	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty" template:"true"`
 }
 
-// +kubebuilder:validation:XValidation:rule="!(has(self.view) && self.view != \"\" && has(self.configs))",message="view and configs are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="!(has(self.view) && self.view != \"\" && (has(self.configs) || has(self.file)))",message="view is mutually exclusive with configs and file"
 type ReportAction struct {
 	// Reference an existing View by namespace/name or just name
 	View string `json:"view,omitempty" yaml:"view,omitempty" template:"true"`
-	// Inline catalog query (alternative to View)
+	// Inline catalog query for the catalog report (alternative to View)
 	Configs *types.ResourceSelector `json:"configs,omitempty" yaml:"configs,omitempty" template:"true"`
+	// File selects the TSX template that renders the catalog report.
+	// When unset, the embedded CatalogReport.tsx is used.
+	File *ReportFile `json:"file,omitempty" yaml:"file,omitempty" template:"true"`
 	// Output format: json, csv, facet-html, facet-pdf, markdown, slack, html, pdf
 	Format string `json:"format,omitempty" yaml:"format,omitempty" template:"true"`
 	// Variables passed to the view queries
 	Variables map[string]string `json:"variables,omitempty" yaml:"variables,omitempty" template:"true"`
 	// Facet rendering options for facet-html and facet-pdf formats
 	Facet *FacetOptions `json:"facet,omitempty" yaml:"facet,omitempty" template:"true"`
+
+	// Since is the time range for changes and access logs (e.g. "30d"). Defaults to 30d.
+	Since string `json:"since,omitempty" yaml:"since,omitempty" template:"true"`
+	// Recursive includes all descendant config items in the catalog report.
+	Recursive bool `json:"recursive,omitempty" yaml:"recursive,omitempty"`
+	// GroupBy controls descendant grouping: "none" (default), "merged", or "config".
+	GroupBy string `json:"groupBy,omitempty" yaml:"groupBy,omitempty" template:"true"`
+	// Sections selects which catalog report sections to include.
+	Sections *api.CatalogReportSections `json:"sections,omitempty" yaml:"sections,omitempty"`
+}
+
+// ReportFile selects the TSX template used to render the catalog report,
+// either from a git repository or a local file path.
+// +kubebuilder:validation:XValidation:rule="has(self.path) != has(self.git)",message="exactly one of path or git must be set"
+type ReportFile struct {
+	// Path to a local TSX file. A relative path is resolved against the
+	// working directory (e.g. "report/CatalogReport.tsx"); an absolute path is
+	// used as-is. The file's directory must contain the report scaffold.
+	Path string `json:"path,omitempty" yaml:"path,omitempty" template:"true"`
+	// Git references a TSX file inside a git repository.
+	Git *ReportGitFile `json:"git,omitempty" yaml:"git,omitempty" template:"true"`
+}
+
+type ReportGitFile struct {
+	// Connection name used for credentials to the git repo.
+	Connection string `json:"connection,omitempty" yaml:"connection,omitempty" template:"true"`
+	// URL of the git repository.
+	URL string `json:"url" yaml:"url" template:"true"`
+	// Base is the branch to clone. Defaults to "main".
+	Base string `json:"base,omitempty" yaml:"base,omitempty" template:"true"`
+	// File is the path to the TSX file within the repository.
+	File string `json:"file" yaml:"file" template:"true"`
 }
 
 func (p *PlaybookAction) ActionType() string {
