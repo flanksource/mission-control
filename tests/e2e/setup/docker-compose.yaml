@@ -20,7 +20,9 @@ services:
   #   ports: ["4566:4566"]
 
   facet:
-    image: ghcr.io/flanksource/facet:latest
+    # Pinned to a known-good release; facet 0.1.47 broke subpath-export
+    # resolution (e.g. "@flanksource/icons/icon"). Unpin once fixed.
+    image: ghcr.io/flanksource/facet:0.1.46
     ports: ["3010:3010"]
 
   # kindctl:  # optional helper; KinD cluster spins up in the job step

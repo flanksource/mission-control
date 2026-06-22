@@ -71,14 +71,20 @@ jobs:
       - name: Install facet
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Pin to a known-good release. facet 0.1.47 migrated the CLI runtime
+          # from Bun to Node and rewrote the Vite builder + NODE_PATH/module
+          # resolution, which broke subpath-export resolution (e.g.
+          # "@flanksource/icons/icon") under both Rollup and Rolldown. Unpin
+          # once a fixed facet release is available.
+          FACET_VERSION: v0.1.46
         run: |
           set -euo pipefail
           # Authenticate the API call so it doesn't hit the anonymous rate limit
           # (which returns an HTML error page that then gets saved as the binary).
           url=$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            https://api.github.com/repos/flanksource/facet/releases/latest \
+            "https://api.github.com/repos/flanksource/facet/releases/tags/${FACET_VERSION}" \
             | jq -r '.assets[] | select(.name == "facet-linux-x64") | .browser_download_url')
-          [ -n "$url" ] || { echo "::error::could not resolve facet download URL"; exit 1; }
+          [ -n "$url" ] || { echo "::error::could not resolve facet download URL for ${FACET_VERSION}"; exit 1; }
           curl -fsSL "$url" -o /usr/local/bin/facet
           chmod +x /usr/local/bin/facet
           facet --version
