@@ -27,6 +27,9 @@ var (
 	DefaultLLMConnection string
 
 	DisableOperators bool
+
+	// UpstreamGRPCPort is the port used by agents to call upstream plugin HostService gRPC.
+	UpstreamGRPCPort = 8081
 )
 
 const (

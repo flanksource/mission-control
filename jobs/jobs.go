@@ -39,6 +39,7 @@ func agentJobs(ctx context.Context) []*job.Job {
 	return []*job.Job{
 		PingUpstream,
 		ReconcileAllJob(api.UpstreamConf),
+		RegisterPluginsWithUpstream,
 		SyncArtifactData,
 		ResetIsPushed,
 		PushPlaybookActions(ctx),
@@ -57,7 +58,7 @@ func RunPullPlaybookActionsJob(ctx context.Context) {
 		_ = retry.Do(ctx, backoff, func(_ctx gocontext.Context) error {
 			job.Run()
 
-			if len(job.LastJob.Errors) != 0 {
+			if job.LastJob != nil && len(job.LastJob.Errors) != 0 {
 				return retry.RetryableError(fmt.Errorf("%s", strings.Join(job.LastJob.Errors, ", ")))
 			}
 

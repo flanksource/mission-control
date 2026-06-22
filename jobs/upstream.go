@@ -2,7 +2,9 @@ package jobs
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
+	"strings"
 
 	"github.com/flanksource/duty/job"
 	dutymodels "github.com/flanksource/duty/models"
@@ -10,13 +12,18 @@ import (
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 
+	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
+
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/artifacts"
+	pluginpb "github.com/flanksource/incident-commander/plugin"
 )
 
 var (
 	ReconcilePageSize int
 )
+
+const PluginRegisterUpstreamSchedule = "@every 1m"
 
 func ReconcileAllJob(config upstream.UpstreamConfig) *job.Job {
 	client := upstream.NewUpstreamClient(api.UpstreamConf)
@@ -98,6 +105,41 @@ var SyncArtifactData = &job.Job{
 		}
 
 		return err
+	},
+}
+
+// RegisterPluginsWithUpstream periodically reports running local plugins to upstream.
+var RegisterPluginsWithUpstream = &job.Job{
+	Name:       "RegisterPluginsWithUpstream",
+	Schedule:   PluginRegisterUpstreamSchedule,
+	Retention:  job.RetentionFailed,
+	JobHistory: true,
+	RunNow:     true,
+	Singleton:  true,
+	Fn: func(ctx job.JobRuntime) error {
+		ctx.History.ResourceType = job.ResourceTypeUpstream
+		ctx.History.ResourceID = api.UpstreamConf.Host
+
+		var errs []string
+		for _, entry := range pluginpb.DefaultRegistry.List() {
+			if entry.Kind != pluginAPI.PluginKindLocal || entry.Runtime == nil || entry.Manifest == nil {
+				continue
+			}
+
+			if err := pluginpb.RegisterWithUpstream(ctx.Context, api.UpstreamConf, entry.ID); err != nil {
+				msg := fmt.Sprintf("%s/%s (%s): %v", entry.Namespace, entry.Name, entry.ID, err)
+				errs = append(errs, msg)
+				ctx.History.AddError(msg)
+				ctx.History.ErrorCount++
+				continue
+			}
+			ctx.History.SuccessCount++
+		}
+
+		if len(errs) > 0 {
+			return fmt.Errorf("register plugins with upstream: %s", strings.Join(errs, "; "))
+		}
+		return nil
 	},
 }
 

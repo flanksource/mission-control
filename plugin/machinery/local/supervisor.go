@@ -19,14 +19,15 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 
 	dutyContext "github.com/flanksource/duty/context"
+	commanderAPI "github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/plugin"
-	"github.com/flanksource/incident-commander/plugin/api"
+	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
 )
 
 // pluginMap is the host-side go-plugin registry used to dispense the
 // mission-control plugin client.
 var pluginMap = map[string]goplugin.Plugin{
-	api.PluginName: &GRPCPlugin{},
+	pluginAPI.PluginName: &GRPCPlugin{},
 }
 
 // Supervisor owns the lifecycle of one plugin process.
@@ -41,7 +42,7 @@ type Supervisor struct {
 	mu        sync.Mutex
 	client    *goplugin.Client
 	pluginCLI *Client
-	manifest  *api.PluginManifest
+	manifest  *pluginAPI.PluginManifest
 	hostBrkID uint32
 	startHost func(*goplugin.GRPCBroker) (uint32, error)
 	stopped   bool
@@ -95,11 +96,11 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 
 	cmd := exec.Command(s.BinaryPath)
 	cmd.Env = append(cmd.Env,
-		fmt.Sprintf("%s=%s", api.Handshake.MagicCookieKey, api.Handshake.MagicCookieValue),
+		fmt.Sprintf("%s=%s", pluginAPI.Handshake.MagicCookieKey, pluginAPI.Handshake.MagicCookieValue),
 	)
 
 	cli := goplugin.NewClient(&goplugin.ClientConfig{
-		HandshakeConfig:  api.Handshake,
+		HandshakeConfig:  pluginAPI.Handshake,
 		Plugins:          pluginMap,
 		Cmd:              cmd,
 		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolGRPC},
@@ -115,7 +116,7 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 		return fmt.Errorf("plugin %s rpc client: %w", s.Name, err)
 	}
 
-	raw, err := rpcClient.Dispense(api.PluginName)
+	raw, err := rpcClient.Dispense(pluginAPI.PluginName)
 	if err != nil {
 		cli.Kill()
 		return fmt.Errorf("plugin %s dispense: %w", s.Name, err)
@@ -134,8 +135,8 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 	}
 	s.hostBrkID = hostBrkID
 
-	manifest, err := pluginCli.Service.RegisterPlugin(dialCtx, &api.RegisterRequest{
-		HostProtocolVersion: uint32(api.ProtocolVersion),
+	manifest, err := pluginCli.Service.RegisterPlugin(dialCtx, &pluginAPI.RegisterRequest{
+		HostProtocolVersion: uint32(pluginAPI.ProtocolVersion),
 		HostBrokerId:        hostBrkID,
 	})
 	if err != nil {
@@ -151,6 +152,14 @@ func (s *Supervisor) Start(ctx dutyContext.Context, startHost func(broker *goplu
 	if err := plugin.DefaultRegistry.SetManifest(s.ID, manifest); err != nil {
 		// Not fatal — the registry might have been recreated, but the supervisor still works.
 		ctx.Logger.Warnf("plugin %s: register manifest: %v", s.Name, err)
+	} else if commanderAPI.UpstreamConf.Valid() {
+		// Right after the plugin is registered locally on the agent
+		// It immediately informs the upstream about the plugin
+		go func() {
+			if err := plugin.RegisterWithUpstream(ctx, commanderAPI.UpstreamConf, s.ID); err != nil {
+				ctx.Logger.Warnf("plugin %s: register with upstream: %v", s.Name, err)
+			}
+		}()
 	}
 
 	go s.watchExit(ctx, cli)
@@ -339,7 +348,7 @@ func (s *Supervisor) Stop() {
 }
 
 // Manifest returns the most recent PluginManifest received from the plugin.
-func (s *Supervisor) Manifest() *api.PluginManifest {
+func (s *Supervisor) Manifest() *pluginAPI.PluginManifest {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.manifest
@@ -355,7 +364,7 @@ func (s *Supervisor) UIPort() uint32 {
 }
 
 // Invoke calls the plugin's Invoke RPC.
-func (s *Supervisor) Invoke(ctx gocontext.Context, req *api.InvokeRequest) (*api.InvokeResponse, error) {
+func (s *Supervisor) Invoke(ctx gocontext.Context, req *pluginAPI.InvokeRequest) (*pluginAPI.InvokeResponse, error) {
 	s.mu.Lock()
 	pluginCli := s.pluginCLI
 	s.mu.Unlock()
@@ -366,12 +375,12 @@ func (s *Supervisor) Invoke(ctx gocontext.Context, req *api.InvokeRequest) (*api
 }
 
 // ListOperations calls the plugin's ListOperations RPC.
-func (s *Supervisor) ListOperations(ctx gocontext.Context) (*api.OperationList, error) {
+func (s *Supervisor) ListOperations(ctx gocontext.Context) (*pluginAPI.OperationList, error) {
 	s.mu.Lock()
 	pluginCli := s.pluginCLI
 	s.mu.Unlock()
 	if pluginCli == nil {
 		return nil, fmt.Errorf("plugin %s not running", s.Name)
 	}
-	return pluginCli.Service.ListOperations(ctx, &api.Empty{})
+	return pluginCli.Service.ListOperations(ctx, &pluginAPI.Empty{})
 }
