@@ -3,7 +3,6 @@ package machinery
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	dutyAPI "github.com/flanksource/duty/api"
@@ -85,6 +84,9 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*api.InvokeResponse,
 		req.Roles = claims.Roles
 	} else {
 		// No invocation token was supplied, so authorize locally before minting one.
+		// Plugins always act on behalf of the user, so the same subject threads
+		// unchanged down the chain: it is both the RBAC principal (must hold
+		// invoke:<plugin>:<op>) and the JWT sub.
 		if err := EnforceInvokePermission(ctx, subject, entry, req.Operation, req.ConfigItemID); err != nil {
 			return nil, entry, err
 		}
@@ -191,8 +193,4 @@ func EnforceInvokePermission(ctx dutyContext.Context, subject string, entry *plu
 
 func CanInvokePluginOperation(ctx dutyContext.Context, subject string, attr *models.ABACAttribute, pluginName, op string) bool {
 	return dutyRBAC.HasPermission(ctx, subject, attr, policy.NewPluginInvokeAction(pluginName, op))
-}
-
-func PluginSubject(namespace, name string) string {
-	return fmt.Sprintf("plugin:%s/%s", namespace, name)
 }
