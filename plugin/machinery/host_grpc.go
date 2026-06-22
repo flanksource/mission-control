@@ -143,14 +143,19 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginAPI.GetConnectio
 
 func (s *Service) InvokePlugin(ctx context.Context, req *pluginAPI.InvokePluginRequest) (*pluginAPI.InvokeResponse, error) {
 	dutyCtx := invocationDutyContext(s.ctx, ctx)
-	source, err := pluginEntryFromInvocation(ctx)
-	if err != nil {
+	if _, err := pluginEntryFromInvocation(ctx); err != nil {
 		return nil, err
 	}
 
 	depth := 1
+	// Plugins always act on behalf of the originating user, so thread the
+	// user's subject (from the calling plugin's invocation token) down the
+	// chain. The same subject authorizes the invoke and becomes the next
+	// token's sub — no plugin-scoped invoke permission is required.
+	userSubject := ""
 	if claims, ok := invocationClaimsFromContext(ctx); ok {
 		depth = claims.Depth + 1
+		userSubject = claims.Subject
 	}
 
 	configID := req.ConfigItemId
@@ -160,7 +165,7 @@ func (s *Service) InvokePlugin(ctx context.Context, req *pluginAPI.InvokePluginR
 		PluginRef:  req.Plugin,
 		Operation:  req.Operation,
 		ParamsJSON: req.ParamsJson,
-		Subject:    PluginSubject(source.Namespace, source.Name),
+		Subject:    userSubject,
 		Depth:      depth,
 		Deadline:   req.Deadline,
 
