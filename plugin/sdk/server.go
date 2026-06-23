@@ -2,6 +2,8 @@ package sdk
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net/http"
 	"strings"
@@ -10,9 +12,15 @@ import (
 
 	goplugin "github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 
 	pluginpb "github.com/flanksource/incident-commander/plugin/api"
 )
+
+// maxHostMessageSize bounds the back-channel gRPC messages a standalone plugin
+// exchanges with the host, matching the host's own server-side limit.
+const maxHostMessageSize = 64 * 1024 * 1024 // 64MB
 
 // pluginServer adapts the user's Plugin interface onto the generated
 // pluginpb.PluginServiceServer. It also owns the back-channel connection
@@ -25,6 +33,11 @@ type pluginServer struct {
 	mu      sync.Mutex
 	hostBrk *goplugin.GRPCBroker
 	ops     map[string]Operation
+
+	// tlsCertFile/tlsKeyFile are the plugin's own certificate, presented as a
+	// client certificate when dialing the host back-channel under mTLS.
+	tlsCertFile string
+	tlsKeyFile  string
 
 	// a connection back to the mission-control gRPC server
 	mcgPRCConn *grpc.ClientConn
@@ -41,18 +54,74 @@ func newPluginServer(impl Plugin, uiPort uint32) *pluginServer {
 }
 
 func (s *pluginServer) RegisterPlugin(ctx context.Context, req *pluginpb.RegisterRequest) (*pluginpb.PluginManifest, error) {
-	if s.hostBrk != nil && req.HostBrokerId != 0 {
+	switch {
+	case s.hostBrk != nil && req.HostBrokerId != 0:
+		// go-plugin subprocess mode: dial the host back-channel through the broker.
 		conn, err := s.hostBrk.Dial(req.HostBrokerId)
 		if err != nil {
 			return nil, fmt.Errorf("dial host broker: %w", err)
 		}
+		s.mu.Lock()
+		s.mcgPRCConn = conn
+		s.mu.Unlock()
 
+	case req.HostGrpcAddress != "":
+		// Standalone/remote mode: there is no broker, so dial the host's
+		// HostService directly over the network. The invocation token added by
+		// each HostClient call authenticates these requests.
+		creds, err := hostTransportCredentials(req, s.tlsCertFile, s.tlsKeyFile)
+		if err != nil {
+			return nil, err
+		}
+		conn, err := grpc.NewClient(req.HostGrpcAddress,
+			grpc.WithTransportCredentials(creds),
+			grpc.WithDefaultCallOptions(
+				grpc.MaxCallRecvMsgSize(maxHostMessageSize),
+				grpc.MaxCallSendMsgSize(maxHostMessageSize),
+			),
+		)
+		if err != nil {
+			return nil, fmt.Errorf("dial host %s: %w", req.HostGrpcAddress, err)
+		}
 		s.mu.Lock()
 		s.mcgPRCConn = conn
 		s.mu.Unlock()
 	}
 
 	manifest := s.impl.Manifest()
+	return s.finishRegister(manifest)
+}
+
+// hostTransportCredentials builds the transport credentials a standalone plugin
+// uses to dial the host back-channel. It is plaintext unless the host asked for
+// TLS, in which case the host's certificate is verified against the supplied CA
+// bundle (or the system roots when none is given). When the plugin has its own
+// certificate it is presented as a client certificate so the host can enforce
+// mTLS.
+func hostTransportCredentials(req *pluginpb.RegisterRequest, certFile, keyFile string) (credentials.TransportCredentials, error) {
+	if !req.HostGrpcTls {
+		return insecure.NewCredentials(), nil
+	}
+
+	cfg := &tls.Config{MinVersion: tls.VersionTLS12}
+	if req.HostGrpcCaCert != "" {
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM([]byte(req.HostGrpcCaCert)) {
+			return nil, fmt.Errorf("parse host CA cert")
+		}
+		cfg.RootCAs = pool
+	}
+	if certFile != "" && keyFile != "" {
+		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return nil, fmt.Errorf("load plugin client cert: %w", err)
+		}
+		cfg.Certificates = []tls.Certificate{cert}
+	}
+	return credentials.NewTLS(cfg), nil
+}
+
+func (s *pluginServer) finishRegister(manifest *pluginpb.PluginManifest) (*pluginpb.PluginManifest, error) {
 	if manifest == nil {
 		return nil, fmt.Errorf("plugin Manifest() returned nil")
 	}

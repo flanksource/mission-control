@@ -77,6 +77,18 @@ message RegisterRequest {
   string host_version          = 2;
   uint32 host_broker_id        = 3;
   map<string,string> env       = 4;
+  // host_grpc_address is the network address of the host's HostService. It is
+  // set when the host reaches the plugin over the network rather than through
+  // the go-plugin broker, so a standalone plugin can dial the host back-channel
+  // directly. When empty, the plugin uses the broker (host_broker_id) instead.
+  string host_grpc_address     = 5;
+  // host_grpc_tls tells the plugin to dial host_grpc_address over TLS. When
+  // false the back-channel is plaintext (only safe on loopback / same host).
+  bool   host_grpc_tls         = 6;
+  // host_grpc_ca_cert is an optional PEM CA bundle the plugin uses to verify the
+  // host's TLS certificate. When empty and host_grpc_tls is set, the system
+  // root CAs are used.
+  string host_grpc_ca_cert     = 7;
 }
 
 message ConfigureRequest {

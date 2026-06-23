@@ -83,7 +83,11 @@ func (r *Registry) Upsert(id uuid.UUID, namespace, name string, spec v1.PluginSp
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	return r.upsertLocked(id, namespace, name, spec, api.PluginKindLocal, nil, nil)
+	kind := api.PluginKindLocal
+	if spec.Address != "" {
+		kind = api.PluginKindRemote
+	}
+	return r.upsertLocked(id, namespace, name, spec, kind, nil, nil)
 }
 
 // UpsertProxied registers a plugin runtime reported by an authenticated agent.

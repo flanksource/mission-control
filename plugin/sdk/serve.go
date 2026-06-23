@@ -1,16 +1,22 @@
 package sdk
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"io/fs"
 	"net"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	goplugin "github.com/hashicorp/go-plugin"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials"
 
 	"github.com/flanksource/incident-commander/plugin/api"
 )
@@ -20,6 +26,23 @@ type Option func(*serveOptions)
 
 type serveOptions struct {
 	staticAssets fs.FS
+
+	// httpBindHost is the interface the static-asset/operations HTTP server binds
+	// to. Empty means loopback (go-plugin subprocess mode, reached only by the
+	// local host). ServeGRPC sets it to all-interfaces so a remote host can reach
+	// the plugin's UI and HTTP operations.
+	httpBindHost string
+
+	// tlsCertFile/tlsKeyFile, when set, make ServeGRPC serve the plugin's gRPC
+	// server over TLS so the host can dial it securely. Empty means plaintext.
+	// The same certificate is presented as the plugin's client certificate when
+	// it dials the host back-channel (mTLS).
+	tlsCertFile string
+	tlsKeyFile  string
+
+	// tlsClientCAFile, when set, makes ServeGRPC require and verify the host's
+	// client certificate against this CA bundle (mTLS).
+	tlsClientCAFile string
 }
 
 // WithStaticAssets mounts the given filesystem under the plugin HTTP server's
@@ -32,6 +55,25 @@ type serveOptions struct {
 //	sdk.Serve(&MyPlugin{}, sdk.WithStaticAssets(uiAssets))
 func WithStaticAssets(assets fs.FS) Option {
 	return func(o *serveOptions) { o.staticAssets = assets }
+}
+
+// WithServerTLS makes ServeGRPC serve the plugin's gRPC server over TLS using
+// the given certificate and key files. The host must trust the certificate
+// (e.g. via spec.caCert). The same certificate is presented as the plugin's
+// client certificate when it dials the host back-channel. It has no effect on
+// the go-plugin subprocess Serve.
+func WithServerTLS(certFile, keyFile string) Option {
+	return func(o *serveOptions) {
+		o.tlsCertFile = certFile
+		o.tlsKeyFile = keyFile
+	}
+}
+
+// WithServerClientCA enables mutual TLS on ServeGRPC: the host's client
+// certificate is required and verified against the given CA bundle. Requires
+// WithServerTLS.
+func WithServerClientCA(caFile string) Option {
+	return func(o *serveOptions) { o.tlsClientCAFile = caFile }
 }
 
 // shutdownCh signals the main goroutine that the host called Shutdown.
@@ -112,6 +154,101 @@ func Serve(impl Plugin, opts ...Option) {
 	_ = httpServer.Close()
 }
 
+// ServeGRPC runs the plugin as a standalone gRPC server listening on addr
+// (e.g. ":9000"), instead of as a go-plugin subprocess started by the host.
+// There is no go-plugin handshake: the server simply binds the PluginService
+// on a plain TCP listener and blocks until the process is signalled or the
+// host calls the Shutdown RPC. The static-asset HTTP server is started exactly
+// as it is under Serve.
+func ServeGRPC(impl Plugin, addr string, opts ...Option) error {
+	lis, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("bind grpc listener: %w", err)
+	}
+
+	if m := impl.Manifest(); m != nil {
+		fmt.Fprintf(os.Stderr, "plugin %s serving on %s: version=%s\n", m.Name, lis.Addr(), m.Version)
+	}
+
+	grpcServer, httpServer, err := newGRPCServer(impl, opts...)
+	if err != nil {
+		return err
+	}
+	defer httpServer.Close()
+
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		select {
+		case <-sig:
+		case <-shutdownCh:
+		}
+		grpcServer.GracefulStop()
+	}()
+
+	return grpcServer.Serve(lis)
+}
+
+// newGRPCServer builds the standalone gRPC server and its companion static
+// HTTP server from a plugin. It mirrors Serve's wiring (newPluginServer +
+// startHTTPServer + the api gRPC server factory) so both entry points dispatch
+// operations identically.
+func newGRPCServer(impl Plugin, opts ...Option) (*grpc.Server, *http.Server, error) {
+	cfg := &serveOptions{}
+	for _, o := range opts {
+		o(cfg)
+	}
+	// A standalone server is reached over the network, so its UI/operations HTTP
+	// server must bind all interfaces rather than loopback.
+	if cfg.httpBindHost == "" {
+		cfg.httpBindHost = "0.0.0.0"
+	}
+
+	var serverOpts []grpc.ServerOption
+	if cfg.tlsCertFile != "" || cfg.tlsKeyFile != "" {
+		tlsCfg, err := serverTLSConfig(cfg.tlsCertFile, cfg.tlsKeyFile, cfg.tlsClientCAFile)
+		if err != nil {
+			return nil, nil, err
+		}
+		serverOpts = append(serverOpts, grpc.Creds(credentials.NewTLS(tlsCfg)))
+	}
+
+	srv := newPluginServer(impl, 0)
+	// The plugin presents its own certificate as a client certificate when it
+	// dials the host back-channel (mTLS).
+	srv.tlsCertFile = cfg.tlsCertFile
+	srv.tlsKeyFile = cfg.tlsKeyFile
+	uiPort, httpServer := startHTTPServer(cfg, srv)
+	srv.uiPort = uiPort
+
+	grpcServer := api.GRPCServerFactory(serverOpts)
+	api.RegisterPluginServiceServer(grpcServer, srv)
+	return grpcServer, httpServer, nil
+}
+
+// serverTLSConfig builds the plugin gRPC server's TLS config. When clientCAFile
+// is set it requires and verifies the host's client certificate (mTLS).
+func serverTLSConfig(certFile, keyFile, clientCAFile string) (*tls.Config, error) {
+	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("load plugin server TLS: %w", err)
+	}
+	cfg := &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{cert}}
+	if clientCAFile != "" {
+		pem, err := os.ReadFile(clientCAFile)
+		if err != nil {
+			return nil, fmt.Errorf("read plugin server client CA: %w", err)
+		}
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(pem) {
+			return nil, fmt.Errorf("parse plugin server client CA")
+		}
+		cfg.ClientCAs = pool
+		cfg.ClientAuth = tls.RequireAndVerifyClientCert
+	}
+	return cfg, nil
+}
+
 func startHTTPServer(cfg *serveOptions, srv *pluginServer) (uint32, *http.Server) {
 	mux := http.NewServeMux()
 	mux.Handle("/__mc/operations/", srv.httpOperationsHandler())
@@ -122,7 +259,11 @@ func startHTTPServer(cfg *serveOptions, srv *pluginServer) (uint32, *http.Server
 	}
 	mux.Handle("/__mc/ui/", http.StripPrefix("/__mc/ui", staticHandler))
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	bindHost := cfg.httpBindHost
+	if bindHost == "" {
+		bindHost = "127.0.0.1"
+	}
+	listener, err := net.Listen("tcp", net.JoinHostPort(bindHost, "0"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "plugin sdk: bind http listener: %v\n", err)
 		os.Exit(1)

@@ -20,8 +20,8 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 	if p == nil {
 		return fmt.Errorf("nil Plugin")
 	}
-	if p.Spec.Source == "" {
-		return fmt.Errorf("plugin %s: spec.source is required", p.Name)
+	if p.Spec.Source == "" && p.Spec.Address == "" {
+		return fmt.Errorf("plugin %s: spec.source is required (or spec.address for a remote plugin)", p.Name)
 	}
 	if err := validatePluginSelector(p); err != nil {
 		return err
