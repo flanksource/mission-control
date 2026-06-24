@@ -3,6 +3,7 @@ package sdk
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 
@@ -43,6 +44,36 @@ var _ = ginkgo.Describe("catalog client", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(item.Name).ToNot(BeNil())
 		Expect(*item.Name).To(Equal("my-config"))
+	})
+
+	ginkgo.It("gets full catalog change details from PostgREST", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			Expect(r.Method).To(Equal(http.MethodGet))
+			Expect(r.URL.Path).To(Equal("/db/config_changes"))
+			Expect(r.URL.Query().Get("id")).To(Equal("eq.521bae33-e4c3-42eb-a9c5-071ab92940b5"))
+			Expect(r.URL.Query().Get("select")).To(Equal(catalogChangeDetailSelect))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"521bae33-e4c3-42eb-a9c5-071ab92940b5","config_id":"21e7586d-31fb-453c-a205-d73dc6b58eaa","change_type":"Failed","created_at":"2026-06-24T16:41:38Z","source":"kubernetes/","details":{"reason":"Failed"},"config":{"id":"21e7586d-31fb-453c-a205-d73dc6b58eaa","name":"opensearch-fail","type":"MissionControl::Canary","config_class":"Canary"},"artifacts":[]}]`))
+		}))
+		defer server.Close()
+
+		change, err := New(server.URL, "tok").GetCatalogChange(context.Background(), "521bae33-e4c3-42eb-a9c5-071ab92940b5")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(change.ChangeType).To(Equal("Failed"))
+		Expect(change.Details).To(HaveKeyWithValue("reason", "Failed"))
+		Expect(change.Config).ToNot(BeNil())
+		Expect(change.Config.Name).To(Equal("opensearch-fail"))
+	})
+
+	ginkgo.It("returns not found for an empty catalog change response", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[]`))
+		}))
+		defer server.Close()
+
+		_, err := New(server.URL, "tok").GetCatalogChange(context.Background(), "missing")
+		Expect(errors.Is(err, ErrNotFound)).To(BeTrue())
 	})
 
 	ginkgo.It("fetches relationships and exposes both tree directions", func() {
