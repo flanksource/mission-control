@@ -133,7 +133,11 @@ func Serve(impl Plugin, opts ...Option) {
 	}
 
 	srv := newPluginServer(impl, 0)
-	uiPort, httpServer := startHTTPServer(cfg, srv)
+	uiPort, httpServer, err := startHTTPServer(cfg, srv)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "plugin sdk: %v\n", err)
+		os.Exit(1)
+	}
 	srv.uiPort = uiPort
 
 	go watchParentDeath(os.Getppid(), parentPollInterval, os.Getppid, func() {
@@ -172,6 +176,7 @@ func ServeGRPC(impl Plugin, addr string, opts ...Option) error {
 
 	grpcServer, httpServer, err := newGRPCServer(impl, opts...)
 	if err != nil {
+		_ = lis.Close()
 		return err
 	}
 	defer httpServer.Close()
@@ -205,7 +210,10 @@ func newGRPCServer(impl Plugin, opts ...Option) (*grpc.Server, *http.Server, err
 	}
 
 	var serverOpts []grpc.ServerOption
-	if cfg.tlsCertFile != "" || cfg.tlsKeyFile != "" {
+	// A client CA alone (mTLS) still requires the server's own certificate, so
+	// entering the TLS branch on any TLS option ensures a partial config is
+	// rejected by serverTLSConfig rather than silently starting in plaintext.
+	if cfg.tlsCertFile != "" || cfg.tlsKeyFile != "" || cfg.tlsClientCAFile != "" {
 		tlsCfg, err := serverTLSConfig(cfg.tlsCertFile, cfg.tlsKeyFile, cfg.tlsClientCAFile)
 		if err != nil {
 			return nil, nil, err
@@ -218,7 +226,10 @@ func newGRPCServer(impl Plugin, opts ...Option) (*grpc.Server, *http.Server, err
 	// dials the host back-channel (mTLS).
 	srv.tlsCertFile = cfg.tlsCertFile
 	srv.tlsKeyFile = cfg.tlsKeyFile
-	uiPort, httpServer := startHTTPServer(cfg, srv)
+	uiPort, httpServer, err := startHTTPServer(cfg, srv)
+	if err != nil {
+		return nil, nil, err
+	}
 	srv.uiPort = uiPort
 
 	grpcServer := api.GRPCServerFactory(serverOpts)
@@ -229,6 +240,9 @@ func newGRPCServer(impl Plugin, opts ...Option) (*grpc.Server, *http.Server, err
 // serverTLSConfig builds the plugin gRPC server's TLS config. When clientCAFile
 // is set it requires and verifies the host's client certificate (mTLS).
 func serverTLSConfig(certFile, keyFile, clientCAFile string) (*tls.Config, error) {
+	if certFile == "" || keyFile == "" {
+		return nil, fmt.Errorf("plugin server TLS requires both a certificate and key (--serve-tls-cert/--serve-tls-key)")
+	}
 	cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 	if err != nil {
 		return nil, fmt.Errorf("load plugin server TLS: %w", err)
@@ -249,7 +263,7 @@ func serverTLSConfig(certFile, keyFile, clientCAFile string) (*tls.Config, error
 	return cfg, nil
 }
 
-func startHTTPServer(cfg *serveOptions, srv *pluginServer) (uint32, *http.Server) {
+func startHTTPServer(cfg *serveOptions, srv *pluginServer) (uint32, *http.Server, error) {
 	mux := http.NewServeMux()
 	mux.Handle("/__mc/operations/", srv.httpOperationsHandler())
 
@@ -265,8 +279,7 @@ func startHTTPServer(cfg *serveOptions, srv *pluginServer) (uint32, *http.Server
 	}
 	listener, err := net.Listen("tcp", net.JoinHostPort(bindHost, "0"))
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "plugin sdk: bind http listener: %v\n", err)
-		os.Exit(1)
+		return 0, nil, fmt.Errorf("bind http listener: %w", err)
 	}
 
 	port := uint32(listener.Addr().(*net.TCPAddr).Port)
@@ -280,5 +293,5 @@ func startHTTPServer(cfg *serveOptions, srv *pluginServer) (uint32, *http.Server
 		}
 	}()
 
-	return port, server
+	return port, server, nil
 }

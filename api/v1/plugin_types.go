@@ -28,6 +28,8 @@ type PluginConnectionMappings struct {
 // to over bi-directional gRPC. The plugin can register UI tabs that are
 // iframed into the catalog detail page, and operations that are exposed
 // over the HTTP API and as CLI subcommands.
+//
+// +kubebuilder:validation:XValidation:rule="has(self.source) || has(self.address)",message="spec.source is required (or spec.address for a remote plugin)"
 type PluginSpec struct {
 	// Source is the deps package name or URL the binary is installed from
 	// (via flanksource/deps). Mission-control places the resulting binary

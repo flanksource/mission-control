@@ -39,9 +39,16 @@ func StartUpstreamHostGRPCServer(ctx dutyContext.Context, port int) (*grpc.Serve
 
 	svc := NewGRPCService(ctx)
 	serverOpts := []grpc.ServerOption{grpc.UnaryInterceptor(upstreamHostUnaryInterceptor(ctx, svc))}
-	if commanderAPI.PluginHostTLSCertFile != "" && commanderAPI.PluginHostTLSKeyFile != "" {
+	certSet := commanderAPI.PluginHostTLSCertFile != ""
+	keySet := commanderAPI.PluginHostTLSKeyFile != ""
+	if certSet != keySet {
+		_ = lis.Close()
+		return nil, fmt.Errorf("plugin HostService TLS requires both --plugin-host-tls-cert and --plugin-host-tls-key")
+	}
+	if certSet && keySet {
 		tlsCfg, err := hostServerTLSConfig()
 		if err != nil {
+			_ = lis.Close()
 			return nil, err
 		}
 		serverOpts = append(serverOpts, grpc.Creds(credentials.NewTLS(tlsCfg)))

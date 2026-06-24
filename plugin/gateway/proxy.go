@@ -73,6 +73,8 @@ func pluginUIToken(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 	}
 
+	// The response carries a bearer token; never let a browser or proxy cache it.
+	c.Response().Header().Set("Cache-Control", "no-store")
 	return c.JSON(http.StatusOK, map[string]any{
 		"token":            token,
 		"expiresInSeconds": int(plugin.PluginJWTTTL.Seconds()),
@@ -167,6 +169,16 @@ func operationHTTPProxy(c echo.Context) error {
 
 		subject = claims.Subject
 		roles = claims.Roles
+
+		// A UI-minted token (local/remote plugins) is issued without an
+		// operation-level check, so authorize the operation here against the
+		// token's subject. Proxied tokens were already authorized upstream and
+		// this agent lacks the RBAC data to re-check.
+		if entry.Kind != api.PluginKindProxied {
+			if err := machinery.EnforceInvokePermission(ctx, subject, entry, op, configID); err != nil {
+				return dutyAPI.WriteError(c, err)
+			}
+		}
 	} else {
 		// No invocation token was supplied, so authorize locally before minting one.
 		user := ctx.User()

@@ -72,6 +72,10 @@ func startRemotePlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 	if hostGRPCAddress == "" {
 		hostGRPCAddress = commanderAPI.RemotePluginHostGRPCAddress
 	}
+	if hostGRPCAddress == "" {
+		_ = conn.Close()
+		return fmt.Errorf("plugin %s: no HostService back-channel address (set spec.hostGRPCAddress or --plugin-host-grpc-address)", entry.Name)
+	}
 
 	hostTLS, hostCACert, err := hostBackChannelTLS()
 	if err != nil {

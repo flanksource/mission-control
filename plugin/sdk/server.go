@@ -12,6 +12,7 @@ import (
 
 	goplugin "github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -83,6 +84,10 @@ func (s *pluginServer) RegisterPlugin(ctx context.Context, req *pluginpb.Registe
 		if err != nil {
 			return nil, fmt.Errorf("dial host %s: %w", req.HostGrpcAddress, err)
 		}
+		if err := waitForConnReady(ctx, conn); err != nil {
+			_ = conn.Close()
+			return nil, fmt.Errorf("dial host %s: %w", req.HostGrpcAddress, err)
+		}
 		s.mu.Lock()
 		s.mcgPRCConn = conn
 		s.mu.Unlock()
@@ -119,6 +124,22 @@ func hostTransportCredentials(req *pluginpb.RegisterRequest, certFile, keyFile s
 		cfg.Certificates = []tls.Certificate{cert}
 	}
 	return credentials.NewTLS(cfg), nil
+}
+
+// waitForConnReady blocks until conn reaches a Ready state or ctx is done.
+// grpc.NewClient is lazy, so without this a plugin whose host back-channel is
+// unreachable would register successfully and only fail on the first callback.
+func waitForConnReady(ctx context.Context, conn *grpc.ClientConn) error {
+	conn.Connect()
+	for {
+		state := conn.GetState()
+		if state == connectivity.Ready {
+			return nil
+		}
+		if !conn.WaitForStateChange(ctx, state) {
+			return ctx.Err()
+		}
+	}
 }
 
 func (s *pluginServer) finishRegister(manifest *pluginpb.PluginManifest) (*pluginpb.PluginManifest, error) {

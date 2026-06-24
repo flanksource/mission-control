@@ -91,6 +91,12 @@ var Root = &cobra.Command{
 			properties.Set("artifacts.connection", f.Value.String())
 		}
 
+		// Unless explicitly overridden, the address remote plugins dial back on is
+		// derived from the effective upstream gRPC port so the two cannot drift.
+		if f := cmd.Flags().Lookup("plugin-host-grpc-address"); f == nil || !f.Changed {
+			api.RemotePluginHostGRPCAddress = fmt.Sprintf("127.0.0.1:%d", api.UpstreamGRPCPort)
+		}
+
 		api.DefaultArtifactConnection = properties.String(api.DefaultArtifactConnection, "artifacts.connection")
 		applyContext()
 	},

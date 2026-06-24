@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/url"
+	"strconv"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
@@ -210,7 +211,7 @@ func HTTPURL(ctx dutyContext.Context, pluginID uuid.UUID) (*url.URL, error) {
 		if err != nil {
 			return nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has invalid address %q: %v", pluginID, entry.Spec.Address, err)
 		}
-		return url.Parse(fmt.Sprintf("http://%s:%d", host, port))
+		return url.Parse("http://" + net.JoinHostPort(host, strconv.Itoa(int(port))))
 	default:
 		return nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has unsupported connection kind %q", pluginID, entry.Kind)
 	}

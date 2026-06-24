@@ -187,6 +187,9 @@ spec:
                   (e.g. a semver tag, "latest", or a git ref the deps package supports).
                 type: string
             type: object
+            x-kubernetes-validations:
+            - message: spec.source is required (or spec.address for a remote plugin)
+              rule: has(self.source) || has(self.address)
           status:
             description: PluginStatus reflects the supervised state of the plugin
               process.
