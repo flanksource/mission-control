@@ -6,4 +6,4 @@ metadata:
   uid: 7eb7d4c8-faad-4809-9643-e8116eef6e3e
 spec:
   http:
-    url: https://httpbin.org/status/200
+    url: https://httpbingo.org/status/200
