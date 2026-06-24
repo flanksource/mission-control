@@ -166,7 +166,7 @@ func InvokeOperation(c echo.Context) error {
 	switch entry.Kind {
 	case api.PluginKindProxied:
 		return invokeProxiedOperation(c, ctx, entry, pluginRef, op, configID, configUUID)
-	case "", api.PluginKindLocal:
+	case "", api.PluginKindLocal, api.PluginKindRemote:
 		resp, err := invokeLocalOperation(ctx, c.Request(), entry, pluginRef, op, configID, configUUID)
 		if err != nil {
 			return dutyAPI.WriteError(c, err)

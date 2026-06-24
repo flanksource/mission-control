@@ -2,7 +2,9 @@ package machinery
 
 import (
 	"fmt"
+	"net"
 	"net/url"
+	"strconv"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
@@ -25,6 +27,8 @@ func StartPlugin(ctx dutyContext.Context, id uuid.UUID) error {
 	switch entry.Kind {
 	case "", api.PluginKindLocal:
 		return startLocalPlugin(ctx, entry)
+	case api.PluginKindRemote:
+		return startRemotePlugin(ctx, entry)
 	case api.PluginKindProxied:
 		return nil
 	default:
@@ -152,7 +156,7 @@ func Invoke(ctx dutyContext.Context, pluginID uuid.UUID, req *api.InvokeRequest)
 	}
 
 	switch entry.Kind {
-	case "", api.PluginKindLocal:
+	case "", api.PluginKindLocal, api.PluginKindRemote:
 		if entry.Runtime == nil {
 			return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
 		}
@@ -193,6 +197,21 @@ func HTTPURL(ctx dutyContext.Context, pluginID uuid.UUID) (*url.URL, error) {
 			return nil, ctx.Oops().Code(dutyAPI.EINTERNAL).Errorf("plugin %s did not advertise a UI port", pluginID)
 		}
 		return url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
+	case api.PluginKindRemote:
+		if entry.Runtime == nil {
+			return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
+		}
+		port := entry.Runtime.UIPort()
+		if port == 0 {
+			return nil, ctx.Oops().Code(dutyAPI.EINTERNAL).Errorf("plugin %s did not advertise a UI port", pluginID)
+		}
+		// The plugin serves its UI on its own host (the gRPC address) but on the
+		// manifest-advertised UI port.
+		host, _, err := net.SplitHostPort(entry.Spec.Address)
+		if err != nil {
+			return nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has invalid address %q: %v", pluginID, entry.Spec.Address, err)
+		}
+		return url.Parse("http://" + net.JoinHostPort(host, strconv.Itoa(int(port))))
 	default:
 		return nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has unsupported connection kind %q", pluginID, entry.Kind)
 	}

@@ -437,8 +437,20 @@ type RegisterRequest struct {
 	HostVersion         string                 `protobuf:"bytes,2,opt,name=host_version,json=hostVersion,proto3" json:"host_version,omitempty"`
 	HostBrokerId        uint32                 `protobuf:"varint,3,opt,name=host_broker_id,json=hostBrokerId,proto3" json:"host_broker_id,omitempty"`
 	Env                 map[string]string      `protobuf:"bytes,4,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// host_grpc_address is the network address of the host's HostService. It is
+	// set when the host reaches the plugin over the network rather than through
+	// the go-plugin broker, so a standalone plugin can dial the host back-channel
+	// directly. When empty, the plugin uses the broker (host_broker_id) instead.
+	HostGrpcAddress string `protobuf:"bytes,5,opt,name=host_grpc_address,json=hostGrpcAddress,proto3" json:"host_grpc_address,omitempty"`
+	// host_grpc_tls tells the plugin to dial host_grpc_address over TLS. When
+	// false the back-channel is plaintext (only safe on loopback / same host).
+	HostGrpcTls bool `protobuf:"varint,6,opt,name=host_grpc_tls,json=hostGrpcTls,proto3" json:"host_grpc_tls,omitempty"`
+	// host_grpc_ca_cert is an optional PEM CA bundle the plugin uses to verify the
+	// host's TLS certificate. When empty and host_grpc_tls is set, the system
+	// root CAs are used.
+	HostGrpcCaCert string `protobuf:"bytes,7,opt,name=host_grpc_ca_cert,json=hostGrpcCaCert,proto3" json:"host_grpc_ca_cert,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *RegisterRequest) Reset() {
@@ -497,6 +509,27 @@ func (x *RegisterRequest) GetEnv() map[string]string {
 		return x.Env
 	}
 	return nil
+}
+
+func (x *RegisterRequest) GetHostGrpcAddress() string {
+	if x != nil {
+		return x.HostGrpcAddress
+	}
+	return ""
+}
+
+func (x *RegisterRequest) GetHostGrpcTls() bool {
+	if x != nil {
+		return x.HostGrpcTls
+	}
+	return false
+}
+
+func (x *RegisterRequest) GetHostGrpcCaCert() string {
+	if x != nil {
+		return x.HostGrpcCaCert
+	}
+	return ""
 }
 
 type ConfigureRequest struct {
@@ -1789,12 +1822,15 @@ const file_plugin_proto_rawDesc = "" +
 	"\x14required_permissions\x18\a \x03(\tR\x13requiredPermissions\x129\n" +
 	"\x04http\x18\b \x03(\v2%.missioncontrol.plugin.v1.HTTPBindingR\x04http\"U\n" +
 	"\vHTTPBinding\x12\x16\n" +
-	"\x06method\x18\x01 \x01(\tR\x06methodJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04J\x04\b\x04\x10\x05R\x04pathR\vresult_mimeR\tstreaming\"\x8c\x02\n" +
+	"\x06method\x18\x01 \x01(\tR\x06methodJ\x04\b\x02\x10\x03J\x04\b\x03\x10\x04J\x04\b\x04\x10\x05R\x04pathR\vresult_mimeR\tstreaming\"\x87\x03\n" +
 	"\x0fRegisterRequest\x122\n" +
 	"\x15host_protocol_version\x18\x01 \x01(\rR\x13hostProtocolVersion\x12!\n" +
 	"\fhost_version\x18\x02 \x01(\tR\vhostVersion\x12$\n" +
 	"\x0ehost_broker_id\x18\x03 \x01(\rR\fhostBrokerId\x12D\n" +
-	"\x03env\x18\x04 \x03(\v22.missioncontrol.plugin.v1.RegisterRequest.EnvEntryR\x03env\x1a6\n" +
+	"\x03env\x18\x04 \x03(\v22.missioncontrol.plugin.v1.RegisterRequest.EnvEntryR\x03env\x12*\n" +
+	"\x11host_grpc_address\x18\x05 \x01(\tR\x0fhostGrpcAddress\x12\"\n" +
+	"\rhost_grpc_tls\x18\x06 \x01(\bR\vhostGrpcTls\x12)\n" +
+	"\x11host_grpc_ca_cert\x18\a \x01(\tR\x0ehostGrpcCaCert\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"G\n" +

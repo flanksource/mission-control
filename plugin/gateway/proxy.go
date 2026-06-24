@@ -11,35 +11,74 @@ import (
 
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
-	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/api"
 	"github.com/flanksource/incident-commander/plugin/machinery"
-	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/upstream/tunnel"
 )
 
-func upstreamInvokedOrRBAC(authz echo.MiddlewareFunc) echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			if auth.IsTrustedUpstream(c.Request().Context()) {
-				return next(c)
-			}
-			return authz(next)(c)
-		}
-	}
-}
-
 func registerProxyRoutes(e *echo.Echo) {
 	g := e.Group("/api/plugins")
-	uiAuth := upstreamInvokedOrRBAC(rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
-	g.GET("/:name/ui", uiProxy, uiAuth)
-	g.GET("/:name/ui/*", uiProxy, uiAuth)
+	// Plugin UI assets are public for registered plugins so a whitelisted plugin
+	// can be embedded in a cross-site iframe where the session cookie is not sent.
+	// uiProxy resolves the plugin and 404s unregistered ones; the bundle carries
+	// no user data. Operation calls remain authenticated by the invocation token.
+	g.GET("/:name/ui", uiProxy)
+	g.GET("/:name/ui/*", uiProxy)
+	g.GET("/:name/ui-token", pluginUIToken)
 	g.Any("/:name/proxy/:op", operationHTTPProxy)
+}
+
+// pluginUIToken mints a short-lived, plugin-scoped invocation token for a
+// whitelisted plugin's UI to authenticate its operation calls. The parent app
+// calls this same-origin (with the user's session), then hands the token to the
+// cross-site iframe, which sends it on operation requests. The token carries only
+// the roles the user actually holds for this plugin and config.
+func pluginUIToken(c echo.Context) error {
+	ctx := c.Request().Context().(dutyContext.Context)
+	pluginRef := c.Param("name")
+	configID := c.QueryParam("config_id")
+	if configID == "" {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("config_id is required"))
+	}
+
+	entry, err := machinery.ResolvePlugin(ctx, pluginRef)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	matches, err := machinery.SelectorMatches(ctx, entry, configID)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	}
+	if !matches {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, configID))
+	}
+
+	user := ctx.User()
+	if user == nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in"))
+	}
+
+	roles, err := pluginRolesForUser(ctx, entry, configID)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	token, err := plugin.MintInvocationToken(user.ID.String(), entry.ID, 0, roles...)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
+	}
+
+	// The response carries a bearer token; never let a browser or proxy cache it.
+	c.Response().Header().Set("Cache-Control", "no-store")
+	return c.JSON(http.StatusOK, map[string]any{
+		"token":            token,
+		"expiresInSeconds": int(plugin.PluginJWTTTL.Seconds()),
+	})
 }
 
 // uiProxy reverse-proxies static plugin UI assets. Dynamic/plugin API calls
@@ -130,6 +169,16 @@ func operationHTTPProxy(c echo.Context) error {
 
 		subject = claims.Subject
 		roles = claims.Roles
+
+		// A UI-minted token (local/remote plugins) is issued without an
+		// operation-level check, so authorize the operation here against the
+		// token's subject. Proxied tokens were already authorized upstream and
+		// this agent lacks the RBAC data to re-check.
+		if entry.Kind != api.PluginKindProxied {
+			if err := machinery.EnforceInvokePermission(ctx, subject, entry, op, configID); err != nil {
+				return dutyAPI.WriteError(c, err)
+			}
+		}
 	} else {
 		// No invocation token was supplied, so authorize locally before minting one.
 		user := ctx.User()

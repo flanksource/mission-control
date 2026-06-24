@@ -11,5 +11,5 @@ spec:
   actions:
     - name: HTTP
       http:
-        url: https://httpbin.org/get
+        url: https://httpbingo.org/get
         connection: connection://mc/httpbin

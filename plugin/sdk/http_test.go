@@ -26,9 +26,10 @@ func (p httpTestPlugin) Operations() []Operation                       { return 
 var _ = ginkgo.Describe("HTTP server routing", func() {
 	ginkgo.It("serves static UI only from the reserved UI mount", func() {
 		plugin := httpTestPlugin{}
-		port, server := startHTTPServer(&serveOptions{staticAssets: fstest.MapFS{
+		port, server, err := startHTTPServer(&serveOptions{staticAssets: fstest.MapFS{
 			"assets/app.js": &fstest.MapFile{Data: []byte("static app")},
 		}}, newPluginServer(plugin, 0))
+		Expect(err).NotTo(HaveOccurred())
 		defer server.Close()
 
 		body, status := httpGet(fmt.Sprintf("http://127.0.0.1:%d/__mc/ui/assets/app.js", port))
@@ -50,7 +51,8 @@ var _ = ginkgo.Describe("HTTP server routing", func() {
 				_, _ = w.Write([]byte("operation"))
 			}),
 		}}}
-		port, server := startHTTPServer(&serveOptions{}, newPluginServer(plugin, 0))
+		port, server, err := startHTTPServer(&serveOptions{}, newPluginServer(plugin, 0))
+		Expect(err).NotTo(HaveOccurred())
 		defer server.Close()
 
 		body, status := httpGet(fmt.Sprintf("http://127.0.0.1:%d/__mc/operations/logs", port))

@@ -28,12 +28,37 @@ type PluginConnectionMappings struct {
 // to over bi-directional gRPC. The plugin can register UI tabs that are
 // iframed into the catalog detail page, and operations that are exposed
 // over the HTTP API and as CLI subcommands.
+//
+// +kubebuilder:validation:XValidation:rule="has(self.source) || has(self.address)",message="spec.source is required (or spec.address for a remote plugin)"
 type PluginSpec struct {
 	// Source is the deps package name or URL the binary is installed from
 	// (via flanksource/deps). Mission-control places the resulting binary
-	// in $MISSION_CONTROL_PLUGIN_PATH.
-	//+kubebuilder:validation:Required
-	Source string `json:"source"`
+	// in $MISSION_CONTROL_PLUGIN_PATH. Required unless Address is set, in
+	// which case the plugin is remote and there is no binary to install.
+	//+kubebuilder:validation:Optional
+	Source string `json:"source,omitempty"`
+
+	// Address, when set, marks this plugin as remote: Mission Control dials the
+	// plugin's gRPC server at this network address (host:port) instead of
+	// installing and supervising a local binary. Source/Version/Checksum are
+	// ignored for remote plugins.
+	//+kubebuilder:validation:Optional
+	Address string `json:"address,omitempty"`
+
+	// HostGRPCAddress is the address this remote plugin uses to reach Mission
+	// Control's HostService back-channel (for connection resolution and other
+	// callbacks). Set it per plugin when plugins run in different networks and
+	// reach Mission Control at different addresses. When empty, the host's
+	// configured default is used. Only meaningful when Address is set.
+	//+kubebuilder:validation:Optional
+	HostGRPCAddress string `json:"hostGRPCAddress,omitempty"`
+
+	// CACert is an optional PEM CA bundle used to verify the TLS certificate the
+	// remote plugin serves at Address. When empty, Mission Control dials the
+	// plugin in plaintext (only safe for same-host plugins). Only meaningful when
+	// Address is set.
+	//+kubebuilder:validation:Optional
+	CACert string `json:"caCert,omitempty"`
 
 	// Version of the binary to install. Forwarded to deps.Install verbatim
 	// (e.g. a semver tag, "latest", or a git ref the deps package supports).
