@@ -84,6 +84,10 @@ func registerCachedPlaybookCommands(playbookRoot, root *cobra.Command, items []a
 	if runRoot == nil {
 		return nil
 	}
+	// Register the core group before the playbook group so the Core section
+	// always precedes the dynamic sections in --help.
+	ensureCommandGroup(root, GroupCore)
+	ensureCommandGroup(root, GroupPlaybooks)
 	sort.SliceStable(items, func(i, j int) bool { return playbookRef(items[i]) < playbookRef(items[j]) })
 	for _, item := range items {
 		name := cachedPlaybookCommandName(runRoot, item)
@@ -94,7 +98,12 @@ func registerCachedPlaybookCommands(playbookRoot, root *cobra.Command, items []a
 			runRoot.AddCommand(newCachedPlaybookCommand(item, name))
 		}
 		if root != nil && !commandExists(root, name) {
-			root.AddCommand(newCachedPlaybookCommand(item, name))
+			// Top-level playbook commands are surfaced directly on root; group
+			// them under the "Playbook Commands" section of --help. (The copy
+			// nested under `playbook run` intentionally stays ungrouped.)
+			cmd := newCachedPlaybookCommand(item, name)
+			cmd.GroupID = GroupPlaybooks
+			root.AddCommand(cmd)
 		}
 	}
 	return nil
@@ -130,9 +139,9 @@ func newCachedPlaybookCommand(item api.PlaybookListItem, name string) *cobra.Com
 	var wait = true
 	var pollInterval = 2 * time.Second
 	var configID, componentID, checkID, paramFile string
-	short := item.Description
+	short := normalizeShort(item.Description)
 	if short == "" {
-		short = item.Title
+		short = normalizeShort(item.Title)
 	}
 	if short == "" {
 		short = fmt.Sprintf("Run playbook %s", playbookRef(item))

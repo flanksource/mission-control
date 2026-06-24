@@ -118,6 +118,7 @@ func main() {
 	if c, _, err := root.Find([]string{"catalog"}); err == nil && c != nil {
 		clicky.BindAllFlags(c.PersistentFlags(), "format")
 	}
+	clientcmd.FinalizeCommandGroups(root)
 	silenceUsage(root)
 
 	harFlush := func() error { return nil }

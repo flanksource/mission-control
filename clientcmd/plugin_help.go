@@ -40,6 +40,13 @@ func registerCachedPluginCommandEntries(pluginRoot, root *cobra.Command, entries
 			pluginRoot.AddCommand(nested)
 		}
 		if root != nil && !commandExists(root, top.Name()) {
+			// Top-level plugin commands are surfaced directly on root; group them
+			// under "Plugin Commands". The core group is registered first so the
+			// Core section always precedes the dynamic sections in --help. (The
+			// nested copy under `plugin <name>` intentionally stays ungrouped.)
+			ensureCommandGroup(root, GroupCore)
+			ensureCommandGroup(root, GroupPlugins)
+			top.GroupID = GroupPlugins
 			root.AddCommand(top)
 		}
 	}
@@ -63,7 +70,7 @@ func buildPluginCommands(entry manifestcache.Entry) (nested, top *cobra.Command)
 }
 
 func newPluginRoot(entry manifestcache.Entry, topLevel bool) *cobra.Command {
-	short := entry.Service.Description
+	short := normalizeShort(entry.Service.Description)
 	if short == "" {
 		short = fmt.Sprintf("Operations for the %q plugin", entry.Service.Name)
 	}
@@ -105,7 +112,7 @@ func newOperationCommandWithDispatcher(plugin string, op rpc.RPCOperation, dispa
 	)
 	cmd := &cobra.Command{
 		Use:          op.Name,
-		Short:        op.Description,
+		Short:        normalizeShort(op.Description),
 		Long:         formatOperationLong(op),
 		SilenceUsage: true,
 		RunE: func(c *cobra.Command, _ []string) error {
