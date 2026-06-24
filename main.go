@@ -53,6 +53,7 @@ func main() {
 	if catalogCmd, _, err := cmd.Root.Find([]string{"catalog"}); err == nil && catalogCmd != nil {
 		clicky.BindAllFlags(catalogCmd.PersistentFlags(), "format")
 	}
+	clientcmd.FinalizeCommandGroups(cmd.Root)
 
 	if err := cmd.Root.Execute(); err != nil {
 		os.Exit(1)
