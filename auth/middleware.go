@@ -22,6 +22,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/flanksource/incident-commander/db"
+	pluginapi "github.com/flanksource/incident-commander/plugin/api"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
@@ -207,6 +208,13 @@ func canSkipAuth(c echo.Context) bool {
 		}
 	}
 
+	// Plugin gateway requests that authenticate themselves (a plugin UI bundle,
+	// or an operation call carrying a plugin invocation token) bypass the user
+	// session so a whitelisted plugin's UI can be embedded cross-site.
+	if pluginSelfAuthenticatedRequest(c) {
+		return true
+	}
+
 	// /metrics requires auth by default, unless metrics.auth.disabled is true
 	if requestPath == "/metrics" && properties.On(false, "metrics.auth.disabled") {
 		return true
@@ -214,6 +222,40 @@ func canSkipAuth(c echo.Context) bool {
 
 	return false
 }
+
+// pluginSelfAuthenticatedRequest reports whether a plugin gateway request carries
+// its own authentication instead of relying on the user's session cookie. It is
+// strictly scoped to /api/plugins/ so it can never bypass auth for another route:
+//
+//   - plugin UI static assets are public for registered plugins (the gateway
+//     404s unregistered ones); the bundle is shipped in the plugin and carries no
+//     user data.
+//   - operation/invoke calls carry a plugin invocation token in a header, which
+//     the gateway validates before serving.
+//
+// This lets a whitelisted plugin's UI run in a cross-site iframe, where the
+// SameSite session cookie is never sent.
+func pluginSelfAuthenticatedRequest(c echo.Context) bool {
+	requestPath := c.Request().URL.Path
+	if !strings.HasPrefix(requestPath, pluginAPIPathPrefix) {
+		return false
+	}
+	if isPluginUIPath(requestPath) {
+		return true
+	}
+	return c.Request().Header.Get(pluginapi.InvocationTokenHTTPHeader) != ""
+}
+
+func isPluginUIPath(requestPath string) bool {
+	rest := strings.TrimPrefix(requestPath, pluginAPIPathPrefix)
+	_, tail, found := strings.Cut(rest, "/")
+	if !found {
+		return false
+	}
+	return tail == "ui" || strings.HasPrefix(tail, "ui/")
+}
+
+const pluginAPIPathPrefix = "/api/plugins/"
 
 func mapIDsToRoles(ctx context.Context, session *client.Session, person models.Person) error {
 	log := logger.GetLogger("auth")
