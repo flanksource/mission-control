@@ -11,8 +11,8 @@ github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc/go.mod h1:J7Y8Yc
 github.com/fatih/color v1.13.0/go.mod h1:kLAiJbzzSOZDVNGyDpeOxJ47H46qBXwg5ILebYFFOfk=
 github.com/fatih/color v1.18.0 h1:S8gINlzdQ840/4pfAwic/ZE0djQEH3wM94VfqLTZcOM=
 github.com/fatih/color v1.18.0/go.mod h1:4FelSpRwEGDpQ12mAdzqdOukCy4u8WUtOY6lkT/6HfU=
-github.com/flanksource/incident-commander/plugin/api v0.0.1 h1:WvO2ea7FwisQvXoyqBOYb2LdJ8LppwrLlMNgV2fyN6E=
-github.com/flanksource/incident-commander/plugin/api v0.0.1/go.mod h1:UzzKclk8Z0b5d2HMaBG4F5pgN5Ua8TjK36sr7Z9kVrU=
+github.com/flanksource/incident-commander/plugin/api v0.0.3 h1:5lLGxoI9cafz8JcBP/p8/GrdUjfpiH0jmcP35Surm0I=
+github.com/flanksource/incident-commander/plugin/api v0.0.3/go.mod h1:UzzKclk8Z0b5d2HMaBG4F5pgN5Ua8TjK36sr7Z9kVrU=
 github.com/gkampitakis/ciinfo v0.3.2 h1:JcuOPk8ZU7nZQjdUhctuhQofk7BGHuIy0c9Ez8BNhXs=
 github.com/gkampitakis/ciinfo v0.3.2/go.mod h1:1NIwaOcFChN4fa/B0hEBdAb6npDlFL8Bwx4dfRLRqAo=
 github.com/gkampitakis/go-diff v1.3.2 h1:Qyn0J9XJSDTgnsgHRdz9Zp24RaJeKMUHg2+PDZZdC4M=

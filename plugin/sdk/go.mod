@@ -3,15 +3,13 @@ module github.com/flanksource/incident-commander/plugin/sdk
 go 1.26.1
 
 require (
-	github.com/flanksource/incident-commander/plugin/api v0.0.1
+	github.com/flanksource/incident-commander/plugin/api v0.0.3
 	github.com/hashicorp/go-plugin v1.8.0
 	github.com/onsi/ginkgo/v2 v2.28.3
 	github.com/onsi/gomega v1.40.0
 	google.golang.org/grpc v1.81.1
 	google.golang.org/protobuf v1.36.12-0.20260120151049-f2248ac996af
 )
-
-replace github.com/flanksource/incident-commander/plugin/api => ../api
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect
