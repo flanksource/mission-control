@@ -57,9 +57,7 @@ func RefreshLatestPlugin(ctx dutyContext.Context, entry *plugin.Entry) (*LatestP
 	if entry == nil {
 		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "plugin is required")
 	}
-	switch entry.Kind {
-	case "", api.PluginKindLocal:
-	default:
+	if entry.Kind != "" && entry.Kind != api.PluginKindLocal {
 		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "plugin %s has unsupported connection kind %q", entry.Name, entry.Kind)
 	}
 	if !local.IsLatest(entry.Spec.Version) {
