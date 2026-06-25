@@ -8,6 +8,10 @@
 //	    given config item. Used by the frontend to populate the tab bar
 //	    on the catalog detail page.
 //
+//	POST /api/plugins/:name/upgrade
+//	    Resolves latest for a local plugin and restarts it when a new version
+//	    is available.
+//
 //	POST /api/plugins/:name/invoke/:op?config_id=X
 //	    Invokes a plugin operation. The body is the operation's params
 //	    (JSON). The response body is whatever the plugin returned via
@@ -46,6 +50,7 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	g := e.Group("/api/plugins")
 	g.GET("", ListPlugins, rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
+	g.POST("/:name/upgrade", UpgradePlugin, rbac.Authorization(policy.ObjectRBAC, policy.ActionUpdate))
 	g.POST("/:name/invoke/:op", InvokeOperation)
 
 	registerProxyRoutes(e)
@@ -139,6 +144,25 @@ func listPluginsClickyRPC(c echo.Context) error {
 		})
 	}
 	return c.JSON(http.StatusOK, out)
+}
+
+// UpgradePlugin resolves latest for a local plugin and restarts it when a new
+// version is available.
+func UpgradePlugin(c echo.Context) error {
+	ctx := c.Request().Context().(dutyContext.Context)
+	pluginRef := c.Param("name")
+
+	entry, err := machinery.ResolvePlugin(ctx, pluginRef)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	result, err := machinery.RefreshLatestPlugin(ctx, entry)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, result)
 }
 
 // InvokeOperation invokes a plugin operation. Local plugins are invoked through
