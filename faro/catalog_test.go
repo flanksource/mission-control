@@ -50,6 +50,7 @@ func catalogSearchServer(expectedPath string) *httptest.Server {
 		var got query.SearchResourcesRequest
 		Expect(json.NewDecoder(r.Body).Decode(&got)).To(Succeed())
 		Expect(got.Limit).To(Equal(5))
+		Expect(got.Timestamps).To(BeTrue())
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"configs":[{"id":"00000000-0000-0000-0000-000000000001","name":"api","type":"Kubernetes::Pod"}]}`))
 	}))

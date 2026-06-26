@@ -68,8 +68,9 @@ func remoteList(opts catalogListOpts) ([]models.ConfigItem, error) {
 	}
 
 	resp, err := client.SearchCatalog(context.Background(), query.SearchResourcesRequest{
-		Limit:   limit,
-		Configs: []types.ResourceSelector{selector},
+		Limit:      limit,
+		Timestamps: true,
+		Configs:    []types.ResourceSelector{selector},
 	})
 	if err != nil {
 		return nil, err
@@ -106,6 +107,11 @@ func selectedResourceToConfigItem(s query.SelectedResource) models.ConfigItem {
 	if len(s.Tags) > 0 {
 		ci.Tags = types.JSONStringMap(s.Tags)
 	}
+	if s.CreatedAt != nil {
+		ci.CreatedAt = *s.CreatedAt
+	}
+	ci.UpdatedAt = s.UpdatedAt
+	ci.DeletedAt = s.DeletedAt
 	return ci
 }
 
