@@ -26,12 +26,12 @@ var _ = ginkgo.Describe("faro catalog search", func() {
 			var got query.SearchResourcesRequest
 			Expect(json.NewDecoder(r.Body).Decode(&got)).To(Succeed())
 			Expect(got.Limit).To(Equal(25))
-			Expect(got.Fields).To(ContainElements("created_at", "inserted_at", "updated_at"))
+			Expect(got.Timestamps).To(BeTrue())
 			Expect(got.Configs).To(HaveLen(1))
 			Expect(got.Configs[0].Search).To(Equal("tags.cluster=beta-cluster type=pod mission-control"))
 			Expect(got.Configs[0].Agent).To(Equal("all"))
 
-			_, _ = w.Write([]byte(`{"configs":[{"id":"00000000-0000-0000-0000-000000000001","name":"api","type":"Kubernetes::Pod","health":"healthy","status":"Running","created_at":"2026-06-24T16:41:38Z","inserted_at":"2026-06-24T16:42:38Z","updated_at":"2026-06-24T16:43:38Z"}]}`))
+			_, _ = w.Write([]byte(`{"configs":[{"id":"00000000-0000-0000-0000-000000000001","name":"api","type":"Kubernetes::Pod","health":"healthy","status":"Running","created_at":"2026-06-24T16:41:38Z","updated_at":"2026-06-24T16:43:38Z","deleted_at":"2026-06-24T16:44:38Z"}]}`))
 		}))
 		defer server.Close()
 		storeRemoteContext(server.URL)
@@ -43,8 +43,8 @@ var _ = ginkgo.Describe("faro catalog search", func() {
 		Expect(*items[0].Name).To(Equal("api"))
 		Expect(*items[0].Type).To(Equal("Kubernetes::Pod"))
 		Expect(items[0].CreatedAt.IsZero()).To(BeFalse())
-		Expect(items[0].InsertedAt.IsZero()).To(BeFalse())
 		Expect(items[0].UpdatedAt).ToNot(BeNil())
+		Expect(items[0].DeletedAt).ToNot(BeNil())
 	})
 
 	ginkgo.It("defaults an empty limit to 100", func() {
