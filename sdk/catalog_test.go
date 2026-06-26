@@ -31,6 +31,26 @@ var _ = ginkgo.Describe("catalog client", func() {
 		Expect(resp.Configs[0].Name).To(Equal("api"))
 	})
 
+	ginkgo.It("posts an insight search request and decodes config_analysis", func() {
+		var gotBody CatalogInsightSearchRequest
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			Expect(r.Method).To(Equal(http.MethodPost))
+			Expect(r.URL.Path).To(Equal("/resources/search"))
+			Expect(json.NewDecoder(r.Body).Decode(&gotBody)).To(Succeed())
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"config_analysis":[{"id":"i1","name":"no-public-ip","type":"security","status":"open","severity":"high"}]}`))
+		}))
+		defer server.Close()
+
+		resp, err := New(server.URL, "tok").SearchCatalogInsights(context.Background(), CatalogInsightSearchRequest{Limit: 5})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(gotBody.Limit).To(Equal(5))
+		Expect(resp.ConfigAnalysis).To(HaveLen(1))
+		Expect(resp.ConfigAnalysis[0].Name).To(Equal("no-public-ip"))
+		Expect(resp.ConfigAnalysis[0].Severity).ToNot(BeNil())
+		Expect(*resp.ConfigAnalysis[0].Severity).To(Equal("high"))
+	})
+
 	ginkgo.It("gets a single catalog item by id", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			Expect(r.Method).To(Equal(http.MethodGet))
@@ -63,6 +83,25 @@ var _ = ginkgo.Describe("catalog client", func() {
 		Expect(change.Details).To(HaveKeyWithValue("reason", "Failed"))
 		Expect(change.Config).ToNot(BeNil())
 		Expect(change.Config.Name).To(Equal("opensearch-fail"))
+	})
+
+	ginkgo.It("gets full catalog insight details from PostgREST", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			Expect(r.Method).To(Equal(http.MethodGet))
+			Expect(r.URL.Path).To(Equal("/db/config_analysis"))
+			Expect(r.URL.Query().Get("id")).To(Equal("eq.521bae33-e4c3-42eb-a9c5-071ab92940b5"))
+			Expect(r.URL.Query().Get("select")).To(Equal(catalogInsightDetailSelect))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"521bae33-e4c3-42eb-a9c5-071ab92940b5","config_id":"21e7586d-31fb-453c-a205-d73dc6b58eaa","analyzer":"no-public-ip","message":"instance has public ip","summary":"public ip","status":"open","severity":"high","analysis_type":"security","analysis":{"rule":"R1"},"config":{"id":"21e7586d-31fb-453c-a205-d73dc6b58eaa","name":"prod-instance","type":"AWS::EC2::Instance","config_class":"EC2"}}]`))
+		}))
+		defer server.Close()
+
+		insight, err := New(server.URL, "tok").GetCatalogInsight(context.Background(), "521bae33-e4c3-42eb-a9c5-071ab92940b5")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(insight.Analyzer).To(Equal("no-public-ip"))
+		Expect(insight.Analysis).To(HaveKeyWithValue("rule", "R1"))
+		Expect(insight.Config).ToNot(BeNil())
+		Expect(insight.Config.Name).To(Equal("prod-instance"))
 	})
 
 	ginkgo.It("returns not found for an empty catalog change response", func() {
