@@ -57,7 +57,8 @@ func remoteSearch(searchQuery, agent string, limit int) ([]models.ConfigItem, er
 	}
 
 	resp, err := client.SearchCatalog(context.Background(), query.SearchResourcesRequest{
-		Limit: limit,
+		Limit:  limit,
+		Fields: catalogSearchFields,
 		Configs: []types.ResourceSelector{{
 			Search: searchQuery,
 			Agent:  agent,

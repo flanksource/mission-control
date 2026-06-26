@@ -29,6 +29,8 @@ type catalogGetFlags struct {
 
 func (catalogGetFlags) ClickyActionFlags() {}
 
+var catalogSearchFields = []string{"id", "name", "type", "tags", "health", "status", "created_at", "inserted_at", "updated_at"}
+
 // joinTagSelectors flattens repeated --tag values into a comma-separated label
 // selector, stripping the stray brackets clicky's []string round-trip can add.
 func joinTagSelectors(tags []string) string {
@@ -69,6 +71,7 @@ func remoteList(opts catalogListOpts) ([]models.ConfigItem, error) {
 
 	resp, err := client.SearchCatalog(context.Background(), query.SearchResourcesRequest{
 		Limit:   limit,
+		Fields:  catalogSearchFields,
 		Configs: []types.ResourceSelector{selector},
 	})
 	if err != nil {
@@ -106,6 +109,13 @@ func selectedResourceToConfigItem(s query.SelectedResource) models.ConfigItem {
 	if len(s.Tags) > 0 {
 		ci.Tags = types.JSONStringMap(s.Tags)
 	}
+	if s.CreatedAt != nil {
+		ci.CreatedAt = *s.CreatedAt
+	}
+	if s.InsertedAt != nil {
+		ci.InsertedAt = *s.InsertedAt
+	}
+	ci.UpdatedAt = s.UpdatedAt
 	return ci
 }
 
