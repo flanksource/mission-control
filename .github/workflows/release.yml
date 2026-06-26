@@ -28,14 +28,14 @@ jobs:
           rm -rf /usr/local/share/boost
           rm -rf $AGENT_TOOLSDIRECTORY
           rm -rf /opt/hostedtoolcache
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Install Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
         with:
           go-version: v1.26.x
           cache: false
 
-      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
+      - uses: actions/cache@2c8a9bd7457de244a408f35966fab2fb45fda9c8 # v4
         with:
           path: |
             ~/go/pkg/mod
@@ -59,7 +59,7 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
       - name: Set version
         # Always use root git tags as semantic release can fail due to rate limit
@@ -68,16 +68,16 @@ jobs:
           echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags --match 'v[0-9]*' | sed -e 's/^v//')" >> $GITHUB_ENV
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+        uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
 
       - name: Login to Docker Hub
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v5
+        uses: aws-actions/configure-aws-credentials@e7f100cf4c008499ea8adda475de1042d6975c7b # v5
         with:
           aws-access-key-id: ${{ secrets.ECR_AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
@@ -85,7 +85,7 @@ jobs:
 
       - name: Login to Amazon ECR Public
         id: login-ecr-public
-        uses: aws-actions/amazon-ecr-login@fa648b43de3d4d023bcb3f89ed6940096949c419 # v2
+        uses: aws-actions/amazon-ecr-login@d539f0932e70871a027e9d5a9d8fc38589180a64 # v2
         with:
           registry-type: public
 
@@ -94,7 +94,7 @@ jobs:
       # provisioning) hits resolving nodejs/node releases; the Dockerfile reads
       # it via --mount=type=secret,id=GITHUB_TOKEN.
       - name: Build and push
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
         with:
           context: .
           push: true
@@ -115,23 +115,23 @@ jobs:
     runs-on: ubuntu-latest
     needs: [create-release, docker]
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - name: Set version
         # Always use root git tags as semantic release can fail due to rate limit
         run: |
           git fetch --prune --unshallow
           echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags --match 'v[0-9]*' | sed -e 's/^v//')" >> $GITHUB_ENV
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           repository: "${{ github.repository_owner }}/mission-control-chart"
           token: ${{ secrets.FLANKBOT }}
           path: ./incident-commander-chart
       - name: Update image tags in chart
-        uses: mikefarah/yq@cb9793555487aafb501e1a9d85c28b812aeadfab # master
+        uses: mikefarah/yq@e95bb7e472727cada92b9ffbeb992653a0aa4184 # master
         with:
           cmd: yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' incident-commander-chart/chart/values.yaml
       - name: Update image tags in agent chart
-        uses: mikefarah/yq@cb9793555487aafb501e1a9d85c28b812aeadfab # master
+        uses: mikefarah/yq@e95bb7e472727cada92b9ffbeb992653a0aa4184 # master
         with:
           cmd: yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' incident-commander-chart/agent-chart/values.yaml
       - name: Update CRDs
