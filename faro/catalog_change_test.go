@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"time"
 
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/incident-commander/sdk"
@@ -26,12 +27,13 @@ var _ = ginkgo.Describe("faro catalog change", func() {
 			var got query.SearchResourcesRequest
 			Expect(json.NewDecoder(r.Body).Decode(&got)).To(Succeed())
 			Expect(got.Limit).To(Equal(25))
+			Expect(got.Timestamps).To(BeTrue())
 			Expect(got.ConfigChanges).To(HaveLen(1))
 			Expect(got.ConfigChanges[0].Search).To(Equal("change_type=diff type=deployment"))
 			Expect(got.ConfigChanges[0].Agent).To(BeEmpty())
 
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"config_changes":[{"id":"0274d556-6257-426a-b651-0a9bc35c26d8","agent":"00000000-0000-0000-0000-000000000000","name":"status","namespace":"kube-system","type":"diff"}]}`))
+			_, _ = w.Write([]byte(`{"config_changes":[{"id":"0274d556-6257-426a-b651-0a9bc35c26d8","agent":"00000000-0000-0000-0000-000000000000","name":"status","namespace":"kube-system","type":"diff","created_at":"2026-06-24T16:41:38Z"}]}`))
 		}))
 		defer server.Close()
 		storeRemoteContext(server.URL)
@@ -42,6 +44,8 @@ var _ = ginkgo.Describe("faro catalog change", func() {
 		Expect(items).To(HaveLen(1))
 		Expect(items[0].ID).To(Equal("0274d556-6257-426a-b651-0a9bc35c26d8"))
 		Expect(items[0].ChangeType).To(Equal("diff"))
+		Expect(items[0].CreatedAt).ToNot(BeNil())
+		Expect(items[0].CreatedAt.UTC()).To(Equal(time.Date(2026, 6, 24, 16, 41, 38, 0, time.UTC)))
 	})
 
 	ginkgo.It("defaults change search empty limit to 100", func() {

@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/duty/query"
@@ -14,11 +15,12 @@ import (
 var changeSearchLimit int
 
 type catalogChangeSearchHit struct {
-	ID         string `json:"id"`
-	Agent      string `json:"agent,omitempty"`
-	Name       string `json:"name,omitempty"`
-	Namespace  string `json:"namespace,omitempty"`
-	ChangeType string `json:"change_type,omitempty"`
+	ID         string     `json:"id"`
+	Agent      string     `json:"agent,omitempty"`
+	Name       string     `json:"name,omitempty"`
+	Namespace  string     `json:"namespace,omitempty"`
+	ChangeType string     `json:"change_type,omitempty"`
+	CreatedAt  *time.Time `json:"created_at,omitempty"`
 }
 
 var CatalogChange = &cobra.Command{
@@ -72,7 +74,8 @@ func remoteSearchChanges(searchQuery string, limit int) ([]catalogChangeSearchHi
 	}
 
 	resp, err := client.SearchCatalog(context.Background(), query.SearchResourcesRequest{
-		Limit: limit,
+		Limit:      limit,
+		Timestamps: true,
 		ConfigChanges: []types.ResourceSelector{{
 			Search: searchQuery,
 		}},
@@ -89,6 +92,7 @@ func remoteSearchChanges(searchQuery string, limit int) ([]catalogChangeSearchHi
 			Name:       s.Name,
 			Namespace:  s.Namespace,
 			ChangeType: s.Type,
+			CreatedAt:  s.CreatedAt,
 		})
 	}
 	return out, nil
