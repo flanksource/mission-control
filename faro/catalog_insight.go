@@ -3,24 +3,30 @@ package main
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/flanksource/clicky"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/clientcmd"
-	"github.com/flanksource/incident-commander/sdk"
 	"github.com/spf13/cobra"
 )
 
-var insightSearchLimit int
+var (
+	insightSearchAgent string
+	insightSearchLimit int
+)
 
 type catalogInsightSearchHit struct {
-	ID          string  `json:"id"`
-	Agent       string  `json:"agent,omitempty"`
-	Name        string  `json:"name,omitempty"`
-	Namespace   string  `json:"namespace,omitempty"`
-	InsightType string  `json:"insight_type,omitempty"`
-	Status      string  `json:"status,omitempty"`
-	Severity    *string `json:"severity,omitempty"`
+	ID          string     `json:"id"`
+	Agent       string     `json:"agent,omitempty"`
+	Name        string     `json:"name,omitempty"`
+	Namespace   string     `json:"namespace,omitempty"`
+	InsightType string     `json:"insight_type,omitempty"`
+	Status      string     `json:"status,omitempty"`
+	Severity    *string    `json:"severity,omitempty"`
+	CreatedAt   *time.Time `json:"created_at,omitempty"`
+	UpdatedAt   *time.Time `json:"updated_at,omitempty"`
 }
 
 var CatalogInsight = &cobra.Command{
@@ -40,7 +46,7 @@ Examples:
   catalog insights search "analyzer=no-public-ip source=aws" --limit 50`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		results, err := remoteSearchInsights(strings.Join(args, " "), insightSearchLimit)
+		results, err := remoteSearchInsights(strings.Join(args, " "), insightSearchAgent, insightSearchLimit)
 		if err != nil {
 			return err
 		}
@@ -63,7 +69,7 @@ var CatalogInsightGet = &cobra.Command{
 	},
 }
 
-func remoteSearchInsights(searchQuery string, limit int) ([]catalogInsightSearchHit, error) {
+func remoteSearchInsights(searchQuery, agent string, limit int) ([]catalogInsightSearchHit, error) {
 	client, err := clientcmd.RemoteClient()
 	if err != nil {
 		return nil, err
@@ -73,10 +79,12 @@ func remoteSearchInsights(searchQuery string, limit int) ([]catalogInsightSearch
 		limit = 100
 	}
 
-	resp, err := client.SearchCatalogInsights(context.Background(), sdk.CatalogInsightSearchRequest{
-		Limit: limit,
+	resp, err := client.SearchCatalog(context.Background(), query.SearchResourcesRequest{
+		Limit:      limit,
+		Timestamps: true,
 		ConfigAnalysis: []types.ResourceSelector{{
 			Search: searchQuery,
+			Agent:  agent,
 		}},
 	})
 	if err != nil {
@@ -93,6 +101,8 @@ func remoteSearchInsights(searchQuery string, limit int) ([]catalogInsightSearch
 			InsightType: s.Type,
 			Status:      s.Status,
 			Severity:    s.Severity,
+			CreatedAt:   s.CreatedAt,
+			UpdatedAt:   s.UpdatedAt,
 		})
 	}
 	return out, nil
@@ -107,6 +117,7 @@ func remoteGetInsight(id string) (any, error) {
 }
 
 func init() {
+	CatalogInsightSearch.Flags().StringVar(&insightSearchAgent, "agent", "all", "Filter by agent id or name ('all' for every agent)")
 	CatalogInsightSearch.Flags().IntVar(&insightSearchLimit, "limit", 100, "Maximum number of results")
 	CatalogInsight.AddCommand(CatalogInsightSearch, CatalogInsightGet)
 	clicky.RegisterSubCommand("catalog", CatalogInsight)

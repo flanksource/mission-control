@@ -28,28 +28,6 @@ type CatalogChangeConfig struct {
 	ConfigClass string `json:"config_class"`
 }
 
-type CatalogSearchResource struct {
-	ID        string            `json:"id"`
-	Agent     string            `json:"agent"`
-	Icon      string            `json:"icon,omitempty"`
-	Name      string            `json:"name"`
-	Namespace string            `json:"namespace"`
-	Type      string            `json:"type"`
-	Tags      map[string]string `json:"tags,omitempty"`
-	Health    string            `json:"health,omitempty"`
-	Status    string            `json:"status,omitempty"`
-	Severity  *string           `json:"severity,omitempty"`
-}
-
-type CatalogInsightSearchRequest struct {
-	Limit          int                      `json:"limit"`
-	ConfigAnalysis []types.ResourceSelector `json:"config_analysis"`
-}
-
-type CatalogInsightSearchResponse struct {
-	ConfigAnalysis []CatalogSearchResource `json:"config_analysis,omitempty"`
-}
-
 type CatalogChangeDetail struct {
 	ID                string               `json:"id"`
 	ConfigID          string               `json:"config_id"`
@@ -102,26 +80,6 @@ func (c *Client) SearchCatalog(ctx context.Context, req query.SearchResourcesReq
 		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
 	}
 	var out query.SearchResourcesResponse
-	if err := decodeJSON(r, &out); err != nil {
-		return nil, err
-	}
-	return &out, nil
-}
-
-// SearchCatalogInsights runs a config insight search against POST /resources/search.
-func (c *Client) SearchCatalogInsights(ctx context.Context, req CatalogInsightSearchRequest) (*CatalogInsightSearchResponse, error) {
-	r, err := c.R(ctx).Post(c.apiPath("/resources/search"), req)
-	if err != nil {
-		return nil, err
-	}
-	if !r.IsOK() {
-		body, _ := r.AsString()
-		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
-			return nil, ErrHTMLResponse
-		}
-		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
-	}
-	var out CatalogInsightSearchResponse
 	if err := decodeJSON(r, &out); err != nil {
 		return nil, err
 	}

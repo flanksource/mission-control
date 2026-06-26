@@ -31,26 +31,6 @@ var _ = ginkgo.Describe("catalog client", func() {
 		Expect(resp.Configs[0].Name).To(Equal("api"))
 	})
 
-	ginkgo.It("posts an insight search request and decodes config_analysis", func() {
-		var gotBody CatalogInsightSearchRequest
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			Expect(r.Method).To(Equal(http.MethodPost))
-			Expect(r.URL.Path).To(Equal("/resources/search"))
-			Expect(json.NewDecoder(r.Body).Decode(&gotBody)).To(Succeed())
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"config_analysis":[{"id":"i1","name":"no-public-ip","type":"security","status":"open","severity":"high"}]}`))
-		}))
-		defer server.Close()
-
-		resp, err := New(server.URL, "tok").SearchCatalogInsights(context.Background(), CatalogInsightSearchRequest{Limit: 5})
-		Expect(err).ToNot(HaveOccurred())
-		Expect(gotBody.Limit).To(Equal(5))
-		Expect(resp.ConfigAnalysis).To(HaveLen(1))
-		Expect(resp.ConfigAnalysis[0].Name).To(Equal("no-public-ip"))
-		Expect(resp.ConfigAnalysis[0].Severity).ToNot(BeNil())
-		Expect(*resp.ConfigAnalysis[0].Severity).To(Equal("high"))
-	})
-
 	ginkgo.It("gets a single catalog item by id", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			Expect(r.Method).To(Equal(http.MethodGet))
