@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
@@ -27,6 +28,7 @@ import (
 
 const (
 	clerkSessionCookie = "__session"
+	clerkUserCacheTTL  = 5 * time.Minute
 )
 
 var (
@@ -151,21 +153,35 @@ func (h *ClerkHandler) getUserFromSessionToken(ctx context.Context, sessionToken
 	if err != nil {
 		return AuthResult{}, err
 	}
-	sessionID := fmt.Sprint(claims["sid"])
 
-	if user, exists := h.userCache.Get(sessionID); exists {
+	return h.getUserFromSessionClaims(ctx, claims)
+}
+
+func (h *ClerkHandler) getUserFromSessionClaims(ctx context.Context, claims jwt.MapClaims) (AuthResult, error) {
+	orgID := clerkOrgID(claims)
+	if orgID == "" {
+		return AuthResult{}, dutyAPI.Errorf(dutyAPI.EINVALID, "missing Clerk organization id")
+	}
+	if orgID != h.orgID {
+		return AuthResult{}, dutyAPI.Errorf(dutyAPI.EINVALID, "organization id does not match")
+	}
+
+	externalID := clerkUserID(claims)
+	if externalID == "" {
+		return AuthResult{}, dutyAPI.Errorf(dutyAPI.EINVALID, "missing Clerk user id")
+	}
+
+	sessionID := clerkClaimString(claims, "sid")
+	cacheKey := clerkUserCacheKey(orgID, externalID)
+	if user, exists := h.userCache.Get(cacheKey); exists {
 		return AuthResult{User: user.(*models.Person), SessionID: sessionID}, nil
 	}
 
-	if fmt.Sprint(claims["org_id"]) != h.orgID {
-		return AuthResult{}, fmt.Errorf("organization id does not match")
-	}
-
 	user := models.Person{
-		Name:       fmt.Sprint(claims["name"]),
-		Email:      fmt.Sprint(claims["email"]),
-		Avatar:     fmt.Sprint(claims["image_url"]),
-		ExternalID: fmt.Sprint(claims["user_id"]),
+		Name:       clerkClaimString(claims, "name"),
+		Email:      clerkClaimString(claims, "email"),
+		Avatar:     clerkClaimString(claims, "image_url"),
+		ExternalID: externalID,
 	}
 	dbUser, err := h.createDBUserIfNotExists(ctx, user)
 	if err != nil {
@@ -174,12 +190,89 @@ func (h *ClerkHandler) getUserFromSessionToken(ctx context.Context, sessionToken
 
 	// If session expires, and clerk role is different from our rbac
 	// we update the rbac
-	if err := h.updateRole(dbUser.ID.String(), fmt.Sprint(claims["role"])); err != nil {
-		return AuthResult{}, err
+	if err := h.updateRole(dbUser.ID.String(), clerkRole(claims)); err != nil {
+		return AuthResult{}, ctx.Oops().Wrapf(err, "update Clerk role for user %s", dbUser.ID.String())
 	}
 
-	h.userCache.SetDefault(sessionID, &dbUser)
+	h.userCache.Set(cacheKey, &dbUser, clerkUserCacheTTL)
 	return AuthResult{User: &dbUser, SessionID: sessionID}, nil
+}
+
+func clerkClaimString(claims jwt.MapClaims, key string) string {
+	raw, ok := claims[key]
+	if !ok || raw == nil {
+		return ""
+	}
+
+	value, ok := raw.(string)
+	if !ok {
+		return ""
+	}
+	return value
+}
+
+func clerkClaimMap(claims jwt.MapClaims, key string) map[string]any {
+	raw, ok := claims[key]
+	if !ok || raw == nil {
+		return nil
+	}
+
+	switch value := raw.(type) {
+	case map[string]any:
+		return value
+	case jwt.MapClaims:
+		return map[string]any(value)
+	default:
+		return nil
+	}
+}
+
+func clerkMapString(claims map[string]any, key string) string {
+	raw, ok := claims[key]
+	if !ok || raw == nil {
+		return ""
+	}
+
+	value, ok := raw.(string)
+	if !ok {
+		return ""
+	}
+	return value
+}
+
+func clerkOrgID(claims jwt.MapClaims) string {
+	if orgID := clerkClaimString(claims, "org_id"); orgID != "" {
+		return orgID
+	}
+
+	if org := clerkClaimMap(claims, "o"); org != nil {
+		return clerkMapString(org, "id")
+	}
+	return ""
+}
+
+func clerkUserID(claims jwt.MapClaims) string {
+	if userID := clerkClaimString(claims, "user_id"); userID != "" {
+		return userID
+	}
+	return clerkClaimString(claims, "sub")
+}
+
+func clerkRole(claims jwt.MapClaims) string {
+	if role := clerkClaimString(claims, "role"); role != "" {
+		return role
+	}
+	if role := clerkClaimString(claims, "org_role"); role != "" {
+		return role
+	}
+	if org := clerkClaimMap(claims, "o"); org != nil {
+		return clerkMapString(org, "rol")
+	}
+	return ""
+}
+
+func clerkUserCacheKey(orgID, externalID string) string {
+	return fmt.Sprintf("clerk:%s:%s", orgID, externalID)
 }
 
 func (h *ClerkHandler) createDBUserIfNotExists(ctx context.Context, user models.Person) (models.Person, error) {
@@ -358,13 +451,17 @@ func (c *ClerkCredentialChecker) LoginRedirectURL(authRequestID string) (string,
 	return loginURL.String(), nil
 }
 
+func (c *ClerkCredentialChecker) callbackSessionToken(ec echo.Context) string {
+	if sessionToken := ec.Request().PostFormValue("clerk_session_token"); sessionToken != "" {
+		return sessionToken
+	}
+	return c.handler.extractSessionToken(ec)
+}
+
 func (c *ClerkCredentialChecker) CallbackSubject(ec echo.Context) (string, error) {
 	ctx := ec.Request().Context().(context.Context)
 
-	sessionToken := c.handler.extractSessionToken(ec)
-	if sessionToken == "" {
-		sessionToken = ec.FormValue("clerk_session_token")
-	}
+	sessionToken := c.callbackSessionToken(ec)
 	if sessionToken == "" {
 		return "", fmt.Errorf("no Clerk session token found")
 	}
