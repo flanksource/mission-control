@@ -19,6 +19,7 @@ type catalogListOpts struct {
 	Type      string   `flag:"type" help:"Filter by type (comma-separated, supports ! negation)"`
 	Namespace string   `flag:"namespace" help:"Filter by namespace"`
 	Tag       []string `flag:"tag" help:"Filter by tag as a label selector (repeatable: --tag cluster=foo)"`
+	Agent     string   `flag:"agent" help:"Filter by agent id or name ('all' for every agent)" default:"all"`
 	Limit     int      `flag:"limit" help:"Maximum number of results" default:"100"`
 }
 
@@ -54,8 +55,14 @@ func remoteList(opts catalogListOpts) ([]models.ConfigItem, error) {
 		return nil, err
 	}
 
+	agent := opts.Agent
+	if agent == "" {
+		agent = "all"
+	}
+
 	selector := types.ResourceSelector{
 		Search:      opts.Query,
+		Agent:       agent,
 		Namespace:   opts.Namespace,
 		TagSelector: joinTagSelectors(opts.Tag),
 	}
