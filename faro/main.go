@@ -116,6 +116,7 @@ func main() {
 	// (see catalog.go) into `catalog list` / `catalog get` commands.
 	clicky.GenerateCLI(root)
 	if c, _, err := root.Find([]string{"catalog"}); err == nil && c != nil {
+		documentCatalogCommand(c)
 		clicky.BindAllFlags(c.PersistentFlags(), "format")
 	}
 	clientcmd.FinalizeCommandGroups(root)

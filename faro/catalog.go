@@ -15,7 +15,7 @@ import (
 
 // catalogListOpts binds the `catalog list` filter flags via clicky's `flag:` tags.
 type catalogListOpts struct {
-	Query     string   `flag:"query" help:"Free-form search (name/tag/labels)"`
+	Query     string   `flag:"query" help:"Free-form text or catalog query expression"`
 	Type      string   `flag:"type" help:"Filter by type (comma-separated, supports ! negation)"`
 	Namespace string   `flag:"namespace" help:"Filter by namespace"`
 	Tag       []string `flag:"tag" help:"Filter by tag as a label selector (repeatable: --tag cluster=foo)"`
@@ -25,7 +25,7 @@ type catalogListOpts struct {
 
 // catalogGetFlags binds the `catalog get` flags.
 type catalogGetFlags struct {
-	Relationships bool `flag:"relationships" help:"Show the config relationship tree instead of the item"`
+	Relationships bool `flag:"relationships" help:"Return the config relationship tree instead of the item"`
 }
 
 func (catalogGetFlags) ClickyActionFlags() {}
