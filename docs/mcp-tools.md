@@ -16,7 +16,7 @@
 | `Unhealthy catalog items` | Searches for all unhealthy items using `search_catalog` with query `health!=healthy` |
 | `troubleshoot_kubernetes_resource` | Troubleshoots Kubernetes resources. Accepts optional `query` argument (default: `health!=healthy type=Kubernetes::*`) |
 
-## Tools (21 static + dynamic)
+## Tools (22 static + dynamic)
 
 | Tool | Hints | Description |
 |------|-------|-------------|
@@ -41,6 +41,7 @@
 | [`search_catalog_access_reviews`](#search_catalog_access_reviews) | read-only | Search historical access review and certification events to verify when user permissions were last audited or validated. |
 | [`search_catalog_changes`](#search_catalog_changes) | read-only | Search and find configuration change events across catalog items. |
 | [`search_health_checks`](#search_health_checks) | read-only | Search and find health checks returning JSON array with check metadata |
+| [`whoami`](#whoami) | read-only | Return the currently authenticated MCP subject, delegated owner, roles, and permissions. |
 | `{playbook}_{namespace}_{category}` | mutating | Dynamic per-session playbook tools. Parameters derived from playbook spec. |
 | `view_{name}_{namespace}` | read-only | Dynamic view tools synced hourly. Returns table rows by default with select/page/limit controls. |
 
@@ -360,4 +361,12 @@ Search and find health checks returning JSON array with check metadata
 |------|------|----------|-------------|
 | `limit` | number |  | Number of items to return |
 | `query` | string | Yes | Search query. |
+
+### `whoami`
+
+Return the currently authenticated MCP subject, delegated owner, roles, and permissions.
+
+**Hints:** read-only
+
+**Parameters:** none
 
