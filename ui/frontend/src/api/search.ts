@@ -31,22 +31,34 @@ export async function globalSearch(query: string): Promise<GlobalSearchResult[]>
   ];
 }
 
+// The /resources/search endpoint runs the query through the PEG grammar
+// defined in duty/query/grammar, so grammar syntax like
+// `type=pod prometheus` or `tag.cluster=beta-cluster` is parsed correctly
+// (type prefix expansion, JSON-path tag/label lookups, AND-joined
+// free-text terms, etc.). Hitting /db/config_detail with an ilike pattern
+// would treat the entire string as a single literal substring and miss
+// every grammar query.
 async function searchConfigs(query: string): Promise<ConfigItem[]> {
-  const params = new URLSearchParams({
-    select: "id,name,type,config_class,status,health,path,updated_at",
-    order: "updated_at.desc.nullslast,name.asc",
-    limit: String(searchLimit),
+  const response = await fetch("/resources/search", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      limit: searchLimit,
+      configs: [{ search: query, agent: "all" }],
+    }),
   });
-  const or = orFilter([
-    `name.ilike.${ilike(query)}`,
-    `type.ilike.${ilike(query)}`,
-    `path.ilike.${ilike(query)}`,
-    exactUUIDFilter(query),
-  ]);
-  if (or) params.set("or", or);
 
-  const result = await fetchPostgrest<ConfigItem[]>(`/db/config_detail?${params.toString()}`);
-  return result.data ?? [];
+  if (!response.ok) {
+    throw new Error(
+      `POST /resources/search failed with ${response.status}: ${await response.text()}`,
+    );
+  }
+
+  const data = (await response.json()) as { configs?: SelectedResource[] };
+  return (data.configs ?? []).map(selectedResourceToConfigItem);
 }
 
 async function searchExternalUsers(query: string): Promise<ExternalUser[]> {
@@ -84,6 +96,31 @@ async function searchExternalGroups(query: string): Promise<ExternalGroup[]> {
 
   const result = await fetchPostgrest<ExternalGroup[]>(`/db/external_groups?${params.toString()}`);
   return result.data ?? [];
+}
+
+type SelectedResource = {
+  id: string;
+  agent?: string;
+  icon?: string;
+  name: string;
+  namespace?: string;
+  type?: string;
+  tags?: Record<string, string>;
+  health?: string;
+  status?: string;
+};
+
+function selectedResourceToConfigItem(resource: SelectedResource): ConfigItem {
+  return {
+    id: resource.id,
+    name: resource.name || resource.id,
+    type: resource.type,
+    config_class: resource.icon,
+    status: resource.status ?? null,
+    health: resource.health as ConfigItem["health"],
+    tags: resource.tags ?? null,
+    agent_id: resource.agent,
+  };
 }
 
 function configToResult(config: ConfigItem): GlobalSearchResult {
