@@ -1,5 +1,10 @@
 version: "3"
 
+includes:
+  local:
+    taskfile: ./Taskfile.local.yml
+    optional: true
+
 # Incremental build pipeline for incident-commander. Each stage tracks its
 # own sources + generates, so `task build` re-runs only the stages whose
 # inputs changed since the last successful run. Checksums live in .task/.
