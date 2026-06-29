@@ -815,52 +815,79 @@ export function CommandPalette({
       open={open}
       onClose={() => onOpenChange(false)}
       hideClose
-      size="lg"
-      className="max-h-[82vh] overflow-hidden"
+      size="full"
+      className="max-h-[82vh] max-w-3xl overflow-hidden"
       headerSlot={
-        <div className="flex min-w-0 flex-1 items-center gap-2">
-          <Icon
-            name="lucide:search"
-            className="shrink-0 text-muted-foreground"
-          />
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(event) => handleQueryChange(event.target.value)}
-            onKeyDown={handleInputKeyDown}
-            placeholder="Search resources..."
-            className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-          />
-          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-            esc
-          </kbd>
+        <div className="flex w-full flex-col gap-0">
+          <div className="flex min-w-0 items-center gap-2 px-4 py-3">
+            <Icon
+              name="lucide:search"
+              className="shrink-0 text-muted-foreground"
+            />
+            <input
+              ref={inputRef}
+              value={query}
+              onChange={(event) => handleQueryChange(event.target.value)}
+              onKeyDown={handleInputKeyDown}
+              placeholder="Search resources..."
+              className="h-9 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
+            <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              esc
+            </kbd>
+          </div>
+          <div className="flex flex-wrap items-center gap-3 border-t border-border px-4 py-2">
+            {SEARCH_TYPE_OPTIONS.map((option) => (
+              <label
+                key={option.key}
+                className="inline-flex cursor-pointer items-center gap-2 text-xs text-muted-foreground"
+              >
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 cursor-pointer accent-primary"
+                  checked={enabledSearchTypes[option.key]}
+                  onChange={(event) =>
+                    setEnabledSearchTypes((previous) => ({
+                      ...previous,
+                      [option.key]: event.target.checked,
+                    }))
+                  }
+                />
+                <span>{option.label}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      }
+      footer={
+        <div className="flex items-center gap-4 text-[10px] text-muted-foreground">
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono">
+              esc
+            </kbd>
+            <span>to close</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono">
+              ↑↓
+            </kbd>
+            <span>to navigate</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono">
+              ↵
+            </kbd>
+            <span>to open</span>
+          </span>
+          <span className="flex items-center gap-1">
+            <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono">
+              {getShortcutHint()}
+            </kbd>
+            <span>to open search</span>
+          </span>
         </div>
       }
     >
-      <div className="border-b border-border bg-muted/30">
-        <div className="flex flex-wrap items-center gap-3 px-4 py-2">
-          {SEARCH_TYPE_OPTIONS.map((option) => (
-            <label
-              key={option.key}
-              className="inline-flex cursor-pointer items-center gap-2 text-xs text-muted-foreground"
-            >
-              <input
-                type="checkbox"
-                className="h-3.5 w-3.5 cursor-pointer accent-primary"
-                checked={enabledSearchTypes[option.key]}
-                onChange={(event) =>
-                  setEnabledSearchTypes((previous) => ({
-                    ...previous,
-                    [option.key]: event.target.checked,
-                  }))
-                }
-              />
-              <span>{option.label}</span>
-            </label>
-          ))}
-        </div>
-      </div>
-
       <div className="min-h-[18rem]">
         {showRecents ? (
           <RecentList items={recentItems} onChoose={chooseRecent} />
@@ -899,33 +926,6 @@ export function CommandPalette({
             agentNamesMap={agentNamesMap}
           />
         )}
-      </div>
-
-      <div className="flex items-center gap-4 border-t border-border px-4 py-2 text-[10px] text-muted-foreground">
-        <span className="flex items-center gap-1">
-          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono">
-            esc
-          </kbd>
-          <span>to close</span>
-        </span>
-        <span className="flex items-center gap-1">
-          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono">
-            ↑↓
-          </kbd>
-          <span>to navigate</span>
-        </span>
-        <span className="flex items-center gap-1">
-          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono">
-            ↵
-          </kbd>
-          <span>to open</span>
-        </span>
-        <span className="flex items-center gap-1">
-          <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono">
-            {getShortcutHint()}
-          </kbd>
-          <span>to open search</span>
-        </span>
       </div>
     </Modal>
   );
@@ -966,7 +966,7 @@ function ResultList({
   if (results.length === 0) return null;
 
   return (
-    <div className="space-y-3 p-2">
+    <div className="space-y-3">
       {results.map((result, index) => {
         const searchTypeLabel = getSearchTypeLabel(result.resourceType);
         const showAgentBadge =
@@ -1061,7 +1061,7 @@ function SuggestionView({
   onSelectSuggestion: (q: string) => void;
 }) {
   return (
-    <div className="space-y-3 p-2">
+    <div className="space-y-3">
       {searchHistory.length > 0 ? (
         <div>
           <div className="mb-1 flex items-center gap-2 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -1136,7 +1136,7 @@ function RecentList({
   onChoose: (item: RecentItem) => void;
 }) {
   return (
-    <div className="space-y-3 p-2">
+    <div className="space-y-3">
       <div>
         <div className="mb-1 flex items-center gap-2 px-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
           <Icon name="lucide:clock" />
