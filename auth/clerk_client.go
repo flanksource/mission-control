@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -42,6 +43,33 @@ type ClerkHandler struct {
 	tokenCache       *cache.Cache
 	accessTokenCache *cache.Cache
 	userCache        *cache.Cache
+	jwks             *jwksCache
+}
+
+// jwksCache lazily fetches and caches the Clerk JWKS keyfunc. The underlying
+// keyfunc.Get performs a network fetch and spawns a background-refresh goroutine,
+// so it must be built once and shared rather than rebuilt per request. The cache
+// is held behind a pointer so copies of ClerkHandler (value receivers) share the
+// same instance and lock. A failed fetch is not cached, so the next request retries.
+type jwksCache struct {
+	url string
+	mu  sync.Mutex
+	fn  jwt.Keyfunc
+}
+
+func (c *jwksCache) keyfunc() (jwt.Keyfunc, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.fn == nil {
+		fn, err := newClerkKeyfunc(c.url)
+		if err != nil {
+			return nil, err
+		}
+		c.fn = fn
+	}
+
+	return c.fn, nil
 }
 
 func NewClerkHandler() (*ClerkHandler, error) {
@@ -58,19 +86,25 @@ func NewClerkHandler() (*ClerkHandler, error) {
 		tokenCache:       cache.New(3*24*time.Hour, 12*time.Hour),
 		accessTokenCache: cache.New(3*24*time.Hour, 12*time.Hour),
 		userCache:        cache.New(3*24*time.Hour, 12*time.Hour),
+		jwks:             &jwksCache{url: ClerkJwksUrl},
 	}, nil
 }
 
 func (h ClerkHandler) parseJWTToken(token string) (jwt.MapClaims, error) {
+	keyfunc, err := h.jwks.keyfunc()
+	if err != nil {
+		return nil, err
+	}
+
 	claims := jwt.MapClaims{}
-	jt, err := jwt.ParseWithClaims(token, claims, getJWTKeyFunc(h.jwksURL))
+	jt, err := jwt.ParseWithClaims(token, claims, keyfunc)
 	if err != nil {
 		return claims, err
 	}
 	if !jt.Valid {
 		return claims, fmt.Errorf("jwt token not valid")
 	}
-	return claims, err
+	return claims, nil
 }
 
 type AuthResult struct {

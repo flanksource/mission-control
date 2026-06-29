@@ -110,7 +110,11 @@ func newPostgRESTJWT(config api.PostgrestConfig, claims jwt.MapClaims) (string, 
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(config.JWTSecret))
 }
 
-func getJWTKeyFunc(jwksURL string) jwt.Keyfunc {
+// newClerkKeyfunc fetches the JWKS from the given URL and returns a jwt.Keyfunc
+// backed by it. keyfunc.Get performs a synchronous network fetch and spawns a
+// background-refresh goroutine, so the result must be created once and reused
+// rather than rebuilt per request.
+func newClerkKeyfunc(jwksURL string) (jwt.Keyfunc, error) {
 	// Create the keyfunc options. Use an error handler that logs. Refresh the JWKS when a JWT signed by an unknown KID
 	// is found or at the specified interval. Rate limit these refreshes. Timeout the initial JWKS refresh request after
 	// 10 seconds. This timeout is also used to create the initial context.Context for keyfunc.Get.
@@ -127,10 +131,9 @@ func getJWTKeyFunc(jwksURL string) jwt.Keyfunc {
 	// Create the JWKS from the resource at the given URL.
 	jwks, err := keyfunc.Get(jwksURL, options)
 	if err != nil {
-		logger.Fatalf("Failed to create JWKS from resource at the given URL.\nError: %s", err.Error())
-		// TODO Handle
+		return nil, fmt.Errorf("failed to fetch JWKS from %q: %w", jwksURL, err)
 	}
-	return jwks.Keyfunc
+	return jwks.Keyfunc, nil
 }
 
 func getAccessToken(ctx context.Context, token string) (*models.AccessToken, error) {
