@@ -58,6 +58,7 @@ report/*.pdf
 .playwright-mcp/
 out.*
 .task/
+Taskfile.local.yml
 dist/
 node_modules/
 plugin-smoke
