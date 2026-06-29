@@ -91,6 +91,32 @@ export async function getConfigsByIDs(ids: string[]): Promise<ConfigItem[]> {
   return result.data ?? [];
 }
 
+export type ConfigChangeConfigMapping = {
+  id: string;
+  config_id?: string | null;
+};
+
+// getConfigChangeConfigMappings looks up the parent config for each config
+// change id. The /resources/search response can omit `config_id` on
+// individual changes, so the global search palette re-queries the table to
+// group changes under their owning config.
+export async function getConfigChangeConfigMappings(
+  changeIds: string[],
+): Promise<ConfigChangeConfigMapping[]> {
+  const ids = Array.from(
+    new Set(changeIds.map((id) => id.trim()).filter(Boolean)),
+  );
+
+  if (ids.length === 0) {
+    return [];
+  }
+
+  const result = await fetchPostgrest<ConfigChangeConfigMapping[]>(
+    `/db/config_changes?id=in.(${ids.map(encodeURIComponent).join(",")})&select=id,config_id`,
+  );
+  return result.data ?? [];
+}
+
 export async function searchConfigItems(query: string, type?: string, limit = 12): Promise<ConfigItem[]> {
   const params = new URLSearchParams({
     select: "id,name,type,config_class,status,health,path,external_id,updated_at,deleted_at",
