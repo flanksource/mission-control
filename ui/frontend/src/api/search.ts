@@ -1,54 +1,74 @@
-import { fetchPostgrest } from "./http";
-import type { ConfigItem, ExternalGroup, ExternalUser } from "./types";
+export type SearchResourceType =
+  | "configs"
+  | "canaries"
+  | "checks"
+  | "config_changes"
+  | "playbooks"
+  | "connections";
 
-export type GlobalSearchKind = "config" | "external_user" | "external_group";
-
-export type GlobalSearchResult = {
+export type SearchedResource = {
   id: string;
-  kind: GlobalSearchKind;
-  title: string;
-  subtitle?: string;
-  meta?: string;
-  href: string;
+  name: string;
+  type: string;
+  namespace: string;
+  agent: string;
+  labels: Record<string, string>;
+  icon?: string;
+  tags?: Record<string, string>;
+  summary?: string;
+  change_type?: string;
+  config_id?: string;
 };
 
-const searchLimit = 8;
+export type SearchResourcesRequest = {
+  limit?: number;
+  checks?: SearchSelector[];
+  canaries?: SearchSelector[];
+  configs?: SearchSelector[];
+  config_changes?: SearchSelector[];
+  playbooks?: SearchSelector[];
+  connections?: SearchSelector[];
+};
 
-export async function globalSearch(query: string): Promise<GlobalSearchResult[]> {
-  const q = query.trim();
-  if (q.length < 2) return [];
+// `search` is the raw user-typed string — the server runs it through the
+// PEG grammar in duty/query/grammar, so syntax like
+// `type=pod prometheus` or `tag.cluster=beta-cluster` is parsed
+// correctly. `agent: "all"` disables the implicit local-agent filter.
+export type SearchSelector = {
+  search?: string;
+  agent?: string;
+  tagSelector?: string;
+  labelSelector?: string;
+  fieldSelector?: string;
+  id?: string;
+  name?: string;
+  namespace?: string;
+  types?: string[];
+  statuses?: string[];
+  health?: string;
+};
 
-  const [configs, users, groups] = await Promise.all([
-    searchConfigs(q),
-    searchExternalUsers(q),
-    searchExternalGroups(q),
-  ]);
+export type SelectedResources = {
+  configs: SearchedResource[];
+  checks: SearchedResource[];
+  canaries: SearchedResource[];
+  config_changes: SearchedResource[];
+  playbooks: SearchedResource[];
+  connections: SearchedResource[];
+};
 
-  return [
-    ...configs.map(configToResult),
-    ...users.map(userToResult),
-    ...groups.map(groupToResult),
-  ];
-}
+const DEFAULT_LIMIT = 25;
 
-// The /resources/search endpoint runs the query through the PEG grammar
-// defined in duty/query/grammar, so grammar syntax like
-// `type=pod prometheus` or `tag.cluster=beta-cluster` is parsed correctly
-// (type prefix expansion, JSON-path tag/label lookups, AND-joined
-// free-text terms, etc.). Hitting /db/config_detail with an ilike pattern
-// would treat the entire string as a single literal substring and miss
-// every grammar query.
-async function searchConfigs(query: string): Promise<ConfigItem[]> {
+export async function searchResources(
+  input: SearchResourcesRequest,
+): Promise<SelectedResources | null> {
   const response = await fetch("/resources/search", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify({
-      limit: searchLimit,
-      configs: [{ search: query, agent: "all" }],
-    }),
+    body: JSON.stringify(input),
   });
 
   if (!response.ok) {
@@ -57,122 +77,18 @@ async function searchConfigs(query: string): Promise<ConfigItem[]> {
     );
   }
 
-  const data = (await response.json()) as { configs?: SelectedResource[] };
-  return (data.configs ?? []).map(selectedResourceToConfigItem);
+  return (await response.json()) as SelectedResources | null;
 }
 
-async function searchExternalUsers(query: string): Promise<ExternalUser[]> {
-  const params = new URLSearchParams({
-    select: "id,name,email,user_type,account_id,aliases,created_at,updated_at",
-    deleted_at: "is.null",
-    order: "name.asc",
-    limit: String(searchLimit),
-  });
-  const or = orFilter([
-    `name.ilike.${ilike(query)}`,
-    `email.ilike.${ilike(query)}`,
-    `user_type.ilike.${ilike(query)}`,
-    exactUUIDFilter(query),
-  ]);
-  if (or) params.set("or", or);
-
-  const result = await fetchPostgrest<ExternalUser[]>(`/db/external_users?${params.toString()}`);
-  return result.data ?? [];
-}
-
-async function searchExternalGroups(query: string): Promise<ExternalGroup[]> {
-  const params = new URLSearchParams({
-    select: "id,name,group_type,account_id,aliases,created_at,updated_at",
-    deleted_at: "is.null",
-    order: "name.asc",
-    limit: String(searchLimit),
-  });
-  const or = orFilter([
-    `name.ilike.${ilike(query)}`,
-    `group_type.ilike.${ilike(query)}`,
-    exactUUIDFilter(query),
-  ]);
-  if (or) params.set("or", or);
-
-  const result = await fetchPostgrest<ExternalGroup[]>(`/db/external_groups?${params.toString()}`);
-  return result.data ?? [];
-}
-
-type SelectedResource = {
-  id: string;
-  agent?: string;
-  icon?: string;
-  name: string;
-  namespace?: string;
-  type?: string;
-  tags?: Record<string, string>;
-  health?: string;
-  status?: string;
-};
-
-function selectedResourceToConfigItem(resource: SelectedResource): ConfigItem {
+export function emptySelectedResources(): SelectedResources {
   return {
-    id: resource.id,
-    name: resource.name || resource.id,
-    type: resource.type,
-    config_class: resource.icon,
-    status: resource.status ?? null,
-    health: resource.health as ConfigItem["health"],
-    tags: resource.tags ?? null,
-    agent_id: resource.agent,
+    configs: [],
+    checks: [],
+    canaries: [],
+    config_changes: [],
+    playbooks: [],
+    connections: [],
   };
 }
 
-function configToResult(config: ConfigItem): GlobalSearchResult {
-  return {
-    id: `config:${config.id}`,
-    kind: "config",
-    title: config.name || config.id,
-    subtitle: config.type,
-    meta: config.status || config.health || config.config_class || undefined,
-    href: `/ui/item/${encodeURIComponent(config.id)}`,
-  };
-}
-
-function userToResult(user: ExternalUser): GlobalSearchResult {
-  return {
-    id: `external_user:${user.id}`,
-    kind: "external_user",
-    title: user.name || user.email || user.id,
-    subtitle: user.email || user.user_type || undefined,
-    meta: user.account_id || user.user_type || undefined,
-    href: `/ui/access/users/${encodeURIComponent(user.id)}`,
-  };
-}
-
-function groupToResult(group: ExternalGroup): GlobalSearchResult {
-  return {
-    id: `external_group:${group.id}`,
-    kind: "external_group",
-    title: group.name || group.id,
-    subtitle: group.group_type || undefined,
-    meta: group.account_id || undefined,
-    href: `/ui/access/groups/${encodeURIComponent(group.id)}`,
-  };
-}
-
-function ilike(query: string) {
-  return `*${sanitizePattern(query)}*`;
-}
-
-function exactUUIDFilter(query: string): string | undefined {
-  const id = query.trim();
-  if (!/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id)) {
-    return undefined;
-  }
-  return `id.eq.${id}`;
-}
-
-function orFilter(parts: Array<string | undefined>) {
-  const filtered = parts.filter((part): part is string => Boolean(part));
-  return filtered.length > 0 ? `(${filtered.join(",")})` : undefined;
-}
-
-function sanitizePattern(query: string) {
-  return query.trim().replace(/[(),*]/g, " ").replace(/\s+/g, " ");
-}
+export const SEARCH_DEFAULT_LIMIT = DEFAULT_LIMIT;

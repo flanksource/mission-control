@@ -23,7 +23,7 @@ export function RecentlyUsedPanel() {
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-foreground">{item.name}</span>
                   <span className="block truncate text-xs text-muted-foreground">
-                    {item.kind === "config" ? item.type || "Config" : "Playbook"}
+                    {describeRecent(item)}
                   </span>
                 </span>
                 <span className="shrink-0 text-xs text-muted-foreground">{formatRelativeTime(item.lastUsed)}</span>
@@ -40,11 +40,44 @@ function RecentIcon({ item }: { item: RecentItem }) {
   if (item.kind === "config") {
     return <ConfigIcon primary={item.type} className="h-5 max-w-5 shrink-0 text-muted-foreground" />;
   }
+  if (item.kind === "playbook") {
+    return (
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted/50">
+        <Icon name={item.icon || "lucide:book-open-check"} className="text-muted-foreground" />
+      </span>
+    );
+  }
   return (
     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-muted/50">
-      <Icon name={item.icon || "lucide:book-open-check"} className="text-muted-foreground" />
+      <Icon name={RECENT_KIND_FALLBACK_ICON[item.kind]} className="text-muted-foreground" />
     </span>
   );
+}
+
+const RECENT_KIND_FALLBACK_ICON = {
+  config: "lucide:database",
+  canary: "lucide:heart-pulse",
+  check: "lucide:list-checks",
+  config_change: "lucide:git-compare-arrows",
+  playbook: "lucide:book-open-check",
+  connection: "lucide:cable",
+} as const;
+
+function describeRecent(item: RecentItem): string {
+  switch (item.kind) {
+    case "config":
+      return item.type || "Config";
+    case "canary":
+      return item.type ? `Canary · ${item.type}` : "Canary";
+    case "check":
+      return item.type ? `Check · ${item.type}` : "Check";
+    case "config_change":
+      return item.type ? `Change · ${item.type}` : "Change";
+    case "playbook":
+      return "Playbook";
+    case "connection":
+      return item.type ? `Connection · ${item.type}` : "Connection";
+  }
 }
 
 function EmptyState() {

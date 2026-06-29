@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 
-export type RecentKind = "config" | "playbook";
+export type RecentKind =
+  | "config"
+  | "canary"
+  | "check"
+  | "config_change"
+  | "playbook"
+  | "connection";
 
 export type RecentItem = {
   kind: RecentKind;
@@ -14,6 +20,15 @@ export type RecentItem = {
 
 const STORAGE_KEY = "mc.recents.v1";
 const MAX_ITEMS = 25;
+
+const RECENT_KINDS: ReadonlySet<RecentKind> = new Set<RecentKind>([
+  "config",
+  "canary",
+  "check",
+  "config_change",
+  "playbook",
+  "connection",
+]);
 
 function readStorage(): RecentItem[] {
   if (typeof window === "undefined") return [];
@@ -42,7 +57,8 @@ function isRecentItem(value: unknown): value is RecentItem {
   if (!value || typeof value !== "object") return false;
   const v = value as Record<string, unknown>;
   return (
-    (v.kind === "config" || v.kind === "playbook") &&
+    typeof v.kind === "string" &&
+    RECENT_KINDS.has(v.kind as RecentKind) &&
     typeof v.id === "string" &&
     typeof v.name === "string" &&
     typeof v.href === "string" &&
