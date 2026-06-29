@@ -816,7 +816,7 @@ export function CommandPalette({
       onClose={() => onOpenChange(false)}
       hideClose
       size="full"
-      className="max-h-[82vh] max-w-3xl overflow-hidden"
+      className="max-h-[82vh] max-w-3xl overflow-hidden [&>*]:min-h-0"
       headerSlot={
         <div className="flex w-full flex-col gap-0">
           <div className="flex min-w-0 items-center gap-2 px-4 py-3">
