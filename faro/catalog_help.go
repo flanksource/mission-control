@@ -135,12 +135,14 @@ IDs, then "get" to fetch the full insight record.`
 		searchCmd.Short = "Search catalog insights using the query language"
 		searchCmd.Long = `Search catalog insights using the catalog query language.
 
-Use this to find findings by severity, status, analyzer, source, catalog resource
-type, name, tags, or other indexed fields. The result rows include insight IDs
-that can be passed to "faro catalog insights get".`
+Use this to find findings by severity, status, analyzer, source, config_id,
+catalog resource type, name, tags, or other indexed fields. The result rows
+include insight IDs that can be passed to "faro catalog insights get".`
 		searchCmd.Example = `  faro catalog insights search 'severity=critical'
   faro catalog insights search 'status=open type=security'
-  faro catalog insights search 'analyzer=no-public-ip source=aws' --limit 50`
+  faro catalog insights search 'analyzer=no-public-ip source=aws' --limit 50
+  faro catalog insights search 'config_type=GitHub::Repository severity=critical' --limit 5
+  faro catalog insights search 'config_id=203c4012-d12b-5c6a-a1e7-2e990f6a8f0e'`
 	}
 
 	if getCmd := catalogSubcommand(insightsCmd, "get"); getCmd != nil {

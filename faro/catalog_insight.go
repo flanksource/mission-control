@@ -43,7 +43,9 @@ var CatalogInsightSearch = &cobra.Command{
 Examples:
   catalog insights search severity=critical
   catalog insights search "status=open type=security"
-  catalog insights search "analyzer=no-public-ip source=aws" --limit 50`,
+  catalog insights search "analyzer=no-public-ip source=aws" --limit 50
+  catalog insights search "config_type=GitHub::Repository severity=critical" --limit 5
+  catalog insights search "config_id=203c4012-d12b-5c6a-a1e7-2e990f6a8f0e"`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		results, err := remoteSearchInsights(strings.Join(args, " "), insightSearchAgent, insightSearchLimit)
