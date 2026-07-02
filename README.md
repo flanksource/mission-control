@@ -1,5 +1,7 @@
 # Mission control
 
+[![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/flanksource/mission-control/badge)](https://securityscorecards.dev/viewer/?uri=github.com/flanksource/mission-control)
+
 Incident Commander is a mission control center for enterprises, managed service providers and SaaS providers, it provides:
 
 * Single pane of glass across infrastructure, applications and the cloud by aggregating data from multiple data sources:
