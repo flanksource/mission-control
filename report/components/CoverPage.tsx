@@ -107,7 +107,7 @@ export default function CoverPage({ title, subtitle, icon, query, breadcrumbs, s
       )}
 
       {subjects && subjects.length > 0 && (
-        <div className="mb-[6mm]">
+        <div className="mb-[6mm] flex flex-col items-center gap-[1mm]">
           {subjects.map((s, i) => (
             <SubjectBadge key={i} subject={s} />
           ))}
