@@ -171,9 +171,10 @@ func catalogOptions(action v1.ReportAction) (catalog.Options, error) {
 
 // resolveReportSource resolves the TSX template source directory and entry file.
 // When file is nil, the embedded CatalogReport.tsx is used. A local path is
-// resolved against the working directory unless absolute. A git source is
-// cloned and the file located within the clone. The directory must contain the
-// report scaffold needed to compile the entry file.
+// resolved against the working directory unless absolute, and its directory
+// must contain the report scaffold needed to compile the entry file. A git
+// source is cloned and the clone root becomes the source directory, so the
+// entry file may live in a subdirectory and import from anywhere in the repo.
 func resolveReportSource(ctx context.Context, file *v1.ReportFile) (srcDir, entryFile string, err error) {
 	if file == nil {
 		dir, err := report.SrcDir()
@@ -242,7 +243,7 @@ func resolveGitReportSource(ctx context.Context, src *v1.ReportGitFile) (srcDir,
 		return "", "", fmt.Errorf("file %s not found in repo %s: %w", src.File, src.URL, err)
 	}
 
-	return filepath.Dir(full), filepath.Base(full), nil
+	return work.Filesystem.Root(), src.File, nil
 }
 
 func reportResult(format string, rendered []byte) *ReportResult {

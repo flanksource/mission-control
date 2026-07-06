@@ -78,4 +78,21 @@ var _ = ginkgo.Describe("Report action source resolution", func() {
 		Expect(entry).To(Equal("CustomReport.tsx"))
 		Expect(filepath.Join(srcDir, entry)).To(BeAnExistingFile())
 	})
+
+	ginkgo.It("uses the clone root as source dir so nested files and repo-root files ship", ginkgo.Label("slow"), func() {
+		err := gitServer.InitRepo("testdata/report-repo", "main", "nested-report-repo")
+		Expect(err).NotTo(HaveOccurred())
+
+		srcDir, entry, err := resolveReportSource(ctx, &v1.ReportFile{
+			Git: &v1.ReportGitFile{
+				URL:  gitServer.HTTPAddress() + "/nested-report-repo",
+				Base: "main",
+				File: "templates/NestedReport.tsx",
+			},
+		})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(entry).To(Equal("templates/NestedReport.tsx"))
+		Expect(filepath.Join(srcDir, entry)).To(BeAnExistingFile())
+		Expect(filepath.Join(srcDir, "package.json")).To(BeAnExistingFile())
+	})
 })
