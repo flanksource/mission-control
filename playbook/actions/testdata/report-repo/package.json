@@ -1,0 +1,7 @@
+{
+  "name": "report-repo",
+  "private": true,
+  "dependencies": {
+    "@flanksource/facet": "0.1.43"
+  }
+}
