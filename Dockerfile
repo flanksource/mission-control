@@ -107,6 +107,7 @@ RUN cd /tmp/facet && \
 
 COPY --from=builder /app/.bin/incident-commander /app
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
+COPY report /app/report
 
 RUN /app/incident-commander go-offline
 ENTRYPOINT ["/app/incident-commander"]

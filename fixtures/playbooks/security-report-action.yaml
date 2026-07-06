@@ -1,0 +1,46 @@
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: security-report
+spec:
+  title: Security Report
+  category: Reporting
+  description: >-
+    Generates a security report for every config item matching the given
+    search query/selector and uploads it as an artifact.
+  parameters:
+    - name: configs
+      label: Config selector
+      description: 'Search query/selector for config items (e.g. type=Kubernetes::Namespace)'
+      type: text
+      required: true
+    - name: format
+      label: Format
+      type: list
+      default: pdf
+      properties:
+        options:
+          - label: HTML
+            value: html
+          - label: PDF
+            value: pdf
+          - label: JSON
+            value: json
+  actions:
+    - name: Security Report
+      report:
+        configs:
+          search: '{{ .params.configs }}'
+        format: '{{ .params.format }}'
+        file:
+          path: report/RepoSecurityReport.tsx
+        facet:
+          connection: mission-control/facet
+        sections:
+          changes: true
+          insights: true
+          relationships: true
+          access: true
+          accessLogs: true
+          configJSON: true
