@@ -3,6 +3,7 @@ package llm
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/flanksource/incident-commander/api"
 )
@@ -117,7 +118,7 @@ func modelInfoFromModelsDev(provider api.LLMBackend, modelID string, model model
 		ModelID:             modelID,
 		MaxTokens:           model.Limit.Output,
 		ContextWindow:       model.Limit.Context,
-		SupportsImages:      containsString(model.Modalities.Input, "image"),
+		SupportsImages:      slices.Contains(model.Modalities.Input, "image"),
 		SupportsPromptCache: model.Cost.CacheRead != nil || model.Cost.CacheWrite != nil,
 		InputPrice:          *model.Cost.Input,
 		OutputPrice:         *model.Cost.Output,
@@ -150,13 +151,4 @@ func contextPriceTiersFromModelsDev(tiers []modelsDevCostTier) []ContextPriceTie
 	}
 
 	return contextTiers
-}
-
-func containsString(values []string, target string) bool {
-	for _, value := range values {
-		if value == target {
-			return true
-		}
-	}
-	return false
 }

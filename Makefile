@@ -191,7 +191,7 @@ generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and
 
 .PHONY: generate-llm-pricing
 generate-llm-pricing: ## Regenerate embedded LLM pricing registry from models.dev.
-	go run hack/update-llm-models/main.go --output "$(LLM_PRICING_REGISTRY)"
+	go run llm/internal/gen-pricing/main.go --output "$(LLM_PRICING_REGISTRY)"
 
 .PHONY: build
 build: static

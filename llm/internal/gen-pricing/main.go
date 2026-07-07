@@ -15,7 +15,7 @@ import (
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintf(os.Stderr, "update-llm-models: %v\n", err)
+		fmt.Fprintf(os.Stderr, "gen-pricing: %v\n", err)
 		os.Exit(1)
 	}
 }
@@ -78,7 +78,7 @@ func readURL(source string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
-	req.Header.Set("User-Agent", "mission-control/update-llm-models")
+	req.Header.Set("User-Agent", "mission-control/gen-pricing")
 
 	resp, err := client.Do(req)
 	if err != nil {
