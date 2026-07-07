@@ -8,12 +8,12 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
-	dutyTypes "github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 
+	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/vars"
+	"github.com/flanksource/incident-commander/playbook/runner"
 )
 
 type scheduleKey struct {
@@ -128,18 +128,59 @@ func triggerScheduledRun(ctx context.Context, playbookID uuid.UUID, params map[s
 	var pb models.Playbook
 	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", playbookID).First(&pb).Error; err != nil {
 		ctx.Errorf("failed to load playbook %s for scheduled run: %v", playbookID, err)
+		logToJobHistory(ctx, playbookID.String(), err.Error())
 		return
 	}
 
-	run := models.PlaybookRun{
-		PlaybookID: pb.ID,
-		Status:     models.PlaybookRunStatusScheduled,
-		Spec:       pb.Spec,
-		Parameters: dutyTypes.JSONStringMap(params),
-		Timeout:    ctx.Properties().Duration("playbook.run.timeout", vars.PlaybookRunTimeout),
+	ctx = ctx.WithNamespace(pb.Namespace)
+	if api.SystemUserID != nil {
+		ctx = ctx.WithUser(&models.Person{ID: *api.SystemUserID})
 	}
 
-	if err := ctx.DB().Create(&run).Error; err != nil {
-		ctx.Errorf("failed to create scheduled run for playbook %s: %v", playbookID, err)
+	templatedParams, err := templateScheduledRunParams(ctx, &pb, params)
+	if err != nil {
+		ctx.Errorf("failed to template scheduled run parameters for playbook %s: %v", playbookID, err)
+		logToJobHistory(ctx, playbookID.String(), err.Error())
+		return
 	}
+
+	req := RunParams{
+		ID:     pb.ID,
+		Params: templatedParams,
+	}
+	if _, err := createPlaybookRun(ctx.WithObject(&pb, req), &pb, req, playbookRunOptions{}); err != nil {
+		ctx.Errorf("failed to create scheduled run for playbook %s: %v", playbookID, err)
+		logToJobHistory(ctx, playbookID.String(), err.Error())
+	}
+}
+
+func templateScheduledRunParams(ctx context.Context, playbook *models.Playbook, params map[string]string) (PlaybookRuntimeParameters, error) {
+	if len(params) == 0 {
+		return nil, nil
+	}
+
+	run := models.PlaybookRun{
+		PlaybookID: playbook.ID,
+		Spec:       playbook.Spec,
+	}
+	if ctx.User() != nil {
+		run.CreatedBy = &ctx.User().ID
+	}
+
+	templateEnv, err := runner.CreateTemplateEnv(ctx, playbook, run, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	output := make(PlaybookRuntimeParameters, len(params))
+	for k, v := range params {
+		value, err := runner.TemplateEnv(ctx, templateEnv, v)
+		if err != nil {
+			return nil, err
+		}
+
+		output[k] = value
+	}
+
+	return output, nil
 }
