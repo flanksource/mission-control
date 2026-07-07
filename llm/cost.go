@@ -1,656 +1,188 @@
 package llm
 
-// Generated from: https://github.com/cline/cline/blob/450583c81d6f861bd1af446390dd3f085380bf28/src/shared/api.ts
-
 import (
+	_ "embed"
+	"encoding/json"
 	"fmt"
-	"math"
+	"strings"
 
 	"github.com/flanksource/incident-commander/api"
-	"github.com/samber/lo"
 )
 
-// Prices are typically per million tokens
 const million = 1_000_000.0
 
-// PriceTier defines a pricing tier based on token count.
-type PriceTier struct {
-	TokenLimit int     // Upper limit (inclusive) of *input* or *output* tokens for this price. Use math.MaxInt32 for the highest tier.
-	Price      float64 // Price per million tokens for this tier.
+//go:embed pricing_registry.json
+var embeddedPricingRegistry []byte
+
+// ContextPriceTier defines price overrides that apply when the prompt context
+// exceeds a provider threshold.
+type ContextPriceTier struct {
+	TokenThreshold   int      `json:"tokenThreshold"`
+	InputPrice       *float64 `json:"inputPrice,omitempty"`
+	OutputPrice      *float64 `json:"outputPrice,omitempty"`
+	CacheWritesPrice *float64 `json:"cacheWritesPrice,omitempty"`
+	CacheReadsPrice  *float64 `json:"cacheReadsPrice,omitempty"`
 }
 
-// ModelInfo holds the pricing information for a specific model.
+// ModelInfo holds pricing information for a model.
 type ModelInfo struct {
-	Provider            api.LLMBackend
-	ModelID             string
-	MaxTokens           int
-	ContextWindow       int
-	SupportsImages      bool
-	SupportsPromptCache bool
-	InputPrice          float64 // Flat input price per million tokens (used if InputPriceTiers is empty)
-	OutputPrice         float64 // Flat output price per million tokens (used if OutputPriceTiers is empty)
-	InputPriceTiers     []PriceTier
-	OutputPriceTiers    []PriceTier
-	CacheWritesPrice    float64 // Price per million cache write tokens
-	CacheReadsPrice     float64 // Price per million cache read tokens
+	Provider            api.LLMBackend     `json:"provider"`
+	ModelID             string             `json:"modelID"`
+	MaxTokens           int                `json:"maxTokens,omitempty"`
+	ContextWindow       int                `json:"contextWindow,omitempty"`
+	SupportsImages      bool               `json:"supportsImages,omitempty"`
+	SupportsPromptCache bool               `json:"supportsPromptCache,omitempty"`
+	InputPrice          float64            `json:"inputPrice"`
+	OutputPrice         float64            `json:"outputPrice"`
+	CacheWritesPrice    float64            `json:"cacheWritesPrice,omitempty"`
+	CacheReadsPrice     float64            `json:"cacheReadsPrice,omitempty"`
+	ContextPriceTiers   []ContextPriceTier `json:"contextPriceTiers,omitempty"`
 }
 
-// modelRegistry stores ModelInfo for all known models, keyed by provider, then model ID.
-var modelRegistry = make(map[api.LLMBackend]map[string]ModelInfo)
+type pricingRegistryFile struct {
+	Providers map[api.LLMBackend]map[string]ModelInfo `json:"providers"`
+	Source    string                                  `json:"source"`
+	Version   int                                     `json:"version"`
+}
 
-// init populates the modelRegistry with known model data.
+var modelRegistry map[api.LLMBackend]map[string]ModelInfo
+
 func init() {
-	populateAnthropicModels()
-	populateGeminiDirectModels() // Populating gemini under 'gemini' key
-	populateOpenAIModels()
-	populateBedrockModels()
-	// Add calls to populate other providers as needed
+	registry, err := loadPricingRegistry(embeddedPricingRegistry)
+	if err != nil {
+		panic(fmt.Errorf("failed to load embedded LLM pricing registry: %w", err))
+	}
+	modelRegistry = registry
 }
 
-func populateAnthropicModels() {
-	provider := api.LLMBackendAnthropic
-	models := make(map[string]ModelInfo)
-
-	sonnet37 := ModelInfo{
-		Provider:            provider,
-		ModelID:             "claude-3-7-sonnet-20250219",
-		MaxTokens:           8192,
-		ContextWindow:       200_000,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          3.0,
-		OutputPrice:         15.0,
-		CacheWritesPrice:    3.75,
-		CacheReadsPrice:     0.3,
+func loadPricingRegistry(data []byte) (map[api.LLMBackend]map[string]ModelInfo, error) {
+	var registryFile pricingRegistryFile
+	if err := json.Unmarshal(data, &registryFile); err != nil {
+		return nil, err
 	}
-	models["claude-3-7-sonnet-20250219"] = sonnet37
-	models["claude-3-7-sonnet-latest"] = sonnet37
-
-	sonnet35 := ModelInfo{
-		Provider:            provider,
-		ModelID:             "claude-3-5-sonnet-20241022",
-		MaxTokens:           8192,
-		ContextWindow:       200_000,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          3.0,
-		OutputPrice:         15.0,
-		CacheWritesPrice:    3.75,
-		CacheReadsPrice:     0.3,
+	if registryFile.Version != 1 {
+		return nil, fmt.Errorf("unsupported pricing registry version: %d", registryFile.Version)
 	}
-	models["claude-3-5-sonnet-20241022"] = sonnet35
-	models["claude-3-5-sonnet-latest"] = sonnet35
-
-	models["claude-3-5-haiku-20241022"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "claude-3-5-haiku-20241022",
-		MaxTokens:           8192,
-		ContextWindow:       200_000,
-		SupportsImages:      false,
-		SupportsPromptCache: true,
-		InputPrice:          0.8,
-		OutputPrice:         4.0,
-		CacheWritesPrice:    1.0,
-		CacheReadsPrice:     0.08,
-	}
-	models["claude-3-opus-20240229"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "claude-3-opus-20240229",
-		MaxTokens:           4096,
-		ContextWindow:       200_000,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          15.0,
-		OutputPrice:         75.0,
-		CacheWritesPrice:    18.75,
-		CacheReadsPrice:     1.5,
-	}
-	models["claude-3-haiku-20240307"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "claude-3-haiku-20240307",
-		MaxTokens:           4096,
-		ContextWindow:       200_000,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          0.25,
-		OutputPrice:         1.25,
-		CacheWritesPrice:    0.3,
-		CacheReadsPrice:     0.03,
+	if len(registryFile.Providers) == 0 {
+		return nil, fmt.Errorf("pricing registry has no providers")
 	}
 
-	modelRegistry[provider] = models
+	registry := make(map[api.LLMBackend]map[string]ModelInfo, len(registryFile.Providers))
+	for provider, models := range registryFile.Providers {
+		if !isSupportedPricingProvider(provider) {
+			return nil, fmt.Errorf("unsupported pricing provider: %s", provider)
+		}
+		if len(models) == 0 {
+			continue
+		}
+
+		registry[provider] = make(map[string]ModelInfo, len(models))
+		for modelID, modelInfo := range models {
+			modelID = normalizeModelID(modelID)
+			if modelID == "" {
+				return nil, fmt.Errorf("pricing registry has empty model ID for provider %s", provider)
+			}
+			if modelInfo.ModelID == "" {
+				modelInfo.ModelID = modelID
+			}
+			if modelInfo.Provider == "" {
+				modelInfo.Provider = provider
+			}
+			if modelInfo.Provider != provider {
+				return nil, fmt.Errorf("model %s has provider %s in %s registry", modelID, modelInfo.Provider, provider)
+			}
+			if modelInfo.InputPrice < 0 || modelInfo.OutputPrice < 0 || modelInfo.CacheReadsPrice < 0 || modelInfo.CacheWritesPrice < 0 {
+				return nil, fmt.Errorf("model %s/%s has negative pricing", provider, modelID)
+			}
+			for _, tier := range modelInfo.ContextPriceTiers {
+				if tier.TokenThreshold <= 0 {
+					return nil, fmt.Errorf("model %s/%s has invalid context price tier threshold", provider, modelID)
+				}
+				if ptrFloatNegative(tier.InputPrice) || ptrFloatNegative(tier.OutputPrice) || ptrFloatNegative(tier.CacheReadsPrice) || ptrFloatNegative(tier.CacheWritesPrice) {
+					return nil, fmt.Errorf("model %s/%s has negative context tier pricing", provider, modelID)
+				}
+			}
+
+			registry[provider][modelID] = modelInfo
+		}
+	}
+
+	return registry, nil
 }
 
-func populateGeminiDirectModels() {
-	provider := api.LLMBackendGemini
-	models := make(map[string]ModelInfo)
-
-	models["gemini-2.5-pro-exp-03-25"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gemini-2.5-pro-exp-03-25",
-		MaxTokens:           65536,
-		ContextWindow:       1_048_576,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          0,
-		OutputPrice:         0,
+func isSupportedPricingProvider(provider api.LLMBackend) bool {
+	switch provider {
+	case api.LLMBackendAnthropic, api.LLMBackendOpenAI, api.LLMBackendGemini, api.LLMBackendBedrock:
+		return true
+	default:
+		return false
 	}
-	models["gemini-2.5-pro-preview-03-25"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gemini-2.5-pro-preview-03-25",
-		MaxTokens:           65536,
-		ContextWindow:       1_048_576,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPriceTiers: []PriceTier{
-			{TokenLimit: 200000, Price: 1.25},
-			{TokenLimit: math.MaxInt32, Price: 2.5},
-		},
-		OutputPriceTiers: []PriceTier{
-			{TokenLimit: 200000, Price: 10.0},
-			{TokenLimit: math.MaxInt32, Price: 15.0},
-		},
-	}
-
-	flash20 := ModelInfo{
-		Provider:            provider,
-		ModelID:             "gemini-2.0-flash-001",
-		MaxTokens:           8192,
-		ContextWindow:       1_048_576,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          0,
-		OutputPrice:         0,
-	}
-	models["gemini-2.0-flash"] = flash20
-	models["gemini-2.0-flash-001"] = flash20
-
-	models["gemini-2.0-flash-lite-preview-02-05"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gemini-2.0-flash-lite-preview-02-05",
-		MaxTokens:           8192,
-		ContextWindow:       1_048_576,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          0,
-		OutputPrice:         0,
-	}
-	models["gemini-2.0-pro-exp-02-05"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gemini-2.0-pro-exp-02-05",
-		MaxTokens:           8192,
-		ContextWindow:       2_097_152,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          0,
-		OutputPrice:         0,
-	}
-	models["gemini-2.0-flash-thinking-exp-01-21"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gemini-2.0-flash-thinking-exp-01-21",
-		MaxTokens:           65_536,
-		ContextWindow:       1_048_576,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          0,
-		OutputPrice:         0,
-	}
-	models["gemini-2.0-flash-thinking-exp-1219"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gemini-2.0-flash-thinking-exp-1219",
-		MaxTokens:           8192,
-		ContextWindow:       32_767,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          0,
-		OutputPrice:         0,
-	}
-	models["gemini-2.0-flash-exp"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gemini-2.0-flash-exp",
-		MaxTokens:           8192,
-		ContextWindow:       1_048_576,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          0,
-		OutputPrice:         0,
-	}
-	models["gemini-1.5-flash-002"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gemini-1.5-flash-002",
-		MaxTokens:           8192,
-		ContextWindow:       1_048_576,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          0,
-		OutputPrice:         0,
-	}
-	models["gemini-1.5-flash-exp-0827"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gemini-1.5-flash-exp-0827",
-		MaxTokens:           8192,
-		ContextWindow:       1_048_576,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          0,
-		OutputPrice:         0,
-	}
-	models["gemini-1.5-flash-8b-exp-0827"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gemini-1.5-flash-8b-exp-0827",
-		MaxTokens:           8192,
-		ContextWindow:       1_048_576,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          0,
-		OutputPrice:         0,
-	}
-	models["gemini-1.5-pro-002"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gemini-1.5-pro-002",
-		MaxTokens:           8192,
-		ContextWindow:       2_097_152,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          0,
-		OutputPrice:         0,
-	}
-	models["gemini-1.5-pro-exp-0827"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gemini-1.5-pro-exp-0827",
-		MaxTokens:           8192,
-		ContextWindow:       2_097_152,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          0,
-		OutputPrice:         0,
-	}
-	models["gemini-exp-1206"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gemini-exp-1206",
-		MaxTokens:           8192,
-		ContextWindow:       2_097_152,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          0,
-		OutputPrice:         0,
-	}
-
-	modelRegistry[provider] = models
 }
 
-func populateOpenAIModels() {
-	provider := api.LLMBackendOpenAI
-	models := make(map[string]ModelInfo)
-
-	models["o3"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "o3",
-		MaxTokens:           100_000,
-		ContextWindow:       200_000,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          10.0,
-		OutputPrice:         40.0,
-		CacheReadsPrice:     2.5,
-	}
-	models["o4-mini"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "o4-mini",
-		MaxTokens:           100_000,
-		ContextWindow:       200_000,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          1.1,
-		OutputPrice:         4.4,
-		CacheReadsPrice:     0.275,
-	}
-	models["gpt-4.1"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gpt-4.1",
-		MaxTokens:           32_768,
-		ContextWindow:       1_047_576,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          2.0,
-		OutputPrice:         8.0,
-		CacheReadsPrice:     0.5,
-	}
-	models["gpt-4.1-mini"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gpt-4.1-mini",
-		MaxTokens:           32_768,
-		ContextWindow:       1_047_576,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          0.4,
-		OutputPrice:         1.6,
-		CacheReadsPrice:     0.1,
-	}
-	models["gpt-4.1-nano"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gpt-4.1-nano",
-		MaxTokens:           32_768,
-		ContextWindow:       1_047_576,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          0.1,
-		OutputPrice:         0.4,
-		CacheReadsPrice:     0.025,
-	}
-	models["o3-mini"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "o3-mini",
-		MaxTokens:           100_000,
-		ContextWindow:       200_000,
-		SupportsImages:      false,
-		SupportsPromptCache: true,
-		InputPrice:          1.1,
-		OutputPrice:         4.4,
-		CacheReadsPrice:     0.55,
-	}
-	models["o1"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "o1",
-		MaxTokens:           100_000,
-		ContextWindow:       200_000,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          15.0,
-		OutputPrice:         60.0,
-		CacheReadsPrice:     7.5,
-	}
-	models["o1-preview"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "o1-preview",
-		MaxTokens:           32_768,
-		ContextWindow:       128_000,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          15.0,
-		OutputPrice:         60.0,
-		CacheReadsPrice:     7.5,
-	}
-	models["o1-mini"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "o1-mini",
-		MaxTokens:           65_536,
-		ContextWindow:       128_000,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          1.1,
-		OutputPrice:         4.4,
-		CacheReadsPrice:     0.55,
-	}
-	models["gpt-4o"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gpt-4o",
-		MaxTokens:           4_096,
-		ContextWindow:       128_000,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          2.5,
-		OutputPrice:         10.0,
-		CacheReadsPrice:     1.25,
-	}
-	models["gpt-4o-mini"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gpt-4o-mini",
-		MaxTokens:           16_384,
-		ContextWindow:       128_000,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          0.15,
-		OutputPrice:         0.6,
-		CacheReadsPrice:     0.075,
-	}
-	models["chatgpt-4o-latest"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "chatgpt-4o-latest",
-		MaxTokens:           16_384,
-		ContextWindow:       128_000,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          5.0,
-		OutputPrice:         15.0,
-	}
-	models["gpt-4.5-preview"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "gpt-4.5-preview",
-		MaxTokens:           16_384,
-		ContextWindow:       128_000,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          75.0,
-		OutputPrice:         150.0,
-	}
-
-	modelRegistry[provider] = models
-}
-
-func populateBedrockModels() {
-	provider := api.LLMBackendBedrock
-	models := make(map[string]ModelInfo)
-
-	// Claude models via Bedrock (same pricing as Anthropic direct)
-	sonnet37 := ModelInfo{
-		Provider:            provider,
-		ModelID:             "us.anthropic.claude-3-7-sonnet-20250219-v1:0",
-		MaxTokens:           8192,
-		ContextWindow:       200_000,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          3.0,
-		OutputPrice:         15.0,
-		CacheWritesPrice:    3.75,
-		CacheReadsPrice:     0.3,
-	}
-	models["us.anthropic.claude-3-7-sonnet-20250219-v1:0"] = sonnet37
-	models["us.anthropic.claude-3-7-sonnet-latest-v1:0"] = sonnet37
-	models["anthropic.claude-3-7-sonnet-20250219-v1:0"] = sonnet37
-
-	sonnet35 := ModelInfo{
-		Provider:            provider,
-		ModelID:             "us.anthropic.claude-3-5-sonnet-20241022-v2:0",
-		MaxTokens:           8192,
-		ContextWindow:       200_000,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          3.0,
-		OutputPrice:         15.0,
-		CacheWritesPrice:    3.75,
-		CacheReadsPrice:     0.3,
-	}
-	models["us.anthropic.claude-3-5-sonnet-20241022-v2:0"] = sonnet35
-	models["anthropic.claude-3-5-sonnet-20241022-v2:0"] = sonnet35
-
-	models["us.anthropic.claude-3-5-haiku-20241022-v1:0"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "us.anthropic.claude-3-5-haiku-20241022-v1:0",
-		MaxTokens:           8192,
-		ContextWindow:       200_000,
-		SupportsImages:      false,
-		SupportsPromptCache: true,
-		InputPrice:          0.8,
-		OutputPrice:         4.0,
-		CacheWritesPrice:    1.0,
-		CacheReadsPrice:     0.08,
-	}
-
-	models["us.anthropic.claude-3-opus-20240229-v1:0"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "us.anthropic.claude-3-opus-20240229-v1:0",
-		MaxTokens:           4096,
-		ContextWindow:       200_000,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          15.0,
-		OutputPrice:         75.0,
-		CacheWritesPrice:    18.75,
-		CacheReadsPrice:     1.5,
-	}
-
-	models["us.anthropic.claude-3-haiku-20240307-v1:0"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "us.anthropic.claude-3-haiku-20240307-v1:0",
-		MaxTokens:           4096,
-		ContextWindow:       200_000,
-		SupportsImages:      true,
-		SupportsPromptCache: true,
-		InputPrice:          0.25,
-		OutputPrice:         1.25,
-		CacheWritesPrice:    0.30,
-		CacheReadsPrice:     0.03,
-	}
-
-	// Amazon Nova models
-	models["amazon.nova-pro-v1:0"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "amazon.nova-pro-v1:0",
-		MaxTokens:           5120,
-		ContextWindow:       300_000,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          0.8,
-		OutputPrice:         3.2,
-	}
-
-	models["amazon.nova-lite-v1:0"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "amazon.nova-lite-v1:0",
-		MaxTokens:           5120,
-		ContextWindow:       300_000,
-		SupportsImages:      true,
-		SupportsPromptCache: false,
-		InputPrice:          0.06,
-		OutputPrice:         0.24,
-	}
-
-	models["amazon.nova-micro-v1:0"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "amazon.nova-micro-v1:0",
-		MaxTokens:           5120,
-		ContextWindow:       128_000,
-		SupportsImages:      false,
-		SupportsPromptCache: false,
-		InputPrice:          0.035,
-		OutputPrice:         0.14,
-	}
-
-	// Llama models via Bedrock
-	models["meta.llama3-1-70b-instruct-v1:0"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "meta.llama3-1-70b-instruct-v1:0",
-		MaxTokens:           2048,
-		ContextWindow:       128_000,
-		SupportsImages:      false,
-		SupportsPromptCache: false,
-		InputPrice:          0.99,
-		OutputPrice:         0.99,
-	}
-
-	models["meta.llama3-1-8b-instruct-v1:0"] = ModelInfo{
-		Provider:            provider,
-		ModelID:             "meta.llama3-1-8b-instruct-v1:0",
-		MaxTokens:           2048,
-		ContextWindow:       128_000,
-		SupportsImages:      false,
-		SupportsPromptCache: false,
-		InputPrice:          0.22,
-		OutputPrice:         0.22,
-	}
-
-	modelRegistry[provider] = models
-}
-
-// CalculateCost calculates the estimated cost for a given model and token counts.
-// It considers tiered pricing if defined for the model.
-// cacheReadTokens and cacheWriteTokens are optional.
+// CalculateCost calculates cost from the embedded pricing registry.
 func CalculateCost(provider api.LLMBackend, modelID string, genInfo GenerationInfo) (float64, error) {
 	modelInfo, err := GetModelInfo(provider, modelID)
 	if err != nil {
 		return 0, err
 	}
 
-	inputCost := calculateTieredCost(genInfo.InputTokens, modelInfo.InputPriceTiers, modelInfo.InputPrice)
+	prices := pricesForUsage(modelInfo, genInfo)
+	inputCost := float64(genInfo.InputTokens) * prices.Input / million
+	outputTokens := genInfo.OutputTokens + ptrInt(genInfo.ReasoningTokens)
+	outputCost := float64(outputTokens) * prices.Output / million
+	cacheReadCost := float64(ptrInt(genInfo.CacheReadTokens)) * prices.CacheRead / million
+	cacheWriteCost := float64(ptrInt(genInfo.CacheWriteTokens)) * prices.CacheWrite / million
 
-	// NOTE: Couldn't find the price for reasoning tokens in the model info.
-	// Assuming it's the same as output tokens for now.
-	outputCost := calculateTieredCost(genInfo.OutputTokens+lo.FromPtr(genInfo.ReasoningTokens), modelInfo.OutputPriceTiers, modelInfo.OutputPrice)
-
-	readTokens := 0
-	if genInfo.CacheReadTokens != nil {
-		readTokens = *genInfo.CacheReadTokens
-	}
-	writeTokens := 0
-	if genInfo.CacheWriteTokens != nil {
-		writeTokens = *genInfo.CacheWriteTokens
-	}
-
-	cacheReadCost := float64(readTokens) * modelInfo.CacheReadsPrice / million
-	cacheWriteCost := float64(writeTokens) * modelInfo.CacheWritesPrice / million
-
-	totalCost := inputCost + outputCost + cacheReadCost + cacheWriteCost
-
-	return totalCost, nil
+	return inputCost + outputCost + cacheReadCost + cacheWriteCost, nil
 }
 
-// calculateTieredCost calculates cost based on tiers or a flat price.
-// Assumes tiers are sorted by TokenLimit ascending, with the last tier potentially having math.MaxInt32.
-func calculateTieredCost(tokens int, tiers []PriceTier, flatPrice float64) float64 {
-	if tokens <= 0 {
-		return 0
-	}
-
-	if len(tiers) > 0 {
-		var cost float64
-		processedTokens := 0
-
-		// Assumes tiers are pre-sorted correctly in the init() functions
-		// sort.Slice(tiers, func(i, j int) bool { return tiers[i].TokenLimit < tiers[j].TokenLimit }
-
-		for _, tier := range tiers {
-			if processedTokens >= tokens {
-				break // All tokens accounted for
-			}
-
-			tokensInThisTierCanProcess := tier.TokenLimit - processedTokens
-			if tokensInThisTierCanProcess <= 0 {
-				continue // This tier starts beyond the tokens we have
-			}
-
-			remainingTokens := tokens - processedTokens
-			tokensToProcessInTier := min(remainingTokens, tokensInThisTierCanProcess)
-
-			cost += float64(tokensToProcessInTier) * tier.Price / million
-			processedTokens += tokensToProcessInTier
-		}
-
-		// This part should ideally not be reached if the last tier has TokenLimit=math.MaxInt32
-		if processedTokens < tokens {
-			// Fallback: Apply the last tier's price to remaining tokens
-			// Or handle as an error/log a warning, depending on desired behavior
-			if len(tiers) > 0 {
-				lastTierPrice := tiers[len(tiers)-1].Price
-				remaining := tokens - processedTokens
-				cost += float64(remaining) * lastTierPrice / million
-				fmt.Printf("Warning: Tokens (%d) exceeded defined tiers for calculation. Applied last tier price to remainder (%d).\\n", tokens, remaining)
-			} else {
-				fmt.Printf("Warning: Tokens (%d) processed but no tiers defined?\\n", tokens) // Should not happen
-			}
-		}
-		return cost
-	} else {
-		// Use flat pricing if no tiers are defined
-		return float64(tokens) * flatPrice / million
-	}
+type modelPrices struct {
+	Input      float64
+	Output     float64
+	CacheRead  float64
+	CacheWrite float64
 }
 
-// GetModelInfo retrieves the ModelInfo for a given provider and model ID.
-// It includes logic to handle provider aliases (e.g., "openai" -> "openai-native")
-// and to check across gemini/vertex if the model isn't found under the initial provider.
-func GetModelInfo(providerKey api.LLMBackend, modelID string) (ModelInfo, error) {
-	providerModels, ok := modelRegistry[providerKey]
+func pricesForUsage(modelInfo ModelInfo, genInfo GenerationInfo) modelPrices {
+	prices := modelPrices{
+		Input:      modelInfo.InputPrice,
+		Output:     modelInfo.OutputPrice,
+		CacheRead:  modelInfo.CacheReadsPrice,
+		CacheWrite: modelInfo.CacheWritesPrice,
+	}
+
+	contextTokens := genInfo.InputTokens + ptrInt(genInfo.CacheReadTokens) + ptrInt(genInfo.CacheWriteTokens)
+	var selectedTier *ContextPriceTier
+	for i := range modelInfo.ContextPriceTiers {
+		tier := &modelInfo.ContextPriceTiers[i]
+		if contextTokens > tier.TokenThreshold && (selectedTier == nil || tier.TokenThreshold > selectedTier.TokenThreshold) {
+			selectedTier = tier
+		}
+	}
+	if selectedTier == nil {
+		return prices
+	}
+
+	if selectedTier.InputPrice != nil {
+		prices.Input = *selectedTier.InputPrice
+	}
+	if selectedTier.OutputPrice != nil {
+		prices.Output = *selectedTier.OutputPrice
+	}
+	if selectedTier.CacheReadsPrice != nil {
+		prices.CacheRead = *selectedTier.CacheReadsPrice
+	}
+	if selectedTier.CacheWritesPrice != nil {
+		prices.CacheWrite = *selectedTier.CacheWritesPrice
+	}
+
+	return prices
+}
+
+// GetModelInfo retrieves pricing metadata for an exact provider/model match.
+func GetModelInfo(provider api.LLMBackend, modelID string) (ModelInfo, error) {
+	modelID = normalizeModelID(modelID)
+	providerModels, ok := modelRegistry[provider]
 	if ok {
 		modelInfo, modelOk := providerModels[modelID]
 		if modelOk {
@@ -658,13 +190,21 @@ func GetModelInfo(providerKey api.LLMBackend, modelID string) (ModelInfo, error)
 		}
 	}
 
-	return ModelInfo{}, fmt.Errorf("model not found for provider '%s' (checked '%s'): %s", providerKey, providerKey, modelID)
+	return ModelInfo{}, fmt.Errorf("model not found for provider %q: %s", provider, modelID)
 }
 
-// Helper min function for integers
-func min(a, b int) int {
-	if a < b {
-		return a
+func normalizeModelID(modelID string) string {
+	modelID = strings.TrimSpace(modelID)
+	return strings.TrimPrefix(modelID, "models/")
+}
+
+func ptrInt(value *int) int {
+	if value == nil {
+		return 0
 	}
-	return b
+	return *value
+}
+
+func ptrFloatNegative(value *float64) bool {
+	return value != nil && *value < 0
 }

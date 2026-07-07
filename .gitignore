@@ -42,6 +42,12 @@ shell-tmp
 .llm-jail/
 .todos/
 hack/
+!hack/
+hack/*
+!hack/update-llm-models/
+!hack/update-llm-models/main.go
+!hack/update-llm-models/go.mod
+!hack/update-llm-models/go.sum
 .htpasswd
 specs/
 .db/

@@ -47,14 +47,14 @@ type Config struct {
 }
 
 type GenerationInfo struct {
-	InputTokens          int     `json:"inputTokens"`
-	OutputTokens         int     `json:"outputTokens"`
-	ReasoningTokens      *int    `json:"reasoningTokens,omitempty"`
-	CacheReadTokens      *int    `json:"cacheReadTokens,omitempty"`
-	CacheWriteTokens     *int    `json:"cacheWriteTokens,omitempty"`
-	Cost                 float64 `json:"cost"`
-	CostCalculationError *string `json:"costCalculationError,omitempty"`
-	Model                string  `json:"model"`
+	InputTokens          int      `json:"inputTokens"`
+	OutputTokens         int      `json:"outputTokens"`
+	ReasoningTokens      *int     `json:"reasoningTokens,omitempty"`
+	CacheReadTokens      *int     `json:"cacheReadTokens,omitempty"`
+	CacheWriteTokens     *int     `json:"cacheWriteTokens,omitempty"`
+	Cost                 *float64 `json:"cost,omitempty"`
+	CostCalculationError *string  `json:"costCalculationError,omitempty"`
+	Model                string   `json:"model"`
 }
 
 func Prompt(ctx dutyctx.Context, config Config, systemPrompt string, promptParts ...string) (string, []*genkitai.Message, []GenerationInfo, error) {
@@ -328,7 +328,7 @@ func calculateGenerationInfo(llmBackend api.LLMBackend, model string, resp *genk
 	if err != nil {
 		genInfo.CostCalculationError = lo.ToPtr(err.Error())
 	} else {
-		genInfo.Cost = cost
+		genInfo.Cost = lo.ToPtr(cost)
 	}
 
 	return []GenerationInfo{genInfo}
