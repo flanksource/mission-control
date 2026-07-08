@@ -3,6 +3,7 @@ package playbook
 import (
 	gocontext "context"
 	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/flanksource/duty/context"
@@ -90,14 +91,15 @@ func syncPlaybookSchedules(ctx context.Context, scheduler *cron.Cron) error {
 			}
 
 			playbookID := pb.ID
-			params := sched.Parameters
+			scheduleIndex := i
+			schedule := sched.Schedule
 			cronID, err := scheduler.AddFunc(sched.Schedule, func() {
 				// Create a fresh context for each cron execution rather than
 				// capturing the sync job's context, which may be cancelled.
 				cronCtx := context.NewContext(gocontext.Background()).
 					WithDB(ctx.DB(), ctx.Pool()).
 					WithNamespace(ctx.GetNamespace())
-				triggerScheduledRun(cronCtx, playbookID, params)
+				triggerScheduledRun(cronCtx, playbookID, scheduleIndex, schedule)
 			})
 			if err != nil {
 				ctx.Errorf("failed to register cron for playbook %s schedule[%d]: %v", pb.ID, i, err)
@@ -121,7 +123,7 @@ func syncPlaybookSchedules(ctx context.Context, scheduler *cron.Cron) error {
 	return nil
 }
 
-func triggerScheduledRun(ctx context.Context, playbookID uuid.UUID, params map[string]string) {
+func triggerScheduledRun(ctx context.Context, playbookID uuid.UUID, scheduleIndex int, schedule string) {
 	ctx = ctx.WithName("triggerScheduledRun").
 		WithLoggingValues("playbook_id", playbookID.String(), "trigger", "schedule")
 
@@ -135,6 +137,13 @@ func triggerScheduledRun(ctx context.Context, playbookID uuid.UUID, params map[s
 	ctx = ctx.WithNamespace(pb.Namespace)
 	if api.SystemUserID != nil {
 		ctx = ctx.WithUser(&models.Person{ID: *api.SystemUserID})
+	}
+
+	params, err := getScheduledRunParams(&pb, scheduleIndex, schedule)
+	if err != nil {
+		ctx.Errorf("failed to load scheduled run parameters for playbook %s: %v", playbookID, err)
+		logToJobHistory(ctx, playbookID.String(), err.Error())
+		return
 	}
 
 	templatedParams, err := templateScheduledRunParams(ctx, &pb, params)
@@ -152,6 +161,24 @@ func triggerScheduledRun(ctx context.Context, playbookID uuid.UUID, params map[s
 		ctx.Errorf("failed to create scheduled run for playbook %s: %v", playbookID, err)
 		logToJobHistory(ctx, playbookID.String(), err.Error())
 	}
+}
+
+func getScheduledRunParams(playbook *models.Playbook, scheduleIndex int, schedule string) (map[string]string, error) {
+	var spec v1.PlaybookSpec
+	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
+		return nil, err
+	}
+
+	if spec.On == nil || scheduleIndex < 0 || scheduleIndex >= len(spec.On.Schedule) {
+		return nil, fmt.Errorf("schedule[%d] no longer exists", scheduleIndex)
+	}
+
+	current := spec.On.Schedule[scheduleIndex]
+	if current.Schedule != schedule {
+		return nil, fmt.Errorf("schedule[%d] changed from %q to %q", scheduleIndex, schedule, current.Schedule)
+	}
+
+	return current.Parameters, nil
 }
 
 func templateScheduledRunParams(ctx context.Context, playbook *models.Playbook, params map[string]string) (PlaybookRuntimeParameters, error) {
