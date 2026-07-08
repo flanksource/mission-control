@@ -94,6 +94,9 @@ func PromptWithHistory(ctx dutyctx.Context, config Config, history []*genkitai.M
 	}
 	if schema != nil {
 		opts = append(opts, genkitai.WithOutputSchema(schema))
+		if config.Backend == api.LLMBackendOpenAI && config.ResponseFormat == ResponseFormatCustomSchema {
+			opts = append(opts, genkitai.WithCustomConstrainedOutput())
+		}
 	}
 	if len(config.SkillPaths) > 0 {
 		opts = append(opts, genkitai.WithUse(&middleware.Skills{SkillPaths: config.SkillPaths}))
@@ -129,16 +132,18 @@ func initGenkit(config Config) (g *genkit.Genkit, modelName string, err error) {
 
 	var provider string
 	var plugin genkitapi.Plugin
+	var openAIPlugin *openaiplugin.OpenAICompatible
 	var bedrockPlugin *bedrockplugin.Bedrock
 
 	switch config.Backend {
 	case api.LLMBackendOpenAI:
 		provider = "openai"
-		plugin = &openaiplugin.OpenAICompatible{
+		openAIPlugin = &openaiplugin.OpenAICompatible{
 			Provider: provider,
 			APIKey:   config.APIKey.ValueStatic,
 			BaseURL:  config.APIURL,
 		}
+		plugin = openAIPlugin
 
 	case api.LLMBackendOllama:
 		provider = "ollama"
@@ -183,6 +188,15 @@ func initGenkit(config Config) (g *genkit.Genkit, modelName string, err error) {
 	// Use context.Background() so the genkit lifecycle isn't tied to any request context.
 	g = genkit.Init(context.Background(), genkit.WithPlugins(plugin))
 
+	if openAIPlugin != nil {
+		// Genkit uses native output schema enforcement only when the model declares
+		// constrained output support; otherwise it falls back to prompt instructions
+		// and SDK-side validation. Gemini has constrained model definitions in the
+		// registry, but OpenAI does not, so define and register one here.
+		openAIModel := openAIPlugin.DefineModel(provider, unqualifiedModelName(modelName), constrainedOpenAIModelOptions(model))
+		genkit.RegisterAction(g, openAIModel)
+	}
+
 	// Bedrock requires explicit model registration via DefineModel after Init.
 	if bedrockPlugin != nil {
 		bedrockPlugin.DefineModel(g, bedrockplugin.ModelDefinition{
@@ -192,6 +206,22 @@ func initGenkit(config Config) (g *genkit.Genkit, modelName string, err error) {
 	}
 
 	return g, modelName, nil
+}
+
+func constrainedOpenAIModelOptions(model string) genkitai.ModelOptions {
+	return genkitai.ModelOptions{
+		Label:    fmt.Sprintf("OpenAI - %s", model),
+		Stage:    genkitai.ModelStageStable,
+		Versions: []string{},
+		Supports: &genkitai.ModelSupports{
+			Multiturn:   true,
+			Tools:       true,
+			ToolChoice:  true,
+			SystemRole:  true,
+			Media:       true,
+			Constrained: genkitai.ConstrainedSupportAll,
+		},
+	}
 }
 
 func newBedrockAWSConfig(cfg Config) (aws.Config, error) {
