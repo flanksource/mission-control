@@ -94,14 +94,12 @@ func CreateOrSaveFromFile(ctx context.Context, file string) (*models.Playbook, e
 
 type playbookRunOptions struct {
 	CheckPermissions bool
-	AllowApproval    bool
 }
 
 // Run creates and saves a run from a run request after validating the run parameters.
 func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models.PlaybookRun, error) {
 	run, err := createPlaybookRun(ctx, playbook, req, playbookRunOptions{
 		CheckPermissions: true,
-		AllowApproval:    true,
 	})
 	if err != nil {
 		return nil, err
@@ -148,7 +146,7 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 		run.CreatedBy = &ctx.User().ID
 	}
 
-	if opts.AllowApproval && spec.Approval != nil && !spec.Approval.Approvers.Empty() {
+	if spec.Approval != nil && !spec.Approval.Approvers.Empty() {
 		run.Status = models.PlaybookRunStatusPendingApproval
 	}
 
