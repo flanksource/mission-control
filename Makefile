@@ -52,6 +52,7 @@ PNPM_VERSION ?= 10.33.0
 TAILWIND_VERSION ?= 3.4.17
 TAILWIND_JS = auth/oidc/static/tailwind.min.js
 DEPS_VERSION ?= $(shell go list -m -f '{{.Version}}' github.com/flanksource/deps 2>/dev/null || echo latest)
+LLM_PRICING_REGISTRY = llm/pricing_registry.json
 
 $(TAILWIND_JS):
 	curl -sL "https://cdn.tailwindcss.com/$(TAILWIND_VERSION)" -o $(TAILWIND_JS)
@@ -187,6 +188,10 @@ manifests: generate gen-schemas ## Generate WebhookConfiguration, ClusterRole an
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object paths="./api/..." paths="./logs/..."
+
+.PHONY: generate-llm-pricing
+generate-llm-pricing: ## Regenerate embedded LLM pricing registry from models.dev.
+	go run llm/internal/gen-pricing/main.go --output "$(LLM_PRICING_REGISTRY)"
 
 .PHONY: build
 build: static
