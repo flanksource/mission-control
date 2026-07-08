@@ -99,9 +99,6 @@ type playbookRunOptions struct {
 
 // Run creates and saves a run from a run request after validating the run parameters.
 func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models.PlaybookRun, error) {
-	ctx = ctx.WithObject(playbook, req).WithLoggingValues("req", req)
-	ctx.Infof("running \n%v\n", logger.Pretty(req))
-
 	run, err := createPlaybookRun(ctx, playbook, req, playbookRunOptions{
 		CheckPermissions: true,
 		AllowApproval:    true,
@@ -130,6 +127,9 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 	if err := req.Params.Sanitize(ctx, spec.Parameters); err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to sanitize parameters")
 	}
+
+	ctx = ctx.WithObject(playbook, req).WithLoggingValues("req", req)
+	ctx.Infof("running \n%v\n", logger.Pretty(req))
 
 	run := models.PlaybookRun{
 		PlaybookID:         playbook.ID,
