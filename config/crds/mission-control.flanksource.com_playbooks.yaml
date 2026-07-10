@@ -4537,6 +4537,11 @@ spec:
                               type: boolean
                             relationships:
                               type: boolean
+                            resolvedInsights:
+                              description: |-
+                                ResolvedInsights includes resolved insights that were last observed
+                                within the report window alongside open ones.
+                              type: boolean
                           required:
                           - access
                           - accessLogs
@@ -4546,8 +4551,8 @@ spec:
                           - relationships
                           type: object
                         since:
-                          description: Since is the time range for changes and access
-                            logs (e.g. "30d"). Defaults to 30d.
+                          description: Since is the time range for changes, access
+                            logs and resolved insights (e.g. "30d"). Defaults to 30d.
                           type: string
                         variables:
                           additionalProperties:

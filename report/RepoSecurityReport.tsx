@@ -9,7 +9,7 @@ import {
 import { Icon } from '@flanksource/icons/icon';
 import { MissionControlLogo, Github as IconGithub } from '@flanksource/icons/mi';
 import type { CatalogReportData, CatalogReportEntry } from './catalog-report-types.ts';
-import type { ConfigAnalysis, ConfigItem, ConfigSeverity } from './config-types.ts';
+import type { ConfigAnalysis, ConfigItem, ConfigProperty, ConfigSeverity } from './config-types.ts';
 import ConfigInsightsSection from './components/ConfigInsightsSection.tsx';
 import CoverPage from './components/CoverPage.tsx';
 import { formatDate, formatDateTime } from './components/utils.ts';
@@ -53,6 +53,14 @@ interface ScorecardCheck {
   risk: ConfigSeverity;
   passing: boolean;
   reason: string;
+  score?: number;
+  docURL?: string;
+}
+
+interface AlertActivity {
+  newCount: number;
+  resolvedCount: number;
+  avgCloseDays: number | null;
 }
 
 interface RepoSecurity {
@@ -61,11 +69,12 @@ interface RepoSecurity {
   repo?: string;
   githubUrl?: string;
   checks: ScorecardCheck[];
-  passingChecks: number;
-  // Pass rate mapped onto a 0-10 scale. The raw OpenSSF aggregate score is not
-  // part of the insight data, so this is derived from check pass/fail status.
-  postureScore: number | null;
+  // Aggregate OpenSSF Scorecard score (0-10) as scraped from the OpenSSF API.
+  scorecardScore: number | null;
+  scorecardBadgeURL?: string;
   openAlerts: ConfigAnalysis[];
+  resolvedAlerts: ConfigAnalysis[];
+  activity: AlertActivity;
   alertsByKind: Record<AlertKind, ConfigAnalysis[]>;
   severity: SeverityCounts;
   otherInsights: ConfigAnalysis[];
@@ -74,6 +83,48 @@ interface RepoSecurity {
 
 function isOpen(a: ConfigAnalysis): boolean {
   return !a.status || a.status === 'open';
+}
+
+function findProperty(props: ConfigProperty[] | undefined, name: string): ConfigProperty | undefined {
+  return props?.find((p) => p.name === name);
+}
+
+function propertyURL(props: ConfigProperty[] | undefined, name: string): string | undefined {
+  const p = findProperty(props, name);
+  return p?.links?.find((l) => l.url)?.url || (p?.type === 'url' ? p.text : undefined);
+}
+
+// Direct link to the insight's source: the GitHub alert for scanning alerts,
+// the check documentation for OpenSSF scorecard checks.
+function insightSourceURL(a: ConfigAnalysis): string | undefined {
+  return propertyURL(a.properties, 'URL') || propertyURL(a.properties, 'Documentation');
+}
+
+function dayDiff(fromISO?: string, toISO?: string): number | null {
+  if (!fromISO || !toISO) return null;
+  const ms = Date.parse(toISO) - Date.parse(fromISO);
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  return ms / 86400000;
+}
+
+function buildAlertActivity(alerts: ConfigAnalysis[], resolvedAlerts: ConfigAnalysis[], since?: string): AlertActivity {
+  const sinceMs = since ? Date.parse(since) : NaN;
+  const inPeriod = (iso?: string) => !Number.isFinite(sinceMs) || (!!iso && Date.parse(iso) >= sinceMs);
+
+  const newCount = alerts.filter((a) => inPeriod(a.firstObserved)).length;
+  const resolvedInPeriod = resolvedAlerts.filter((a) => inPeriod(a.lastObserved));
+  const closeDays = resolvedInPeriod
+    .map((a) => dayDiff(a.firstObserved, a.lastObserved))
+    .filter((d): d is number => d !== null);
+  const avgCloseDays = closeDays.length > 0
+    ? closeDays.reduce((sum, d) => sum + d, 0) / closeDays.length
+    : null;
+
+  return { newCount, resolvedCount: resolvedInPeriod.length, avgCloseDays };
+}
+
+function formatDays(days: number): string {
+  return days < 1 ? '<1d' : `${Math.round(days)}d`;
 }
 
 function countSeverity(alerts: ConfigAnalysis[]): SeverityCounts {
@@ -100,7 +151,7 @@ function normalizeEntries(data: CatalogReportData): CatalogReportEntry[] {
   }];
 }
 
-function buildRepoSecurity(entry: CatalogReportEntry): RepoSecurity {
+function buildRepoSecurity(entry: CatalogReportEntry, since?: string): RepoSecurity {
   const ci = entry.configItem;
   const analyses = entry.analyses || [];
 
@@ -116,14 +167,16 @@ function buildRepoSecurity(entry: CatalogReportEntry): RepoSecurity {
       risk: (a.severity || 'info') as ConfigSeverity,
       passing: a.status === 'resolved',
       reason: a.summary || a.message || '',
+      score: findProperty(a.properties, 'Score')?.value,
+      docURL: propertyURL(a.properties, 'Documentation'),
     }))
     .sort((a, b) => {
       if (a.passing !== b.passing) return a.passing ? 1 : -1;
       return SEVERITY_ORDER.indexOf(a.risk) - SEVERITY_ORDER.indexOf(b.risk);
     });
 
-  const passingChecks = checks.filter((c) => c.passing).length;
   const openAlerts = alerts.filter(isOpen);
+  const resolvedAlerts = alerts.filter((a) => !isOpen(a));
 
   const alertsByKind: Record<AlertKind, ConfigAnalysis[]> = {
     dependabot: [],
@@ -137,15 +190,22 @@ function buildRepoSecurity(entry: CatalogReportEntry): RepoSecurity {
 
   const observed = analyses.map((a) => a.lastObserved).filter(Boolean) as string[];
 
+  const scoreText = findProperty(ci.properties, 'OpenSSF Score')?.text;
+  const scorecardScore = scoreText !== undefined && !Number.isNaN(parseFloat(scoreText))
+    ? parseFloat(scoreText)
+    : null;
+
   return {
     configItem: ci,
     org,
     repo,
     githubUrl: org && repo ? `https://github.com/${org}/${repo}` : undefined,
     checks,
-    passingChecks,
-    postureScore: checks.length > 0 ? (passingChecks / checks.length) * 10 : null,
+    scorecardScore,
+    scorecardBadgeURL: findProperty(ci.properties, 'OpenSSF Badge')?.text,
     openAlerts,
+    resolvedAlerts,
+    activity: buildAlertActivity(alerts, resolvedAlerts, since),
     alertsByKind,
     severity: countSeverity(openAlerts),
     otherInsights,
@@ -160,7 +220,7 @@ function toAlertRow(a: ConfigAnalysis) {
     type: kind,
     severity: severity as 'critical' | 'high' | 'medium' | 'low',
     title: a.summary || a.message || a.analyzer,
-    url: a.permalink,
+    url: insightSourceURL(a) || a.permalink,
     location: kind === 'code-scanning' ? a.analyzer : undefined,
   };
 }
@@ -182,19 +242,19 @@ function SeverityChips({ counts }: { counts: SeverityCounts }) {
   );
 }
 
-function CheckPassBar({ passing, total }: { passing: number; total: number }) {
-  const rate = total > 0 ? Math.round((passing / total) * 100) : 0;
+function ScorecardBadge({ security }: { security: RepoSecurity }) {
+  const viewerURL = security.org && security.repo
+    ? `https://scorecard.dev/viewer/?uri=github.com/${security.org}/${security.repo}`
+    : undefined;
+  if (security.scorecardBadgeURL) {
+    const badge = <img src={security.scorecardBadgeURL} className="h-[4mm] w-auto" alt="OpenSSF Scorecard" />;
+    return viewerURL ? <a href={viewerURL}>{badge}</a> : badge;
+  }
+  if (!viewerURL) return null;
   return (
-    <div className="inline-flex items-center gap-[1.5mm]">
-      <span className="text-xs text-gray-600 whitespace-nowrap">{passing}/{total} checks passing</span>
-      <div className="relative w-[12mm] h-[1.5mm] bg-gray-200 rounded-full overflow-hidden">
-        <div
-          className={`absolute top-0 left-0 h-full ${rate >= 70 ? 'bg-green-600' : rate >= 50 ? 'bg-yellow-500' : 'bg-red-600'}`}
-          style={{ width: `${rate}%` }}
-        />
-      </div>
-      <span className="text-xs text-gray-600">{rate}%</span>
-    </div>
+    <a href={viewerURL} className="text-xs text-blue-600 underline">
+      OpenSSF Scorecard
+    </a>
   );
 }
 
@@ -215,29 +275,22 @@ function RepoSummaryCard({ security }: { security: RepoSecurity }) {
       <div className="flex items-center gap-[2mm] mb-[1mm]">
         <Icon name={ci.type || 'github'} size={18} className="shrink-0" />
         <span className="text-sm font-bold text-gray-900 flex-1 leading-none">{ci.name}</span>
-        {security.postureScore !== null && (
-          <ScoreGauge score={security.postureScore} size="sm" showMinMax={false} />
+        {security.scorecardScore !== null && (
+          <ScoreGauge score={security.scorecardScore} size="sm" showMinMax={false} />
         )}
       </div>
       {ci.description && <p className="text-xs text-gray-600 mb-[2mm]">{ci.description}</p>}
 
       <div className="flex items-center gap-[2mm] flex-wrap mb-[2mm]">
         <GithubLink security={security} />
-        {security.org && security.repo && (
-          <a
-            href={`https://scorecard.dev/viewer/?uri=github.com/${security.org}/${security.repo}`}
-            className="text-xs text-blue-600 underline"
-          >
-            OpenSSF Scorecard
-          </a>
-        )}
+        <ScorecardBadge security={security} />
       </div>
 
       <div className="grid grid-cols-2 gap-[2mm] text-xs">
         <div className="bg-gray-50 rounded p-[2mm]">
-          <div className="text-gray-600 mb-[1mm]">Security Checks</div>
-          {security.checks.length > 0
-            ? <CheckPassBar passing={security.passingChecks} total={security.checks.length} />
+          <div className="text-gray-600 mb-[1mm]">OpenSSF Score</div>
+          {security.scorecardScore !== null
+            ? <span className="font-bold text-slate-800">{security.scorecardScore.toFixed(1)} / 10</span>
             : <span className="text-gray-400">No scorecard data</span>}
         </div>
         <div className="bg-gray-50 rounded p-[2mm]">
@@ -261,6 +314,7 @@ function SecurityChecksTable({ checks }: { checks: ScorecardCheck[] }) {
         <tr className="border-b-2 border-gray-300 text-left text-gray-600">
           <th className="py-[1mm] pr-[2mm] font-semibold">Check</th>
           <th className="py-[1mm] pr-[2mm] font-semibold">Risk</th>
+          <th className="py-[1mm] pr-[2mm] font-semibold">Score</th>
           <th className="py-[1mm] pr-[2mm] font-semibold">Status</th>
           <th className="py-[1mm] font-semibold">Details</th>
         </tr>
@@ -268,9 +322,16 @@ function SecurityChecksTable({ checks }: { checks: ScorecardCheck[] }) {
       <tbody>
         {checks.map((check) => (
           <tr key={check.name} className="border-b border-gray-100" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
-            <td className="py-[1mm] pr-[2mm] font-medium text-slate-800 whitespace-nowrap">{check.name}</td>
+            <td className="py-[1mm] pr-[2mm] font-medium text-slate-800 whitespace-nowrap">
+              {check.docURL
+                ? <a href={check.docURL} className="text-slate-800 underline">{check.name}</a>
+                : check.name}
+            </td>
             <td className="py-[1mm] pr-[2mm]">
               <Badge variant="custom" size="xs" shape="rounded" label={check.risk} className={SEVERITY_BADGE[check.risk] ?? SEVERITY_BADGE.info} />
+            </td>
+            <td className="py-[1mm] pr-[2mm] text-gray-600 whitespace-nowrap">
+              {check.score !== undefined ? `${check.score}/10` : '-'}
             </td>
             <td className="py-[1mm] pr-[2mm]">
               <Badge
@@ -286,6 +347,76 @@ function SecurityChecksTable({ checks }: { checks: ScorecardCheck[] }) {
         ))}
       </tbody>
     </table>
+  );
+}
+
+function AlertActivityRow({ security, periodLabel }: { security: RepoSecurity; periodLabel?: string }) {
+  const { newCount, resolvedCount, avgCloseDays } = security.activity;
+  if (newCount === 0 && resolvedCount === 0) return null;
+  return (
+    <div className="flex items-center gap-[2mm] mb-[2mm] text-xs text-gray-600">
+      {periodLabel && <span className="font-semibold text-slate-800">Last {periodLabel}:</span>}
+      <Badge
+        variant="custom" size="xs" shape="rounded"
+        label={`${newCount} new`}
+        className={newCount > 0 ? 'text-orange-700 bg-orange-50 border-orange-200' : SEVERITY_BADGE.info}
+      />
+      <Badge
+        variant="custom" size="xs" shape="rounded"
+        label={`${resolvedCount} resolved`}
+        className={resolvedCount > 0 ? 'text-green-700 bg-green-50 border-green-200' : SEVERITY_BADGE.info}
+      />
+      {avgCloseDays !== null && <span>avg time to resolve: {formatDays(avgCloseDays)}</span>}
+    </div>
+  );
+}
+
+function ResolvedAlertsTable({ security, periodLabel }: { security: RepoSecurity; periodLabel?: string }) {
+  if (security.resolvedAlerts.length === 0) return null;
+  const rows = [...security.resolvedAlerts].sort(
+    (a, b) => (b.lastObserved || '').localeCompare(a.lastObserved || ''),
+  );
+  return (
+    <div className="mt-[3mm]">
+      <h3 className="text-sm font-semibold text-gray-800 mb-[2mm]">
+        Resolved Alerts{periodLabel ? ` · last ${periodLabel}` : ''}
+      </h3>
+      <table className="w-full text-xs border-collapse">
+        <thead>
+          <tr className="border-b-2 border-gray-300 text-left text-gray-600">
+            <th className="py-[1mm] pr-[2mm] font-semibold">Type</th>
+            <th className="py-[1mm] pr-[2mm] font-semibold">Severity</th>
+            <th className="py-[1mm] pr-[2mm] font-semibold">Alert</th>
+            <th className="py-[1mm] pr-[2mm] font-semibold">Resolved</th>
+            <th className="py-[1mm] font-semibold">Open for</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((a) => {
+            const sev = a.severity === 'info' || !a.severity ? 'low' : a.severity;
+            const url = insightSourceURL(a) || a.permalink;
+            const title = a.summary || a.message || a.analyzer;
+            const openFor = dayDiff(a.firstObserved, a.lastObserved);
+            return (
+              <tr key={a.id} className="border-b border-gray-100" style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
+                <td className="py-[1mm] pr-[2mm] whitespace-nowrap text-gray-600">{ALERT_KIND_LABELS[ALERT_SOURCES[a.source!]] || a.source}</td>
+                <td className="py-[1mm] pr-[2mm]">
+                  <Badge variant="custom" size="xs" shape="rounded" label={sev} className={SEVERITY_BADGE[sev] ?? SEVERITY_BADGE.info} />
+                </td>
+                <td className="py-[1mm] pr-[2mm] text-slate-800">
+                  {url ? <a href={url} className="text-slate-800 underline">{title}</a> : title}
+                </td>
+                <td className="py-[1mm] pr-[2mm] whitespace-nowrap text-gray-600">{a.lastObserved ? formatDate(a.lastObserved) : '-'}</td>
+                <td className="py-[1mm] whitespace-nowrap text-gray-600">{openFor !== null ? formatDays(openFor) : '-'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p className="text-xs text-gray-400 mt-[1mm]">
+        Resolution time is approximated from when the alert was last observed open by the catalog scraper.
+      </p>
+    </div>
   );
 }
 
@@ -327,7 +458,7 @@ function VulnerabilityAlerts({ security }: { security: RepoSecurity }) {
   );
 }
 
-function RepoSecuritySection({ security }: { security: RepoSecurity }) {
+function RepoSecuritySection({ security, periodLabel }: { security: RepoSecurity; periodLabel?: string }) {
   const ci = security.configItem;
   return (
     <div className="mb-[6mm]">
@@ -340,16 +471,12 @@ function RepoSecuritySection({ security }: { security: RepoSecurity }) {
             </div>
             {ci.description && <p className="text-xs text-gray-600">{ci.description}</p>}
           </div>
-          {security.postureScore !== null && <ScoreGauge score={security.postureScore} size="md" label="check pass" />}
+          {security.scorecardScore !== null && <ScoreGauge score={security.scorecardScore} size="md" label="OpenSSF score" />}
         </div>
         <div className="flex justify-end items-center gap-[2mm] flex-wrap">
           <GithubLink security={security} />
-          {security.checks.length > 0 && (
-            <>
-              <span className="text-gray-400">•</span>
-              <CheckPassBar passing={security.passingChecks} total={security.checks.length} />
-            </>
-          )}
+          <span className="text-gray-400">•</span>
+          <ScorecardBadge security={security} />
           {security.lastObserved && (
             <>
               <span className="text-gray-400">•</span>
@@ -363,7 +490,9 @@ function RepoSecuritySection({ security }: { security: RepoSecurity }) {
       <SecurityChecksTable checks={security.checks} />
 
       <h3 className="text-sm font-semibold text-gray-800 mt-[4mm] mb-[2mm]">Vulnerability Alerts</h3>
+      <AlertActivityRow security={security} periodLabel={periodLabel} />
       <VulnerabilityAlerts security={security} />
+      <ResolvedAlertsTable security={security} periodLabel={periodLabel} />
 
       {security.otherInsights.length > 0 && (
         <div className="mt-[4mm]">
@@ -374,23 +503,30 @@ function RepoSecuritySection({ security }: { security: RepoSecurity }) {
   );
 }
 
-function OverviewStats({ repos }: { repos: RepoSecurity[] }) {
-  const scored = repos.filter((r) => r.postureScore !== null);
+function OverviewStats({ repos, periodLabel }: { repos: RepoSecurity[]; periodLabel?: string }) {
+  const scored = repos.filter((r) => r.scorecardScore !== null);
   const avgScore = scored.length > 0
-    ? scored.reduce((sum, r) => sum + (r.postureScore || 0), 0) / scored.length
-    : 0;
+    ? scored.reduce((sum, r) => sum + (r.scorecardScore || 0), 0) / scored.length
+    : null;
   const totalAlerts = repos.reduce((sum, r) => sum + r.openAlerts.length, 0);
   const critical = repos.reduce((sum, r) => sum + r.severity.critical, 0);
   const high = repos.reduce((sum, r) => sum + r.severity.high, 0);
-  const passing = repos.reduce((sum, r) => sum + r.passingChecks, 0);
-  const totalChecks = repos.reduce((sum, r) => sum + r.checks.length, 0);
+  const newAlerts = repos.reduce((sum, r) => sum + r.activity.newCount, 0);
+  const resolved = repos.reduce((sum, r) => sum + r.activity.resolvedCount, 0);
+  const closeDays = repos
+    .map((r) => r.activity.avgCloseDays !== null ? { avg: r.activity.avgCloseDays, n: r.activity.resolvedCount } : null)
+    .filter((x): x is { avg: number; n: number } => x !== null);
+  const totalClosed = closeDays.reduce((sum, x) => sum + x.n, 0);
+  const avgClose = totalClosed > 0
+    ? closeDays.reduce((sum, x) => sum + x.avg * x.n, 0) / totalClosed
+    : null;
 
   return (
     <div className="grid grid-cols-3 gap-[3mm] mb-[4mm]">
       <div className="border border-gray-200 rounded p-[3mm] bg-blue-50">
-        <div className="text-xl font-bold text-blue-700 mb-[0.5mm]">{avgScore.toFixed(1)}</div>
-        <div className="text-xs text-gray-700 font-medium">Average Check Pass Score</div>
-        <div className="text-xs text-gray-600 mt-[0.5mm]">Across {repos.length} repositories (0-10)</div>
+        <div className="text-xl font-bold text-blue-700 mb-[0.5mm]">{avgScore !== null ? avgScore.toFixed(1) : '-'}</div>
+        <div className="text-xs text-gray-700 font-medium">Average OpenSSF Score</div>
+        <div className="text-xs text-gray-600 mt-[0.5mm]">Across {scored.length} scored {scored.length === 1 ? 'repository' : 'repositories'} (0-10)</div>
       </div>
       <div className="border border-gray-200 rounded p-[3mm] bg-red-50">
         <div className="text-xl font-bold text-red-700 mb-[0.5mm]">{totalAlerts}</div>
@@ -398,9 +534,11 @@ function OverviewStats({ repos }: { repos: RepoSecurity[] }) {
         <div className="text-xs text-gray-600 mt-[0.5mm]">{critical} critical, {high} high</div>
       </div>
       <div className="border border-gray-200 rounded p-[3mm] bg-purple-50">
-        <div className="text-xl font-bold text-purple-700 mb-[0.5mm]">{passing}</div>
-        <div className="text-xs text-gray-700 font-medium">Total Passing Checks</div>
-        <div className="text-xs text-gray-600 mt-[0.5mm]">Out of {totalChecks} OpenSSF checks</div>
+        <div className="text-xl font-bold text-purple-700 mb-[0.5mm]">{newAlerts} / {resolved}</div>
+        <div className="text-xs text-gray-700 font-medium">New / Resolved Alerts{periodLabel ? ` · last ${periodLabel}` : ''}</div>
+        <div className="text-xs text-gray-600 mt-[0.5mm]">
+          {avgClose !== null ? `Avg time to resolve: ${formatDays(avgClose)}` : 'No alerts resolved in period'}
+        </div>
       </div>
     </div>
   );
@@ -430,18 +568,27 @@ export default function SecurityReport({ data }: SecurityReportProps) {
   const entries = normalizeEntries(data);
   const repoEntries = entries.filter((e) => e.configItem?.type === GITHUB_REPO_TYPE);
   const otherEntries = entries.filter((e) => e.configItem?.type !== GITHUB_REPO_TYPE);
-  const repos = repoEntries.map(buildRepoSecurity);
+  const repos = repoEntries.map((e) => buildRepoSecurity(e, data.from));
 
   const totalAlerts = repos.reduce((sum, r) => sum + r.openAlerts.length, 0);
-  const passing = repos.reduce((sum, r) => sum + r.passingChecks, 0);
-  const totalChecks = repos.reduce((sum, r) => sum + r.checks.length, 0);
+  const totalResolved = repos.reduce((sum, r) => sum + r.activity.resolvedCount, 0);
+  const scored = repos.filter((r) => r.scorecardScore !== null);
+  const avgScore = scored.length > 0
+    ? scored.reduce((sum, r) => sum + (r.scorecardScore || 0), 0) / scored.length
+    : null;
   const generated = formatDateTime(data.generatedAt ?? new Date().toISOString());
+
+  const periodDays = data.from
+    ? Math.round((Date.parse(data.generatedAt ?? new Date().toISOString()) - Date.parse(data.from)) / 86400000)
+    : null;
+  const periodLabel = periodDays && periodDays > 0 ? `${periodDays}d` : undefined;
 
   const coverStats: Array<{ label: string; value: string | number }> = [
     { label: 'repositories', value: repos.length },
     { label: 'open alerts', value: totalAlerts },
-    { label: 'checks passing', value: `${passing}/${totalChecks}` },
+    { label: periodLabel ? `resolved · ${periodLabel}` : 'resolved alerts', value: totalResolved },
   ];
+  if (avgScore !== null) coverStats.push({ label: 'avg OpenSSF score', value: avgScore.toFixed(1) });
   if (otherEntries.length > 0) coverStats.push({ label: 'other components', value: otherEntries.length });
 
   return (
@@ -485,18 +632,19 @@ export default function SecurityReport({ data }: SecurityReportProps) {
         <p className="text-xs text-gray-700 mb-[3mm]">
           This report summarizes the security posture of {repos.length} GitHub{' '}
           {repos.length === 1 ? 'repository' : 'repositories'} tracked in Mission Control. It combines
-          OpenSSF Scorecard assessments with open GitHub security alerts (Dependabot, Code Scanning and
-          Secret Scanning), as collected by catalog scrapers.
+          OpenSSF Scorecard assessments with GitHub security alerts (Dependabot, Code Scanning and
+          Secret Scanning) — both open and recently resolved — as collected by catalog scrapers.
         </p>
 
-        <OverviewStats repos={repos} />
+        <OverviewStats repos={repos} periodLabel={periodLabel} />
 
         <blockquote className="info mb-[3mm]">
           <strong>About OpenSSF Scorecards:</strong> The Open Source Security Foundation (OpenSSF)
           Scorecard project automatically assesses projects against security best practices such as code
           review, dependency management, SAST tooling and vulnerability handling. Each check listed in
-          this report carries its inherent risk level; a check is marked <em>pass</em> only when it fully
-          meets the practice. The gauge shown per repository is the share of passing checks on a 0-10 scale.
+          this report carries its inherent risk level and a 0-10 score; a check is marked <em>pass</em>{' '}
+          only when it fully meets the practice. The gauge shown per repository is the aggregate OpenSSF
+          Scorecard score (0-10) as published by the OpenSSF Scorecard API.
         </blockquote>
 
         <blockquote className="mb-[4mm]">
@@ -519,7 +667,7 @@ export default function SecurityReport({ data }: SecurityReportProps) {
 
       {repos.map((r) => (
         <Page key={r.configItem.id}>
-          <RepoSecuritySection security={r} />
+          <RepoSecuritySection security={r} periodLabel={periodLabel} />
         </Page>
       ))}
 
@@ -538,7 +686,7 @@ export default function SecurityReport({ data }: SecurityReportProps) {
       <Page>
         <div className="mt-[4mm] border-t-2 border-gray-300 pt-[4mm]">
           <h2 className="text-xl font-bold text-gray-900 mb-[3mm]">Security Summary</h2>
-          <OverviewStats repos={repos} />
+          <OverviewStats repos={repos} periodLabel={periodLabel} />
           <blockquote className="info">
             <strong>Additional Security Resources:</strong> For questions about security practices or to
             report security issues, please contact{' '}

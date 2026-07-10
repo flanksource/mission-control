@@ -307,16 +307,23 @@ func buildEntryWithMapper(ctx context.Context, config *models.ConfigItem, opts O
 	}
 
 	if opts.Sections.Insights {
-		resp, err := query.FindCatalogInsights(ctx, query.CatalogInsightsSearchRequest{
+		req := query.CatalogInsightsSearchRequest{
 			BaseCatalogSearch: query.BaseCatalogSearch{
 				CatalogID: catalogIDsCSV,
 				PageSize:  opts.pageSizeFor(0),
 			},
-		})
+		}
+		if opts.Sections.ResolvedInsights {
+			req.Status = "open,resolved"
+		}
+		resp, err := query.FindCatalogInsights(ctx, req)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get insights: %w", err)
 		}
-		entry.Analyses = lo.Map(resp.Insights, func(a models.ConfigAnalysis, _ int) api.CatalogReportAnalysis {
+		insights := lo.Filter(resp.Insights, func(a models.ConfigAnalysis, _ int) bool {
+			return includeInsight(a, sinceTime)
+		})
+		entry.Analyses = lo.Map(insights, func(a models.ConfigAnalysis, _ int) api.CatalogReportAnalysis {
 			name, typ := configMeta(a.ConfigID.String())
 			return api.NewCatalogReportAnalysis(a, name, typ)
 		})
@@ -360,6 +367,16 @@ func buildEntryWithMapper(ctx context.Context, config *models.ConfigItem, opts O
 	}
 
 	return entry, scraperIDs, nil
+}
+
+// includeInsight reports whether an insight belongs in the report. Open (and
+// otherwise non-resolved) insights are always kept; resolved insights are kept
+// only when they were last observed within the report window.
+func includeInsight(a models.ConfigAnalysis, since time.Time) bool {
+	if a.Status != models.AnalysisStatusResolved {
+		return true
+	}
+	return a.LastObserved != nil && a.LastObserved.After(since)
 }
 
 func newCatalogReportChangeFromRow(c query.ConfigChangeRow, configName, configType string, details map[string]any) api.CatalogReportChange {
