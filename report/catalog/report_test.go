@@ -83,6 +83,37 @@ var _ = ginkgo.Describe("Report date range", func() {
 	})
 })
 
+var _ = ginkgo.Describe("includeInsight", func() {
+	since := time.Now().Add(-30 * 24 * time.Hour)
+	recent := time.Now().Add(-24 * time.Hour)
+	old := time.Now().Add(-60 * 24 * time.Hour)
+
+	ginkgo.It("keeps open insights regardless of age", func() {
+		a := models.ConfigAnalysis{Status: "open", LastObserved: &old}
+		Expect(includeInsight(a, since)).To(BeTrue())
+	})
+
+	ginkgo.It("keeps insights with empty status", func() {
+		a := models.ConfigAnalysis{LastObserved: &old}
+		Expect(includeInsight(a, since)).To(BeTrue())
+	})
+
+	ginkgo.It("keeps resolved insights observed within the window", func() {
+		a := models.ConfigAnalysis{Status: models.AnalysisStatusResolved, LastObserved: &recent}
+		Expect(includeInsight(a, since)).To(BeTrue())
+	})
+
+	ginkgo.It("drops resolved insights observed before the window", func() {
+		a := models.ConfigAnalysis{Status: models.AnalysisStatusResolved, LastObserved: &old}
+		Expect(includeInsight(a, since)).To(BeFalse())
+	})
+
+	ginkgo.It("drops resolved insights without a last observed time", func() {
+		a := models.ConfigAnalysis{Status: models.AnalysisStatusResolved}
+		Expect(includeInsight(a, since)).To(BeFalse())
+	})
+})
+
 var _ = ginkgo.Describe("Options.effectiveMax", func() {
 	cases := []struct {
 		name     string

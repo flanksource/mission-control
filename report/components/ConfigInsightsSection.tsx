@@ -35,14 +35,22 @@ const ANALYSIS_TYPES: AnalysisType[] = [
   'reliability', 'recommendation', 'availability', 'integration',
 ];
 
+function sourceURL(analysis: ConfigAnalysis): string | undefined {
+  const links = analysis.properties?.flatMap((p) => p.links ?? []);
+  return links?.find((l) => l.url)?.url;
+}
+
 function InsightEntry({ analysis }: { analysis: ConfigAnalysis }) {
   const sev = analysis.severity ?? 'info';
+  const url = sourceURL(analysis);
   return (
     <div className="flex items-center gap-[1.5mm] py-[0.3mm] border-b border-gray-50 last:border-b-0 text-xs">
       <span className="w-[3.5mm] h-[3.5mm] shrink-0 flex items-center justify-center">
         <Icon name={analysis.analysisType || analysis.analyzer} size={10} />
       </span>
-      <span className="font-medium text-slate-800 whitespace-nowrap">{analysis.analyzer}</span>
+      {url
+        ? <a href={url} className="font-medium text-slate-800 whitespace-nowrap underline">{analysis.analyzer}</a>
+        : <span className="font-medium text-slate-800 whitespace-nowrap">{analysis.analyzer}</span>}
       {analysis.configName && (
         <Badge variant="custom" size="xs" shape="rounded" label={analysis.configName} color="bg-blue-50" textColor="text-blue-600" borderColor="border-blue-200" />
       )}

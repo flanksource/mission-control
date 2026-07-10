@@ -27,12 +27,18 @@ spec:
             value: pdf
           - label: JSON
             value: json
+    - name: since
+      label: Time period
+      description: 'Window for new/resolved alert activity (e.g. 7d, 30d, 90d)'
+      type: text
+      default: 30d
   actions:
     - name: Security Report
       report:
         configs:
           search: '{{ .params.configs }}'
         format: '{{ .params.format }}'
+        since: '{{ .params.since }}'
         file:
           path: report/RepoSecurityReport.tsx
         facet:
@@ -40,6 +46,7 @@ spec:
         sections:
           changes: true
           insights: true
+          resolvedInsights: true
           relationships: true
           access: true
           accessLogs: true

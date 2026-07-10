@@ -4,6 +4,25 @@ export type AnalysisType =
   | 'security' | 'compliance' | 'cost' | 'performance'
   | 'reliability' | 'recommendation' | 'integration' | 'availability';
 
+export interface ConfigPropertyLink {
+  type?: string;
+  url?: string;
+  label?: string;
+}
+
+export interface ConfigProperty {
+  name?: string;
+  label?: string;
+  type?: string;
+  text?: string;
+  value?: number;
+  max?: number;
+  min?: number;
+  unit?: string;
+  color?: string;
+  links?: ConfigPropertyLink[];
+}
+
 export interface ConfigItem {
   id: string;
   name: string;
@@ -15,6 +34,7 @@ export interface ConfigItem {
   permalink?: string;
   labels?: Record<string, string>;
   tags?: Record<string, string>;
+  properties?: ConfigProperty[];
   costTotal30d?: number;
   createdAt?: string;
   updatedAt?: string;
@@ -72,6 +92,7 @@ export interface ConfigAnalysis {
   source?: string;
   firstObserved?: string;
   lastObserved?: string;
+  properties?: ConfigProperty[];
 }
 
 export interface ConfigRelationship {

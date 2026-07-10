@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 )
 
 func ConfigPermalink(configID string) string {
@@ -141,6 +142,9 @@ type CatalogReportSections struct {
 	Access        bool `json:"access"`
 	AccessLogs    bool `json:"accessLogs"`
 	ConfigJSON    bool `json:"configJSON"`
+	// ResolvedInsights includes resolved insights that were last observed
+	// within the report window alongside open ones.
+	ResolvedInsights bool `json:"resolvedInsights,omitempty"`
 }
 
 // CatalogReportChange wraps models.ConfigChange with camelCase JSON tags
@@ -220,6 +224,8 @@ type CatalogReportAnalysis struct {
 	Source        string `json:"source,omitempty"`
 	FirstObserved string `json:"firstObserved,omitempty"`
 	LastObserved  string `json:"lastObserved,omitempty"`
+
+	Properties types.Properties `json:"properties,omitempty"`
 }
 
 func NewCatalogReportAnalysis(a models.ConfigAnalysis, configName, configType string) CatalogReportAnalysis {
@@ -236,6 +242,9 @@ func NewCatalogReportAnalysis(a models.ConfigAnalysis, configName, configType st
 		Severity:     string(a.Severity),
 		AnalysisType: string(a.AnalysisType),
 		Source:       a.Source,
+	}
+	if a.Properties != nil {
+		r.Properties = *a.Properties
 	}
 	if a.FirstObserved != nil {
 		r.FirstObserved = a.FirstObserved.Format(time.RFC3339)
@@ -271,6 +280,7 @@ type CatalogReportConfigItem struct {
 	Description string            `json:"description,omitempty"`
 	Labels      map[string]string `json:"labels,omitempty"`
 	Tags        map[string]string `json:"tags,omitempty"`
+	Properties  types.Properties  `json:"properties,omitempty"`
 	CreatedAt   string            `json:"createdAt,omitempty"`
 	UpdatedAt   string            `json:"updatedAt,omitempty"`
 }
@@ -297,6 +307,9 @@ func NewCatalogReportConfigItem(ci models.ConfigItem) CatalogReportConfigItem {
 	}
 	if ci.Labels != nil {
 		r.Labels = *ci.Labels
+	}
+	if ci.Properties != nil {
+		r.Properties = *ci.Properties
 	}
 	if !ci.CreatedAt.IsZero() {
 		r.CreatedAt = ci.CreatedAt.Format(time.RFC3339)

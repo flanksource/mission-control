@@ -15,6 +15,7 @@ export interface CatalogReportSections {
   access: boolean;
   accessLogs: boolean;
   configJSON: boolean;
+  resolvedInsights?: boolean;
 }
 
 export interface CatalogReportAccess {

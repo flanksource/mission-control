@@ -433,6 +433,9 @@
         },
         "configJSON": {
           "type": "boolean"
+        },
+        "resolvedInsights": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
@@ -2431,7 +2434,7 @@
         },
         "since": {
           "type": "string",
-          "description": "Since is the time range for changes and access logs (e.g. \"30d\"). Defaults to 30d."
+          "description": "Since is the time range for changes, access logs and resolved insights (e.g. \"30d\"). Defaults to 30d."
         },
         "recursive": {
           "type": "boolean",

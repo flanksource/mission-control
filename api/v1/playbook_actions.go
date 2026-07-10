@@ -756,7 +756,7 @@ type ReportAction struct {
 	// Facet rendering options for facet-html and facet-pdf formats
 	Facet *FacetOptions `json:"facet,omitempty" yaml:"facet,omitempty" template:"true"`
 
-	// Since is the time range for changes and access logs (e.g. "30d"). Defaults to 30d.
+	// Since is the time range for changes, access logs and resolved insights (e.g. "30d"). Defaults to 30d.
 	Since string `json:"since,omitempty" yaml:"since,omitempty" template:"true"`
 	// Recursive includes all descendant config items in the catalog report.
 	Recursive bool `json:"recursive,omitempty" yaml:"recursive,omitempty"`
