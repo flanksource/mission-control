@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"os"
 	"path/filepath"
+	"strings"
 
 	commons "github.com/flanksource/commons/context"
 	"github.com/flanksource/duty/context"
@@ -12,6 +13,31 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
+
+var _ = ginkgo.Describe("Report action progress logs", func() {
+	ctx := context.Context{Context: commons.NewContext(gocontext.TODO())}
+
+	ginkgo.It("accumulates timestamped log lines", func() {
+		r := &Report{}
+		r.logf(ctx, "resolving %d configs", 3)
+		r.logf(ctx, "rendering pdf")
+
+		logs := r.logText()
+		Expect(logs).To(ContainSubstring("resolving 3 configs"))
+		Expect(logs).To(ContainSubstring("rendering pdf"))
+		Expect(strings.Split(logs, "\n")).To(HaveLen(2))
+	})
+
+	ginkgo.It("returns accumulated logs on the result even when the action fails", func() {
+		r := &Report{}
+		r.logf(ctx, "starting report")
+
+		result, err := r.Run(ctx, v1.ReportAction{})
+		Expect(err).To(HaveOccurred())
+		Expect(result).NotTo(BeNil())
+		Expect(result.Logs).To(ContainSubstring("starting report"))
+	})
+})
 
 var _ = ginkgo.Describe("Report action source resolution", func() {
 	ctx := context.Context{Context: commons.NewContext(gocontext.TODO())}

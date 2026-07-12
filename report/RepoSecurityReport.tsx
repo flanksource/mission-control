@@ -4,7 +4,7 @@ import './icon-setup.ts';
 import React from 'react';
 import {
   Document, Page, Header, Footer, PageNo, ScoreGauge,
-  SeverityStatCard, Badge, AlertsTable,
+  SeverityStatCard, Badge,
 } from '@flanksource/facet';
 import { Icon } from '@flanksource/icons/icon';
 import { MissionControlLogo, Github as IconGithub } from '@flanksource/icons/mi';
@@ -213,16 +213,36 @@ function buildRepoSecurity(entry: CatalogReportEntry, since?: string): RepoSecur
   };
 }
 
-function toAlertRow(a: ConfigAnalysis) {
-  const kind = ALERT_SOURCES[a.source!] || 'code-scanning';
-  const severity = a.severity === 'info' || !a.severity ? 'low' : a.severity;
-  return {
-    type: kind,
-    severity: severity as 'critical' | 'high' | 'medium' | 'low',
-    title: a.summary || a.message || a.analyzer,
-    url: insightSourceURL(a) || a.permalink,
-    location: kind === 'code-scanning' ? a.analyzer : undefined,
-  };
+// Renders open alerts as one row per alert with the title linked to the
+// GitHub alert. Facet's AlertsTable is not used because it drops the url field.
+function OpenAlertsList({ alerts }: { alerts: ConfigAnalysis[] }) {
+  const rows = [...alerts].sort((a, b) => {
+    const sevDiff = SEVERITY_ORDER.indexOf((a.severity || 'info') as ConfigSeverity)
+      - SEVERITY_ORDER.indexOf((b.severity || 'info') as ConfigSeverity);
+    if (sevDiff !== 0) return sevDiff;
+    return (a.summary || '').localeCompare(b.summary || '');
+  });
+  return (
+    <div className="space-y-1">
+      {rows.map((a) => {
+        const sev = a.severity === 'info' || !a.severity ? 'low' : a.severity;
+        const url = insightSourceURL(a) || a.permalink;
+        const title = a.summary || a.message || a.analyzer;
+        const isCodeScanning = ALERT_SOURCES[a.source!] === 'code-scanning';
+        return (
+          <div key={a.id} className="flex items-center gap-2 text-xs min-w-0">
+            <Badge variant="custom" size="xs" shape="rounded" label={sev} className={SEVERITY_BADGE[sev] ?? SEVERITY_BADGE.info} />
+            <span className="text-gray-700 truncate flex-1 min-w-0">
+              {url ? <a href={url} className="text-gray-700 underline">{title}</a> : title}
+            </span>
+            {isCodeScanning && a.analyzer && (
+              <code className="text-gray-500 flex-shrink-0 max-w-[50%] text-[10px] bg-gray-100 px-1 rounded truncate">{a.analyzer}</code>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function SeverityChips({ counts }: { counts: SeverityCounts }) {
@@ -450,7 +470,7 @@ function VulnerabilityAlerts({ security }: { security: RepoSecurity }) {
               <span className="text-xs font-semibold text-slate-800">{ALERT_KIND_LABELS[kind]}</span>
               <Badge variant="custom" size="xs" shape="pill" label={String(alerts.length)} color="bg-gray-100" textColor="text-gray-500" borderColor="border-gray-200" />
             </div>
-            <AlertsTable alerts={alerts.map(toAlertRow)} />
+            <OpenAlertsList alerts={alerts} />
           </div>
         );
       })}

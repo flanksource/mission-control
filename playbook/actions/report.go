@@ -14,7 +14,10 @@ import (
 	"github.com/flanksource/commons/duration"
 	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/types"
+	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -31,14 +34,48 @@ const defaultCatalogEntryFile = "CatalogReport.tsx"
 
 type ReportResult struct {
 	Format    string               `json:"format,omitempty"`
+	Logs      string               `json:"logs,omitempty"`
 	Artifacts []artifacts.Artifact `json:"-"`
 }
 
 func (r *ReportResult) GetArtifacts() []artifacts.Artifact { return r.Artifacts }
 
-type Report struct{}
+type Report struct {
+	// ActionID identifies the playbook run action row that receives progress
+	// logs while the report builds. uuid.Nil disables streaming.
+	ActionID uuid.UUID
+
+	logs []string
+}
+
+// logf records a progress line and streams the accumulated log to the run
+// action row so the UI can show it while the action is still running.
+func (r *Report) logf(ctx context.Context, format string, args ...any) {
+	line := time.Now().Format("15:04:05") + " " + fmt.Sprintf(format, args...)
+	r.logs = append(r.logs, line)
+
+	if r.ActionID == uuid.Nil || ctx.DB() == nil {
+		return
+	}
+
+	runAction := models.PlaybookRunAction{ID: r.ActionID}
+	if err := runAction.Update(ctx.DB(), map[string]any{"result": types.JSONMap{"logs": r.logText()}}); err != nil {
+		ctx.Logger.V(3).Infof("failed to stream report progress: %v", err)
+	}
+}
+
+func (r *Report) logText() string { return strings.Join(r.logs, "\n") }
 
 func (r *Report) Run(ctx context.Context, action v1.ReportAction) (*ReportResult, error) {
+	result, err := r.run(ctx, action)
+	if result == nil {
+		result = &ReportResult{}
+	}
+	result.Logs = r.logText()
+	return result, err
+}
+
+func (r *Report) run(ctx context.Context, action v1.ReportAction) (*ReportResult, error) {
 	format := action.Format
 	if format == "" {
 		format = "json"
@@ -65,15 +102,18 @@ func (r *Report) runView(ctx context.Context, action v1.ReportAction, format str
 		return nil, fmt.Errorf("view %s not found", action.View)
 	}
 
+	r.logf(ctx, "exporting view %s as %s", action.View, format)
 	rendered, err := views.Export(ctx, v, action.Variables, format, action.Facet)
 	if err != nil {
 		return nil, fmt.Errorf("failed to export view: %w", err)
 	}
+	r.logf(ctx, "view exported (%d bytes)", len(rendered))
 
 	return reportResult(format, rendered), nil
 }
 
 func (r *Report) runCatalog(ctx context.Context, action v1.ReportAction, format string) (*ReportResult, error) {
+	r.logf(ctx, "resolving config items")
 	configs, err := query.FindConfigsByResourceSelector(ctx, -1, *action.Configs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve configs: %w", err)
@@ -81,21 +121,25 @@ func (r *Report) runCatalog(ctx context.Context, action v1.ReportAction, format 
 	if len(configs) == 0 {
 		return nil, fmt.Errorf("no config items matched the selector")
 	}
+	r.logf(ctx, "resolved %d config item(s)", len(configs))
 
 	opts, err := catalogOptions(action)
 	if err != nil {
 		return nil, err
 	}
+	opts.Progress = func(format string, args ...any) { r.logf(ctx, format, args...) }
 
 	data, err := catalog.Build(ctx, configs, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build catalog report: %w", err)
 	}
+	r.logf(ctx, "report data ready: %d entries, %d changes, %d insights", len(data.Entries), len(data.Changes), len(data.Analyses))
 
 	rendered, err := r.renderCatalog(ctx, action, data, format)
 	if err != nil {
 		return nil, err
 	}
+	r.logf(ctx, "report rendered as %s (%d bytes)", format, len(rendered))
 
 	return reportResult(format, rendered), nil
 }
@@ -123,6 +167,7 @@ func (r *Report) renderCatalogFacet(ctx context.Context, action v1.ReportAction,
 	}
 
 	if baseURL != "" {
+		r.logf(ctx, "rendering %s via facet service %s", facetFormat, baseURL)
 		opts := report.RenderHTTPOptions{TimestampURL: timestampURL}
 		// The embedded default ships the pristine embedded files; a custom file
 		// ships its own directory.
@@ -132,6 +177,7 @@ func (r *Report) renderCatalogFacet(ctx context.Context, action v1.ReportAction,
 		return report.RenderHTTPFromDir(ctx, baseURL, token, data, facetFormat, srcDir, entryFile, opts)
 	}
 
+	r.logf(ctx, "rendering %s via local facet CLI", facetFormat)
 	result, err := report.RenderCLIFromDir(data, facetFormat, srcDir, entryFile)
 	if err != nil {
 		return nil, err
