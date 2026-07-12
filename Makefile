@@ -117,7 +117,7 @@ tidy:
 	cd plugin/sdk && go mod tidy
 
 .PHONY: compress
-compress: .bin/upx
+compress: .bin/upx linux faro
 	upx -1 ./.bin/$(NAME)_linux_amd64 ./.bin/$(NAME)_linux_arm64 ./.bin/faro_linux_amd64 ./.bin/faro_linux_arm64
 
 .PHONY: linux
