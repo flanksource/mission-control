@@ -128,7 +128,7 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 		e := actions.NewLogsAction()
 		result, err = e.Run(ctx, actionSpec.Logs)
 	} else if actionSpec.Report != nil {
-		var e actions.Report
+		e := actions.Report{ActionID: runAction.ID}
 		result, err = e.Run(ctx, *actionSpec.Report)
 	} else if actionSpec.Catalog != nil {
 		var e actions.Catalog

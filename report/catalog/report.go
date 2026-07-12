@@ -44,6 +44,16 @@ type Options struct {
 	// MaxItemArtifacts caps the number of artifacts retained per change source
 	// within a single catalog entry. 0 = unlimited.
 	MaxItemArtifacts int
+
+	// Progress receives human-readable build progress messages.
+	Progress func(format string, args ...any)
+}
+
+// progressf forwards a progress message to the Progress callback, if any.
+func (o Options) progressf(format string, args ...any) {
+	if o.Progress != nil {
+		o.Progress(format, args...)
+	}
 }
 
 // effectiveMax resolves the cap for a section, taking the tighter of an
@@ -139,7 +149,8 @@ func BuildReport(ctx context.Context, configs []models.ConfigItem, opts Options)
 		}
 	}
 
-	for _, config := range configs {
+	for i, config := range configs {
+		opts.progressf("collecting data for %s (%d/%d)", config.GetName(), i+1, len(configs))
 		entry, entryScraperIDs, err := buildEntryWithMapper(ctx, &config, opts, sinceTime, mapper)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to build entry for %s: %w", config.GetName(), err)
@@ -281,6 +292,10 @@ func buildEntryWithMapper(ctx context.Context, config *models.ConfigItem, opts O
 				CatalogID: catalogIDsCSV,
 				FromTime:  &sinceTime,
 				PageSize:  opts.pageSizeFor(opts.MaxChanges),
+				// targetIDs already includes descendants when the report is
+				// recursive; without this duty defaults to downstream depth-5
+				// graph traversal for single-config requests.
+				Recursive: query.CatalogChangeRecursiveNone,
 			},
 		})
 		if err != nil {

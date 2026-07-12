@@ -2,6 +2,7 @@ package catalog
 
 import (
 	gocontext "context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -532,5 +533,22 @@ var _ = ginkgo.Describe("buildRecursiveRelationshipTree", func() {
 		Expect(tree.ID).To(Equal(a.String()))
 		Expect(tree.Children).To(HaveLen(1))
 		Expect(tree.Children[0].ID).To(Equal(b.String()))
+	})
+})
+
+var _ = ginkgo.Describe("build progress", func() {
+	ginkgo.It("is a no-op when no Progress callback is set", func() {
+		opts := Options{}
+		Expect(func() { opts.progressf("collecting %s", "repo") }).NotTo(Panic())
+	})
+
+	ginkgo.It("forwards formatted messages to the Progress callback", func() {
+		var got []string
+		opts := Options{Progress: func(format string, args ...any) {
+			got = append(got, fmt.Sprintf(format, args...))
+		}}
+
+		opts.progressf("collecting data for %s (%d/%d)", "repo-a", 1, 2)
+		Expect(got).To(Equal([]string{"collecting data for repo-a (1/2)"}))
 	})
 })
