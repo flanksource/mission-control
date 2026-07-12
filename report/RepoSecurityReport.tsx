@@ -216,21 +216,24 @@ function buildRepoSecurity(entry: CatalogReportEntry, since?: string): RepoSecur
 // Renders open alerts as one row per alert with the title linked to the
 // GitHub alert. Facet's AlertsTable is not used because it drops the url field.
 function OpenAlertsList({ alerts }: { alerts: ConfigAnalysis[] }) {
+  const effectiveSeverity = (alert: ConfigAnalysis): ConfigSeverity =>
+    alert.severity === 'info' || !alert.severity ? 'low' : alert.severity;
   const rows = [...alerts].sort((a, b) => {
-    const sevDiff = SEVERITY_ORDER.indexOf((a.severity || 'info') as ConfigSeverity)
-      - SEVERITY_ORDER.indexOf((b.severity || 'info') as ConfigSeverity);
+    const sevDiff = SEVERITY_ORDER.indexOf(effectiveSeverity(a))
+      - SEVERITY_ORDER.indexOf(effectiveSeverity(b));
     if (sevDiff !== 0) return sevDiff;
     return (a.summary || '').localeCompare(b.summary || '');
   });
   return (
     <div className="space-y-1">
-      {rows.map((a) => {
-        const sev = a.severity === 'info' || !a.severity ? 'low' : a.severity;
+      {rows.map((a, index) => {
+        const sev = effectiveSeverity(a);
         const url = insightSourceURL(a) || a.permalink;
         const title = a.summary || a.message || a.analyzer;
-        const isCodeScanning = ALERT_SOURCES[a.source!] === 'code-scanning';
+        const isCodeScanning = a.source ? ALERT_SOURCES[a.source] === 'code-scanning' : false;
+        const key = a.id || `${a.source || 'alert'}-${title || 'untitled'}-${index}`;
         return (
-          <div key={a.id} className="flex items-center gap-2 text-xs min-w-0">
+          <div key={key} className="flex items-center gap-2 text-xs min-w-0">
             <Badge variant="custom" size="xs" shape="rounded" label={sev} className={SEVERITY_BADGE[sev] ?? SEVERITY_BADGE.info} />
             <span className="text-gray-700 truncate flex-1 min-w-0">
               {url ? <a href={url} className="text-gray-700 underline">{title}</a> : title}

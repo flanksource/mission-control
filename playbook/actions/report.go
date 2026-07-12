@@ -45,23 +45,37 @@ type Report struct {
 	// logs while the report builds. uuid.Nil disables streaming.
 	ActionID uuid.UUID
 
-	logs []string
+	logs             []string
+	lastLogPersisted time.Time
+	logsDirty        bool
 }
+
+const reportLogPersistInterval = time.Second
 
 // logf records a progress line and streams the accumulated log to the run
 // action row so the UI can show it while the action is still running.
 func (r *Report) logf(ctx context.Context, format string, args ...any) {
 	line := time.Now().Format("15:04:05") + " " + fmt.Sprintf(format, args...)
 	r.logs = append(r.logs, line)
+	r.logsDirty = true
 
-	if r.ActionID == uuid.Nil || ctx.DB() == nil {
+	if time.Since(r.lastLogPersisted) >= reportLogPersistInterval {
+		r.persistLogs(ctx)
+	}
+}
+
+func (r *Report) persistLogs(ctx context.Context) {
+	if !r.logsDirty || r.ActionID == uuid.Nil || ctx.DB() == nil {
 		return
 	}
 
 	runAction := models.PlaybookRunAction{ID: r.ActionID}
 	if err := runAction.Update(ctx.DB(), map[string]any{"result": types.JSONMap{"logs": r.logText()}}); err != nil {
 		ctx.Logger.V(3).Infof("failed to stream report progress: %v", err)
+		return
 	}
+	r.lastLogPersisted = time.Now()
+	r.logsDirty = false
 }
 
 func (r *Report) logText() string { return strings.Join(r.logs, "\n") }
@@ -72,6 +86,7 @@ func (r *Report) Run(ctx context.Context, action v1.ReportAction) (*ReportResult
 		result = &ReportResult{}
 	}
 	result.Logs = r.logText()
+	r.persistLogs(ctx)
 	return result, err
 }
 
