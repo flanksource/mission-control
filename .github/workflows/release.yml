@@ -12,7 +12,7 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
-    uses: flanksource/action-workflows/.github/workflows/create-release.yml@main
+    uses: flanksource/action-workflows/.github/workflows/create-release.yml@d8fee444922a72525e94481babc8304bcbe32e2d
     secrets:
       token: ${{ secrets.FLANKBOT }}
 
@@ -35,18 +35,12 @@ jobs:
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version: v1.26.x
-          cache: false
-
-      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-            .bin
-          key: cache-go-1.26-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
-          restore-keys: |
-            cache-go-1.26-
-      - run: make release
+          cache: true
+      - name: Build release binaries
+        run: |
+          make ui
+          make --jobs=2 binaries
+          make package-release
         env:
           VERSION: v${{ needs.create-release.outputs.version }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -57,58 +51,26 @@ jobs:
 
   docker:
     needs: create-release
+    if: needs.create-release.outputs.published == 'true'
     permissions:
       contents: read
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-
-      - name: Set version
-        # Always use root git tags as semantic release can fail due to rate limit
-        run: |
-          git fetch --prune --unshallow
-          echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags --match 'v[0-9]*' | sed -e 's/^v//')" >> $GITHUB_ENV
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
-
-      - name: Login to Docker Hub
-        uses: docker/login-action@74a5d142397b4f367a81961eba4e8cd7edddf772 # v3.4.0
-        with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v5
-        with:
-          aws-access-key-id: ${{ secrets.ECR_AWS_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - name: Login to Amazon ECR Public
-        id: login-ecr-public
-        uses: aws-actions/amazon-ecr-login@fa648b43de3d4d023bcb3f89ed6940096949c419 # v2
-        with:
-          registry-type: public
-
-      # Build once and push to both registries. The GITHUB_TOKEN BuildKit secret
-      # lifts the GitHub API rate limit that `deps install node` (facet/Chrome
-      # provisioning) hits resolving nodejs/node releases; the Dockerfile reads
-      # it via --mount=type=secret,id=GITHUB_TOKEN.
-      - name: Build and push
-        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
-        with:
-          context: .
-          push: true
-          provenance: false
-          tags: |
-            flanksource/incident-commander:latest
-            flanksource/incident-commander:v${{ env.RELEASE_VERSION }}
-            ${{ steps.login-ecr-public.outputs.registry }}/k4y9r6y5/incident-commander:v${{ env.RELEASE_VERSION }}
-          secrets: |
-            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      id-token: write
+    uses: flanksource/action-workflows/.github/workflows/publish-docker-image.yml@d8fee444922a72525e94481babc8304bcbe32e2d
+    with:
+      image_tags: |
+        flanksource/incident-commander:latest
+        flanksource/incident-commander:v${{ needs.create-release.outputs.version }}
+        public.ecr.aws/k4y9r6y5/incident-commander:v${{ needs.create-release.outputs.version }}
+      platforms: linux/amd64
+      login_to_ecr: true
+      cache_from: type=gha
+      cache_to: type=gha,mode=max
+      cosign: true
+    secrets:
+      docker_username: ${{ secrets.DOCKER_USERNAME }}
+      docker_password: ${{ secrets.DOCKER_PASSWORD }}
+      aws_access_key_id: ${{ secrets.ECR_AWS_ACCESS_KEY }}
+      aws_secret_access_key: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
 
   update-incident-commander-chart:
     if: needs.create-release.outputs.published == 'true'

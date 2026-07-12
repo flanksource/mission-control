@@ -118,7 +118,7 @@ tidy:
 
 .PHONY: compress
 compress: .bin/upx
-	upx -5 ./.bin/$(NAME)_linux_amd64 ./.bin/$(NAME)_linux_arm64 ./.bin/faro_linux_amd64 ./.bin/faro_linux_arm64
+	upx -1 ./.bin/$(NAME)_linux_amd64 ./.bin/$(NAME)_linux_arm64 ./.bin/faro_linux_amd64 ./.bin/faro_linux_arm64
 
 .PHONY: linux
 linux: $(TAILWIND_JS)
@@ -157,8 +157,10 @@ faro: faro-linux faro-darwin faro-windows
 .PHONY: binaries
 binaries: linux darwin windows faro compress
 
-.PHONY: release
-release: ui binaries
+.PHONY: release package-release
+release: ui binaries package-release
+
+package-release:
 	mkdir -p .release
 	cp .bin/incident-commander* .release/
 	cp .bin/faro* .release/
