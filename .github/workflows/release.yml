@@ -12,7 +12,7 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
-    uses: flanksource/action-workflows/.github/workflows/create-release.yml@7080efac89b20714a0f7a621bc59794b1b5f1433
+    uses: flanksource/action-workflows/.github/workflows/create-release.yml@6e3308211f3e1694e187ea2057c24978e5a01c2f
     secrets:
       token: ${{ secrets.FLANKBOT }}
 
@@ -57,7 +57,7 @@ jobs:
       contents: read
       id-token: write
       packages: write
-    uses: flanksource/action-workflows/.github/workflows/publish-docker-image.yml@7080efac89b20714a0f7a621bc59794b1b5f1433
+    uses: flanksource/action-workflows/.github/workflows/publish-docker-image.yml@6e3308211f3e1694e187ea2057c24978e5a01c2f
     with:
       image_tags: |
         flanksource/incident-commander:latest
@@ -73,7 +73,7 @@ jobs:
       docker_password: ${{ secrets.DOCKER_PASSWORD }}
       aws_access_key_id: ${{ secrets.ECR_AWS_ACCESS_KEY }}
       aws_secret_access_key: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
-      github_token: ${{ secrets.GITHUB_TOKEN }}
+      token: ${{ secrets.GITHUB_TOKEN }}
 
   update-incident-commander-chart:
     if: needs.create-release.outputs.published == 'true'
