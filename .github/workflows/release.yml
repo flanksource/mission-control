@@ -12,7 +12,7 @@ jobs:
       contents: write
       issues: write
       pull-requests: write
-    uses: flanksource/action-workflows/.github/workflows/create-release.yml@d8fee444922a72525e94481babc8304bcbe32e2d
+    uses: flanksource/action-workflows/.github/workflows/create-release.yml@7080efac89b20714a0f7a621bc59794b1b5f1433
     secrets:
       token: ${{ secrets.FLANKBOT }}
 
@@ -44,6 +44,7 @@ jobs:
         env:
           VERSION: v${{ needs.create-release.outputs.version }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GOFLAGS: -p=2
       - name: Upload binaries to draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -56,7 +57,7 @@ jobs:
       contents: read
       id-token: write
       packages: write
-    uses: flanksource/action-workflows/.github/workflows/publish-docker-image.yml@d8fee444922a72525e94481babc8304bcbe32e2d
+    uses: flanksource/action-workflows/.github/workflows/publish-docker-image.yml@7080efac89b20714a0f7a621bc59794b1b5f1433
     with:
       image_tags: |
         flanksource/incident-commander:latest
@@ -72,6 +73,7 @@ jobs:
       docker_password: ${{ secrets.DOCKER_PASSWORD }}
       aws_access_key_id: ${{ secrets.ECR_AWS_ACCESS_KEY }}
       aws_secret_access_key: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
+      github_token: ${{ secrets.GITHUB_TOKEN }}
 
   update-incident-commander-chart:
     if: needs.create-release.outputs.published == 'true'
