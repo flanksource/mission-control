@@ -55,6 +55,7 @@ jobs:
     permissions:
       contents: read
       id-token: write
+      packages: write
     uses: flanksource/action-workflows/.github/workflows/publish-docker-image.yml@d8fee444922a72525e94481babc8304bcbe32e2d
     with:
       image_tags: |
