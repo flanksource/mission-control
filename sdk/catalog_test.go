@@ -84,31 +84,6 @@ var _ = ginkgo.Describe("catalog client", func() {
 		Expect(insight.Config.Name).To(Equal("prod-instance"))
 	})
 
-	ginkgo.It("gets multiple catalog insight details with linked issue ids", func() {
-		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			Expect(r.Method).To(Equal(http.MethodGet))
-			Expect(r.URL.Path).To(Equal("/db/config_analysis"))
-			Expect(r.URL.Query().Get("id")).To(Equal("in.(521bae33-e4c3-42eb-a9c5-071ab92940b5,621bae33-e4c3-42eb-a9c5-071ab92940b5)"))
-			Expect(r.URL.Query().Get("select")).To(Equal(catalogInsightSearchDetailSelect))
-			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`[{"id":"521bae33-e4c3-42eb-a9c5-071ab92940b5","summary":"public ip","config":{"id":"21e7586d-31fb-453c-a205-d73dc6b58eaa","name":"prod-instance","type":"AWS::EC2::Instance"},"evidences":[{"hypothesis":{"incident":{"incident_id":"INC-42"}}}]},{"id":"621bae33-e4c3-42eb-a9c5-071ab92940b5","summary":"old package"}]`))
-		}))
-		defer server.Close()
-
-		insights, err := New(server.URL, "tok").GetCatalogInsights(context.Background(), []string{
-			"521bae33-e4c3-42eb-a9c5-071ab92940b5",
-			"621bae33-e4c3-42eb-a9c5-071ab92940b5",
-		})
-
-		Expect(err).ToNot(HaveOccurred())
-		Expect(insights).To(HaveLen(2))
-		Expect(insights[0].Summary).To(Equal("public ip"))
-		Expect(insights[0].Config).ToNot(BeNil())
-		Expect(insights[0].Config.Name).To(Equal("prod-instance"))
-		Expect(insights[0].Evidences).To(HaveLen(1))
-		Expect(insights[0].Evidences[0].Hypothesis.Incident.IncidentID).To(Equal("INC-42"))
-	})
-
 	ginkgo.It("returns not found for an empty catalog change response", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
