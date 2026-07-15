@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
+	"golang.org/x/sync/errgroup"
 )
 
 // CatalogRelationships mirrors the server's catalog relationships response
@@ -78,6 +79,8 @@ type CatalogInsightIncident struct {
 const catalogChangeDetailSelect = "id,config_id,change_type,created_at,external_created_by,source,diff,details,patches,created_by,config:configs(id,name,type,config_class),artifacts:artifacts(*)::jsonb"
 const catalogInsightDetailSelect = "id,config_id,scraper_id,analyzer,message,summary,status,severity,analysis_type,analysis,properties,source,first_observed,last_observed,is_pushed,config:configs(id,name,type,config_class)"
 const catalogInsightSearchDetailSelect = catalogInsightDetailSelect + ",evidences(hypothesis:hypotheses(incident:incidents(incident_id)))"
+const catalogInsightBatchSize = 200
+const catalogInsightBatchConcurrency = 4
 
 // SearchCatalog runs a resource search against the remote server
 // (POST /resources/search).
@@ -172,12 +175,42 @@ func (c *Client) GetCatalogInsight(ctx context.Context, id string) (*CatalogInsi
 	return &out[0], nil
 }
 
-// GetCatalogInsights fetches full details for multiple insights in one PostgREST request.
+// GetCatalogInsights fetches insight details in bounded, concurrent PostgREST batches.
 func (c *Client) GetCatalogInsights(ctx context.Context, ids []string) ([]CatalogInsightDetail, error) {
 	if len(ids) == 0 {
 		return []CatalogInsightDetail{}, nil
 	}
 
+	batchCount := (len(ids) + catalogInsightBatchSize - 1) / catalogInsightBatchSize
+	batches := make([][]CatalogInsightDetail, batchCount)
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.SetLimit(catalogInsightBatchConcurrency)
+
+	for batchIndex := range batchCount {
+		start := batchIndex * catalogInsightBatchSize
+		end := min(start+catalogInsightBatchSize, len(ids))
+		group.Go(func() error {
+			batch, err := c.getCatalogInsightsBatch(groupCtx, ids[start:end])
+			if err != nil {
+				return fmt.Errorf("catalog insights batch %d: %w", batchIndex+1, err)
+			}
+			batches[batchIndex] = batch
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+
+	result := make([]CatalogInsightDetail, 0, len(ids))
+	for _, batch := range batches {
+		result = append(result, batch...)
+	}
+	return result, nil
+}
+
+func (c *Client) getCatalogInsightsBatch(ctx context.Context, ids []string) ([]CatalogInsightDetail, error) {
 	r, err := c.R(ctx).
 		QueryParam("id", "in.("+strings.Join(ids, ",")+")").
 		QueryParam("select", catalogInsightSearchDetailSelect).

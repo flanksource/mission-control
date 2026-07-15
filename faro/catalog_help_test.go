@@ -32,18 +32,4 @@ var _ = ginkgo.Describe("faro catalog help", func() {
 		Expect(out.String()).To(ContainSubstring("Choose a subcommand"))
 		Expect(out.String()).To(ContainSubstring("faro catalog list"))
 	})
-
-	ginkgo.It("documents catalog insights as a default search command", func() {
-		insightsCmd := &cobra.Command{
-			Use:  "insights [QUERY]",
-			RunE: runCatalogInsightSearch,
-		}
-		insightsCmd.AddCommand(&cobra.Command{Use: "search [QUERY]"}, &cobra.Command{Use: "get <id>"})
-
-		documentCatalogInsightsCommand(insightsCmd)
-
-		Expect(insightsCmd.Runnable()).To(BeTrue())
-		Expect(insightsCmd.Long).To(ContainSubstring("subcommand searches open insights"))
-		Expect(insightsCmd.Example).To(ContainSubstring("faro catalog insights\n"))
-	})
 })

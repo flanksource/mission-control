@@ -22,18 +22,18 @@ var (
 )
 
 type catalogInsightSearchHit struct {
-	ID          string                `json:"id"`
-	Agent       string                `json:"agent,omitempty"`
-	Name        string                `json:"name,omitempty"`
-	Namespace   string                `json:"namespace,omitempty"`
-	InsightType string                `json:"insight_type,omitempty"`
-	Status      string                `json:"status,omitempty"`
-	Severity    *string               `json:"severity,omitempty"`
-	Summary     string                `json:"summary,omitempty"`
-	Config      *catalogInsightConfig `json:"config,omitempty"`
-	IssueIDs    []string              `json:"issue_ids,omitempty"`
-	CreatedAt   *time.Time            `json:"created_at,omitempty"`
-	UpdatedAt   *time.Time            `json:"updated_at,omitempty"`
+	ID            string                `json:"id"`
+	Agent         string                `json:"agent,omitempty"`
+	Name          string                `json:"name,omitempty"`
+	Namespace     string                `json:"namespace,omitempty"`
+	InsightType   string                `json:"insight_type,omitempty"`
+	Status        string                `json:"status,omitempty"`
+	Severity      *string               `json:"severity,omitempty"`
+	Summary       string                `json:"summary,omitempty"`
+	Config        *catalogInsightConfig `json:"config,omitempty"`
+	IssueIDs      []string              `json:"issue_ids,omitempty"`
+	FirstObserved *time.Time            `json:"first_observed,omitempty"`
+	LastObserved  *time.Time            `json:"last_observed,omitempty"`
 }
 
 type catalogInsightConfig struct {
@@ -48,6 +48,39 @@ type catalogInsightSearchResult struct {
 	TotalAtLeast int
 }
 
+type catalogInsightCompactRow struct {
+	catalogInsightSearchHit
+}
+
+func (r catalogInsightCompactRow) Columns() []clickyapi.ColumnDef {
+	return []clickyapi.ColumnDef{
+		clickyapi.Column("ID").Build(),
+		clickyapi.Column("Name").Build(),
+		clickyapi.Column("Summary").Build(),
+		clickyapi.Column("InsightType").Label("Insight Type").Build(),
+		clickyapi.Column("Status").Build(),
+		clickyapi.Column("Severity").Build(),
+		clickyapi.Column("LastObserved").Label("Last Observed").Build(),
+	}
+}
+
+func (r catalogInsightCompactRow) Row() map[string]any {
+	severity := ""
+	if r.Severity != nil {
+		severity = *r.Severity
+	}
+
+	return map[string]any{
+		"ID":           r.ID,
+		"Name":         r.Name,
+		"Summary":      r.Summary,
+		"InsightType":  r.InsightType,
+		"Status":       r.Status,
+		"Severity":     severity,
+		"LastObserved": r.LastObserved,
+	}
+}
+
 func (r catalogInsightSearchHit) Columns() []clickyapi.ColumnDef {
 	return []clickyapi.ColumnDef{
 		clickyapi.Column("ID").Build(),
@@ -60,6 +93,8 @@ func (r catalogInsightSearchHit) Columns() []clickyapi.ColumnDef {
 		clickyapi.Column("InsightType").Label("Insight Type").Build(),
 		clickyapi.Column("Status").Build(),
 		clickyapi.Column("Severity").Build(),
+		clickyapi.Column("FirstObserved").Label("First Observed").Build(),
+		clickyapi.Column("LastObserved").Label("Last Observed").Build(),
 	}
 }
 
@@ -77,16 +112,18 @@ func (r catalogInsightSearchHit) Row() map[string]any {
 	}
 
 	return map[string]any{
-		"ID":          r.ID,
-		"ConfigID":    configID,
-		"ConfigName":  configName,
-		"ConfigType":  configType,
-		"Summary":     r.Summary,
-		"IssueIDs":    strings.Join(r.IssueIDs, ", "),
-		"Analyzer":    r.Name,
-		"InsightType": r.InsightType,
-		"Status":      r.Status,
-		"Severity":    severity,
+		"ID":            r.ID,
+		"ConfigID":      configID,
+		"ConfigName":    configName,
+		"ConfigType":    configType,
+		"Summary":       r.Summary,
+		"IssueIDs":      strings.Join(r.IssueIDs, ", "),
+		"Analyzer":      r.Name,
+		"InsightType":   r.InsightType,
+		"Status":        r.Status,
+		"Severity":      severity,
+		"FirstObserved": r.FirstObserved,
+		"LastObserved":  r.LastObserved,
 	}
 }
 
@@ -119,8 +156,21 @@ func runCatalogInsightSearch(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	printCatalogInsightLimitWarning(cmd, result)
-	clicky.MustPrint(result.Items, clicky.Flags.FormatOptions)
+	clicky.MustPrint(catalogInsightSearchOutput(result.Items, clicky.Flags.FormatOptions), clicky.Flags.FormatOptions)
 	return nil
+}
+
+func catalogInsightSearchOutput(items []catalogInsightSearchHit, opts clicky.FormatOptions) any {
+	format := opts.ResolveFormat()
+	if format != "pretty" && format != "table" {
+		return items
+	}
+
+	rows := make([]catalogInsightCompactRow, len(items))
+	for i, item := range items {
+		rows[i] = catalogInsightCompactRow{catalogInsightSearchHit: item}
+	}
+	return rows
 }
 
 func catalogInsightSearchQuery(args []string) string {
@@ -132,7 +182,7 @@ func catalogInsightSearchQuery(args []string) string {
 
 func printCatalogInsightLimitWarning(cmd *cobra.Command, result *catalogInsightSearchResult) {
 	if result.Limited {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: showing %d of at least %d total insights; increase --limit to return more.\n", len(result.Items), result.TotalAtLeast)
+		fmt.Fprintf(cmd.ErrOrStderr(), "showing %d of at least %d total insights; increase --limit to return more.\n", len(result.Items), result.TotalAtLeast)
 	}
 }
 
@@ -201,15 +251,15 @@ func remoteSearchInsights(searchQuery, agent string, limit int) (*catalogInsight
 	out := make([]catalogInsightSearchHit, 0, len(resp.ConfigAnalysis))
 	for _, s := range resp.ConfigAnalysis {
 		hit := catalogInsightSearchHit{
-			ID:          s.ID,
-			Agent:       s.Agent,
-			Name:        s.Name,
-			Namespace:   s.Namespace,
-			InsightType: s.Type,
-			Status:      s.Status,
-			Severity:    s.Severity,
-			CreatedAt:   s.CreatedAt,
-			UpdatedAt:   s.UpdatedAt,
+			ID:            s.ID,
+			Agent:         s.Agent,
+			Name:          s.Name,
+			Namespace:     s.Namespace,
+			InsightType:   s.Type,
+			Status:        s.Status,
+			Severity:      s.Severity,
+			FirstObserved: s.CreatedAt,
+			LastObserved:  s.UpdatedAt,
 		}
 		if detail, ok := detailsByID[s.ID]; ok {
 			hit.Summary = detail.Summary
