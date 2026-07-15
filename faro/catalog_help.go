@@ -125,9 +125,10 @@ func documentCatalogInsightsCommand(insightsCmd *cobra.Command) {
 	insightsCmd.Long = `Search and inspect catalog insights produced by analyzers.
 
 Insights are findings or observations about catalog resources, such as security,
-compliance, reliability, or operational issues. Use "search" to find insight
-IDs, then "get" to fetch the full insight record.`
-	insightsCmd.Example = `  faro catalog insights search 'severity=critical'
+compliance, reliability, or operational issues. Running this command without a
+subcommand searches open insights. Use "get" to fetch a full insight record.`
+	insightsCmd.Example = `  faro catalog insights
+  faro catalog insights 'severity=critical'
   faro catalog insights search 'status=open analyzer=no-public-ip' --limit 50
   faro catalog insights get <insight-id>`
 

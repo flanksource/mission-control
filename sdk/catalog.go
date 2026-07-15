@@ -44,26 +44,40 @@ type CatalogChangeDetail struct {
 }
 
 type CatalogInsightDetail struct {
-	ID            uuid.UUID            `json:"id"`
-	ConfigID      uuid.UUID            `json:"config_id"`
-	ScraperID     *uuid.UUID           `json:"scraper_id,omitempty"`
-	Analyzer      string               `json:"analyzer"`
-	Message       string               `json:"message,omitempty"`
-	Summary       string               `json:"summary,omitempty"`
-	Status        string               `json:"status,omitempty"`
-	Severity      models.Severity      `json:"severity,omitempty"`
-	AnalysisType  models.AnalysisType  `json:"analysis_type,omitempty"`
-	Analysis      types.JSONMap        `json:"analysis,omitempty"`
-	Properties    *types.Properties    `json:"properties,omitempty"`
-	Source        string               `json:"source,omitempty"`
-	FirstObserved *time.Time           `json:"first_observed,omitempty"`
-	LastObserved  *time.Time           `json:"last_observed,omitempty"`
-	IsPushed      bool                 `json:"is_pushed,omitempty"`
-	Config        *CatalogChangeConfig `json:"config,omitempty"`
+	ID            uuid.UUID                `json:"id"`
+	ConfigID      uuid.UUID                `json:"config_id"`
+	ScraperID     *uuid.UUID               `json:"scraper_id,omitempty"`
+	Analyzer      string                   `json:"analyzer"`
+	Message       string                   `json:"message,omitempty"`
+	Summary       string                   `json:"summary,omitempty"`
+	Status        string                   `json:"status,omitempty"`
+	Severity      models.Severity          `json:"severity,omitempty"`
+	AnalysisType  models.AnalysisType      `json:"analysis_type,omitempty"`
+	Analysis      types.JSONMap            `json:"analysis,omitempty"`
+	Properties    *types.Properties        `json:"properties,omitempty"`
+	Source        string                   `json:"source,omitempty"`
+	FirstObserved *time.Time               `json:"first_observed,omitempty"`
+	LastObserved  *time.Time               `json:"last_observed,omitempty"`
+	IsPushed      bool                     `json:"is_pushed,omitempty"`
+	Config        *CatalogChangeConfig     `json:"config,omitempty"`
+	Evidences     []CatalogInsightEvidence `json:"evidences,omitempty"`
+}
+
+type CatalogInsightEvidence struct {
+	Hypothesis *CatalogInsightHypothesis `json:"hypothesis,omitempty"`
+}
+
+type CatalogInsightHypothesis struct {
+	Incident *CatalogInsightIncident `json:"incident,omitempty"`
+}
+
+type CatalogInsightIncident struct {
+	IncidentID string `json:"incident_id,omitempty"`
 }
 
 const catalogChangeDetailSelect = "id,config_id,change_type,created_at,external_created_by,source,diff,details,patches,created_by,config:configs(id,name,type,config_class),artifacts:artifacts(*)::jsonb"
 const catalogInsightDetailSelect = "id,config_id,scraper_id,analyzer,message,summary,status,severity,analysis_type,analysis,properties,source,first_observed,last_observed,is_pushed,config:configs(id,name,type,config_class)"
+const catalogInsightSearchDetailSelect = catalogInsightDetailSelect + ",evidences(hypothesis:hypotheses(incident:incidents(incident_id)))"
 
 // SearchCatalog runs a resource search against the remote server
 // (POST /resources/search).
@@ -156,6 +170,34 @@ func (c *Client) GetCatalogInsight(ctx context.Context, id string) (*CatalogInsi
 		return nil, ErrNotFound
 	}
 	return &out[0], nil
+}
+
+// GetCatalogInsights fetches full details for multiple insights in one PostgREST request.
+func (c *Client) GetCatalogInsights(ctx context.Context, ids []string) ([]CatalogInsightDetail, error) {
+	if len(ids) == 0 {
+		return []CatalogInsightDetail{}, nil
+	}
+
+	r, err := c.R(ctx).
+		QueryParam("id", "in.("+strings.Join(ids, ",")+")").
+		QueryParam("select", catalogInsightSearchDetailSelect).
+		Get(c.apiPath("/db/config_analysis"))
+	if err != nil {
+		return nil, err
+	}
+	if !r.IsOK() {
+		body, _ := r.AsString()
+		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
+			return nil, ErrHTMLResponse
+		}
+		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
+	}
+
+	var out []CatalogInsightDetail
+	if err := decodeJSON(r, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
 // GetCatalogRelationships fetches the incoming/outgoing config tree for a
