@@ -420,8 +420,8 @@ github.com/flanksource/commons-test v0.1.13 h1:DLb3q1a7d+BpfxZDy2bdY8ZA5z1+UTYFE
 github.com/flanksource/commons-test v0.1.13/go.mod h1:T0zLA9F55jlaOhtvjj1Ot7QZQhtn2baAuflT+27ueG8=
 github.com/flanksource/deps v1.0.35 h1:tHxhkJSsJBWRmx7lR/X1rI8diz6tu0dsGb7GCROfuIQ=
 github.com/flanksource/deps v1.0.35/go.mod h1:2YRfP32WZrMxGVMYV51RlVHZfgerxf8DT3TqSgjzmTQ=
-github.com/flanksource/duty v1.0.1351 h1:ujv72zhpDSmaz8aQG2kBy/U6XEscgR4kItDuSLilpPk=
-github.com/flanksource/duty v1.0.1351/go.mod h1:sk3nPKqdhu2m5kvlxTx14+gKjj6XJgykyQcGHeZRcKM=
+github.com/flanksource/duty v1.0.1352 h1:BEHlbbs91szHLfTkwXTSvKEwirGqC1Mdbn3u6QxKq1o=
+github.com/flanksource/duty v1.0.1352/go.mod h1:Hpj7YMhx8BhpHauVTUOQmCRkgsQeBFsOd3YkTq8MCZ4=
 github.com/flanksource/gomplate/v3 v3.24.84 h1:UOE0yCJsczTIKRaHUvhD6tjCYrbNvOugAizuy0FVlhE=
 github.com/flanksource/gomplate/v3 v3.24.84/go.mod h1:NMMZkFsjbLy/8iY8Fip5N86Y0PP6lZeq+kmPwpVVIL0=
 github.com/flanksource/is-healthy v1.0.88 h1:ATQuKoNdp8Qfzf41/eMFajmT0qzOmZlZNG5eLK41RFo=
@@ -993,8 +993,6 @@ github.com/redis/go-redis/v9 v9.19.0 h1:XPVaaPSnG6RhYf7p+rmSa9zZfeVAnWsH5h3lxthO
 github.com/redis/go-redis/v9 v9.19.0/go.mod h1:v/M13XI1PVCDcm01VtPFOADfZtHf8YW3baQf57KlIkA=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
-github.com/richardlehane/mscfb v1.0.6 h1:eN3bvvZCp00bs7Zf52bxNwAx5lJDBK1tCuH19qq5aC8=
-github.com/richardlehane/mscfb v1.0.6/go.mod h1:pe0+IUIc0AHh0+teNzBlJCtSyZdFOGgV4ZK9bsoV+Jo=
 github.com/richardlehane/mscfb v1.0.7 h1:oeoiM0WE79vHwE8RpIYYvIAc8ajTH2mb6UZm55/+EB0=
 github.com/richardlehane/mscfb v1.0.7/go.mod h1:pe0+IUIc0AHh0+teNzBlJCtSyZdFOGgV4ZK9bsoV+Jo=
 github.com/richardlehane/msoleps v1.0.6 h1:9BvkpjvD+iUBalUY4esMwv6uBkfOip/Lzvd93jvR9gg=
@@ -1142,8 +1140,6 @@ github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e h1:JVG44RsyaB9T2KIHavM
 github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e/go.mod h1:RbqR21r5mrJuqunuUZ/Dhy/avygyECGrLceyNeo4LiM=
 github.com/xuri/efp v0.0.1 h1:fws5Rv3myXyYni8uwj2qKjVaRP30PdjeYe2Y6FDsCL8=
 github.com/xuri/efp v0.0.1/go.mod h1:ybY/Jr0T0GTCnYjKqmdwxyxn2BQf2RcQIIvex5QldPI=
-github.com/xuri/excelize/v2 v2.10.1 h1:V62UlqopMqha3kOpnlHy2CcRVw1V8E63jFoWUmMzxN0=
-github.com/xuri/excelize/v2 v2.10.1/go.mod h1:iG5tARpgaEeIhTqt3/fgXCGoBRt4hNXgCp3tfXKoOIc=
 github.com/xuri/excelize/v2 v2.11.0 h1:HxaEFl6sRN2+8J5a8HaKq+0M4FsjBGMnWWtjOCPSG88=
 github.com/xuri/excelize/v2 v2.11.0/go.mod h1:jxFLbzaIwGQ5ufFNvYfUOHqXhfPaNmP14KWfmNz2Uak=
 github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 h1:+C0TIdyyYmzadGaL/HBLbf3WdLgC29pgyhTjAT/0nuE=
