@@ -90,3 +90,28 @@ var _ = ginkgo.Describe("extractBasicLoginCredentials", func() {
 		})
 	}
 })
+
+var _ = ginkgo.Describe("sanitizeNext", func() {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{name: "empty falls back to /ui", input: "", expected: "/ui"},
+		{name: "simple relative path", input: "/ui/topology", expected: "/ui/topology"},
+		{name: "relative path with query", input: "/ui/topology?id=1", expected: "/ui/topology?id=1"},
+		{name: "protocol-relative // is rejected", input: "//evil.com", expected: "/ui"},
+		{name: "backslash-relative /\\ is rejected", input: `/\evil.com`, expected: "/ui"},
+		{name: "backslash-relative /\\/ is rejected", input: `/\/evil.com`, expected: "/ui"},
+		{name: "absolute http URL is rejected", input: "http://evil.com", expected: "/ui"},
+		{name: "absolute https URL is rejected", input: "https://evil.com", expected: "/ui"},
+		{name: "scheme-only target is rejected", input: "javascript:alert(1)", expected: "/ui"},
+		{name: "path not starting with slash is rejected", input: "evil.com", expected: "/ui"},
+	}
+
+	for _, tt := range tests {
+		ginkgo.It(tt.name, func() {
+			Expect(sanitizeNext(tt.input)).To(Equal(tt.expected))
+		})
+	}
+})

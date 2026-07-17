@@ -111,12 +111,21 @@ func sanitizeNext(raw string) string {
 	if raw == "" {
 		return "/ui"
 	}
-	if !strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, "//") {
+
+	// The redirect target must be a rooted, host-relative path. A leading-slash
+	// check alone is not enough: browsers interpret both "//host" and "/\host"
+	// as protocol-relative absolute URLs, so the character after the leading
+	// slash must not be another slash or a backslash.
+	if !strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, "//") || strings.HasPrefix(raw, `/\`) {
 		return "/ui"
 	}
-	if _, err := url.Parse(raw); err != nil {
+
+	// Defense in depth: reject anything that parses as an absolute URL or
+	// carries a host component.
+	if u, err := url.Parse(raw); err != nil || u.IsAbs() || u.Host != "" {
 		return "/ui"
 	}
+
 	return raw
 }
 
