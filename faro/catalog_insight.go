@@ -101,8 +101,9 @@ var CatalogInsight = &cobra.Command{
 }
 
 var CatalogInsightSearch = &cobra.Command{
-	Use:   "search [QUERY]",
-	Short: "Search catalog insights using the PEG search grammar",
+	Use:     "search [QUERY]",
+	Aliases: []string{"list"},
+	Short:   "Search catalog insights using the PEG search grammar",
 	Long: `Search catalog insights using the PEG search grammar used by the web UI.
 
 Examples:

@@ -185,10 +185,15 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 		Expect(insight.Config.ConfigClass).To(Equal("EC2"))
 	})
 
-	ginkgo.It("registers full only on insight search entry points", func() {
+	ginkgo.It("registers full on insight search entry points and resolves list as an alias", func() {
 		Expect(CatalogInsight.Flags().Lookup("full")).ToNot(BeNil())
 		Expect(CatalogInsightSearch.Flags().Lookup("full")).ToNot(BeNil())
 		Expect(CatalogInsightGet.Flags().Lookup("full")).To(BeNil())
-		Expect(catalogSubcommand(CatalogInsight, "list")).To(BeNil())
+
+		command, args, err := CatalogInsight.Find([]string{"list", "severity=critical"})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(command).To(BeIdenticalTo(CatalogInsightSearch))
+		Expect(args).To(Equal([]string{"severity=critical"}))
+		Expect(catalogInsightSearchQuery(nil)).To(Equal("status=open"))
 	})
 })
