@@ -31,7 +31,8 @@ This command returns lightweight catalog rows.
 
 Use --query for free-form text or a catalog query expression, --type for config
 types, --namespace for a namespace, --tag for tag label selectors, --agent to
-select an agent, and --limit to control result count.
+select an agent, and --limit to control result count. Use --full to fetch complete
+catalog items instead of lightweight search records.
 
 Use "faro catalog search <QUERY>" when the query expression is the main input
 and you do not need the other list filter flags.`
@@ -39,7 +40,8 @@ and you do not need the other list filter flags.`
   faro catalog list --type Kubernetes::Pod --namespace default
   faro catalog list --tag cluster=prod --tag env=dev --agent all --limit 50
   faro catalog list --query api
-  faro catalog list --type Kubernetes::Deployment`
+  faro catalog list --type Kubernetes::Deployment
+  faro catalog list --type Kubernetes::Deployment --full --json`
 	}
 
 	if getCmd := catalogSubcommand(catalogCmd, "get"); getCmd != nil {
@@ -65,11 +67,13 @@ or multiple clauses joined together.
 
 Queries are matched against resource name, type, tags, labels, health, status,
 and other indexed catalog fields. Multiple clauses are space-separated and ANDed
-together. Quote the query when it contains spaces or shell-special characters.`
+together. Quote the query when it contains spaces or shell-special characters.
+Use --full to fetch complete catalog items instead of lightweight search records.`
 		searchCmd.Example = `  faro catalog search 'type=Kubernetes::Pod'
   faro catalog search 'tags.cluster=prod type=Kubernetes::Pod api'
   faro catalog search 'health!=healthy agent=all' --limit 50
-  faro catalog search 'name=api*' --agent all --limit 50`
+  faro catalog search 'name=api*' --agent all --limit 50
+  faro catalog search 'name=api*' --full --json`
 	}
 
 	if changesCmd := catalogSubcommand(catalogCmd, "change"); changesCmd != nil {
@@ -126,9 +130,11 @@ func documentCatalogInsightsCommand(insightsCmd *cobra.Command) {
 
 Insights are findings or observations about catalog resources, such as security,
 compliance, reliability, or operational issues. Running this command without a
-subcommand searches open insights. Use "get" to fetch a full insight record.`
+subcommand searches open insights. Use --full to return complete insight records,
+or use "get" to fetch one complete insight by ID.`
 	insightsCmd.Example = `  faro catalog insights
   faro catalog insights 'severity=critical'
+  faro catalog insights --full --json
   faro catalog insights search 'status=open analyzer=no-public-ip' --limit 50
   faro catalog insights get <insight-id>`
 
@@ -138,12 +144,14 @@ subcommand searches open insights. Use "get" to fetch a full insight record.`
 
 Use this to find findings by severity, status, analyzer, source, config_id,
 catalog resource type, name, tags, or other indexed fields. The result rows
-include insight IDs that can be passed to "faro catalog insights get".`
+include insight IDs that can be passed to "faro catalog insights get". Use
+--full to return complete insight records instead of compact search results.`
 		searchCmd.Example = `  faro catalog insights search 'severity=critical'
   faro catalog insights search 'status=open type=security'
   faro catalog insights search 'analyzer=no-public-ip source=aws' --limit 50
   faro catalog insights search 'config_type=GitHub::Repository severity=critical' --limit 5
-  faro catalog insights search 'config_id=203c4012-d12b-5c6a-a1e7-2e990f6a8f0e'`
+  faro catalog insights search 'config_id=203c4012-d12b-5c6a-a1e7-2e990f6a8f0e'
+  faro catalog insights search 'severity=critical' --full --json`
 	}
 
 	if getCmd := catalogSubcommand(insightsCmd, "get"); getCmd != nil {

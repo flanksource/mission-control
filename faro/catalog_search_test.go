@@ -36,7 +36,7 @@ var _ = ginkgo.Describe("faro catalog search", func() {
 		defer server.Close()
 		storeRemoteContext(server.URL)
 
-		items, err := remoteSearch("tags.cluster=beta-cluster type=pod mission-control", "all", 25)
+		items, err := remoteSearch("tags.cluster=beta-cluster type=pod mission-control", "all", 25, false)
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(items).To(HaveLen(1))
@@ -58,7 +58,33 @@ var _ = ginkgo.Describe("faro catalog search", func() {
 		defer server.Close()
 		storeRemoteContext(server.URL)
 
-		_, err := remoteSearch("type=Kubernetes::Pod", "all", 0)
+		_, err := remoteSearch("type=Kubernetes::Pod", "all", 0, false)
 		Expect(err).ToNot(HaveOccurred())
+	})
+
+	ginkgo.It("hydrates complete catalog items when full is requested", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/resources/search":
+				_, _ = w.Write([]byte(`{"configs":[{"id":"00000000-0000-0000-0000-000000000001","name":"api","type":"Kubernetes::Pod"}]}`))
+			case "/db/config_items":
+				Expect(r.URL.Query().Get("id")).To(Equal("in.(00000000-0000-0000-0000-000000000001)"))
+				_, _ = w.Write([]byte(`[{"id":"00000000-0000-0000-0000-000000000001","name":"api","type":"Kubernetes::Pod","config_class":"Pod","description":"full record","config":{"kind":"Pod"},"properties":[{"name":"namespace","text":"production"}]}]`))
+			default:
+				ginkgo.Fail("unexpected request: " + r.URL.Path)
+			}
+		}))
+		defer server.Close()
+		storeRemoteContext(server.URL)
+
+		items, err := remoteSearch("type=Kubernetes::Pod", "all", 25, true)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(items).To(HaveLen(1))
+		Expect(items[0].Description).ToNot(BeNil())
+		Expect(*items[0].Description).To(Equal("full record"))
+		Expect(items[0].Properties).ToNot(BeNil())
+		Expect(*items[0].Properties).To(HaveLen(1))
 	})
 })

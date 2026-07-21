@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"time"
 
+	"github.com/flanksource/clicky"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/incident-commander/sdk"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -36,7 +37,7 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 
 				_, _ = w.Write([]byte(`{"config_analysis":[{"id":"0274d556-6257-426a-b651-0a9bc35c26d8","name":"no-public-ip","type":"security","status":"open","severity":"high","created_at":"2026-06-24T16:41:38Z","updated_at":"2026-06-25T10:00:00Z"}]}`))
 			case "/db/config_analysis":
-				_, _ = w.Write([]byte(`[]`))
+				_, _ = w.Write([]byte(`[{"id":"0274d556-6257-426a-b651-0a9bc35c26d8","config_id":"21e7586d-31fb-453c-a205-d73dc6b58eaa","analyzer":"no-public-ip","message":"instance has public ip","summary":"public ip","status":"open","severity":"high","analysis_type":"security","analysis":{"rule":"R1"},"properties":[{"name":"port","value":443}],"config":{"id":"21e7586d-31fb-453c-a205-d73dc6b58eaa","name":"prod-instance","type":"AWS::EC2::Instance"}}]`))
 			default:
 				ginkgo.Fail("unexpected request: " + r.URL.Path)
 			}
@@ -56,6 +57,46 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 		Expect(*result.Items[0].FirstObserved).To(Equal(time.Date(2026, 6, 24, 16, 41, 38, 0, time.UTC)))
 		Expect(result.Items[0].LastObserved).ToNot(BeNil())
 		Expect(*result.Items[0].LastObserved).To(Equal(time.Date(2026, 6, 25, 10, 0, 0, 0, time.UTC)))
+		Expect(result.Details).To(HaveLen(1))
+		Expect(result.Details[0].Message).To(Equal("instance has public ip"))
+		Expect(result.Details[0].Analysis).To(HaveKeyWithValue("rule", "R1"))
+
+		compact := catalogInsightSearchOutput(result, false, clicky.FormatOptions{JSON: true})
+		Expect(compact).To(BeAssignableToTypeOf([]catalogInsightSearchHit{}))
+		full := catalogInsightSearchOutput(result, true, clicky.FormatOptions{JSON: true})
+		Expect(full).To(BeAssignableToTypeOf([]sdk.CatalogInsightDetail{}))
+		compactJSON, err := json.Marshal(compact)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(string(compactJSON)).ToNot(ContainSubstring(`"message"`))
+		fullJSON, err := json.Marshal(full)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(string(fullJSON)).To(And(
+			ContainSubstring(`"message":"instance has public ip"`),
+			ContainSubstring(`"analysis":{"rule":"R1"}`),
+			ContainSubstring(`"properties":[{"name":"port"`),
+		))
+
+		row := catalogInsightCompactRow{catalogInsightSearchHit: result.Items[0]}
+		Expect(row.Columns()).To(HaveLen(10))
+		Expect(row.Row()).To(And(
+			HaveKeyWithValue("ConfigID", "21e7586d-31fb-453c-a205-d73dc6b58eaa"),
+			HaveKeyWithValue("ConfigName", "prod-instance"),
+			HaveKeyWithValue("ConfigType", "AWS::EC2::Instance"),
+			HaveKey("Name"),
+			HaveKey("Summary"),
+			HaveKey("InsightType"),
+			HaveKey("Status"),
+			HaveKey("Severity"),
+			HaveKey("LastObserved"),
+		))
+		rendered, err := clicky.Format([]catalogInsightCompactRow{row}, clicky.FormatOptions{Pretty: true, NoColor: true})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(rendered).To(And(
+			ContainSubstring("Config ID"),
+			ContainSubstring("Config Name"),
+			ContainSubstring("Config Type"),
+			ContainSubstring("prod-instance"),
+		))
 	})
 
 	ginkgo.It("defaults insight search empty limit to 100", func() {
@@ -94,5 +135,12 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 		Expect(insight.Analyzer).To(Equal("no-public-ip"))
 		Expect(insight.Config).ToNot(BeNil())
 		Expect(insight.Config.ConfigClass).To(Equal("EC2"))
+	})
+
+	ginkgo.It("registers full only on insight search entry points", func() {
+		Expect(CatalogInsight.Flags().Lookup("full")).ToNot(BeNil())
+		Expect(CatalogInsightSearch.Flags().Lookup("full")).ToNot(BeNil())
+		Expect(CatalogInsightGet.Flags().Lookup("full")).To(BeNil())
+		Expect(catalogSubcommand(CatalogInsight, "list")).To(BeNil())
 	})
 })

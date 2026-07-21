@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -76,9 +77,17 @@ type CatalogInsightIncident struct {
 	IncidentID string `json:"incident_id,omitempty"`
 }
 
+// catalogItemResponse bridges PostgREST's native JSONB config to ConfigItem's JSON string field.
+type catalogItemResponse struct {
+	models.ConfigItem
+	Config json.RawMessage `json:"config"`
+}
+
 const catalogChangeDetailSelect = "id,config_id,change_type,created_at,external_created_by,source,diff,details,patches,created_by,config:configs(id,name,type,config_class),artifacts:artifacts(*)::jsonb"
 const catalogInsightDetailSelect = "id,config_id,scraper_id,analyzer,message,summary,status,severity,analysis_type,analysis,properties,source,first_observed,last_observed,is_pushed,config:configs(id,name,type,config_class)"
 const catalogInsightSearchDetailSelect = catalogInsightDetailSelect + ",evidences(hypothesis:hypotheses(incident:incidents(incident_id)))"
+const catalogItemBatchSize = 200
+const catalogItemBatchConcurrency = 4
 const catalogInsightBatchSize = 200
 const catalogInsightBatchConcurrency = 4
 
@@ -121,6 +130,91 @@ func (c *Client) GetCatalogItem(ctx context.Context, id string) (*models.ConfigI
 		return nil, err
 	}
 	return &out, nil
+}
+
+// GetCatalogItems fetches complete catalog items in bounded batches and preserves the requested order.
+func (c *Client) GetCatalogItems(ctx context.Context, ids []string) ([]models.ConfigItem, error) {
+	if len(ids) == 0 {
+		return []models.ConfigItem{}, nil
+	}
+
+	batchCount := (len(ids) + catalogItemBatchSize - 1) / catalogItemBatchSize
+	batches := make([][]models.ConfigItem, batchCount)
+	group, groupCtx := errgroup.WithContext(ctx)
+	group.SetLimit(catalogItemBatchConcurrency)
+
+	for batchIndex := range batchCount {
+		start := batchIndex * catalogItemBatchSize
+		end := min(start+catalogItemBatchSize, len(ids))
+		group.Go(func() error {
+			batch, err := c.getCatalogItemsBatch(groupCtx, ids[start:end])
+			if err != nil {
+				return fmt.Errorf("catalog items batch %d: %w", batchIndex+1, err)
+			}
+			batches[batchIndex] = batch
+			return nil
+		})
+	}
+
+	if err := group.Wait(); err != nil {
+		return nil, err
+	}
+
+	itemsByID := make(map[string]models.ConfigItem, len(ids))
+	for _, batch := range batches {
+		for _, item := range batch {
+			itemsByID[item.ID.String()] = item
+		}
+	}
+
+	result := make([]models.ConfigItem, 0, len(ids))
+	for _, id := range ids {
+		item, ok := itemsByID[id]
+		if !ok {
+			return nil, fmt.Errorf("catalog item %s was not returned", id)
+		}
+		result = append(result, item)
+	}
+	return result, nil
+}
+
+func (c *Client) getCatalogItemsBatch(ctx context.Context, ids []string) ([]models.ConfigItem, error) {
+	r, err := c.R(ctx).
+		QueryParam("id", "in.("+strings.Join(ids, ",")+")").
+		QueryParam("select", "*").
+		Get(c.apiPath("/db/config_items"))
+	if err != nil {
+		return nil, err
+	}
+	if !r.IsOK() {
+		body, _ := r.AsString()
+		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
+			return nil, ErrHTMLResponse
+		}
+		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
+	}
+
+	var response []catalogItemResponse
+	if err := decodeJSON(r, &response); err != nil {
+		return nil, err
+	}
+
+	out := make([]models.ConfigItem, 0, len(response))
+	for _, raw := range response {
+		item := raw.ConfigItem
+		rawConfig := strings.TrimSpace(string(raw.Config))
+		if rawConfig != "" && rawConfig != "null" {
+			config := rawConfig
+			if rawConfig[0] == '"' {
+				if err := json.Unmarshal([]byte(rawConfig), &config); err != nil {
+					return nil, err
+				}
+			}
+			item.Config = &config
+		}
+		out = append(out, item)
+	}
+	return out, nil
 }
 
 // GetCatalogChange fetches full details for a catalog change from PostgREST.
