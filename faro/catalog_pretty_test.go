@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/flanksource/clicky/formatters"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
@@ -80,7 +81,7 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 		}
 	})
 
-	ginkgo.It("preserves the ConfigItem JSON shape", func() {
+	ginkgo.It("preserves the ConfigItem JSON and YAML shapes", func() {
 		name := "api"
 		typ := "Kubernetes::Pod"
 		item := models.ConfigItem{ID: uuid.New(), Name: &name, Type: &typ, ConfigClass: "Pod"}
@@ -91,5 +92,14 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(wrapped).To(MatchJSON(original))
+
+		yamlFormatter := formatters.NewYAMLFormatter()
+		originalYAML, err := yamlFormatter.FormatValue(item)
+		Expect(err).ToNot(HaveOccurred())
+		wrappedYAML, err := yamlFormatter.FormatValue(catalogItemDetail{ConfigItem: item})
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(wrappedYAML).To(MatchYAML(originalYAML))
+		Expect(wrappedYAML).ToNot(ContainSubstring("configitem:"))
 	})
 })

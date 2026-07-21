@@ -87,4 +87,31 @@ var _ = ginkgo.Describe("faro catalog search", func() {
 		Expect(items[0].Properties).ToNot(BeNil())
 		Expect(*items[0].Properties).To(HaveLen(1))
 	})
+
+	ginkgo.It("falls back to lightweight results when an item vanishes during hydration", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/resources/search":
+				_, _ = w.Write([]byte(`{"configs":[{"id":"00000000-0000-0000-0000-000000000001","name":"vanished","type":"Kubernetes::Pod"},{"id":"00000000-0000-0000-0000-000000000002","name":"api","type":"Kubernetes::Pod"}]}`))
+			case "/db/config_items":
+				_, _ = w.Write([]byte(`[{"id":"00000000-0000-0000-0000-000000000002","name":"api","type":"Kubernetes::Pod","config_class":"Pod","description":"full record"}]`))
+			default:
+				ginkgo.Fail("unexpected request: " + r.URL.Path)
+			}
+		}))
+		defer server.Close()
+		storeRemoteContext(server.URL)
+
+		items, err := remoteSearch("type=Kubernetes::Pod", "all", 25, true)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(items).To(HaveLen(2))
+		Expect(items[0].ID.String()).To(Equal("00000000-0000-0000-0000-000000000001"))
+		Expect(*items[0].Name).To(Equal("vanished"))
+		Expect(items[0].Description).To(BeNil())
+		Expect(items[1].ID.String()).To(Equal("00000000-0000-0000-0000-000000000002"))
+		Expect(items[1].Description).ToNot(BeNil())
+		Expect(*items[1].Description).To(Equal("full record"))
+	})
 })

@@ -61,9 +61,9 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 		Expect(result.Details[0].Message).To(Equal("instance has public ip"))
 		Expect(result.Details[0].Analysis).To(HaveKeyWithValue("rule", "R1"))
 
-		compact := catalogInsightSearchOutput(result, false, clicky.FormatOptions{JSON: true})
+		compact := catalogInsightSearchOutput(result, false)
 		Expect(compact).To(BeAssignableToTypeOf([]catalogInsightSearchHit{}))
-		full := catalogInsightSearchOutput(result, true, clicky.FormatOptions{JSON: true})
+		full := catalogInsightSearchOutput(result, true)
 		Expect(full).To(BeAssignableToTypeOf([]sdk.CatalogInsightDetail{}))
 		compactJSON, err := json.Marshal(compact)
 		Expect(err).ToNot(HaveOccurred())
@@ -76,7 +76,7 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 			ContainSubstring(`"properties":[{"name":"port"`),
 		))
 
-		row := catalogInsightCompactRow{catalogInsightSearchHit: result.Items[0]}
+		row := result.Items[0]
 		Expect(row.Columns()).To(HaveLen(10))
 		Expect(row.Row()).To(And(
 			HaveKeyWithValue("ConfigID", "21e7586d-31fb-453c-a205-d73dc6b58eaa"),
@@ -89,7 +89,7 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 			HaveKey("Severity"),
 			HaveKey("LastObserved"),
 		))
-		rendered, err := clicky.Format([]catalogInsightCompactRow{row}, clicky.FormatOptions{Pretty: true, NoColor: true})
+		rendered, err := clicky.Format([]catalogInsightSearchHit{row}, clicky.FormatOptions{Pretty: true, NoColor: true})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(rendered).To(And(
 			ContainSubstring("Config ID"),
@@ -98,6 +98,54 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 			ContainSubstring("prod-instance"),
 		))
 	})
+
+	formats := []struct {
+		name string
+		opts clicky.FormatOptions
+	}{
+		{name: "pretty", opts: clicky.FormatOptions{Pretty: true, NoColor: true}},
+		{name: "CSV", opts: clicky.FormatOptions{CSV: true}},
+		{name: "Markdown", opts: clicky.FormatOptions{Markdown: true}},
+		{name: "HTML", opts: clicky.FormatOptions{HTML: true}},
+	}
+	for _, format := range formats {
+		ginkgo.It("uses the same insight columns for "+format.name, func() {
+			severity := "high"
+			firstObserved := time.Date(1999, 1, 1, 0, 0, 0, 0, time.UTC)
+			lastObserved := time.Date(2031, 1, 1, 0, 0, 0, 0, time.UTC)
+			hit := catalogInsightSearchHit{
+				ID:            "id",
+				Name:          "name",
+				Summary:       "summary",
+				InsightType:   "kind",
+				Status:        "open",
+				Severity:      &severity,
+				IssueIDs:      []string{"hidden-issue"},
+				FirstObserved: &firstObserved,
+				LastObserved:  &lastObserved,
+				Config: &catalogInsightConfig{
+					ID:   "cid",
+					Name: "cfg",
+					Type: "type",
+				},
+			}
+
+			columns := hit.Columns()
+			labels := make([]string, len(columns))
+			for i, column := range columns {
+				labels[i] = column.DisplayLabel()
+			}
+			Expect(labels).To(Equal([]string{"Id", "Config ID", "Config Name", "Config Type", "Name", "Summary", "Insight Type", "Status", "Severity", "Last Observed"}))
+
+			rendered, err := clicky.Format([]catalogInsightSearchHit{hit}, format.opts)
+			Expect(err).ToNot(HaveOccurred())
+			for _, value := range []string{"cid", "cfg", "type", "name", "summary", "kind", "open", "high", "2031"} {
+				Expect(rendered).To(ContainSubstring(value))
+			}
+			Expect(rendered).ToNot(ContainSubstring("hidden-issue"))
+			Expect(rendered).ToNot(ContainSubstring("1999"))
+		})
+	}
 
 	ginkgo.It("defaults insight search empty limit to 100", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

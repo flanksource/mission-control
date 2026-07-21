@@ -50,7 +50,7 @@ var _ = ginkgo.Describe("catalog client", func() {
 	})
 
 	ginkgo.It("gets complete catalog items in bounded batches and preserves requested order", func() {
-		ids := make([]string, catalogItemBatchSize+1)
+		ids := make([]string, 201)
 		for i := range ids {
 			ids[i] = fmt.Sprintf("00000000-0000-0000-0000-%012d", i+1)
 		}
@@ -64,6 +64,8 @@ var _ = ginkgo.Describe("catalog client", func() {
 
 			filter := strings.TrimSuffix(strings.TrimPrefix(r.URL.Query().Get("id"), "in.("), ")")
 			batchIDs := strings.Split(filter, ",")
+			Expect(len(batchIDs)).To(BeNumerically("<=", 100))
+			Expect(len(r.RequestURI)).To(BeNumerically("<", 8_000))
 			response := make([]map[string]any, 0, len(batchIDs))
 			for i := len(batchIDs) - 1; i >= 0; i-- {
 				item := map[string]any{
@@ -87,7 +89,7 @@ var _ = ginkgo.Describe("catalog client", func() {
 		items, err := New(server.URL, "tok").GetCatalogItems(context.Background(), ids)
 
 		Expect(err).ToNot(HaveOccurred())
-		Expect(requestCount.Load()).To(Equal(int32(2)))
+		Expect(requestCount.Load()).To(Equal(int32(3)))
 		Expect(items).To(HaveLen(len(ids)))
 		for i := range ids {
 			Expect(items[i].ID.String()).To(Equal(ids[i]))
@@ -99,16 +101,44 @@ var _ = ginkgo.Describe("catalog client", func() {
 		Expect(items[0].Properties).ToNot(BeNil())
 	})
 
-	ginkgo.It("reports when a requested full catalog item is missing", func() {
+	ginkgo.It("omits a requested full catalog item that is no longer visible", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[]`))
 		}))
 		defer server.Close()
 
-		_, err := New(server.URL, "tok").GetCatalogItems(context.Background(), []string{"00000000-0000-0000-0000-000000000001"})
+		items, err := New(server.URL, "tok").GetCatalogItems(context.Background(), []string{"00000000-0000-0000-0000-000000000001"})
 
-		Expect(err).To(MatchError("catalog item 00000000-0000-0000-0000-000000000001 was not returned"))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(items).To(BeEmpty())
+	})
+
+	ginkgo.It("keeps catalog insight hydration requests below common proxy limits", func() {
+		ids := make([]string, catalogInsightBatchSize+1)
+		for i := range ids {
+			ids[i] = fmt.Sprintf("00000000-0000-0000-0000-%012d", i+1)
+		}
+
+		var requestCount atomic.Int32
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCount.Add(1)
+			Expect(r.Method).To(Equal(http.MethodGet))
+			Expect(r.URL.Path).To(Equal("/db/config_analysis"))
+			Expect(r.URL.Query().Get("select")).To(Equal(catalogInsightSearchDetailSelect))
+			filter := strings.TrimSuffix(strings.TrimPrefix(r.URL.Query().Get("id"), "in.("), ")")
+			Expect(len(strings.Split(filter, ","))).To(BeNumerically("<=", 100))
+			Expect(len(r.RequestURI)).To(BeNumerically("<", 8_000))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[]`))
+		}))
+		defer server.Close()
+
+		insights, err := New(server.URL, "tok").GetCatalogInsights(context.Background(), ids)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(insights).To(BeEmpty())
+		Expect(requestCount.Load()).To(Equal(int32(2)))
 	})
 
 	ginkgo.It("gets full catalog change details from PostgREST", func() {

@@ -86,9 +86,9 @@ type catalogItemResponse struct {
 const catalogChangeDetailSelect = "id,config_id,change_type,created_at,external_created_by,source,diff,details,patches,created_by,config:configs(id,name,type,config_class),artifacts:artifacts(*)::jsonb"
 const catalogInsightDetailSelect = "id,config_id,scraper_id,analyzer,message,summary,status,severity,analysis_type,analysis,properties,source,first_observed,last_observed,is_pushed,config:configs(id,name,type,config_class)"
 const catalogInsightSearchDetailSelect = catalogInsightDetailSelect + ",evidences(hypothesis:hypotheses(incident:incidents(incident_id)))"
-const catalogItemBatchSize = 200
+const catalogItemBatchSize = 100
 const catalogItemBatchConcurrency = 4
-const catalogInsightBatchSize = 200
+const catalogInsightBatchSize = 100
 const catalogInsightBatchConcurrency = 4
 
 // SearchCatalog runs a resource search against the remote server
@@ -132,7 +132,8 @@ func (c *Client) GetCatalogItem(ctx context.Context, id string) (*models.ConfigI
 	return &out, nil
 }
 
-// GetCatalogItems fetches complete catalog items in bounded batches and preserves the requested order.
+// GetCatalogItems fetches available catalog items in bounded batches, preserves
+// requested order, and omits IDs that are no longer visible during hydration.
 func (c *Client) GetCatalogItems(ctx context.Context, ids []string) ([]models.ConfigItem, error) {
 	if len(ids) == 0 {
 		return []models.ConfigItem{}, nil
@@ -170,10 +171,9 @@ func (c *Client) GetCatalogItems(ctx context.Context, ids []string) ([]models.Co
 	result := make([]models.ConfigItem, 0, len(ids))
 	for _, id := range ids {
 		item, ok := itemsByID[id]
-		if !ok {
-			return nil, fmt.Errorf("catalog item %s was not returned", id)
+		if ok {
+			result = append(result, item)
 		}
-		result = append(result, item)
 	}
 	return result, nil
 }

@@ -16,7 +16,7 @@ import (
 
 // catalogItemDetail keeps the ConfigItem wire shape while expanding its human-readable view.
 type catalogItemDetail struct {
-	models.ConfigItem
+	models.ConfigItem `yaml:",inline"`
 }
 
 func (r catalogItemDetail) Pretty() api.Text {

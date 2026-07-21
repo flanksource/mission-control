@@ -94,7 +94,25 @@ func catalogItemsFromSearch(ctx context.Context, client *sdk.Client, items []que
 		for i, item := range items {
 			ids[i] = item.ID
 		}
-		return client.GetCatalogItems(ctx, ids)
+		fullItems, err := client.GetCatalogItems(ctx, ids)
+		if err != nil {
+			return nil, err
+		}
+
+		fullItemsByID := make(map[string]models.ConfigItem, len(fullItems))
+		for _, item := range fullItems {
+			fullItemsByID[item.ID.String()] = item
+		}
+
+		out := make([]models.ConfigItem, 0, len(items))
+		for _, item := range items {
+			if fullItem, ok := fullItemsByID[item.ID]; ok {
+				out = append(out, fullItem)
+			} else {
+				out = append(out, selectedResourceToConfigItem(item))
+			}
+		}
+		return out, nil
 	}
 
 	out := make([]models.ConfigItem, 0, len(items))
