@@ -12,7 +12,7 @@ RUN go mod download
 COPY ./ ./
 RUN make build
 
-FROM flanksource/base-image:0.6.0@sha256:6cae0a4bbba7e7e16674a55751c8161c11d5ebdd23f596f93e669f835ee1e034
+FROM flanksource/base-image:0.8.0@sha256:b0cf87d5baa8fcfaad1294a09168f4215b1d2e98cec9ff93a49e48f2dd8fb0a6
 WORKDIR /app
 
 ARG TARGETARCH
