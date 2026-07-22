@@ -1,13 +1,193 @@
-// Tests for the action consumer's claim-then-execute split and the orphaned-action reaper.
+// Tests for the action consumer's claim-then-execute split (streaming), the failing-action
+// regression, and the orphaned-action reaper for both local and agent actions.
 package playbook
 
 import (
+	"encoding/json"
 	"time"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/playbook/actions"
+	"github.com/flanksource/incident-commander/playbook/runner"
 )
+
+// ancientTime is well before any action created during the suite, so an action stamped with
+// it sorts first in getNextAction/getNextActionForAgent regardless of other rows in the
+// shared test database, making claims deterministic.
+var ancientTime = time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)
+
+// scheduleLocalAction persists a playbook, run and a single scheduled action whose spec runs
+// the given action, ready for the local ActionConsumer to claim. It bypasses Run()'s RBAC by
+// writing the rows directly. The action's scheduled_time is backdated so claimNextAction picks
+// it deterministically.
+func scheduleLocalAction(ctx context.Context, name string, action v1.PlaybookAction) (models.PlaybookRun, models.PlaybookRunAction) {
+	spec, err := json.Marshal(v1.PlaybookSpec{Actions: []v1.PlaybookAction{action}})
+	Expect(err).To(BeNil())
+
+	playbook := models.Playbook{
+		Namespace: "default",
+		Name:      name,
+		Spec:      spec,
+		Source:    models.SourceConfigFile,
+	}
+	Expect(playbook.Save(ctx.DB())).To(BeNil())
+
+	run := models.PlaybookRun{
+		PlaybookID:    playbook.ID,
+		Spec:          spec,
+		Status:        models.PlaybookRunStatusRunning,
+		ScheduledTime: time.Now(),
+		Timeout:       30 * time.Minute,
+	}
+	Expect(ctx.DB().Create(&run).Error).To(BeNil())
+
+	runAction := models.PlaybookRunAction{
+		PlaybookRunID: run.ID,
+		Name:          action.Name,
+		Status:        models.PlaybookActionStatusScheduled,
+		ScheduledTime: ancientTime,
+	}
+	Expect(ctx.DB().Create(&runAction).Error).To(BeNil())
+
+	return run, runAction
+}
+
+func actionStatus(ctx context.Context, id uuid.UUID) models.PlaybookActionStatus {
+	var got models.PlaybookRunAction
+	Expect(ctx.DB().Where("id = ?", id).First(&got).Error).To(BeNil())
+	return got.Status
+}
+
+var _ = ginkgo.Describe("ActionConsumer claim-then-execute", ginkgo.Ordered, func() {
+	// Disable the background consumers so the specs drive claim + execution manually and can
+	// observe intermediate states without races. The scheduler stays enabled but is unused here.
+	ginkgo.BeforeAll(func() {
+		Expect(context.UpdateProperty(DefaultContext, "playbook.runner.disabled", "true")).To(BeNil())
+	})
+
+	ginkgo.AfterAll(func() {
+		Expect(context.UpdateProperty(DefaultContext, "playbook.runner.disabled", "false")).To(BeNil())
+	})
+
+	ginkgo.It("commits the running claim before execution so progress can stream", func() {
+		_, scheduled := scheduleLocalAction(DefaultContext, "stream-echo",
+			v1.PlaybookAction{Name: "echo", Exec: &v1.ExecAction{Script: "echo hello streaming"}})
+
+		action, run, err := claimNextAction(DefaultContext)
+		Expect(err).To(BeNil())
+		Expect(action).ToNot(BeNil())
+		Expect(action.ID).To(Equal(scheduled.ID))
+
+		// The claim committed in its own transaction, so the running status is visible on the
+		// pooled connection before execution has run — this is what lets the report action's
+		// incremental result writes stream to the UI.
+		Expect(actionStatus(DefaultContext, scheduled.ID)).To(Equal(models.PlaybookActionStatusRunning))
+
+		Expect(runner.RunAction(DefaultContext, run, action)).To(BeNil())
+		Expect(actionStatus(DefaultContext, scheduled.ID)).To(Equal(models.PlaybookActionStatusCompleted))
+	})
+
+	ginkgo.It("marks a failing SQL action failed without wedging the consumer", func() {
+		_, scheduled := scheduleLocalAction(DefaultContext, "stream-sql-fail",
+			v1.PlaybookAction{Name: "bad-sql", SQL: &v1.SQLAction{
+				Connection: "connection://does/not-exist",
+				Query:      "SELECT 1",
+			}})
+
+		action, run, err := claimNextAction(DefaultContext)
+		Expect(err).To(BeNil())
+		Expect(action.ID).To(Equal(scheduled.ID))
+
+		// Execution runs outside a transaction, so a failing action is a plain error that
+		// ExecuteAndSaveAction records via action.Fail; RunAction itself returns no error.
+		Expect(runner.RunAction(DefaultContext, run, action)).To(BeNil())
+		Expect(actionStatus(DefaultContext, scheduled.ID)).To(Equal(models.PlaybookActionStatusFailed))
+
+		// The failure must not poison the connection: a subsequent action runs to completion.
+		_, next := scheduleLocalAction(DefaultContext, "stream-after-fail",
+			v1.PlaybookAction{Name: "echo", Exec: &v1.ExecAction{Script: "echo still working"}})
+		nextAction, nextRun, err := claimNextAction(DefaultContext)
+		Expect(err).To(BeNil())
+		Expect(nextAction.ID).To(Equal(next.ID))
+		Expect(runner.RunAction(DefaultContext, nextRun, nextAction)).To(BeNil())
+		Expect(actionStatus(DefaultContext, next.ID)).To(Equal(models.PlaybookActionStatusCompleted))
+	})
+
+	ginkgo.It("recovers an action orphaned mid-execution and retries it to completion", func() {
+		_, scheduled := scheduleLocalAction(DefaultContext, "stream-orphan",
+			v1.PlaybookAction{Name: "echo", Exec: &v1.ExecAction{Script: "echo recovered"}})
+
+		// Claim the action but never execute it, simulating a crash after the claim commits.
+		action, _, err := claimNextAction(DefaultContext)
+		Expect(err).To(BeNil())
+		Expect(action.ID).To(Equal(scheduled.ID))
+		Expect(actionStatus(DefaultContext, scheduled.ID)).To(Equal(models.PlaybookActionStatusRunning))
+
+		// Backdate the claim past the orphan timeout and reap it.
+		Expect(DefaultContext.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", scheduled.ID).
+			Update("start_time", ancientTime).Error).To(BeNil())
+		Expect(ReapOrphanedActions(DefaultContext)).To(BeNil())
+		Expect(actionStatus(DefaultContext, scheduled.ID)).To(Equal(models.PlaybookActionStatusScheduled))
+
+		// The reset action is claimable again and now runs to completion.
+		retried, retriedRun, err := claimNextAction(DefaultContext)
+		Expect(err).To(BeNil())
+		Expect(retried.ID).To(Equal(scheduled.ID))
+		Expect(runner.RunAction(DefaultContext, retriedRun, retried)).To(BeNil())
+		Expect(actionStatus(DefaultContext, scheduled.ID)).To(Equal(models.PlaybookActionStatusCompleted))
+	})
+})
+
+var _ = ginkgo.Describe("ActionAgentConsumer claim", ginkgo.Ordered, func() {
+	ginkgo.BeforeAll(func() {
+		Expect(context.UpdateProperty(DefaultContext, "playbook.runner.disabled", "true")).To(BeNil())
+	})
+
+	ginkgo.AfterAll(func() {
+		Expect(context.UpdateProperty(DefaultContext, "playbook.runner.disabled", "false")).To(BeNil())
+	})
+
+	ginkgo.It("commits the running claim before execution for agent actions", func() {
+		// Agent-pulled actions carry their own spec/env and a null playbook_run_id.
+		runAction := models.PlaybookRunAction{
+			Name:          "agent-step",
+			Status:        models.PlaybookActionStatusWaiting,
+			ScheduledTime: ancientTime,
+		}
+		// Omit playbook_run_id so it is NULL (agent-pulled actions have no local run),
+		// mirroring PullPlaybookAction and avoiding the run foreign key.
+		Expect(DefaultContext.DB().Omit("playbook_run_id").Create(&runAction).Error).To(BeNil())
+
+		spec, err := json.Marshal(v1.PlaybookAction{Name: "agent-step", Exec: &v1.ExecAction{Script: "echo hi"}})
+		Expect(err).To(BeNil())
+		env, err := json.Marshal(actions.TemplateEnv{})
+		Expect(err).To(BeNil())
+
+		agentData := models.PlaybookActionAgentData{
+			ActionID:   runAction.ID,
+			RunID:      uuid.New(),
+			PlaybookID: uuid.New(),
+			Spec:       spec,
+			Env:        env,
+		}
+		Expect(DefaultContext.DB().Create(&agentData).Error).To(BeNil())
+
+		claimed, err := claimNextAgentAction(DefaultContext)
+		Expect(err).To(BeNil())
+		Expect(claimed).ToNot(BeNil())
+		Expect(claimed.runAction.ID).To(Equal(runAction.ID))
+		Expect(claimed.spec.Name).To(Equal("agent-step"))
+
+		// The claim committed independently, so the running status is visible before execution.
+		Expect(actionStatus(DefaultContext, runAction.ID)).To(Equal(models.PlaybookActionStatusRunning))
+	})
+})
 
 var _ = ginkgo.Describe("Orphaned action reaper", func() {
 	var run models.PlaybookRun
