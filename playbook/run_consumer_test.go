@@ -108,17 +108,18 @@ var _ = ginkgo.Describe("ActionConsumer claim-then-execute", ginkgo.Ordered, fun
 			}
 		}()
 
+		reportSpec := v1.ReportAction{
+			Configs:  &types.ResourceSelector{ID: dummy.KubernetesNodeA.ID.String(), Limit: 1},
+			Format:   "facet-html",
+			Facet:    &v1.FacetOptions{URL: facetServer.URL},
+			Sections: &icapi.CatalogReportSections{},
+		}
 		_, scheduled := scheduleLocalAction(DefaultContext, "stream-report", v1.PlaybookAction{
-			Name: "report",
-			Report: &v1.ReportAction{
-				Configs:  &types.ResourceSelector{ID: dummy.KubernetesNodeA.ID.String(), Limit: 1},
-				Format:   "facet-html",
-				Facet:    &v1.FacetOptions{URL: facetServer.URL},
-				Sections: &icapi.CatalogReportSections{},
-			},
+			Name:   "report",
+			Report: &reportSpec,
 		})
 
-		action, run, err := claimNextAction(DefaultContext)
+		action, _, err := claimNextAction(DefaultContext)
 		Expect(err).To(BeNil())
 		Expect(action).ToNot(BeNil())
 		Expect(action.ID).To(Equal(scheduled.ID))
@@ -126,7 +127,14 @@ var _ = ginkgo.Describe("ActionConsumer claim-then-execute", ginkgo.Ordered, fun
 
 		executionStarted = true
 		go func() {
-			done <- runner.RunAction(DefaultContext, run, action)
+			report := actions.Report{ActionID: action.ID}
+			result, err := report.Run(DefaultContext, reportSpec)
+			if err != nil {
+				_ = action.Fail(DefaultContext.DB(), result, err)
+				done <- err
+				return
+			}
+			done <- action.Complete(DefaultContext.DB(), result)
 		}()
 		select {
 		case <-facetRequest:
