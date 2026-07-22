@@ -12,11 +12,11 @@ importers:
         specifier: ^0.2.1
         version: 0.2.21(@shikijs/langs@1.29.2)(@shikijs/themes@1.29.2)(marked@15.0.12)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(recharts@3.10.0(react-dom@19.2.5(react@19.2.5))(react-is@16.13.1)(react@19.2.5)(redux@5.0.1))(shiki@1.29.2)(tailwindcss@4.3.3)
       '@flanksource/facet':
-        specifier: ^0.1.60
+        specifier: 0.1.60
         version: 0.1.60(@shikijs/langs@1.29.2)(@shikijs/themes@1.29.2)(immer@11.1.15)(marked@15.0.12)(monaco-editor@0.56.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(recharts@3.10.0(react-dom@19.2.5(react@19.2.5))(react-is@16.13.1)(react@19.2.5)(redux@5.0.1))(tailwindcss@4.3.3)
       '@flanksource/icons':
-        specifier: ^1.0.53
-        version: 1.0.53(react@19.2.5)
+        specifier: ^1.0.63
+        version: 1.0.63(react@19.2.5)
       '@iconify-json/carbon':
         specifier: ^1.2.0
         version: 1.2.20
@@ -425,11 +425,6 @@ packages:
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'
-
-  '@flanksource/icons@1.0.53':
-    resolution: {integrity: sha512-em7v4Kjgp4mlgacAwCOOSRBc8/+v6EYy3qV8WcL7aNj8gvzCFzpCwuMAJ+i1OLsgxEVvOrjN0YHXmEobZhZMGQ==}
-    peerDependencies:
-      react: '*'
 
   '@flanksource/icons@1.0.60':
     resolution: {integrity: sha512-PH/0IFJJlyr9bNMUI2abCpiTP6pmYvwXklkw2OsoSIZHjnBvmb9ogZ0Xxd4J7QElT54T6gPZqQEQjTuAz7DISA==}
@@ -1734,10 +1729,6 @@ snapshots:
       - recharts
       - streamdown
       - tailwindcss
-
-  '@flanksource/icons@1.0.53(react@19.2.5)':
-    dependencies:
-      react: 19.2.5
 
   '@flanksource/icons@1.0.60(react@19.2.5)':
     dependencies:
