@@ -84,6 +84,10 @@ var _ = ginkgo.Describe("ActionConsumer claim-then-execute", ginkgo.Ordered, fun
 	ginkgo.It("streams report logs while execution is still running", func() {
 		facetRequest := make(chan struct{}, 1)
 		releaseFacet := make(chan struct{}, 1)
+		done := make(chan error, 1)
+		executionStarted := false
+		executionFinished := false
+
 		facetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			facetRequest <- struct{}{}
 			<-releaseFacet
@@ -95,6 +99,12 @@ var _ = ginkgo.Describe("ActionConsumer claim-then-execute", ginkgo.Ordered, fun
 			select {
 			case releaseFacet <- struct{}{}:
 			default:
+			}
+			if executionStarted && !executionFinished {
+				select {
+				case <-done:
+				case <-time.After(30 * time.Second):
+				}
 			}
 		}()
 
@@ -114,13 +124,14 @@ var _ = ginkgo.Describe("ActionConsumer claim-then-execute", ginkgo.Ordered, fun
 		Expect(action.ID).To(Equal(scheduled.ID))
 		Expect(actionStatus(DefaultContext, scheduled.ID)).To(Equal(models.PlaybookActionStatusRunning))
 
-		done := make(chan error, 1)
+		executionStarted = true
 		go func() {
 			done <- runner.RunAction(DefaultContext, run, action)
 		}()
 		select {
 		case <-facetRequest:
 		case err := <-done:
+			executionFinished = true
 			if err == nil {
 				ginkgo.Fail("report action completed before calling the facet server")
 			}
@@ -132,11 +143,24 @@ var _ = ginkgo.Describe("ActionConsumer claim-then-execute", ginkgo.Ordered, fun
 		var streaming models.PlaybookRunAction
 		Expect(DefaultContext.DB().Where("id = ?", scheduled.ID).First(&streaming).Error).To(BeNil())
 		Expect(streaming.Status).To(Equal(models.PlaybookActionStatusRunning))
-		Expect(streaming.Result["logs"]).To(ContainSubstring("rendering html via facet service"))
+		Expect(streaming.Result["logs"]).To(ContainSubstring("resolving config items"))
 
 		releaseFacet <- struct{}{}
-		Eventually(done, 30*time.Second).Should(Receive(BeNil()))
-		Expect(actionStatus(DefaultContext, scheduled.ID)).To(Equal(models.PlaybookActionStatusCompleted))
+		select {
+		case err := <-done:
+			executionFinished = true
+			Expect(err).ToNot(HaveOccurred())
+		case <-time.After(30 * time.Second):
+			ginkgo.Fail("timed out waiting for the report action to complete")
+		}
+
+		var completed models.PlaybookRunAction
+		Expect(DefaultContext.DB().Where("id = ?", scheduled.ID).First(&completed).Error).To(BeNil())
+		Expect(completed.Status).To(Equal(models.PlaybookActionStatusCompleted))
+		Expect(completed.Result["logs"]).To(And(
+			ContainSubstring("resolving config items"),
+			ContainSubstring("rendering html via facet service"),
+		))
 	})
 
 	ginkgo.It("marks a failing SQL query failed without wedging the consumer", func() {
