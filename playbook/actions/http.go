@@ -66,9 +66,9 @@ func (c *HTTP) Run(ctx context.Context, action v1.HTTPAction) (*HTTPResult, erro
 	return result, nil
 }
 
-func (r HTTPResult) String() string   { return r.plain(false) }
-func (r HTTPResult) ANSI() string     { return r.plain(true) }
-func (r HTTPResult) HTML() string     { return "<pre>" + r.plain(false) + "</pre>" }
+func (r HTTPResult) String() string  { return r.plain(false) }
+func (r HTTPResult) ANSI() string    { return r.plain(true) }
+func (r HTTPResult) HTML() string    { return "<pre>" + r.plain(false) + "</pre>" }
 func (r HTTPResult) Markdown() string { return "```\n" + r.plain(false) + "\n```" }
 
 func (r HTTPResult) plain(colors bool) string {

@@ -151,19 +151,24 @@ func MarkTimedOutPlaybookRuns(ctx context.Context) error {
 }
 
 // ReapOrphanedActions resets actions stuck in the running state past the orphan timeout so
-// they are retried. Actions strand in running when the process crashes mid-execution, since
-// execution no longer runs inside a transaction that would roll back on crash. This job runs
-// on both the main server and agents; on an agent the pulled action has a null playbook_run_id
-// (PullPlaybookAction omits it), so it is reset to waiting for ActionAgentConsumer to re-pick,
-// while a local action is reset to scheduled for ActionConsumer. start_time is cleared so the
-// retry records a fresh timestamp and is not immediately reaped again.
+// they are retried. Agent-pulled actions have no local run and return to waiting. Local actions
+// are only retried while their parent run is still executing and has not timed out.
 func ReapOrphanedActions(ctx context.Context) error {
-	timeout := ctx.Properties().Duration("playbook.action.orphan_timeout", 30*time.Minute)
+	timeout := ctx.Properties().Duration("playbook.action.orphan_timeout", 20*time.Minute)
 
 	tx := ctx.DB().Model(&models.PlaybookRunAction{}).
 		Where("status = ?", models.PlaybookActionStatusRunning).
-		Where("agent_id IS NULL").
+		Where("agent_id IS NULL OR agent_id = ?", uuid.Nil).
 		Where("start_time < NOW() - INTERVAL '1 second' * ?", int64(timeout.Seconds())).
+		Where(`
+			playbook_run_id IS NULL OR EXISTS (
+				SELECT 1
+				FROM playbook_runs
+				WHERE playbook_runs.id = playbook_run_actions.playbook_run_id
+				AND playbook_runs.status IN ?
+				AND (playbook_runs.timeout IS NULL OR playbook_runs.timeout > EXTRACT(EPOCH FROM (NOW() - playbook_runs.scheduled_time)) * 1000000000)
+			)
+		`, models.PlaybookRunStatusExecutingGroup).
 		Updates(map[string]any{
 			"status": gorm.Expr("CASE WHEN playbook_run_id IS NULL THEN ? ELSE ? END",
 				models.PlaybookActionStatusWaiting, models.PlaybookActionStatusScheduled),
