@@ -427,6 +427,17 @@ func skipCancelledAction(ctx context.Context, action *models.PlaybookRunAction) 
 	}))
 }
 
+// failAction marks the action failed and returns the original error. When execution runs
+// outside a transaction a raw error return would strand the action in the running state, so
+// deterministic pre-execution failures mark it terminal here. Under the transactional fallback
+// this write rolls back along with the returned error, preserving retry-on-rollback.
+func failAction(ctx context.Context, action *models.PlaybookRunAction, err error) error {
+	if failErr := action.Fail(ctx.DB(), "", err); failErr != nil {
+		return ctx.Oops().Wrapf(failErr, "failed to mark action failed")
+	}
+	return err
+}
+
 func RunAction(ctx context.Context, run *models.PlaybookRun, action *models.PlaybookRunAction) error {
 	if run.Status == models.PlaybookRunStatusCancelled {
 		return skipCancelledAction(ctx, action)
@@ -434,18 +445,19 @@ func RunAction(ctx context.Context, run *models.PlaybookRun, action *models.Play
 
 	playbook, err := action.GetPlaybook(ctx.DB())
 	if err != nil {
+		// A transient DB error is retryable; leave the action for a later attempt.
 		return err
 	} else if playbook == nil {
-		return ctx.Oops().Errorf("playbook not found")
+		return failAction(ctx, action, ctx.Oops().Errorf("playbook not found"))
 	}
 
 	var spec v1.PlaybookSpec
 	if err := json.Unmarshal([]byte(run.Spec), &spec); err != nil {
-		return ctx.Oops().Wrapf(err, "failed to unmarshal playbook spec")
+		return failAction(ctx, action, ctx.Oops().Wrapf(err, "failed to unmarshal playbook spec"))
 	}
 
 	if err := spec.Validate(); err != nil {
-		return ctx.Oops().Wrap(err)
+		return failAction(ctx, action, ctx.Oops().Wrap(err))
 	}
 
 	ctx = ctx.WithObject(action, run).WithSubject(playbook.ID.String())

@@ -14,6 +14,7 @@ import (
 	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace"
+	"gorm.io/gorm"
 )
 
 var pushPullLagBuckets = []float64{100, 200, 500, 1000, 1500, 3000, 5000, 10_000, 20_000, 30_000, 60_000, 100_000}
@@ -144,6 +145,36 @@ func MarkTimedOutPlaybookRuns(ctx context.Context) error {
 		if err := run.EndAsTimedOut(ctx.DB()); err != nil {
 			return ctx.Oops("db").Wrapf(err, "failed to mark playbook run %s as timed out", run.ID)
 		}
+	}
+
+	return nil
+}
+
+// ReapOrphanedActions resets actions stuck in the running state past the orphan timeout so
+// they are retried. Actions strand in running when the process crashes mid-execution, since
+// execution no longer runs inside a transaction that would roll back on crash. This job runs
+// on both the main server and agents; on an agent the pulled action has a null playbook_run_id
+// (PullPlaybookAction omits it), so it is reset to waiting for ActionAgentConsumer to re-pick,
+// while a local action is reset to scheduled for ActionConsumer. start_time is cleared so the
+// retry records a fresh timestamp and is not immediately reaped again.
+func ReapOrphanedActions(ctx context.Context) error {
+	timeout := ctx.Properties().Duration("playbook.action.orphan_timeout", 30*time.Minute)
+
+	tx := ctx.DB().Model(&models.PlaybookRunAction{}).
+		Where("status = ?", models.PlaybookActionStatusRunning).
+		Where("agent_id IS NULL").
+		Where("start_time < NOW() - INTERVAL '1 second' * ?", int64(timeout.Seconds())).
+		Updates(map[string]any{
+			"status": gorm.Expr("CASE WHEN playbook_run_id IS NULL THEN ? ELSE ? END",
+				models.PlaybookActionStatusWaiting, models.PlaybookActionStatusScheduled),
+			"start_time": nil,
+		})
+	if tx.Error != nil {
+		return ctx.Oops("db").Wrapf(tx.Error, "failed to reap orphaned playbook actions")
+	}
+
+	if tx.RowsAffected > 0 {
+		ctx.Logger.Infof("reset %d orphaned playbook action(s) from running for retry", tx.RowsAffected)
 	}
 
 	return nil
