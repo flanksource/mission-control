@@ -37,9 +37,9 @@ func (c *ExecAction) Run(ctx context.Context, exec v1.ExecAction) (*ExecDetails,
 	return (*ExecDetails)(details), err
 }
 
-func (e ExecDetails) String() string  { return e.plain(false) }
-func (e ExecDetails) ANSI() string    { return e.plain(true) }
-func (e ExecDetails) HTML() string    { return "<pre>" + e.plain(false) + "</pre>" }
+func (e ExecDetails) String() string   { return e.plain(false) }
+func (e ExecDetails) ANSI() string     { return e.plain(true) }
+func (e ExecDetails) HTML() string     { return "<pre>" + e.plain(false) + "</pre>" }
 func (e ExecDetails) Markdown() string { return "```\n" + e.plain(false) + "\n```" }
 
 func (e ExecDetails) plain(colors bool) string {
