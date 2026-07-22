@@ -13,7 +13,7 @@ require (
 	github.com/flanksource/duty v1.0.1352
 	github.com/flanksource/gomplate/v3 v3.24.84
 	github.com/flanksource/incident-commander/plugin/api v0.0.0
-	github.com/flanksource/kopper v1.0.25
+	github.com/flanksource/kopper v1.0.28
 	github.com/gomarkdown/markdown v0.0.0-20260411013819-759bbc3e3207
 	github.com/google/cel-go v0.28.1
 	github.com/google/go-cmp v0.7.0
@@ -52,7 +52,7 @@ require (
 	github.com/emersion/go-smtp v0.24.0
 	github.com/firebase/genkit/go v1.9.0
 	github.com/flanksource/artifacts v1.0.24
-	github.com/flanksource/clicky v1.21.18
+	github.com/flanksource/clicky v1.21.40
 	github.com/flanksource/commons-test v0.1.13
 	github.com/flanksource/deps v1.0.35
 	github.com/fluxcd/pkg/gittestserver v0.28.0
@@ -346,6 +346,7 @@ require (
 	github.com/xuri/efp v0.0.1 // indirect
 	github.com/xuri/excelize/v2 v2.11.0 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
+	github.com/yuin/goldmark v1.7.16 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	github.com/zclconf/go-cty v1.18.1 // indirect
