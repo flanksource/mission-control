@@ -18,6 +18,7 @@ import (
 
 var (
 	insightSearchAgent string
+	insightSearchFull  bool
 	insightSearchLimit int
 )
 
@@ -44,41 +45,9 @@ type catalogInsightConfig struct {
 
 type catalogInsightSearchResult struct {
 	Items        []catalogInsightSearchHit
+	Details      []sdk.CatalogInsightDetail
 	Limited      bool
 	TotalAtLeast int
-}
-
-type catalogInsightCompactRow struct {
-	catalogInsightSearchHit
-}
-
-func (r catalogInsightCompactRow) Columns() []clickyapi.ColumnDef {
-	return []clickyapi.ColumnDef{
-		clickyapi.Column("ID").Build(),
-		clickyapi.Column("Name").Build(),
-		clickyapi.Column("Summary").Build(),
-		clickyapi.Column("InsightType").Label("Insight Type").Build(),
-		clickyapi.Column("Status").Build(),
-		clickyapi.Column("Severity").Build(),
-		clickyapi.Column("LastObserved").Label("Last Observed").Build(),
-	}
-}
-
-func (r catalogInsightCompactRow) Row() map[string]any {
-	severity := ""
-	if r.Severity != nil {
-		severity = *r.Severity
-	}
-
-	return map[string]any{
-		"ID":           r.ID,
-		"Name":         r.Name,
-		"Summary":      r.Summary,
-		"InsightType":  r.InsightType,
-		"Status":       r.Status,
-		"Severity":     severity,
-		"LastObserved": r.LastObserved,
-	}
 }
 
 func (r catalogInsightSearchHit) Columns() []clickyapi.ColumnDef {
@@ -87,13 +56,11 @@ func (r catalogInsightSearchHit) Columns() []clickyapi.ColumnDef {
 		clickyapi.Column("ConfigID").Label("Config ID").Build(),
 		clickyapi.Column("ConfigName").Label("Config Name").Build(),
 		clickyapi.Column("ConfigType").Label("Config Type").Build(),
+		clickyapi.Column("Name").Build(),
 		clickyapi.Column("Summary").Build(),
-		clickyapi.Column("IssueIDs").Label("Issue IDs").Build(),
-		clickyapi.Column("Analyzer").Build(),
 		clickyapi.Column("InsightType").Label("Insight Type").Build(),
 		clickyapi.Column("Status").Build(),
 		clickyapi.Column("Severity").Build(),
-		clickyapi.Column("FirstObserved").Label("First Observed").Build(),
 		clickyapi.Column("LastObserved").Label("Last Observed").Build(),
 	}
 }
@@ -112,18 +79,16 @@ func (r catalogInsightSearchHit) Row() map[string]any {
 	}
 
 	return map[string]any{
-		"ID":            r.ID,
-		"ConfigID":      configID,
-		"ConfigName":    configName,
-		"ConfigType":    configType,
-		"Summary":       r.Summary,
-		"IssueIDs":      strings.Join(r.IssueIDs, ", "),
-		"Analyzer":      r.Name,
-		"InsightType":   r.InsightType,
-		"Status":        r.Status,
-		"Severity":      severity,
-		"FirstObserved": r.FirstObserved,
-		"LastObserved":  r.LastObserved,
+		"ID":           r.ID,
+		"ConfigID":     configID,
+		"ConfigName":   configName,
+		"ConfigType":   configType,
+		"Name":         r.Name,
+		"Summary":      r.Summary,
+		"InsightType":  r.InsightType,
+		"Status":       r.Status,
+		"Severity":     severity,
+		"LastObserved": r.LastObserved,
 	}
 }
 
@@ -136,8 +101,9 @@ var CatalogInsight = &cobra.Command{
 }
 
 var CatalogInsightSearch = &cobra.Command{
-	Use:   "search [QUERY]",
-	Short: "Search catalog insights using the PEG search grammar",
+	Use:     "search [QUERY]",
+	Aliases: []string{"list"},
+	Short:   "Search catalog insights using the PEG search grammar",
 	Long: `Search catalog insights using the PEG search grammar used by the web UI.
 
 Examples:
@@ -156,21 +122,15 @@ func runCatalogInsightSearch(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	printCatalogInsightLimitWarning(cmd, result)
-	clicky.MustPrint(catalogInsightSearchOutput(result.Items, clicky.Flags.FormatOptions), clicky.Flags.FormatOptions)
+	clicky.MustPrint(catalogInsightSearchOutput(result, insightSearchFull), clicky.Flags.FormatOptions)
 	return nil
 }
 
-func catalogInsightSearchOutput(items []catalogInsightSearchHit, opts clicky.FormatOptions) any {
-	format := opts.ResolveFormat()
-	if format != "pretty" && format != "table" {
-		return items
+func catalogInsightSearchOutput(result *catalogInsightSearchResult, full bool) any {
+	if full {
+		return result.Details
 	}
-
-	rows := make([]catalogInsightCompactRow, len(items))
-	for i, item := range items {
-		rows[i] = catalogInsightCompactRow{catalogInsightSearchHit: item}
-	}
-	return rows
+	return result.Items
 }
 
 func catalogInsightSearchQuery(args []string) string {
@@ -249,6 +209,7 @@ func remoteSearchInsights(searchQuery, agent string, limit int) (*catalogInsight
 	}
 
 	out := make([]catalogInsightSearchHit, 0, len(resp.ConfigAnalysis))
+	orderedDetails := make([]sdk.CatalogInsightDetail, 0, len(resp.ConfigAnalysis))
 	for _, s := range resp.ConfigAnalysis {
 		hit := catalogInsightSearchHit{
 			ID:            s.ID,
@@ -262,6 +223,7 @@ func remoteSearchInsights(searchQuery, agent string, limit int) (*catalogInsight
 			LastObserved:  s.UpdatedAt,
 		}
 		if detail, ok := detailsByID[s.ID]; ok {
+			orderedDetails = append(orderedDetails, detail)
 			hit.Summary = detail.Summary
 			if detail.Config != nil {
 				hit.Config = &catalogInsightConfig{
@@ -274,7 +236,7 @@ func remoteSearchInsights(searchQuery, agent string, limit int) (*catalogInsight
 		}
 		out = append(out, hit)
 	}
-	return &catalogInsightSearchResult{Items: out, Limited: limited, TotalAtLeast: totalAtLeast}, nil
+	return &catalogInsightSearchResult{Items: out, Details: orderedDetails, Limited: limited, TotalAtLeast: totalAtLeast}, nil
 }
 
 func catalogInsightIssueIDs(detail sdk.CatalogInsightDetail) []string {
@@ -307,6 +269,8 @@ func remoteGetInsight(id string) (any, error) {
 func init() {
 	CatalogInsight.PersistentFlags().StringVar(&insightSearchAgent, "agent", "all", "Filter by agent id or name ('all' for every agent)")
 	CatalogInsight.PersistentFlags().IntVar(&insightSearchLimit, "limit", 100, "Maximum number of results")
+	CatalogInsight.Flags().BoolVar(&insightSearchFull, "full", false, "Return full insight records")
+	CatalogInsightSearch.Flags().BoolVar(&insightSearchFull, "full", false, "Return full insight records")
 	CatalogInsight.AddCommand(CatalogInsightSearch, CatalogInsightGet)
 	clicky.RegisterSubCommand("catalog", CatalogInsight)
 }

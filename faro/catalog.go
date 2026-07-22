@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/clientcmd"
+	"github.com/flanksource/incident-commander/sdk"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
@@ -21,6 +22,7 @@ type catalogListOpts struct {
 	Tag       []string `flag:"tag" help:"Filter by tag as a label selector (repeatable: --tag cluster=foo)"`
 	Agent     string   `flag:"agent" help:"Filter by agent id or name ('all' for every agent)" default:"all"`
 	Limit     int      `flag:"limit" help:"Maximum number of results" default:"100"`
+	Full      bool     `flag:"full" help:"Return complete catalog items"`
 }
 
 // catalogGetFlags binds the `catalog get` flags.
@@ -47,8 +49,8 @@ func joinTagSelectors(tags []string) string {
 	return strings.Join(parts, ",")
 }
 
-// remoteList backs `catalog list`, searching the remote server and mapping the
-// lightweight search hits to models.ConfigItem for clicky rendering.
+// remoteList backs `catalog list`, returning lightweight search hits by default
+// and hydrating complete items only when requested.
 func remoteList(opts catalogListOpts) ([]models.ConfigItem, error) {
 	client, err := clientcmd.RemoteClient()
 	if err != nil {
@@ -83,9 +85,39 @@ func remoteList(opts catalogListOpts) ([]models.ConfigItem, error) {
 		return nil, err
 	}
 
-	out := make([]models.ConfigItem, 0, len(resp.Configs))
-	for _, s := range resp.Configs {
-		out = append(out, selectedResourceToConfigItem(s))
+	return catalogItemsFromSearch(context.Background(), client, resp.Configs, opts.Full)
+}
+
+func catalogItemsFromSearch(ctx context.Context, client *sdk.Client, items []query.SelectedResource, full bool) ([]models.ConfigItem, error) {
+	if full {
+		ids := make([]string, len(items))
+		for i, item := range items {
+			ids[i] = item.ID
+		}
+		fullItems, err := client.GetCatalogItems(ctx, ids)
+		if err != nil {
+			return nil, err
+		}
+
+		fullItemsByID := make(map[string]models.ConfigItem, len(fullItems))
+		for _, item := range fullItems {
+			fullItemsByID[item.ID.String()] = item
+		}
+
+		out := make([]models.ConfigItem, 0, len(items))
+		for _, item := range items {
+			if fullItem, ok := fullItemsByID[item.ID]; ok {
+				out = append(out, fullItem)
+			} else {
+				out = append(out, selectedResourceToConfigItem(item))
+			}
+		}
+		return out, nil
+	}
+
+	out := make([]models.ConfigItem, 0, len(items))
+	for _, item := range items {
+		out = append(out, selectedResourceToConfigItem(item))
 	}
 	return out, nil
 }
@@ -132,7 +164,11 @@ func remoteGet(id string, flags map[string]string) (any, error) {
 	if flags["relationships"] == "true" {
 		return client.GetCatalogRelationships(context.Background(), id)
 	}
-	return client.GetCatalogItem(context.Background(), id)
+	item, err := client.GetCatalogItem(context.Background(), id)
+	if err != nil {
+		return nil, err
+	}
+	return &catalogItemDetail{ConfigItem: *item}, nil
 }
 
 func completeCatalogIDs(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {

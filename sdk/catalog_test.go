@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 
 	"github.com/flanksource/duty/query"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -44,6 +47,98 @@ var _ = ginkgo.Describe("catalog client", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(item.Name).ToNot(BeNil())
 		Expect(*item.Name).To(Equal("my-config"))
+	})
+
+	ginkgo.It("gets complete catalog items in bounded batches and preserves requested order", func() {
+		ids := make([]string, 201)
+		for i := range ids {
+			ids[i] = fmt.Sprintf("00000000-0000-0000-0000-%012d", i+1)
+		}
+
+		var requestCount atomic.Int32
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCount.Add(1)
+			Expect(r.Method).To(Equal(http.MethodGet))
+			Expect(r.URL.Path).To(Equal("/db/config_items"))
+			Expect(r.URL.Query().Get("select")).To(Equal("*"))
+
+			filter := strings.TrimSuffix(strings.TrimPrefix(r.URL.Query().Get("id"), "in.("), ")")
+			batchIDs := strings.Split(filter, ",")
+			Expect(len(batchIDs)).To(BeNumerically("<=", 100))
+			Expect(len(r.RequestURI)).To(BeNumerically("<", 8_000))
+			response := make([]map[string]any, 0, len(batchIDs))
+			for i := len(batchIDs) - 1; i >= 0; i-- {
+				item := map[string]any{
+					"id":           batchIDs[i],
+					"name":         "config-" + batchIDs[i],
+					"type":         "Kubernetes::Pod",
+					"config_class": "Pod",
+				}
+				if batchIDs[i] == ids[0] {
+					item["description"] = "full record"
+					item["config"] = map[string]any{"kind": "Pod"}
+					item["properties"] = []map[string]any{{"name": "namespace", "text": "production"}}
+				}
+				response = append(response, item)
+			}
+			w.Header().Set("Content-Type", "application/json")
+			Expect(json.NewEncoder(w).Encode(response)).To(Succeed())
+		}))
+		defer server.Close()
+
+		items, err := New(server.URL, "tok").GetCatalogItems(context.Background(), ids)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(requestCount.Load()).To(Equal(int32(3)))
+		Expect(items).To(HaveLen(len(ids)))
+		for i := range ids {
+			Expect(items[i].ID.String()).To(Equal(ids[i]))
+		}
+		Expect(items[0].Description).ToNot(BeNil())
+		Expect(*items[0].Description).To(Equal("full record"))
+		Expect(items[0].Config).ToNot(BeNil())
+		Expect(*items[0].Config).To(MatchJSON(`{"kind":"Pod"}`))
+		Expect(items[0].Properties).ToNot(BeNil())
+	})
+
+	ginkgo.It("omits a requested full catalog item that is no longer visible", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[]`))
+		}))
+		defer server.Close()
+
+		items, err := New(server.URL, "tok").GetCatalogItems(context.Background(), []string{"00000000-0000-0000-0000-000000000001"})
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(items).To(BeEmpty())
+	})
+
+	ginkgo.It("keeps catalog insight hydration requests below common proxy limits", func() {
+		ids := make([]string, catalogInsightBatchSize+1)
+		for i := range ids {
+			ids[i] = fmt.Sprintf("00000000-0000-0000-0000-%012d", i+1)
+		}
+
+		var requestCount atomic.Int32
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			requestCount.Add(1)
+			Expect(r.Method).To(Equal(http.MethodGet))
+			Expect(r.URL.Path).To(Equal("/db/config_analysis"))
+			Expect(r.URL.Query().Get("select")).To(Equal(catalogInsightSearchDetailSelect))
+			filter := strings.TrimSuffix(strings.TrimPrefix(r.URL.Query().Get("id"), "in.("), ")")
+			Expect(len(strings.Split(filter, ","))).To(BeNumerically("<=", 100))
+			Expect(len(r.RequestURI)).To(BeNumerically("<", 8_000))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[]`))
+		}))
+		defer server.Close()
+
+		insights, err := New(server.URL, "tok").GetCatalogInsights(context.Background(), ids)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(insights).To(BeEmpty())
+		Expect(requestCount.Load()).To(Equal(int32(2)))
 	})
 
 	ginkgo.It("gets full catalog change details from PostgREST", func() {

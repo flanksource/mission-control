@@ -14,6 +14,7 @@ import (
 
 var (
 	searchAgent string
+	searchFull  bool
 	searchLimit int
 )
 
@@ -35,7 +36,7 @@ Examples:
   catalog search "name=api*" --agent all --limit 50`,
 	Args: cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		results, err := remoteSearch(strings.Join(args, " "), searchAgent, searchLimit)
+		results, err := remoteSearch(strings.Join(args, " "), searchAgent, searchLimit, searchFull)
 		if err != nil {
 			return err
 		}
@@ -44,9 +45,9 @@ Examples:
 	},
 }
 
-// remoteSearch runs the grammar search against the remote server and maps the
-// lightweight search hits to models.ConfigItem so they render like `catalog list`.
-func remoteSearch(searchQuery, agent string, limit int) ([]models.ConfigItem, error) {
+// remoteSearch runs the grammar search against the remote server and mirrors
+// the compact or full result shape selected by `catalog list`.
+func remoteSearch(searchQuery, agent string, limit int, full bool) ([]models.ConfigItem, error) {
 	client, err := clientcmd.RemoteClient()
 	if err != nil {
 		return nil, err
@@ -68,15 +69,12 @@ func remoteSearch(searchQuery, agent string, limit int) ([]models.ConfigItem, er
 		return nil, err
 	}
 
-	out := make([]models.ConfigItem, 0, len(resp.Configs))
-	for _, s := range resp.Configs {
-		out = append(out, selectedResourceToConfigItem(s))
-	}
-	return out, nil
+	return catalogItemsFromSearch(context.Background(), client, resp.Configs, full)
 }
 
 func init() {
 	Search.Flags().StringVar(&searchAgent, "agent", "all", "Filter by agent id or name ('all' for every agent)")
+	Search.Flags().BoolVar(&searchFull, "full", false, "Return complete catalog items")
 	Search.Flags().IntVar(&searchLimit, "limit", 100, "Maximum number of results")
 	clicky.RegisterSubCommand("catalog", Search)
 }

@@ -41,6 +41,30 @@ var _ = ginkgo.Describe("faro catalog API paths", func() {
 		Expect(items).To(HaveLen(1))
 		Expect(*items[0].Name).To(Equal("api"))
 	})
+
+	ginkgo.It("hydrates complete catalog items for full list output", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			switch r.URL.Path {
+			case "/resources/search":
+				_, _ = w.Write([]byte(`{"configs":[{"id":"00000000-0000-0000-0000-000000000001","name":"api","type":"Kubernetes::Pod"}]}`))
+			case "/db/config_items":
+				_, _ = w.Write([]byte(`[{"id":"00000000-0000-0000-0000-000000000001","name":"api","type":"Kubernetes::Pod","config_class":"Pod","source":"kubernetes","properties":[{"label":"Namespace","text":"production"}]}]`))
+			default:
+				ginkgo.Fail("unexpected request: " + r.URL.Path)
+			}
+		}))
+		defer server.Close()
+		storeRemoteContext(server.URL)
+
+		items, err := remoteList(catalogListOpts{Limit: 5, Full: true})
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(items).To(HaveLen(1))
+		Expect(items[0].Source).ToNot(BeNil())
+		Expect(*items[0].Source).To(Equal("kubernetes"))
+		Expect(items[0].Properties).ToNot(BeNil())
+	})
 })
 
 func catalogSearchServer(expectedPath string) *httptest.Server {
