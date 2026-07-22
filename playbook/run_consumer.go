@@ -255,9 +255,8 @@ func ActionAgentConsumer(ctx context.Context) (int, error) {
 	ctx = ctx.WithObject(claimed.runAction)
 
 	// ExecuteAndSaveAction runs outside a transaction so result updates stream to the UI.
-	// It marks the action terminal (Complete/Fail/Skip) on every execution outcome.
 	if err := runner.ExecuteAndSaveAction(ctx, claimed.spec.PlaybookID, claimed.runAction, *claimed.spec, claimed.templateEnv); err != nil {
-		return 1, err
+		return 1, failClaimedAction(ctx, claimed.runAction, err)
 	}
 
 	return 1, nil
@@ -354,6 +353,20 @@ func failOrRetryRun(tx *gorm.DB, run *models.PlaybookRun, err error) error {
 	return run.Fail(tx, err)
 }
 
+func failClaimedAction(ctx context.Context, action *models.PlaybookRunAction, actionErr error) error {
+	var current models.PlaybookRunAction
+	if err := ctx.DB().Select("status").Where("id = ?", action.ID).First(&current).Error; err != nil {
+		return oops.Join(actionErr, ctx.Oops("db").Wrapf(err, "failed to check action status"))
+	}
+	if current.Status != models.PlaybookActionStatusRunning {
+		return actionErr
+	}
+	if err := action.Fail(ctx.DB(), "", actionErr); err != nil {
+		return oops.Join(actionErr, ctx.Oops("db").Wrapf(err, "failed to mark action failed"))
+	}
+	return actionErr
+}
+
 // ActionConsumer picks up scheduled actions runs them.
 func ActionConsumer(ctx context.Context) (int, error) {
 	if ctx.Properties().On(false, "playbook.runner.disabled") {
@@ -382,7 +395,7 @@ func ActionConsumer(ctx context.Context) (int, error) {
 	// terminal on every non-transient error, so a failure here does not strand the
 	// claim in the running state.
 	if err := runner.RunAction(ctx, run, action); err != nil {
-		return 1, err
+		return 1, failClaimedAction(ctx, action, err)
 	}
 
 	return 1, nil

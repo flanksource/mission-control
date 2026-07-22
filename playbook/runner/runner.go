@@ -438,15 +438,26 @@ func failAction(ctx context.Context, action *models.PlaybookRunAction, err error
 	return err
 }
 
+func retryAction(ctx context.Context, action *models.PlaybookRunAction, err error) error {
+	if retryErr := action.Update(ctx.DB(), map[string]any{
+		"status":     models.PlaybookActionStatusScheduled,
+		"start_time": nil,
+	}); retryErr != nil {
+		return ctx.Oops().Wrapf(retryErr, "failed to reschedule action after: %v", err)
+	}
+	return err
+}
+
 func RunAction(ctx context.Context, run *models.PlaybookRun, action *models.PlaybookRunAction) error {
 	if run.Status == models.PlaybookRunStatusCancelled {
 		return skipCancelledAction(ctx, action)
 	}
 
 	playbook, err := action.GetPlaybook(ctx.DB())
-	if err != nil {
-		// A transient DB error is retryable; leave the action for a later attempt.
-		return err
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return failAction(ctx, action, ctx.Oops().Errorf("playbook not found"))
+	} else if err != nil {
+		return retryAction(ctx, action, err)
 	} else if playbook == nil {
 		return failAction(ctx, action, ctx.Oops().Errorf("playbook not found"))
 	}
