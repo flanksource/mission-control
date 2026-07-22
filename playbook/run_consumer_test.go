@@ -11,6 +11,7 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -100,7 +101,7 @@ var _ = ginkgo.Describe("ActionConsumer claim-then-execute", ginkgo.Ordered, fun
 		_, scheduled := scheduleLocalAction(DefaultContext, "stream-report", v1.PlaybookAction{
 			Name: "report",
 			Report: &v1.ReportAction{
-				Configs:  &types.ResourceSelector{Limit: 1},
+				Configs:  &types.ResourceSelector{ID: dummy.KubernetesNodeA.ID.String(), Limit: 1},
 				Format:   "facet-html",
 				Facet:    &v1.FacetOptions{URL: facetServer.URL},
 				Sections: &icapi.CatalogReportSections{},
@@ -117,7 +118,16 @@ var _ = ginkgo.Describe("ActionConsumer claim-then-execute", ginkgo.Ordered, fun
 		go func() {
 			done <- runner.RunAction(DefaultContext, run, action)
 		}()
-		Eventually(facetRequest, 30*time.Second).Should(Receive())
+		select {
+		case <-facetRequest:
+		case err := <-done:
+			if err == nil {
+				ginkgo.Fail("report action completed before calling the facet server")
+			}
+			Expect(err).ToNot(HaveOccurred())
+		case <-time.After(30 * time.Second):
+			ginkgo.Fail("timed out waiting for the report action to call the facet server")
+		}
 
 		var streaming models.PlaybookRunAction
 		Expect(DefaultContext.DB().Where("id = ?", scheduled.ID).First(&streaming).Error).To(BeNil())
