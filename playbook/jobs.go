@@ -150,16 +150,36 @@ func MarkTimedOutPlaybookRuns(ctx context.Context) error {
 	return nil
 }
 
+const defaultActionOrphanTimeout = 20 * time.Minute
+
+func actionOrphanTimeout(ctx context.Context) time.Duration {
+	timeout := ctx.Properties().Duration("playbook.action.orphan_timeout", defaultActionOrphanTimeout)
+	if timeout <= 0 {
+		return defaultActionOrphanTimeout
+	}
+	return timeout
+}
+
 // ReapOrphanedActions resets actions stuck in the running state past the orphan timeout so
 // they are retried. Agent-pulled actions have no local run and return to waiting. Local actions
 // are only retried while their parent run is still executing and has not timed out.
 func ReapOrphanedActions(ctx context.Context) error {
-	timeout := ctx.Properties().Duration("playbook.action.orphan_timeout", 20*time.Minute)
+	timeout := actionOrphanTimeout(ctx)
+	var activeActionIDs []uuid.UUID
+	activePlaybookActions.Range(func(id uuid.UUID, _ struct{}) bool {
+		activeActionIDs = append(activeActionIDs, id)
+		return true
+	})
 
-	tx := ctx.DB().Model(&models.PlaybookRunAction{}).
+	query := ctx.DB().Model(&models.PlaybookRunAction{}).
 		Where("status = ?", models.PlaybookActionStatusRunning).
 		Where("agent_id IS NULL OR agent_id = ?", uuid.Nil).
-		Where("start_time < NOW() - INTERVAL '1 second' * ?", int64(timeout.Seconds())).
+		Where("start_time < NOW() - INTERVAL '1 second' * ?", int64(timeout.Seconds()))
+	if len(activeActionIDs) > 0 {
+		query = query.Where("id NOT IN ?", activeActionIDs)
+	}
+
+	tx := query.
 		Where(`
 			playbook_run_id IS NULL OR EXISTS (
 				SELECT 1

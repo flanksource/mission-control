@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flanksource/commons/collections/syncmap"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/postq"
@@ -23,6 +24,8 @@ import (
 	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/flanksource/incident-commander/playbook/runner"
 )
+
+var activePlaybookActions = syncmap.New[uuid.UUID, struct{}]()
 
 type playbookRunError struct {
 	RunID    uuid.UUID
@@ -253,6 +256,8 @@ func ActionAgentConsumer(ctx context.Context) (int, error) {
 	}
 
 	ctx = ctx.WithObject(claimed.runAction)
+	activePlaybookActions.Store(claimed.runAction.ID, struct{}{})
+	defer activePlaybookActions.Delete(claimed.runAction.ID)
 
 	// ExecuteAndSaveAction runs outside a transaction so result updates stream to the UI.
 	if err := runner.ExecuteAndSaveAction(ctx, claimed.spec.PlaybookID, claimed.runAction, *claimed.spec, claimed.templateEnv); err != nil {
@@ -388,12 +393,13 @@ func ActionConsumer(ctx context.Context) (int, error) {
 	}
 
 	ctx = ctx.WithObject(action)
+	activePlaybookActions.Store(action.ID, struct{}{})
+	defer activePlaybookActions.Delete(action.ID)
 
 	// Execution runs outside a transaction so that per-write result updates (e.g. the
 	// report action's progress logs) commit immediately and stream to the UI, instead
-	// of being buffered until the whole action commits. RunAction marks the action
-	// terminal on every non-transient error, so a failure here does not strand the
-	// claim in the running state.
+	// of being buffered until the whole action commits. The active action registry keeps
+	// the reaper from reclaiming an action that is still executing in this process.
 	if err := runner.RunAction(ctx, run, action); err != nil {
 		return 1, failClaimedAction(ctx, action, err)
 	}
