@@ -3,7 +3,7 @@ module github.com/flanksource/incident-commander/plugin/sdk
 go 1.26.1
 
 require (
-	github.com/flanksource/incident-commander/plugin/api v0.0.3
+	github.com/flanksource/incident-commander/plugin/api v0.0.4
 	github.com/hashicorp/go-plugin v1.8.0
 	github.com/onsi/ginkgo/v2 v2.28.3
 	github.com/onsi/gomega v1.40.0
