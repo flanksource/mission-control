@@ -333,6 +333,15 @@ var _ = ginkgo.Describe("Orphaned action reaper", func() {
 		Expect(got.StartTime.IsZero()).To(BeTrue())
 	})
 
+	ginkgo.It("does not reset an action that is active in this process", func() {
+		action := newAction(models.PlaybookActionStatusRunning, time.Now().Add(-2*time.Hour))
+		activePlaybookActions.Store(action.ID, struct{}{})
+		defer activePlaybookActions.Delete(action.ID)
+
+		Expect(ReapOrphanedActions(DefaultContext)).To(BeNil())
+		Expect(actionStatus(DefaultContext, action.ID)).To(Equal(models.PlaybookActionStatusRunning))
+	})
+
 	ginkgo.It("resets an orphaned agent-pulled action to waiting", func() {
 		action := newAction(models.PlaybookActionStatusRunning, time.Now().Add(-2*time.Hour))
 		Expect(DefaultContext.DB().Exec(
