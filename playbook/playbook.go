@@ -92,11 +92,34 @@ func CreateOrSaveFromFile(ctx context.Context, file string) (*models.Playbook, e
 	return db.SavePlaybook(ctx, &spec)
 }
 
-// validateAndSavePlaybookRun creates and saves a run from a run request after validating the run parameters.
+type playbookRunOptions struct {
+	CheckPermissions bool
+}
+
+// Run creates and saves a run from a run request after validating the run parameters.
 func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models.PlaybookRun, error) {
+	run, err := createPlaybookRun(ctx, playbook, req, playbookRunOptions{
+		CheckPermissions: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if err := saveRunAsConfigChange(ctx, playbook, *run, req.Params); err != nil {
+		ctx.Logger.Errorf("failed to save playbook run as config change: %v", err)
+	}
+
+	return run, nil
+}
+
+func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunParams, opts playbookRunOptions) (*models.PlaybookRun, error) {
 	var spec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
 		return nil, err
+	}
+
+	if err := spec.Validate(); err != nil {
+		return nil, ctx.Oops().Wrapf(err, "invalid playbook spec")
 	}
 
 	if err := req.Params.Sanitize(ctx, spec.Parameters); err != nil {
@@ -168,21 +191,23 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		return nil, ctx.Oops().Wrap(err)
 	}
 
-	// Must have read access on the resource (required to prevent guests from accessing unauthorized resources)
-	if !rbac.HasPermission(ctx, ctx.Subject(), templateEnv.ABACAttributes(), policy.ActionRead) {
-		return nil, ctx.Oops().
-			Code(dutyAPI.EFORBIDDEN).
-			With("permission", policy.ActionRead, "objects", templateEnv.ABACAttributes()).
-			Wrap(fmt.Errorf("access denied: read access to resource not allowed for subject: %s", ctx.Subject()))
-	}
+	if opts.CheckPermissions {
+		// Must have read access on the resource (required to prevent guests from accessing unauthorized resources)
+		if !rbac.HasPermission(ctx, ctx.Subject(), templateEnv.ABACAttributes(), policy.ActionRead) {
+			return nil, ctx.Oops().
+				Code(dutyAPI.EFORBIDDEN).
+				With("permission", policy.ActionRead, "objects", templateEnv.ABACAttributes()).
+				Wrap(fmt.Errorf("access denied: read access to resource not allowed for subject: %s", ctx.Subject()))
+		}
 
-	if attr, err := run.GetABACAttributes(ctx.DB()); err != nil {
-		return nil, ctx.Oops().Wrap(err)
-	} else if !rbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
-		return nil, ctx.Oops().
-			Code(dutyAPI.EFORBIDDEN).
-			With("permission", policy.ActionPlaybookRun, "objects", attr).
-			Wrap(fmt.Errorf("access denied to subject(%s): cannot run playbook on this resource", ctx.Subject()))
+		if attr, err := run.GetABACAttributes(ctx.DB()); err != nil {
+			return nil, ctx.Oops().Wrap(err)
+		} else if !rbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
+			return nil, ctx.Oops().
+				Code(dutyAPI.EFORBIDDEN).
+				With("permission", policy.ActionPlaybookRun, "objects", attr).
+				Wrap(fmt.Errorf("access denied to subject(%s): cannot run playbook on this resource", ctx.Subject()))
+		}
 	}
 
 	// Rest of the playbook must run using the playbook's permission.
@@ -253,10 +278,6 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 
 	if err := savePlaybookRun(ctx, &run); err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to create playbook run")
-	}
-
-	if err := saveRunAsConfigChange(ctx, playbook, run, req.Params); err != nil {
-		ctx.Logger.Errorf("failed to save playbook run as config change: %v", err)
 	}
 
 	return &run, nil

@@ -13,6 +13,7 @@ import (
 	"github.com/flanksource/kopper"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
 	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -379,6 +380,19 @@ func (p PlaybookSpec) Validate() error {
 			return err
 		}
 	}
+
+	if p.On != nil && len(p.On.Schedule) > 0 {
+		if p.Approval != nil && !p.Approval.Approvers.Empty() {
+			return fmt.Errorf("scheduled playbooks cannot require approval")
+		}
+
+		for i, schedule := range p.On.Schedule {
+			if _, err := cron.ParseStandard(schedule.Schedule); err != nil {
+				return fmt.Errorf("invalid schedule[%d] %q: %w", i, schedule.Schedule, err)
+			}
+		}
+	}
+
 	return nil
 }
 
