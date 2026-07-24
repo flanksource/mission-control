@@ -2,11 +2,11 @@ module github.com/flanksource/mission-control-plugin-test
 
 go 1.26.1
 
-require github.com/flanksource/incident-commander/plugin/sdk v0.0.0
+require github.com/flanksource/incident-commander/plugin/sdk v0.0.5
 
 require (
 	github.com/fatih/color v1.18.0 // indirect
-	github.com/flanksource/incident-commander/plugin/api v0.0.3 // indirect
+	github.com/flanksource/incident-commander/plugin/api v0.0.4 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
 	github.com/hashicorp/go-hclog v1.6.3 // indirect
 	github.com/hashicorp/go-plugin v1.8.0 // indirect

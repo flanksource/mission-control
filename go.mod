@@ -12,8 +12,8 @@ require (
 	github.com/flanksource/commons v1.53.1
 	github.com/flanksource/duty v1.0.1352
 	github.com/flanksource/gomplate/v3 v3.24.84
-	github.com/flanksource/incident-commander/plugin/api v0.0.0
-	github.com/flanksource/kopper v1.0.25
+	github.com/flanksource/incident-commander/plugin/api v0.0.4
+	github.com/flanksource/kopper v1.0.30
 	github.com/gomarkdown/markdown v0.0.0-20260411013819-759bbc3e3207
 	github.com/google/cel-go v0.28.1
 	github.com/google/go-cmp v0.7.0
@@ -52,9 +52,9 @@ require (
 	github.com/emersion/go-smtp v0.24.0
 	github.com/firebase/genkit/go v1.9.0
 	github.com/flanksource/artifacts v1.0.24
-	github.com/flanksource/clicky v1.21.18
-	github.com/flanksource/commons-test v0.1.13
-	github.com/flanksource/deps v1.0.35
+	github.com/flanksource/clicky v1.21.45
+	github.com/flanksource/commons-test v0.1.15
+	github.com/flanksource/deps v1.0.36
 	github.com/fluxcd/pkg/gittestserver v0.28.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/glebarez/sqlite v1.11.0
@@ -71,7 +71,7 @@ require (
 	github.com/invopop/jsonschema v0.14.0
 	github.com/jackc/pgerrcode v0.0.0-20250907135507-afb5586c32a6
 	github.com/jenkins-x/go-scm v1.15.22
-	github.com/mark3labs/mcp-go v0.53.0
+	github.com/mark3labs/mcp-go v0.56.0
 	github.com/oklog/ulid/v2 v2.1.1
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.68.1
@@ -346,6 +346,7 @@ require (
 	github.com/xuri/efp v0.0.1 // indirect
 	github.com/xuri/excelize/v2 v2.11.0 // indirect
 	github.com/xuri/nfp v0.0.2-0.20250530014748-2ddeb826f9a9 // indirect
+	github.com/yuin/goldmark v1.7.16 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	github.com/zclconf/go-cty v1.18.1 // indirect
@@ -373,7 +374,7 @@ require (
 	gonum.org/v1/gonum v0.17.0 // indirect
 	google.golang.org/genai v1.56.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260608224507-4308a22a1bab // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260622175928-b703f567277d // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/sourcemap.v1 v1.0.5 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect

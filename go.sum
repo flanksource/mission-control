@@ -414,12 +414,18 @@ github.com/flanksource/artifacts v1.0.24 h1:cv6DV3aOWngXlrJ6XsOMVFNXg4G/I0Eyobux
 github.com/flanksource/artifacts v1.0.24/go.mod h1:AmQ1JxsnL+7/7FrjhCNdcd/PCBsM5xZ1kRJu2UoFw7g=
 github.com/flanksource/clicky v1.21.18 h1:7PUoY3hjOMG/eAbrhI4pgZ2nuBIayYYHX0NKtxsU6go=
 github.com/flanksource/clicky v1.21.18/go.mod h1:+JLpose/DqOYsXWdjF+J2/rAZ7PbThzAGXWm2GUPA1s=
+github.com/flanksource/clicky v1.21.45 h1:FqtYI5dTSvbrdXAyMHs4/KvJdKp/XqE6jZtFOBLOGUc=
+github.com/flanksource/clicky v1.21.45/go.mod h1:2gAph3Uy90AYirGmkEP/D4okiFZlrH2XdcoXf69oZHY=
 github.com/flanksource/commons v1.53.1 h1:WiMvY9XGG//L4ndYKTcmp0NjWXg4B7Wbn4hYWkITUmY=
 github.com/flanksource/commons v1.53.1/go.mod h1:ZII22jIDJ3fd/Mz7l0SzLFEv8aoSUg+xwfJAAVf8up4=
 github.com/flanksource/commons-test v0.1.13 h1:DLb3q1a7d+BpfxZDy2bdY8ZA5z1+UTYFEO9DYd15bw4=
 github.com/flanksource/commons-test v0.1.13/go.mod h1:T0zLA9F55jlaOhtvjj1Ot7QZQhtn2baAuflT+27ueG8=
+github.com/flanksource/commons-test v0.1.15 h1:YmGO7jeaFdbyfJCWpzIJNxU8j4b3QNPwfLT/5UoaUck=
+github.com/flanksource/commons-test v0.1.15/go.mod h1:7Ir8vYdYuKuAY/t4h1F5bwupdNXzG+ygctX2pxosrbI=
 github.com/flanksource/deps v1.0.35 h1:tHxhkJSsJBWRmx7lR/X1rI8diz6tu0dsGb7GCROfuIQ=
 github.com/flanksource/deps v1.0.35/go.mod h1:2YRfP32WZrMxGVMYV51RlVHZfgerxf8DT3TqSgjzmTQ=
+github.com/flanksource/deps v1.0.36 h1:bC09I8T5jX4nvKAFmzLx6Wl0+UfQNneRcWxNQ6hmjc0=
+github.com/flanksource/deps v1.0.36/go.mod h1:NvSfoROQeX2VsXsQgQ006934GiwFzT0poVjyJQy871M=
 github.com/flanksource/duty v1.0.1352 h1:BEHlbbs91szHLfTkwXTSvKEwirGqC1Mdbn3u6QxKq1o=
 github.com/flanksource/duty v1.0.1352/go.mod h1:Hpj7YMhx8BhpHauVTUOQmCRkgsQeBFsOd3YkTq8MCZ4=
 github.com/flanksource/gomplate/v3 v3.24.84 h1:UOE0yCJsczTIKRaHUvhD6tjCYrbNvOugAizuy0FVlhE=
@@ -428,6 +434,8 @@ github.com/flanksource/is-healthy v1.0.88 h1:ATQuKoNdp8Qfzf41/eMFajmT0qzOmZlZNG5
 github.com/flanksource/is-healthy v1.0.88/go.mod h1:faa7yhEtdftTiMxg9Cp2bZ/fGaaB04KSjEm+bkghyY0=
 github.com/flanksource/kopper v1.0.25 h1:DM9unut3wwWf4AF5NSLxo/F4DKLFZ2WofkcYojLSatw=
 github.com/flanksource/kopper v1.0.25/go.mod h1:x4tSLzAxvfdvd3bnE+1RkGQ4ZTWMmScBp8f4IqlBvTE=
+github.com/flanksource/kopper v1.0.30 h1:HhtZ+L4lCIpZgjR+Z5TGR6A9U2whgKUMd/fYbzyVP74=
+github.com/flanksource/kopper v1.0.30/go.mod h1:XmOCI+0q0ZTPZwBqO+VG3Lj8LwSjRtE7Al0x/t/xW8I=
 github.com/flanksource/kubectl-neat v1.0.4 h1:t5/9CqgE84oEtB0KitgJ2+WIeLfD+RhXSxYrqb4X8yI=
 github.com/flanksource/kubectl-neat v1.0.4/go.mod h1:Un/Voyh3cmiZNKQrW/TkAl28nAA7vwnwDGVjRErKjOw=
 github.com/flanksource/sandbox-runtime v1.0.2 h1:dEaVyUpeaCAn3GOiWcNDrPguaey1Gx9eTsPAc27W3Eg=
@@ -831,6 +839,8 @@ github.com/mailru/easyjson v0.9.1 h1:LbtsOm5WAswyWbvTEOqhypdPeZzHavpZx96/n553mR8
 github.com/mailru/easyjson v0.9.1/go.mod h1:1+xMtQp2MRNVL/V1bOzuP3aP8VNwRW55fQUto+XFtTU=
 github.com/mark3labs/mcp-go v0.53.0 h1:nzjUi/L448XxwrfmVjiZ03vWgYOWVBrJK0wkZH7fVWo=
 github.com/mark3labs/mcp-go v0.53.0/go.mod h1:Zg9cB2HdwdMMVgY0xtTzq3KvYIOJQDsaut+jWjwDaQY=
+github.com/mark3labs/mcp-go v0.56.0 h1:7aCj2wODCskMi08f923ADG+EfELZBdiKILny415cIS8=
+github.com/mark3labs/mcp-go v0.56.0/go.mod h1:+8WclSK1ZUweCP3hvktSji8n8ABG/95QaEkeVE/Uwas=
 github.com/maruel/natural v1.1.1 h1:Hja7XhhmvEFhcByqDoHz9QZbkWey+COd9xWfCfn1ioo=
 github.com/maruel/natural v1.1.1/go.mod h1:v+Rfd79xlw1AgVBjbO0BEQmptqb5HvL/k9GRHB7ZKEg=
 github.com/mattn/go-colorable v0.1.9/go.mod h1:u6P/XSegPjTcexA+o6vUJrdnUu04hMope9wVRipJSqc=
@@ -1151,6 +1161,8 @@ github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9de
 github.com/yuin/goldmark v1.1.32/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.4.13/go.mod h1:6yULJ656Px+3vBD8DxQVa3kxgyrAnzto9xy5taEt/CY=
+github.com/yuin/goldmark v1.7.16 h1:n+CJdUxaFMiDUNnWC3dMWCIQJSkxH4uz3ZwQBkAlVNE=
+github.com/yuin/goldmark v1.7.16/go.mod h1:ip/1k0VRfGynBgxOz0yCqHrbZXhcjxyuS66Brc7iBKg=
 github.com/yuin/gopher-lua v1.1.1 h1:kYKnWBjvbNP4XLT3+bPEwAXJx262OhaHDWDVOPjL46M=
 github.com/yuin/gopher-lua v1.1.1/go.mod h1:GBR0iDaNXjAgGg9zfCvksxSRnQx76gclCIb7kdAd1Pw=
 github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo0=
@@ -1610,6 +1622,8 @@ google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa h1:
 google.golang.org/genproto/googleapis/api v0.0.0-20260526163538-3dc84a4a5aaa/go.mod h1:q4lMZS6kskjT5HvCPrnnypcDPVJqT/f4nfxmkE7gryY=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20260608224507-4308a22a1bab h1:cY0oV1VnAqvaim8VsR8ZyEKAudzbRJMRGwD3W/L7yOw=
 google.golang.org/genproto/googleapis/rpc v0.0.0-20260608224507-4308a22a1bab/go.mod h1:4Hqkh8ycfw05ld/3BWL7rJOSfebL2Q+DVDeRgYgxUU8=
+google.golang.org/genproto/googleapis/rpc v0.0.0-20260622175928-b703f567277d h1:mpAgMyM9vQHxycBlDq50y1VHpfSfVwzXvrQKtYbXuUY=
+google.golang.org/genproto/googleapis/rpc v0.0.0-20260622175928-b703f567277d/go.mod h1:4Hqkh8ycfw05ld/3BWL7rJOSfebL2Q+DVDeRgYgxUU8=
 google.golang.org/grpc v1.19.0/go.mod h1:mqu4LbDTu4XGKhr4mRzUsmM4RtVoemTSY81AxZiDr8c=
 google.golang.org/grpc v1.20.1/go.mod h1:10oTOabMzJvdu6/UiuZezV6QK5dSlG84ov/aaiqXj38=
 google.golang.org/grpc v1.21.1/go.mod h1:oYelfM1adQP15Ek0mdvEgi9Df8B9CZIaU1084ijfRaM=
