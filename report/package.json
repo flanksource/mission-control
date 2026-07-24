@@ -9,8 +9,8 @@
     "mission-control": "npm run pdf"
   },
   "dependencies": {
-    "@flanksource/clicky-ui": "^0.2.1",
-    "@flanksource/facet": "0.1.60",
+    "@flanksource/clicky-ui": "^0.3.0",
+    "@flanksource/facet": "0.1.68",
     "@flanksource/icons": "^1.0.53",
     "@radix-ui/react-compose-refs": "^1.1.2",
     "@radix-ui/react-slot": "^1.2.3",
