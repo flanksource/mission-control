@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/secret"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
@@ -64,6 +65,21 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run model
 			} else if config.ID != uuid.Nil {
 				templateEnv.Params[p.Name] = config.AsMap()
 			}
+
+		case v1.PlaybookParameterTypeConfigs:
+			var selector types.ResourceSelector
+			if err := json.Unmarshal([]byte(val), &selector); err != nil {
+				return templateEnv, oops.Wrapf(err, "invalid configs parameter (%s). not a valid resource selector", p.Name)
+			}
+
+			configs, err := query.FindConfigsByResourceSelector(ctx, -1, selector)
+			if err != nil {
+				return templateEnv, oops.Tags("db").Wrap(err)
+			}
+
+			templateEnv.Params[p.Name] = lo.Map(configs, func(c models.ConfigItem, _ int) map[string]any {
+				return c.AsMap()
+			})
 
 		case v1.PlaybookParameterTypeComponent:
 			var component models.Component
