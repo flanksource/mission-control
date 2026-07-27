@@ -10,8 +10,10 @@ import { Icon } from '@flanksource/icons/icon';
 import { MissionControlLogo, Github as IconGithub } from '@flanksource/icons/mi';
 import type { CatalogReportData, CatalogReportEntry } from './catalog-report-types.ts';
 import type { ConfigAnalysis, ConfigItem, ConfigProperty, ConfigSeverity } from './config-types.ts';
+import type { RBACResource } from './rbac-types.ts';
 import ConfigInsightsSection from './components/ConfigInsightsSection.tsx';
 import CoverPage from './components/CoverPage.tsx';
+import RBACMatrixSection from './components/RBACMatrixSection.tsx';
 import { formatDate, formatDateTime } from './components/utils.ts';
 
 const GITHUB_REPO_TYPE = 'GitHub::Repository';
@@ -78,6 +80,7 @@ interface RepoSecurity {
   alertsByKind: Record<AlertKind, ConfigAnalysis[]>;
   severity: SeverityCounts;
   otherInsights: ConfigAnalysis[];
+  accessResources: RBACResource[];
   lastObserved?: string;
 }
 
@@ -209,6 +212,9 @@ function buildRepoSecurity(entry: CatalogReportEntry, since?: string): RepoSecur
     alertsByKind,
     severity: countSeverity(openAlerts),
     otherInsights,
+    accessResources: (entry.rbacResources || []).filter(
+      (resource) => resource.configType === GITHUB_REPO_TYPE,
+    ),
     lastObserved: observed.sort().pop(),
   };
 }
@@ -544,6 +550,32 @@ function OverviewStats({ repos, periodLabel }: { repos: RepoSecurity[]; periodLa
   );
 }
 
+function RepositoryAccessMatrix({ repos }: { repos: RepoSecurity[] }) {
+  const resources = repos.flatMap((repo) => repo.accessResources);
+
+  return (
+    <Page>
+      <h2 className="text-xl font-bold text-gray-900 mb-[1mm]">Repository Access Matrix</h2>
+      <p className="text-xs text-gray-600 mb-[3mm]">
+        Effective GitHub repository access for collaborators and organization teams. Direct grants are
+        repository collaborators; indirect grants are GitHub teams. GitHub pull and push permissions are
+        shown as read and write respectively.
+      </p>
+      {resources.length > 0 ? (
+        <div className="flex flex-col gap-[4mm]">
+          {resources.map((resource) => (
+            <RBACMatrixSection key={resource.configId} resource={resource} />
+          ))}
+        </div>
+      ) : (
+        <div className="border border-gray-200 bg-gray-50 rounded p-[3mm] text-xs text-gray-500 italic">
+          No repository access assignments were collected for the repositories in this report.
+        </div>
+      )}
+    </Page>
+  );
+}
+
 function OtherConfigSection({ entry }: { entry: CatalogReportEntry }) {
   const ci = entry.configItem;
   return (
@@ -572,6 +604,10 @@ export default function SecurityReport({ data }: SecurityReportProps) {
 
   const totalAlerts = repos.reduce((sum, r) => sum + r.openAlerts.length, 0);
   const totalResolved = repos.reduce((sum, r) => sum + r.activity.resolvedCount, 0);
+  const accessGrants = repos.reduce(
+    (sum, r) => sum + r.accessResources.reduce((resourceTotal, resource) => resourceTotal + resource.users.length, 0),
+    0,
+  );
   const scored = repos.filter((r) => r.scorecardScore !== null);
   const avgScore = scored.length > 0
     ? scored.reduce((sum, r) => sum + (r.scorecardScore || 0), 0) / scored.length
@@ -589,6 +625,7 @@ export default function SecurityReport({ data }: SecurityReportProps) {
     { label: periodLabel ? `resolved · ${periodLabel}` : 'resolved alerts', value: totalResolved },
   ];
   if (avgScore !== null) coverStats.push({ label: 'avg OpenSSF score', value: avgScore.toFixed(1) });
+  if (accessGrants > 0) coverStats.push({ label: 'access grants', value: accessGrants });
   if (otherEntries.length > 0) coverStats.push({ label: 'other components', value: otherEntries.length });
 
   return (
@@ -633,7 +670,8 @@ export default function SecurityReport({ data }: SecurityReportProps) {
           This report summarizes the security posture of {repos.length} GitHub{' '}
           {repos.length === 1 ? 'repository' : 'repositories'} tracked in Mission Control. It combines
           OpenSSF Scorecard assessments with GitHub security alerts (Dependabot, Code Scanning and
-          Secret Scanning) — both open and recently resolved — as collected by catalog scrapers.
+          Secret Scanning) — both open and recently resolved — and effective collaborator and team
+          access as collected by catalog scrapers.
         </p>
 
         <OverviewStats repos={repos} periodLabel={periodLabel} />
@@ -664,6 +702,8 @@ export default function SecurityReport({ data }: SecurityReportProps) {
           {repos.map((r) => <RepoSummaryCard key={r.configItem.id} security={r} />)}
         </div>
       </Page>
+
+      {data.sections?.access && <RepositoryAccessMatrix repos={repos} />}
 
       {repos.map((r) => (
         <Page key={r.configItem.id}>
@@ -696,7 +736,7 @@ export default function SecurityReport({ data }: SecurityReportProps) {
           </blockquote>
           <div className="mt-[3mm] text-xs text-gray-500">
             <p>Report generated: {generated}</p>
-            <p>Data sources: OpenSSF Scorecard, GitHub Security API (via Mission Control catalog scrapers)</p>
+            <p>Data sources: OpenSSF Scorecard, GitHub Security and Repository APIs (via Mission Control catalog scrapers)</p>
             <p>All metrics reflect insights recorded as of report generation.</p>
           </div>
         </div>
