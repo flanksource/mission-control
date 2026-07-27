@@ -36,6 +36,7 @@ const (
 	PlaybookParameterTypeCode      PlaybookParameterType = "code"
 	PlaybookParameterTypeComponent PlaybookParameterType = "component"
 	PlaybookParameterTypeConfig    PlaybookParameterType = "config"
+	PlaybookParameterTypeConfigs   PlaybookParameterType = "configs"
 	PlaybookParameterTypeDuration  PlaybookParameterType = "duration"
 	PlaybookParameterTypeList      PlaybookParameterType = "list"
 	PlaybookParameterTypePeople    PlaybookParameterType = "people"
@@ -61,7 +62,7 @@ type PlaybookParameter struct {
 	Icon        string `json:"icon,omitempty" yaml:"icon,omitempty"`
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 
-	// +kubebuilder:validation:Enum=check;checkbox;code;component;config;duration;list;people;team;text;bytes;millicores;secret
+	// +kubebuilder:validation:Enum=check;checkbox;code;component;config;configs;duration;list;people;team;text;bytes;millicores;secret
 	Type PlaybookParameterType `json:"type,omitempty" yaml:"type,omitempty"`
 
 	// +kubebuilder:validation:Schemaless
