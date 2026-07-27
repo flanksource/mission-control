@@ -102,7 +102,7 @@ func (c *Client) findPlaybooksForApply(ctx context.Context, namespace, name stri
 		return nil, err
 	}
 	if !response.IsOK() {
-		return nil, playbookWriteError(response)
+		return nil, postgrestError(response)
 	}
 
 	var playbooks []models.Playbook
@@ -135,7 +135,7 @@ func (c *Client) updatePlaybook(ctx context.Context, id string, write playbookWr
 
 func decodePlaybookWriteResponse(response *http.Response) (*models.Playbook, error) {
 	if !response.IsOK() {
-		return nil, playbookWriteError(response)
+		return nil, postgrestError(response)
 	}
 
 	body, err := response.AsString()
@@ -152,7 +152,7 @@ func decodePlaybookWriteResponse(response *http.Response) (*models.Playbook, err
 	return &playbooks[0], nil
 }
 
-func playbookWriteError(response *http.Response) error {
+func postgrestError(response *http.Response) error {
 	body, err := response.AsString()
 	if err != nil {
 		return err
