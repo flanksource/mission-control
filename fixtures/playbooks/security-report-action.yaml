@@ -12,8 +12,8 @@ spec:
   parameters:
     - name: configs
       label: Config selector
-      description: 'Search query/selector for config items (e.g. type=Kubernetes::Namespace)'
-      type: text
+      description: 'Select config items by search query or individually'
+      type: configs
       required: true
     - name: format
       label: Format
@@ -36,7 +36,7 @@ spec:
     - name: Security Report
       report:
         configs:
-          search: '{{ .params.configs }}'
+          id: '$(.params.configs | idsFromMap)'
         format: '{{ .params.format }}'
         since: '{{ .params.since }}'
         file:

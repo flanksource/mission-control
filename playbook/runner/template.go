@@ -2,6 +2,8 @@ package runner
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/collections"
@@ -214,8 +216,19 @@ func templateActionExpressions(ctx context.Context, actionSpec *v1.PlaybookActio
 	return nil
 }
 
+func idsFromMap(items []map[string]any) string {
+	ids := make([]string, 0, len(items))
+	for _, item := range items {
+		if id, ok := item["id"]; ok && id != nil {
+			ids = append(ids, fmt.Sprint(id))
+		}
+	}
+	return strings.Join(ids, ",")
+}
+
 func getGomplateFuncs(ctx context.Context, env actions.TemplateEnv) map[string]any {
 	return map[string]any{
+		"idsFromMap": idsFromMap,
 		"getLastAction": func() any {
 			if env.Action == nil {
 				return make(map[string]any)
