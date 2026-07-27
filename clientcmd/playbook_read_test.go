@@ -10,7 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = ginkgo.Describe("playbook get and history", func() {
+var _ = ginkgo.Describe("playbook read and delete commands", func() {
 	ginkgo.It("renders get output as an applicable Playbook manifest", func() {
 		manifest, err := playbookManifestFromItem(api.PlaybookListItem{
 			Namespace:   "ops",
@@ -58,8 +58,9 @@ spec:
 		Expect(err).To(MatchError(`invalid playbook run status "unknown"`))
 	})
 
-	ginkgo.It("registers get and history under playbook", func() {
+	ginkgo.It("registers get, history, and delete under playbook", func() {
 		Expect(findChildCommand(Playbook, "get")).ToNot(BeNil())
 		Expect(findChildCommand(Playbook, "history")).ToNot(BeNil())
+		Expect(findChildCommand(Playbook, "delete")).ToNot(BeNil())
 	})
 })

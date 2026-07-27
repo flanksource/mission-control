@@ -22,7 +22,7 @@ var _ = ginkgo.Describe("ApplyPlaybook", func() {
 		Spec:        json.RawMessage(`{"actions":[{"name":"echo","exec":{"script":"echo ok"}}]}`),
 	}
 
-	ginkgo.It("creates file-backed playbooks", func() {
+	ginkgo.It("creates API-owned playbooks", func() {
 		id := uuid.New()
 		requestCount := 0
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -38,11 +38,11 @@ var _ = ginkgo.Describe("ApplyPlaybook", func() {
 				Expect(r.Method).To(Equal(http.MethodPost))
 				var body map[string]any
 				Expect(json.NewDecoder(r.Body).Decode(&body)).To(Succeed())
-				Expect(body).To(HaveKeyWithValue("source", models.SourceConfigFile))
+				Expect(body).To(HaveKeyWithValue("source", models.SourceUI))
 				Expect(body["spec"]).To(HaveKey("actions"))
 				w.Header().Set("Content-Type", "application/json")
 				Expect(json.NewEncoder(w).Encode([]models.Playbook{{
-					ID: id, Namespace: "default", Name: "restart", Source: models.SourceConfigFile,
+					ID: id, Namespace: "default", Name: "restart", Source: models.SourceUI,
 				}})).To(Succeed())
 			default:
 				ginkgo.Fail("unexpected request")
@@ -90,21 +90,21 @@ var _ = ginkgo.Describe("ApplyPlaybook", func() {
 		Expect(requestCount).To(Equal(2))
 	})
 
-	ginkgo.It("does not update Kubernetes-managed playbooks", func() {
+	ginkgo.It("does not update externally managed playbooks", func() {
 		id := uuid.New()
 		requestCount := 0
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			requestCount++
 			w.Header().Set("Content-Type", "application/json")
 			Expect(json.NewEncoder(w).Encode([]models.Playbook{{
-				ID: id, Namespace: "default", Name: "restart", Source: models.SourceCRD,
+				ID: id, Namespace: "default", Name: "restart", Source: models.SourceConfigFile,
 			}})).To(Succeed())
 		}))
 		defer server.Close()
 
 		_, err := New(server.URL, "token").ApplyPlaybook(context.Background(), params)
 
-		Expect(err).To(MatchError(ContainSubstring("managed by Kubernetes")))
+		Expect(err).To(MatchError(ContainSubstring("not created through the API")))
 		Expect(requestCount).To(Equal(1))
 	})
 })

@@ -39,7 +39,7 @@ type playbookWrite struct {
 	Source      string     `json:"source,omitempty"`
 }
 
-// ApplyPlaybook creates a file-backed playbook or updates a non-Kubernetes playbook with the same identity.
+// ApplyPlaybook creates an API-owned playbook or updates an API-owned playbook with the same identity.
 func (c *Client) ApplyPlaybook(ctx context.Context, params PlaybookApplyParams) (*PlaybookApplyResult, error) {
 	existing, err := c.findPlaybooksForApply(ctx, params.Namespace, params.Name)
 	if err != nil {
@@ -73,15 +73,15 @@ func (c *Client) ApplyPlaybook(ctx context.Context, params PlaybookApplyParams) 
 		Spec:        types.JSON(params.Spec),
 	}
 	if target == nil {
-		write.Source = models.SourceConfigFile
+		write.Source = models.SourceUI
 		playbook, err := c.createPlaybook(ctx, write)
 		if err != nil {
 			return nil, err
 		}
 		return &PlaybookApplyResult{Playbook: *playbook, Created: true}, nil
 	}
-	if target.Source == models.SourceCRD {
-		return nil, fmt.Errorf("playbook %s/%s is managed by Kubernetes and cannot be applied", target.Namespace, target.Name)
+	if target.Source != models.SourceUI {
+		return nil, fmt.Errorf("playbook %s/%s was not created through the API and cannot be applied", target.Namespace, target.Name)
 	}
 
 	playbook, err := c.updatePlaybook(ctx, target.ID.String(), write)
