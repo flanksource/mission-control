@@ -564,7 +564,7 @@ function RepositoryAccessMatrix({ repos }: { repos: RepoSecurity[] }) {
       {resources.length > 0 ? (
         <div className="flex flex-col gap-[4mm]">
           {resources.map((resource) => (
-            <RBACMatrixSection key={resource.configId} resource={resource} />
+            <RBACMatrixSection key={resource.configId} resource={resource} compact />
           ))}
         </div>
       ) : (
