@@ -19,7 +19,6 @@ import (
 	"gorm.io/gorm"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/config/schemas"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/actions"
 )
@@ -36,18 +35,8 @@ func GetNextActionToRun(ctx context.Context, run models.PlaybookRun) (action *v1
 	ctx.Logger.V(3).Infof("getting next action for run %s", run.ID)
 	ctx = ctx.WithObject(run)
 
-	if validationErr, err := schemas.ValidatePlaybookSpec(run.Spec); err != nil {
-		return nil, nil, err
-	} else if validationErr != nil {
-		return nil, nil, validationErr
-	}
-
-	var playbookSpec v1.PlaybookSpec
-	if err := json.Unmarshal(run.Spec, &playbookSpec); err != nil {
-		return nil, nil, ctx.Oops().Wrap(err)
-	}
-
-	if err := playbookSpec.Validate(); err != nil {
+	playbookSpec, err := v1.ParseAndValidatePlaybookSpec(run.Spec)
+	if err != nil {
 		return nil, nil, ctx.Oops().Wrap(err)
 	}
 

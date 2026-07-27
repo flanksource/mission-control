@@ -1,0 +1,78 @@
+package clientcmd
+
+import (
+	ginkgo "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
+
+var _ = ginkgo.Describe("playbook apply manifest", func() {
+	ginkgo.It("converts a Playbook CRD into apply parameters", func() {
+		params, err := parsePlaybookManifest([]byte(`
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: restart
+  namespace: ops
+spec:
+  title: Restart workload
+  category: Kubernetes
+  description: Restarts a workload
+  actions:
+    - name: echo
+      exec:
+        script: echo ok
+`))
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(params.Namespace).To(Equal("ops"))
+		Expect(params.Name).To(Equal("restart"))
+		Expect(params.Title).To(Equal("Restart workload"))
+		Expect(params.Category).To(Equal("Kubernetes"))
+		Expect(params.Description).To(Equal("Restarts a workload"))
+		Expect(params.Spec).To(MatchJSON(`{"title":"Restart workload","category":"Kubernetes","description":"Restarts a workload","actions":[{"name":"echo","exec":{"script":"echo ok"}}]}`))
+	})
+
+	ginkgo.It("defaults the namespace and title", func() {
+		params, err := parsePlaybookManifest([]byte(`
+kind: Playbook
+metadata:
+  name: diagnose
+spec:
+  actions:
+    - name: echo
+      exec:
+        script: echo ok
+`))
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(params.Namespace).To(Equal("default"))
+		Expect(params.Title).To(Equal("diagnose"))
+	})
+
+	ginkgo.It("rejects schema-invalid manifests before making a request", func() {
+		_, err := parsePlaybookManifest([]byte(`
+kind: Playbook
+metadata:
+  name: invalid
+spec:
+  unexpected: true
+  actions:
+    - name: echo
+      exec:
+        script: echo ok
+`))
+
+		Expect(err).To(MatchError(ContainSubstring("Additional property unexpected is not allowed")))
+	})
+
+	ginkgo.It("rejects other manifest kinds", func() {
+		_, err := parsePlaybookManifest([]byte(`
+kind: Connection
+metadata:
+  name: invalid
+spec: {}
+`))
+
+		Expect(err).To(MatchError(`manifest kind must be Playbook, got "Connection"`))
+	})
+})

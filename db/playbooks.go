@@ -241,16 +241,16 @@ func FindPlaybookByWebhookPath(ctx context.Context, path string) (*models.Playbo
 }
 
 func PersistPlaybookFromCRD(ctx context.Context, obj *v1.Playbook) error {
-	if err := obj.Spec.Validate(); err != nil {
-		return err
-	}
-
 	_, err := SavePlaybook(ctx, obj)
 	return err
 }
 
 func SavePlaybook(ctx context.Context, obj *v1.Playbook) (*models.Playbook, error) {
-	if err := obj.Spec.Validate(); err != nil {
+	specJSON, err := json.Marshal(obj.Spec)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := v1.ParseAndValidatePlaybookSpec(specJSON); err != nil {
 		return nil, err
 	}
 
