@@ -22,11 +22,13 @@ import (
 	"github.com/flanksource/duty/canary"
 	"github.com/flanksource/duty/context"
 	dutyEcho "github.com/flanksource/duty/echo"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/duty/telemetry"
 	"github.com/flanksource/duty/topology"
+	"github.com/google/uuid"
 	"github.com/labstack/echo-contrib/echoprometheus"
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -254,49 +256,149 @@ func postgrestTraceMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 	}
 }
 
+// postgrestInterceptor enforces write invariants that PostgREST cannot express.
 func postgrestInterceptor(next echov4.HandlerFunc) echov4.HandlerFunc {
 	return func(c echov4.Context) error {
 		path := strings.TrimPrefix(c.Request().URL.Path, "/db/")
 		table := strings.Split(path, "?")[0] // Remove query parameters
+		if table != "playbooks" {
+			return next(c)
+		}
 
-		switch table {
-		// For playbooks we need to validate the spec for create/update requests
-		case "playbooks":
-			method := c.Request().Method
-			if method != http.MethodPost && method != http.MethodPatch {
-				return next(c)
-			}
-			requestData, err := readJSONBody(c)
-			if err != nil {
-				return dutyApi.WriteError(c, err)
-			}
+		method := c.Request().Method
+		if method != http.MethodPost && method != http.MethodPatch && method != http.MethodDelete {
+			return next(c)
+		}
 
-			specValue, hasSpec := requestData["spec"]
-			if !hasSpec {
-				return next(c)
-			}
+		existing, err := playbookMutationTarget(c)
+		if err != nil {
+			return dutyApi.WriteError(c, err)
+		}
+		if existing != nil && existing.Source == models.SourceCRD {
+			return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.ECONFLICT, "playbook %s/%s is managed by Kubernetes and cannot be modified through the API", existing.Namespace, existing.Name))
+		}
+		if method == http.MethodDelete {
+			return next(c)
+		}
+		if method == http.MethodPost && strings.Contains(c.Request().Header.Get("Prefer"), "resolution=merge-duplicates") {
+			return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "playbook upserts are not supported; use PATCH with an id filter to update an existing playbook"))
+		}
 
-			specBytes, err := json.Marshal(specValue)
-			if err != nil {
-				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "error marshaling json: %v", err))
-			}
-			var spec v1.PlaybookSpec
-			if err := json.Unmarshal(specBytes, &spec); err != nil {
-				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "invalid playbook spec: %v", err))
-			}
+		requestData, err := readJSONBody(c)
+		if err != nil {
+			return dutyApi.WriteError(c, err)
+		}
+		if err := validatePlaybookSource(method, requestData, existing); err != nil {
+			return dutyApi.WriteError(c, err)
+		}
+		if err := replaceJSONBody(c, requestData); err != nil {
+			return dutyApi.WriteError(c, err)
+		}
 
-			if err := spec.Validate(); err != nil {
-				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "playbook validation failed: %v", err))
+		specValue, hasSpec := requestData["spec"]
+		if !hasSpec {
+			if method == http.MethodPost {
+				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "playbook spec is required"))
 			}
+			return next(c)
+		}
+
+		specBytes, err := json.Marshal(specValue)
+		if err != nil {
+			return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "error marshaling playbook spec: %v", err))
+		}
+		spec, err := v1.ParseAndValidatePlaybookSpec(specBytes)
+		if err != nil {
+			return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "playbook validation failed: %v", err))
+		}
+		if err := validatePlaybookWebhookPath(c, spec, existing); err != nil {
+			return dutyApi.WriteError(c, err)
 		}
 
 		return next(c)
 	}
 }
 
-// readJSONBody reads the request body for POST/PATCH requests and unmarshals it into a map.
-// Returns nil, error if there was an error reading or unmarshaling the body.
-// Returns the map, nil on success.
+// playbookMutationTarget restricts source-aware mutations to one identifiable playbook.
+func playbookMutationTarget(c echov4.Context) (*models.Playbook, error) {
+	if c.Request().Method == http.MethodPost {
+		return nil, nil
+	}
+
+	filter := c.QueryParam("id")
+	if !strings.HasPrefix(filter, "eq.") {
+		return nil, dutyApi.Errorf(dutyApi.EINVALID, "playbook mutations require an exact id filter")
+	}
+	id, err := uuid.Parse(strings.TrimPrefix(filter, "eq."))
+	if err != nil {
+		return nil, dutyApi.Errorf(dutyApi.EINVALID, "invalid playbook id: %v", err)
+	}
+
+	ctx := c.Request().Context().(context.Context)
+	var playbook models.Playbook
+	tx := ctx.DB().Select("id", "namespace", "name", "source").Where("id = ?", id).Find(&playbook)
+	if tx.Error != nil {
+		return nil, ctx.Oops().Wrap(tx.Error)
+	}
+	if tx.RowsAffected == 0 {
+		return nil, nil
+	}
+	return &playbook, nil
+}
+
+// validatePlaybookSource prevents API writes from claiming or transferring reconciler ownership.
+func validatePlaybookSource(method string, requestData map[string]any, existing *models.Playbook) error {
+	sourceValue, hasSource := requestData["source"]
+	if method == http.MethodPatch {
+		if !hasSource || existing == nil {
+			return nil
+		}
+		source, ok := sourceValue.(string)
+		if !ok || source != existing.Source {
+			return dutyApi.Errorf(dutyApi.EINVALID, "playbook source cannot be changed")
+		}
+		return nil
+	}
+
+	if !hasSource {
+		requestData["source"] = models.SourceUI
+		return nil
+	}
+	source, ok := sourceValue.(string)
+	if !ok || (source != models.SourceUI && source != models.SourceConfigFile) {
+		return dutyApi.Errorf(dutyApi.EINVALID, "playbook source must be %q or %q", models.SourceUI, models.SourceConfigFile)
+	}
+	return nil
+}
+
+// validatePlaybookWebhookPath applies the uniqueness rule used by CRD persistence.
+func validatePlaybookWebhookPath(c echov4.Context, spec *v1.PlaybookSpec, existing *models.Playbook) error {
+	if spec.On == nil || spec.On.Webhook == nil || spec.On.Webhook.Path == "" {
+		return nil
+	}
+
+	ctx := c.Request().Context().(context.Context)
+	other, err := db.FindPlaybookByWebhookPath(ctx, spec.On.Webhook.Path)
+	if err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+	if other != nil && (existing == nil || other.ID != existing.ID) {
+		return dutyApi.Errorf(dutyApi.ECONFLICT, "playbook with webhook path %s already exists", spec.On.Webhook.Path)
+	}
+	return nil
+}
+
+func replaceJSONBody(c echov4.Context, requestData map[string]any) error {
+	bodyBytes, err := json.Marshal(requestData)
+	if err != nil {
+		return dutyApi.Errorf(dutyApi.EINVALID, "error marshaling request body: %v", err)
+	}
+	c.Request().Body = io.NopCloser(bytes.NewReader(bodyBytes))
+	c.Request().ContentLength = int64(len(bodyBytes))
+	return nil
+}
+
+// readJSONBody reads a request body while preserving it for the proxied handler.
 func readJSONBody(c echov4.Context) (map[string]any, error) {
 	bodyBytes, err := io.ReadAll(c.Request().Body)
 	if err != nil {
