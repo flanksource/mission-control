@@ -274,8 +274,8 @@ func postgrestInterceptor(next echov4.HandlerFunc) echov4.HandlerFunc {
 		if err != nil {
 			return dutyApi.WriteError(c, err)
 		}
-		if existing != nil && existing.Source == models.SourceCRD {
-			return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.ECONFLICT, "playbook %s/%s is managed by Kubernetes and cannot be modified through the API", existing.Namespace, existing.Name))
+		if existing != nil && existing.Source != models.SourceUI {
+			return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.ECONFLICT, "playbook %s/%s was not created through the API and cannot be modified", existing.Namespace, existing.Name))
 		}
 		if method == http.MethodDelete {
 			return next(c)
@@ -365,8 +365,8 @@ func validatePlaybookSource(method string, requestData map[string]any, existing 
 		return nil
 	}
 	source, ok := sourceValue.(string)
-	if !ok || (source != models.SourceUI && source != models.SourceConfigFile) {
-		return dutyApi.Errorf(dutyApi.EINVALID, "playbook source must be %q or %q", models.SourceUI, models.SourceConfigFile)
+	if !ok || source != models.SourceUI {
+		return dutyApi.Errorf(dutyApi.EINVALID, "playbook source must be %q", models.SourceUI)
 	}
 	return nil
 }

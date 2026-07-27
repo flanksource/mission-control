@@ -89,17 +89,51 @@ var _ = ginkgo.Describe("playbook PostgREST writes", func() {
 		Expect(response.Code).To(Equal(http.StatusNoContent))
 	})
 
-	ginkgo.It("rejects updates to Kubernetes-managed playbooks", func() {
-		playbook := newPlaybook(models.SourceCRD)
-		response, called := execute(http.MethodPatch, "/db/playbooks?id=eq."+playbook.ID.String(), map[string]any{
+	for _, source := range []string{models.SourceCRD, models.SourceConfigFile} {
+		ginkgo.It("rejects updates to "+source+" playbooks", func() {
+			playbook := newPlaybook(source)
+			response, called := execute(http.MethodPatch, "/db/playbooks?id=eq."+playbook.ID.String(), map[string]any{
+				"spec": map[string]any{
+					"actions": []any{map[string]any{"name": "echo", "exec": map[string]any{"script": "echo changed"}}},
+				},
+			})
+
+			Expect(called).To(BeFalse())
+			Expect(response.Code).To(Equal(http.StatusConflict))
+			Expect(response.Body.String()).To(ContainSubstring("not created through the API"))
+		})
+	}
+
+	ginkgo.It("allows deletes of API-created playbooks", func() {
+		playbook := newPlaybook(models.SourceUI)
+		response, called := execute(http.MethodDelete, "/db/playbooks?id=eq."+playbook.ID.String(), nil)
+
+		Expect(called).To(BeTrue())
+		Expect(response.Code).To(Equal(http.StatusNoContent))
+	})
+
+	ginkgo.It("rejects deletes of externally managed playbooks", func() {
+		playbook := newPlaybook(models.SourceConfigFile)
+		response, called := execute(http.MethodDelete, "/db/playbooks?id=eq."+playbook.ID.String(), nil)
+
+		Expect(called).To(BeFalse())
+		Expect(response.Code).To(Equal(http.StatusConflict))
+		Expect(response.Body.String()).To(ContainSubstring("not created through the API"))
+	})
+
+	ginkgo.It("rejects externally managed sources on create", func() {
+		response, called := execute(http.MethodPost, "/db/playbooks", map[string]any{
+			"namespace": "default",
+			"name":      "config-file",
+			"source":    models.SourceConfigFile,
 			"spec": map[string]any{
-				"actions": []any{map[string]any{"name": "echo", "exec": map[string]any{"script": "echo changed"}}},
+				"actions": []any{map[string]any{"name": "echo", "exec": map[string]any{"script": "echo ok"}}},
 			},
 		})
 
 		Expect(called).To(BeFalse())
-		Expect(response.Code).To(Equal(http.StatusConflict))
-		Expect(response.Body.String()).To(ContainSubstring("managed by Kubernetes"))
+		Expect(response.Code).To(Equal(http.StatusBadRequest))
+		Expect(response.Body.String()).To(ContainSubstring("playbook source must be"))
 	})
 
 	ginkgo.It("rejects source changes", func() {

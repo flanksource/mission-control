@@ -40,6 +40,31 @@ var GetPlaybook = &cobra.Command{
 	},
 }
 
+var DeletePlaybook = &cobra.Command{
+	Use:          "delete <playbook-id|namespace/name|name>",
+	Short:        "Delete an API-created playbook",
+	Args:         cobra.ExactArgs(1),
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		item, err := getRemotePlaybook(cmd, args[0])
+		if err != nil {
+			return err
+		}
+		if item.Source != models.SourceUI {
+			return fmt.Errorf("playbook %s/%s was not created through the API and cannot be deleted", item.Namespace, item.Name)
+		}
+		_, client, err := playbookAPIClient(cmd)
+		if err != nil {
+			return err
+		}
+		if _, err := client.DeletePlaybook(cmd.Context(), item.ID); err != nil {
+			return err
+		}
+		_, err = fmt.Fprintf(cmd.OutOrStdout(), "playbook %s/%s deleted\n", item.Namespace, item.Name)
+		return err
+	},
+}
+
 var PlaybookHistory = &cobra.Command{
 	Use:          "history <playbook-id|namespace/name|name>",
 	Short:        "List execution history for a playbook",
@@ -147,5 +172,5 @@ func init() {
 	PlaybookHistory.Flags().IntVar(&playbookHistoryLimit, "limit", 20, "Maximum number of runs")
 	PlaybookHistory.Flags().StringSliceVar(&playbookHistoryStatus, "status", nil, "Filter by run status (repeatable or comma-separated)")
 	clicky.BindAllFlags(PlaybookHistory.Flags(), "format")
-	Playbook.AddCommand(GetPlaybook, PlaybookHistory)
+	Playbook.AddCommand(GetPlaybook, DeletePlaybook, PlaybookHistory)
 }
