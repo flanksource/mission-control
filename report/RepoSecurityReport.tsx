@@ -551,7 +551,9 @@ function OverviewStats({ repos, periodLabel }: { repos: RepoSecurity[]; periodLa
 }
 
 function RepositoryAccessMatrix({ repos }: { repos: RepoSecurity[] }) {
-  const resources = repos.flatMap((repo) => repo.accessResources);
+  const resources = repos
+    .flatMap((repo) => repo.accessResources)
+    .filter((resource) => (resource.users || []).length > 0);
 
   return (
     <Page>

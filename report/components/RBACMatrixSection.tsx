@@ -189,7 +189,7 @@ function RoleReferenceTable({
     : ['Role name', 'External IDs'];
   const tableRows = roleReferences(rows, roles).map(({ role, externalIds }) => [
     <div
-      className={`flex gap-[0.75mm] text-slate-800${compact ? ' h-[5mm] items-center text-xs leading-none' : ' items-start'}`}
+      className={`flex gap-[0.75mm] text-slate-800${compact ? ' min-h-[5mm] items-center text-xs leading-tight' : ' items-start'}`}
       title={role.role}
       style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
     >
@@ -199,7 +199,7 @@ function RoleReferenceTable({
       <span>{role.label}</span>
     </div>,
     externalIds.length > 0 ? (
-      <div className={`flex flex-col justify-center gap-[0.25mm] font-mono text-slate-600 ${compact ? 'h-[5mm] text-xs leading-none' : 'text-[4.8pt] leading-tight'}`}>
+      <div className={`flex flex-col justify-center gap-[0.25mm] font-mono text-slate-600 ${compact ? 'min-h-[5mm] text-xs leading-tight' : 'text-[4.8pt] leading-tight'}`}>
         {externalIds.map((externalID) => (
           <span key={externalID} style={{ overflowWrap: 'anywhere', wordBreak: 'break-all' }}>
             {externalID}
@@ -399,7 +399,7 @@ function buildMatrixRows(users: UserRow[], roles: RoleColumn[], compact = false)
     const isGroupRow = user.kind === 'group';
     return {
       label: (
-        <span className={compact ? 'text-xs' : undefined} style={{
+        <span className={compact ? 'text-[8pt]' : undefined} style={{
           display: 'inline-flex',
           alignItems: 'center',
           gap: '0.65mm',
