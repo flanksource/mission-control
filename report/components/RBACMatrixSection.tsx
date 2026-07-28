@@ -6,6 +6,7 @@ import { ACCESS_COLORS, STALE_COLORS, ReviewOverdueBadge, ReviewOverdueLegendSwa
 
 interface Props {
   resource: RBACResource;
+  compact?: boolean;
 }
 
 interface UserRow {
@@ -136,13 +137,14 @@ function roleHeaderHeightMm(roles: string[]): number {
   return Math.min(42, Math.max(20, Math.ceil(required)));
 }
 
-function RoleHeader({ column }: { column: RoleColumn }) {
+function RoleHeader({ column, compact = false }: { column: RoleColumn; compact?: boolean }) {
   return (
     <span
       title={column.role}
+      className={compact ? 'text-xs' : undefined}
       style={{
         display: 'inline-block',
-        fontSize: `${roleHeaderFontPt(column.label).toFixed(2)}pt`,
+        fontSize: compact ? undefined : `${roleHeaderFontPt(column.label).toFixed(2)}pt`,
         lineHeight: 1,
       }}
     >
@@ -172,19 +174,32 @@ function roleReferences(rows: UserRow[], roles: RoleColumn[]) {
   });
 }
 
-function RoleReferenceTable({ rows, roles }: { rows: UserRow[]; roles: RoleColumn[] }) {
+function RoleReferenceTable({
+  rows,
+  roles,
+  compact = false,
+}: {
+  rows: UserRow[];
+  roles: RoleColumn[];
+  compact?: boolean;
+}) {
   if (roles.length === 0) return null;
+  const columns = compact
+    ? [<span className="text-xs">Role name</span>, <span className="text-xs">External IDs</span>]
+    : ['Role name', 'External IDs'];
   const tableRows = roleReferences(rows, roles).map(({ role, externalIds }) => [
-    <span
-      className="inline-flex items-start gap-[0.75mm] text-slate-800"
+    <div
+      className={`flex gap-[0.75mm] text-slate-800${compact ? ' min-h-[5mm] items-center text-xs leading-tight' : ' items-start'}`}
       title={role.role}
       style={{ overflowWrap: 'anywhere', wordBreak: 'break-word' }}
     >
-      <Icon name="shield-user" size={9} />
+      <span className="inline-flex items-center justify-center self-center">
+        <Icon name="shield-user" size={9} />
+      </span>
       <span>{role.label}</span>
-    </span>,
+    </div>,
     externalIds.length > 0 ? (
-      <div className="flex flex-col gap-[0.25mm] font-mono text-[4.8pt] leading-tight text-slate-600">
+      <div className={`flex flex-col justify-center gap-[0.25mm] font-mono text-slate-600 ${compact ? 'min-h-[5mm] text-xs leading-tight' : 'text-[4.8pt] leading-tight'}`}>
         {externalIds.map((externalID) => (
           <span key={externalID} style={{ overflowWrap: 'anywhere', wordBreak: 'break-all' }}>
             {externalID}
@@ -197,15 +212,29 @@ function RoleReferenceTable({ rows, roles }: { rows: UserRow[]; roles: RoleColum
   ]);
   return (
     <div className="mt-[1.25mm]">
-      <div className="mb-[0.5mm] text-[5.8pt] font-semibold uppercase tracking-wide text-slate-500">
+      <div className={`mb-[0.5mm] font-semibold uppercase tracking-wide text-slate-500 ${compact ? 'text-xs' : 'text-[5.8pt]'}`}>
         Role external IDs
       </div>
-      <CompactTable
-        size="xs"
-        variant="reference"
-        columns={['Role name', 'External IDs']}
-        data={tableRows}
-      />
+      <div className="my-4">
+        <table className="w-full border-collapse text-xs">
+          <thead>
+            <tr>
+              {columns.map((column, index) => (
+                <th key={index} style={{ verticalAlign: 'middle', padding: '1.5mm 2mm' }}>{column}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {tableRows.map((row, rowIndex) => (
+              <tr key={rowIndex} className="border-b border-gray-200 last:border-b-0">
+                {row.map((cell, cellIndex) => (
+                  <td key={cellIndex} style={{ verticalAlign: 'middle', padding: '1mm 2mm' }}>{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -354,7 +383,7 @@ function SparseAccessTable({ entries }: { entries: SparseEntry[] }) {
   );
 }
 
-function buildMatrixRows(users: UserRow[], roles: RoleColumn[]) {
+function buildMatrixRows(users: UserRow[], roles: RoleColumn[], compact = false) {
   const roleSet = new Set(roles.map((role) => role.role));
   return users.map((user) => {
     const entries = [...user.roles.entries()]
@@ -370,11 +399,11 @@ function buildMatrixRows(users: UserRow[], roles: RoleColumn[]) {
     const isGroupRow = user.kind === 'group';
     return {
       label: (
-        <span style={{
+        <span className={compact ? 'text-[8pt]' : undefined} style={{
           display: 'inline-flex',
           alignItems: 'center',
           gap: '0.65mm',
-          fontSize: user.kind === 'member' ? '5.4pt' : '5.8pt',
+          fontSize: compact ? undefined : (user.kind === 'member' ? '5.4pt' : '5.8pt'),
           lineHeight: 1.05,
           fontWeight: isGroupRow ? 650 : 500,
           borderLeft: `2px solid ${worstStale || 'transparent'}`,
@@ -396,13 +425,16 @@ function MatrixBlock({
   roles,
   rows,
   cornerContent,
+  compact = false,
 }: {
   title?: string;
   roles: RoleColumn[];
   rows: UserRow[];
   cornerContent?: React.ReactNode;
+  compact?: boolean;
 }) {
   if (roles.length === 0 || rows.length === 0) return null;
+  const headerHeight = roleHeaderHeightMm(roles.map((role) => role.label));
   return (
     <div className="mb-[2mm]">
       {title && (
@@ -411,15 +443,15 @@ function MatrixBlock({
         </div>
       )}
       <MatrixTable
-        columns={roles.map((role) => <RoleHeader key={role.role} column={role} />)}
-        rows={buildMatrixRows(rows, roles)}
-        columnWidth={9}
-        headerHeight={roleHeaderHeightMm(roles.map((role) => role.label))}
+        columns={roles.map((role) => <RoleHeader key={role.role} column={role} compact={compact} />)}
+        rows={buildMatrixRows(rows, roles, compact)}
+        columnWidth={compact ? 12 : 9}
+        headerHeight={compact ? Math.max(24, headerHeight) : headerHeight}
         rowHeight={3.1}
         labelPadding="0.1mm 1.4mm 0.1mm 0.6mm"
         cornerContent={cornerContent}
       />
-      <RoleReferenceTable rows={rows} roles={roles} />
+      <RoleReferenceTable rows={rows} roles={roles} compact={compact} />
     </div>
   );
 }
@@ -429,11 +461,13 @@ function MatrixBlockGroup({
   roles,
   rows,
   cornerContent,
+  compact = false,
 }: {
   title?: string;
   roles: string[];
   rows: UserRow[];
   cornerContent?: React.ReactNode;
+  compact?: boolean;
 }) {
   const { sparseEntries, matrixRows, matrixRoles } = extractSparseEntries(rows, roles);
   const matrixColumns = columnsForRoles(matrixRoles);
@@ -449,14 +483,23 @@ function MatrixBlockGroup({
         roles={matrixColumns}
         rows={matrixRows}
         cornerContent={cornerContent}
+        compact={compact}
       />
     </div>
   );
 }
 
-export function MatrixLegend({ showStale = true, showReviewOverdue = true }: { showStale?: boolean; showReviewOverdue?: boolean } = {}) {
+export function MatrixLegend({
+  showStale = true,
+  showReviewOverdue = true,
+  compact = false,
+}: {
+  showStale?: boolean;
+  showReviewOverdue?: boolean;
+  compact?: boolean;
+} = {}) {
   return (
-    <div className="flex flex-wrap items-center gap-[3mm] text-gray-500">
+    <div className={`flex flex-wrap items-center gap-[3mm] text-gray-500${compact ? ' text-xs' : ''}`}>
       <span className="font-semibold">Legend:</span>
       <span className="inline-flex items-center gap-[1mm]">
         <Dot color={ACCESS_COLORS.direct} /> Direct
@@ -481,7 +524,7 @@ export function MatrixLegend({ showStale = true, showReviewOverdue = true }: { s
   );
 }
 
-export default function RBACMatrixSection({ resource }: Props) {
+export default function RBACMatrixSection({ resource, compact = false }: Props) {
   const matrix = buildMatrix(resource);
   if (matrix.combinedRows.length === 0) return null;
 
@@ -502,7 +545,7 @@ export default function RBACMatrixSection({ resource }: Props) {
           ))}
         </div>
       )}
-      <div className="flex items-center gap-[1mm] text-[8pt] font-semibold text-slate-900">
+      <div className={`flex items-center gap-[1mm] font-semibold text-slate-900 ${compact ? 'text-xs' : 'text-[8pt]'}`}>
         <Icon name={resource.configType} size={14} />
         {resource.configName}
       </div>
@@ -518,13 +561,15 @@ export default function RBACMatrixSection({ resource }: Props) {
               value={v || '-'}
               color="bg-blue-50"
               textColor="text-slate-600"
+              labelClassName={compact ? 'text-xs' : undefined}
+              valueClassName={compact ? 'text-xs' : undefined}
               className="bg-white"
             />
           ))}
         </div>
       )}
       <div className="mt-[1.5mm]">
-        <MatrixLegend showStale={hasStale} showReviewOverdue={hasReviewOverdue} />
+        <MatrixLegend showStale={hasStale} showReviewOverdue={hasReviewOverdue} compact={compact} />
       </div>
     </div>
   );
@@ -536,7 +581,10 @@ export default function RBACMatrixSection({ resource }: Props) {
   ].filter((block) => block.roles.length > 0 && block.rows.length > 0);
 
   return (
-    <div className="mb-[3mm]">
+    <div
+      className="mb-[3mm]"
+      style={compact ? { width: 'max-content', maxWidth: '100%', alignSelf: 'flex-start' } : undefined}
+    >
       {splitByAccessType ? (
         splitBlocks.map((block, index) => (
           <MatrixBlockGroup
@@ -545,6 +593,7 @@ export default function RBACMatrixSection({ resource }: Props) {
             roles={block.roles}
             rows={block.rows}
             cornerContent={index === 0 ? corner : undefined}
+            compact={compact}
           />
         ))
       ) : (
@@ -552,6 +601,7 @@ export default function RBACMatrixSection({ resource }: Props) {
           roles={matrix.allRoles}
           rows={matrix.combinedRows}
           cornerContent={corner}
+          compact={compact}
         />
       )}
     </div>
