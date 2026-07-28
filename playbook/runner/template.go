@@ -216,10 +216,14 @@ func templateActionExpressions(ctx context.Context, actionSpec *v1.PlaybookActio
 	return nil
 }
 
-func idsFromMap(items []map[string]any) string {
+func idsFromMap(items []any) string {
 	ids := make([]string, 0, len(items))
 	for _, item := range items {
-		if id, ok := item["id"]; ok && id != nil {
+		itemMap, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if id, ok := itemMap["id"]; ok && id != nil {
 			ids = append(ids, fmt.Sprint(id))
 		}
 	}
