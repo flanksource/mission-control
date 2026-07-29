@@ -24,24 +24,78 @@ spec:
             value: pdf
           - label: JSON
             value: json
+    - name: title
+      label: Report title
+      type: text
+      default: Catalog Report
     - name: since
       label: Time period
       description: 'Time range for changes and access logs (e.g. 7d, 30d, 90d)'
       type: text
       default: 30d
+    - name: recursive
+      label: Include all descendant config items
+      type: checkbox
+      default: "false"
+    - name: groupBy
+      label: Group descendant data
+      type: list
+      default: none
+      properties:
+        options:
+          - label: None
+            value: none
+          - label: Merged
+            value: merged
+          - label: Per config
+            value: config
+    - name: changes
+      label: Include config changes
+      type: checkbox
+      default: "true"
+    - name: insights
+      label: Include config insights
+      type: checkbox
+      default: "true"
+    - name: resolvedInsights
+      label: Include recently resolved insights
+      type: checkbox
+      default: "false"
+    - name: relationships
+      label: Include relationships
+      type: checkbox
+      default: "true"
+    - name: access
+      label: Include RBAC access
+      type: checkbox
+      default: "true"
+    - name: accessLogs
+      label: Include access logs
+      type: checkbox
+      default: "false"
+    - name: configJSON
+      label: Include raw config JSON
+      type: checkbox
+      default: "false"
   actions:
     - name: Generate Report
       report:
         configs:
           id: '{{ .config.id }}'
+        title: '{{ .params.title }}'
         format: '{{ .params.format }}'
         since: '{{ .params.since }}'
+        recursive: '{{ .params.recursive }}'
+        groupBy: '{{ .params.groupBy }}'
+        file:
+          path: report/CatalogReport.tsx
         facet:
           connection: mission-control/facet
         sections:
-          changes: true
-          insights: true
-          relationships: true
-          access: true
-          accessLogs: false
-          configJSON: false
+          changes: '{{ .params.changes }}'
+          insights: '{{ .params.insights }}'
+          resolvedInsights: '{{ .params.resolvedInsights }}'
+          relationships: '{{ .params.relationships }}'
+          access: '{{ .params.access }}'
+          accessLogs: '{{ .params.accessLogs }}'
+          configJSON: '{{ .params.configJSON }}'

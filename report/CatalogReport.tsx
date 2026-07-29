@@ -45,7 +45,7 @@ function CatalogCoverPage({ data }: { data: CatalogReportData }) {
       {data.recursive && (
         <div className="text-xs text-blue-600 font-medium mt-[2mm]">
           Including all descendant config items
-          {data.groupBy === 'config' && ` · Grouped by config (${(data.configGroups || []).length} items)`}
+          {data.groupBy === 'config' && ` · Grouped by config (${data.entries?.length || data.configGroups?.length || 0} items)`}
         </div>
       )}
       {data.thresholds && (
@@ -139,11 +139,12 @@ export default function CatalogReportPage({ data }: CatalogReportProps) {
         {data.groupBy === 'config' && (data.entries || []).map((entry, idx) => (
           <React.Fragment key={entry.configItem?.id || idx}>
             <ConfigGroupHeader group={{ configItem: entry.configItem as any, changes: entry.changes, analyses: entry.analyses, access: entry.access, accessLogs: entry.accessLogs }} />
-            <CategorizedChangesSection changes={entry.changes} hideConfigName />
-            <ConfigInsightsSection analyses={entry.analyses} />
-            {(entry.rbacResources || []).map((resource, rIdx) => (
+            {data.sections?.changes && <CategorizedChangesSection changes={entry.changes} hideConfigName />}
+            {data.sections?.insights && <ConfigInsightsSection analyses={entry.analyses} />}
+            {data.sections?.access && (entry.rbacResources || []).map((resource, rIdx) => (
               <RBACMatrixSection key={resource.configId || rIdx} resource={resource} />
             ))}
+            {data.sections?.accessLogs && <CatalogAccessLogsSection logs={entry.accessLogs} />}
           </React.Fragment>
         ))}
 

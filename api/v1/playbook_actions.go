@@ -744,6 +744,8 @@ type CatalogAction struct {
 type ReportAction struct {
 	// Reference an existing View by namespace/name or just name
 	View string `json:"view,omitempty" yaml:"view,omitempty" template:"true"`
+	// Title overrides the default catalog report title.
+	Title string `json:"title,omitempty" yaml:"title,omitempty" template:"true"`
 	// Inline catalog query for the catalog report (alternative to View)
 	Configs *types.ResourceSelector `json:"configs,omitempty" yaml:"configs,omitempty" template:"true"`
 	// File selects the TSX template that renders the catalog report.
@@ -759,11 +761,49 @@ type ReportAction struct {
 	// Since is the time range for changes, access logs and resolved insights (e.g. "30d"). Defaults to 30d.
 	Since string `json:"since,omitempty" yaml:"since,omitempty" template:"true"`
 	// Recursive includes all descendant config items in the catalog report.
-	Recursive bool `json:"recursive,omitempty" yaml:"recursive,omitempty"`
+	// The value must be true, false, or a template that renders to true or false.
+	// TemplatedBool is needed because actions are decoded before templates run.
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Recursive TemplatedBool `json:"recursive,omitempty" yaml:"recursive,omitempty" template:"true"`
 	// GroupBy controls descendant grouping: "none" (default), "merged", or "config".
 	GroupBy string `json:"groupBy,omitempty" yaml:"groupBy,omitempty" template:"true"`
 	// Sections selects which catalog report sections to include.
-	Sections *api.CatalogReportSections `json:"sections,omitempty" yaml:"sections,omitempty"`
+	Sections *ReportSections `json:"sections,omitempty" yaml:"sections,omitempty" template:"true"`
+}
+
+// ReportSections controls the catalog sections included in a report action.
+// Every value must be true, false, or a template that renders to true or false.
+// TemplatedBool is needed because actions are decoded before templates run.
+type ReportSections struct {
+	// Changes controls whether config changes are included. The value must be true, false, or a template that renders to true or false.
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Changes TemplatedBool `json:"changes,omitempty" yaml:"changes,omitempty" template:"true"`
+	// Insights controls whether config insights are included. The value must be true, false, or a template that renders to true or false.
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Insights TemplatedBool `json:"insights,omitempty" yaml:"insights,omitempty" template:"true"`
+	// Relationships controls whether config relationships are included. The value must be true, false, or a template that renders to true or false.
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Relationships TemplatedBool `json:"relationships,omitempty" yaml:"relationships,omitempty" template:"true"`
+	// Access controls whether RBAC access is included. The value must be true, false, or a template that renders to true or false.
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Access TemplatedBool `json:"access,omitempty" yaml:"access,omitempty" template:"true"`
+	// AccessLogs controls whether access logs are included. The value must be true, false, or a template that renders to true or false.
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	AccessLogs TemplatedBool `json:"accessLogs,omitempty" yaml:"accessLogs,omitempty" template:"true"`
+	// ConfigJSON controls whether raw config JSON is included. The value must be true, false, or a template that renders to true or false.
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	ConfigJSON TemplatedBool `json:"configJSON,omitempty" yaml:"configJSON,omitempty" template:"true"`
+	// ResolvedInsights controls whether recently resolved insights are included. The value must be true, false, or a template that renders to true or false.
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	ResolvedInsights TemplatedBool `json:"resolvedInsights,omitempty" yaml:"resolvedInsights,omitempty" template:"true"`
 }
 
 // ReportFile selects the TSX template used to render the catalog report,

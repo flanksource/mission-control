@@ -39,6 +39,61 @@ var _ = ginkgo.Describe("Report action progress logs", func() {
 	})
 })
 
+var _ = ginkgo.Describe("Report action catalog options", func() {
+	ctx := context.Context{Context: commons.NewContext(gocontext.TODO())}
+
+	ginkgo.It("accepts literal booleans", func() {
+		action := v1.ReportAction{
+			Title:     "Infrastructure Report",
+			Recursive: v1.TemplatedBool(`true`),
+			GroupBy:   "config",
+			Sections: &v1.ReportSections{
+				Changes:       v1.TemplatedBool(`true`),
+				Insights:      v1.TemplatedBool(`false`),
+				Relationships: v1.TemplatedBool(`true`),
+			},
+		}
+
+		opts, err := catalogOptions(action)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(opts.Title).To(Equal("Infrastructure Report"))
+		Expect(opts.Recursive).To(BeTrue())
+		Expect(opts.GroupBy).To(Equal("config"))
+		Expect(opts.Sections.Changes).To(BeTrue())
+		Expect(opts.Sections.Insights).To(BeFalse())
+		Expect(opts.Sections.Relationships).To(BeTrue())
+	})
+
+	ginkgo.It("templates recursive and section booleans", func() {
+		action := v1.ReportAction{
+			Recursive: v1.TemplatedBool(`"{{ .params.recursive }}"`),
+			Sections: &v1.ReportSections{
+				Changes:          v1.TemplatedBool(`"{{ .params.changes }}"`),
+				ResolvedInsights: v1.TemplatedBool(`"{{ .params.resolvedInsights }}"`),
+			},
+		}
+		templater := ctx.NewStructTemplater(map[string]any{
+			"params": map[string]any{
+				"recursive":        "true",
+				"changes":          "false",
+				"resolvedInsights": "true",
+			},
+		}, "template", nil)
+		Expect(templater.Walk(&action)).To(Succeed())
+
+		opts, err := catalogOptions(action)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(opts.Recursive).To(BeTrue())
+		Expect(opts.Sections.Changes).To(BeFalse())
+		Expect(opts.Sections.ResolvedInsights).To(BeTrue())
+	})
+
+	ginkgo.It("rejects a template result that is not a boolean", func() {
+		_, err := catalogOptions(v1.ReportAction{Recursive: v1.TemplatedBool(`"sometimes"`)})
+		Expect(err).To(MatchError(`recursive: template rendered "sometimes"; expected true or false`))
+	})
+})
+
 var _ = ginkgo.Describe("Report action source resolution", func() {
 	ctx := context.Context{Context: commons.NewContext(gocontext.TODO())}
 

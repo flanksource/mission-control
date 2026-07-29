@@ -414,41 +414,6 @@
       ],
       "description": "CatalogAction creates a config item in the catalog."
     },
-    "CatalogReportSections": {
-      "properties": {
-        "changes": {
-          "type": "boolean"
-        },
-        "insights": {
-          "type": "boolean"
-        },
-        "relationships": {
-          "type": "boolean"
-        },
-        "access": {
-          "type": "boolean"
-        },
-        "accessLogs": {
-          "type": "boolean"
-        },
-        "configJSON": {
-          "type": "boolean"
-        },
-        "resolvedInsights": {
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "changes",
-        "insights",
-        "relationships",
-        "access",
-        "accessLogs",
-        "configJSON"
-      ]
-    },
     "Condition": {
       "properties": {
         "type": {
@@ -2409,6 +2374,10 @@
           "type": "string",
           "description": "Reference an existing View by namespace/name or just name"
         },
+        "title": {
+          "type": "string",
+          "description": "Title overrides the default catalog report title."
+        },
         "configs": {
           "$ref": "#/$defs/ResourceSelector",
           "description": "Inline catalog query for the catalog report (alternative to View)"
@@ -2437,15 +2406,15 @@
           "description": "Since is the time range for changes, access logs and resolved insights (e.g. \"30d\"). Defaults to 30d."
         },
         "recursive": {
-          "type": "boolean",
-          "description": "Recursive includes all descendant config items in the catalog report."
+          "$ref": "#/$defs/TemplatedBool",
+          "description": "Recursive includes all descendant config items in the catalog report.\nThe value must be true, false, or a template that renders to true or false.\nTemplatedBool is needed because actions are decoded before templates run."
         },
         "groupBy": {
           "type": "string",
           "description": "GroupBy controls descendant grouping: \"none\" (default), \"merged\", or \"config\"."
         },
         "sections": {
-          "$ref": "#/$defs/CatalogReportSections",
+          "$ref": "#/$defs/ReportSections",
           "description": "Sections selects which catalog report sections to include."
         }
       },
@@ -2492,6 +2461,41 @@
         "url",
         "file"
       ]
+    },
+    "ReportSections": {
+      "properties": {
+        "changes": {
+          "$ref": "#/$defs/TemplatedBool",
+          "description": "Changes controls whether config changes are included. The value must be true, false, or a template that renders to true or false."
+        },
+        "insights": {
+          "$ref": "#/$defs/TemplatedBool",
+          "description": "Insights controls whether config insights are included. The value must be true, false, or a template that renders to true or false."
+        },
+        "relationships": {
+          "$ref": "#/$defs/TemplatedBool",
+          "description": "Relationships controls whether config relationships are included. The value must be true, false, or a template that renders to true or false."
+        },
+        "access": {
+          "$ref": "#/$defs/TemplatedBool",
+          "description": "Access controls whether RBAC access is included. The value must be true, false, or a template that renders to true or false."
+        },
+        "accessLogs": {
+          "$ref": "#/$defs/TemplatedBool",
+          "description": "AccessLogs controls whether access logs are included. The value must be true, false, or a template that renders to true or false."
+        },
+        "configJSON": {
+          "$ref": "#/$defs/TemplatedBool",
+          "description": "ConfigJSON controls whether raw config JSON is included. The value must be true, false, or a template that renders to true or false."
+        },
+        "resolvedInsights": {
+          "$ref": "#/$defs/TemplatedBool",
+          "description": "ResolvedInsights controls whether recently resolved insights are included. The value must be true, false, or a template that renders to true or false."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "ReportSections controls the catalog sections included in a report action.\nEvery value must be true, false, or a template that renders to true or false.\nTemplatedBool is needed because actions are decoded before templates run."
     },
     "ResourceSelector": {
       "properties": {
@@ -2631,6 +2635,17 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "TemplatedBool": {
+      "oneOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "A literal true or false, or a template string that renders to true or false."
     },
     "Time": {
       "properties": {},

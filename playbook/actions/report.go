@@ -144,10 +144,22 @@ func (r *Report) runCatalog(ctx context.Context, action v1.ReportAction, format 
 	}
 	opts.Progress = func(format string, args ...any) { r.logf(ctx, format, args...) }
 
+	recursive := opts.Recursive
+	if recursive && opts.GroupBy == "config" {
+		configs, err = expandReportConfigs(ctx, configs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to expand config descendants: %w", err)
+		}
+		r.logf(ctx, "expanded selection to %d config item(s)", len(configs))
+		opts.Recursive = false
+		opts.IncludedConfigIDs = configIDSet(configs)
+	}
+
 	data, err := catalog.Build(ctx, configs, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build catalog report: %w", err)
 	}
+	data.Recursive = recursive
 	r.logf(ctx, "report data ready: %d entries, %d changes, %d insights", len(data.Entries), len(data.Changes), len(data.Analyses))
 
 	rendered, err := r.renderCatalog(ctx, action, data, format)
@@ -203,13 +215,23 @@ func (r *Report) renderCatalogFacet(ctx context.Context, action v1.ReportAction,
 // catalogOptions builds the catalog report options from the action. When no
 // sections are specified, the defaults match a bare `catalog report` run.
 func catalogOptions(action v1.ReportAction) (catalog.Options, error) {
+	recursive, err := reportBool(action.Recursive, false, "recursive")
+	if err != nil {
+		return catalog.Options{}, err
+	}
+
 	opts := catalog.Options{
-		Recursive: action.Recursive,
+		Title:     action.Title,
+		Recursive: recursive,
 		GroupBy:   action.GroupBy,
 	}
 
 	if action.Sections != nil {
-		opts.Sections = *action.Sections
+		sections, err := reportSections(*action.Sections)
+		if err != nil {
+			return catalog.Options{}, err
+		}
+		opts.Sections = sections
 	} else {
 		opts.Sections = api.CatalogReportSections{
 			Changes:       true,
@@ -228,6 +250,85 @@ func catalogOptions(action v1.ReportAction) (catalog.Options, error) {
 	}
 
 	return opts, nil
+}
+
+func reportSections(sections v1.ReportSections) (api.CatalogReportSections, error) {
+	resolved := api.CatalogReportSections{}
+	fields := []struct {
+		name   string
+		value  v1.TemplatedBool
+		target *bool
+	}{
+		{name: "sections.changes", value: sections.Changes, target: &resolved.Changes},
+		{name: "sections.insights", value: sections.Insights, target: &resolved.Insights},
+		{name: "sections.relationships", value: sections.Relationships, target: &resolved.Relationships},
+		{name: "sections.access", value: sections.Access, target: &resolved.Access},
+		{name: "sections.accessLogs", value: sections.AccessLogs, target: &resolved.AccessLogs},
+		{name: "sections.configJSON", value: sections.ConfigJSON, target: &resolved.ConfigJSON},
+		{name: "sections.resolvedInsights", value: sections.ResolvedInsights, target: &resolved.ResolvedInsights},
+	}
+
+	for _, field := range fields {
+		value, err := reportBool(field.value, false, field.name)
+		if err != nil {
+			return api.CatalogReportSections{}, err
+		}
+		*field.target = value
+	}
+	return resolved, nil
+}
+
+func expandReportConfigs(ctx context.Context, configs []models.ConfigItem) ([]models.ConfigItem, error) {
+	ids := make([]uuid.UUID, 0, len(configs))
+	result := make([]models.ConfigItem, 0, len(configs))
+	seen := make(map[uuid.UUID]bool, len(configs))
+	for _, config := range configs {
+		if seen[config.ID] {
+			continue
+		}
+		seen[config.ID] = true
+		ids = append(ids, config.ID)
+		result = append(result, config)
+	}
+
+	expanded, err := query.ExpandConfigChildren(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	missing := make([]uuid.UUID, 0, len(expanded))
+	for _, id := range expanded {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		missing = append(missing, id)
+	}
+	if len(missing) == 0 {
+		return result, nil
+	}
+
+	descendants, err := query.GetConfigsByIDs(ctx, missing)
+	if err != nil {
+		return nil, err
+	}
+	return append(result, descendants...), nil
+}
+
+func configIDSet(configs []models.ConfigItem) map[uuid.UUID]bool {
+	ids := make(map[uuid.UUID]bool, len(configs))
+	for _, config := range configs {
+		ids[config.ID] = true
+	}
+	return ids
+}
+
+func reportBool(value v1.TemplatedBool, defaultValue bool, field string) (bool, error) {
+	resolved, err := value.Resolve(defaultValue)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", field, err)
+	}
+	return resolved, nil
 }
 
 // resolveReportSource resolves the TSX template source directory and entry file.
