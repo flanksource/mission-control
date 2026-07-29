@@ -1,0 +1,47 @@
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: category-report
+spec:
+  title: Category Report
+  category: Reporting
+  description: >-
+    Generates a catalog report for the selected config item and uploads it as
+    an artifact.
+  configs:
+    - name: "*"
+  parameters:
+    - name: format
+      label: Format
+      type: list
+      default: pdf
+      properties:
+        options:
+          - label: HTML
+            value: html
+          - label: PDF
+            value: pdf
+          - label: JSON
+            value: json
+    - name: since
+      label: Time period
+      description: 'Time range for changes and access logs (e.g. 7d, 30d, 90d)'
+      type: text
+      default: 30d
+  actions:
+    - name: Generate Report
+      report:
+        configs:
+          id: '{{ .config.id }}'
+        format: '{{ .params.format }}'
+        since: '{{ .params.since }}'
+        facet:
+          connection: mission-control/facet
+        sections:
+          changes: true
+          insights: true
+          relationships: true
+          access: true
+          accessLogs: false
+          configJSON: false
