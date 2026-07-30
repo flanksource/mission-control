@@ -126,10 +126,10 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 			decorators = append(decorators, ginkgo.FlakeAttempts(attempts))
 		}
 
-		// catalog-facet-report and facet-pdf-report render via facet, whose
-		// generated .facet/ Vite build currently fails (PostCSS config load
-		// error). Disabled until a fixed facet release is available.
-		if name == "email-report" || name == "facet-pdf-report" || name == "catalog-facet-report" {
+		// facet-pdf-report uses an older view-report path that is still incompatible
+		// with the Facet test container. Catalog report rendering is covered by the
+		// multi-root HTML fixture.
+		if name == "email-report" || name == "facet-pdf-report" {
 			decorators = append(decorators, ginkgo.Pending)
 		}
 

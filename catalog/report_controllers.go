@@ -104,6 +104,22 @@ func GenerateCatalogReport(c echo.Context) error {
 	if err != nil {
 		return api.WriteError(c, err)
 	}
+	selection, opts, err := resolveCatalogReportSelection(ctx, req, roots, opts)
+	if err != nil {
+		return api.WriteError(c, err)
+	}
+
+	result, err := reportCatalog.ExportSelection(ctx, selection, opts, format)
+	if err != nil {
+		return api.WriteError(c, ctx.Oops().Wrapf(err, "failed to render catalog report"))
+	}
+
+	filename := catalogReportFilename(req.Title, extension)
+	c.Response().Header().Set(echo.HeaderContentDisposition, mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
+	return c.Blob(http.StatusOK, contentType, result.Data)
+}
+
+func resolveCatalogReportSelection(ctx context.Context, req CatalogReportRequest, roots []models.ConfigItem, opts reportCatalog.Options) (reportCatalog.Selection, reportCatalog.Options, error) {
 	recursiveRoots := make(map[uuid.UUID]bool, len(roots))
 	if opts.Recursive {
 		for _, root := range roots {
@@ -116,25 +132,18 @@ func GenerateCatalogReport(c echo.Context) error {
 			}
 			id, err := uuid.Parse(requested.ID)
 			if err != nil {
-				return api.WriteError(c, api.Errorf(api.EINVALID, "invalid root config id: %s", requested.ID))
+				return reportCatalog.Selection{}, opts, api.Errorf(api.EINVALID, "invalid root config id: %s", requested.ID)
 			}
 			recursiveRoots[id] = true
 		}
 		opts.Recursive = len(recursiveRoots) > 0
 	}
+
 	selection, err := reportCatalog.ResolveSelectionRoots(ctx, roots, recursiveRoots, opts.Settings.FilterQuery())
 	if err != nil {
-		return api.WriteError(c, ctx.Oops().Wrapf(err, "failed to resolve catalog report selection"))
+		return reportCatalog.Selection{}, opts, ctx.Oops().Wrapf(err, "failed to resolve catalog report selection")
 	}
-
-	result, err := reportCatalog.ExportSelection(ctx, selection, opts, format)
-	if err != nil {
-		return api.WriteError(c, ctx.Oops().Wrapf(err, "failed to render catalog report"))
-	}
-
-	filename := catalogReportFilename(req.Title, extension)
-	c.Response().Header().Set(echo.HeaderContentDisposition, mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
-	return c.Blob(http.StatusOK, contentType, result.Data)
+	return selection, opts, nil
 }
 
 func catalogReportOptionsFromRequest(req CatalogReportRequest) (reportCatalog.Options, error) {

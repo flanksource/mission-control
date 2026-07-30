@@ -8,7 +8,7 @@ params:
   facet_url: "{{facetURL}}"
 
 playbook:
-  title: Catalog Facet HTML Test
+  title: Catalog Facet Multi Root Test
   configs:
     - types:
         - Kubernetes::Pod
@@ -16,22 +16,64 @@ playbook:
     - name: facet_url
       label: Facet server URL
   actions:
-    - name: generate-catalog-facet-html
+    - name: generate-recursive-merged-catalog
       report:
         configs:
           types:
-            - Kubernetes::Pod
+            - Kubernetes::Deployment
         format: facet-html
+        recursive: true
+        groupBy: merged
         facet:
           url: $(.params.facet_url)
+        sections:
+          changes: false
+          insights: false
+          resolvedInsights: false
+          relationships: false
+          access: false
+          accessLogs: false
+          configJSON: false
+    - name: generate-recursive-config-catalog
+      report:
+        configs:
+          types:
+            - Kubernetes::Deployment
+        format: facet-html
+        recursive: true
+        groupBy: config
+        facet:
+          url: $(.params.facet_url)
+        sections:
+          changes: false
+          insights: false
+          resolvedInsights: false
+          relationships: false
+          access: false
+          accessLogs: false
+          configJSON: false
 
 output:
   run:
     status: completed
   actions:
-    - name: generate-catalog-facet-html
+    - name: generate-recursive-merged-catalog
       status: completed
       result:
         format: facet-html
       artifacts:
         - content_type: text/html
+          contains:
+            - Catalog Report
+            - logistics-api
+            - logistics-ui
+    - name: generate-recursive-config-catalog
+      status: completed
+      result:
+        format: facet-html
+      artifacts:
+        - content_type: text/html
+          contains:
+            - Catalog Report
+            - logistics-api
+            - logistics-ui

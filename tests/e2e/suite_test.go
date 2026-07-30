@@ -125,9 +125,7 @@ func startContainers() {
 		defer ginkgo.GinkgoRecover()
 		var err error
 		facetContainer, err = container.New(container.Config{
-			// Pinned to a known-good release; facet 0.1.47 broke subpath-export
-			// resolution (e.g. "@flanksource/icons/icon"). Unpin once fixed.
-			Image: "ghcr.io/flanksource/facet:0.1.46",
+			Image: "ghcr.io/flanksource/facet:0.1.69",
 			Name:  "e2e-facet",
 			Ports: map[string]string{"3010": "0"},
 			HealthCheck: &container.HealthCheck{
