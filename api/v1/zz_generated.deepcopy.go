@@ -3596,6 +3596,26 @@ func (in *ReportAction) DeepCopyInto(out *ReportAction) {
 		*out = make(TemplatedBool, len(*in))
 		copy(*out, *in)
 	}
+	if in.ChangeArtifacts != nil {
+		in, out := &in.ChangeArtifacts, &out.ChangeArtifacts
+		*out = make(TemplatedBool, len(*in))
+		copy(*out, *in)
+	}
+	if in.ExpandGroups != nil {
+		in, out := &in.ExpandGroups, &out.ExpandGroups
+		*out = make(TemplatedBool, len(*in))
+		copy(*out, *in)
+	}
+	if in.Audit != nil {
+		in, out := &in.Audit, &out.Audit
+		*out = make(TemplatedBool, len(*in))
+		copy(*out, *in)
+	}
+	if in.Filters != nil {
+		in, out := &in.Filters, &out.Filters
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.Sections != nil {
 		in, out := &in.Sections, &out.Sections
 		*out = new(ReportSections)

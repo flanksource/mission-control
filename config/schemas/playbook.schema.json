@@ -2413,6 +2413,25 @@
           "type": "string",
           "description": "GroupBy controls descendant grouping: \"none\" (default), \"merged\", or \"config\"."
         },
+        "changeArtifacts": {
+          "$ref": "#/$defs/TemplatedBool",
+          "description": "ChangeArtifacts embeds artifacts associated with included config changes.\nThe value must be true, false, or a template that renders to true or false."
+        },
+        "expandGroups": {
+          "$ref": "#/$defs/TemplatedBool",
+          "description": "ExpandGroups expands group-granted access into rows for active group members.\nThe value must be true, false, or a template that renders to true or false."
+        },
+        "audit": {
+          "$ref": "#/$defs/TemplatedBool",
+          "description": "Audit includes build details, effective settings, query logs, scrapers and groups.\nThe value must be true, false, or a template that renders to true or false."
+        },
+        "filters": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Filters are appended to the embedded report settings filters. Explicit\nroots remain selected; filters apply to recursive descendants."
+        },
         "sections": {
           "$ref": "#/$defs/ReportSections",
           "description": "Sections selects which catalog report sections to include."

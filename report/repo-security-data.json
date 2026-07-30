@@ -1,0 +1,674 @@
+{
+  "title": "Repository Security Report",
+  "generatedAt": "2026-07-27T15:25:26.107092061Z",
+  "publicURL": "https://beta.flanksource.com",
+  "from": "2026-06-27T15:25:26Z",
+  "sections": {
+    "changes": false,
+    "insights": true,
+    "relationships": false,
+    "access": true,
+    "accessLogs": false,
+    "configJSON": false
+  },
+  "groupBy": "none",
+  "entries": [
+    {
+      "configItem": {
+        "id": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+        "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+        "name": "flanksource/azure-production",
+        "type": "GitHub::Repository",
+        "configClass": "Repository",
+        "health": "healthy",
+        "description": "No security alerts",
+        "labels": {
+          "owner": "flanksource",
+          "repo": "azure-production"
+        },
+        "tags": {
+          "owner": "flanksource",
+          "repo": "azure-production"
+        },
+        "properties": [
+          {
+            "type": "url",
+            "name": "URL",
+            "text": "https://github.com/flanksource/azure-production",
+            "links": [
+              {
+                "type": "url",
+                "url": "https://github.com/flanksource/azure-production"
+              }
+            ]
+          },
+          {
+            "type": "badge",
+            "name": "Forked",
+            "text": "false"
+          },
+          {
+            "type": "badge",
+            "name": "Archived",
+            "text": "false"
+          },
+          {
+            "type": "number",
+            "name": "Critical Alerts",
+            "text": "0"
+          },
+          {
+            "type": "number",
+            "name": "High Alerts",
+            "text": "0"
+          },
+          {
+            "type": "number",
+            "name": "Medium Alerts",
+            "text": "0"
+          },
+          {
+            "type": "number",
+            "name": "Low Alerts",
+            "text": "0"
+          }
+        ],
+        "createdAt": "2023-08-28T05:42:55Z",
+        "updatedAt": "2026-07-27T11:06:34Z"
+      },
+      "changeCount": 0,
+      "insightCount": 0,
+      "accessCount": 10,
+      "rbacResources": [
+        {
+          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "configName": "flanksource/azure-production",
+          "configType": "GitHub::Repository",
+          "configClass": "Repository",
+          "health": "healthy",
+          "tags": {
+            "owner": "flanksource",
+            "repo": "azure-production"
+          },
+          "labels": {
+            "owner": "flanksource",
+            "repo": "azure-production"
+          },
+          "users": [
+            {
+              "userId": "019fa341-4c21-7614-b4b8-d7ea01b9862c",
+              "userName": "adityathebe",
+              "email": "",
+              "role": "maintain",
+              "roleExternalIds": [
+                "github://repository-role/flanksource/maintain"
+              ],
+              "roleSource": "direct",
+              "sourceSystem": "GitHub::User",
+              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "019fa341-4c23-785b-a474-a57d81c59180",
+              "userName": "BrendanGalloway",
+              "email": "",
+              "role": "admin",
+              "roleExternalIds": [
+                "github://repository-role/flanksource/admin"
+              ],
+              "roleSource": "direct",
+              "sourceSystem": "GitHub::User",
+              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "019fa341-4c22-7797-b066-9e58a34f77fe",
+              "userName": "dabasvibhor",
+              "email": "",
+              "role": "read",
+              "roleExternalIds": [
+                "github://repository-role/flanksource/read"
+              ],
+              "roleSource": "direct",
+              "sourceSystem": "GitHub::User",
+              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "00000000-0000-0000-0000-000000000000",
+              "userName": "flankbot",
+              "email": "",
+              "role": "read",
+              "roleExternalIds": [
+                "github://repository-role/flanksource/read"
+              ],
+              "roleSource": "group:flankbot",
+              "sourceSystem": "group",
+              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "019fa341-4c24-767b-b65a-07683c35649a",
+              "userName": "flankbot",
+              "email": "",
+              "role": "write",
+              "roleExternalIds": [
+                "github://repository-role/flanksource/write"
+              ],
+              "roleSource": "direct",
+              "sourceSystem": "GitHub::User",
+              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "019fa341-4c25-7668-bd4a-4a78ad03a4fe",
+              "userName": "frumie1984",
+              "email": "",
+              "role": "read",
+              "roleExternalIds": [
+                "github://repository-role/flanksource/read"
+              ],
+              "roleSource": "direct",
+              "sourceSystem": "GitHub::User",
+              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "019fa341-4c20-7a06-9285-744dc70c6061",
+              "userName": "junaid-ebrahim",
+              "email": "",
+              "role": "read",
+              "roleExternalIds": [
+                "github://repository-role/flanksource/read"
+              ],
+              "roleSource": "direct",
+              "sourceSystem": "GitHub::User",
+              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "019fa341-4c1e-7ddd-bd73-c373df25bdba",
+              "userName": "moshloop",
+              "email": "",
+              "role": "admin",
+              "roleExternalIds": [
+                "github://repository-role/flanksource/admin"
+              ],
+              "roleSource": "direct",
+              "sourceSystem": "GitHub::User",
+              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "00000000-0000-0000-0000-000000000000",
+              "userName": "Production Admins",
+              "email": "",
+              "role": "maintain",
+              "roleExternalIds": [
+                "github://repository-role/flanksource/maintain"
+              ],
+              "roleSource": "group:Production Admins",
+              "sourceSystem": "group",
+              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "019fa341-4c1f-7bc2-aba5-f0c9a4fb9683",
+              "userName": "yashmehrotra",
+              "email": "",
+              "role": "admin",
+              "roleExternalIds": [
+                "github://repository-role/flanksource/admin"
+              ],
+              "roleSource": "direct",
+              "sourceSystem": "GitHub::User",
+              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            }
+          ],
+          "changelog": null
+        }
+      ],
+      "access": [
+        {
+          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "configName": "flanksource/azure-production",
+          "configType": "GitHub::Repository",
+          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "userId": "019fa341-4c21-7614-b4b8-d7ea01b9862c",
+          "userName": "adityathebe",
+          "email": "",
+          "role": "maintain",
+          "roleExternalIds": [
+            "github://repository-role/flanksource/maintain"
+          ],
+          "userType": "GitHub::User",
+          "createdAt": "2026-07-27T11:06:33Z"
+        },
+        {
+          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "configName": "flanksource/azure-production",
+          "configType": "GitHub::Repository",
+          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "userId": "019fa341-4c23-785b-a474-a57d81c59180",
+          "userName": "BrendanGalloway",
+          "email": "",
+          "role": "admin",
+          "roleExternalIds": [
+            "github://repository-role/flanksource/admin"
+          ],
+          "userType": "GitHub::User",
+          "createdAt": "2026-07-27T11:06:33Z"
+        },
+        {
+          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "configName": "flanksource/azure-production",
+          "configType": "GitHub::Repository",
+          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "userId": "019fa341-4c22-7797-b066-9e58a34f77fe",
+          "userName": "dabasvibhor",
+          "email": "",
+          "role": "read",
+          "roleExternalIds": [
+            "github://repository-role/flanksource/read"
+          ],
+          "userType": "GitHub::User",
+          "createdAt": "2026-07-27T11:06:33Z"
+        },
+        {
+          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "configName": "flanksource/azure-production",
+          "configType": "GitHub::Repository",
+          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "userId": "00000000-0000-0000-0000-000000000000",
+          "userName": "flankbot",
+          "email": "",
+          "role": "read",
+          "roleExternalIds": [
+            "github://repository-role/flanksource/read"
+          ],
+          "userType": "group",
+          "createdAt": "2026-07-27T11:06:33Z"
+        },
+        {
+          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "configName": "flanksource/azure-production",
+          "configType": "GitHub::Repository",
+          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "userId": "019fa341-4c24-767b-b65a-07683c35649a",
+          "userName": "flankbot",
+          "email": "",
+          "role": "write",
+          "roleExternalIds": [
+            "github://repository-role/flanksource/write"
+          ],
+          "userType": "GitHub::User",
+          "createdAt": "2026-07-27T11:06:33Z"
+        },
+        {
+          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "configName": "flanksource/azure-production",
+          "configType": "GitHub::Repository",
+          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "userId": "019fa341-4c25-7668-bd4a-4a78ad03a4fe",
+          "userName": "frumie1984",
+          "email": "",
+          "role": "read",
+          "roleExternalIds": [
+            "github://repository-role/flanksource/read"
+          ],
+          "userType": "GitHub::User",
+          "createdAt": "2026-07-27T11:06:33Z"
+        },
+        {
+          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "configName": "flanksource/azure-production",
+          "configType": "GitHub::Repository",
+          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "userId": "019fa341-4c20-7a06-9285-744dc70c6061",
+          "userName": "junaid-ebrahim",
+          "email": "",
+          "role": "read",
+          "roleExternalIds": [
+            "github://repository-role/flanksource/read"
+          ],
+          "userType": "GitHub::User",
+          "createdAt": "2026-07-27T11:06:33Z"
+        },
+        {
+          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "configName": "flanksource/azure-production",
+          "configType": "GitHub::Repository",
+          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "userId": "019fa341-4c1e-7ddd-bd73-c373df25bdba",
+          "userName": "moshloop",
+          "email": "",
+          "role": "admin",
+          "roleExternalIds": [
+            "github://repository-role/flanksource/admin"
+          ],
+          "userType": "GitHub::User",
+          "createdAt": "2026-07-27T11:06:33Z"
+        },
+        {
+          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "configName": "flanksource/azure-production",
+          "configType": "GitHub::Repository",
+          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "userId": "00000000-0000-0000-0000-000000000000",
+          "userName": "Production Admins",
+          "email": "",
+          "role": "maintain",
+          "roleExternalIds": [
+            "github://repository-role/flanksource/maintain"
+          ],
+          "userType": "group",
+          "createdAt": "2026-07-27T11:06:33Z"
+        },
+        {
+          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "configName": "flanksource/azure-production",
+          "configType": "GitHub::Repository",
+          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "userId": "019fa341-4c1f-7bc2-aba5-f0c9a4fb9683",
+          "userName": "yashmehrotra",
+          "email": "",
+          "role": "admin",
+          "roleExternalIds": [
+            "github://repository-role/flanksource/admin"
+          ],
+          "userType": "GitHub::User",
+          "createdAt": "2026-07-27T11:06:33Z"
+        }
+      ]
+    }
+  ],
+  "categoryMappings": [
+    {
+      "category": "rbac.granted",
+      "filter": "changeType == \"PermissionGranted\" || changeType == \"PermissionAdded\" || changeType == \"IAMRoleAdded\""
+    },
+    {
+      "category": "rbac.revoked",
+      "filter": "changeType == \"PermissionRevoked\" || changeType == \"PermissionRemoved\" || changeType == \"IAMRoleRemoved\""
+    },
+    {
+      "category": "backup.success",
+      "filter": "changeType == \"BackupCompleted\" || changeType == \"BackupSuccessful\" || (changeType == \"BACKUP_DB\" \u0026\u0026 severity == \"low\") || ((\"kind\" in details \u0026\u0026 details[\"kind\"] == \"Backup/v1\") \u0026\u0026 (\"status\" in details \u0026\u0026 (details[\"status\"] == \"success\" || details[\"status\"] == \"successful\" || details[\"status\"] == \"completed\")))"
+    },
+    {
+      "category": "backup.failed",
+      "filter": "changeType == \"BackupFailed\" || (changeType == \"BACKUP_DB\" \u0026\u0026 severity == \"high\") || ((\"kind\" in details \u0026\u0026 details[\"kind\"] == \"Backup/v1\") \u0026\u0026 (\"status\" in details \u0026\u0026 (details[\"status\"] == \"failed\" || details[\"status\"] == \"error\")))"
+    },
+    {
+      "category": "backup.success",
+      "filter": "changeType == \"BACKUP_DB\" \u0026\u0026 severity != \"high\""
+    },
+    {
+      "category": "backup.progress",
+      "filter": "changeType == \"BackupStarted\" || changeType == \"BackupRunning\" || changeType == \"BackupEnqueued\" || ((\"kind\" in details \u0026\u0026 details[\"kind\"] == \"Backup/v1\") \u0026\u0026 (\"status\" in details \u0026\u0026 (details[\"status\"] == \"started\" || details[\"status\"] == \"running\" || details[\"status\"] == \"enqueued\" || details[\"status\"] == \"progress\")))"
+    },
+    {
+      "category": "backup.restore",
+      "filter": "changeType == \"BackupRestored\" || changeType == \"RestoreCompleted\" || ((\"kind\" in details \u0026\u0026 details[\"kind\"] == \"Backup/v1\") \u0026\u0026 (\"status\" in details \u0026\u0026 (details[\"status\"] == \"restored\" || details[\"status\"] == \"restore_completed\")))"
+    },
+    {
+      "category": "deployment.spec",
+      "filter": "changeType == \"diff\" || (\"kind\" in details \u0026\u0026 details[\"kind\"] == \"Deployment/v1\")"
+    },
+    {
+      "category": "deployment.success",
+      "filter": "changeType == \"CodeDeployment\" \u0026\u0026 severity == \"info\""
+    },
+    {
+      "category": "deployment.failed",
+      "filter": "changeType == \"CodeDeployment\" \u0026\u0026 severity != \"info\""
+    },
+    {
+      "category": "deployment.scale",
+      "filter": "changeType == \"ScalingReplicaSet\" || (\"kind\" in details \u0026\u0026 details[\"kind\"] == \"Scaling/v1\")"
+    },
+    {
+      "category": "deployment.policy",
+      "filter": "changeType == \"PolicyUpdate\""
+    }
+  ],
+  "thresholds": {
+    "staleDays": 0,
+    "reviewOverdueDays": 0
+  },
+  "configItem": {
+    "id": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+    "scraper_id": "ef7fb4be-88ee-455b-93f7-6d65ec526c8a",
+    "agent_id": "00000000-0000-0000-0000-000000000000",
+    "config_class": "Repository",
+    "external_id": [
+      "github/flanksource/azure-production"
+    ],
+    "type": "GitHub::Repository",
+    "status": null,
+    "ready": true,
+    "health": "healthy",
+    "name": "flanksource/azure-production",
+    "description": "No security alerts",
+    "config": "{\"id\": 683942764, \"fork\": false, \"name\": \"azure-production\", \"size\": 1114, \"owner\": {\"id\": 58787470, \"type\": \"Organization\", \"login\": \"flanksource\", \"node_id\": \"MDEyOk9yZ2FuaXphdGlvbjU4Nzg3NDcw\", \"site_admin\": false}, \"node_id\": \"R_kgDOKMQjbA\", \"private\": true, \"archived\": false, \"disabled\": false, \"has_wiki\": true, \"html_url\": \"https://github.com/flanksource/azure-production\", \"language\": \"HCL\", \"full_name\": \"flanksource/azure-production\", \"has_pages\": false, \"pushed_at\": \"2026-07-24T09:57:15Z\", \"created_at\": \"2023-08-28T05:42:55Z\", \"has_issues\": true, \"updated_at\": \"2026-07-24T09:57:57Z\", \"visibility\": \"private\", \"forks_count\": 0, \"is_template\": false, \"permissions\": {\"pull\": true, \"push\": true, \"admin\": true, \"triage\": true, \"maintain\": true}, \"has_projects\": true, \"allow_forking\": false, \"has_downloads\": false, \"default_branch\": \"main\", \"watchers_count\": 0, \"has_discussions\": false, \"stargazers_count\": 0, \"open_issues_count\": 20, \"security_and_analysis\": {\"secret_scanning\": {\"status\": \"disabled\"}, \"dependabot_security_updates\": {\"status\": \"enabled\"}, \"secret_scanning_push_protection\": {\"status\": \"disabled\"}, \"secret_scanning_validity_checks\": {\"status\": \"disabled\"}}, \"web_commit_signoff_required\": false}",
+    "source": "",
+    "labels": {
+      "owner": "flanksource",
+      "repo": "azure-production"
+    },
+    "tags": {
+      "owner": "flanksource",
+      "repo": "azure-production"
+    },
+    "properties": [
+      {
+        "type": "url",
+        "name": "URL",
+        "text": "https://github.com/flanksource/azure-production",
+        "links": [
+          {
+            "type": "url",
+            "url": "https://github.com/flanksource/azure-production"
+          }
+        ]
+      },
+      {
+        "type": "badge",
+        "name": "Forked",
+        "text": "false"
+      },
+      {
+        "type": "badge",
+        "name": "Archived",
+        "text": "false"
+      },
+      {
+        "type": "number",
+        "name": "Critical Alerts",
+        "text": "0"
+      },
+      {
+        "type": "number",
+        "name": "High Alerts",
+        "text": "0"
+      },
+      {
+        "type": "number",
+        "name": "Medium Alerts",
+        "text": "0"
+      },
+      {
+        "type": "number",
+        "name": "Low Alerts",
+        "text": "0"
+      }
+    ],
+    "created_at": "2023-08-28T05:42:55Z",
+    "inserted_at": "2026-06-25T20:01:09.014589Z",
+    "updated_at": "2026-07-27T11:06:34.578595Z"
+  },
+  "parents": null,
+  "access": [
+    {
+      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "configName": "flanksource/azure-production",
+      "configType": "GitHub::Repository",
+      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "userId": "019fa341-4c21-7614-b4b8-d7ea01b9862c",
+      "userName": "adityathebe",
+      "email": "",
+      "role": "maintain",
+      "roleExternalIds": [
+        "github://repository-role/flanksource/maintain"
+      ],
+      "userType": "GitHub::User",
+      "createdAt": "2026-07-27T11:06:33Z"
+    },
+    {
+      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "configName": "flanksource/azure-production",
+      "configType": "GitHub::Repository",
+      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "userId": "019fa341-4c23-785b-a474-a57d81c59180",
+      "userName": "BrendanGalloway",
+      "email": "",
+      "role": "admin",
+      "roleExternalIds": [
+        "github://repository-role/flanksource/admin"
+      ],
+      "userType": "GitHub::User",
+      "createdAt": "2026-07-27T11:06:33Z"
+    },
+    {
+      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "configName": "flanksource/azure-production",
+      "configType": "GitHub::Repository",
+      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "userId": "019fa341-4c22-7797-b066-9e58a34f77fe",
+      "userName": "dabasvibhor",
+      "email": "",
+      "role": "read",
+      "roleExternalIds": [
+        "github://repository-role/flanksource/read"
+      ],
+      "userType": "GitHub::User",
+      "createdAt": "2026-07-27T11:06:33Z"
+    },
+    {
+      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "configName": "flanksource/azure-production",
+      "configType": "GitHub::Repository",
+      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "userId": "00000000-0000-0000-0000-000000000000",
+      "userName": "flankbot",
+      "email": "",
+      "role": "read",
+      "roleExternalIds": [
+        "github://repository-role/flanksource/read"
+      ],
+      "userType": "group",
+      "createdAt": "2026-07-27T11:06:33Z"
+    },
+    {
+      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "configName": "flanksource/azure-production",
+      "configType": "GitHub::Repository",
+      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "userId": "019fa341-4c24-767b-b65a-07683c35649a",
+      "userName": "flankbot",
+      "email": "",
+      "role": "write",
+      "roleExternalIds": [
+        "github://repository-role/flanksource/write"
+      ],
+      "userType": "GitHub::User",
+      "createdAt": "2026-07-27T11:06:33Z"
+    },
+    {
+      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "configName": "flanksource/azure-production",
+      "configType": "GitHub::Repository",
+      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "userId": "019fa341-4c25-7668-bd4a-4a78ad03a4fe",
+      "userName": "frumie1984",
+      "email": "",
+      "role": "read",
+      "roleExternalIds": [
+        "github://repository-role/flanksource/read"
+      ],
+      "userType": "GitHub::User",
+      "createdAt": "2026-07-27T11:06:33Z"
+    },
+    {
+      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "configName": "flanksource/azure-production",
+      "configType": "GitHub::Repository",
+      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "userId": "019fa341-4c20-7a06-9285-744dc70c6061",
+      "userName": "junaid-ebrahim",
+      "email": "",
+      "role": "read",
+      "roleExternalIds": [
+        "github://repository-role/flanksource/read"
+      ],
+      "userType": "GitHub::User",
+      "createdAt": "2026-07-27T11:06:33Z"
+    },
+    {
+      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "configName": "flanksource/azure-production",
+      "configType": "GitHub::Repository",
+      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "userId": "019fa341-4c1e-7ddd-bd73-c373df25bdba",
+      "userName": "moshloop",
+      "email": "",
+      "role": "admin",
+      "roleExternalIds": [
+        "github://repository-role/flanksource/admin"
+      ],
+      "userType": "GitHub::User",
+      "createdAt": "2026-07-27T11:06:33Z"
+    },
+    {
+      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "configName": "flanksource/azure-production",
+      "configType": "GitHub::Repository",
+      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "userId": "00000000-0000-0000-0000-000000000000",
+      "userName": "Production Admins",
+      "email": "",
+      "role": "maintain",
+      "roleExternalIds": [
+        "github://repository-role/flanksource/maintain"
+      ],
+      "userType": "group",
+      "createdAt": "2026-07-27T11:06:33Z"
+    },
+    {
+      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "configName": "flanksource/azure-production",
+      "configType": "GitHub::Repository",
+      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "userId": "019fa341-4c1f-7bc2-aba5-f0c9a4fb9683",
+      "userName": "yashmehrotra",
+      "email": "",
+      "role": "admin",
+      "roleExternalIds": [
+        "github://repository-role/flanksource/admin"
+      ],
+      "userType": "GitHub::User",
+      "createdAt": "2026-07-27T11:06:33Z"
+    }
+  ]
+}

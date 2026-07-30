@@ -768,6 +768,24 @@ type ReportAction struct {
 	Recursive TemplatedBool `json:"recursive,omitempty" yaml:"recursive,omitempty" template:"true"`
 	// GroupBy controls descendant grouping: "none" (default), "merged", or "config".
 	GroupBy string `json:"groupBy,omitempty" yaml:"groupBy,omitempty" template:"true"`
+	// ChangeArtifacts embeds artifacts associated with included config changes.
+	// The value must be true, false, or a template that renders to true or false.
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	ChangeArtifacts TemplatedBool `json:"changeArtifacts,omitempty" yaml:"changeArtifacts,omitempty" template:"true"`
+	// ExpandGroups expands group-granted access into rows for active group members.
+	// The value must be true, false, or a template that renders to true or false.
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	ExpandGroups TemplatedBool `json:"expandGroups,omitempty" yaml:"expandGroups,omitempty" template:"true"`
+	// Audit includes build details, effective settings, query logs, scrapers and groups.
+	// The value must be true, false, or a template that renders to true or false.
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	Audit TemplatedBool `json:"audit,omitempty" yaml:"audit,omitempty" template:"true"`
+	// Filters are appended to the embedded report settings filters. Explicit
+	// roots remain selected; filters apply to recursive descendants.
+	Filters []string `json:"filters,omitempty" yaml:"filters,omitempty" template:"true"`
 	// Sections selects which catalog report sections to include.
 	Sections *ReportSections `json:"sections,omitempty" yaml:"sections,omitempty" template:"true"`
 }

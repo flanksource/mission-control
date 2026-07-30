@@ -44,9 +44,13 @@ var _ = ginkgo.Describe("Report action catalog options", func() {
 
 	ginkgo.It("accepts literal booleans", func() {
 		action := v1.ReportAction{
-			Title:     "Infrastructure Report",
-			Recursive: v1.TemplatedBool(`true`),
-			GroupBy:   "config",
+			Title:           "Infrastructure Report",
+			Recursive:       v1.TemplatedBool(`true`),
+			GroupBy:         "config",
+			ChangeArtifacts: v1.TemplatedBool(`true`),
+			ExpandGroups:    v1.TemplatedBool(`true`),
+			Audit:           v1.TemplatedBool(`true`),
+			Filters:         []string{"type=Kubernetes::Pod", "health=unhealthy,status=warning"},
 			Sections: &v1.ReportSections{
 				Changes:       v1.TemplatedBool(`true`),
 				Insights:      v1.TemplatedBool(`false`),
@@ -59,6 +63,10 @@ var _ = ginkgo.Describe("Report action catalog options", func() {
 		Expect(opts.Title).To(Equal("Infrastructure Report"))
 		Expect(opts.Recursive).To(BeTrue())
 		Expect(opts.GroupBy).To(Equal("config"))
+		Expect(opts.ChangeArtifacts).To(BeTrue())
+		Expect(opts.ExpandGroups).To(BeTrue())
+		Expect(opts.Audit).To(BeTrue())
+		Expect(opts.Settings.Filters).To(ContainElements("type=Kubernetes::Pod", "health=unhealthy", "status=warning"))
 		Expect(opts.Sections.Changes).To(BeTrue())
 		Expect(opts.Sections.Insights).To(BeFalse())
 		Expect(opts.Sections.Relationships).To(BeTrue())
@@ -91,6 +99,11 @@ var _ = ginkgo.Describe("Report action catalog options", func() {
 	ginkgo.It("rejects a template result that is not a boolean", func() {
 		_, err := catalogOptions(v1.ReportAction{Recursive: v1.TemplatedBool(`"sometimes"`)})
 		Expect(err).To(MatchError(`recursive: template rendered "sometimes"; expected true or false`))
+	})
+
+	ginkgo.It("rejects an unsupported groupBy value", func() {
+		_, err := catalogOptions(v1.ReportAction{GroupBy: "service"})
+		Expect(err).To(MatchError(`invalid groupBy "service": expected none, merged, or config`))
 	})
 })
 

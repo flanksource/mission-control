@@ -26,35 +26,40 @@ type ExportResult struct {
 }
 
 func Export(ctx context.Context, configs []models.ConfigItem, opts Options, format string) (*ExportResult, error) {
-	var queryLog *query.QueryLog
-	if opts.Audit {
-		ctx, queryLog = query.WithQueryLog(ctx)
-	}
-
-	r, scraperIDs, err := BuildReport(ctx, configs, opts)
+	r, err := buildCatalogData(ctx, configs, configs, opts)
 	if err != nil {
 		return nil, err
 	}
+	return exportCatalogData(ctx, *r, opts, format)
+}
 
-	ctx.Logger.V(3).Infof("Report built: %d entries, %d changes, %d analyses",
-		len(r.Entries), len(r.Changes), len(r.Analyses))
-
-	if opts.Audit {
-		r.Audit = buildAudit(ctx, opts, configs, scraperIDs, queryLog)
+// ExportSelection builds and renders a report with explicit multi-root
+// selection semantics.
+func ExportSelection(ctx context.Context, selection Selection, opts Options, format string) (*ExportResult, error) {
+	r, err := BuildSelection(ctx, selection, opts)
+	if err != nil {
+		return nil, err
 	}
+	return exportCatalogData(ctx, r, opts, format)
+}
+
+func exportCatalogData(ctx context.Context, report api.CatalogReport, opts Options, format string) (*ExportResult, error) {
+	ctx.Logger.V(3).Infof("Report built: %d entries, %d changes, %d analyses",
+		len(report.Entries), len(report.Changes), len(report.Analyses))
 
 	result := &ExportResult{}
 	if opts.Settings != nil {
 		result.Settings = opts.SettingsPath
 	}
 
+	var err error
 	switch format {
 	case "html", "facet-html":
-		result.Data, result.SrcDir, result.Entry, result.DataFile, err = renderFacetResult(ctx, r, "html")
+		result.Data, result.SrcDir, result.Entry, result.DataFile, err = renderFacetResult(ctx, &report, "html")
 	case "pdf", "facet-pdf":
-		result.Data, result.SrcDir, result.Entry, result.DataFile, err = renderFacetResult(ctx, r, "pdf")
+		result.Data, result.SrcDir, result.Entry, result.DataFile, err = renderFacetResult(ctx, &report, "pdf")
 	default:
-		result.Data, err = json.MarshalIndent(r, "", "  ")
+		result.Data, err = json.MarshalIndent(report, "", "  ")
 	}
 
 	return result, err
@@ -64,11 +69,83 @@ func Export(ctx context.Context, configs []models.ConfigItem, opts Options, form
 // rendering. Slices are initialized so the JSON output is stable, matching
 // what the embedded CatalogReport.tsx expects.
 func Build(ctx context.Context, configs []models.ConfigItem, opts Options) (api.CatalogReport, error) {
-	r, _, err := BuildReport(ctx, configs, opts)
+	r, err := buildCatalogData(ctx, configs, configs, opts)
 	if err != nil {
 		return api.CatalogReport{}, err
 	}
-	return initSlices(r), nil
+	return *r, nil
+}
+
+// BuildSelection builds a report from explicit roots and their owned items.
+// Merged modes aggregate each item under one root; config mode emits one entry
+// per item without recursive overlap.
+func BuildSelection(ctx context.Context, selection Selection, opts Options) (api.CatalogReport, error) {
+	opts = opts.WithDefaults()
+	buildOpts := opts
+	configs := selection.Roots
+	if opts.Recursive && opts.GroupBy == "config" {
+		configs = selection.Items
+		buildOpts.Recursive = false
+		buildOpts.IncludedConfigIDs = configIDSet(selection.Items)
+	} else if opts.Recursive {
+		buildOpts.IncludedConfigIDsByRoot = make(map[uuid.UUID]map[uuid.UUID]bool, len(selection.ItemsByRoot))
+		for rootID, items := range selection.ItemsByRoot {
+			buildOpts.IncludedConfigIDsByRoot[rootID] = configIDSet(items)
+		}
+	}
+
+	r, err := buildCatalogData(ctx, configs, selection.Items, buildOpts)
+	if err != nil {
+		return api.CatalogReport{}, err
+	}
+	r.Recursive = opts.Recursive
+	r.Roots = nil
+	for _, root := range selection.Roots {
+		r.Roots = append(r.Roots, api.NewCatalogReportConfigItem(root))
+	}
+	r.ItemCount = len(selection.Items)
+	if r.Audit != nil {
+		r.Audit.Options.Recursive = opts.Recursive
+	}
+	if opts.Sections.ConfigJSON {
+		r.ConfigJSONItems = nil
+		for _, item := range selection.Items {
+			if item.Config == nil {
+				continue
+			}
+			r.ConfigJSONItems = append(r.ConfigJSONItems, api.CatalogReportConfigJSON{
+				ConfigItem: api.NewCatalogReportConfigItem(item),
+				JSON:       *item.Config,
+			})
+		}
+	}
+	return *r, nil
+}
+
+func buildCatalogData(ctx context.Context, configs, auditConfigs []models.ConfigItem, opts Options) (*api.CatalogReport, error) {
+	opts = opts.WithDefaults()
+	var queryLog *query.QueryLog
+	if opts.Audit {
+		ctx, queryLog = query.WithQueryLog(ctx)
+	}
+
+	r, scraperIDs, err := BuildReport(ctx, configs, opts)
+	if err != nil {
+		return nil, err
+	}
+	if opts.Audit {
+		r.Audit = buildAudit(ctx, opts, auditConfigs, scraperIDs, queryLog)
+	}
+	initialized := initSlices(r)
+	return &initialized, nil
+}
+
+func configIDSet(configs []models.ConfigItem) map[uuid.UUID]bool {
+	ids := make(map[uuid.UUID]bool, len(configs))
+	for _, config := range configs {
+		ids[config.ID] = true
+	}
+	return ids
 }
 
 func buildAudit(ctx context.Context, opts Options, configs []models.ConfigItem, scraperIDs []string, queryLog *query.QueryLog) *api.CatalogReportAudit {
@@ -202,6 +279,12 @@ func gitStatus() string {
 
 func initSlices(r *api.CatalogReport) api.CatalogReport {
 	out := *r
+	if out.Roots == nil {
+		out.Roots = []api.CatalogReportConfigItem{}
+	}
+	if out.ConfigJSONItems == nil {
+		out.ConfigJSONItems = []api.CatalogReportConfigJSON{}
+	}
 	if out.Entries == nil {
 		out.Entries = []api.CatalogReportEntry{}
 	}

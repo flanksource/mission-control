@@ -77,15 +77,17 @@ type CatalogReportQuery struct {
 }
 
 type CatalogReport struct {
-	Title       string                `json:"title"`
-	GeneratedAt time.Time             `json:"generatedAt"`
-	PublicURL   string                `json:"publicURL,omitempty"`
-	From        string                `json:"from,omitempty"`
-	To          string                `json:"to,omitempty"`
-	Sections    CatalogReportSections `json:"sections"`
-	Recursive   bool                  `json:"recursive,omitempty"`
-	GroupBy     string                `json:"groupBy,omitempty"`
-	Entries     []CatalogReportEntry  `json:"entries"`
+	Title       string                    `json:"title"`
+	GeneratedAt time.Time                 `json:"generatedAt"`
+	PublicURL   string                    `json:"publicURL,omitempty"`
+	From        string                    `json:"from,omitempty"`
+	To          string                    `json:"to,omitempty"`
+	Sections    CatalogReportSections     `json:"sections"`
+	Recursive   bool                      `json:"recursive,omitempty"`
+	GroupBy     string                    `json:"groupBy,omitempty"`
+	Roots       []CatalogReportConfigItem `json:"roots"`
+	ItemCount   int                       `json:"itemCount"`
+	Entries     []CatalogReportEntry      `json:"entries"`
 
 	CategoryMappings []CatalogReportCategoryMapping `json:"categoryMappings,omitempty"`
 	Thresholds       *CatalogReportThresholds       `json:"thresholds,omitempty"`
@@ -103,7 +105,13 @@ type CatalogReport struct {
 	Access           []CatalogReportAccess       `json:"access,omitempty"`
 	AccessLogs       []CatalogReportAccessLog    `json:"accessLogs,omitempty"`
 	ConfigJSON       *string                     `json:"configJSON,omitempty"`
+	ConfigJSONItems  []CatalogReportConfigJSON   `json:"configJSONItems,omitempty"`
 	ConfigGroups     []CatalogReportConfigGroup  `json:"configGroups,omitempty"`
+}
+
+type CatalogReportConfigJSON struct {
+	ConfigItem CatalogReportConfigItem `json:"configItem"`
+	JSON       string                  `json:"json"`
 }
 
 type CatalogReportEntry struct {
@@ -118,6 +126,7 @@ type CatalogReportEntry struct {
 	Analyses         []CatalogReportAnalysis   `json:"analyses,omitempty"`
 	Access           []CatalogReportAccess     `json:"access,omitempty"`
 	AccessLogs       []CatalogReportAccessLog  `json:"accessLogs,omitempty"`
+	ConfigJSON       *string                   `json:"configJSON,omitempty"`
 
 	// IsRoot marks entries whose ancestors are not in the selected set. Used by
 	// groupBy=none to render roots first and children under a breadcrumb.

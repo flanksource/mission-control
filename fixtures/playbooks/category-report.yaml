@@ -7,11 +7,14 @@ spec:
   title: Category Report
   category: Reporting
   description: >-
-    Generates a catalog report for the selected config item and uploads it as
-    an artifact.
-  configs:
-    - name: "*"
+    Generates a catalog report for one or more root config items and uploads it
+    as an artifact.
   parameters:
+    - name: configs
+      label: Root configs
+      description: Select one or more root config items
+      type: configs
+      required: true
     - name: format
       label: Format
       type: list
@@ -77,16 +80,38 @@ spec:
       label: Include raw config JSON
       type: checkbox
       default: "false"
+    - name: changeArtifacts
+      label: Include change artifacts
+      type: checkbox
+      default: "false"
+    - name: expandGroups
+      label: Expand group access into members
+      type: checkbox
+      default: "false"
+    - name: audit
+      label: Include audit details
+      type: checkbox
+      default: "false"
+    - name: filters
+      label: Additional descendant filters
+      description: Comma-separated filters appended to the default report filters
+      type: text
+      default: ""
   actions:
     - name: Generate Report
       report:
         configs:
-          id: '{{ .config.id }}'
+          id: '$(.params.configs | idsFromMap)'
         title: '{{ .params.title }}'
         format: '{{ .params.format }}'
         since: '{{ .params.since }}'
         recursive: '{{ .params.recursive }}'
         groupBy: '{{ .params.groupBy }}'
+        changeArtifacts: '{{ .params.changeArtifacts }}'
+        expandGroups: '{{ .params.expandGroups }}'
+        audit: '{{ .params.audit }}'
+        filters:
+          - '{{ .params.filters | default "" }}'
         file:
           path: report/CatalogReport.tsx
         facet:

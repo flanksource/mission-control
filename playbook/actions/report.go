@@ -128,38 +128,36 @@ func (r *Report) runView(ctx context.Context, action v1.ReportAction, format str
 }
 
 func (r *Report) runCatalog(ctx context.Context, action v1.ReportAction, format string) (*ReportResult, error) {
-	r.logf(ctx, "resolving config items")
-	configs, err := query.FindConfigsByResourceSelector(ctx, -1, *action.Configs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve configs: %w", err)
-	}
-	if len(configs) == 0 {
-		return nil, fmt.Errorf("no config items matched the selector")
-	}
-	r.logf(ctx, "resolved %d config item(s)", len(configs))
-
 	opts, err := catalogOptions(action)
 	if err != nil {
 		return nil, err
 	}
 	opts.Progress = func(format string, args ...any) { r.logf(ctx, format, args...) }
 
-	recursive := opts.Recursive
-	if recursive && opts.GroupBy == "config" {
-		configs, err = expandReportConfigs(ctx, configs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to expand config descendants: %w", err)
-		}
-		r.logf(ctx, "expanded selection to %d config item(s)", len(configs))
-		opts.Recursive = false
-		opts.IncludedConfigIDs = configIDSet(configs)
+	r.logf(ctx, "resolving config items")
+	selector := *action.Configs
+	if selector.Search != "" {
+		selector.Search = strings.TrimSpace(selector.Search + " " + opts.Settings.FilterQuery())
 	}
+	configs, err := query.FindConfigsByResourceSelector(ctx, -1, selector)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve configs: %w", err)
+	}
+	if len(configs) == 0 {
+		return nil, fmt.Errorf("no config items matched the selector")
+	}
+	r.logf(ctx, "resolved %d root config item(s)", len(configs))
 
-	data, err := catalog.Build(ctx, configs, opts)
+	selection, err := catalog.ResolveSelection(ctx, configs, opts.Recursive, opts.Settings.FilterQuery())
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve report selection: %w", err)
+	}
+	r.logf(ctx, "selected %d root(s), %d total config item(s)", len(selection.Roots), len(selection.Items))
+
+	data, err := catalog.BuildSelection(ctx, selection, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build catalog report: %w", err)
 	}
-	data.Recursive = recursive
 	r.logf(ctx, "report data ready: %d entries, %d changes, %d insights", len(data.Entries), len(data.Changes), len(data.Analyses))
 
 	rendered, err := r.renderCatalog(ctx, action, data, format)
@@ -215,15 +213,47 @@ func (r *Report) renderCatalogFacet(ctx context.Context, action v1.ReportAction,
 // catalogOptions builds the catalog report options from the action. When no
 // sections are specified, the defaults match a bare `catalog report` run.
 func catalogOptions(action v1.ReportAction) (catalog.Options, error) {
+	if action.GroupBy != "" && action.GroupBy != "none" && action.GroupBy != "merged" && action.GroupBy != "config" {
+		return catalog.Options{}, fmt.Errorf("invalid groupBy %q: expected none, merged, or config", action.GroupBy)
+	}
 	recursive, err := reportBool(action.Recursive, false, "recursive")
 	if err != nil {
 		return catalog.Options{}, err
 	}
 
+	changeArtifacts, err := reportBool(action.ChangeArtifacts, false, "changeArtifacts")
+	if err != nil {
+		return catalog.Options{}, err
+	}
+	expandGroups, err := reportBool(action.ExpandGroups, false, "expandGroups")
+	if err != nil {
+		return catalog.Options{}, err
+	}
+	audit, err := reportBool(action.Audit, false, "audit")
+	if err != nil {
+		return catalog.Options{}, err
+	}
+	settings, settingsSource, err := catalog.ResolveSettings("")
+	if err != nil {
+		return catalog.Options{}, fmt.Errorf("load report settings: %w", err)
+	}
+	for _, filter := range action.Filters {
+		for _, item := range strings.Split(filter, ",") {
+			if item = strings.TrimSpace(item); item != "" {
+				settings.Filters = append(settings.Filters, item)
+			}
+		}
+	}
+
 	opts := catalog.Options{
-		Title:     action.Title,
-		Recursive: recursive,
-		GroupBy:   action.GroupBy,
+		Title:           action.Title,
+		Recursive:       recursive,
+		GroupBy:         action.GroupBy,
+		ChangeArtifacts: changeArtifacts,
+		ExpandGroups:    expandGroups,
+		Audit:           audit,
+		Settings:        settings,
+		SettingsPath:    settingsSource,
 	}
 
 	if action.Sections != nil {
@@ -276,51 +306,6 @@ func reportSections(sections v1.ReportSections) (api.CatalogReportSections, erro
 		*field.target = value
 	}
 	return resolved, nil
-}
-
-func expandReportConfigs(ctx context.Context, configs []models.ConfigItem) ([]models.ConfigItem, error) {
-	ids := make([]uuid.UUID, 0, len(configs))
-	result := make([]models.ConfigItem, 0, len(configs))
-	seen := make(map[uuid.UUID]bool, len(configs))
-	for _, config := range configs {
-		if seen[config.ID] {
-			continue
-		}
-		seen[config.ID] = true
-		ids = append(ids, config.ID)
-		result = append(result, config)
-	}
-
-	expanded, err := query.ExpandConfigChildren(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-
-	missing := make([]uuid.UUID, 0, len(expanded))
-	for _, id := range expanded {
-		if seen[id] {
-			continue
-		}
-		seen[id] = true
-		missing = append(missing, id)
-	}
-	if len(missing) == 0 {
-		return result, nil
-	}
-
-	descendants, err := query.GetConfigsByIDs(ctx, missing)
-	if err != nil {
-		return nil, err
-	}
-	return append(result, descendants...), nil
-}
-
-func configIDSet(configs []models.ConfigItem) map[uuid.UUID]bool {
-	ids := make(map[uuid.UUID]bool, len(configs))
-	for _, config := range configs {
-		ids[config.ID] = true
-	}
-	return ids
 }
 
 func reportBool(value v1.TemplatedBool, defaultValue bool, field string) (bool, error) {
