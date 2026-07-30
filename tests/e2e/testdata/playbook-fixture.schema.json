@@ -151,6 +151,11 @@
           "type": "string",
           "description": "Expected MIME content type of the artifact",
           "examples": ["text/html", "application/pdf", "application/json"]
+        },
+        "contains": {
+          "type": "array",
+          "description": "Strings expected in a single generated artifact",
+          "items": {"type": "string"}
         }
       }
     }

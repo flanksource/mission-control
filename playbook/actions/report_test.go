@@ -39,6 +39,118 @@ var _ = ginkgo.Describe("Report action progress logs", func() {
 	})
 })
 
+var _ = ginkgo.Describe("Report action catalog options", func() {
+	ctx := context.Context{Context: commons.NewContext(gocontext.TODO())}
+
+	ginkgo.It("accepts literal booleans", func() {
+		action := v1.ReportAction{
+			Title:           "Infrastructure Report",
+			Recursive:       v1.TemplatedBool(`true`),
+			GroupBy:         "config",
+			ChangeArtifacts: v1.TemplatedBool(`true`),
+			ExpandGroups:    v1.TemplatedBool(`true`),
+			Audit:           v1.TemplatedBool(`true`),
+			Filters:         []string{"type=Kubernetes::Pod", "health=unhealthy,status=warning"},
+			Sections: &v1.ReportSections{
+				Changes:          v1.TemplatedBool(`true`),
+				Insights:         v1.TemplatedBool(`false`),
+				Relationships:    v1.TemplatedBool(`true`),
+				Access:           v1.TemplatedBool(`false`),
+				AccessLogs:       v1.TemplatedBool(`true`),
+				ConfigJSON:       v1.TemplatedBool(`true`),
+				ResolvedInsights: v1.TemplatedBool(`false`),
+			},
+		}
+
+		opts, err := catalogOptions(action)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(opts.Title).To(Equal("Infrastructure Report"))
+		Expect(opts.Recursive).To(BeTrue())
+		Expect(opts.GroupBy).To(Equal("config"))
+		Expect(opts.ChangeArtifacts).To(BeTrue())
+		Expect(opts.ExpandGroups).To(BeTrue())
+		Expect(opts.Audit).To(BeTrue())
+		Expect(opts.Settings.Filters).To(ContainElements("type=Kubernetes::Pod", "health=unhealthy", "status=warning"))
+		Expect(opts.Sections.Changes).To(BeTrue())
+		Expect(opts.Sections.Insights).To(BeFalse())
+		Expect(opts.Sections.Relationships).To(BeTrue())
+		Expect(opts.Sections.Access).To(BeFalse())
+		Expect(opts.Sections.AccessLogs).To(BeTrue())
+		Expect(opts.Sections.ConfigJSON).To(BeTrue())
+		Expect(opts.Sections.ResolvedInsights).To(BeFalse())
+	})
+
+	ginkgo.It("uses section defaults for omitted values", func() {
+		opts, err := catalogOptions(v1.ReportAction{Sections: &v1.ReportSections{}})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(opts.Sections.Changes).To(BeTrue())
+		Expect(opts.Sections.Insights).To(BeTrue())
+		Expect(opts.Sections.Relationships).To(BeTrue())
+		Expect(opts.Sections.Access).To(BeTrue())
+		Expect(opts.Sections.AccessLogs).To(BeFalse())
+		Expect(opts.Sections.ConfigJSON).To(BeFalse())
+		Expect(opts.Sections.ResolvedInsights).To(BeFalse())
+	})
+
+	ginkgo.It("templates recursive and section booleans", func() {
+		action := v1.ReportAction{
+			Recursive:       v1.TemplatedBool(`"{{ .params.recursive }}"`),
+			ChangeArtifacts: v1.TemplatedBool(`"{{ .params.changeArtifacts }}"`),
+			ExpandGroups:    v1.TemplatedBool(`"{{ .params.expandGroups }}"`),
+			Audit:           v1.TemplatedBool(`"{{ .params.audit }}"`),
+			Sections: &v1.ReportSections{
+				Changes:          v1.TemplatedBool(`"{{ .params.changes }}"`),
+				Insights:         v1.TemplatedBool(`"{{ .params.insights }}"`),
+				Relationships:    v1.TemplatedBool(`"{{ .params.relationships }}"`),
+				Access:           v1.TemplatedBool(`"{{ .params.access }}"`),
+				AccessLogs:       v1.TemplatedBool(`"{{ .params.accessLogs }}"`),
+				ConfigJSON:       v1.TemplatedBool(`"{{ .params.configJSON }}"`),
+				ResolvedInsights: v1.TemplatedBool(`"{{ .params.resolvedInsights }}"`),
+			},
+		}
+		templater := ctx.NewStructTemplater(map[string]any{
+			"params": map[string]any{
+				"recursive":        "true",
+				"changeArtifacts":  "false",
+				"expandGroups":     "true",
+				"audit":            "false",
+				"changes":          "false",
+				"insights":         "true",
+				"relationships":    "false",
+				"access":           "false",
+				"accessLogs":       "true",
+				"configJSON":       "true",
+				"resolvedInsights": "true",
+			},
+		}, "template", nil)
+		Expect(templater.Walk(&action)).To(Succeed())
+
+		opts, err := catalogOptions(action)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(opts.Recursive).To(BeTrue())
+		Expect(opts.ChangeArtifacts).To(BeFalse())
+		Expect(opts.ExpandGroups).To(BeTrue())
+		Expect(opts.Audit).To(BeFalse())
+		Expect(opts.Sections.Changes).To(BeFalse())
+		Expect(opts.Sections.Insights).To(BeTrue())
+		Expect(opts.Sections.Relationships).To(BeFalse())
+		Expect(opts.Sections.Access).To(BeFalse())
+		Expect(opts.Sections.AccessLogs).To(BeTrue())
+		Expect(opts.Sections.ConfigJSON).To(BeTrue())
+		Expect(opts.Sections.ResolvedInsights).To(BeTrue())
+	})
+
+	ginkgo.It("rejects a template result that is not a boolean", func() {
+		_, err := catalogOptions(v1.ReportAction{Recursive: v1.TemplatedBool(`"sometimes"`)})
+		Expect(err).To(MatchError(`recursive: template rendered "sometimes"; expected true or false`))
+	})
+
+	ginkgo.It("rejects an unsupported groupBy value", func() {
+		_, err := catalogOptions(v1.ReportAction{GroupBy: "service"})
+		Expect(err).To(MatchError(`invalid groupBy "service": expected none, merged, or config`))
+	})
+})
+
 var _ = ginkgo.Describe("Report action source resolution", func() {
 	ctx := context.Context{Context: commons.NewContext(gocontext.TODO())}
 

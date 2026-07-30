@@ -4381,6 +4381,16 @@ spec:
                       type: object
                     report:
                       properties:
+                        audit:
+                          description: |-
+                            Audit includes build details, effective settings, query logs, scrapers and groups.
+                            The value must be true, false, or a template that renders to true or false.
+                          x-kubernetes-preserve-unknown-fields: true
+                        changeArtifacts:
+                          description: |-
+                            ChangeArtifacts embeds artifacts associated with included config changes.
+                            The value must be true, false, or a template that renders to true or false.
+                          x-kubernetes-preserve-unknown-fields: true
                         configs:
                           description: Inline catalog query for the catalog report
                             (alternative to View)
@@ -4441,6 +4451,11 @@ spec:
                                 type: string
                               type: array
                           type: object
+                        expandGroups:
+                          description: |-
+                            ExpandGroups expands group-granted access into rows for active group members.
+                            The value must be true, false, or a template that renders to true or false.
+                          x-kubernetes-preserve-unknown-fields: true
                         facet:
                           description: Facet rendering options for facet-html and
                             facet-pdf formats
@@ -4509,6 +4524,13 @@ spec:
                           x-kubernetes-validations:
                           - message: exactly one of path or git must be set
                             rule: has(self.path) != has(self.git)
+                        filters:
+                          description: |-
+                            Filters are appended to the embedded report settings filters. Explicit
+                            roots remain selected; filters apply to recursive descendants.
+                          items:
+                            type: string
+                          type: array
                         format:
                           description: 'Output format: json, csv, facet-html, facet-pdf,
                             markdown, slack, html, pdf'
@@ -4518,41 +4540,59 @@ spec:
                             (default), "merged", or "config".'
                           type: string
                         recursive:
-                          description: Recursive includes all descendant config items
-                            in the catalog report.
-                          type: boolean
+                          description: |-
+                            Recursive includes all descendant config items in the catalog report.
+                            The value must be true, false, or a template that renders to true or false.
+                            TemplatedBool is needed because actions are decoded before templates run.
+                          x-kubernetes-preserve-unknown-fields: true
                         sections:
                           description: Sections selects which catalog report sections
                             to include.
                           properties:
                             access:
-                              type: boolean
+                              description: Access controls whether RBAC access is
+                                included. The value must be true, false, or a template
+                                that renders to true or false.
+                              x-kubernetes-preserve-unknown-fields: true
                             accessLogs:
-                              type: boolean
+                              description: AccessLogs controls whether access logs
+                                are included. The value must be true, false, or a
+                                template that renders to true or false.
+                              x-kubernetes-preserve-unknown-fields: true
                             changes:
-                              type: boolean
+                              description: Changes controls whether config changes
+                                are included. The value must be true, false, or a
+                                template that renders to true or false.
+                              x-kubernetes-preserve-unknown-fields: true
                             configJSON:
-                              type: boolean
+                              description: ConfigJSON controls whether raw config
+                                JSON is included. The value must be true, false, or
+                                a template that renders to true or false.
+                              x-kubernetes-preserve-unknown-fields: true
                             insights:
-                              type: boolean
+                              description: Insights controls whether config insights
+                                are included. The value must be true, false, or a
+                                template that renders to true or false.
+                              x-kubernetes-preserve-unknown-fields: true
                             relationships:
-                              type: boolean
+                              description: Relationships controls whether config relationships
+                                are included. The value must be true, false, or a
+                                template that renders to true or false.
+                              x-kubernetes-preserve-unknown-fields: true
                             resolvedInsights:
-                              description: |-
-                                ResolvedInsights includes resolved insights that were last observed
-                                within the report window alongside open ones.
-                              type: boolean
-                          required:
-                          - access
-                          - accessLogs
-                          - changes
-                          - configJSON
-                          - insights
-                          - relationships
+                              description: ResolvedInsights controls whether recently
+                                resolved insights are included. The value must be
+                                true, false, or a template that renders to true or
+                                false.
+                              x-kubernetes-preserve-unknown-fields: true
                           type: object
                         since:
                           description: Since is the time range for changes, access
                             logs and resolved insights (e.g. "30d"). Defaults to 30d.
+                          type: string
+                        title:
+                          description: Title overrides the default catalog report
+                            title.
                           type: string
                         variables:
                           additionalProperties:
@@ -5289,6 +5329,7 @@ spec:
                       - code
                       - component
                       - config
+                      - configs
                       - duration
                       - list
                       - people

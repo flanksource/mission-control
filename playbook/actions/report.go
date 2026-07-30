@@ -128,6 +128,12 @@ func (r *Report) runView(ctx context.Context, action v1.ReportAction, format str
 }
 
 func (r *Report) runCatalog(ctx context.Context, action v1.ReportAction, format string) (*ReportResult, error) {
+	opts, err := catalogOptions(action)
+	if err != nil {
+		return nil, err
+	}
+	opts.Progress = func(format string, args ...any) { r.logf(ctx, format, args...) }
+
 	r.logf(ctx, "resolving config items")
 	configs, err := query.FindConfigsByResourceSelector(ctx, -1, *action.Configs)
 	if err != nil {
@@ -136,15 +142,15 @@ func (r *Report) runCatalog(ctx context.Context, action v1.ReportAction, format 
 	if len(configs) == 0 {
 		return nil, fmt.Errorf("no config items matched the selector")
 	}
-	r.logf(ctx, "resolved %d config item(s)", len(configs))
+	r.logf(ctx, "resolved %d root config item(s)", len(configs))
 
-	opts, err := catalogOptions(action)
+	selection, err := catalog.ResolveSelection(ctx, configs, opts.Recursive, opts.Settings.FilterQuery())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to resolve report selection: %w", err)
 	}
-	opts.Progress = func(format string, args ...any) { r.logf(ctx, format, args...) }
+	r.logf(ctx, "selected %d root(s), %d total config item(s)", len(selection.Roots), len(selection.Items))
 
-	data, err := catalog.Build(ctx, configs, opts)
+	data, err := catalog.BuildSelection(ctx, selection, opts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build catalog report: %w", err)
 	}
@@ -203,13 +209,55 @@ func (r *Report) renderCatalogFacet(ctx context.Context, action v1.ReportAction,
 // catalogOptions builds the catalog report options from the action. When no
 // sections are specified, the defaults match a bare `catalog report` run.
 func catalogOptions(action v1.ReportAction) (catalog.Options, error) {
+	if action.GroupBy != "" && action.GroupBy != "none" && action.GroupBy != "merged" && action.GroupBy != "config" {
+		return catalog.Options{}, fmt.Errorf("invalid groupBy %q: expected none, merged, or config", action.GroupBy)
+	}
+	recursive, err := reportBool(action.Recursive, false, "recursive")
+	if err != nil {
+		return catalog.Options{}, err
+	}
+
+	changeArtifacts, err := reportBool(action.ChangeArtifacts, false, "changeArtifacts")
+	if err != nil {
+		return catalog.Options{}, err
+	}
+	expandGroups, err := reportBool(action.ExpandGroups, false, "expandGroups")
+	if err != nil {
+		return catalog.Options{}, err
+	}
+	audit, err := reportBool(action.Audit, false, "audit")
+	if err != nil {
+		return catalog.Options{}, err
+	}
+	settings, settingsSource, err := catalog.ResolveSettings("")
+	if err != nil {
+		return catalog.Options{}, fmt.Errorf("load report settings: %w", err)
+	}
+	for _, filter := range action.Filters {
+		for _, item := range strings.Split(filter, ",") {
+			if item = strings.TrimSpace(item); item != "" {
+				settings.Filters = append(settings.Filters, item)
+			}
+		}
+	}
+
 	opts := catalog.Options{
-		Recursive: action.Recursive,
-		GroupBy:   action.GroupBy,
+		Title:           action.Title,
+		Recursive:       recursive,
+		GroupBy:         action.GroupBy,
+		ChangeArtifacts: changeArtifacts,
+		ExpandGroups:    expandGroups,
+		Audit:           audit,
+		Settings:        settings,
+		SettingsPath:    settingsSource,
 	}
 
 	if action.Sections != nil {
-		opts.Sections = *action.Sections
+		sections, err := reportSections(*action.Sections)
+		if err != nil {
+			return catalog.Options{}, err
+		}
+		opts.Sections = sections
 	} else {
 		opts.Sections = api.CatalogReportSections{
 			Changes:       true,
@@ -228,6 +276,41 @@ func catalogOptions(action v1.ReportAction) (catalog.Options, error) {
 	}
 
 	return opts, nil
+}
+
+func reportSections(sections v1.ReportSections) (api.CatalogReportSections, error) {
+	resolved := api.CatalogReportSections{}
+	fields := []struct {
+		name         string
+		value        v1.TemplatedBool
+		defaultValue bool
+		target       *bool
+	}{
+		{name: "sections.changes", value: sections.Changes, defaultValue: true, target: &resolved.Changes},
+		{name: "sections.insights", value: sections.Insights, defaultValue: true, target: &resolved.Insights},
+		{name: "sections.relationships", value: sections.Relationships, defaultValue: true, target: &resolved.Relationships},
+		{name: "sections.access", value: sections.Access, defaultValue: true, target: &resolved.Access},
+		{name: "sections.accessLogs", value: sections.AccessLogs, target: &resolved.AccessLogs},
+		{name: "sections.configJSON", value: sections.ConfigJSON, target: &resolved.ConfigJSON},
+		{name: "sections.resolvedInsights", value: sections.ResolvedInsights, target: &resolved.ResolvedInsights},
+	}
+
+	for _, field := range fields {
+		value, err := reportBool(field.value, field.defaultValue, field.name)
+		if err != nil {
+			return api.CatalogReportSections{}, err
+		}
+		*field.target = value
+	}
+	return resolved, nil
+}
+
+func reportBool(value v1.TemplatedBool, defaultValue bool, field string) (bool, error) {
+	resolved, err := value.Resolve(defaultValue)
+	if err != nil {
+		return false, fmt.Errorf("%s: %w", field, err)
+	}
+	return resolved, nil
 }
 
 // resolveReportSource resolves the TSX template source directory and entry file.

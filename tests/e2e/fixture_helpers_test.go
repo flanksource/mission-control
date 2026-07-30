@@ -104,7 +104,8 @@ type expectedAction struct {
 }
 
 type expectedArtifact struct {
-	ContentType string `yaml:"content_type" json:"content_type"`
+	ContentType string   `yaml:"content_type" json:"content_type"`
+	Contains    []string `yaml:"contains" json:"contains"`
 }
 
 func loadPlaybookFixture(path string) playbookFixture {
@@ -196,10 +197,19 @@ func compareOutput(expected expectedOutput, run *models.PlaybookRun, actions []m
 
 		if len(ea.Artifacts) > 0 {
 			var dbArtifacts []models.Artifact
-			Expect(DefaultContext.DB().Where("playbook_run_action_id = ?", actual.ID).Find(&dbArtifacts).Error).To(Succeed())
+			Expect(DefaultContext.DB().Where("playbook_run_action_id = ?", actual.ID).Order("created_at, id").Find(&dbArtifacts).Error).To(Succeed())
 			Expect(dbArtifacts).To(HaveLen(len(ea.Artifacts)), "action[%d] artifact count", i)
 			for j, eArt := range ea.Artifacts {
 				Expect(dbArtifacts[j].ContentType).To(Equal(eArt.ContentType), "action[%d] artifact[%d] content_type", i, j)
+			}
+
+			if len(ea.Artifacts) == 1 && len(ea.Artifacts[0].Contains) > 0 {
+				contents, err := artifacts.GetArtifactContents(DefaultContext.WithSubject("admin"), actual.ID.String())
+				Expect(err).NotTo(HaveOccurred(), "action[%d] artifact contents", i)
+				Expect(contents).To(HaveLen(1), "action[%d] expected 1 artifact for content comparison", i)
+				for _, expected := range ea.Artifacts[0].Contains {
+					Expect(string(contents[0].Content)).To(ContainSubstring(expected), "action[%d] artifact content", i)
+				}
 			}
 		}
 

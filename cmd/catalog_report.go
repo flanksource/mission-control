@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/flanksource/clicky"
@@ -11,11 +10,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty"
-	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/shutdown"
-	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
 	"github.com/flanksource/incident-commander/api"
@@ -96,29 +91,16 @@ Examples:
 			return err
 		}
 
-		queryArgs := args
-		if opts.Settings != nil {
-			if fq := opts.Settings.FilterQuery(); fq != "" {
-				queryArgs = make([]string, len(args))
-				for i, a := range args {
-					queryArgs[i] = strings.TrimSpace(a + " " + fq)
-				}
-			}
+		configs, err := resolveConfigs(ctx, args, catalogReportLimit)
+		if err != nil {
+			return err
 		}
-
-		configs, err := resolveConfigs(ctx, queryArgs, catalogReportLimit)
+		selection, err := catalog.ResolveSelection(ctx, configs, catalogReportRecursive, opts.Settings.FilterQuery())
 		if err != nil {
 			return err
 		}
 
-		if catalogReportRecursive {
-			configs, err = expandDescendants(ctx, configs, catalogReportLimit)
-			if err != nil {
-				return err
-			}
-		}
-
-		result, err := catalog.Export(ctx, configs, opts, catalogReportFormat)
+		result, err := catalog.ExportSelection(ctx, selection, opts, catalogReportFormat)
 		if err != nil {
 			shutdown.ShutdownAndExit(1, err.Error())
 			return err
@@ -234,54 +216,4 @@ func init() {
 	CatalogReportCmd.Flags().StringArrayVar(&catalogReportFilters, "filter", nil, "Extra query filter (repeatable, appended to settings.filters)")
 
 	clicky.RegisterSubCommand("catalog", CatalogReportCmd)
-}
-
-// expandDescendants loads every descendant of the given configs via
-// duty's parent-path expansion (lookup_config_children SQL) and returns the
-// union — matched configs first, then descendants in load order — deduped
-// by ID. The limit is applied to the final slice so the caller's cap is
-// respected.
-func expandDescendants(ctx context.Context, configs []models.ConfigItem, limit int) ([]models.ConfigItem, error) {
-	if len(configs) == 0 {
-		return configs, nil
-	}
-
-	seen := make(map[uuid.UUID]bool, len(configs))
-	ids := make([]uuid.UUID, 0, len(configs))
-	for _, c := range configs {
-		if seen[c.ID] {
-			continue
-		}
-		seen[c.ID] = true
-		ids = append(ids, c.ID)
-	}
-
-	expanded, err := query.ExpandConfigChildren(ctx, ids)
-	if err != nil {
-		return nil, fmt.Errorf("failed to expand descendants: %w", err)
-	}
-
-	// Keep the original matched configs at the front to preserve the
-	// existing semantics (report.ConfigItem = configs[0]).
-	out := append([]models.ConfigItem{}, configs...)
-	missing := make([]uuid.UUID, 0, len(expanded))
-	for _, id := range expanded {
-		if seen[id] {
-			continue
-		}
-		seen[id] = true
-		missing = append(missing, id)
-	}
-	if len(missing) > 0 {
-		loaded, err := query.GetConfigsByIDs(ctx, missing)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load descendant configs: %w", err)
-		}
-		out = append(out, loaded...)
-	}
-
-	if limit > 0 && len(out) > limit {
-		out = out[:limit]
-	}
-	return out, nil
 }

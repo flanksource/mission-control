@@ -111,6 +111,11 @@ export interface CatalogReportAudit {
   groups: CatalogReportGroup[];
 }
 
+export interface CatalogReportConfigJSON {
+  configItem: ConfigItem & { permalink?: string };
+  json: string;
+}
+
 export interface CatalogReportData {
   title: string;
   generatedAt: string;
@@ -119,6 +124,8 @@ export interface CatalogReportData {
   to?: string;
   recursive?: boolean;
   groupBy?: string;
+  roots?: Array<ConfigItem & { permalink?: string }>;
+  itemCount?: number;
   categoryMappings?: CatalogReportCategoryMapping[];
   thresholds?: { staleDays?: number; reviewOverdueDays?: number };
   configItem: ConfigItem & {
@@ -145,6 +152,7 @@ export interface CatalogReportData {
   access: CatalogReportAccess[];
   accessLogs: CatalogReportAccessLog[];
   configJSON?: string;
+  configJSONItems?: CatalogReportConfigJSON[];
   configGroups?: CatalogReportConfigGroup[];
   relationshipTree?: CatalogReportTreeNode;
   entries?: CatalogReportEntry[];
@@ -163,6 +171,7 @@ export interface CatalogReportEntry {
   analyses: ConfigAnalysis[];
   access: CatalogReportAccess[];
   accessLogs: CatalogReportAccessLog[];
+  configJSON?: string;
   isRoot?: boolean;
   breadcrumb?: Array<ConfigItem & { permalink?: string }>;
 }

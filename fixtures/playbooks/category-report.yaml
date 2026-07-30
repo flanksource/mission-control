@@ -1,0 +1,126 @@
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: category-report
+spec:
+  title: Category Report
+  category: Reporting
+  description: >-
+    Generates a catalog report for one or more root config items and uploads it
+    as an artifact.
+  parameters:
+    - name: configs
+      label: Root configs
+      description: Select one or more root config items
+      type: configs
+      required: true
+    - name: format
+      label: Format
+      type: list
+      default: pdf
+      properties:
+        options:
+          - label: HTML
+            value: html
+          - label: PDF
+            value: pdf
+          - label: JSON
+            value: json
+    - name: title
+      label: Report title
+      type: text
+      default: Catalog Report
+    - name: since
+      label: Time period
+      description: 'Time range for changes and access logs (e.g. 7d, 30d, 90d)'
+      type: text
+      default: 30d
+    - name: recursive
+      label: Include all descendant config items
+      type: checkbox
+      default: "false"
+    - name: groupBy
+      label: Group descendant data
+      type: list
+      default: none
+      properties:
+        options:
+          - label: None
+            value: none
+          - label: Merged
+            value: merged
+          - label: Per config
+            value: config
+    - name: changes
+      label: Include config changes
+      type: checkbox
+      default: "true"
+    - name: insights
+      label: Include config insights
+      type: checkbox
+      default: "true"
+    - name: resolvedInsights
+      label: Include recently resolved insights
+      type: checkbox
+      default: "false"
+    - name: relationships
+      label: Include relationships
+      type: checkbox
+      default: "true"
+    - name: access
+      label: Include RBAC access
+      type: checkbox
+      default: "true"
+    - name: accessLogs
+      label: Include access logs
+      type: checkbox
+      default: "false"
+    - name: configJSON
+      label: Include raw config JSON
+      type: checkbox
+      default: "false"
+    - name: changeArtifacts
+      label: Include change artifacts
+      type: checkbox
+      default: "false"
+    - name: expandGroups
+      label: Expand group access into members
+      type: checkbox
+      default: "false"
+    - name: audit
+      label: Include audit details
+      type: checkbox
+      default: "false"
+    - name: filters
+      label: Additional descendant filters
+      description: Comma-separated filters appended to the default report filters
+      type: text
+      default: ""
+  actions:
+    - name: Generate Report
+      report:
+        configs:
+          id: '$(.params.configs | idsFromMap)'
+        title: '{{ .params.title }}'
+        format: '{{ .params.format }}'
+        since: '{{ .params.since }}'
+        recursive: '{{ .params.recursive }}'
+        groupBy: '{{ .params.groupBy }}'
+        changeArtifacts: '{{ .params.changeArtifacts }}'
+        expandGroups: '{{ .params.expandGroups }}'
+        audit: '{{ .params.audit }}'
+        filters:
+          - '{{ .params.filters | default "" }}'
+        file:
+          path: report/CatalogReport.tsx
+        facet:
+          connection: mission-control/facet
+        sections:
+          changes: '{{ .params.changes }}'
+          insights: '{{ .params.insights }}'
+          resolvedInsights: '{{ .params.resolvedInsights }}'
+          relationships: '{{ .params.relationships }}'
+          access: '{{ .params.access }}'
+          accessLogs: '{{ .params.accessLogs }}'
+          configJSON: '{{ .params.configJSON }}'

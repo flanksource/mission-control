@@ -1,0 +1,673 @@
+{
+  "title": "Repository Security Report",
+  "generatedAt": "2024-02-01T12:00:00Z",
+  "publicURL": "https://mission-control.example.com",
+  "from": "2024-01-01T00:00:00Z",
+  "sections": {
+    "changes": false,
+    "insights": true,
+    "relationships": false,
+    "access": true,
+    "accessLogs": false,
+    "configJSON": false
+  },
+  "groupBy": "none",
+  "entries": [
+    {
+      "configItem": {
+        "id": "10000000-0000-4000-8000-000000000001",
+        "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+        "name": "example-org/sample-service",
+        "type": "GitHub::Repository",
+        "configClass": "Repository",
+        "health": "healthy",
+        "description": "No security alerts",
+        "labels": {
+          "owner": "example-org",
+          "repo": "sample-service"
+        },
+        "tags": {
+          "owner": "example-org",
+          "repo": "sample-service"
+        },
+        "properties": [
+          {
+            "type": "url",
+            "name": "URL",
+            "text": "https://github.com/example-org/sample-service",
+            "links": [
+              {
+                "type": "url",
+                "url": "https://github.com/example-org/sample-service"
+              }
+            ]
+          },
+          {
+            "type": "badge",
+            "name": "Forked",
+            "text": "false"
+          },
+          {
+            "type": "badge",
+            "name": "Archived",
+            "text": "false"
+          },
+          {
+            "type": "number",
+            "name": "Critical Alerts",
+            "text": "0"
+          },
+          {
+            "type": "number",
+            "name": "High Alerts",
+            "text": "0"
+          },
+          {
+            "type": "number",
+            "name": "Medium Alerts",
+            "text": "0"
+          },
+          {
+            "type": "number",
+            "name": "Low Alerts",
+            "text": "0"
+          }
+        ],
+        "createdAt": "2024-01-01T00:00:00Z",
+        "updatedAt": "2024-02-01T12:00:00Z"
+      },
+      "changeCount": 0,
+      "insightCount": 0,
+      "accessCount": 10,
+      "rbacResources": [
+        {
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
+          "configType": "GitHub::Repository",
+          "configClass": "Repository",
+          "health": "healthy",
+          "tags": {
+            "owner": "example-org",
+            "repo": "sample-service"
+          },
+          "labels": {
+            "owner": "example-org",
+            "repo": "sample-service"
+          },
+          "users": [
+            {
+              "userId": "10000000-0000-4000-8000-000000000002",
+              "userName": "sample-user-01",
+              "email": "",
+              "role": "maintain",
+              "roleExternalIds": [
+                "github://repository-role/example-org/maintain"
+              ],
+              "roleSource": "direct",
+              "sourceSystem": "GitHub::User",
+              "createdAt": "2024-01-01T00:00:00Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "10000000-0000-4000-8000-000000000003",
+              "userName": "sample-user-02",
+              "email": "",
+              "role": "admin",
+              "roleExternalIds": [
+                "github://repository-role/example-org/admin"
+              ],
+              "roleSource": "direct",
+              "sourceSystem": "GitHub::User",
+              "createdAt": "2024-01-01T00:00:00Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "10000000-0000-4000-8000-000000000004",
+              "userName": "sample-user-03",
+              "email": "",
+              "role": "read",
+              "roleExternalIds": [
+                "github://repository-role/example-org/read"
+              ],
+              "roleSource": "direct",
+              "sourceSystem": "GitHub::User",
+              "createdAt": "2024-01-01T00:00:00Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "00000000-0000-0000-0000-000000000000",
+              "userName": "sample-group-04",
+              "email": "",
+              "role": "read",
+              "roleExternalIds": [
+                "github://repository-role/example-org/read"
+              ],
+              "roleSource": "group:sample-group",
+              "sourceSystem": "group",
+              "createdAt": "2024-01-01T00:00:00Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "10000000-0000-4000-8000-000000000005",
+              "userName": "sample-user-05",
+              "email": "",
+              "role": "write",
+              "roleExternalIds": [
+                "github://repository-role/example-org/write"
+              ],
+              "roleSource": "direct",
+              "sourceSystem": "GitHub::User",
+              "createdAt": "2024-01-01T00:00:00Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "10000000-0000-4000-8000-000000000006",
+              "userName": "sample-user-06",
+              "email": "",
+              "role": "read",
+              "roleExternalIds": [
+                "github://repository-role/example-org/read"
+              ],
+              "roleSource": "direct",
+              "sourceSystem": "GitHub::User",
+              "createdAt": "2024-01-01T00:00:00Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "10000000-0000-4000-8000-000000000007",
+              "userName": "sample-user-07",
+              "email": "",
+              "role": "read",
+              "roleExternalIds": [
+                "github://repository-role/example-org/read"
+              ],
+              "roleSource": "direct",
+              "sourceSystem": "GitHub::User",
+              "createdAt": "2024-01-01T00:00:00Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "10000000-0000-4000-8000-000000000008",
+              "userName": "sample-user-08",
+              "email": "",
+              "role": "admin",
+              "roleExternalIds": [
+                "github://repository-role/example-org/admin"
+              ],
+              "roleSource": "direct",
+              "sourceSystem": "GitHub::User",
+              "createdAt": "2024-01-01T00:00:00Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "00000000-0000-0000-0000-000000000000",
+              "userName": "sample-group-04",
+              "email": "",
+              "role": "maintain",
+              "roleExternalIds": [
+                "github://repository-role/example-org/maintain"
+              ],
+              "roleSource": "group:sample-group",
+              "sourceSystem": "group",
+              "createdAt": "2024-01-01T00:00:00Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            },
+            {
+              "userId": "10000000-0000-4000-8000-000000000009",
+              "userName": "sample-user-09",
+              "email": "",
+              "role": "admin",
+              "roleExternalIds": [
+                "github://repository-role/example-org/admin"
+              ],
+              "roleSource": "direct",
+              "sourceSystem": "GitHub::User",
+              "createdAt": "2024-01-01T00:00:00Z",
+              "isStale": false,
+              "isReviewOverdue": false
+            }
+          ],
+          "changelog": null
+        }
+      ],
+      "access": [
+        {
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
+          "configType": "GitHub::Repository",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "10000000-0000-4000-8000-000000000002",
+          "userName": "sample-user-01",
+          "email": "",
+          "role": "maintain",
+          "roleExternalIds": [
+            "github://repository-role/example-org/maintain"
+          ],
+          "userType": "GitHub::User",
+          "createdAt": "2024-01-01T00:00:00Z"
+        },
+        {
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
+          "configType": "GitHub::Repository",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "10000000-0000-4000-8000-000000000003",
+          "userName": "sample-user-02",
+          "email": "",
+          "role": "admin",
+          "roleExternalIds": [
+            "github://repository-role/example-org/admin"
+          ],
+          "userType": "GitHub::User",
+          "createdAt": "2024-01-01T00:00:00Z"
+        },
+        {
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
+          "configType": "GitHub::Repository",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "10000000-0000-4000-8000-000000000004",
+          "userName": "sample-user-03",
+          "email": "",
+          "role": "read",
+          "roleExternalIds": [
+            "github://repository-role/example-org/read"
+          ],
+          "userType": "GitHub::User",
+          "createdAt": "2024-01-01T00:00:00Z"
+        },
+        {
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
+          "configType": "GitHub::Repository",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "00000000-0000-0000-0000-000000000000",
+          "userName": "sample-group-04",
+          "email": "",
+          "role": "read",
+          "roleExternalIds": [
+            "github://repository-role/example-org/read"
+          ],
+          "userType": "group",
+          "createdAt": "2024-01-01T00:00:00Z"
+        },
+        {
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
+          "configType": "GitHub::Repository",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "10000000-0000-4000-8000-000000000005",
+          "userName": "sample-user-05",
+          "email": "",
+          "role": "write",
+          "roleExternalIds": [
+            "github://repository-role/example-org/write"
+          ],
+          "userType": "GitHub::User",
+          "createdAt": "2024-01-01T00:00:00Z"
+        },
+        {
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
+          "configType": "GitHub::Repository",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "10000000-0000-4000-8000-000000000006",
+          "userName": "sample-user-06",
+          "email": "",
+          "role": "read",
+          "roleExternalIds": [
+            "github://repository-role/example-org/read"
+          ],
+          "userType": "GitHub::User",
+          "createdAt": "2024-01-01T00:00:00Z"
+        },
+        {
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
+          "configType": "GitHub::Repository",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "10000000-0000-4000-8000-000000000007",
+          "userName": "sample-user-07",
+          "email": "",
+          "role": "read",
+          "roleExternalIds": [
+            "github://repository-role/example-org/read"
+          ],
+          "userType": "GitHub::User",
+          "createdAt": "2024-01-01T00:00:00Z"
+        },
+        {
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
+          "configType": "GitHub::Repository",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "10000000-0000-4000-8000-000000000008",
+          "userName": "sample-user-08",
+          "email": "",
+          "role": "admin",
+          "roleExternalIds": [
+            "github://repository-role/example-org/admin"
+          ],
+          "userType": "GitHub::User",
+          "createdAt": "2024-01-01T00:00:00Z"
+        },
+        {
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
+          "configType": "GitHub::Repository",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "00000000-0000-0000-0000-000000000000",
+          "userName": "sample-group-04",
+          "email": "",
+          "role": "maintain",
+          "roleExternalIds": [
+            "github://repository-role/example-org/maintain"
+          ],
+          "userType": "group",
+          "createdAt": "2024-01-01T00:00:00Z"
+        },
+        {
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
+          "configType": "GitHub::Repository",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "10000000-0000-4000-8000-000000000009",
+          "userName": "sample-user-09",
+          "email": "",
+          "role": "admin",
+          "roleExternalIds": [
+            "github://repository-role/example-org/admin"
+          ],
+          "userType": "GitHub::User",
+          "createdAt": "2024-01-01T00:00:00Z"
+        }
+      ]
+    }
+  ],
+  "categoryMappings": [
+    {
+      "category": "rbac.granted",
+      "filter": "changeType == \"PermissionGranted\" || changeType == \"PermissionAdded\" || changeType == \"IAMRoleAdded\""
+    },
+    {
+      "category": "rbac.revoked",
+      "filter": "changeType == \"PermissionRevoked\" || changeType == \"PermissionRemoved\" || changeType == \"IAMRoleRemoved\""
+    },
+    {
+      "category": "backup.success",
+      "filter": "changeType == \"BackupCompleted\" || changeType == \"BackupSuccessful\" || (changeType == \"BACKUP_DB\" && severity == \"low\") || ((\"kind\" in details && details[\"kind\"] == \"Backup/v1\") && (\"status\" in details && (details[\"status\"] == \"success\" || details[\"status\"] == \"successful\" || details[\"status\"] == \"completed\")))"
+    },
+    {
+      "category": "backup.failed",
+      "filter": "changeType == \"BackupFailed\" || (changeType == \"BACKUP_DB\" && severity == \"high\") || ((\"kind\" in details && details[\"kind\"] == \"Backup/v1\") && (\"status\" in details && (details[\"status\"] == \"failed\" || details[\"status\"] == \"error\")))"
+    },
+    {
+      "category": "backup.success",
+      "filter": "changeType == \"BACKUP_DB\" && severity != \"high\""
+    },
+    {
+      "category": "backup.progress",
+      "filter": "changeType == \"BackupStarted\" || changeType == \"BackupRunning\" || changeType == \"BackupEnqueued\" || ((\"kind\" in details && details[\"kind\"] == \"Backup/v1\") && (\"status\" in details && (details[\"status\"] == \"started\" || details[\"status\"] == \"running\" || details[\"status\"] == \"enqueued\" || details[\"status\"] == \"progress\")))"
+    },
+    {
+      "category": "backup.restore",
+      "filter": "changeType == \"BackupRestored\" || changeType == \"RestoreCompleted\" || ((\"kind\" in details && details[\"kind\"] == \"Backup/v1\") && (\"status\" in details && (details[\"status\"] == \"restored\" || details[\"status\"] == \"restore_completed\")))"
+    },
+    {
+      "category": "deployment.spec",
+      "filter": "changeType == \"diff\" || (\"kind\" in details && details[\"kind\"] == \"Deployment/v1\")"
+    },
+    {
+      "category": "deployment.success",
+      "filter": "changeType == \"CodeDeployment\" && severity == \"info\""
+    },
+    {
+      "category": "deployment.failed",
+      "filter": "changeType == \"CodeDeployment\" && severity != \"info\""
+    },
+    {
+      "category": "deployment.scale",
+      "filter": "changeType == \"ScalingReplicaSet\" || (\"kind\" in details && details[\"kind\"] == \"Scaling/v1\")"
+    },
+    {
+      "category": "deployment.policy",
+      "filter": "changeType == \"PolicyUpdate\""
+    }
+  ],
+  "thresholds": {
+    "staleDays": 0,
+    "reviewOverdueDays": 0
+  },
+  "configItem": {
+    "id": "10000000-0000-4000-8000-000000000001",
+    "scraper_id": "10000000-0000-4000-8000-000000000010",
+    "agent_id": "00000000-0000-0000-0000-000000000000",
+    "config_class": "Repository",
+    "external_id": [
+      "github/example-org/sample-service"
+    ],
+    "type": "GitHub::Repository",
+    "status": null,
+    "ready": true,
+    "health": "healthy",
+    "name": "example-org/sample-service",
+    "description": "No security alerts",
+    "source": "",
+    "labels": {
+      "owner": "example-org",
+      "repo": "sample-service"
+    },
+    "tags": {
+      "owner": "example-org",
+      "repo": "sample-service"
+    },
+    "properties": [
+      {
+        "type": "url",
+        "name": "URL",
+        "text": "https://github.com/example-org/sample-service",
+        "links": [
+          {
+            "type": "url",
+            "url": "https://github.com/example-org/sample-service"
+          }
+        ]
+      },
+      {
+        "type": "badge",
+        "name": "Forked",
+        "text": "false"
+      },
+      {
+        "type": "badge",
+        "name": "Archived",
+        "text": "false"
+      },
+      {
+        "type": "number",
+        "name": "Critical Alerts",
+        "text": "0"
+      },
+      {
+        "type": "number",
+        "name": "High Alerts",
+        "text": "0"
+      },
+      {
+        "type": "number",
+        "name": "Medium Alerts",
+        "text": "0"
+      },
+      {
+        "type": "number",
+        "name": "Low Alerts",
+        "text": "0"
+      }
+    ],
+    "created_at": "2024-01-01T00:00:00Z",
+    "inserted_at": "2024-01-15T00:00:00Z",
+    "updated_at": "2024-02-01T12:00:00Z"
+  },
+  "parents": null,
+  "access": [
+    {
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
+      "configType": "GitHub::Repository",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "10000000-0000-4000-8000-000000000002",
+      "userName": "sample-user-01",
+      "email": "",
+      "role": "maintain",
+      "roleExternalIds": [
+        "github://repository-role/example-org/maintain"
+      ],
+      "userType": "GitHub::User",
+      "createdAt": "2024-01-01T00:00:00Z"
+    },
+    {
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
+      "configType": "GitHub::Repository",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "10000000-0000-4000-8000-000000000003",
+      "userName": "sample-user-02",
+      "email": "",
+      "role": "admin",
+      "roleExternalIds": [
+        "github://repository-role/example-org/admin"
+      ],
+      "userType": "GitHub::User",
+      "createdAt": "2024-01-01T00:00:00Z"
+    },
+    {
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
+      "configType": "GitHub::Repository",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "10000000-0000-4000-8000-000000000004",
+      "userName": "sample-user-03",
+      "email": "",
+      "role": "read",
+      "roleExternalIds": [
+        "github://repository-role/example-org/read"
+      ],
+      "userType": "GitHub::User",
+      "createdAt": "2024-01-01T00:00:00Z"
+    },
+    {
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
+      "configType": "GitHub::Repository",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "00000000-0000-0000-0000-000000000000",
+      "userName": "sample-group-04",
+      "email": "",
+      "role": "read",
+      "roleExternalIds": [
+        "github://repository-role/example-org/read"
+      ],
+      "userType": "group",
+      "createdAt": "2024-01-01T00:00:00Z"
+    },
+    {
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
+      "configType": "GitHub::Repository",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "10000000-0000-4000-8000-000000000005",
+      "userName": "sample-user-05",
+      "email": "",
+      "role": "write",
+      "roleExternalIds": [
+        "github://repository-role/example-org/write"
+      ],
+      "userType": "GitHub::User",
+      "createdAt": "2024-01-01T00:00:00Z"
+    },
+    {
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
+      "configType": "GitHub::Repository",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "10000000-0000-4000-8000-000000000006",
+      "userName": "sample-user-06",
+      "email": "",
+      "role": "read",
+      "roleExternalIds": [
+        "github://repository-role/example-org/read"
+      ],
+      "userType": "GitHub::User",
+      "createdAt": "2024-01-01T00:00:00Z"
+    },
+    {
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
+      "configType": "GitHub::Repository",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "10000000-0000-4000-8000-000000000007",
+      "userName": "sample-user-07",
+      "email": "",
+      "role": "read",
+      "roleExternalIds": [
+        "github://repository-role/example-org/read"
+      ],
+      "userType": "GitHub::User",
+      "createdAt": "2024-01-01T00:00:00Z"
+    },
+    {
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
+      "configType": "GitHub::Repository",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "10000000-0000-4000-8000-000000000008",
+      "userName": "sample-user-08",
+      "email": "",
+      "role": "admin",
+      "roleExternalIds": [
+        "github://repository-role/example-org/admin"
+      ],
+      "userType": "GitHub::User",
+      "createdAt": "2024-01-01T00:00:00Z"
+    },
+    {
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
+      "configType": "GitHub::Repository",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "00000000-0000-0000-0000-000000000000",
+      "userName": "sample-group-04",
+      "email": "",
+      "role": "maintain",
+      "roleExternalIds": [
+        "github://repository-role/example-org/maintain"
+      ],
+      "userType": "group",
+      "createdAt": "2024-01-01T00:00:00Z"
+    },
+    {
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
+      "configType": "GitHub::Repository",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "10000000-0000-4000-8000-000000000009",
+      "userName": "sample-user-09",
+      "email": "",
+      "role": "admin",
+      "roleExternalIds": [
+        "github://repository-role/example-org/admin"
+      ],
+      "userType": "GitHub::User",
+      "createdAt": "2024-01-01T00:00:00Z"
+    }
+  ]
+}

@@ -48,6 +48,7 @@ type CatalogReportRequest struct {
 	Filters           []string `json:"filters"`
 	Changes           *bool    `json:"changes"`
 	Insights          *bool    `json:"insights"`
+	ResolvedInsights  *bool    `json:"resolvedInsights"`
 	Relationships     *bool    `json:"relationships"`
 	Access            *bool    `json:"access"`
 	AccessLogs        *bool    `json:"accessLogs"`
@@ -94,7 +95,7 @@ func GenerateCatalogReport(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context().(context.Context)
-	configs, err := resolveCatalogReportConfigs(ctx, req, false)
+	roots, err := resolveCatalogReportRoots(ctx, req)
 	if err != nil {
 		return api.WriteError(c, err)
 	}
@@ -103,9 +104,12 @@ func GenerateCatalogReport(c echo.Context) error {
 	if err != nil {
 		return api.WriteError(c, err)
 	}
-	opts.IncludedConfigIDs = includedConfigIDSet(configs)
+	selection, opts, err := resolveCatalogReportSelection(ctx, req, roots, opts)
+	if err != nil {
+		return api.WriteError(c, err)
+	}
 
-	result, err := reportCatalog.Export(ctx, configs, opts, format)
+	result, err := reportCatalog.ExportSelection(ctx, selection, opts, format)
 	if err != nil {
 		return api.WriteError(c, ctx.Oops().Wrapf(err, "failed to render catalog report"))
 	}
@@ -113,6 +117,33 @@ func GenerateCatalogReport(c echo.Context) error {
 	filename := catalogReportFilename(req.Title, extension)
 	c.Response().Header().Set(echo.HeaderContentDisposition, mime.FormatMediaType("attachment", map[string]string{"filename": filename}))
 	return c.Blob(http.StatusOK, contentType, result.Data)
+}
+
+func resolveCatalogReportSelection(ctx context.Context, req CatalogReportRequest, roots []models.ConfigItem, opts reportCatalog.Options) (reportCatalog.Selection, reportCatalog.Options, error) {
+	recursiveRoots := make(map[uuid.UUID]bool, len(roots))
+	if opts.Recursive {
+		for _, root := range roots {
+			recursiveRoots[root.ID] = true
+		}
+	} else {
+		for _, requested := range req.Roots {
+			if !requested.IncludeChildren {
+				continue
+			}
+			id, err := uuid.Parse(requested.ID)
+			if err != nil {
+				return reportCatalog.Selection{}, opts, api.Errorf(api.EINVALID, "invalid root config id: %s", requested.ID)
+			}
+			recursiveRoots[id] = true
+		}
+		opts.Recursive = len(recursiveRoots) > 0
+	}
+
+	selection, err := reportCatalog.ResolveSelectionRoots(ctx, roots, recursiveRoots, opts.Settings.FilterQuery())
+	if err != nil {
+		return reportCatalog.Selection{}, opts, ctx.Oops().Wrapf(err, "failed to resolve catalog report selection")
+	}
+	return selection, opts, nil
 }
 
 func catalogReportOptionsFromRequest(req CatalogReportRequest) (reportCatalog.Options, error) {
@@ -145,12 +176,13 @@ func catalogReportOptionsFromRequest(req CatalogReportRequest) (reportCatalog.Op
 		Settings:         settings,
 		SettingsPath:     settingsSource,
 		Sections: reportAPI.CatalogReportSections{
-			Changes:       boolOrDefault(req.Changes, true),
-			Insights:      boolOrDefault(req.Insights, true),
-			Relationships: boolOrDefault(req.Relationships, true),
-			Access:        boolOrDefault(req.Access, true),
-			AccessLogs:    boolOrDefault(req.AccessLogs, false),
-			ConfigJSON:    boolOrDefault(req.ConfigJSON, false),
+			Changes:          boolOrDefault(req.Changes, true),
+			Insights:         boolOrDefault(req.Insights, true),
+			ResolvedInsights: boolOrDefault(req.ResolvedInsights, false),
+			Relationships:    boolOrDefault(req.Relationships, true),
+			Access:           boolOrDefault(req.Access, true),
+			AccessLogs:       boolOrDefault(req.AccessLogs, false),
+			ConfigJSON:       boolOrDefault(req.ConfigJSON, false),
 		},
 	}
 
@@ -170,6 +202,43 @@ func boolOrDefault(value *bool, fallback bool) bool {
 		return fallback
 	}
 	return *value
+}
+
+func resolveCatalogReportRoots(ctx context.Context, req CatalogReportRequest) ([]models.ConfigItem, error) {
+	ids := make([]uuid.UUID, 0, len(req.SelectedIDs)+len(req.Roots))
+	seen := map[uuid.UUID]bool{}
+	add := func(raw string) error {
+		id, err := uuid.Parse(raw)
+		if err != nil {
+			return api.Errorf(api.EINVALID, "invalid selected config id: %s", raw)
+		}
+		if !seen[id] {
+			seen[id] = true
+			ids = append(ids, id)
+		}
+		return nil
+	}
+	for _, raw := range req.SelectedIDs {
+		if err := add(raw); err != nil {
+			return nil, err
+		}
+	}
+	for _, root := range req.Roots {
+		if err := add(root.ID); err != nil {
+			return nil, err
+		}
+	}
+	if len(ids) == 0 {
+		return nil, api.Errorf(api.EINVALID, "select at least one config item")
+	}
+	configs, err := getExistingCatalogReportConfigs(ctx, ids)
+	if err != nil {
+		return nil, ctx.Oops().Wrap(err)
+	}
+	if len(configs) == 0 {
+		return nil, api.Errorf(api.EINVALID, "select at least one config item")
+	}
+	return configs, nil
 }
 
 func resolveCatalogReportConfigs(ctx context.Context, req CatalogReportRequest, allowEmpty bool) ([]models.ConfigItem, error) {
@@ -261,14 +330,6 @@ func getExistingCatalogReportConfigs(ctx context.Context, ids []uuid.UUID) ([]mo
 		configs = append(configs, config)
 	}
 	return configs, nil
-}
-
-func includedConfigIDSet(configs []models.ConfigItem) map[uuid.UUID]bool {
-	ids := make(map[uuid.UUID]bool, len(configs))
-	for _, config := range configs {
-		ids[config.ID] = true
-	}
-	return ids
 }
 
 func buildConfigForest(configs []models.ConfigItem) []*query.ConfigTreeNode {

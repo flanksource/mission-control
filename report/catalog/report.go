@@ -20,17 +20,18 @@ import (
 )
 
 type Options struct {
-	Title             string
-	Since             time.Duration
-	Sections          api.CatalogReportSections
-	Recursive         bool
-	GroupBy           string // "none" (default), "merged", or "config"
-	ChangeArtifacts   bool
-	Audit             bool
-	ExpandGroups      bool
-	Settings          *Settings
-	SettingsPath      string
-	IncludedConfigIDs map[uuid.UUID]bool
+	Title                   string
+	Since                   time.Duration
+	Sections                api.CatalogReportSections
+	Recursive               bool
+	GroupBy                 string // "none" (default), "merged", or "config"
+	ChangeArtifacts         bool
+	Audit                   bool
+	ExpandGroups            bool
+	Settings                *Settings
+	SettingsPath            string
+	IncludedConfigIDs       map[uuid.UUID]bool
+	IncludedConfigIDsByRoot map[uuid.UUID]map[uuid.UUID]bool
 
 	// Limit caps the number of config items (including recursive descendants)
 	// included in the report. 0 = unlimited.
@@ -125,15 +126,23 @@ func BuildReport(ctx context.Context, configs []models.ConfigItem, opts Options)
 		return nil, nil, fmt.Errorf("failed to initialize change mappings: %w", err)
 	}
 
+	configItem := configs[0]
+	if !opts.Sections.ConfigJSON {
+		configItem.Config = nil
+	}
 	report := &api.CatalogReport{
 		Title:       opts.Title,
 		GeneratedAt: time.Now(),
 		PublicURL:   api.FrontendURL,
 		From:        sinceTime.Format(time.RFC3339),
-		ConfigItem:  configs[0],
+		ConfigItem:  configItem,
 		Sections:    opts.Sections,
 		Recursive:   opts.Recursive,
 		GroupBy:     opts.GroupBy,
+		ItemCount:   len(configs),
+	}
+	for _, config := range configs {
+		report.Roots = append(report.Roots, api.NewCatalogReportConfigItem(config))
 	}
 
 	report.Parents = resolveParents(ctx, &configs[0])
@@ -231,6 +240,9 @@ func buildEntryWithMapper(ctx context.Context, config *models.ConfigItem, opts O
 	entry := &api.CatalogReportEntry{
 		ConfigItem: api.NewCatalogReportConfigItem(*config),
 	}
+	if opts.Sections.ConfigJSON && config.Config != nil {
+		entry.ConfigJSON = config.Config
+	}
 
 	parents := resolveParents(ctx, config)
 	entry.Parents = lo.Map(parents, func(p models.ConfigItem, _ int) api.CatalogReportConfigItem {
@@ -247,9 +259,13 @@ func buildEntryWithMapper(ctx context.Context, config *models.ConfigItem, opts O
 		}
 
 		targetIDs = tree.OutgoingIDs()
-		if len(opts.IncludedConfigIDs) > 0 {
+		included := opts.IncludedConfigIDs
+		if byRoot := opts.IncludedConfigIDsByRoot[config.ID]; len(byRoot) > 0 {
+			included = byRoot
+		}
+		if len(included) > 0 {
 			targetIDs = lo.Filter(targetIDs, func(id uuid.UUID, _ int) bool {
-				return opts.IncludedConfigIDs[id]
+				return included[id]
 			})
 		}
 	} else if opts.Sections.Relationships {
@@ -378,7 +394,11 @@ func buildEntryWithMapper(ctx context.Context, config *models.ConfigItem, opts O
 	}
 
 	if opts.Sections.Relationships && tree != nil {
-		entry.RelationshipTree = configTreeNodeToReport(tree, opts.IncludedConfigIDs)
+		included := opts.IncludedConfigIDs
+		if byRoot := opts.IncludedConfigIDsByRoot[config.ID]; len(byRoot) > 0 {
+			included = byRoot
+		}
+		entry.RelationshipTree = configTreeNodeToReport(tree, included)
 	}
 
 	return entry, scraperIDs, nil
