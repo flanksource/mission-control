@@ -25,9 +25,10 @@ function CatalogCoverPage({ data }: { data: CatalogReportData }) {
   const roots = data.roots?.length ? data.roots : [ci];
   const shownRoots = roots.slice(0, 10);
   const entries = data.entries || [];
-  const changes = data.groupBy === 'config' ? entries.flatMap((entry) => entry.changes || []) : (data.changes || []);
-  const analyses = data.groupBy === 'config' ? entries.flatMap((entry) => entry.analyses || []) : (data.analyses || []);
-  const accessLogs = data.groupBy === 'config' ? entries.flatMap((entry) => entry.accessLogs || []) : (data.accessLogs || []);
+  const groupedEntries = entries.length ? entries : (data.configGroups || []);
+  const changes = data.groupBy === 'config' ? groupedEntries.flatMap((entry) => entry.changes || []) : (data.changes || []);
+  const analyses = data.groupBy === 'config' ? groupedEntries.flatMap((entry) => entry.analyses || []) : (data.analyses || []);
+  const accessLogs = data.groupBy === 'config' ? groupedEntries.flatMap((entry) => entry.accessLogs || []) : (data.accessLogs || []);
   const stats: Array<{ label: string; value: number }> = [];
   if (roots.length > 1) stats.push({ label: 'root configs', value: roots.length });
   if ((data.itemCount || 0) > roots.length) stats.push({ label: 'config items', value: data.itemCount || 0 });

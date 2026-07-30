@@ -77,8 +77,8 @@ func Build(ctx context.Context, configs []models.ConfigItem, opts Options) (api.
 }
 
 // BuildSelection builds a report from explicit roots and their owned items.
-// Merged modes aggregate each item under one root; config mode emits one entry
-// per item without recursive overlap.
+// Recursive selections emit one entry per selected item without querying any
+// descendant more than once.
 func BuildSelection(ctx context.Context, selection Selection, opts Options) (api.CatalogReport, error) {
 	opts = opts.WithDefaults()
 	buildOpts := opts
@@ -88,10 +88,8 @@ func BuildSelection(ctx context.Context, selection Selection, opts Options) (api
 		buildOpts.Recursive = false
 		buildOpts.IncludedConfigIDs = configIDSet(selection.Items)
 	} else if opts.Recursive {
-		buildOpts.IncludedConfigIDsByRoot = make(map[uuid.UUID]map[uuid.UUID]bool, len(selection.ItemsByRoot))
-		for rootID, items := range selection.ItemsByRoot {
-			buildOpts.IncludedConfigIDsByRoot[rootID] = configIDSet(items)
-		}
+		configs = selection.Items
+		buildOpts.Recursive = false
 	}
 
 	r, err := buildCatalogData(ctx, configs, selection.Items, buildOpts)

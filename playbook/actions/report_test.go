@@ -52,9 +52,13 @@ var _ = ginkgo.Describe("Report action catalog options", func() {
 			Audit:           v1.TemplatedBool(`true`),
 			Filters:         []string{"type=Kubernetes::Pod", "health=unhealthy,status=warning"},
 			Sections: &v1.ReportSections{
-				Changes:       v1.TemplatedBool(`true`),
-				Insights:      v1.TemplatedBool(`false`),
-				Relationships: v1.TemplatedBool(`true`),
+				Changes:          v1.TemplatedBool(`true`),
+				Insights:         v1.TemplatedBool(`false`),
+				Relationships:    v1.TemplatedBool(`true`),
+				Access:           v1.TemplatedBool(`false`),
+				AccessLogs:       v1.TemplatedBool(`true`),
+				ConfigJSON:       v1.TemplatedBool(`true`),
+				ResolvedInsights: v1.TemplatedBool(`false`),
 			},
 		}
 
@@ -70,20 +74,52 @@ var _ = ginkgo.Describe("Report action catalog options", func() {
 		Expect(opts.Sections.Changes).To(BeTrue())
 		Expect(opts.Sections.Insights).To(BeFalse())
 		Expect(opts.Sections.Relationships).To(BeTrue())
+		Expect(opts.Sections.Access).To(BeFalse())
+		Expect(opts.Sections.AccessLogs).To(BeTrue())
+		Expect(opts.Sections.ConfigJSON).To(BeTrue())
+		Expect(opts.Sections.ResolvedInsights).To(BeFalse())
+	})
+
+	ginkgo.It("uses section defaults for omitted values", func() {
+		opts, err := catalogOptions(v1.ReportAction{Sections: &v1.ReportSections{}})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(opts.Sections.Changes).To(BeTrue())
+		Expect(opts.Sections.Insights).To(BeTrue())
+		Expect(opts.Sections.Relationships).To(BeTrue())
+		Expect(opts.Sections.Access).To(BeTrue())
+		Expect(opts.Sections.AccessLogs).To(BeFalse())
+		Expect(opts.Sections.ConfigJSON).To(BeFalse())
+		Expect(opts.Sections.ResolvedInsights).To(BeFalse())
 	})
 
 	ginkgo.It("templates recursive and section booleans", func() {
 		action := v1.ReportAction{
-			Recursive: v1.TemplatedBool(`"{{ .params.recursive }}"`),
+			Recursive:       v1.TemplatedBool(`"{{ .params.recursive }}"`),
+			ChangeArtifacts: v1.TemplatedBool(`"{{ .params.changeArtifacts }}"`),
+			ExpandGroups:    v1.TemplatedBool(`"{{ .params.expandGroups }}"`),
+			Audit:           v1.TemplatedBool(`"{{ .params.audit }}"`),
 			Sections: &v1.ReportSections{
 				Changes:          v1.TemplatedBool(`"{{ .params.changes }}"`),
+				Insights:         v1.TemplatedBool(`"{{ .params.insights }}"`),
+				Relationships:    v1.TemplatedBool(`"{{ .params.relationships }}"`),
+				Access:           v1.TemplatedBool(`"{{ .params.access }}"`),
+				AccessLogs:       v1.TemplatedBool(`"{{ .params.accessLogs }}"`),
+				ConfigJSON:       v1.TemplatedBool(`"{{ .params.configJSON }}"`),
 				ResolvedInsights: v1.TemplatedBool(`"{{ .params.resolvedInsights }}"`),
 			},
 		}
 		templater := ctx.NewStructTemplater(map[string]any{
 			"params": map[string]any{
 				"recursive":        "true",
+				"changeArtifacts":  "false",
+				"expandGroups":     "true",
+				"audit":            "false",
 				"changes":          "false",
+				"insights":         "true",
+				"relationships":    "false",
+				"access":           "false",
+				"accessLogs":       "true",
+				"configJSON":       "true",
 				"resolvedInsights": "true",
 			},
 		}, "template", nil)
@@ -92,7 +128,15 @@ var _ = ginkgo.Describe("Report action catalog options", func() {
 		opts, err := catalogOptions(action)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(opts.Recursive).To(BeTrue())
+		Expect(opts.ChangeArtifacts).To(BeFalse())
+		Expect(opts.ExpandGroups).To(BeTrue())
+		Expect(opts.Audit).To(BeFalse())
 		Expect(opts.Sections.Changes).To(BeFalse())
+		Expect(opts.Sections.Insights).To(BeTrue())
+		Expect(opts.Sections.Relationships).To(BeFalse())
+		Expect(opts.Sections.Access).To(BeFalse())
+		Expect(opts.Sections.AccessLogs).To(BeTrue())
+		Expect(opts.Sections.ConfigJSON).To(BeTrue())
 		Expect(opts.Sections.ResolvedInsights).To(BeTrue())
 	})
 

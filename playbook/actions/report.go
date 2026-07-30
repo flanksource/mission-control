@@ -135,11 +135,7 @@ func (r *Report) runCatalog(ctx context.Context, action v1.ReportAction, format 
 	opts.Progress = func(format string, args ...any) { r.logf(ctx, format, args...) }
 
 	r.logf(ctx, "resolving config items")
-	selector := *action.Configs
-	if selector.Search != "" {
-		selector.Search = strings.TrimSpace(selector.Search + " " + opts.Settings.FilterQuery())
-	}
-	configs, err := query.FindConfigsByResourceSelector(ctx, -1, selector)
+	configs, err := query.FindConfigsByResourceSelector(ctx, -1, *action.Configs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve configs: %w", err)
 	}
@@ -285,21 +281,22 @@ func catalogOptions(action v1.ReportAction) (catalog.Options, error) {
 func reportSections(sections v1.ReportSections) (api.CatalogReportSections, error) {
 	resolved := api.CatalogReportSections{}
 	fields := []struct {
-		name   string
-		value  v1.TemplatedBool
-		target *bool
+		name         string
+		value        v1.TemplatedBool
+		defaultValue bool
+		target       *bool
 	}{
-		{name: "sections.changes", value: sections.Changes, target: &resolved.Changes},
-		{name: "sections.insights", value: sections.Insights, target: &resolved.Insights},
-		{name: "sections.relationships", value: sections.Relationships, target: &resolved.Relationships},
-		{name: "sections.access", value: sections.Access, target: &resolved.Access},
+		{name: "sections.changes", value: sections.Changes, defaultValue: true, target: &resolved.Changes},
+		{name: "sections.insights", value: sections.Insights, defaultValue: true, target: &resolved.Insights},
+		{name: "sections.relationships", value: sections.Relationships, defaultValue: true, target: &resolved.Relationships},
+		{name: "sections.access", value: sections.Access, defaultValue: true, target: &resolved.Access},
 		{name: "sections.accessLogs", value: sections.AccessLogs, target: &resolved.AccessLogs},
 		{name: "sections.configJSON", value: sections.ConfigJSON, target: &resolved.ConfigJSON},
 		{name: "sections.resolvedInsights", value: sections.ResolvedInsights, target: &resolved.ResolvedInsights},
 	}
 
 	for _, field := range fields {
-		value, err := reportBool(field.value, false, field.name)
+		value, err := reportBool(field.value, field.defaultValue, field.name)
 		if err != nil {
 			return api.CatalogReportSections{}, err
 		}

@@ -126,12 +126,16 @@ func BuildReport(ctx context.Context, configs []models.ConfigItem, opts Options)
 		return nil, nil, fmt.Errorf("failed to initialize change mappings: %w", err)
 	}
 
+	configItem := configs[0]
+	if !opts.Sections.ConfigJSON {
+		configItem.Config = nil
+	}
 	report := &api.CatalogReport{
 		Title:       opts.Title,
 		GeneratedAt: time.Now(),
 		PublicURL:   api.FrontendURL,
 		From:        sinceTime.Format(time.RFC3339),
-		ConfigItem:  configs[0],
+		ConfigItem:  configItem,
 		Sections:    opts.Sections,
 		Recursive:   opts.Recursive,
 		GroupBy:     opts.GroupBy,

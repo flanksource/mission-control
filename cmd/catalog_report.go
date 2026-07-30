@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/flanksource/clicky"
@@ -92,17 +91,7 @@ Examples:
 			return err
 		}
 
-		queryArgs := args
-		if opts.Settings != nil {
-			if fq := opts.Settings.FilterQuery(); fq != "" {
-				queryArgs = make([]string, len(args))
-				for i, a := range args {
-					queryArgs[i] = strings.TrimSpace(a + " " + fq)
-				}
-			}
-		}
-
-		configs, err := resolveConfigs(ctx, queryArgs, catalogReportLimit)
+		configs, err := resolveConfigs(ctx, args, catalogReportLimit)
 		if err != nil {
 			return err
 		}

@@ -1,8 +1,8 @@
 {
   "title": "Repository Security Report",
-  "generatedAt": "2026-07-27T15:25:26.107092061Z",
-  "publicURL": "https://beta.flanksource.com",
-  "from": "2026-06-27T15:25:26Z",
+  "generatedAt": "2024-02-01T12:00:00Z",
+  "publicURL": "https://mission-control.example.com",
+  "from": "2024-01-01T00:00:00Z",
   "sections": {
     "changes": false,
     "insights": true,
@@ -15,30 +15,30 @@
   "entries": [
     {
       "configItem": {
-        "id": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-        "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-        "name": "flanksource/azure-production",
+        "id": "10000000-0000-4000-8000-000000000001",
+        "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+        "name": "example-org/sample-service",
         "type": "GitHub::Repository",
         "configClass": "Repository",
         "health": "healthy",
         "description": "No security alerts",
         "labels": {
-          "owner": "flanksource",
-          "repo": "azure-production"
+          "owner": "example-org",
+          "repo": "sample-service"
         },
         "tags": {
-          "owner": "flanksource",
-          "repo": "azure-production"
+          "owner": "example-org",
+          "repo": "sample-service"
         },
         "properties": [
           {
             "type": "url",
             "name": "URL",
-            "text": "https://github.com/flanksource/azure-production",
+            "text": "https://github.com/example-org/sample-service",
             "links": [
               {
                 "type": "url",
-                "url": "https://github.com/flanksource/azure-production"
+                "url": "https://github.com/example-org/sample-service"
               }
             ]
           },
@@ -73,165 +73,165 @@
             "text": "0"
           }
         ],
-        "createdAt": "2023-08-28T05:42:55Z",
-        "updatedAt": "2026-07-27T11:06:34Z"
+        "createdAt": "2024-01-01T00:00:00Z",
+        "updatedAt": "2024-02-01T12:00:00Z"
       },
       "changeCount": 0,
       "insightCount": 0,
       "accessCount": 10,
       "rbacResources": [
         {
-          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "configName": "flanksource/azure-production",
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
           "configType": "GitHub::Repository",
           "configClass": "Repository",
           "health": "healthy",
           "tags": {
-            "owner": "flanksource",
-            "repo": "azure-production"
+            "owner": "example-org",
+            "repo": "sample-service"
           },
           "labels": {
-            "owner": "flanksource",
-            "repo": "azure-production"
+            "owner": "example-org",
+            "repo": "sample-service"
           },
           "users": [
             {
-              "userId": "019fa341-4c21-7614-b4b8-d7ea01b9862c",
-              "userName": "adityathebe",
+              "userId": "10000000-0000-4000-8000-000000000002",
+              "userName": "sample-user-01",
               "email": "",
               "role": "maintain",
               "roleExternalIds": [
-                "github://repository-role/flanksource/maintain"
+                "github://repository-role/example-org/maintain"
               ],
               "roleSource": "direct",
               "sourceSystem": "GitHub::User",
-              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "createdAt": "2024-01-01T00:00:00Z",
               "isStale": false,
               "isReviewOverdue": false
             },
             {
-              "userId": "019fa341-4c23-785b-a474-a57d81c59180",
-              "userName": "BrendanGalloway",
+              "userId": "10000000-0000-4000-8000-000000000003",
+              "userName": "sample-user-02",
               "email": "",
               "role": "admin",
               "roleExternalIds": [
-                "github://repository-role/flanksource/admin"
+                "github://repository-role/example-org/admin"
               ],
               "roleSource": "direct",
               "sourceSystem": "GitHub::User",
-              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "createdAt": "2024-01-01T00:00:00Z",
               "isStale": false,
               "isReviewOverdue": false
             },
             {
-              "userId": "019fa341-4c22-7797-b066-9e58a34f77fe",
-              "userName": "dabasvibhor",
+              "userId": "10000000-0000-4000-8000-000000000004",
+              "userName": "sample-user-03",
               "email": "",
               "role": "read",
               "roleExternalIds": [
-                "github://repository-role/flanksource/read"
+                "github://repository-role/example-org/read"
               ],
               "roleSource": "direct",
               "sourceSystem": "GitHub::User",
-              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "createdAt": "2024-01-01T00:00:00Z",
               "isStale": false,
               "isReviewOverdue": false
             },
             {
               "userId": "00000000-0000-0000-0000-000000000000",
-              "userName": "flankbot",
+              "userName": "sample-group-04",
               "email": "",
               "role": "read",
               "roleExternalIds": [
-                "github://repository-role/flanksource/read"
+                "github://repository-role/example-org/read"
               ],
-              "roleSource": "group:flankbot",
+              "roleSource": "group:sample-group",
               "sourceSystem": "group",
-              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "createdAt": "2024-01-01T00:00:00Z",
               "isStale": false,
               "isReviewOverdue": false
             },
             {
-              "userId": "019fa341-4c24-767b-b65a-07683c35649a",
-              "userName": "flankbot",
+              "userId": "10000000-0000-4000-8000-000000000005",
+              "userName": "sample-user-05",
               "email": "",
               "role": "write",
               "roleExternalIds": [
-                "github://repository-role/flanksource/write"
+                "github://repository-role/example-org/write"
               ],
               "roleSource": "direct",
               "sourceSystem": "GitHub::User",
-              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "createdAt": "2024-01-01T00:00:00Z",
               "isStale": false,
               "isReviewOverdue": false
             },
             {
-              "userId": "019fa341-4c25-7668-bd4a-4a78ad03a4fe",
-              "userName": "frumie1984",
+              "userId": "10000000-0000-4000-8000-000000000006",
+              "userName": "sample-user-06",
               "email": "",
               "role": "read",
               "roleExternalIds": [
-                "github://repository-role/flanksource/read"
+                "github://repository-role/example-org/read"
               ],
               "roleSource": "direct",
               "sourceSystem": "GitHub::User",
-              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "createdAt": "2024-01-01T00:00:00Z",
               "isStale": false,
               "isReviewOverdue": false
             },
             {
-              "userId": "019fa341-4c20-7a06-9285-744dc70c6061",
-              "userName": "junaid-ebrahim",
+              "userId": "10000000-0000-4000-8000-000000000007",
+              "userName": "sample-user-07",
               "email": "",
               "role": "read",
               "roleExternalIds": [
-                "github://repository-role/flanksource/read"
+                "github://repository-role/example-org/read"
               ],
               "roleSource": "direct",
               "sourceSystem": "GitHub::User",
-              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "createdAt": "2024-01-01T00:00:00Z",
               "isStale": false,
               "isReviewOverdue": false
             },
             {
-              "userId": "019fa341-4c1e-7ddd-bd73-c373df25bdba",
-              "userName": "moshloop",
+              "userId": "10000000-0000-4000-8000-000000000008",
+              "userName": "sample-user-08",
               "email": "",
               "role": "admin",
               "roleExternalIds": [
-                "github://repository-role/flanksource/admin"
+                "github://repository-role/example-org/admin"
               ],
               "roleSource": "direct",
               "sourceSystem": "GitHub::User",
-              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "createdAt": "2024-01-01T00:00:00Z",
               "isStale": false,
               "isReviewOverdue": false
             },
             {
               "userId": "00000000-0000-0000-0000-000000000000",
-              "userName": "Production Admins",
+              "userName": "sample-group-04",
               "email": "",
               "role": "maintain",
               "roleExternalIds": [
-                "github://repository-role/flanksource/maintain"
+                "github://repository-role/example-org/maintain"
               ],
-              "roleSource": "group:Production Admins",
+              "roleSource": "group:sample-group",
               "sourceSystem": "group",
-              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "createdAt": "2024-01-01T00:00:00Z",
               "isStale": false,
               "isReviewOverdue": false
             },
             {
-              "userId": "019fa341-4c1f-7bc2-aba5-f0c9a4fb9683",
-              "userName": "yashmehrotra",
+              "userId": "10000000-0000-4000-8000-000000000009",
+              "userName": "sample-user-09",
               "email": "",
               "role": "admin",
               "roleExternalIds": [
-                "github://repository-role/flanksource/admin"
+                "github://repository-role/example-org/admin"
               ],
               "roleSource": "direct",
               "sourceSystem": "GitHub::User",
-              "createdAt": "2026-07-27T11:06:33.467973Z",
+              "createdAt": "2024-01-01T00:00:00Z",
               "isStale": false,
               "isReviewOverdue": false
             }
@@ -241,154 +241,154 @@
       ],
       "access": [
         {
-          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "configName": "flanksource/azure-production",
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
           "configType": "GitHub::Repository",
-          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "userId": "019fa341-4c21-7614-b4b8-d7ea01b9862c",
-          "userName": "adityathebe",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "10000000-0000-4000-8000-000000000002",
+          "userName": "sample-user-01",
           "email": "",
           "role": "maintain",
           "roleExternalIds": [
-            "github://repository-role/flanksource/maintain"
+            "github://repository-role/example-org/maintain"
           ],
           "userType": "GitHub::User",
-          "createdAt": "2026-07-27T11:06:33Z"
+          "createdAt": "2024-01-01T00:00:00Z"
         },
         {
-          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "configName": "flanksource/azure-production",
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
           "configType": "GitHub::Repository",
-          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "userId": "019fa341-4c23-785b-a474-a57d81c59180",
-          "userName": "BrendanGalloway",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "10000000-0000-4000-8000-000000000003",
+          "userName": "sample-user-02",
           "email": "",
           "role": "admin",
           "roleExternalIds": [
-            "github://repository-role/flanksource/admin"
+            "github://repository-role/example-org/admin"
           ],
           "userType": "GitHub::User",
-          "createdAt": "2026-07-27T11:06:33Z"
+          "createdAt": "2024-01-01T00:00:00Z"
         },
         {
-          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "configName": "flanksource/azure-production",
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
           "configType": "GitHub::Repository",
-          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "userId": "019fa341-4c22-7797-b066-9e58a34f77fe",
-          "userName": "dabasvibhor",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "10000000-0000-4000-8000-000000000004",
+          "userName": "sample-user-03",
           "email": "",
           "role": "read",
           "roleExternalIds": [
-            "github://repository-role/flanksource/read"
+            "github://repository-role/example-org/read"
           ],
           "userType": "GitHub::User",
-          "createdAt": "2026-07-27T11:06:33Z"
+          "createdAt": "2024-01-01T00:00:00Z"
         },
         {
-          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "configName": "flanksource/azure-production",
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
           "configType": "GitHub::Repository",
-          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
           "userId": "00000000-0000-0000-0000-000000000000",
-          "userName": "flankbot",
+          "userName": "sample-group-04",
           "email": "",
           "role": "read",
           "roleExternalIds": [
-            "github://repository-role/flanksource/read"
+            "github://repository-role/example-org/read"
           ],
           "userType": "group",
-          "createdAt": "2026-07-27T11:06:33Z"
+          "createdAt": "2024-01-01T00:00:00Z"
         },
         {
-          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "configName": "flanksource/azure-production",
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
           "configType": "GitHub::Repository",
-          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "userId": "019fa341-4c24-767b-b65a-07683c35649a",
-          "userName": "flankbot",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "10000000-0000-4000-8000-000000000005",
+          "userName": "sample-user-05",
           "email": "",
           "role": "write",
           "roleExternalIds": [
-            "github://repository-role/flanksource/write"
+            "github://repository-role/example-org/write"
           ],
           "userType": "GitHub::User",
-          "createdAt": "2026-07-27T11:06:33Z"
+          "createdAt": "2024-01-01T00:00:00Z"
         },
         {
-          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "configName": "flanksource/azure-production",
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
           "configType": "GitHub::Repository",
-          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "userId": "019fa341-4c25-7668-bd4a-4a78ad03a4fe",
-          "userName": "frumie1984",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "10000000-0000-4000-8000-000000000006",
+          "userName": "sample-user-06",
           "email": "",
           "role": "read",
           "roleExternalIds": [
-            "github://repository-role/flanksource/read"
+            "github://repository-role/example-org/read"
           ],
           "userType": "GitHub::User",
-          "createdAt": "2026-07-27T11:06:33Z"
+          "createdAt": "2024-01-01T00:00:00Z"
         },
         {
-          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "configName": "flanksource/azure-production",
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
           "configType": "GitHub::Repository",
-          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "userId": "019fa341-4c20-7a06-9285-744dc70c6061",
-          "userName": "junaid-ebrahim",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "10000000-0000-4000-8000-000000000007",
+          "userName": "sample-user-07",
           "email": "",
           "role": "read",
           "roleExternalIds": [
-            "github://repository-role/flanksource/read"
+            "github://repository-role/example-org/read"
           ],
           "userType": "GitHub::User",
-          "createdAt": "2026-07-27T11:06:33Z"
+          "createdAt": "2024-01-01T00:00:00Z"
         },
         {
-          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "configName": "flanksource/azure-production",
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
           "configType": "GitHub::Repository",
-          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "userId": "019fa341-4c1e-7ddd-bd73-c373df25bdba",
-          "userName": "moshloop",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "10000000-0000-4000-8000-000000000008",
+          "userName": "sample-user-08",
           "email": "",
           "role": "admin",
           "roleExternalIds": [
-            "github://repository-role/flanksource/admin"
+            "github://repository-role/example-org/admin"
           ],
           "userType": "GitHub::User",
-          "createdAt": "2026-07-27T11:06:33Z"
+          "createdAt": "2024-01-01T00:00:00Z"
         },
         {
-          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "configName": "flanksource/azure-production",
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
           "configType": "GitHub::Repository",
-          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
           "userId": "00000000-0000-0000-0000-000000000000",
-          "userName": "Production Admins",
+          "userName": "sample-group-04",
           "email": "",
           "role": "maintain",
           "roleExternalIds": [
-            "github://repository-role/flanksource/maintain"
+            "github://repository-role/example-org/maintain"
           ],
           "userType": "group",
-          "createdAt": "2026-07-27T11:06:33Z"
+          "createdAt": "2024-01-01T00:00:00Z"
         },
         {
-          "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "configName": "flanksource/azure-production",
+          "configId": "10000000-0000-4000-8000-000000000001",
+          "configName": "example-org/sample-service",
           "configType": "GitHub::Repository",
-          "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-          "userId": "019fa341-4c1f-7bc2-aba5-f0c9a4fb9683",
-          "userName": "yashmehrotra",
+          "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+          "userId": "10000000-0000-4000-8000-000000000009",
+          "userName": "sample-user-09",
           "email": "",
           "role": "admin",
           "roleExternalIds": [
-            "github://repository-role/flanksource/admin"
+            "github://repository-role/example-org/admin"
           ],
           "userType": "GitHub::User",
-          "createdAt": "2026-07-27T11:06:33Z"
+          "createdAt": "2024-01-01T00:00:00Z"
         }
       ]
     }
@@ -404,39 +404,39 @@
     },
     {
       "category": "backup.success",
-      "filter": "changeType == \"BackupCompleted\" || changeType == \"BackupSuccessful\" || (changeType == \"BACKUP_DB\" \u0026\u0026 severity == \"low\") || ((\"kind\" in details \u0026\u0026 details[\"kind\"] == \"Backup/v1\") \u0026\u0026 (\"status\" in details \u0026\u0026 (details[\"status\"] == \"success\" || details[\"status\"] == \"successful\" || details[\"status\"] == \"completed\")))"
+      "filter": "changeType == \"BackupCompleted\" || changeType == \"BackupSuccessful\" || (changeType == \"BACKUP_DB\" && severity == \"low\") || ((\"kind\" in details && details[\"kind\"] == \"Backup/v1\") && (\"status\" in details && (details[\"status\"] == \"success\" || details[\"status\"] == \"successful\" || details[\"status\"] == \"completed\")))"
     },
     {
       "category": "backup.failed",
-      "filter": "changeType == \"BackupFailed\" || (changeType == \"BACKUP_DB\" \u0026\u0026 severity == \"high\") || ((\"kind\" in details \u0026\u0026 details[\"kind\"] == \"Backup/v1\") \u0026\u0026 (\"status\" in details \u0026\u0026 (details[\"status\"] == \"failed\" || details[\"status\"] == \"error\")))"
+      "filter": "changeType == \"BackupFailed\" || (changeType == \"BACKUP_DB\" && severity == \"high\") || ((\"kind\" in details && details[\"kind\"] == \"Backup/v1\") && (\"status\" in details && (details[\"status\"] == \"failed\" || details[\"status\"] == \"error\")))"
     },
     {
       "category": "backup.success",
-      "filter": "changeType == \"BACKUP_DB\" \u0026\u0026 severity != \"high\""
+      "filter": "changeType == \"BACKUP_DB\" && severity != \"high\""
     },
     {
       "category": "backup.progress",
-      "filter": "changeType == \"BackupStarted\" || changeType == \"BackupRunning\" || changeType == \"BackupEnqueued\" || ((\"kind\" in details \u0026\u0026 details[\"kind\"] == \"Backup/v1\") \u0026\u0026 (\"status\" in details \u0026\u0026 (details[\"status\"] == \"started\" || details[\"status\"] == \"running\" || details[\"status\"] == \"enqueued\" || details[\"status\"] == \"progress\")))"
+      "filter": "changeType == \"BackupStarted\" || changeType == \"BackupRunning\" || changeType == \"BackupEnqueued\" || ((\"kind\" in details && details[\"kind\"] == \"Backup/v1\") && (\"status\" in details && (details[\"status\"] == \"started\" || details[\"status\"] == \"running\" || details[\"status\"] == \"enqueued\" || details[\"status\"] == \"progress\")))"
     },
     {
       "category": "backup.restore",
-      "filter": "changeType == \"BackupRestored\" || changeType == \"RestoreCompleted\" || ((\"kind\" in details \u0026\u0026 details[\"kind\"] == \"Backup/v1\") \u0026\u0026 (\"status\" in details \u0026\u0026 (details[\"status\"] == \"restored\" || details[\"status\"] == \"restore_completed\")))"
+      "filter": "changeType == \"BackupRestored\" || changeType == \"RestoreCompleted\" || ((\"kind\" in details && details[\"kind\"] == \"Backup/v1\") && (\"status\" in details && (details[\"status\"] == \"restored\" || details[\"status\"] == \"restore_completed\")))"
     },
     {
       "category": "deployment.spec",
-      "filter": "changeType == \"diff\" || (\"kind\" in details \u0026\u0026 details[\"kind\"] == \"Deployment/v1\")"
+      "filter": "changeType == \"diff\" || (\"kind\" in details && details[\"kind\"] == \"Deployment/v1\")"
     },
     {
       "category": "deployment.success",
-      "filter": "changeType == \"CodeDeployment\" \u0026\u0026 severity == \"info\""
+      "filter": "changeType == \"CodeDeployment\" && severity == \"info\""
     },
     {
       "category": "deployment.failed",
-      "filter": "changeType == \"CodeDeployment\" \u0026\u0026 severity != \"info\""
+      "filter": "changeType == \"CodeDeployment\" && severity != \"info\""
     },
     {
       "category": "deployment.scale",
-      "filter": "changeType == \"ScalingReplicaSet\" || (\"kind\" in details \u0026\u0026 details[\"kind\"] == \"Scaling/v1\")"
+      "filter": "changeType == \"ScalingReplicaSet\" || (\"kind\" in details && details[\"kind\"] == \"Scaling/v1\")"
     },
     {
       "category": "deployment.policy",
@@ -448,38 +448,37 @@
     "reviewOverdueDays": 0
   },
   "configItem": {
-    "id": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-    "scraper_id": "ef7fb4be-88ee-455b-93f7-6d65ec526c8a",
+    "id": "10000000-0000-4000-8000-000000000001",
+    "scraper_id": "10000000-0000-4000-8000-000000000010",
     "agent_id": "00000000-0000-0000-0000-000000000000",
     "config_class": "Repository",
     "external_id": [
-      "github/flanksource/azure-production"
+      "github/example-org/sample-service"
     ],
     "type": "GitHub::Repository",
     "status": null,
     "ready": true,
     "health": "healthy",
-    "name": "flanksource/azure-production",
+    "name": "example-org/sample-service",
     "description": "No security alerts",
-    "config": "{\"id\": 683942764, \"fork\": false, \"name\": \"azure-production\", \"size\": 1114, \"owner\": {\"id\": 58787470, \"type\": \"Organization\", \"login\": \"flanksource\", \"node_id\": \"MDEyOk9yZ2FuaXphdGlvbjU4Nzg3NDcw\", \"site_admin\": false}, \"node_id\": \"R_kgDOKMQjbA\", \"private\": true, \"archived\": false, \"disabled\": false, \"has_wiki\": true, \"html_url\": \"https://github.com/flanksource/azure-production\", \"language\": \"HCL\", \"full_name\": \"flanksource/azure-production\", \"has_pages\": false, \"pushed_at\": \"2026-07-24T09:57:15Z\", \"created_at\": \"2023-08-28T05:42:55Z\", \"has_issues\": true, \"updated_at\": \"2026-07-24T09:57:57Z\", \"visibility\": \"private\", \"forks_count\": 0, \"is_template\": false, \"permissions\": {\"pull\": true, \"push\": true, \"admin\": true, \"triage\": true, \"maintain\": true}, \"has_projects\": true, \"allow_forking\": false, \"has_downloads\": false, \"default_branch\": \"main\", \"watchers_count\": 0, \"has_discussions\": false, \"stargazers_count\": 0, \"open_issues_count\": 20, \"security_and_analysis\": {\"secret_scanning\": {\"status\": \"disabled\"}, \"dependabot_security_updates\": {\"status\": \"enabled\"}, \"secret_scanning_push_protection\": {\"status\": \"disabled\"}, \"secret_scanning_validity_checks\": {\"status\": \"disabled\"}}, \"web_commit_signoff_required\": false}",
     "source": "",
     "labels": {
-      "owner": "flanksource",
-      "repo": "azure-production"
+      "owner": "example-org",
+      "repo": "sample-service"
     },
     "tags": {
-      "owner": "flanksource",
-      "repo": "azure-production"
+      "owner": "example-org",
+      "repo": "sample-service"
     },
     "properties": [
       {
         "type": "url",
         "name": "URL",
-        "text": "https://github.com/flanksource/azure-production",
+        "text": "https://github.com/example-org/sample-service",
         "links": [
           {
             "type": "url",
-            "url": "https://github.com/flanksource/azure-production"
+            "url": "https://github.com/example-org/sample-service"
           }
         ]
       },
@@ -514,161 +513,161 @@
         "text": "0"
       }
     ],
-    "created_at": "2023-08-28T05:42:55Z",
-    "inserted_at": "2026-06-25T20:01:09.014589Z",
-    "updated_at": "2026-07-27T11:06:34.578595Z"
+    "created_at": "2024-01-01T00:00:00Z",
+    "inserted_at": "2024-01-15T00:00:00Z",
+    "updated_at": "2024-02-01T12:00:00Z"
   },
   "parents": null,
   "access": [
     {
-      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "configName": "flanksource/azure-production",
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
       "configType": "GitHub::Repository",
-      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "userId": "019fa341-4c21-7614-b4b8-d7ea01b9862c",
-      "userName": "adityathebe",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "10000000-0000-4000-8000-000000000002",
+      "userName": "sample-user-01",
       "email": "",
       "role": "maintain",
       "roleExternalIds": [
-        "github://repository-role/flanksource/maintain"
+        "github://repository-role/example-org/maintain"
       ],
       "userType": "GitHub::User",
-      "createdAt": "2026-07-27T11:06:33Z"
+      "createdAt": "2024-01-01T00:00:00Z"
     },
     {
-      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "configName": "flanksource/azure-production",
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
       "configType": "GitHub::Repository",
-      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "userId": "019fa341-4c23-785b-a474-a57d81c59180",
-      "userName": "BrendanGalloway",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "10000000-0000-4000-8000-000000000003",
+      "userName": "sample-user-02",
       "email": "",
       "role": "admin",
       "roleExternalIds": [
-        "github://repository-role/flanksource/admin"
+        "github://repository-role/example-org/admin"
       ],
       "userType": "GitHub::User",
-      "createdAt": "2026-07-27T11:06:33Z"
+      "createdAt": "2024-01-01T00:00:00Z"
     },
     {
-      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "configName": "flanksource/azure-production",
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
       "configType": "GitHub::Repository",
-      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "userId": "019fa341-4c22-7797-b066-9e58a34f77fe",
-      "userName": "dabasvibhor",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "10000000-0000-4000-8000-000000000004",
+      "userName": "sample-user-03",
       "email": "",
       "role": "read",
       "roleExternalIds": [
-        "github://repository-role/flanksource/read"
+        "github://repository-role/example-org/read"
       ],
       "userType": "GitHub::User",
-      "createdAt": "2026-07-27T11:06:33Z"
+      "createdAt": "2024-01-01T00:00:00Z"
     },
     {
-      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "configName": "flanksource/azure-production",
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
       "configType": "GitHub::Repository",
-      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
       "userId": "00000000-0000-0000-0000-000000000000",
-      "userName": "flankbot",
+      "userName": "sample-group-04",
       "email": "",
       "role": "read",
       "roleExternalIds": [
-        "github://repository-role/flanksource/read"
+        "github://repository-role/example-org/read"
       ],
       "userType": "group",
-      "createdAt": "2026-07-27T11:06:33Z"
+      "createdAt": "2024-01-01T00:00:00Z"
     },
     {
-      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "configName": "flanksource/azure-production",
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
       "configType": "GitHub::Repository",
-      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "userId": "019fa341-4c24-767b-b65a-07683c35649a",
-      "userName": "flankbot",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "10000000-0000-4000-8000-000000000005",
+      "userName": "sample-user-05",
       "email": "",
       "role": "write",
       "roleExternalIds": [
-        "github://repository-role/flanksource/write"
+        "github://repository-role/example-org/write"
       ],
       "userType": "GitHub::User",
-      "createdAt": "2026-07-27T11:06:33Z"
+      "createdAt": "2024-01-01T00:00:00Z"
     },
     {
-      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "configName": "flanksource/azure-production",
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
       "configType": "GitHub::Repository",
-      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "userId": "019fa341-4c25-7668-bd4a-4a78ad03a4fe",
-      "userName": "frumie1984",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "10000000-0000-4000-8000-000000000006",
+      "userName": "sample-user-06",
       "email": "",
       "role": "read",
       "roleExternalIds": [
-        "github://repository-role/flanksource/read"
+        "github://repository-role/example-org/read"
       ],
       "userType": "GitHub::User",
-      "createdAt": "2026-07-27T11:06:33Z"
+      "createdAt": "2024-01-01T00:00:00Z"
     },
     {
-      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "configName": "flanksource/azure-production",
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
       "configType": "GitHub::Repository",
-      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "userId": "019fa341-4c20-7a06-9285-744dc70c6061",
-      "userName": "junaid-ebrahim",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "10000000-0000-4000-8000-000000000007",
+      "userName": "sample-user-07",
       "email": "",
       "role": "read",
       "roleExternalIds": [
-        "github://repository-role/flanksource/read"
+        "github://repository-role/example-org/read"
       ],
       "userType": "GitHub::User",
-      "createdAt": "2026-07-27T11:06:33Z"
+      "createdAt": "2024-01-01T00:00:00Z"
     },
     {
-      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "configName": "flanksource/azure-production",
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
       "configType": "GitHub::Repository",
-      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "userId": "019fa341-4c1e-7ddd-bd73-c373df25bdba",
-      "userName": "moshloop",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "10000000-0000-4000-8000-000000000008",
+      "userName": "sample-user-08",
       "email": "",
       "role": "admin",
       "roleExternalIds": [
-        "github://repository-role/flanksource/admin"
+        "github://repository-role/example-org/admin"
       ],
       "userType": "GitHub::User",
-      "createdAt": "2026-07-27T11:06:33Z"
+      "createdAt": "2024-01-01T00:00:00Z"
     },
     {
-      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "configName": "flanksource/azure-production",
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
       "configType": "GitHub::Repository",
-      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
       "userId": "00000000-0000-0000-0000-000000000000",
-      "userName": "Production Admins",
+      "userName": "sample-group-04",
       "email": "",
       "role": "maintain",
       "roleExternalIds": [
-        "github://repository-role/flanksource/maintain"
+        "github://repository-role/example-org/maintain"
       ],
       "userType": "group",
-      "createdAt": "2026-07-27T11:06:33Z"
+      "createdAt": "2024-01-01T00:00:00Z"
     },
     {
-      "configId": "36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "configName": "flanksource/azure-production",
+      "configId": "10000000-0000-4000-8000-000000000001",
+      "configName": "example-org/sample-service",
       "configType": "GitHub::Repository",
-      "permalink": "https://beta.flanksource.com/catalog/36ebe20d-313e-bbb2-cdf9-18e8ca669a1f",
-      "userId": "019fa341-4c1f-7bc2-aba5-f0c9a4fb9683",
-      "userName": "yashmehrotra",
+      "permalink": "https://mission-control.example.com/catalog/10000000-0000-4000-8000-000000000001",
+      "userId": "10000000-0000-4000-8000-000000000009",
+      "userName": "sample-user-09",
       "email": "",
       "role": "admin",
       "roleExternalIds": [
-        "github://repository-role/flanksource/admin"
+        "github://repository-role/example-org/admin"
       ],
       "userType": "GitHub::User",
-      "createdAt": "2026-07-27T11:06:33Z"
+      "createdAt": "2024-01-01T00:00:00Z"
     }
   ]
 }
