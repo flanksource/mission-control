@@ -2,8 +2,6 @@ package runner
 
 import (
 	"encoding/json"
-	"fmt"
-	"strings"
 	"time"
 
 	"github.com/flanksource/commons/collections"
@@ -22,6 +20,8 @@ import (
 	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/playbook/actions"
 )
+
+const configsParameterName = "configs"
 
 // CreateTemplateEnv creates a template environment for the playbook run.
 //
@@ -79,6 +79,9 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run model
 				return templateEnv, oops.Tags("db").Wrap(err)
 			}
 
+			if p.Name == configsParameterName {
+				templateEnv.ResolvedConfigs = append([]models.ConfigItem{}, configs...)
+			}
 			templateEnv.Params[p.Name] = lo.Map(configs, func(c models.ConfigItem, _ int) map[string]any {
 				return c.AsMap()
 			})
@@ -216,23 +219,8 @@ func templateActionExpressions(ctx context.Context, actionSpec *v1.PlaybookActio
 	return nil
 }
 
-func idsFromMap(items []any) string {
-	ids := make([]string, 0, len(items))
-	for _, item := range items {
-		itemMap, ok := item.(map[string]any)
-		if !ok {
-			continue
-		}
-		if id, ok := itemMap["id"]; ok && id != nil {
-			ids = append(ids, fmt.Sprint(id))
-		}
-	}
-	return strings.Join(ids, ",")
-}
-
 func getGomplateFuncs(ctx context.Context, env actions.TemplateEnv) map[string]any {
 	return map[string]any{
-		"idsFromMap": idsFromMap,
 		"getLastAction": func() any {
 			if env.Action == nil {
 				return make(map[string]any)

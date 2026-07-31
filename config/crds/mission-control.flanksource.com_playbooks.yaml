@@ -4393,7 +4393,7 @@ spec:
                           x-kubernetes-preserve-unknown-fields: true
                         configs:
                           description: Inline catalog query for the catalog report
-                            (alternative to View)
+                            (alternative to view and configsFromParams).
                           properties:
                             agent:
                               description: |-
@@ -4451,6 +4451,15 @@ spec:
                                 type: string
                               type: array
                           type: object
+                        configsFromParams:
+                          description: |-
+                            ConfigsFromParams uses config items already resolved from the playbook parameter named "configs".
+                            The playbook must declare a parameter with name "configs" and type "configs". Set this to true
+                            when the report should use that parameter instead of executing a separate configs selector. Reusing
+                            the resolved parameter avoids a duplicate database query and guarantees that the report uses the
+                            same config items that are exposed to templates as .params.configs. This is mutually exclusive with
+                            configs and view.
+                          type: boolean
                         expandGroups:
                           description: |-
                             ExpandGroups expands group-granted access into rows for active group members.
@@ -4605,9 +4614,14 @@ spec:
                           type: string
                       type: object
                       x-kubernetes-validations:
-                      - message: view is mutually exclusive with configs and file
+                      - message: view is mutually exclusive with configs, configsFromParams,
+                          and file
                         rule: '!(has(self.view) && self.view != "" && (has(self.configs)
+                          || (has(self.configsFromParams) && self.configsFromParams)
                           || has(self.file)))'
+                      - message: configs and configsFromParams are mutually exclusive
+                        rule: '!(has(self.configs) && has(self.configsFromParams)
+                          && self.configsFromParams)'
                     retry:
                       description: Retry specifies the retry policy for the action.
                       properties:

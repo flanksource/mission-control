@@ -129,7 +129,14 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 		result, err = e.Run(ctx, actionSpec.Logs)
 	} else if actionSpec.Report != nil {
 		e := actions.Report{ActionID: runAction.ID}
-		result, err = e.Run(ctx, *actionSpec.Report)
+		if actionSpec.Report.ConfigsFromParams {
+			if templateEnv.ResolvedConfigs == nil {
+				return executeActionResult{}, fmt.Errorf("configsFromParams requires a playbook parameter named %q with type configs", configsParameterName)
+			}
+			result, err = e.RunWithConfigs(ctx, *actionSpec.Report, templateEnv.ResolvedConfigs)
+		} else {
+			result, err = e.Run(ctx, *actionSpec.Report)
+		}
 	} else if actionSpec.Catalog != nil {
 		var e actions.Catalog
 		result, err = e.Run(ctx, *actionSpec.Catalog)

@@ -8,6 +8,8 @@ import (
 
 	commons "github.com/flanksource/commons/context"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -143,6 +145,27 @@ var _ = ginkgo.Describe("Report action catalog options", func() {
 	ginkgo.It("rejects a template result that is not a boolean", func() {
 		_, err := catalogOptions(v1.ReportAction{Recursive: v1.TemplatedBool(`"sometimes"`)})
 		Expect(err).To(MatchError(`recursive: template rendered "sometimes"; expected true or false`))
+	})
+
+	ginkgo.It("requires configsFromParams to be supplied by the runner", func() {
+		result, err := (&Report{}).Run(ctx, v1.ReportAction{ConfigsFromParams: true})
+		Expect(err).To(MatchError(`configsFromParams requires a resolved configs parameter named "configs"`))
+		Expect(result).NotTo(BeNil())
+	})
+
+	ginkgo.It("accepts an empty resolved configs parameter without querying a selector", func() {
+		result, err := (&Report{}).RunWithConfigs(ctx, v1.ReportAction{ConfigsFromParams: true}, []models.ConfigItem{})
+		Expect(err).To(MatchError("no config items matched the selector"))
+		Expect(result).NotTo(BeNil())
+	})
+
+	ginkgo.It("rejects configs together with configsFromParams", func() {
+		result, err := (&Report{}).Run(ctx, v1.ReportAction{
+			Configs:           &types.ResourceSelector{},
+			ConfigsFromParams: true,
+		})
+		Expect(err).To(MatchError("configs and configsFromParams are mutually exclusive"))
+		Expect(result).NotTo(BeNil())
 	})
 
 	ginkgo.It("rejects an unsupported groupBy value", func() {

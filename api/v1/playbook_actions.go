@@ -740,14 +740,22 @@ type CatalogAction struct {
 	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty" template:"true"`
 }
 
-// +kubebuilder:validation:XValidation:rule="!(has(self.view) && self.view != \"\" && (has(self.configs) || has(self.file)))",message="view is mutually exclusive with configs and file"
+// +kubebuilder:validation:XValidation:rule="!(has(self.view) && self.view != \"\" && (has(self.configs) || (has(self.configsFromParams) && self.configsFromParams) || has(self.file)))",message="view is mutually exclusive with configs, configsFromParams, and file"
+// +kubebuilder:validation:XValidation:rule="!(has(self.configs) && has(self.configsFromParams) && self.configsFromParams)",message="configs and configsFromParams are mutually exclusive"
 type ReportAction struct {
 	// Reference an existing View by namespace/name or just name
 	View string `json:"view,omitempty" yaml:"view,omitempty" template:"true"`
 	// Title overrides the default catalog report title.
 	Title string `json:"title,omitempty" yaml:"title,omitempty" template:"true"`
-	// Inline catalog query for the catalog report (alternative to View)
+	// Inline catalog query for the catalog report (alternative to view and configsFromParams).
 	Configs *types.ResourceSelector `json:"configs,omitempty" yaml:"configs,omitempty" template:"true"`
+	// ConfigsFromParams uses config items already resolved from the playbook parameter named "configs".
+	// The playbook must declare a parameter with name "configs" and type "configs". Set this to true
+	// when the report should use that parameter instead of executing a separate configs selector. Reusing
+	// the resolved parameter avoids a duplicate database query and guarantees that the report uses the
+	// same config items that are exposed to templates as .params.configs. This is mutually exclusive with
+	// configs and view.
+	ConfigsFromParams bool `json:"configsFromParams,omitempty" yaml:"configsFromParams,omitempty"`
 	// File selects the TSX template that renders the catalog report.
 	// When unset, the embedded CatalogReport.tsx is used.
 	File *ReportFile `json:"file,omitempty" yaml:"file,omitempty" template:"true"`

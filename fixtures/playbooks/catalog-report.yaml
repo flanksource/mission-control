@@ -18,7 +18,7 @@ spec:
     - name: format
       label: Format
       type: list
-      default: pdf
+      default: html
       properties:
         options:
           - label: HTML
@@ -100,8 +100,8 @@ spec:
   actions:
     - name: Generate Report
       report:
-        configs:
-          search: '$($ids := .params.configs | idListFromMap)id=$(join $ids ";id=")'
+        # Reuse the already-resolved `configs` parameter instead of querying the selected IDs again.
+        configsFromParams: true
         title: '{{ .params.title }}'
         format: '{{ .params.format }}'
         since: '{{ .params.since }}'

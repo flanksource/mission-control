@@ -81,7 +81,17 @@ func (r *Report) persistLogs(ctx context.Context) {
 func (r *Report) logText() string { return strings.Join(r.logs, "\n") }
 
 func (r *Report) Run(ctx context.Context, action v1.ReportAction) (*ReportResult, error) {
-	result, err := r.run(ctx, action)
+	return r.runWithConfigs(ctx, action, nil)
+}
+
+// RunWithConfigs executes a report using config items already resolved from a
+// configs playbook parameter.
+func (r *Report) RunWithConfigs(ctx context.Context, action v1.ReportAction, configs []models.ConfigItem) (*ReportResult, error) {
+	return r.runWithConfigs(ctx, action, configs)
+}
+
+func (r *Report) runWithConfigs(ctx context.Context, action v1.ReportAction, configs []models.ConfigItem) (*ReportResult, error) {
+	result, err := r.run(ctx, action, configs)
 	if result == nil {
 		result = &ReportResult{}
 	}
@@ -90,21 +100,31 @@ func (r *Report) Run(ctx context.Context, action v1.ReportAction) (*ReportResult
 	return result, err
 }
 
-func (r *Report) run(ctx context.Context, action v1.ReportAction) (*ReportResult, error) {
+func (r *Report) run(ctx context.Context, action v1.ReportAction, configs []models.ConfigItem) (*ReportResult, error) {
 	format := action.Format
 	if format == "" {
 		format = "json"
 	}
 
+	if action.Configs != nil && action.ConfigsFromParams {
+		return nil, fmt.Errorf("configs and configsFromParams are mutually exclusive")
+	}
 	if action.View != "" {
+		if action.ConfigsFromParams {
+			return nil, fmt.Errorf("view and configsFromParams are mutually exclusive")
+		}
 		return r.runView(ctx, action, format)
 	}
 
-	if action.Configs == nil {
-		return nil, fmt.Errorf("either view or configs must be specified")
+	if action.ConfigsFromParams {
+		if configs == nil {
+			return nil, fmt.Errorf("configsFromParams requires a resolved configs parameter named \"configs\"")
+		}
+	} else if action.Configs == nil {
+		return nil, fmt.Errorf("either view, configs, or configsFromParams must be specified")
 	}
 
-	return r.runCatalog(ctx, action, format)
+	return r.runCatalog(ctx, action, format, configs)
 }
 
 func (r *Report) runView(ctx context.Context, action v1.ReportAction, format string) (*ReportResult, error) {
@@ -127,17 +147,19 @@ func (r *Report) runView(ctx context.Context, action v1.ReportAction, format str
 	return reportResult(format, rendered), nil
 }
 
-func (r *Report) runCatalog(ctx context.Context, action v1.ReportAction, format string) (*ReportResult, error) {
+func (r *Report) runCatalog(ctx context.Context, action v1.ReportAction, format string, configs []models.ConfigItem) (*ReportResult, error) {
 	opts, err := catalogOptions(action)
 	if err != nil {
 		return nil, err
 	}
 	opts.Progress = func(format string, args ...any) { r.logf(ctx, format, args...) }
 
-	r.logf(ctx, "resolving config items")
-	configs, err := query.FindConfigsByResourceSelector(ctx, -1, *action.Configs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve configs: %w", err)
+	if configs == nil {
+		r.logf(ctx, "resolving config items")
+		configs, err = query.FindConfigsByResourceSelector(ctx, -1, *action.Configs)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve configs: %w", err)
+		}
 	}
 	if len(configs) == 0 {
 		return nil, fmt.Errorf("no config items matched the selector")
