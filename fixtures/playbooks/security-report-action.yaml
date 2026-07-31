@@ -35,8 +35,8 @@ spec:
   actions:
     - name: Security Report
       report:
-        configs:
-          id: '$(.params.configs | idsFromMap)'
+        # Reuse the already-resolved `configs` parameter instead of querying the selected IDs again.
+        configsFromParams: true
         format: '{{ .params.format }}'
         since: '{{ .params.since }}'
         file:

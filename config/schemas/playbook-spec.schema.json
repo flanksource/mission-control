@@ -2183,7 +2183,11 @@
         },
         "configs": {
           "$ref": "#/$defs/ResourceSelector",
-          "description": "Inline catalog query for the catalog report (alternative to View)"
+          "description": "Inline catalog query for the catalog report (alternative to view and configsFromParams)."
+        },
+        "configsFromParams": {
+          "type": "boolean",
+          "description": "ConfigsFromParams uses config items already resolved from the playbook parameter named \"configs\".\nThe playbook must declare a parameter with name \"configs\" and type \"configs\". Set this to true\nwhen the report should use that parameter instead of executing a separate configs selector. Reusing\nthe resolved parameter avoids a duplicate database query and guarantees that the report uses the\nsame config items that are exposed to templates as .params.configs. This is mutually exclusive with\nconfigs and view."
         },
         "file": {
           "$ref": "#/$defs/ReportFile",

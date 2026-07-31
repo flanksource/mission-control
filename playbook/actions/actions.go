@@ -64,9 +64,11 @@ type TemplateEnv struct {
 	Run       models.PlaybookRun        `json:"run"`
 	Action    *models.PlaybookRunAction `json:"action,omitempty"`
 	Params    map[string]any            `json:"params,omitempty"`
-	Request   types.JSONMap             `json:"request,omitempty"`
-	Env       map[string]any            `json:"env,omitempty"`
-	GitOps    query.GitOpsSource        `json:"git,omitempty"`
+	// ResolvedConfigs retains the typed value of the configs parameter for actions that consume it directly.
+	ResolvedConfigs []models.ConfigItem `json:"-"`
+	Request         types.JSONMap       `json:"request,omitempty"`
+	Env             map[string]any      `json:"env,omitempty"`
+	GitOps          query.GitOpsSource  `json:"git,omitempty"`
 
 	// User is the user who triggered the playbook run
 	User *models.Person `json:"user,omitempty"`
