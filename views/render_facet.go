@@ -3,9 +3,7 @@ package views
 import (
 	"fmt"
 
-	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/view"
 
 	"github.com/flanksource/incident-commander/api"
@@ -106,55 +104,9 @@ func renderFacetWithData(ctx context.Context, data any, format string, opts *v1.
 		return nil, fmt.Errorf("data must not be nil")
 	}
 
-	baseURL, token, timestampURL, err := ResolveFacetConnection(ctx, opts)
-	if err != nil {
-		return nil, err
-	}
-
-	if baseURL != "" {
-		return report.RenderHTTP(ctx, baseURL, token, data, format, viewEntryFile, report.RenderHTTPOptions{
-			TimestampURL: timestampURL,
-		})
-	}
-
-	result, err := report.RenderCLI(data, format, viewEntryFile)
+	result, err := report.Render(ctx, data, format, viewEntryFile, "", opts)
 	if err != nil {
 		return nil, err
 	}
 	return result.Data, nil
-}
-
-// ResolveFacetConnection resolves the facet rendering server connection from
-// the action's facet options. Returns empty baseURL when no remote server is
-// configured (local CLI rendering should be used).
-func ResolveFacetConnection(ctx context.Context, opts *v1.FacetOptions) (baseURL, token, timestampURL string, err error) {
-	if opts == nil {
-		return "", "", "", nil
-	}
-
-	timestampURL = opts.TimestampURL
-
-	if opts.Connection != "" {
-		conn, err := connection.Get(ctx, opts.Connection)
-		if err != nil {
-			return "", "", "", fmt.Errorf("failed to get facet connection: %w", err)
-		}
-		if conn == nil {
-			return "", "", "", fmt.Errorf("facet connection %q not found", opts.Connection)
-		}
-		if conn.Type != models.ConnectionTypeFacet {
-			return "", "", "", fmt.Errorf("connection %q is type %q, expected %q", opts.Connection, conn.Type, models.ConnectionTypeFacet)
-		}
-		baseURL = conn.URL
-		token = conn.Password
-		if timestampURL == "" {
-			timestampURL = conn.Properties["timestampUrl"]
-		}
-	}
-
-	if opts.URL != "" {
-		baseURL = opts.URL
-	}
-
-	return baseURL, token, timestampURL, nil
 }

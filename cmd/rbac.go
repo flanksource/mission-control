@@ -67,6 +67,7 @@ Examples:
 		}
 		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 		shutdown.WaitForSignal()
+		applyFacetFlags(ctx)
 
 		opts := buildRBACOptions(args)
 
@@ -160,6 +161,7 @@ func selectorsFromAppYAML(path string) []types.ResourceSelector {
 
 func init() {
 	ExportRBAC.Flags().StringVarP(&rbacFormat, "format", "f", "json", "Output format: json, csv, facet-html, facet-pdf")
+	addFacetFlags(ExportRBAC)
 	ExportRBAC.Flags().StringVarP(&rbacOutFile, "out-file", "o", "", "Write output to file instead of stdout")
 	ExportRBAC.Flags().IntVar(&rbacStaleDays, "stale-days", 0, "Days without sign-in before access is flagged stale (0 = disabled)")
 	ExportRBAC.Flags().IntVar(&rbacReviewDays, "review-days", 0, "Days without review before access is flagged overdue (0 = disabled)")

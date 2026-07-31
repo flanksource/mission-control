@@ -204,24 +204,18 @@ func (r *Report) renderCatalogFacet(ctx context.Context, action v1.ReportAction,
 		return nil, err
 	}
 
-	baseURL, token, timestampURL, err := views.ResolveFacetConnection(ctx, action.Facet)
+	server, err := report.ResolveServer(ctx, action.Facet)
 	if err != nil {
 		return nil, err
 	}
 
-	if baseURL != "" {
-		r.logf(ctx, "rendering %s via facet service %s", facetFormat, baseURL)
-		opts := report.RenderHTTPOptions{TimestampURL: timestampURL}
-		// The embedded default ships the pristine embedded files; a custom file
-		// ships its own directory.
-		if action.File == nil {
-			return report.RenderHTTP(ctx, baseURL, token, data, facetFormat, entryFile, opts)
-		}
-		return report.RenderHTTPFromDir(ctx, baseURL, token, data, facetFormat, srcDir, entryFile, opts)
+	if server.Configured() {
+		r.logf(ctx, "rendering %s via facet service %s", facetFormat, server.BaseURL)
+	} else {
+		r.logf(ctx, "rendering %s via local facet binary", facetFormat)
 	}
 
-	r.logf(ctx, "rendering %s via local facet CLI", facetFormat)
-	result, err := report.RenderCLIFromDir(data, facetFormat, srcDir, entryFile)
+	result, err := report.RenderWith(ctx, data, facetFormat, entryFile, srcDir, server)
 	if err != nil {
 		return nil, err
 	}
@@ -343,11 +337,7 @@ func reportBool(value v1.TemplatedBool, defaultValue bool, field string) (bool, 
 // entry file may live in a subdirectory and import from anywhere in the repo.
 func resolveReportSource(ctx context.Context, file *v1.ReportFile) (srcDir, entryFile string, err error) {
 	if file == nil {
-		dir, err := report.SrcDir()
-		if err != nil {
-			return "", "", fmt.Errorf("prepare report src dir: %w", err)
-		}
-		return dir, defaultCatalogEntryFile, nil
+		return "", defaultCatalogEntryFile, nil
 	}
 
 	if file.Git != nil {

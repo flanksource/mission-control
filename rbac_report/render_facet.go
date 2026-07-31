@@ -31,7 +31,7 @@ func renderWithFacet(ctx context.Context, r *api.RBACReport, format string, view
 
 	ctx.Logger.V(3).Infof("Rendering facet-%s", format)
 
-	result, err := report.RenderCLI(initSlices(r), format, entryFile)
+	result, err := report.Render(ctx, initSlices(r), format, entryFile, "", nil)
 	if err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to render RBAC %s report", format)
 	}

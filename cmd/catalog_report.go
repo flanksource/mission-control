@@ -85,6 +85,7 @@ Examples:
 		}
 		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 		shutdown.WaitForSignal()
+		applyFacetFlags(ctx)
 
 		opts, err := buildCatalogReportOptions(cmd)
 		if err != nil {
@@ -194,6 +195,7 @@ func init() {
 	CatalogReportCmd.Flags().StringVar(&catalogReportSince, "since", "30d", "Time range for changes and access logs (supports d/w/y e.g. 7d, 2w, 30d)")
 	CatalogReportCmd.Flags().StringVar(&catalogReportTitle, "title", "", "Report title (default auto-generated)")
 	CatalogReportCmd.Flags().StringVar(&report.SourceDir, "report-source", "", "Local directory or TSX file for report rendering (overrides embedded reports)")
+	addFacetFlags(CatalogReportCmd)
 
 	CatalogReportCmd.Flags().BoolVar(&catalogReportRecursive, "recursive", false, "Include all descendant config items")
 	CatalogReportCmd.Flags().StringVar(&catalogReportGroupBy, "group-by", "none", "Group descendant data: 'none' (default), 'merged', or 'config'")

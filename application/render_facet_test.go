@@ -1,10 +1,10 @@
 package application
 
 import (
-	"os/exec"
 	"strings"
 	"time"
 
+	"github.com/flanksource/duty/context"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -33,11 +33,7 @@ var _ = ginkgo.Describe("RenderFacetHTML", ginkgo.Label("ignore_local"), func() 
 	ginkgo.It("should render HTML output", func() {
 		ginkgo.Skip("disabled: facet integration test is flaky in CI")
 
-		if _, err := exec.LookPath("facet"); err != nil {
-			ginkgo.Skip("facet not on PATH; skipping facet-html integration test")
-		}
-
-		data, err := RenderFacetHTML(testApp())
+		data, err := RenderFacetHTML(context.New(), testApp())
 		Expect(err).ToNot(HaveOccurred())
 		Expect(string(data)).To(ContainSubstring("<html"))
 	})
@@ -47,11 +43,7 @@ var _ = ginkgo.Describe("RenderFacetPDF", ginkgo.Label("ignore_local"), func() {
 	ginkgo.It("should render PDF output", func() {
 		ginkgo.Skip("disabled: facet integration test is flaky in CI")
 
-		if _, err := exec.LookPath("facet"); err != nil {
-			ginkgo.Skip("facet not on PATH; skipping facet-pdf integration test")
-		}
-
-		data, err := RenderFacetPDF(testApp())
+		data, err := RenderFacetPDF(context.New(), testApp())
 		if err != nil && strings.Contains(err.Error(), "Failed to launch the browser") {
 			ginkgo.Skip("headless Chrome unavailable in this environment; skipping facet-pdf test")
 		}

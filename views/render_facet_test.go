@@ -6,14 +6,65 @@ import (
 	"net/http"
 	"net/http/httptest"
 
+	"github.com/flanksource/commons/properties"
+	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/report"
 )
 
 // maxMultipartMemory is the max memory used when parsing multipart form data in tests (32MB).
 const maxMultipartMemory = 32 << 20
+
+var _ = ginkgo.Describe("ResolveServer with a facet connection", func() {
+	var facetConn models.Connection
+
+	ginkgo.BeforeEach(func() {
+		facetConn = models.Connection{
+			Name:       "test-facet-connection",
+			Namespace:  "default",
+			Type:       models.ConnectionTypeFacet,
+			URL:        "http://facet.test",
+			Password:   "facet-token",
+			Properties: types.JSONStringMap{"timestampUrl": "http://tsa.test"},
+			Source:     models.SourceUI,
+		}
+		Expect(DefaultContext.DB().Save(&facetConn).Error).ToNot(HaveOccurred())
+
+		ginkgo.DeferCleanup(func() {
+			Expect(DefaultContext.DB().Delete(&facetConn).Error).ToNot(HaveOccurred())
+			properties.Global.Set(report.PropertyConnection, "")
+			DefaultContext.ClearCache()
+		})
+	})
+
+	ginkgo.It("resolves the url, token and timestamp url from the connection", func() {
+		server, err := report.ResolveServer(DefaultContext, &v1.FacetOptions{Connection: "connection://default/test-facet-connection"})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(server.BaseURL).To(Equal("http://facet.test"))
+		Expect(server.Token).To(Equal("facet-token"))
+		Expect(server.TimestampURL).To(Equal("http://tsa.test"))
+	})
+
+	ginkgo.It("resolves the connection named by the facet.connection property", func() {
+		properties.Global.Set(report.PropertyConnection, "connection://default/test-facet-connection")
+		DefaultContext.ClearCache()
+
+		server, err := report.ResolveServer(DefaultContext, nil)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(server.BaseURL).To(Equal("http://facet.test"))
+		Expect(server.Token).To(Equal("facet-token"))
+	})
+
+	ginkgo.It("rejects a connection that is not a facet connection", func() {
+		_, err := report.ResolveServer(DefaultContext, &v1.FacetOptions{Connection: connectionName})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("expected"))
+	})
+})
 
 var _ = ginkgo.Describe("RenderHTTP", func() {
 	var (

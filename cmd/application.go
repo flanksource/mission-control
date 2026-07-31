@@ -43,6 +43,7 @@ var ExportApplication = &cobra.Command{
 		}
 		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 		shutdown.WaitForSignal()
+		applyFacetFlags(ctx)
 
 		manifest, err := os.ReadFile(args[0])
 		if err != nil {
@@ -92,5 +93,6 @@ func init() {
 	ExportApplication.Flags().StringVarP(&exportFormat, "format", "f", "json", "Output format: json, html, pdf, facet-html, facet-pdf")
 	ExportApplication.Flags().StringVarP(&exportOutfile, "out-file", "o", "", "Write output to file instead of stdout")
 	ExportApplication.Flags().StringVar(&report.SourceDir, "report-source", "", "Local directory or TSX file for report rendering (overrides embedded reports)")
+	addFacetFlags(ExportApplication)
 	ApplicationCmd.AddCommand(ExportApplication)
 }

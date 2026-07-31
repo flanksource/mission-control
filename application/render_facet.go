@@ -3,26 +3,26 @@ package application
 import (
 	"fmt"
 
+	"github.com/flanksource/duty/context"
+
 	icapi "github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/report"
 )
 
-func RenderFacetHTML(app *icapi.Application) ([]byte, error) {
-	if app == nil {
-		return nil, fmt.Errorf("application must not be nil")
-	}
-	result, err := report.RenderCLI(initSlices(app), "html", "Application.tsx")
-	if err != nil {
-		return nil, err
-	}
-	return result.Data, nil
+func RenderFacetHTML(ctx context.Context, app *icapi.Application) ([]byte, error) {
+	return renderWithFacet(ctx, app, "html")
 }
 
-func RenderFacetPDF(app *icapi.Application) ([]byte, error) {
+func RenderFacetPDF(ctx context.Context, app *icapi.Application) ([]byte, error) {
+	return renderWithFacet(ctx, app, "pdf")
+}
+
+func renderWithFacet(ctx context.Context, app *icapi.Application, format string) ([]byte, error) {
 	if app == nil {
 		return nil, fmt.Errorf("application must not be nil")
 	}
-	result, err := report.RenderCLI(initSlices(app), "pdf", "Application.tsx")
+
+	result, err := report.Render(ctx, initSlices(app), format, "Application.tsx", "", nil)
 	if err != nil {
 		return nil, err
 	}
