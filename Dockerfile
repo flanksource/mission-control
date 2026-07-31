@@ -18,5 +18,9 @@ WORKDIR /app
 COPY --from=builder /app/.bin/incident-commander /app
 COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
+# Report actions resolve a relative file.path against the working directory, so
+# playbooks can reference the shipped templates as report/<Name>.tsx.
+COPY report /app/report
+
 RUN /app/incident-commander go-offline
 ENTRYPOINT ["/app/incident-commander"]
