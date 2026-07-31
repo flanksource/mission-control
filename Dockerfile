@@ -93,7 +93,7 @@ RUN --mount=type=secret,id=GITHUB_TOKEN,env=GITHUB_TOKEN \
 # is version-specific, so ENV can't reference it with a glob).
 ENV PUPPETEER_CACHE_DIR=/opt/puppeteer
 RUN npx --yes puppeteer browsers install chrome --path /opt/puppeteer && \
-    ln -sf "$(ls /opt/puppeteer/chrome/linux-*/chrome-linux64/chrome)" /usr/local/bin/chrome
+    ln -sf "$(ls /opt/puppeteer/chrome/linux*/chrome-linux64/chrome)" /usr/local/bin/chrome
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/local/bin/chrome
 
 # Verify facet can render a PDF inside the container.
