@@ -63,7 +63,7 @@ jobs:
         flanksource/incident-commander:latest
         flanksource/incident-commander:v${{ needs.create-release.outputs.version }}
         public.ecr.aws/k4y9r6y5/incident-commander:v${{ needs.create-release.outputs.version }}
-      platforms: linux/amd64
+      platforms: linux/amd64,linux/arm64
       login_to_ecr: true
       cache_from: type=gha
       cache_to: type=gha,mode=max
