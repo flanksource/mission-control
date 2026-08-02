@@ -195,9 +195,12 @@ generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and
 generate-llm-pricing: ## Regenerate embedded LLM pricing registry from models.dev.
 	go run llm/internal/gen-pricing/main.go --output "$(LLM_PRICING_REGISTRY)"
 
-.PHONY: build
+.PHONY: build go-build
 build: static
-	go build -o ./.bin/$(NAME) -ldflags "-X \"main.version=$(VERSION_TAG) built at $(DATE)\""  main.go
+	$(MAKE) go-build
+
+go-build: | $(LOCALBIN)
+	go build -o ./.bin/$(NAME) -ldflags "-X \"main.version=$(VERSION_TAG) built at $(DATE)\"" main.go
 
 .PHONY: dev
 dev:
