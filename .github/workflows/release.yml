@@ -64,6 +64,8 @@ jobs:
         flanksource/incident-commander:v${{ needs.create-release.outputs.version }}
         public.ecr.aws/k4y9r6y5/incident-commander:v${{ needs.create-release.outputs.version }}
       platforms: linux/amd64,linux/arm64
+      build_args: |
+        VERSION=v${{ needs.create-release.outputs.version }}
       login_to_ecr: true
       cache_from: type=gha
       cache_to: type=gha,mode=max

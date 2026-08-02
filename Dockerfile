@@ -1,7 +1,6 @@
-FROM golang:1.26.1-bookworm@sha256:ab3d6955bbc813a0f3fdf220c1d817dd89c0b3f283777db8ece4a32fe7858edd AS builder
+FROM --platform=$BUILDPLATFORM golang:1.26.1-bookworm@sha256:ab3d6955bbc813a0f3fdf220c1d817dd89c0b3f283777db8ece4a32fe7858edd AS generator
 WORKDIR /app
 
-ARG VERSION
 COPY go.mod /app/go.mod
 COPY go.sum /app/go.sum
 COPY plugin/api/go.mod /app/plugin/api/go.mod
@@ -10,7 +9,15 @@ COPY plugin/sdk/go.mod /app/plugin/sdk/go.mod
 COPY plugin/sdk/go.sum /app/plugin/sdk/go.sum
 RUN go mod download
 COPY ./ ./
-RUN make build
+RUN make auth/oidc/static/tailwind.min.js
+RUN make manifests
+RUN make ui
+
+FROM generator AS builder
+ARG TARGETOS
+ARG TARGETARCH
+ARG VERSION=latest
+RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH VERSION=$VERSION make go-build
 
 FROM flanksource/base-image:0.6.0@sha256:6cae0a4bbba7e7e16674a55751c8161c11d5ebdd23f596f93e669f835ee1e034
 WORKDIR /app
