@@ -70,12 +70,8 @@ jobs:
       - name: Install facet
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Pin to a known-good release. facet 0.1.47 migrated the CLI runtime
-          # from Bun to Node and rewrote the Vite builder + NODE_PATH/module
-          # resolution, which broke subpath-export resolution (e.g.
-          # "@flanksource/icons/icon") under both Rollup and Rolldown. Unpin
-          # once a fixed facet release is available.
-          FACET_VERSION: v0.1.46
+          # Kept in sync with the @flanksource/facet version in report/package.json.
+          FACET_VERSION: v0.1.69
         run: |
           set -euo pipefail
           # Authenticate the API call so it doesn't hit the anonymous rate limit

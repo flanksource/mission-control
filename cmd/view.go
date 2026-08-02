@@ -44,6 +44,7 @@ var ViewRun = &cobra.Command{
 		}
 		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 		shutdown.WaitForSignal()
+		applyFacetFlags(ctx)
 
 		manifest, err := os.ReadFile(args[0])
 		if err != nil {
@@ -111,5 +112,6 @@ func init() {
 	ViewRun.Flags().StringVarP(&viewOutFile, "out-file", "o", "", "Write output to file instead of stdout")
 	ViewRun.Flags().StringSliceVar(&viewVars, "var", nil, "Template variables as key=value pairs")
 	ViewRun.Flags().StringVar(&report.SourceDir, "report-source", "", "Local directory or TSX file for report rendering (overrides embedded reports)")
+	addFacetFlags(ViewRun)
 	ViewCmd.AddCommand(ViewRun)
 }

@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/gomega"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/report"
 )
 
 var _ = ginkgo.Describe("Report action progress logs", func() {
@@ -181,8 +182,12 @@ var _ = ginkgo.Describe("Report action source resolution", func() {
 		srcDir, entry, err := resolveReportSource(ctx, nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(entry).To(Equal("CatalogReport.tsx"))
-		Expect(srcDir).NotTo(BeEmpty())
-		Expect(filepath.Join(srcDir, entry)).To(BeAnExistingFile())
+
+		// An empty source directory selects the embedded report files, which the
+		// renderer ships as-is rather than from a directory on disk.
+		Expect(srcDir).To(BeEmpty())
+		_, err = report.FS.ReadFile(entry)
+		Expect(err).NotTo(HaveOccurred())
 	})
 
 	ginkgo.It("resolves an absolute local path as-is", func() {

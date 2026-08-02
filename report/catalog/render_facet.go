@@ -16,7 +16,7 @@ func renderFacetResult(ctx context.Context, r *api.CatalogReport, format string)
 
 	ctx.Logger.V(3).Infof("Rendering catalog facet-%s", format)
 
-	result, err := report.RenderCLI(initSlices(r), format, "CatalogReport.tsx")
+	result, err := report.Render(ctx, initSlices(r), format, "CatalogReport.tsx", "", nil)
 	if err != nil {
 		return nil, "", "", "", err
 	}

@@ -111,9 +111,9 @@ func Export(ctx context.Context, namespace, name, format string) ([]byte, error)
 		}
 		return []byte(html), nil
 	case "facet-html":
-		return RenderFacetHTML(generated)
+		return RenderFacetHTML(ctx, generated)
 	case "facet-pdf":
-		return RenderFacetPDF(generated)
+		return RenderFacetPDF(ctx, generated)
 	default:
 		out, err := json.MarshalIndent(generated, "", "  ")
 		if err != nil {
