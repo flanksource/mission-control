@@ -3,9 +3,6 @@
 package report
 
 import (
-	"net/url"
-	"strings"
-
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
@@ -33,23 +30,6 @@ type Server struct {
 }
 
 func (s Server) Configured() bool { return s.BaseURL != "" }
-
-// requireSecureToken refuses to send the facet API key over a plaintext
-// connection, where it would be readable in transit.
-func (s Server) requireSecureToken() error {
-	if s.Token == "" {
-		return nil
-	}
-
-	parsed, err := url.Parse(s.BaseURL)
-	if err != nil {
-		return dutyAPI.Errorf(dutyAPI.EINVALID, "invalid facet server url %q: %v", s.BaseURL, err)
-	}
-	if !strings.EqualFold(parsed.Scheme, "https") {
-		return dutyAPI.Errorf(dutyAPI.EINVALID, "refusing to send the facet api key to %q over %s: use https", s.BaseURL, parsed.Scheme)
-	}
-	return nil
-}
 
 // ResolveServer resolves the facet rendering server, preferring the report
 // options and falling back to the facet.url and facet.connection properties.
@@ -133,10 +113,6 @@ func RenderWith(ctx context.Context, data any, format, entryFile, srcDir string,
 	}
 
 	if server.Configured() {
-		if err := server.requireSecureToken(); err != nil {
-			return nil, err
-		}
-
 		httpOpts := RenderHTTPOptions{TimestampURL: server.TimestampURL}
 
 		var rendered []byte
