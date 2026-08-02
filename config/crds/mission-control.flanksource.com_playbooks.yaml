@@ -4530,9 +4530,6 @@ spec:
                                 used as-is. The file's directory must contain the report scaffold.
                               type: string
                           type: object
-                          x-kubernetes-validations:
-                          - message: exactly one of path or git must be set
-                            rule: has(self.path) != has(self.git)
                         filters:
                           description: |-
                             Filters are appended to the embedded report settings filters. Explicit
@@ -4613,15 +4610,6 @@ spec:
                             or just name
                           type: string
                       type: object
-                      x-kubernetes-validations:
-                      - message: view is mutually exclusive with configs, configsFromParams,
-                          and file
-                        rule: '!(has(self.view) && self.view != "" && (has(self.configs)
-                          || (has(self.configsFromParams) && self.configsFromParams)
-                          || has(self.file)))'
-                      - message: configs and configsFromParams are mutually exclusive
-                        rule: '!(has(self.configs) && has(self.configsFromParams)
-                          && self.configsFromParams)'
                     retry:
                       description: Retry specifies the retry policy for the action.
                       properties:
