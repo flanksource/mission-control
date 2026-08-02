@@ -740,8 +740,6 @@ type CatalogAction struct {
 	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty" template:"true"`
 }
 
-// +kubebuilder:validation:XValidation:rule="!(has(self.view) && self.view != \"\" && (has(self.configs) || (has(self.configsFromParams) && self.configsFromParams) || has(self.file)))",message="view is mutually exclusive with configs, configsFromParams, and file"
-// +kubebuilder:validation:XValidation:rule="!(has(self.configs) && has(self.configsFromParams) && self.configsFromParams)",message="configs and configsFromParams are mutually exclusive"
 type ReportAction struct {
 	// Reference an existing View by namespace/name or just name
 	View string `json:"view,omitempty" yaml:"view,omitempty" template:"true"`
@@ -834,7 +832,6 @@ type ReportSections struct {
 
 // ReportFile selects the TSX template used to render the catalog report,
 // either from a git repository or a local file path.
-// +kubebuilder:validation:XValidation:rule="has(self.path) != has(self.git)",message="exactly one of path or git must be set"
 type ReportFile struct {
 	// Path to a local TSX file. A relative path is resolved against the
 	// working directory (e.g. "report/CatalogReport.tsx"); an absolute path is
@@ -985,6 +982,29 @@ func (p *PlaybookAction) Validate() error {
 
 	if primaryCount == 0 && p.GitOps == nil && p.Notification == nil {
 		return fmt.Errorf("action %q is empty", name)
+	}
+
+	if p.Report != nil {
+		if err := p.Report.Validate(); err != nil {
+			return fmt.Errorf("action %q: %w", name, err)
+		}
+	}
+
+	return nil
+}
+
+// Validate checks that the report action selects its config items from exactly one source.
+func (r *ReportAction) Validate() error {
+	if r.View != "" && (r.Configs != nil || r.ConfigsFromParams || r.File != nil) {
+		return fmt.Errorf("view is mutually exclusive with configs, configsFromParams, and file")
+	}
+
+	if r.Configs != nil && r.ConfigsFromParams {
+		return fmt.Errorf("configs and configsFromParams are mutually exclusive")
+	}
+
+	if r.File != nil && (r.File.Path != "") == (r.File.Git != nil) {
+		return fmt.Errorf("exactly one of path or git must be set")
 	}
 
 	return nil
