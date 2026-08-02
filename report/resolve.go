@@ -3,8 +3,10 @@
 package report
 
 import (
-	"fmt"
+	"net/url"
+	"strings"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -31,6 +33,23 @@ type Server struct {
 }
 
 func (s Server) Configured() bool { return s.BaseURL != "" }
+
+// requireSecureToken refuses to send the facet API key over a plaintext
+// connection, where it would be readable in transit.
+func (s Server) requireSecureToken() error {
+	if s.Token == "" {
+		return nil
+	}
+
+	parsed, err := url.Parse(s.BaseURL)
+	if err != nil {
+		return dutyAPI.Errorf(dutyAPI.EINVALID, "invalid facet server url %q: %v", s.BaseURL, err)
+	}
+	if !strings.EqualFold(parsed.Scheme, "https") {
+		return dutyAPI.Errorf(dutyAPI.EINVALID, "refusing to send the facet api key to %q over %s: use https", s.BaseURL, parsed.Scheme)
+	}
+	return nil
+}
 
 // ResolveServer resolves the facet rendering server, preferring the report
 // options and falling back to the facet.url and facet.connection properties.
@@ -69,13 +88,13 @@ func ResolveServer(ctx context.Context, opts *v1.FacetOptions) (Server, error) {
 func resolveConnection(ctx context.Context, name, timestampURL string) (Server, error) {
 	conn, err := connection.Get(ctx, name)
 	if err != nil {
-		return Server{}, fmt.Errorf("failed to get facet connection: %w", err)
+		return Server{}, ctx.Oops().Wrapf(err, "failed to get facet connection %q", name)
 	}
 	if conn == nil {
-		return Server{}, fmt.Errorf("facet connection %q not found", name)
+		return Server{}, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "facet connection %q not found", name)
 	}
 	if conn.Type != models.ConnectionTypeFacet {
-		return Server{}, fmt.Errorf("connection %q is type %q, expected %q", name, conn.Type, models.ConnectionTypeFacet)
+		return Server{}, dutyAPI.Errorf(dutyAPI.EINVALID, "connection %q is type %q, expected %q", name, conn.Type, models.ConnectionTypeFacet)
 	}
 
 	server := Server{
@@ -114,6 +133,10 @@ func RenderWith(ctx context.Context, data any, format, entryFile, srcDir string,
 	}
 
 	if server.Configured() {
+		if err := server.requireSecureToken(); err != nil {
+			return nil, err
+		}
+
 		httpOpts := RenderHTTPOptions{TimestampURL: server.TimestampURL}
 
 		var rendered []byte

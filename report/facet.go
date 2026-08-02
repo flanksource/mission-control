@@ -51,7 +51,7 @@ func RenderCLIFromDir(data any, format, srcDir, entryFile string) (*RenderResult
 
 	facetBin, err := exec.LookPath("facet")
 	if err != nil {
-		return nil, fmt.Errorf("facet rendering unavailable: no facet server configured (set the %q property) and no facet binary on PATH (local dev: npm install -g @flanksource/facet)", PropertyConnection)
+		return nil, fmt.Errorf("facet rendering unavailable: no facet server configured (set the %q or %q property) and no facet binary on PATH (local dev: npm install -g @flanksource/facet)", PropertyConnection, PropertyURL)
 	}
 
 	dataJSON, err := json.MarshalIndent(data, "", "  ")

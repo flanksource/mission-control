@@ -112,4 +112,27 @@ var _ = ginkgo.Describe("Render", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(result.Data).To(Equal(rendered))
 	})
+
+	ginkgo.It("refuses to send the api key over plaintext http", func() {
+		_, err := RenderWith(ctx, map[string]string{"key": "value"}, "html", "CatalogReport.tsx", "",
+			Server{BaseURL: server.URL, Token: "secret-token"})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("refusing to send the facet api key"))
+		Expect(err.Error()).ToNot(ContainSubstring("secret-token"))
+	})
+
+	ginkgo.It("allows a token over https", func() {
+		// Fails to connect rather than being refused: the guard passed.
+		_, err := RenderWith(ctx, map[string]string{"key": "value"}, "html", "CatalogReport.tsx", "",
+			Server{BaseURL: "https://facet.invalid", Token: "secret-token"})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).ToNot(ContainSubstring("refusing to send"))
+	})
+
+	ginkgo.It("allows plaintext http when no token is set", func() {
+		result, err := RenderWith(ctx, map[string]string{"key": "value"}, "html", "CatalogReport.tsx", "",
+			Server{BaseURL: server.URL})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(result.Data).To(Equal(rendered))
+	})
 })
