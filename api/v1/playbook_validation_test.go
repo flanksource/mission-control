@@ -45,6 +45,12 @@ var _ = ginkgo.Describe("ParseAndValidatePlaybookSpec", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
+	ginkgo.It("rejects a report action with no config source", func() {
+		_, err := ParseAndValidatePlaybookSpec(reportSpec(`{}`))
+
+		Expect(err).To(MatchError(ContainSubstring("either view, configs, or configsFromParams must be specified")))
+	})
+
 	ginkgo.It("rejects a report action with both view and configs", func() {
 		_, err := ParseAndValidatePlaybookSpec(reportSpec(`{"view": "my-view", "configs": {"name": "my-config"}}`))
 

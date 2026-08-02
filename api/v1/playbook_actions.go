@@ -1007,6 +1007,10 @@ func (r *ReportAction) Validate() error {
 		return fmt.Errorf("exactly one of path or git must be set")
 	}
 
+	if r.View == "" && r.Configs == nil && !r.ConfigsFromParams {
+		return fmt.Errorf("either view, configs, or configsFromParams must be specified")
+	}
+
 	return nil
 }
 
