@@ -57,7 +57,7 @@ jobs:
       contents: read
       id-token: write
       packages: write
-    uses: flanksource/action-workflows/.github/workflows/publish-docker-image.yml@6e3308211f3e1694e187ea2057c24978e5a01c2f
+    uses: flanksource/action-workflows/.github/workflows/publish-multi-platform-docker-image.yml@c628197234fd2c4c3aebcb3c2b60dd399251adaf
     with:
       image_tags: |
         flanksource/incident-commander:latest
@@ -67,8 +67,7 @@ jobs:
       build_args: |
         VERSION=v${{ needs.create-release.outputs.version }}
       login_to_ecr: true
-      cache_from: type=gha
-      cache_to: type=gha,mode=max
+      cache_mode: max
       cosign: true
     secrets:
       docker_username: ${{ secrets.DOCKER_USERNAME }}
