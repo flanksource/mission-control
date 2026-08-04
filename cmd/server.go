@@ -39,6 +39,7 @@ import (
 	echov4 "github.com/labstack/echo/v4"
 
 	// register event handlers & echo routers
+	_ "github.com/flanksource/incident-commander/aditya"
 	_ "github.com/flanksource/incident-commander/artifacts"
 	_ "github.com/flanksource/incident-commander/catalog"
 	_ "github.com/flanksource/incident-commander/playbook"
