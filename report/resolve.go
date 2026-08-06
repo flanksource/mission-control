@@ -3,6 +3,9 @@
 package report
 
 import (
+	"time"
+
+	"github.com/flanksource/commons/duration"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
@@ -27,6 +30,10 @@ type Server struct {
 	BaseURL      string
 	Token        string
 	TimestampURL string
+
+	// Timeout bounds the render. Zero leaves the render bounded by the facet
+	// server's own timeout.
+	Timeout time.Duration
 }
 
 func (s Server) Configured() bool { return s.BaseURL != "" }
@@ -34,6 +41,38 @@ func (s Server) Configured() bool { return s.BaseURL != "" }
 // ResolveServer resolves the facet rendering server, preferring the report
 // options and falling back to the facet.url and facet.connection properties.
 func ResolveServer(ctx context.Context, opts *v1.FacetOptions) (Server, error) {
+	server, err := resolveServer(ctx, opts)
+	if err != nil {
+		return Server{}, err
+	}
+
+	server.Timeout, err = resolveTimeout(opts)
+	if err != nil {
+		return Server{}, err
+	}
+
+	return server, nil
+}
+
+// resolveTimeout parses the render timeout from the options. An unset timeout
+// resolves to zero, leaving the render bounded by the facet server.
+func resolveTimeout(opts *v1.FacetOptions) (time.Duration, error) {
+	if opts == nil || opts.Timeout == "" {
+		return 0, nil
+	}
+
+	parsed, err := duration.ParseDuration(opts.Timeout)
+	if err != nil {
+		return 0, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid facet timeout %q: %v", opts.Timeout, err)
+	}
+	if parsed <= 0 {
+		return 0, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid facet timeout %q: must be positive", opts.Timeout)
+	}
+
+	return time.Duration(parsed), nil
+}
+
+func resolveServer(ctx context.Context, opts *v1.FacetOptions) (Server, error) {
 	var timestampURL string
 	if opts != nil {
 		timestampURL = opts.TimestampURL
@@ -113,7 +152,7 @@ func RenderWith(ctx context.Context, data any, format, entryFile, srcDir string,
 	}
 
 	if server.Configured() {
-		httpOpts := RenderHTTPOptions{TimestampURL: server.TimestampURL}
+		httpOpts := RenderHTTPOptions{TimestampURL: server.TimestampURL, Timeout: server.Timeout}
 
 		var rendered []byte
 		var err error
@@ -129,7 +168,7 @@ func RenderWith(ctx context.Context, data any, format, entryFile, srcDir string,
 	}
 
 	if srcDir == "" {
-		return RenderCLI(data, format, entryFile)
+		return RenderCLI(ctx, data, format, entryFile, server.Timeout)
 	}
-	return RenderCLIFromDir(data, format, srcDir, entryFile)
+	return RenderCLIFromDir(ctx, data, format, srcDir, entryFile, server.Timeout)
 }

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"time"
 
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty/context"
@@ -72,20 +73,40 @@ var _ = ginkgo.Describe("ResolveServer", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(server.TimestampURL).To(Equal("http://tsa.local"))
 	})
+
+	ginkgo.It("parses the render timeout from the options", func() {
+		server, err := ResolveServer(ctx, &v1.FacetOptions{URL: "http://facet.local", Timeout: "5m"})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(server.Timeout).To(Equal(5 * time.Minute))
+	})
+
+	ginkgo.It("leaves the render timeout to the facet server when the options don't set one", func() {
+		server, err := ResolveServer(ctx, &v1.FacetOptions{URL: "http://facet.local"})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(server.Timeout).To(BeZero())
+	})
+
+	ginkgo.It("fails on an invalid render timeout", func() {
+		_, err := ResolveServer(ctx, &v1.FacetOptions{URL: "http://facet.local", Timeout: "soon"})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("soon"))
+	})
 })
 
 var _ = ginkgo.Describe("Render", func() {
 	var (
-		ctx       context.Context
-		server    *httptest.Server
-		gotAPIKey string
-		rendered  = []byte("<html><body>Rendered</body></html>")
+		ctx        context.Context
+		server     *httptest.Server
+		gotAPIKey  string
+		gotOptions map[string]any
+		rendered   = []byte("<html><body>Rendered</body></html>")
 	)
 
 	ginkgo.BeforeEach(func() {
 		ctx = context.New()
 		ctx.ClearCache()
 		gotAPIKey = ""
+		gotOptions = nil
 
 		server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			gotAPIKey = r.Header.Get("X-API-Key")
@@ -94,6 +115,7 @@ var _ = ginkgo.Describe("Render", func() {
 			var options map[string]any
 			Expect(json.Unmarshal([]byte(r.FormValue("options")), &options)).To(Succeed())
 			Expect(options["entryFile"]).To(Equal("CatalogReport.tsx"))
+			gotOptions = options
 
 			w.Header().Set("Content-Type", "text/html")
 			_, err := w.Write(rendered)
@@ -130,5 +152,19 @@ var _ = ginkgo.Describe("Render", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(result.Data).To(Equal(rendered))
 		Expect(gotAPIKey).To(BeEmpty())
+	})
+
+	ginkgo.It("sends the render timeout in milliseconds", func() {
+		_, err := RenderWith(ctx, map[string]string{"key": "value"}, "html", "CatalogReport.tsx", "",
+			Server{BaseURL: server.URL, Timeout: 90 * time.Second})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(gotOptions["timeout"]).To(BeEquivalentTo(90_000))
+	})
+
+	ginkgo.It("sends no render timeout when none is configured", func() {
+		_, err := RenderWith(ctx, map[string]string{"key": "value"}, "html", "CatalogReport.tsx", "",
+			Server{BaseURL: server.URL})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(gotOptions).ToNot(HaveKey("timeout"))
 	})
 })

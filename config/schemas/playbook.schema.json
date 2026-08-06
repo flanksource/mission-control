@@ -623,6 +623,10 @@
         "url": {
           "type": "string"
         },
+        "timeout": {
+          "type": "string",
+          "description": "Timeout for the render, e.g. \"10m\". When unset the facet server's own\nrender timeout applies."
+        },
         "pageSize": {
           "type": "string"
         },
