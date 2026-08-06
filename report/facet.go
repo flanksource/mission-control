@@ -4,7 +4,9 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
+	gocontext "context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -14,11 +16,16 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	commonshttp "github.com/flanksource/commons/http"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 )
+
+// clientTimeoutGrace is how much longer the HTTP client waits than the render
+// timeout it asks the facet server for, so the server's timeout response wins.
+const clientTimeoutGrace = 30 * time.Second
 
 // RenderResult contains the rendered output and metadata about the render.
 type RenderResult struct {
@@ -31,7 +38,7 @@ type RenderResult struct {
 // RenderCLI renders data to the given format using the local facet CLI binary.
 // With -v (log level 1): prints the facet command and tees stdout/stderr.
 // With -vv (log level 2): also keeps the data file and report dir for re-rendering.
-func RenderCLI(data any, format, entryFile string) (*RenderResult, error) {
+func RenderCLI(ctx context.Context, data any, format, entryFile string, timeout time.Duration) (*RenderResult, error) {
 	srcDir, err := SrcDir()
 	if err != nil {
 		return nil, fmt.Errorf("prepare facet src dir: %w", err)
@@ -39,13 +46,15 @@ func RenderCLI(data any, format, entryFile string) (*RenderResult, error) {
 	if _, override := ResolveSource(); override != "" {
 		entryFile = override
 	}
-	return RenderCLIFromDir(data, format, srcDir, entryFile)
+	return RenderCLIFromDir(ctx, data, format, srcDir, entryFile, timeout)
 }
 
 // RenderCLIFromDir renders data using the facet CLI binary against an explicit
 // source directory and entry file. The directory must contain the report
 // scaffold (package.json, components, etc.) needed to compile the entry file.
-func RenderCLIFromDir(data any, format, srcDir, entryFile string) (*RenderResult, error) {
+// The facet process is killed when it exceeds timeout; a zero timeout lets it
+// run to completion.
+func RenderCLIFromDir(ctx context.Context, data any, format, srcDir, entryFile string, timeout time.Duration) (*RenderResult, error) {
 	verbose := logger.IsLevelEnabled(1)
 	keepFiles := logger.IsLevelEnabled(2)
 
@@ -79,8 +88,15 @@ func RenderCLIFromDir(data any, format, srcDir, entryFile string) (*RenderResult
 	outFile.Close()
 	defer os.Remove(outFile.Name())
 
+	renderCtx := gocontext.Context(ctx)
+	if timeout > 0 {
+		var cancel gocontext.CancelFunc
+		renderCtx, cancel = gocontext.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
 	var stdout, stderr bytes.Buffer
-	cmd := exec.Command(facetBin, format, entryFile, "-d", dataFile.Name(), "-o", outFile.Name())
+	cmd := exec.CommandContext(renderCtx, facetBin, format, entryFile, "-d", dataFile.Name(), "-o", outFile.Name())
 	cmd.Dir = srcDir
 
 	fmt.Fprintf(os.Stderr, "$ cd %s\n", srcDir)
@@ -93,6 +109,9 @@ func RenderCLIFromDir(data any, format, srcDir, entryFile string) (*RenderResult
 	}
 
 	if err = cmd.Run(); err != nil {
+		if errors.Is(renderCtx.Err(), gocontext.DeadlineExceeded) {
+			return nil, fmt.Errorf("facet %s timed out after %s", format, timeout)
+		}
 		return nil, facetCommandError(format, err, stdout.String(), stderr.String())
 	}
 
@@ -125,6 +144,11 @@ func facetCommandError(format string, err error, stdout string, stderr string) e
 
 type RenderHTTPOptions struct {
 	TimestampURL string
+
+	// Timeout bounds the render on the facet server. The HTTP client waits
+	// longer than the server so a server-side timeout is reported as such.
+	// Zero leaves the render bounded by the server's own timeout.
+	Timeout time.Duration
 }
 
 // RenderHTTP renders data via a remote facet rendering service using the
@@ -153,12 +177,19 @@ func renderHTTPWithArchive(ctx context.Context, baseURL, token string, archive [
 		return nil, fmt.Errorf("marshal data: %w", err)
 	}
 
+	var timeout time.Duration
 	renderOpts := map[string]any{
 		"format":    format,
 		"entryFile": entryFile,
 	}
-	if len(opts) > 0 && opts[0].TimestampURL != "" {
-		renderOpts["timestampUrl"] = opts[0].TimestampURL
+	if len(opts) > 0 {
+		if opts[0].TimestampURL != "" {
+			renderOpts["timestampUrl"] = opts[0].TimestampURL
+		}
+		if opts[0].Timeout > 0 {
+			timeout = opts[0].Timeout
+			renderOpts["timeout"] = timeout.Milliseconds()
+		}
 	}
 	optionsJSON, err := json.Marshal(renderOpts)
 	if err != nil {
@@ -189,6 +220,13 @@ func renderHTTPWithArchive(ctx context.Context, baseURL, token string, archive [
 	}
 
 	client := commonshttp.NewClient().BaseURL(baseURL)
+	if timeout > 0 {
+		client = client.Timeout(timeout + clientTimeoutGrace)
+	} else {
+		// The facet server bounds the render, so the client must not give up
+		// first — its own default is 2 minutes.
+		client = client.Timeout(0)
+	}
 	if token != "" {
 		client = client.Header("X-API-Key", token)
 	}

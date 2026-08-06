@@ -210,9 +210,9 @@ func (r *Report) renderCatalogFacet(ctx context.Context, action v1.ReportAction,
 	}
 
 	if server.Configured() {
-		r.logf(ctx, "rendering %s via facet service %s", facetFormat, server.BaseURL)
+		r.logf(ctx, "rendering %s via facet service %s%s", facetFormat, server.BaseURL, timeoutSuffix(server.Timeout))
 	} else {
-		r.logf(ctx, "rendering %s via local facet binary", facetFormat)
+		r.logf(ctx, "rendering %s via local facet binary%s", facetFormat, timeoutSuffix(server.Timeout))
 	}
 
 	result, err := report.RenderWith(ctx, data, facetFormat, entryFile, srcDir, server)
@@ -220,6 +220,15 @@ func (r *Report) renderCatalogFacet(ctx context.Context, action v1.ReportAction,
 		return nil, err
 	}
 	return result.Data, nil
+}
+
+// timeoutSuffix names the render timeout for progress logs. Renders with no
+// configured timeout are bounded by the facet server, so there is nothing to say.
+func timeoutSuffix(timeout time.Duration) string {
+	if timeout <= 0 {
+		return ""
+	}
+	return fmt.Sprintf(" (timeout %s)", timeout)
 }
 
 // catalogOptions builds the catalog report options from the action. When no

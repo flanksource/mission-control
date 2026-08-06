@@ -706,8 +706,11 @@ type FacetPDFOptions struct {
 }
 
 type FacetOptions struct {
-	Connection         string `json:"connection,omitempty" yaml:"connection,omitempty" template:"true"`
-	URL                string `json:"url,omitempty" yaml:"url,omitempty" template:"true"`
+	Connection string `json:"connection,omitempty" yaml:"connection,omitempty" template:"true"`
+	URL        string `json:"url,omitempty" yaml:"url,omitempty" template:"true"`
+	// Timeout for the render, e.g. "10m". When unset the facet server's own
+	// render timeout applies.
+	Timeout            string `json:"timeout,omitempty" yaml:"timeout,omitempty" template:"true"`
 	FacetRenderOptions `json:",inline" yaml:",inline"`
 }
 

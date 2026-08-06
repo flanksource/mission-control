@@ -4490,6 +4490,11 @@ spec:
                               type: object
                             pageSize:
                               type: string
+                            timeout:
+                              description: |-
+                                Timeout for the render, e.g. "10m". When unset the facet server's own
+                                render timeout applies.
+                              type: string
                             timestampUrl:
                               type: string
                             url:
