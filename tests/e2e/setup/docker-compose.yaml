@@ -20,7 +20,7 @@ services:
   #   ports: ["4566:4566"]
 
   facet:
-    image: ghcr.io/flanksource/facet:0.1.69
+    image: ghcr.io/flanksource/facet:0.1.71
     ports: ["3010:3010"]
 
   # kindctl:  # optional helper; KinD cluster spins up in the job step
