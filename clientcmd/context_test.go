@@ -18,7 +18,7 @@ import (
 )
 
 var _ = ginkgo.Describe("context token resolution", func() {
-	var oldOIDCLogin func(*cobra.Command, string, io.Writer) (*oidcclient.Tokens, error)
+	var oldOIDCLogin func(*cobra.Command, string, io.Writer) (*oidcclient.Tokens, *oidcclient.Discovery, error)
 
 	ginkgo.BeforeEach(func() {
 		oldOIDCLogin = oidcLogin
@@ -38,8 +38,8 @@ var _ = ginkgo.Describe("context token resolution", func() {
 
 	ginkgo.It("uses embedded OIDC tokens before starting OIDC login", func() {
 		server := "http://mission-control.local"
-		oidcLogin = func(*cobra.Command, string, io.Writer) (*oidcclient.Tokens, error) {
-			return nil, fmt.Errorf("unexpected login")
+		oidcLogin = func(*cobra.Command, string, io.Writer) (*oidcclient.Tokens, *oidcclient.Discovery, error) {
+			return nil, nil, fmt.Errorf("unexpected login")
 		}
 
 		ctx := &MCContext{Name: "local", Server: server, OIDC: &oidcclient.Tokens{AccessToken: "stored-token"}}
@@ -49,10 +49,10 @@ var _ = ginkgo.Describe("context token resolution", func() {
 
 	ginkgo.It("starts OIDC login when no usable token is available", func() {
 		var stderr bytes.Buffer
-		oidcLogin = func(_ *cobra.Command, server string, status io.Writer) (*oidcclient.Tokens, error) {
+		oidcLogin = func(_ *cobra.Command, server string, status io.Writer) (*oidcclient.Tokens, *oidcclient.Discovery, error) {
 			Expect(server).To(Equal("http://mission-control.local"))
 			fmt.Fprint(status, "login started")
-			return &oidcclient.Tokens{AccessToken: "oauth-token"}, nil
+			return &oidcclient.Tokens{AccessToken: "oauth-token"}, nil, nil
 		}
 
 		ctx := &MCContext{Name: "local", Server: "http://mission-control.local"}
@@ -124,9 +124,9 @@ var _ = ginkgo.Describe("context token resolution", func() {
 
 	ginkgo.It("starts OIDC login against the frontend URL for resolved /api contexts", func() {
 		var loginServer string
-		oidcLogin = func(_ *cobra.Command, server string, status io.Writer) (*oidcclient.Tokens, error) {
+		oidcLogin = func(_ *cobra.Command, server string, status io.Writer) (*oidcclient.Tokens, *oidcclient.Discovery, error) {
 			loginServer = server
-			return &oidcclient.Tokens{AccessToken: "oauth-token"}, nil
+			return &oidcclient.Tokens{AccessToken: "oauth-token"}, nil, nil
 		}
 
 		ctx := &MCContext{Name: "local", Server: "http://mission-control.local/api"}
@@ -183,14 +183,14 @@ var _ = ginkgo.Describe("context token resolution", func() {
 		})).To(Succeed())
 
 		var loginCount int
-		oidcLogin = func(_ *cobra.Command, loginServer string, _ io.Writer) (*oidcclient.Tokens, error) {
+		oidcLogin = func(_ *cobra.Command, loginServer string, _ io.Writer) (*oidcclient.Tokens, *oidcclient.Discovery, error) {
 			loginCount++
 			Expect(loginServer).To(Equal(server.URL))
 			return &oidcclient.Tokens{
 				AccessToken:  "viewer.jwt.token",
 				RefreshToken: "viewer-refresh-token",
 				ExpiresAt:    time.Now().Add(time.Hour),
-			}, nil
+			}, nil, nil
 		}
 
 		contextAddName = "viewer"
