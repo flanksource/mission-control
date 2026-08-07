@@ -23,7 +23,7 @@ filters. Use "search" when you want the catalog query language in one expression
   faro catalog search 'type=Kubernetes::Pod tags.cluster=prod name=api*'
   faro catalog get <config-id>`
 
-	if listCmd := catalogSubcommand(catalogCmd, "list"); listCmd != nil {
+	if listCmd := subcommand(catalogCmd, "list"); listCmd != nil {
 		listCmd.Short = "List catalog resources using filter flags"
 		listCmd.Long = `List catalog resources using simple, structured filter flags.
 
@@ -44,7 +44,7 @@ and you do not need the other list filter flags.`
   faro catalog list --type Kubernetes::Deployment --full --json`
 	}
 
-	if getCmd := catalogSubcommand(catalogCmd, "get"); getCmd != nil {
+	if getCmd := subcommand(catalogCmd, "get"); getCmd != nil {
 		getCmd.Short = "Get a catalog resource by ID"
 		getCmd.Long = `Get a single catalog resource by ID.
 
@@ -57,7 +57,7 @@ incoming and outgoing relationship tree instead.`
   faro catalog search 'name=api*' --limit 10`
 	}
 
-	if searchCmd := catalogSubcommand(catalogCmd, "search"); searchCmd != nil {
+	if searchCmd := subcommand(catalogCmd, "search"); searchCmd != nil {
 		searchCmd.Short = "Search catalog resources using the query language"
 		searchCmd.Long = `Search catalog resources using the catalog query language.
 
@@ -76,11 +76,11 @@ Use --full to fetch complete catalog items instead of lightweight search records
   faro catalog search 'name=api*' --full --json`
 	}
 
-	if changesCmd := catalogSubcommand(catalogCmd, "change"); changesCmd != nil {
+	if changesCmd := subcommand(catalogCmd, "change"); changesCmd != nil {
 		documentCatalogChangeCommand(changesCmd)
 	}
 
-	if insightsCmd := catalogSubcommand(catalogCmd, "insights"); insightsCmd != nil {
+	if insightsCmd := subcommand(catalogCmd, "insights"); insightsCmd != nil {
 		documentCatalogInsightsCommand(insightsCmd)
 	}
 }
@@ -117,7 +117,7 @@ that can be passed to "faro catalog change get".`
   faro catalog change search --config <config-id> --related downstream --soft --depth 5`
 	}
 
-	if getCmd := catalogSubcommand(changesCmd, "get"); getCmd != nil {
+	if getCmd := subcommand(changesCmd, "get"); getCmd != nil {
 		getCmd.Short = "Get full details for a catalog change"
 		getCmd.Long = `Get the full details for a single catalog change event by ID.
 
@@ -141,7 +141,7 @@ or use "get" to fetch one complete insight by ID.`
   faro catalog insights search 'status=open analyzer=no-public-ip' --limit 50
   faro catalog insights get <insight-id>`
 
-	if searchCmd := catalogSubcommand(insightsCmd, "search"); searchCmd != nil {
+	if searchCmd := subcommand(insightsCmd, "search"); searchCmd != nil {
 		searchCmd.Short = "Search catalog insights using the query language"
 		searchCmd.Long = `Search catalog insights using the catalog query language.
 
@@ -157,7 +157,7 @@ include insight IDs that can be passed to "faro catalog insights get". Use
   faro catalog insights search 'severity=critical' --full --json`
 	}
 
-	if getCmd := catalogSubcommand(insightsCmd, "get"); getCmd != nil {
+	if getCmd := subcommand(insightsCmd, "get"); getCmd != nil {
 		getCmd.Short = "Get full details for a catalog insight"
 		getCmd.Long = `Get the full details for a single catalog insight by ID.
 
@@ -167,7 +167,9 @@ Use "faro catalog insights search" to find insight IDs first.`
 	}
 }
 
-func catalogSubcommand(parent *cobra.Command, name string) *cobra.Command {
+// subcommand finds a direct child of parent by name, used to attach help text
+// to commands that clicky materialises from entity registrations.
+func subcommand(parent *cobra.Command, name string) *cobra.Command {
 	if parent == nil {
 		return nil
 	}
