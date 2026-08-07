@@ -157,7 +157,7 @@ export default function CatalogReportPage({ data }: CatalogReportProps) {
           <React.Fragment key={entry.configItem?.id || idx}>
             <ConfigGroupHeader group={{ configItem: entry.configItem as any, changes: entry.changes, analyses: entry.analyses, access: entry.access, accessLogs: entry.accessLogs }} />
             {data.sections?.changes && <CategorizedChangesSection changes={entry.changes} hideConfigName />}
-            {data.sections?.insights && <ConfigInsightsSection analyses={entry.analyses} />}
+            {data.sections?.insights && <ConfigInsightsSection analyses={entry.analyses} details={data.sections?.insightDetails} />}
             {data.sections?.access && (entry.rbacResources || []).map((resource, rIdx) => (
               <RBACMatrixSection key={resource.configId || rIdx} resource={resource} />
             ))}
@@ -169,7 +169,7 @@ export default function CatalogReportPage({ data }: CatalogReportProps) {
         {data.groupBy !== 'config' && (
           <>
             {data.sections?.changes && <CategorizedChangesSection changes={data.changes} />}
-            {data.sections?.insights && <ConfigInsightsSection analyses={data.analyses} />}
+            {data.sections?.insights && <ConfigInsightsSection analyses={data.analyses} details={data.sections?.insightDetails} />}
           </>
         )}
 
@@ -181,7 +181,7 @@ export default function CatalogReportPage({ data }: CatalogReportProps) {
           <React.Fragment key={group.configItem.id || idx}>
             <ConfigGroupHeader group={group} />
             {data.sections?.changes && <CategorizedChangesSection changes={group.changes} hideConfigName />}
-            {data.sections?.insights && <ConfigInsightsSection analyses={group.analyses} />}
+            {data.sections?.insights && <ConfigInsightsSection analyses={group.analyses} details={data.sections?.insightDetails} />}
             {data.sections?.accessLogs && <CatalogAccessLogsSection logs={group.accessLogs} />}
           </React.Fragment>
         ))}

@@ -64,6 +64,13 @@ spec:
       label: Include recently resolved insights
       type: checkbox
       default: "false"
+    - name: insightDetails
+      label: Render insight details
+      description: >-
+        Render each insight's message under the affected resource. Without it
+        insights are only grouped and counted.
+      type: checkbox
+      default: "false"
     - name: relationships
       label: Include relationships
       type: checkbox
@@ -120,6 +127,7 @@ spec:
           changes: '{{ .params.changes }}'
           insights: '{{ .params.insights }}'
           resolvedInsights: '{{ .params.resolvedInsights }}'
+          insightDetails: '{{ .params.insightDetails }}'
           relationships: '{{ .params.relationships }}'
           access: '{{ .params.access }}'
           accessLogs: '{{ .params.accessLogs }}'

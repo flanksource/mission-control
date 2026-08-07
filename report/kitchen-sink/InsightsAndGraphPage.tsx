@@ -14,6 +14,11 @@ export default function InsightsAndGraphPage({ data, pageProps }: Props) {
     <Page {...pageProps}>
       <ConfigInsightsSection analyses={data.analyses} />
 
+      <div className="text-xs text-gray-500 mb-[1mm]">
+        Same insights with <code>insightDetails</code> enabled — each affected resource carries its rendered message.
+      </div>
+      <ConfigInsightsSection analyses={data.analyses} details />
+
       <ConfigRelationshipGraph
         centralConfig={data.configItem}
         relationships={data.relationships}

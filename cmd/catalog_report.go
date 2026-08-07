@@ -27,6 +27,7 @@ var (
 
 	catalogReportChanges          bool
 	catalogReportInsights         bool
+	catalogReportInsightDetails   bool
 	catalogReportRelationships    bool
 	catalogReportAccess           bool
 	catalogReportExpandGroups     bool
@@ -152,12 +153,13 @@ func buildCatalogReportOptions(cmd *cobra.Command) (catalog.Options, error) {
 		MaxChanges:       catalogReportMaxChanges,
 		MaxItemArtifacts: catalogReportMaxItemArtifacts,
 		Sections: api.CatalogReportSections{
-			Changes:       catalogReportChanges,
-			Insights:      catalogReportInsights,
-			Relationships: catalogReportRelationships,
-			Access:        catalogReportAccess,
-			AccessLogs:    catalogReportAccessLogs,
-			ConfigJSON:    catalogReportConfigJSON,
+			Changes:        catalogReportChanges,
+			Insights:       catalogReportInsights,
+			InsightDetails: catalogReportInsightDetails,
+			Relationships:  catalogReportRelationships,
+			Access:         catalogReportAccess,
+			AccessLogs:     catalogReportAccessLogs,
+			ConfigJSON:     catalogReportConfigJSON,
 		},
 	}
 
@@ -206,6 +208,7 @@ func init() {
 	CatalogReportCmd.Flags().IntVar(&catalogReportMaxItemArtifacts, "max-item-artifacts", 0, "Maximum artifacts retained per change source within a single config item (0 = unlimited). Requires --change-artifacts.")
 	CatalogReportCmd.Flags().BoolVar(&catalogReportChanges, "changes", true, "Include config changes section")
 	CatalogReportCmd.Flags().BoolVar(&catalogReportInsights, "insights", true, "Include config insights section")
+	CatalogReportCmd.Flags().BoolVar(&catalogReportInsightDetails, "insight-details", false, "Render each insight's message under the affected resource")
 	CatalogReportCmd.Flags().BoolVar(&catalogReportRelationships, "relationships", true, "Include relationships section")
 	CatalogReportCmd.Flags().BoolVar(&catalogReportAccess, "access", true, "Include RBAC access section")
 	CatalogReportCmd.Flags().BoolVar(&catalogReportExpandGroups, "expand-groups", false, "Expand each group-granted access row into synthetic per-member rows (members render as indirect). Group rows are preserved.")

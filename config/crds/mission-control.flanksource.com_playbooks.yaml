@@ -4580,6 +4580,12 @@ spec:
                                 JSON is included. The value must be true, false, or
                                 a template that renders to true or false.
                               x-kubernetes-preserve-unknown-fields: true
+                            insightDetails:
+                              description: InsightDetails controls whether each insight's
+                                message is rendered under the affected resource. The
+                                value must be true, false, or a template that renders
+                                to true or false.
+                              x-kubernetes-preserve-unknown-fields: true
                             insights:
                               description: Insights controls whether config insights
                                 are included. The value must be true, false, or a

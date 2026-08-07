@@ -62,6 +62,7 @@ var _ = ginkgo.Describe("Report action catalog options", func() {
 				AccessLogs:       v1.TemplatedBool(`true`),
 				ConfigJSON:       v1.TemplatedBool(`true`),
 				ResolvedInsights: v1.TemplatedBool(`false`),
+				InsightDetails:   v1.TemplatedBool(`true`),
 			},
 		}
 
@@ -81,6 +82,7 @@ var _ = ginkgo.Describe("Report action catalog options", func() {
 		Expect(opts.Sections.AccessLogs).To(BeTrue())
 		Expect(opts.Sections.ConfigJSON).To(BeTrue())
 		Expect(opts.Sections.ResolvedInsights).To(BeFalse())
+		Expect(opts.Sections.InsightDetails).To(BeTrue())
 	})
 
 	ginkgo.It("uses section defaults for omitted values", func() {
@@ -93,6 +95,7 @@ var _ = ginkgo.Describe("Report action catalog options", func() {
 		Expect(opts.Sections.AccessLogs).To(BeFalse())
 		Expect(opts.Sections.ConfigJSON).To(BeFalse())
 		Expect(opts.Sections.ResolvedInsights).To(BeFalse())
+		Expect(opts.Sections.InsightDetails).To(BeFalse())
 	})
 
 	ginkgo.It("templates recursive and section booleans", func() {
@@ -109,6 +112,7 @@ var _ = ginkgo.Describe("Report action catalog options", func() {
 				AccessLogs:       v1.TemplatedBool(`"{{ .params.accessLogs }}"`),
 				ConfigJSON:       v1.TemplatedBool(`"{{ .params.configJSON }}"`),
 				ResolvedInsights: v1.TemplatedBool(`"{{ .params.resolvedInsights }}"`),
+				InsightDetails:   v1.TemplatedBool(`"{{ .params.insightDetails }}"`),
 			},
 		}
 		templater := ctx.NewStructTemplater(map[string]any{
@@ -124,6 +128,7 @@ var _ = ginkgo.Describe("Report action catalog options", func() {
 				"accessLogs":       "true",
 				"configJSON":       "true",
 				"resolvedInsights": "true",
+				"insightDetails":   "false",
 			},
 		}, "template", nil)
 		Expect(templater.Walk(&action)).To(Succeed())
@@ -141,6 +146,7 @@ var _ = ginkgo.Describe("Report action catalog options", func() {
 		Expect(opts.Sections.AccessLogs).To(BeTrue())
 		Expect(opts.Sections.ConfigJSON).To(BeTrue())
 		Expect(opts.Sections.ResolvedInsights).To(BeTrue())
+		Expect(opts.Sections.InsightDetails).To(BeFalse())
 	})
 
 	ginkgo.It("rejects a template result that is not a boolean", func() {

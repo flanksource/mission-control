@@ -318,6 +318,7 @@ func reportSections(sections v1.ReportSections) (api.CatalogReportSections, erro
 		{name: "sections.accessLogs", value: sections.AccessLogs, target: &resolved.AccessLogs},
 		{name: "sections.configJSON", value: sections.ConfigJSON, target: &resolved.ConfigJSON},
 		{name: "sections.resolvedInsights", value: sections.ResolvedInsights, target: &resolved.ResolvedInsights},
+		{name: "sections.insightDetails", value: sections.InsightDetails, target: &resolved.InsightDetails},
 	}
 
 	for _, field := range fields {
