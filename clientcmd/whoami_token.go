@@ -2,10 +2,12 @@ package clientcmd
 
 import (
 	"fmt"
-	"os"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/incident-commander/auth/oidcclient"
 )
 
@@ -25,47 +27,41 @@ func oidcTokenExpiring(tokens *oidcclient.Tokens) bool {
 	return tokens.AccessToken == "" || (!tokens.ExpiresAt.IsZero() && time.Until(tokens.ExpiresAt) < time.Minute)
 }
 
-func refreshOIDCTokens(server string, tokens *oidcclient.Tokens) (*oidcclient.Tokens, error) {
-	if tokens == nil {
-		return nil, fmt.Errorf("no OIDC tokens")
-	}
-	if tokens.RefreshToken == "" {
-		return nil, fmt.Errorf("no refresh token")
-	}
-
+// discoverOIDCEndpoints resolves the provider metadata for a server. Unlike the
+// grant itself, discovery is idempotent and safe to attempt against every
+// candidate — it spends nothing.
+func discoverOIDCEndpoints(server string) (*oidcclient.Discovery, error) {
 	var lastErr error
 	for _, candidate := range oidcServerCandidates(server) {
 		endpoints, err := oidcclient.Discover(strings.TrimRight(candidate, "/") + "/.well-known/openid-configuration")
-		if err != nil {
-			lastErr = err
-			continue
+		if err == nil {
+			return endpoints, nil
 		}
-		refreshed, err := oidcclient.RefreshToken(endpoints.TokenEndpoint, tokens.RefreshToken)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		if refreshed.RefreshToken == "" {
-			refreshed.RefreshToken = tokens.RefreshToken
-		}
-		if refreshed.IDToken == "" {
-			refreshed.IDToken = tokens.IDToken
-		}
-		return refreshed, nil
+		lastErr = err
 	}
-	return nil, lastErr
+	return nil, fmt.Errorf("OIDC discovery failed for %s: %w", server, lastErr)
 }
 
-func updateContextOIDCTokens(cfg *MCConfig, name string, tokens *oidcclient.Tokens) {
-	if cfg == nil || name == "" || tokens == nil {
-		return
+// contextTokenEndpoint returns the token endpoint for a context, discovering
+// and caching it in config.json on first use so later commands skip the two
+// discovery round-trips. Failing to write that cache is not fatal — it holds no
+// credential, and the refresh it guards is already in flight.
+func contextTokenEndpoint(cfg *MCConfig, mcCtx *MCContext) (string, error) {
+	if mcCtx.Endpoints != nil && mcCtx.Endpoints.TokenEndpoint != "" {
+		return mcCtx.Endpoints.TokenEndpoint, nil
 	}
-	ctx := cfg.GetContext(name)
-	if ctx == nil {
-		return
+
+	endpoints, err := discoverOIDCEndpoints(mcCtx.Server)
+	if err != nil {
+		return "", err
 	}
-	ctx.SetOIDCTokens(tokens)
-	if err := SaveConfig(cfg); err != nil {
-		fmt.Fprintf(os.Stderr, "failed to update context OIDC tokens: %v\n", err)
+	mcCtx.Endpoints = endpoints
+
+	if stored := cfg.GetContext(mcCtx.Name); stored != nil {
+		stored.Endpoints = endpoints
+		if err := saveConfigLocked(cfg); err != nil {
+			logger.Debugf("failed to cache OIDC endpoints for context %q: %v", mcCtx.Name, err)
+		}
 	}
+	return endpoints.TokenEndpoint, nil
 }
