@@ -76,8 +76,7 @@ func (o AccessGrantOptions) params() url.Values {
 // ListAccessGrants returns the flat grant rows behind the access crosstab,
 // along with the server's exact total so callers can report truncation.
 func (c *Client) ListAccessGrants(ctx context.Context, opts AccessGrantOptions) ([]AccessGrant, int, error) {
-	var summaries []models.ConfigAccessSummary
-	total, err := c.pgGet(ctx, "config_access_summary", opts.params(), &summaries)
+	summaries, total, err := pgGetAccess(ctx, c, "config_access_summary", opts.params(), compareAccessGrants)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -109,6 +108,13 @@ func (c *Client) ListAccessGrants(ctx context.Context, opts AccessGrantOptions) 
 		grants = append(grants, grant)
 	}
 	return grants, total, nil
+}
+
+func compareAccessGrants(a, b models.ConfigAccessSummary) int {
+	if order := strings.Compare(a.ConfigName, b.ConfigName); order != 0 {
+		return order
+	}
+	return strings.Compare(a.User, b.User)
 }
 
 // ExpandGroupAccess emits every input grant followed by one synthetic grant per
@@ -220,9 +226,17 @@ func (c *Client) ListAccessSummaryByConfig(ctx context.Context, opts AccessGrant
 	if opts.Limit > 0 {
 		params.Set("limit", strconv.Itoa(opts.Limit))
 	}
-	var out []AccessSummaryByConfig
-	total, err := c.pgGet(ctx, "config_access_summary_by_config", params, &out)
-	return out, total, err
+	return pgGetAccess(ctx, c, "config_access_summary_by_config", params, compareAccessSummaryByConfig)
+}
+
+func compareAccessSummaryByConfig(a, b AccessSummaryByConfig) int {
+	if a.AccessCount > b.AccessCount {
+		return -1
+	}
+	if a.AccessCount < b.AccessCount {
+		return 1
+	}
+	return strings.Compare(a.ConfigName, b.ConfigName)
 }
 
 // groupNames maps external group ids to their names.
@@ -300,9 +314,9 @@ func (c *Client) pgGet(ctx context.Context, table string, params url.Values, out
 	if !r.IsOK() {
 		body, _ := r.AsString()
 		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
-			return 0, ErrHTMLResponse
+			return 0, fmt.Errorf("GET /db/%s returned HTML with status %d: %w", table, r.StatusCode, ErrHTMLResponse)
 		}
-		return 0, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
+		return 0, newServerError(r.StatusCode, []byte(strings.TrimSpace(body)))
 	}
 	if err := decodeJSON(r, out); err != nil {
 		return 0, err

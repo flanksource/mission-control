@@ -87,8 +87,7 @@ func (c *Client) ListAccessLogs(ctx context.Context, opts AccessHistoryOptions) 
 	params := opts.params("external_user_id")
 	params.Set("select", accessLogSelect)
 
-	var logs []AccessLog
-	total, err := c.pgGet(ctx, "config_access_logs", params, &logs)
+	logs, total, err := pgGetAccess(ctx, c, "config_access_logs", params, compareAccessLogs)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -110,10 +109,13 @@ func (c *Client) ListAccessLogs(ctx context.Context, opts AccessHistoryOptions) 
 	return logs, total, nil
 }
 
+func compareAccessLogs(a, b AccessLog) int {
+	return compareTimeDescending(a.CreatedAt, b.CreatedAt)
+}
+
 // ListAccessReviews returns recorded grant reviews, newest first.
 func (c *Client) ListAccessReviews(ctx context.Context, opts AccessHistoryOptions) ([]AccessReview, int, error) {
-	var reviews []AccessReview
-	total, err := c.pgGet(ctx, "access_reviews", opts.params("external_user_id"), &reviews)
+	reviews, total, err := pgGetAccess(ctx, c, "access_reviews", opts.params("external_user_id"), compareAccessReviews)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -121,6 +123,20 @@ func (c *Client) ListAccessReviews(ctx context.Context, opts AccessHistoryOption
 		return nil, 0, err
 	}
 	return reviews, total, nil
+}
+
+func compareAccessReviews(a, b AccessReview) int {
+	return compareTimeDescending(a.CreatedAt, b.CreatedAt)
+}
+
+func compareTimeDescending(a, b time.Time) int {
+	if a.After(b) {
+		return -1
+	}
+	if a.Before(b) {
+		return 1
+	}
+	return 0
 }
 
 // hydrateReviews fills in config, principal and role names, which access_reviews

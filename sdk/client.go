@@ -21,9 +21,8 @@ import (
 
 var (
 	// ErrHTMLResponse is returned when the server responded with HTML on a JSON
-	// endpoint — typically because the configured server URL points at the
-	// user-facing frontend rather than the /api backend.
-	ErrHTMLResponse = errors.New("server returned HTML instead of JSON (is the backend at /api?)")
+	// endpoint, such as when a frontend or ingress handled the request.
+	ErrHTMLResponse = errors.New("server returned HTML instead of JSON")
 
 	// ErrNotFound is returned when a requested resource does not exist.
 	ErrNotFound = errors.New("not found")
