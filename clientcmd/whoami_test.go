@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"time"
 
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -46,6 +47,54 @@ var _ = ginkgo.Describe("whoami command", func() {
 		_, _, endpoint, _, err := callWhoami(context.TODO(), server.URL, "test-token")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(endpoint).To(Equal(server.URL + "/api/auth/whoami"))
+	})
+
+	ginkgo.It("names every candidate when all of them fail at the network level", func() {
+		// Blocked egress — the sandbox case — fails every candidate with no HTTP status. Reporting
+		// only the last one made it look like faro had built the wrong URL. An authoritative HTTP
+		// answer still short-circuits, so this must be a transport failure rather than a 4xx.
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		unreachable := server.URL
+		server.Close()
+
+		_, _, _, _, err := callWhoami(context.TODO(), unreachable+"/api", "test-token")
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring(unreachable + "/api/auth/whoami"))
+		Expect(err.Error()).To(ContainSubstring(unreachable + "/auth/whoami"))
+	})
+
+	ginkgo.It("keeps an authoritative HTTP rejection as the reported error", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			http.Error(w, "tenant disabled", http.StatusForbidden)
+		}))
+		defer server.Close()
+
+		_, _, endpoint, statusCode, err := callWhoami(context.TODO(), server.URL+"/api", "test-token")
+		Expect(err).To(MatchError(ContainSubstring("tenant disabled")))
+		Expect(statusCode).To(Equal(http.StatusForbidden))
+		Expect(endpoint).To(Equal(server.URL + "/api/auth/whoami"))
+	})
+
+	ginkgo.It("does not let a slow candidate consume the next candidate's timeout", func() {
+		restore := whoamiEndpointTimeout
+		whoamiEndpointTimeout = 200 * time.Millisecond
+		defer func() { whoamiEndpointTimeout = restore }()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/api/auth/whoami" {
+				time.Sleep(whoamiEndpointTimeout + 2*time.Second)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"payload":{"user":{"id":"u1"},"roles":[]}}`))
+		}))
+		defer server.Close()
+
+		_, _, endpoint, _, err := callWhoami(context.TODO(), server.URL+"/api", "test-token")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(endpoint).To(Equal(server.URL + "/auth/whoami"))
 	})
 
 	ginkgo.It("succeeds when no database is configured and auth is ok", func() {
