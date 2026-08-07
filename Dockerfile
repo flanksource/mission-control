@@ -19,7 +19,7 @@ ARG TARGETARCH
 ARG VERSION=latest
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH VERSION=$VERSION make go-build
 
-FROM flanksource/base-image:0.6.0@sha256:6cae0a4bbba7e7e16674a55751c8161c11d5ebdd23f596f93e669f835ee1e034
+FROM flanksource/base-image:0.8.1@sha256:f5f0945741678d7702eb13da393102dbdd10a19fb20b6e06a7efe241d5395173
 WORKDIR /app
 
 COPY --from=builder /app/.bin/incident-commander /app
