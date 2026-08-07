@@ -9,6 +9,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 
+	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/flanksource/incident-commander/db"
 )
 
@@ -59,9 +60,9 @@ func getAccessRole(id string, flags map[string]string) (any, error) {
 		return nil, err
 	}
 
-	all := boolFlag(flags, "all", false)
-	showUsers := all || boolFlag(flags, "users", true)
-	showGroups := all || boolFlag(flags, "groups", true)
+	all := clientcmd.BoolFlag(flags, "all", false)
+	showUsers := all || clientcmd.BoolFlag(flags, "users", true)
+	showGroups := all || clientcmd.BoolFlag(flags, "groups", true)
 
 	result := &AccessRoleGetResult{Role: *role}
 	if showUsers {
@@ -180,7 +181,7 @@ type accessRoleNameFilter struct{}
 func (accessRoleNameFilter) Key() string   { return "name" }
 func (accessRoleNameFilter) Label() string { return "Name" }
 func (accessRoleNameFilter) Lookup(opts *accessRoleListOpts) (map[string]api.Textable, error) {
-	return echoFilterLookup(opts.Name), nil
+	return clientcmd.EchoFilterLookup(opts.Name), nil
 }
 func (accessRoleNameFilter) Options(_ accessRoleListOpts) map[string]api.Textable { return nil }
 
@@ -189,7 +190,7 @@ type accessRoleTypeFilter struct{}
 func (accessRoleTypeFilter) Key() string   { return "type" }
 func (accessRoleTypeFilter) Label() string { return "Type" }
 func (accessRoleTypeFilter) Lookup(opts *accessRoleListOpts) (map[string]api.Textable, error) {
-	return echoFilterLookup(opts.Type), nil
+	return clientcmd.EchoFilterLookup(opts.Type), nil
 }
 func (accessRoleTypeFilter) Options(_ accessRoleListOpts) map[string]api.Textable { return nil }
 
