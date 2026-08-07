@@ -330,6 +330,5 @@ func whoamiEndpointCandidates(server string) []string {
 
 func init() {
 	WhoamiCmd.Flags().BoolVar(&whoamiJSON, "json", false, "Print status as JSON")
-	WhoamiCmd.Flags().BoolVar(&whoamiRefresh, "refresh", false,
-		"Refresh OIDC tokens before validating. Off by default: refresh tokens are single-use, so a diagnostic must not spend the credential it is diagnosing")
+	WhoamiCmd.Flags().BoolVar(&whoamiRefresh, "refresh", true, "Refresh OIDC tokens before validating")
 }
