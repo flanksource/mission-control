@@ -18,32 +18,42 @@ var _ = ginkgo.Describe("Transform Query to postgREST", ginkgo.Ordered, func() {
 		output      url.Values
 	}{
 		{
-			description: "IN Query",
+			description: "positive alternatives are case-insensitive OR terms",
 			input: url.Values{
 				"change_type":        []string{"eq=diff"},
-				"config_type.filter": []string{"Kubernetes::Pod,Kubernetes::Deployment"},
+				"config_type.filter": []string{"Kubernetes::Pod,kubernetes::Deployment"},
 			},
 			output: url.Values{
 				"change_type": []string{"eq=diff"},
-				"config_type": []string{`in.("Kubernetes::Pod","Kubernetes::Deployment")`},
+				"and":         []string{"(or=(config_type.ilike.Kubernetes::Pod,config_type.ilike.kubernetes::Deployment))"},
 			},
 		},
 		{
-			description: "NOT IN Query",
+			description: "exclusions are case-insensitive AND terms",
 			input: url.Values{
-				"change_type.filter": []string{"!diff,!Pulled"},
+				"change_type.filter": []string{"!diff,!Pull*"},
 			},
 			output: url.Values{
-				"change_type": []string{`not.in.("diff","Pulled")`},
+				"and": []string{"(change_type.not.ilike.diff,change_type.not.ilike.Pull*)"},
 			},
 		},
 		{
-			description: "Prefix & Suffix",
+			description: "positive and negative patterns preserve MatchItem precedence",
 			input: url.Values{
-				"change_type.filter": []string{"Pull*,ed*"},
+				"role.filter": []string{"Owner*,*Reader,!Legacy*"},
 			},
 			output: url.Values{
-				"change_type": []string{`like.Pull*`, `like.ed*`},
+				"and": []string{"(or=(role.ilike.Owner*,role.ilike.*Reader),role.not.ilike.Legacy*)"},
+			},
+		},
+		{
+			description: "multiple fields and repeated values are combined with AND",
+			input: url.Values{
+				"role.filter":      []string{"Owner", "Reader"},
+				"user_type.filter": []string{"!Service*"},
+			},
+			output: url.Values{
+				"and": []string{"(or=(role.ilike.Owner,role.ilike.Reader),user_type.not.ilike.Service*)"},
 			},
 		},
 		{
@@ -73,4 +83,10 @@ var _ = ginkgo.Describe("Transform Query to postgREST", ginkgo.Ordered, func() {
 			Expect(transformQuery).Should(Equal(d.output))
 		})
 	}
+
+	ginkgo.It("surfaces malformed encoded filters", func() {
+		_, err := transformQuery(now.UTC(), url.Values{"name.filter": []string{"%zz"}})
+
+		Expect(err).To(MatchError(ContainSubstring("invalid filter for field name")))
+	})
 })
