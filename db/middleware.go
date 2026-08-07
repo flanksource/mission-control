@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/query"
 	"github.com/labstack/echo/v4"
 	"github.com/timberio/go-datemath"
@@ -73,7 +74,7 @@ func SearchQueryTransformMiddleware() func(echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			queryParam, err := transformQuery(time.Now(), c.QueryParams())
 			if err != nil {
-				return err
+				return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "%s", err.Error()))
 			}
 
 			c.Request().URL.RawQuery = queryParam.Encode()

@@ -19,8 +19,12 @@ import (
 )
 
 var (
-	ErrHTMLResponse = lean.ErrHTMLResponse
-	ErrNotFound     = lean.ErrNotFound
+	// ErrHTMLResponse is returned when the server responded with HTML on a JSON
+	// endpoint, such as when a frontend or ingress handled the request.
+	ErrHTMLResponse = errors.New("server returned HTML instead of JSON")
+
+	// ErrNotFound is returned when a requested resource does not exist.
+	ErrNotFound = errors.New("not found")
 )
 
 // IsNotFound reports whether err represents a missing resource.
