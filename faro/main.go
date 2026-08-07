@@ -16,12 +16,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
-)
-
 // faro is a slimmed-down Mission Control client. It exposes only the surfaces
 // that operate against a remote Mission Control server using the credentials
 // obtained through the OIDC login flow.
@@ -77,12 +71,9 @@ func main() {
 	ctx, cancel := gocontext.WithTimeout(gocontext.Background(), 30*time.Second)
 	defer cancel()
 
-	if len(commit) > 8 {
-		version = fmt.Sprintf("%v, commit %v, built at %v", version, commit[0:8], date)
-	}
-
-	api.BuildVersion = version
-	api.BuildCommit = commit
+	build := currentBuildInfo()
+	api.BuildVersion = build.String()
+	api.BuildCommit = build.Commit
 
 	root := &cobra.Command{
 		Use:          "faro",
@@ -90,15 +81,8 @@ func main() {
 		SilenceUsage: true,
 	}
 
-	root.AddCommand(&cobra.Command{
-		Use:   "version",
-		Short: "Print the version of faro",
-		Args:  cobra.MinimumNArgs(0),
-		Run: func(cmd *cobra.Command, args []string) {
-			fmt.Println(version)
-		},
-	})
-	root.SetUsageTemplate(root.UsageTemplate() + fmt.Sprintf("\nversion: %s\n ", version))
+	root.AddCommand(versionCmd())
+	root.SetUsageTemplate(root.UsageTemplate() + fmt.Sprintf("\nversion: %s\n ", build))
 
 	logger.BindFlags(root.PersistentFlags())
 	clientcmd.RegisterClientCommands(root)
@@ -112,11 +96,16 @@ func main() {
 		fmt.Fprintln(os.Stderr, registerErr)
 	}
 
-	// clicky.GenerateCLI materializes the registered remote "catalog" entity
-	// (see catalog.go) into `catalog list` / `catalog get` commands.
+	// clicky.GenerateCLI materializes the registered remote entities — "catalog"
+	// (see catalog.go) and the "access" users/groups/roles (see access_*.go) —
+	// into their `list` / `get` commands.
 	clicky.GenerateCLI(root)
 	if c, _, err := root.Find([]string{"catalog"}); err == nil && c != nil {
 		documentCatalogCommand(c)
+		clicky.BindAllFlags(c.PersistentFlags(), "format")
+	}
+	if c, _, err := root.Find([]string{"access"}); err == nil && c != nil {
+		documentAccessCommand(c)
 		clicky.BindAllFlags(c.PersistentFlags(), "format")
 	}
 	clientcmd.FinalizeCommandGroups(root)

@@ -3,12 +3,12 @@ package db
 import (
 	"fmt"
 	"net/url"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/flanksource/duty/query"
 	"github.com/labstack/echo/v4"
-	"github.com/samber/lo"
 	"github.com/timberio/go-datemath"
 )
 
@@ -89,50 +89,86 @@ func SearchQueryTransformMiddleware() func(echo.HandlerFunc) echo.HandlerFunc {
 
 // transformQuery transforms any search query to native postgREST query
 func transformQuery(now time.Time, queryParam url.Values) (url.Values, error) {
-	for k, values := range queryParam {
-		if !strings.HasSuffix(k, ".filter") || len(values) == 0 {
+	filterKeys := make([]string, 0)
+	for key := range queryParam {
+		if strings.HasSuffix(key, ".filter") {
+			filterKeys = append(filterKeys, key)
+		}
+	}
+	sort.Strings(filterKeys)
+
+	logicalTerms := make([]string, 0)
+	for _, filterKey := range filterKeys {
+		values := queryParam[filterKey]
+		queryParam.Del(filterKey)
+		if len(values) == 0 {
 			continue
 		}
 
-		queryParam.Del(k)
-
-		key := strings.TrimSuffix(k, ".filter")
-		val := values[0] // Use the first one. We don't use multiple values.
-
-		if operator, timestamp, err := parseTimestampField(now, key, val); err != nil {
-			return nil, fmt.Errorf("invalid datemath expression (%q) for field (%s): %w", val, key, err)
-		} else if !timestamp.IsZero() {
-			queryParam.Add(key, fmt.Sprintf("%s.%s", operator, timestamp.Format(time.RFC3339)))
-		} else {
-			fq, _ := query.ParseFilteringQuery(val, false)
-			if len(fq.In) > 0 {
-				queryParam.Add(key, fmt.Sprintf("in.(%s)", postgrestValues(fq.In)))
+		field := strings.TrimSuffix(filterKey, ".filter")
+		if _, isDate := dateFields[field]; isDate {
+			if err := addTimestampFilters(now, field, values, queryParam); err != nil {
+				return nil, err
 			}
-
-			if len(fq.Not.In) > 0 {
-				queryParam.Add(key, fmt.Sprintf("not.in.(%s)", postgrestValues(fq.Not.In)))
-			}
-
-			for _, g := range fq.Glob {
-				queryParam.Add(key, fmt.Sprintf("like.*%s*", g))
-			}
-
-			for _, p := range fq.Prefix {
-				queryParam.Add(key, fmt.Sprintf("like.%s*", p))
-			}
-
-			for _, s := range fq.Suffix {
-				queryParam.Add(key, fmt.Sprintf("like.*%s", s))
-			}
+			continue
 		}
+
+		terms, err := postgrestMatchItemTerms(field, values)
+		if err != nil {
+			return nil, fmt.Errorf("invalid filter for field %s: %w", field, err)
+		}
+		logicalTerms = append(logicalTerms, terms...)
+	}
+	if len(logicalTerms) > 0 {
+		queryParam.Add("and", "("+strings.Join(logicalTerms, ",")+")")
 	}
 
 	return queryParam, nil
 }
 
-// postgrestValues returns ["a", "b", "c"] as `"a","b","c"`
-func postgrestValues(val []any) string {
-	return strings.Join(lo.Map(val, func(s any, i int) string {
-		return fmt.Sprintf(`"%s"`, s)
-	}), ",")
+func addTimestampFilters(now time.Time, field string, values []string, queryParam url.Values) error {
+	for _, value := range values {
+		operator, timestamp, err := parseTimestampField(now, field, value)
+		if err != nil {
+			return fmt.Errorf("invalid datemath expression (%q) for field (%s): %w", value, field, err)
+		}
+		queryParam.Add(field, fmt.Sprintf("%s.%s", operator, timestamp.Format(time.RFC3339)))
+	}
+	return nil
+}
+
+func postgrestMatchItemTerms(field string, values []string) ([]string, error) {
+	positive := make([]string, 0)
+	negative := make([]string, 0)
+	for _, value := range values {
+		filter, err := query.ParseFilteringQuery(value, true)
+		if err != nil {
+			return nil, err
+		}
+		positive = append(positive, postgrestPatterns(field, "ilike", filter.In, filter.Prefix, filter.Suffix, filter.Glob)...)
+		negative = append(negative, postgrestPatterns(field, "not.ilike", filter.Not.In, filter.Not.Prefix, filter.Not.Suffix, filter.Not.Glob)...)
+	}
+
+	terms := make([]string, 0, len(negative)+1)
+	if len(positive) > 0 {
+		terms = append(terms, "or=("+strings.Join(positive, ",")+")")
+	}
+	return append(terms, negative...), nil
+}
+
+func postgrestPatterns(field, operator string, exact []any, prefix, suffix, glob []string) []string {
+	patterns := make([]string, 0, len(exact)+len(prefix)+len(suffix)+len(glob))
+	for _, value := range exact {
+		patterns = append(patterns, fmt.Sprintf("%s.%s.%v", field, operator, value))
+	}
+	for _, value := range prefix {
+		patterns = append(patterns, fmt.Sprintf("%s.%s.%s*", field, operator, value))
+	}
+	for _, value := range suffix {
+		patterns = append(patterns, fmt.Sprintf("%s.%s.*%s", field, operator, value))
+	}
+	for _, value := range glob {
+		patterns = append(patterns, fmt.Sprintf("%s.%s.*%s*", field, operator, value))
+	}
+	return patterns
 }
