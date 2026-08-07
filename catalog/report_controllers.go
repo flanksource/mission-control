@@ -49,6 +49,7 @@ type CatalogReportRequest struct {
 	Changes           *bool    `json:"changes"`
 	Insights          *bool    `json:"insights"`
 	ResolvedInsights  *bool    `json:"resolvedInsights"`
+	InsightDetails    *bool    `json:"insightDetails"`
 	Relationships     *bool    `json:"relationships"`
 	Access            *bool    `json:"access"`
 	AccessLogs        *bool    `json:"accessLogs"`
@@ -179,6 +180,7 @@ func catalogReportOptionsFromRequest(req CatalogReportRequest) (reportCatalog.Op
 			Changes:          boolOrDefault(req.Changes, true),
 			Insights:         boolOrDefault(req.Insights, true),
 			ResolvedInsights: boolOrDefault(req.ResolvedInsights, false),
+			InsightDetails:   boolOrDefault(req.InsightDetails, false),
 			Relationships:    boolOrDefault(req.Relationships, true),
 			Access:           boolOrDefault(req.Access, true),
 			AccessLogs:       boolOrDefault(req.AccessLogs, false),

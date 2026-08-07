@@ -154,6 +154,9 @@ type CatalogReportSections struct {
 	// ResolvedInsights includes resolved insights that were last observed
 	// within the report window alongside open ones.
 	ResolvedInsights bool `json:"resolvedInsights,omitempty"`
+	// InsightDetails renders each insight's message under the affected
+	// resource. Without it insights are only grouped and counted.
+	InsightDetails bool `json:"insightDetails,omitempty"`
 }
 
 // CatalogReportChange wraps models.ConfigChange with camelCase JSON tags

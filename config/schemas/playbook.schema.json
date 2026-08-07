@@ -2518,6 +2518,10 @@
         "resolvedInsights": {
           "$ref": "#/$defs/TemplatedBool",
           "description": "ResolvedInsights controls whether recently resolved insights are included. The value must be true, false, or a template that renders to true or false."
+        },
+        "insightDetails": {
+          "$ref": "#/$defs/TemplatedBool",
+          "description": "InsightDetails controls whether each insight's message is rendered under the affected resource. The value must be true, false, or a template that renders to true or false."
         }
       },
       "additionalProperties": false,

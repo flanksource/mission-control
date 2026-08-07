@@ -146,6 +146,7 @@ var _ = ginkgo.Describe("catalog report endpoints", func() {
 		Expect(opts.Sections.Access).To(BeTrue())
 		Expect(opts.Sections.AccessLogs).To(BeFalse())
 		Expect(opts.Sections.ConfigJSON).To(BeFalse())
+		Expect(opts.Sections.InsightDetails).To(BeFalse())
 		Expect(opts.Settings).NotTo(BeNil())
 	})
 

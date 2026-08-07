@@ -831,6 +831,10 @@ type ReportSections struct {
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:pruning:PreserveUnknownFields
 	ResolvedInsights TemplatedBool `json:"resolvedInsights,omitempty" yaml:"resolvedInsights,omitempty" template:"true"`
+	// InsightDetails controls whether each insight's message is rendered under the affected resource. The value must be true, false, or a template that renders to true or false.
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	InsightDetails TemplatedBool `json:"insightDetails,omitempty" yaml:"insightDetails,omitempty" template:"true"`
 }
 
 // ReportFile selects the TSX template used to render the catalog report,

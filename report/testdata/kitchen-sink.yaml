@@ -585,6 +585,8 @@ changes:
 analyses:
   - id: "ana-001"
     configID: "cfg-eks-001"
+    configName: "prod-eks-cluster"
+    configType: "AWS::EKS::Cluster"
     analyzer: "Trivy"
     message: "Container image flanksource/incident-commander:v1.4.200 has 3 high CVEs (CVE-2026-1234, CVE-2026-1235, CVE-2026-1236)"
     status: "open"
@@ -596,6 +598,8 @@ analyses:
 
   - id: "ana-002"
     configID: "cfg-eks-001"
+    configName: "prod-eks-cluster"
+    configType: "AWS::EKS::Cluster"
     analyzer: "Trivy"
     message: "Base image golang:1.23-alpine has known vulnerability in libcrypto (CVE-2026-0891)"
     status: "open"
@@ -607,6 +611,8 @@ analyses:
 
   - id: "ana-003"
     configID: "cfg-eks-001"
+    configName: "prod-eks-cluster"
+    configType: "AWS::EKS::Cluster"
     analyzer: "OPA/Gatekeeper"
     message: "Pod incident-commander-7f8b9c running as root user in namespace mc"
     status: "open"
@@ -618,6 +624,8 @@ analyses:
 
   - id: "ana-004"
     configID: "cfg-eks-001"
+    configName: "prod-eks-cluster"
+    configType: "AWS::EKS::Cluster"
     analyzer: "OPA/Gatekeeper"
     message: "Namespace mc missing required label: data-classification"
     status: "silenced"
@@ -629,6 +637,8 @@ analyses:
 
   - id: "ana-005"
     configID: "cfg-eks-001"
+    configName: "prod-eks-cluster"
+    configType: "AWS::EKS::Cluster"
     analyzer: "AWS Cost Optimizer"
     message: "EKS node group i3.xlarge instances are underutilized (avg CPU 18%). Consider downsizing to i3.large."
     status: "open"
@@ -640,6 +650,8 @@ analyses:
 
   - id: "ana-006"
     configID: "cfg-eks-001"
+    configName: "prod-eks-cluster"
+    configType: "AWS::EKS::Cluster"
     analyzer: "AWS Cost Optimizer"
     message: "NAT Gateway data processing charges are 40% above baseline ($320/mo). Review egress traffic patterns."
     status: "open"
@@ -651,6 +663,8 @@ analyses:
 
   - id: "ana-007"
     configID: "cfg-eks-001"
+    configName: "prod-eks-cluster"
+    configType: "AWS::EKS::Cluster"
     analyzer: "Prometheus Advisor"
     message: "P99 API response latency exceeded 500ms threshold 12 times in the last 7 days"
     status: "open"
@@ -662,6 +676,8 @@ analyses:
 
   - id: "ana-008"
     configID: "cfg-eks-001"
+    configName: "prod-eks-cluster"
+    configType: "AWS::EKS::Cluster"
     analyzer: "AWS Best Practices"
     message: "EKS cluster running version 1.29 - version 1.30 is available with security patches"
     status: "open"
@@ -673,6 +689,8 @@ analyses:
 
   - id: "ana-009"
     configID: "cfg-eks-001"
+    configName: "prod-eks-cluster"
+    configType: "AWS::EKS::Cluster"
     analyzer: "AWS Best Practices"
     message: "Enable EKS control plane logging for audit, authenticator, and scheduler components"
     status: "resolved"
@@ -684,6 +702,8 @@ analyses:
 
   - id: "ana-010"
     configID: "cfg-eks-001"
+    configName: "prod-eks-cluster"
+    configType: "AWS::EKS::Cluster"
     analyzer: "Prometheus Advisor"
     message: "Node ip-10-0-2-18 memory utilization consistently above 85% - risk of OOM kills"
     status: "open"
@@ -695,6 +715,8 @@ analyses:
 
   - id: "ana-011"
     configID: "cfg-eks-001"
+    configName: "prod-eks-cluster"
+    configType: "AWS::EKS::Cluster"
     analyzer: "Trivy"
     message: "Resolved: CVE-2025-9999 in nginx ingress controller patched in v1.10.1"
     status: "resolved"
@@ -703,6 +725,177 @@ analyses:
     source: "trivy-operator"
     firstObserved: "2026-02-01T09:00:00Z"
     lastObserved: "2026-03-15T09:00:00Z"
+
+  - id: "ana-012"
+    configID: "cfg-deploy-001"
+    configName: "incident-commander"
+    configType: "Kubernetes::Deployment"
+    analyzer: "js/eval-call"
+    summary: "Uncontrolled data used in code evaluation"
+    message: |
+      The call to `eval` depends on a **user-provided value** that is not sanitized.
+
+      Rewrite the handler to parse the payload instead:
+
+      ```js
+      const parsed = JSON.parse(payload);
+      ```
+
+      See the [CodeQL documentation](https://codeql.github.com/codeql-query-help/javascript/js-eval-call/).
+    status: "open"
+    severity: "critical"
+    analysisType: "security"
+    source: "GitHub Code Scanning"
+    firstObserved: "2026-03-18T09:00:00Z"
+    lastObserved: "2026-03-30T09:00:00Z"
+
+  - id: "ana-013"
+    configID: "cfg-deploy-002"
+    configName: "canary-checker"
+    configType: "Kubernetes::Deployment"
+    analyzer: "js/eval-call"
+    summary: "Uncontrolled data used in code evaluation"
+    message: |
+      The call to `eval` depends on a **user-provided value** that is not sanitized.
+
+      Affected entry point: `pkg/api/handler.js:214`.
+    status: "open"
+    severity: "high"
+    analysisType: "security"
+    source: "GitHub Code Scanning"
+    firstObserved: "2026-03-19T09:00:00Z"
+    lastObserved: "2026-03-30T09:00:00Z"
+
+  - id: "ana-014"
+    configID: "cfg-deploy-003"
+    configName: "config-db"
+    configType: "Kubernetes::Deployment"
+    analyzer: "js/eval-call"
+    summary: "Uncontrolled data used in code evaluation"
+    message: |
+      The call to `eval` depends on a **user-provided value** that is not sanitized.
+
+      Affected entry point: `scrapers/kubernetes/transform.js:88`.
+    status: "silenced"
+    severity: "medium"
+    analysisType: "security"
+    source: "GitHub Code Scanning"
+    firstObserved: "2026-03-21T09:00:00Z"
+    lastObserved: "2026-03-30T09:00:00Z"
+
+  # Dependabot: the analyzer is a package ecosystem, so several unrelated
+  # advisories share it. Grouping must fall back to the advisory summary.
+  - id: "ana-015"
+    configID: "cfg-repo-001"
+    configName: "flanksource/clicky-ui"
+    configType: "GitHub::Repository"
+    analyzer: "npm"
+    summary: "PostCSS PreviousMap parses sourceMappingURL without validation"
+    message: |
+      ## Summary
+
+      `PreviousMap` parses the `/*# sourceMappingURL=PATH */` comment without validating the path.
+    status: "open"
+    severity: "high"
+    analysisType: "security"
+    source: "GitHub Dependabot"
+    firstObserved: "2026-03-12T09:00:00Z"
+    lastObserved: "2026-03-30T09:00:00Z"
+
+  - id: "ana-016"
+    configID: "cfg-repo-001"
+    configName: "flanksource/clicky-ui"
+    configType: "GitHub::Repository"
+    analyzer: "npm"
+    summary: "js-yaml quadratic CPU usage when parsing crafted documents"
+    message: |
+      ### Impact
+
+      `js-yaml` spends **quadratic** CPU time parsing a document whose size grows linearly.
+    status: "open"
+    severity: "high"
+    analysisType: "security"
+    source: "GitHub Dependabot"
+    firstObserved: "2026-03-14T09:00:00Z"
+    lastObserved: "2026-03-30T09:00:00Z"
+
+  - id: "ana-017"
+    configID: "cfg-repo-001"
+    configName: "flanksource/clicky-ui"
+    configType: "GitHub::Repository"
+    analyzer: "npm"
+    summary: "Browser Mode exposes built-in commands that run on the Node.js side"
+    message: |
+      ## Summary
+
+      Browser Mode exposes a set of built-in **commands** that run on the Node.js side.
+    status: "open"
+    severity: "critical"
+    analysisType: "security"
+    source: "GitHub Dependabot"
+    firstObserved: "2026-03-08T09:00:00Z"
+    lastObserved: "2026-03-30T09:00:00Z"
+
+  - id: "ana-018"
+    configID: "cfg-repo-002"
+    configName: "flanksource/clicky"
+    configType: "GitHub::Repository"
+    analyzer: "npm"
+    summary: "PostCSS PreviousMap parses sourceMappingURL without validation"
+    message: |
+      ## Summary
+
+      `PreviousMap` parses the `/*# sourceMappingURL=PATH */` comment without validating the path.
+    status: "open"
+    severity: "high"
+    analysisType: "security"
+    source: "GitHub Dependabot"
+    firstObserved: "2026-03-13T09:00:00Z"
+    lastObserved: "2026-03-30T09:00:00Z"
+
+  # OpenSSF: one finding per repo per check, and the summary is the per-repo
+  # reason. Grouping must keep the check together across repos.
+  - id: "ana-019"
+    configID: "cfg-repo-003"
+    configName: "flanksource/canary-checker"
+    configType: "GitHub::Repository"
+    analyzer: "Vulnerabilities"
+    summary: "1 existing vulnerabilities detected"
+    message: "Warn: Project is vulnerable to GHSA-gcjh-h69q-9w9g"
+    status: "open"
+    severity: "high"
+    analysisType: "security"
+    source: "OpenSSF Scorecard"
+    firstObserved: "2026-03-01T09:00:00Z"
+    lastObserved: "2026-03-30T09:00:00Z"
+
+  - id: "ana-020"
+    configID: "cfg-repo-004"
+    configName: "flanksource/commons-db"
+    configType: "GitHub::Repository"
+    analyzer: "Vulnerabilities"
+    summary: "3 existing vulnerabilities detected"
+    message: "Warn: Project is vulnerable to GHSA-gcjh-h69q-9w9g"
+    status: "open"
+    severity: "high"
+    analysisType: "security"
+    source: "OpenSSF Scorecard"
+    firstObserved: "2026-03-02T09:00:00Z"
+    lastObserved: "2026-03-30T09:00:00Z"
+
+  - id: "ana-021"
+    configID: "cfg-repo-003"
+    configName: "flanksource/canary-checker"
+    configType: "GitHub::Repository"
+    analyzer: "Branch-Protection"
+    summary: "branch protection is not maximal on development and all release branches"
+    message: "Info: 'allow deletion' disabled on branch 'master'"
+    status: "open"
+    severity: "high"
+    analysisType: "security"
+    source: "OpenSSF Scorecard"
+    firstObserved: "2026-03-01T09:00:00Z"
+    lastObserved: "2026-03-30T09:00:00Z"
 
 relationships:
   - configID: "cfg-eks-001"
