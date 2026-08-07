@@ -1,10 +1,14 @@
 package db
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"net/url"
 	"time"
 
+	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -88,5 +92,27 @@ var _ = ginkgo.Describe("Transform Query to postgREST", ginkgo.Ordered, func() {
 		_, err := transformQuery(now.UTC(), url.Values{"name.filter": []string{"%zz"}})
 
 		Expect(err).To(MatchError(ContainSubstring("invalid filter for field name")))
+	})
+
+	ginkgo.It("returns malformed filters as JSON bad requests", func() {
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodGet, "/db/config_items", nil)
+		req.URL.RawQuery = url.Values{"name.filter": []string{"%zz"}}.Encode()
+		recorder := httptest.NewRecorder()
+		called := false
+
+		err := SearchQueryTransformMiddleware()(func(c echo.Context) error {
+			called = true
+			return c.NoContent(http.StatusOK)
+		})(e.NewContext(req, recorder))
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(called).To(BeFalse())
+		Expect(recorder.Code).To(Equal(http.StatusBadRequest))
+		Expect(recorder.Header().Get(echo.HeaderContentType)).To(ContainSubstring(echo.MIMEApplicationJSON))
+		Expect(json.Valid(recorder.Body.Bytes())).To(BeTrue())
+		var payload map[string]any
+		Expect(json.Unmarshal(recorder.Body.Bytes(), &payload)).To(Succeed())
+		Expect(payload).To(HaveKey("error"))
 	})
 })
