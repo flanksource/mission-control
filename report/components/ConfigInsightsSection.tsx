@@ -1,6 +1,5 @@
 import React from 'react';
-import { marked } from 'marked';
-import { Badge, Section, SeverityStatCard } from '@flanksource/facet';
+import { Badge, Markdown, markdownToPlainText, Section, SeverityStatCard } from '@flanksource/facet';
 import { Icon } from '@flanksource/icons/icon';
 import type { ConfigAnalysis, ConfigSeverity, AnalysisType } from '../config-types.ts';
 import ConfigLink from './ConfigLink.tsx';
@@ -177,32 +176,6 @@ function groupInsights(analyses: ConfigAnalysis[]): InsightGroup[] {
   });
 }
 
-// plainText flattens markdown to a single line for the collapsed preview, so
-// fenced blocks and emphasis markers don't leak into the summary row.
-function plainText(markdown: string): string {
-  return markdown
-    .replace(/```[\s\S]*?```/g, ' ')
-    .replace(/`([^`]*)`/g, '$1')
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
-    .replace(/^\s*[#>*-]+\s*/gm, '')
-    .replace(/(\*\*|__|\*|_)/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function InsightMarkdown({ text }: { text: string }) {
-  const html = React.useMemo(
-    () => marked.parse(text, { async: false, gfm: true, breaks: true }) as string,
-    [text],
-  );
-  return (
-    <div
-      className="text-xs text-gray-600 leading-snug [&_p]:my-[0.5mm] [&_ul]:list-disc [&_ul]:ml-[3mm] [&_ol]:list-decimal [&_ol]:ml-[3mm] [&_a]:underline [&_code]:bg-gray-100 [&_code]:px-[0.5mm] [&_code]:rounded [&_pre]:bg-gray-50 [&_pre]:p-[1mm] [&_pre]:overflow-x-auto [&_pre]:whitespace-pre-wrap"
-      dangerouslySetInnerHTML={{ __html: html }}
-    />
-  );
-}
-
 function FindingRow({ analysis, details }: { analysis: ConfigAnalysis; details?: boolean }) {
   return (
     <div className="flex-1 min-w-0" style={NO_BREAK_STYLE}>
@@ -211,13 +184,15 @@ function FindingRow({ analysis, details }: { analysis: ConfigAnalysis; details?:
           <Badge variant="custom" size="xs" shape="rounded" label={analysis.status} className={STATUS_TEXT[analysis.status] ?? STATUS_TEXT.resolved} />
         )}
         {!details && (
-          <span className="text-gray-500 leading-tight flex-1 truncate">{analysis.message ? plainText(analysis.message) : analysis.summary || ''}</span>
+          <span className="text-gray-500 leading-tight flex-1 truncate">{analysis.message ? markdownToPlainText(analysis.message) : analysis.summary || ''}</span>
         )}
         {analysis.lastObserved && (
           <span className="text-xs text-gray-400 whitespace-nowrap shrink-0 ml-auto">{formatDate(analysis.lastObserved)}</span>
         )}
       </div>
-      {details && analysis.message && <InsightMarkdown text={analysis.message} />}
+      {details && analysis.message && (
+        <Markdown className="text-xs text-gray-600 leading-snug">{analysis.message}</Markdown>
+      )}
     </div>
   );
 }
@@ -252,7 +227,7 @@ function InsightGroupEntry({ group, details }: { group: InsightGroup; details?: 
     ? firstResource.findings[0]
     : undefined;
   const url = sourceURL(firstResource.findings[0]);
-  const headline = group.summary || (only?.message ? plainText(only.message) : undefined);
+  const headline = group.summary || (only?.message ? markdownToPlainText(only.message) : undefined);
 
   return (
     <div className="border-b border-gray-50 last:border-b-0 py-[0.3mm]" style={only ? NO_BREAK_STYLE : undefined}>
@@ -284,7 +259,7 @@ function InsightGroupEntry({ group, details }: { group: InsightGroup; details?: 
       {only
         ? details && only.message && (
           <div className="pl-[5mm] pt-[0.3mm]">
-            <InsightMarkdown text={only.message} />
+            <Markdown className="text-xs text-gray-600 leading-snug">{only.message}</Markdown>
           </div>
         )
         : (
