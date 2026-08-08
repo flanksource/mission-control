@@ -812,6 +812,15 @@ analyses:
       ### Impact
 
       `js-yaml` spends **quadratic** CPU time parsing a document whose size grows linearly.
+
+      Affected versions:
+
+      - `< 3.13.1` — no fix available
+      - `4.0.0 - 4.1.0` — upgrade to `4.1.1`
+
+      | Package | Patched |
+      | --- | --- |
+      | js-yaml | 4.1.1 |
     status: "open"
     severity: "high"
     analysisType: "security"
@@ -861,7 +870,7 @@ analyses:
     configType: "GitHub::Repository"
     analyzer: "Vulnerabilities"
     summary: "1 existing vulnerabilities detected"
-    message: "Warn: Project is vulnerable to GHSA-gcjh-h69q-9w9g"
+    message: "Warn: Project is vulnerable to: GHSA-gcjh-h69q-9w9g<br><br>Warn: Project is vulnerable to: GHSA-vvpx-j8f3-3w6h"
     status: "open"
     severity: "high"
     analysisType: "security"
@@ -889,7 +898,7 @@ analyses:
     configType: "GitHub::Repository"
     analyzer: "Branch-Protection"
     summary: "branch protection is not maximal on development and all release branches"
-    message: "Info: 'allow deletion' disabled on branch 'master'"
+    message: "Info: 'allow deletion' disabled on branch 'master'<br><br>Warn: no branch protection on 'release-1.x'"
     status: "open"
     severity: "high"
     analysisType: "security"
