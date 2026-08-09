@@ -1,5 +1,5 @@
 import React from 'react';
-import { Badge, Markdown, markdownToPlainText, Section, SeverityStatCard } from '@flanksource/facet';
+import { Badge, Markdown, Section, SeverityStatCard } from '@flanksource/facet';
 import { Icon } from '@flanksource/icons/icon';
 import type { ConfigAnalysis, ConfigSeverity, AnalysisType } from '../config-types.ts';
 import ConfigLink from './ConfigLink.tsx';
@@ -183,8 +183,8 @@ function FindingRow({ analysis, details }: { analysis: ConfigAnalysis; details?:
         {analysis.status && (
           <Badge variant="custom" size="xs" shape="rounded" label={analysis.status} className={STATUS_TEXT[analysis.status] ?? STATUS_TEXT.resolved} />
         )}
-        {!details && (
-          <span className="text-gray-500 leading-tight flex-1 truncate">{analysis.message ? markdownToPlainText(analysis.message) : analysis.summary || ''}</span>
+        {!details && analysis.summary && (
+          <span className="text-gray-500 leading-tight flex-1 truncate">{analysis.summary}</span>
         )}
         {analysis.lastObserved && (
           <span className="text-xs text-gray-400 whitespace-nowrap shrink-0 ml-auto">{formatDate(analysis.lastObserved)}</span>
@@ -227,7 +227,7 @@ function InsightGroupEntry({ group, details }: { group: InsightGroup; details?: 
     ? firstResource.findings[0]
     : undefined;
   const url = sourceURL(firstResource.findings[0]);
-  const headline = group.summary || (only?.message ? markdownToPlainText(only.message) : undefined);
+  const headline = group.summary;
 
   return (
     <div className="border-b border-gray-50 last:border-b-0 py-[0.3mm]" style={only ? NO_BREAK_STYLE : undefined}>
