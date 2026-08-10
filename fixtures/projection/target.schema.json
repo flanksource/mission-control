@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "systems", "identities"],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "systems": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["config_id", "name", "config_type", "evidence"],
+        "properties": {
+          "config_id": {"type": "string", "format": "uuid"},
+          "name": {"type": "string"},
+          "config_type": {"type": "string"},
+          "evidence": {"type": "object"}
+        }
+      }
+    },
+    "identities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["external_user_id", "managed", "groups", "config_access"],
+        "properties": {
+          "external_user_id": {"type": "string", "format": "uuid"},
+          "managed": {"type": "boolean"},
+          "name": {"type": "string"},
+          "email": {"type": "string"},
+          "groups": {"type": "array"},
+          "config_access": {"type": "array"}
+        }
+      }
+    }
+  }
+}

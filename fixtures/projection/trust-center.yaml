@@ -1,0 +1,90 @@
+apiVersion: faro.flanksource.com/v1alpha1
+kind: Projection
+metadata:
+  name: catalog-systems
+spec:
+  source:
+    query:
+      configs:
+        configTypes:
+          - Kubernetes::Cluster
+        limit: 500
+  target:
+    path: target.yaml
+    schema: target.schema.json
+    select: $.systems[*]
+  match:
+    - source.id == target.config_id
+  set:
+    $.config_id:
+      value: source.id
+    $.name:
+      value: source.name
+    $.config_type:
+      value: source.type
+    $.evidence:
+      value: source.config
+---
+apiVersion: faro.flanksource.com/v1alpha1
+kind: Projection
+metadata:
+  name: identity-access
+spec:
+  source:
+    query:
+      identityAccess:
+        limit: 2000
+        userTypes:
+          - when: 'source.user_type == "Group"'
+            identityType: skip
+          - when: 'source.user_type == "User" && source.identity_provider == "Kubernetes" && source.name.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")'
+            identityType: person
+          - when: 'source.user_type == "User" && source.identity_provider == "Kubernetes" && !source.name.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")'
+            identityType: workload_identity
+          - when: 'source.identity_provider != "Kubernetes" && source.user_type in ["User", "user"]'
+            identityType: person
+          - when: 'source.user_type in ["Human", "human", "GitHub::User", "local"]'
+            identityType: person
+          - when: 'source.user_type in ["ServiceAccount", "AWSService"]'
+            identityType: workload_identity
+  target:
+    path: target.yaml
+    schema: target.schema.json
+    select: $.identities[*]
+    filter: target.managed == true
+  match:
+    - source.external_user_id == target.external_user_id
+  set:
+    $.external_user_id:
+      value: source.external_user_id
+    $.managed:
+      value: 'true'
+    $.name:
+      value: source.name
+    $.email:
+      value: source.email
+      when: '"email" in source'
+    $.groups:
+      value: source.groups
+      strategy: replaceMatching
+      match: item.context == context.name
+    $.config_access:
+      value: source.config_access
+      strategy: replaceMatching
+      match: item.context == context.name
+---
+apiVersion: faro.flanksource.com/v1alpha1
+kind: Projection
+metadata:
+  name: permission-changes
+spec:
+  source:
+    query:
+      changes:
+        changeTypes:
+          - PermissionAdded
+          - PermissionRemoved
+        sources:
+          - config-db
+        lookback: 24h
+        limit: 5000
