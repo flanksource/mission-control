@@ -199,7 +199,7 @@ require (
 	github.com/exaring/otelpgx v0.11.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/flanksource/is-healthy v1.0.89 // indirect
+	github.com/flanksource/is-healthy v1.0.90 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/flanksource/sandbox-runtime v1.0.2 // indirect
 	github.com/fluxcd/gitkit v0.6.0 // indirect
