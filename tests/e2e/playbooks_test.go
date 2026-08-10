@@ -106,11 +106,6 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 		panic(fmt.Sprintf("failed to glob playbook fixtures: %v", err))
 	}
 
-	// Fixtures that are flaky in CI and need multiple attempts.
-	flakyFixtures := map[string]int{
-		// "email-report": 5,
-	}
-
 	for _, fixturePath := range fixtures {
 		setup := peekFixtureSetup(fixturePath)
 		name := strings.TrimSuffix(filepath.Base(fixturePath), ".yaml")
@@ -122,14 +117,10 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 			}
 		}
 
-		if attempts, ok := flakyFixtures[name]; ok {
-			decorators = append(decorators, ginkgo.FlakeAttempts(attempts))
-		}
-
 		// facet-pdf-report uses an older view-report path that is still incompatible
 		// with the Facet test container. Catalog report rendering is covered by the
 		// multi-root HTML fixture.
-		if name == "email-report" || name == "facet-pdf-report" {
+		if name == "facet-pdf-report" {
 			decorators = append(decorators, ginkgo.Pending)
 		}
 
