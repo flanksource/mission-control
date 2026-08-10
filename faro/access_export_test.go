@@ -119,7 +119,7 @@ var _ = ginkgo.Describe("access users export", func() {
 		Expect(entries[0].IdentityProvider).To(Equal("AWS, Azure"))
 	})
 
-	ginkgo.It("maps user types onto the register vocabulary and withholds name/email from non-persons", func() {
+	ginkgo.It("maps user types and names workload identities by their principal", func() {
 		service := models.ExternalUser{ID: serviceID, Name: "ci-runner", UserType: "ServiceAccount", CreatedAt: grantedAt}
 		entries, err := projectRegisterIdentities(
 			[]models.ExternalUser{human(humanID, &email), service},
@@ -131,8 +131,46 @@ var _ = ginkgo.Describe("access users export", func() {
 		Expect(entries[0].IdentityType).To(Equal("person"))
 		Expect(entries[0].Email).To(Equal(email))
 		Expect(entries[1].IdentityType).To(Equal("workload_identity"))
-		Expect(entries[1].Name).To(BeEmpty())
+		Expect(entries[1].Name).To(Equal("ci-runner"))
 		Expect(entries[1].Email).To(BeEmpty())
+	})
+
+	ginkgo.It("names a Kubernetes ServiceAccount by its canonical principal", func() {
+		service := models.ExternalUser{
+			ID: serviceID, Name: "controller", UserType: "ServiceAccount", CreatedAt: grantedAt,
+			Aliases: []string{"kubernetes/prod-cluster/serviceaccount/platform/controller"},
+		}
+
+		entries, err := projectRegisterIdentities(
+			[]models.ExternalUser{service},
+			[]sdk.AccessGrant{grant(serviceID, "Kubernetes::Cluster", "")},
+			nil,
+		)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(entries).To(HaveLen(1))
+		Expect(entries[0].Name).To(Equal("system:serviceaccount:platform:controller"))
+	})
+
+	ginkgo.It("omits and warns about a Kubernetes ServiceAccount without a namespace", func() {
+		service := models.ExternalUser{
+			ID: serviceID, Name: "gadget", UserType: "ServiceAccount", CreatedAt: grantedAt,
+			Aliases: []string{"kubernetes/prod-cluster/serviceaccount//gadget"},
+		}
+
+		entries, warnings, err := projectRegisterIdentitiesWithWarnings(
+			[]models.ExternalUser{service},
+			[]sdk.AccessGrant{grant(serviceID, "Kubernetes::Namespace", "")},
+			nil,
+		)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(entries).To(BeEmpty())
+		Expect(warnings).To(Equal([]ProjectionWarning{{
+			Source:  "external-user-" + serviceID.String(),
+			Message: "Kubernetes ServiceAccount subject has no namespace for external user " + serviceID.String() + " (kubernetes/prod-cluster/serviceaccount//gadget)",
+			Count:   1,
+		}}))
 	})
 
 	ginkgo.DescribeTable("maps every user type the tenant actually reports",
@@ -148,10 +186,94 @@ var _ = ginkgo.Describe("access users export", func() {
 			Expect(entries[0].IdentityType).To(Equal(expected))
 		},
 		ginkgo.Entry("Azure/Google directory user", "User", "person"),
+		ginkgo.Entry("Azure Entra transitive member", "human", "person"),
 		ginkgo.Entry("GitHub account", "GitHub::User", "person"),
 		ginkgo.Entry("local Mission Control account", "local", "person"),
 		ginkgo.Entry("cloud service account", "ServiceAccount", "workload_identity"),
 		ginkgo.Entry("AWS service principal", "AWSService", "workload_identity"),
+	)
+
+	ginkgo.It("uses configured user type rules", func() {
+		rules, err := compileIdentityTypeRules([]ProjectionUserTypeRule{{
+			When: `source.user_type == "EntraMember"`, IdentityType: "person",
+		}})
+		Expect(err).ToNot(HaveOccurred())
+		entries, _, err := projectRegisterIdentitiesUsingRules(
+			[]models.ExternalUser{{ID: humanID, Name: "Jane Doe", UserType: "EntraMember", CreatedAt: grantedAt}},
+			[]sdk.AccessGrant{grant(humanID, "Azure::Subscription", "")},
+			nil,
+			rules,
+		)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(entries).To(HaveLen(1))
+		Expect(entries[0].IdentityType).To(Equal("person"))
+	})
+
+	ginkgo.It("rejects overlapping configured user type rules", func() {
+		rules, err := compileIdentityTypeRules([]ProjectionUserTypeRule{
+			{When: `source.user_type == "User"`, IdentityType: "person"},
+			{When: `source.identity_provider == "Azure"`, IdentityType: "person"},
+		})
+		Expect(err).ToNot(HaveOccurred())
+		_, err = classifyIdentityType(rules, models.ExternalUser{UserType: "User"}, "Azure")
+		Expect(err).To(MatchError(ContainSubstring("matches multiple userTypes rules: 0, 1")))
+	})
+
+	ginkgo.DescribeTable("tells a cluster's own subjects from the people it authenticates",
+		func(name, expected string) {
+			// Kubernetes RBAC calls both kinds "User", so the shape of the name is the only
+			// evidence available: a control-plane subject is a machine, and exporting it as a
+			// person is what puts kube-apiserver in front of an access reviewer.
+			user := models.ExternalUser{ID: serviceID, Name: name, UserType: "User", CreatedAt: grantedAt}
+			entries, err := projectRegisterIdentities(
+				[]models.ExternalUser{user},
+				[]sdk.AccessGrant{grant(serviceID, "Kubernetes::Cluster", "")},
+				nil,
+			)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(entries).To(HaveLen(1))
+			Expect(entries[0].IdentityType).To(Equal(expected))
+		},
+		ginkgo.Entry("api server", "kube-apiserver", "workload_identity"),
+		ginkgo.Entry("reserved system subject", "system:kube-scheduler", "workload_identity"),
+		ginkgo.Entry("named controller", "mission-control-reader", "workload_identity"),
+		ginkgo.Entry("a person the cluster authenticated", "jane@example.com", "person"),
+	)
+
+	ginkgo.It("still treats a directory User as a person when the grants are not Kubernetes", func() {
+		// The shape rule is scoped to Kubernetes: elsewhere "User" already means a person,
+		// and a directory account named without an address must not become a workload.
+		user := models.ExternalUser{ID: serviceID, Name: "Jane Doe", UserType: "User", CreatedAt: grantedAt}
+		entries, err := projectRegisterIdentities(
+			[]models.ExternalUser{user},
+			[]sdk.AccessGrant{grant(serviceID, "GCP::ResourceManager::Project", "")},
+			nil,
+		)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(entries[0].IdentityType).To(Equal("person"))
+	})
+
+	ginkgo.DescribeTable("keeps a login out of the contact address a register schema accepts",
+		func(scraped string, wantEmail string, wantAliases []string) {
+			user := models.ExternalUser{ID: humanID, Name: "principal", UserType: "local", CreatedAt: grantedAt}
+			if scraped != "" {
+				user.Email = &scraped
+			}
+			entries, err := projectRegisterIdentities(
+				[]models.ExternalUser{user},
+				[]sdk.AccessGrant{grant(humanID, "Azure::Subscription", "")},
+				nil,
+			)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(entries).To(HaveLen(1))
+			Expect(entries[0].Email).To(Equal(wantEmail))
+			Expect(entries[0].Aliases).To(Equal(wantAliases))
+		},
+		ginkgo.Entry("an address is a contact address", "person@example.com", "person@example.com", []string{}),
+		// admin@local is a login, not an address: it fails the register's email pattern,
+		// so it is kept as the alias the merge matches on rather than exported as email.
+		ginkgo.Entry("a local login is an alias", "admin@local", "", []string{"admin@local"}),
+		ginkgo.Entry("no email at all stays absent", "", "", []string{}),
 	)
 
 	ginkgo.It("emits no entry for a group principal", func() {

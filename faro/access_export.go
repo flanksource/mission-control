@@ -2,7 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -17,6 +20,12 @@ import (
 )
 
 var exportLimit int
+
+type accessExportOptions struct {
+	Limit           int
+	RequireComplete bool
+	UserTypes       []ProjectionUserTypeRule
+}
 
 // registerDateLayout is the calendar-date form governance registers record. The
 // config-db timestamps are RFC 3339; the register keeps only the date, so a
@@ -67,9 +76,10 @@ type RegisterIdentity struct {
 
 // AccessExportResult is the document `access users export` prints.
 type AccessExportResult struct {
-	Context    string             `json:"context,omitempty" yaml:"context,omitempty"`
-	ExportedAt string             `json:"exported_at" yaml:"exported_at"`
-	Entries    []RegisterIdentity `json:"entries" yaml:"entries"`
+	Context    string              `json:"context,omitempty" yaml:"context,omitempty"`
+	ExportedAt string              `json:"exported_at" yaml:"exported_at"`
+	Entries    []RegisterIdentity  `json:"entries" yaml:"entries"`
+	Warnings   []ProjectionWarning `json:"warnings,omitempty" yaml:"warnings,omitempty"`
 }
 
 // registerDate truncates a config-db timestamp to the calendar date the register
@@ -81,32 +91,6 @@ func registerDate(t *time.Time) *string {
 	}
 	formatted := t.UTC().Format(registerDateLayout)
 	return &formatted
-}
-
-// identityTypeSkip marks a principal that is deliberately not an identity-register
-// entry, as distinct from one this code does not recognise.
-const identityTypeSkip = ""
-
-// identityTypeFor maps the scraped user type onto the register's vocabulary, which
-// is person and workload_identity only. An unrecognised type is an error rather
-// than a guess — misclassifying a principal as a person would put it in front of a
-// human reviewer under false pretences.
-//
-// "Group" resolves to no entry at all: a group is neither a person nor a workload,
-// and the access it holds already reaches the register through each member's own
-// grant, recorded as `group:<name>` by AccessGrant.RoleSource. Emitting the group
-// as its own entry would double-count that same access.
-func identityTypeFor(userType string) (string, error) {
-	switch userType {
-	case "Human", "User", "GitHub::User", "local":
-		return "person", nil
-	case "ServiceAccount", "AWSService":
-		return "workload_identity", nil
-	case "Group":
-		return identityTypeSkip, nil
-	default:
-		return "", fmt.Errorf("external user has unmapped user_type %q: extend identityTypeFor before exporting it", userType)
-	}
 }
 
 // identityProvider names the systems a principal reaches, derived from the
@@ -143,6 +127,27 @@ func registerGrants(grants []sdk.AccessGrant) []RegisterGrant {
 	return rows
 }
 
+// registerEmailPattern mirrors register-metadata.schema.json #/$defs/email, the shape
+// a register accepts as a contact address.
+var registerEmailPattern = regexp.MustCompile(`^[^@\s]+@[^@\s]+\.[^@\s]+$`)
+
+// splitContactEmail separates a contact address from a login. A local account carries
+// something like admin@local in the email column: it is an identifier, not an address,
+// so exporting it as email would produce a register the schema rejects, while dropping
+// it would lose the login the merge matches on. It becomes an alias instead, leaving
+// the address absent for a human to establish.
+func splitContactEmail(email string, aliases []string) (string, []string) {
+	if email == "" || registerEmailPattern.MatchString(email) {
+		return email, aliases
+	}
+	for _, alias := range aliases {
+		if alias == email {
+			return "", aliases
+		}
+	}
+	return "", append(aliases, email)
+}
+
 // projectRegisterIdentities joins users, their grants and their group memberships
 // into register entries. Users holding no grants are omitted: the register records
 // what a principal can reach, so a principal that reaches nothing is not evidence
@@ -152,20 +157,44 @@ func projectRegisterIdentities(
 	grants []sdk.AccessGrant,
 	groups map[uuid.UUID][]RegisterGroup,
 ) ([]RegisterIdentity, error) {
+	entries, _, err := projectRegisterIdentitiesWithWarnings(users, grants, groups)
+	return entries, err
+}
+
+func projectRegisterIdentitiesWithWarnings(
+	users []models.ExternalUser,
+	grants []sdk.AccessGrant,
+	groups map[uuid.UUID][]RegisterGroup,
+) ([]RegisterIdentity, []ProjectionWarning, error) {
+	rules, err := compileIdentityTypeRules(nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	return projectRegisterIdentitiesUsingRules(users, grants, groups, rules)
+}
+
+func projectRegisterIdentitiesUsingRules(
+	users []models.ExternalUser,
+	grants []sdk.AccessGrant,
+	groups map[uuid.UUID][]RegisterGroup,
+	rules []compiledIdentityTypeRule,
+) ([]RegisterIdentity, []ProjectionWarning, error) {
 	grantsByUser := map[uuid.UUID][]sdk.AccessGrant{}
 	for _, grant := range grants {
 		grantsByUser[grant.ExternalUserID] = append(grantsByUser[grant.ExternalUserID], grant)
 	}
 
 	entries := make([]RegisterIdentity, 0, len(users))
+	warnings := []ProjectionWarning{}
 	for _, user := range users {
 		held := grantsByUser[user.ID]
 		if len(held) == 0 {
 			continue
 		}
-		identityType, err := identityTypeFor(user.UserType)
+		provider := identityProvider(held)
+		identityType, err := classifyIdentityType(rules, user, provider)
 		if err != nil {
-			return nil, fmt.Errorf("external user %s: %w", user.ID, err)
+			return nil, nil, fmt.Errorf("external user %s: %w", user.ID, err)
 		}
 		if identityType == identityTypeSkip {
 			// Loud, not silent: a principal holding access that produces no entry is
@@ -174,11 +203,34 @@ func projectRegisterIdentities(
 			continue
 		}
 
+		scraped := ""
+		if user.Email != nil {
+			scraped = *user.Email
+		}
+		contact, aliases := splitContactEmail(scraped, user.Aliases)
+		name := user.Name
+		if identityType == "workload_identity" {
+			name, err = canonicalWorkloadPrincipal(user, provider)
+			// WORKAROUND(missing-serviceaccount-namespace): omit invalid Kubernetes ServiceAccounts and expose them as projection warnings.
+			// Correct fix: config-db must reject these subjects before persisting identities or grants.
+			// Ref: gavel todo 7a6f89fd-9ec0-4af4-8fce-ef33966c34b5
+			if isMissingServiceAccountNamespace(err) {
+				warning := ProjectionWarning{Source: "external-user-" + user.ID.String(), Message: err.Error(), Count: len(held)}
+				warnings = append(warnings, warning)
+				logger.Warnf("%s; omitting %d grant(s) from the access export", warning.Message, warning.Count)
+				continue
+			}
+			if err != nil {
+				return nil, nil, fmt.Errorf("external user %s: %w", user.ID, err)
+			}
+		}
+
 		entry := RegisterIdentity{
 			ID:               "external-user-" + user.ID.String(),
 			IdentityType:     identityType,
-			IdentityProvider: identityProvider(held),
-			Aliases:          user.Aliases,
+			IdentityProvider: provider,
+			Name:             name,
+			Aliases:          aliases,
 			ExternalUserID:   user.ID.String(),
 			UserType:         user.UserType,
 			Tenant:           user.Tenant,
@@ -187,10 +239,7 @@ func projectRegisterIdentities(
 			ConfigAccess:     registerGrants(held),
 		}
 		if identityType == "person" {
-			entry.Name = user.Name
-			if user.Email != nil {
-				entry.Email = *user.Email
-			}
+			entry.Email = contact
 		}
 		if entry.Aliases == nil {
 			entry.Aliases = []string{}
@@ -201,7 +250,7 @@ func projectRegisterIdentities(
 		entries = append(entries, entry)
 	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
-	return entries, nil
+	return entries, warnings, nil
 }
 
 // unattributedGrants counts the grants no exported entry accounts for, keyed by the
@@ -235,11 +284,17 @@ func unattributedGrants(entries []RegisterIdentity, grants []sdk.AccessGrant) ma
 
 // groupsByUser resolves every group membership in one pass, so the export costs a
 // fixed number of requests rather than one per user.
-func groupsByUser(ctx context.Context, client *sdk.Client) (map[uuid.UUID][]RegisterGroup, error) {
-	groups, _, err := client.ListExternalGroups(ctx, sdk.IdentityOptions{})
+func groupsByUser(ctx context.Context, client *sdk.Client, options accessExportOptions) (map[uuid.UUID][]RegisterGroup, error) {
+	groups, total, err := client.ListExternalGroups(ctx, sdk.IdentityOptions{Limit: options.Limit})
 	if err != nil {
 		return nil, err
 	}
+	if options.RequireComplete {
+		if err := requireCompleteProjection("groups", len(groups), total, options.Limit); err != nil {
+			return nil, err
+		}
+	}
+	warnTruncated("groups", len(groups), total)
 	if len(groups) == 0 {
 		return map[uuid.UUID][]RegisterGroup{}, nil
 	}
@@ -311,49 +366,96 @@ Examples:
   faro access users export --format json=identities.json`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		client, ctx, err := accessClient()
+		export, err := buildAccessExport(accessExportOptions{Limit: exportLimit})
 		if err != nil {
 			return err
 		}
-
-		users, total, err := client.ListExternalUsers(ctx, sdk.IdentityOptions{Limit: exportLimit})
-		if err != nil {
-			return err
-		}
-		warnTruncated("users", len(users), total)
-
-		grants, grantTotal, err := client.ListAccessGrants(ctx, sdk.AccessGrantOptions{})
-		if err != nil {
-			return err
-		}
-		warnTruncated("access entries", len(grants), grantTotal)
-
-		membership, err := groupsByUser(ctx, client)
-		if err != nil {
-			return err
-		}
-
-		entries, err := projectRegisterIdentities(users, grants, membership)
-		if err != nil {
-			return err
-		}
-
-		for holder, count := range unattributedGrants(entries, grants) {
-			logger.Warnf("%d grant(s) held by %q are not attributable to an external user and are absent from this export; review them via `faro access permissions`", count, holder)
-		}
-
-		contextName, err := accessContextName()
-		if err != nil {
-			return err
-		}
-
-		clicky.MustPrint(AccessExportResult{
-			Context:    contextName,
-			ExportedAt: time.Now().UTC().Format(registerDateLayout),
-			Entries:    entries,
-		}, clicky.Flags.FormatOptions)
+		clicky.MustPrint(export, clicky.Flags.FormatOptions)
 		return nil
 	},
+}
+
+// buildAccessExport projects the live config_access_summary view into register
+// entries. Both the export command and identityAccess projections consume it so
+// their identity classification and grant attribution cannot drift.
+func buildAccessExport(options accessExportOptions) (AccessExportResult, error) {
+	client, ctx, err := accessClient()
+	if err != nil {
+		return AccessExportResult{}, err
+	}
+
+	users, total, err := client.ListExternalUsers(ctx, sdk.IdentityOptions{Limit: options.Limit})
+	if err != nil {
+		return AccessExportResult{}, err
+	}
+	if options.RequireComplete {
+		if err := requireCompleteProjection("users", len(users), total, options.Limit); err != nil {
+			return AccessExportResult{}, err
+		}
+	}
+	warnTruncated("users", len(users), total)
+
+	grants, grantTotal, err := client.ListAccessGrants(ctx, sdk.AccessGrantOptions{Limit: options.Limit})
+	if err != nil {
+		return AccessExportResult{}, err
+	}
+	if options.RequireComplete {
+		if err := requireCompleteProjection("access", len(grants), grantTotal, options.Limit); err != nil {
+			return AccessExportResult{}, err
+		}
+	}
+	warnTruncated("access entries", len(grants), grantTotal)
+
+	membership, err := groupsByUser(ctx, client, options)
+	if err != nil {
+		return AccessExportResult{}, err
+	}
+
+	rules, err := compileIdentityTypeRules(options.UserTypes)
+	if err != nil {
+		return AccessExportResult{}, err
+	}
+	entries, warnings, err := projectRegisterIdentitiesUsingRules(users, grants, membership, rules)
+	if err != nil {
+		return AccessExportResult{}, err
+	}
+
+	for holder, count := range unattributedGrants(entries, grants) {
+		logger.Warnf("%d grant(s) held by %q are not attributable to an external user and are absent from this export; review them via `faro access permissions`", count, holder)
+	}
+
+	contextName, err := accessContextName()
+	if err != nil {
+		return AccessExportResult{}, err
+	}
+
+	return AccessExportResult{
+		Context:    contextName,
+		ExportedAt: time.Now().UTC().Format(registerDateLayout),
+		Entries:    entries,
+		Warnings:   warnings,
+	}, nil
+}
+
+func loadAccessExport(path string) (AccessExportResult, error) {
+	if path == "" {
+		return buildAccessExport(accessExportOptions{Limit: exportLimit})
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return AccessExportResult{}, err
+	}
+	var export AccessExportResult
+	if err := json.Unmarshal(body, &export); err != nil {
+		return AccessExportResult{}, fmt.Errorf("%s: %w", path, err)
+	}
+	if export.Context == "" {
+		return AccessExportResult{}, fmt.Errorf("%s: export has no context", path)
+	}
+	if export.ExportedAt == "" {
+		return AccessExportResult{}, fmt.Errorf("%s: export has no exported_at", path)
+	}
+	return export, nil
 }
 
 func init() {
