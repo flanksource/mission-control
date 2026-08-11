@@ -36,6 +36,11 @@ func NewProvider(ctx context.Context, issuerURL string, cryptoKey [32]byte, priv
 	config := &op.Config{
 		CryptoKey:             cryptoKey,
 		GrantTypeRefreshToken: true,
+
+		// Only read when building the discovery document. Without it
+		// code_challenge_methods_supported is omitted and spec-compliant MCP
+		// clients refuse to start the flow.
+		CodeMethodS256: true,
 	}
 
 	oidcProvider, err := op.NewProvider(config, storage,

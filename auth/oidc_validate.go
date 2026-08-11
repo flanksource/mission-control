@@ -56,22 +56,8 @@ func authenticateOIDCToken(c echo.Context, tokenStr string) (bool, error) {
 		if iss, _ := claims["iss"].(string); iss != issuer {
 			continue
 		}
-		if aud, ok := claims["aud"].(string); !ok || aud != oidcmodels.ClientID {
-			// aud can also be []interface{}
-			if auds, ok := claims["aud"].([]any); ok {
-				found := false
-				for _, a := range auds {
-					if audStr, ok := a.(string); ok && audStr == oidcmodels.ClientID {
-						found = true
-						break
-					}
-				}
-				if !found {
-					continue
-				}
-			} else {
-				continue
-			}
+		if !audienceHasKnownClient(claims["aud"]) {
+			continue
 		}
 
 		sub, _ := claims["sub"].(string)
@@ -94,6 +80,24 @@ func authenticateOIDCToken(c echo.Context, tokenStr string) (bool, error) {
 
 	_ = lastErr
 	return false, nil
+}
+
+// audienceHasKnownClient reports whether the aud claim names a client this
+// provider issues tokens for. Dynamically registered clients each carry their
+// own client_id, so this cannot be a comparison against a single constant.
+// aud is a string or an array of strings per RFC 7519.
+func audienceHasKnownClient(aud any) bool {
+	switch v := aud.(type) {
+	case string:
+		return oidcmodels.IsKnownClient(v)
+	case []any:
+		for _, entry := range v {
+			if s, ok := entry.(string); ok && oidcmodels.IsKnownClient(s) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func loadOIDCPublicKeys(ctx context.Context) ([]*rsa.PublicKey, error) {

@@ -1,6 +1,8 @@
 package oidc
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/url"
 	"strings"
@@ -8,7 +10,15 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-const oauthProtectedResourcePrefix = "/.well-known/oauth-protected-resource"
+const (
+	oauthProtectedResourcePrefix = "/.well-known/oauth-protected-resource"
+
+	// openIDConfigurationPath is OIDC discovery; authorizationServerMetadataPath
+	// is its RFC 8414 equivalent. MCP clients probe the latter first and the
+	// zitadel router only serves the former, so both are mounted here.
+	openIDConfigurationPath         = "/.well-known/openid-configuration"
+	authorizationServerMetadataPath = "/.well-known/oauth-authorization-server"
+)
 
 type oauthProtectedResourceMetadata struct {
 	Resource             string   `json:"resource"`
@@ -17,11 +27,77 @@ type oauthProtectedResourceMetadata struct {
 	BearerMethods        []string `json:"bearer_methods_supported,omitempty"`
 }
 
-func mountOAuthRoutes(e *echo.Echo, oidcIssuer string) {
+func mountOAuthRoutes(e *echo.Echo, oidcIssuer string, providerHandler http.Handler) {
 	// RFC 9728 OAuth 2.0 Protected Resource Metadata for MCP/OAuth clients.
 	prmHandler := oauthProtectedResourceMetadataHandler(oidcIssuer)
-	e.GET("/.well-known/oauth-protected-resource", prmHandler)
-	e.GET("/.well-known/oauth-protected-resource/*", prmHandler)
+	e.GET(oauthProtectedResourcePrefix, prmHandler)
+	e.GET(oauthProtectedResourcePrefix+"/*", prmHandler)
+
+	// The zitadel provider builds the discovery document but has no hook for
+	// registration_endpoint, so the response is augmented on the way out. The
+	// same document answers RFC 8414, which zitadel does not serve at all.
+	metadata := authorizationServerMetadataHandler(providerHandler)
+	e.GET(openIDConfigurationPath, metadata)
+	e.GET(authorizationServerMetadataPath, metadata)
+	e.GET(authorizationServerMetadataPath+"/*", metadata)
+}
+
+// authorizationServerMetadataHandler delegates to the zitadel discovery handler
+// and injects registration_endpoint into the result.
+func authorizationServerMetadataHandler(providerHandler http.Handler) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		req := c.Request().Clone(c.Request().Context())
+		req.URL.Path = openIDConfigurationPath
+		req.Method = http.MethodGet
+
+		rec := &bufferedResponseWriter{headers: http.Header{}, status: http.StatusOK}
+		providerHandler.ServeHTTP(rec, req)
+
+		var doc map[string]any
+		if rec.status != http.StatusOK || json.Unmarshal(rec.body.Bytes(), &doc) != nil {
+			// Pass the provider's response through untouched rather than
+			// masking whatever went wrong behind a synthetic document.
+			for k, values := range rec.headers {
+				for _, v := range values {
+					c.Response().Header().Add(k, v)
+				}
+			}
+			return c.Blob(rec.status, rec.headers.Get(echo.HeaderContentType), rec.body.Bytes())
+		}
+
+		issuer, _ := doc["issuer"].(string)
+		if issuer == "" {
+			issuer = detectRequestOrigin(c, "")
+		}
+		doc["registration_endpoint"] = strings.TrimRight(issuer, "/") + RegistrationEndpoint
+
+		// Discovery documents are public and cookie-free; browser-based clients
+		// such as the MCP Inspector fetch them cross-origin.
+		c.Response().Header().Set("Access-Control-Allow-Origin", "*")
+		return c.JSON(http.StatusOK, doc)
+	}
+}
+
+// bufferedResponseWriter captures a handler's response so it can be rewritten.
+type bufferedResponseWriter struct {
+	headers http.Header
+	body    bytes.Buffer
+	status  int
+	written bool
+}
+
+func (w *bufferedResponseWriter) Header() http.Header { return w.headers }
+
+func (w *bufferedResponseWriter) WriteHeader(status int) {
+	if !w.written {
+		w.status = status
+		w.written = true
+	}
+}
+
+func (w *bufferedResponseWriter) Write(b []byte) (int, error) {
+	w.written = true
+	return w.body.Write(b)
 }
 
 func oauthProtectedResourceMetadataHandler(issuerURL string) echo.HandlerFunc {

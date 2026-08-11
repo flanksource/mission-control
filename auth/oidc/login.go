@@ -110,13 +110,10 @@ func (h *LoginHandler) HandleSubmit(c echo.Context) error {
 		return renderForm("User not found")
 	}
 
-	if err := h.storage.SetAuthRequestSubject(id, personID); err != nil {
+	if err := h.completeLogin(c, id, personID); err != nil {
 		return renderForm("Internal error")
 	}
-
-	issuerCtx := op.ContextWithIssuer(c.Request().Context(), h.issuerURL)
-	callbackURL := op.AuthCallbackURL(h.provider)(issuerCtx, id)
-	return c.Redirect(http.StatusFound, callbackURL)
+	return nil
 }
 
 func (h *LoginHandler) HandleExternalCallback(c echo.Context) error {
@@ -137,13 +134,10 @@ func (h *LoginHandler) HandleExternalCallback(c echo.Context) error {
 		return c.String(http.StatusUnauthorized, "authorization failed")
 	}
 
-	if err := h.storage.SetAuthRequestSubject(id, personID); err != nil {
+	if err := h.completeLogin(c, id, personID); err != nil {
 		return c.String(http.StatusInternalServerError, "internal error")
 	}
-
-	issuerCtx := op.ContextWithIssuer(c.Request().Context(), h.issuerURL)
-	callbackURL := op.AuthCallbackURL(h.provider)(issuerCtx, id)
-	return c.Redirect(http.StatusFound, callbackURL)
+	return nil
 }
 
 func (h *LoginHandler) validateTransaction(c echo.Context, authRequestID string) error {
