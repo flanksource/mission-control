@@ -46,12 +46,17 @@ func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL string, passwordCh
 	// Custom login form (not part of the standard OIDC protocol paths).
 	e.GET("/oidc/login", loginHandler.ShowForm)
 	e.POST("/oidc/login", loginHandler.HandleSubmit)
+	e.GET("/oidc/consent", loginHandler.ShowConsent)
+	e.POST("/oidc/consent", loginHandler.HandleConsent)
 	e.GET("/oidc/kratos/callback", loginHandler.HandleExternalCallback)
 	e.GET("/oidc/clerk/callback", loginHandler.HandleExternalCallback)
 	e.POST("/oidc/clerk/callback", loginHandler.HandleExternalCallback)
 
 	// MCP Clients need OAuth well-known discovery endpoints (not just OIDC discovery).
-	mountOAuthRoutes(e, oidcIssuer)
+	mountOAuthRoutes(e, oidcIssuer, provider.Handler)
+
+	// RFC 7591 dynamic client registration, required by Claude Desktop and Codex CLI.
+	mountRegistrationRoutes(e)
 
 	// Standard OIDC protocol endpoints — mounted at the root so that the issuer URL
 	// and the authorization_endpoint/token_endpoint values in the discovery document

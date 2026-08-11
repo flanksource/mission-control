@@ -162,11 +162,33 @@ flanksource-ui:
 
 ### Setting up MCP
 
+The MCP endpoint is served at `/mcp` and authenticates with OAuth against Mission
+Control's embedded OIDC provider. Start the server with `--oidc` to enable it.
+
+Clients register themselves through OAuth 2.0 Dynamic Client Registration
+([RFC 7591](https://datatracker.ietf.org/doc/html/rfc7591)), so there is no
+client ID to configure. On first connection the client discovers the
+authorization server, registers, and opens a browser for you to log in and
+approve it. Approval shows the application's name and the address it will be
+redirected to — check that address before allowing.
+
+Users additionally need the `mcp:use` permission.
+
 #### Claude
 
-Install mcp-remote: `npm i -g mcp-remote`
+Add a custom connector pointing at `https://<mission-control>/mcp`.
 
-Update mcp server settings in `$HOME/.config/Claude/claude_desktop_config.json`
+#### Codex CLI
+
+```sh
+codex mcp add mission-control --url https://<mission-control>/mcp
+codex mcp login mission-control
+```
+
+#### Clients without remote MCP support
+
+Older clients can bridge over stdio with
+[mcp-remote](https://www.npmjs.com/package/mcp-remote) (`npm i -g mcp-remote`):
 
 ```json
 {
@@ -180,5 +202,4 @@ Update mcp server settings in `$HOME/.config/Claude/claude_desktop_config.json`
     }
   }
 }
-
 ```
