@@ -215,6 +215,14 @@ func setWWWAuthenticate(c echo.Context) {
 	if OIDCEnabled {
 		resourceMetadataURL := OIDCIssuerURL() + "/.well-known/oauth-protected-resource"
 		c.Response().Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer resource_metadata="%s"`, resourceMetadataURL))
+		if c.Request().URL.Path == oidc.MCPResourcePath {
+			header := c.Response().Header()
+			header.Set("Access-Control-Allow-Origin", "*")
+			header.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			header.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, MCP-Protocol-Version, MCP-Session-Id, Last-Event-ID")
+			header.Set("Access-Control-Expose-Headers", "WWW-Authenticate, MCP-Session-Id")
+			header.Del("Access-Control-Allow-Credentials")
+		}
 	}
 }
 

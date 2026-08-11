@@ -60,7 +60,7 @@ func (m *transactionCookieManager) issueOnAuthorize(next http.Handler) http.Hand
 	})
 }
 
-func (m *transactionCookieManager) requireOnAuthorizeCallback(next http.Handler) http.Handler {
+func (m *transactionCookieManager) requireOnAuthorizeCallback(next http.Handler, storage *Storage) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		id := r.URL.Query().Get("id")
 		if id == "" {
@@ -71,7 +71,10 @@ func (m *transactionCookieManager) requireOnAuthorizeCallback(next http.Handler)
 			http.Error(w, "invalid oidc transaction", http.StatusUnauthorized)
 			return
 		}
-		m.clearCookie(w, id)
+		// A premature callback must not consume the cookie needed to submit consent.
+		if authRequest, err := storage.AuthRequestByID(r.Context(), id); err == nil && authRequest.Done() {
+			m.clearCookie(w, id)
+		}
 
 		next.ServeHTTP(w, r)
 	})
