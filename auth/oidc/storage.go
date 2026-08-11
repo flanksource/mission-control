@@ -44,17 +44,26 @@ func (p *publicKey) Key() any                           { return p.key }
 
 // Storage implements op.Storage backed by Postgres.
 type Storage struct {
-	ctx    context.Context
-	signer *signingKey
+	ctx       context.Context
+	signer    *signingKey
+	issuerURL string
 }
 
 var _ op.Storage = (*Storage)(nil)
 
-func NewStorage(ctx context.Context, signer *signingKey) *Storage {
-	return &Storage{ctx: ctx, signer: signer}
+func NewStorage(ctx context.Context, signer *signingKey, issuerURL string) *Storage {
+	return &Storage{ctx: ctx, signer: signer, issuerURL: issuerURL}
 }
 
 func (s *Storage) Health(_ gocontext.Context) error { return nil }
+
+// deriveResource reconstructs the fixed MCP audience for stateless dynamic clients.
+func (s *Storage) deriveResource(clientID string) string {
+	if IsDynamicClient(clientID) {
+		return MCPResourceURL(s.issuerURL)
+	}
+	return ""
+}
 
 func (s *Storage) CreateAuthRequest(ctx gocontext.Context, req *oidc.AuthRequest, _ string) (op.AuthRequest, error) {
 	ar := &AuthRequest{
@@ -82,6 +91,7 @@ func (s *Storage) AuthRequestByID(_ gocontext.Context, id string) (op.AuthReques
 	if err := s.ctx.DB().Where("id = ? AND expires_at > NOW()", id).First(&ar).Error; err != nil {
 		return nil, fmt.Errorf("auth request not found: %w", err)
 	}
+	ar.Resource = s.deriveResource(ar.ClientID)
 	return &ar, nil
 }
 
@@ -90,6 +100,7 @@ func (s *Storage) AuthRequestByCode(_ gocontext.Context, code string) (op.AuthRe
 	if err := s.ctx.DB().Where("code = ? AND expires_at > NOW()", hashToken(code)).First(&ar).Error; err != nil {
 		return nil, fmt.Errorf("auth request not found: %w", err)
 	}
+	ar.Resource = s.deriveResource(ar.ClientID)
 	return &ar, nil
 }
 
@@ -162,6 +173,7 @@ func (s *Storage) TokenRequestByRefreshToken(_ gocontext.Context, refreshToken s
 	if err := s.ctx.DB().Where("token = ? AND expires_at > NOW()", hashToken(refreshToken)).First(&rt).Error; err != nil {
 		return nil, op.ErrInvalidRefreshToken
 	}
+	rt.Resource = s.deriveResource(rt.ClientID)
 	return &rt, nil
 }
 

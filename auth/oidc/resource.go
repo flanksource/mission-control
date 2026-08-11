@@ -53,7 +53,7 @@ func resourceIndicatorFromContext(ctx gocontext.Context) string {
 	return resource
 }
 
-// mcpTokenEndpointHandler enforces the persisted resource on code and refresh exchanges.
+// mcpTokenEndpointHandler enforces the MCP resource on code and refresh exchanges.
 func mcpTokenEndpointHandler(next http.Handler, storage *Storage, issuerURL string) http.Handler {
 	expectedResource := MCPResourceURL(issuerURL)
 

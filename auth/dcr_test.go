@@ -212,7 +212,6 @@ var _ = ginkgo.Describe("OAuth dynamic client registration", func() {
 		Expect(DefaultContext.DB().Where("id = ?", authRequestID).First(&pending).Error).To(Succeed())
 		Expect(pending.Done()).To(BeFalse())
 		Expect(pending.Code).To(BeNil())
-		Expect(pending.Resource).To(Equal(oidc.MCPResourceURL("http://localhost:8080")))
 
 		// The consent screen must name the client and show where the code goes.
 		consentReq := httptest.NewRequest(http.MethodGet, "/oidc/consent?auth_request_id="+authRequestID, nil)
@@ -348,7 +347,6 @@ var _ = ginkgo.Describe("OAuth dynamic client registration", func() {
 
 		var persistedRefreshToken oidc.RefreshToken
 		Expect(DefaultContext.DB().Where("client_id = ?", clientID).Order("created_at DESC").First(&persistedRefreshToken).Error).To(Succeed())
-		Expect(persistedRefreshToken.Resource).To(Equal(resource))
 
 		claims := decodeJWTClaims(accessToken)
 		Expect(claims["aud"]).To(ConsistOf(resource))

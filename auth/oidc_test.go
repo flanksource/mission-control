@@ -803,7 +803,6 @@ CREATE TABLE IF NOT EXISTS oidc_public_keys (
 CREATE TABLE IF NOT EXISTS oidc_auth_requests (
 	id                   TEXT PRIMARY KEY,
 	client_id            TEXT NOT NULL,
-	resource             TEXT,
 	redirect_uri         TEXT NOT NULL,
 	scopes               TEXT[] NOT NULL DEFAULT '{}',
 	state                TEXT,
@@ -823,17 +822,13 @@ CREATE TABLE IF NOT EXISTS oidc_refresh_tokens (
 	id          TEXT PRIMARY KEY,
 	token       TEXT NOT NULL UNIQUE,
 	client_id   TEXT NOT NULL,
-	resource    TEXT,
 	subject     TEXT NOT NULL,
 	scopes      TEXT[] NOT NULL DEFAULT '{}',
 	auth_time   TIMESTAMPTZ NOT NULL,
 	rotation_id TEXT NOT NULL,
 	created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 	expires_at  TIMESTAMPTZ NOT NULL
-);
-
-ALTER TABLE oidc_auth_requests ADD COLUMN IF NOT EXISTS resource TEXT;
-ALTER TABLE oidc_refresh_tokens ADD COLUMN IF NOT EXISTS resource TEXT;`
+);`
 	Expect(ctx.DB().Exec(ddl).Error).To(Succeed())
 }
 
