@@ -14,7 +14,7 @@ const ClientID = "mc-cli"
 type AuthRequest struct {
 	ID                  string         `gorm:"primaryKey;column:id"`
 	ClientID            string         `gorm:"column:client_id;not null"`
-	Resource            string         `gorm:"column:resource"`
+	Resource            string         `gorm:"-"`
 	RedirectURI         string         `gorm:"column:redirect_uri;not null"`
 	Scopes              pq.StringArray `gorm:"column:scopes;type:text[]"`
 	State               string         `gorm:"column:state"`
@@ -74,7 +74,7 @@ type RefreshToken struct {
 	ID         string         `gorm:"primaryKey;column:id"`
 	Token      string         `gorm:"column:token;not null;uniqueIndex"`
 	ClientID   string         `gorm:"column:client_id;not null"`
-	Resource   string         `gorm:"column:resource"`
+	Resource   string         `gorm:"-"`
 	Subject    string         `gorm:"column:subject;not null"`
 	Scopes     pq.StringArray `gorm:"column:scopes;type:text[]"`
 	AuthTime   time.Time      `gorm:"column:auth_time;not null"`

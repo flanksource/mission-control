@@ -31,7 +31,7 @@ func NewProvider(ctx context.Context, issuerURL string, cryptoKey [32]byte, priv
 		algorithm:  "RS256",
 		privateKey: privateKey,
 	}
-	storage := NewStorage(ctx, signer)
+	storage := NewStorage(ctx, signer, issuerURL)
 
 	config := &op.Config{
 		CryptoKey:             cryptoKey,
