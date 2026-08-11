@@ -14,6 +14,7 @@ const ClientID = "mc-cli"
 type AuthRequest struct {
 	ID                  string         `gorm:"primaryKey;column:id"`
 	ClientID            string         `gorm:"column:client_id;not null"`
+	Resource            string         `gorm:"column:resource"`
 	RedirectURI         string         `gorm:"column:redirect_uri;not null"`
 	Scopes              pq.StringArray `gorm:"column:scopes;type:text[]"`
 	State               string         `gorm:"column:state"`
@@ -31,10 +32,15 @@ type AuthRequest struct {
 
 func (AuthRequest) TableName() string { return "oidc_auth_requests" }
 
-func (a *AuthRequest) GetID() string         { return a.ID }
-func (a *AuthRequest) GetACR() string        { return "" }
-func (a *AuthRequest) GetAMR() []string      { return nil }
-func (a *AuthRequest) GetAudience() []string { return []string{a.ClientID} }
+func (a *AuthRequest) GetID() string    { return a.ID }
+func (a *AuthRequest) GetACR() string   { return "" }
+func (a *AuthRequest) GetAMR() []string { return nil }
+func (a *AuthRequest) GetAudience() []string {
+	if a.Resource != "" {
+		return []string{a.Resource}
+	}
+	return []string{a.ClientID}
+}
 func (a *AuthRequest) GetAuthTime() time.Time {
 	if a.AuthTime != nil {
 		return *a.AuthTime
@@ -60,6 +66,7 @@ func (a *AuthRequest) GetResponseMode() oidc.ResponseMode { return "" }
 func (a *AuthRequest) GetScopes() []string                { return []string(a.Scopes) }
 func (a *AuthRequest) GetState() string                   { return a.State }
 func (a *AuthRequest) GetSubject() string                 { return a.Subject }
+func (a *AuthRequest) GetResource() string                { return a.Resource }
 func (a *AuthRequest) Done() bool                         { return a.IsDone }
 
 // RefreshToken is backed by the oidc_refresh_tokens table.
@@ -67,6 +74,7 @@ type RefreshToken struct {
 	ID         string         `gorm:"primaryKey;column:id"`
 	Token      string         `gorm:"column:token;not null;uniqueIndex"`
 	ClientID   string         `gorm:"column:client_id;not null"`
+	Resource   string         `gorm:"column:resource"`
 	Subject    string         `gorm:"column:subject;not null"`
 	Scopes     pq.StringArray `gorm:"column:scopes;type:text[]"`
 	AuthTime   time.Time      `gorm:"column:auth_time;not null"`
@@ -77,12 +85,18 @@ type RefreshToken struct {
 
 func (RefreshToken) TableName() string { return "oidc_refresh_tokens" }
 
-func (r *RefreshToken) GetAMR() []string       { return nil }
-func (r *RefreshToken) GetAudience() []string  { return []string{r.ClientID} }
+func (r *RefreshToken) GetAMR() []string { return nil }
+func (r *RefreshToken) GetAudience() []string {
+	if r.Resource != "" {
+		return []string{r.Resource}
+	}
+	return []string{r.ClientID}
+}
 func (r *RefreshToken) GetAuthTime() time.Time { return r.AuthTime }
 func (r *RefreshToken) GetClientID() string    { return r.ClientID }
 func (r *RefreshToken) GetScopes() []string    { return []string(r.Scopes) }
 func (r *RefreshToken) GetSubject() string     { return r.Subject }
+func (r *RefreshToken) GetResource() string    { return r.Resource }
 func (r *RefreshToken) SetCurrentScopes(scopes []string) {
 	r.Scopes = pq.StringArray(scopes)
 }

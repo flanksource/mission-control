@@ -91,11 +91,14 @@ type registrationError struct {
 func mountRegistrationRoutes(e *echo.Echo) {
 	e.POST(RegistrationEndpoint, registrationHandler)
 	e.OPTIONS(RegistrationEndpoint, func(c echo.Context) error {
+		setOAuthCORSHeaders(c.Response().Header())
 		return c.NoContent(http.StatusNoContent)
 	})
 }
 
 func registrationHandler(c echo.Context) error {
+	setOAuthCORSHeaders(c.Response().Header())
+
 	var req registrationRequest
 	if err := json.NewDecoder(http.MaxBytesReader(c.Response(), c.Request().Body, maxRegistrationBody)).Decode(&req); err != nil {
 		return registrationFailure(c, "invalid_client_metadata", "request body is not valid JSON")
@@ -250,15 +253,15 @@ func decodeClientID(clientID string) (*clientMetadata, error) {
 	return &md, nil
 }
 
-// IsKnownClient reports whether clientID names a client this provider issues
-// tokens for: the built-in CLI client, or a valid dynamically registered id.
-func IsKnownClient(clientID string) bool {
-	if clientID == ClientID {
-		return true
-	}
-
+// IsDynamicClient reports whether clientID contains valid dynamic registration metadata.
+func IsDynamicClient(clientID string) bool {
 	_, err := decodeClientID(clientID)
 	return err == nil
+}
+
+// IsKnownClient reports whether clientID names a client this provider issues tokens for.
+func IsKnownClient(clientID string) bool {
+	return clientID == ClientID || IsDynamicClient(clientID)
 }
 
 // dynamicClient is a public client reconstructed from a dynamically registered

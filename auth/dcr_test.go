@@ -12,6 +12,7 @@ import (
 
 	"github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -22,7 +23,12 @@ var _ = ginkgo.Describe("OAuth dynamic client registration", func() {
 	var e *echo.Echo
 
 	ginkgo.BeforeEach(func() {
+		ensureOIDCTables(DefaultContext)
 		e = newEchoInstance(DefaultContext)
+		e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+			AllowCredentials: true,
+			AllowOrigins:     []string{"https://configured.example.com"},
+		}))
 		Expect(oidc.MountRoutes(e, DefaultContext, "http://localhost:8080", &mockChecker{valid: true}, nil, mockLookup)).To(Succeed())
 	})
 
@@ -36,9 +42,12 @@ var _ = ginkgo.Describe("OAuth dynamic client registration", func() {
 	registerClient := func(body string) map[string]any {
 		req := httptest.NewRequest(http.MethodPost, oidc.RegistrationEndpoint, strings.NewReader(body))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req.Header.Set("Origin", "https://inspector.example.com")
 		rec := serve(req)
 
 		Expect(rec.Code).To(Equal(http.StatusCreated))
+		Expect(rec.Header().Get("Access-Control-Allow-Origin")).To(Equal("*"))
+		Expect(rec.Header().Get("Access-Control-Allow-Credentials")).To(BeEmpty())
 		var resp map[string]any
 		Expect(json.Unmarshal(rec.Body.Bytes(), &resp)).To(Succeed())
 		return resp
@@ -50,8 +59,12 @@ var _ = ginkgo.Describe("OAuth dynamic client registration", func() {
 			"/.well-known/oauth-authorization-server",
 		} {
 			ginkgo.It("advertises registration and S256 at "+path, func() {
-				rec := serve(httptest.NewRequest(http.MethodGet, path, nil))
+				req := httptest.NewRequest(http.MethodGet, path, nil)
+				req.Header.Set("Origin", "https://inspector.example.com")
+				rec := serve(req)
 				Expect(rec.Code).To(Equal(http.StatusOK))
+				Expect(rec.Header().Get("Access-Control-Allow-Origin")).To(Equal("*"))
+				Expect(rec.Header().Get("Access-Control-Allow-Credentials")).To(BeEmpty())
 
 				var doc map[string]any
 				Expect(json.Unmarshal(rec.Body.Bytes(), &doc)).To(Succeed())
@@ -69,13 +82,65 @@ var _ = ginkgo.Describe("OAuth dynamic client registration", func() {
 		})
 
 		ginkgo.It("still serves protected resource metadata", func() {
-			rec := serve(httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil))
+			req := httptest.NewRequest(http.MethodGet, "/.well-known/oauth-protected-resource", nil)
+			req.Header.Set("Origin", "https://inspector.example.com")
+			rec := serve(req)
 			Expect(rec.Code).To(Equal(http.StatusOK))
+			Expect(rec.Header().Get("Access-Control-Allow-Origin")).To(Equal("*"))
 
 			var doc map[string]any
 			Expect(json.Unmarshal(rec.Body.Bytes(), &doc)).To(Succeed())
 			Expect(doc["resource"]).To(HaveSuffix("/mcp"))
 		})
+	})
+
+	ginkgo.It("serves credential-free OAuth preflights", func() {
+		for _, path := range []string{
+			"/.well-known/openid-configuration",
+			"/.well-known/oauth-authorization-server",
+			"/.well-known/oauth-protected-resource/mcp",
+			oidc.RegistrationEndpoint,
+			"/oauth/token",
+			"/mcp",
+		} {
+			req := httptest.NewRequest(http.MethodOptions, path, nil)
+			req.Header.Set("Origin", "https://inspector.example.com")
+			req.Header.Set("Access-Control-Request-Method", http.MethodPost)
+			req.Header.Set("Access-Control-Request-Headers", "authorization, content-type, mcp-protocol-version")
+			rec := serve(req)
+
+			Expect(rec.Code).To(Equal(http.StatusNoContent), path)
+			Expect(rec.Header().Get("Access-Control-Allow-Origin")).To(Equal("*"), path)
+			Expect(rec.Header().Get("Access-Control-Allow-Methods")).To(ContainSubstring("POST"), path)
+			Expect(rec.Header().Get("Access-Control-Allow-Headers")).To(ContainSubstring("Authorization"), path)
+			Expect(rec.Header().Get("Access-Control-Allow-Credentials")).To(BeEmpty(), path)
+		}
+	})
+
+	ginkgo.It("includes the OAuth challenge in cross-origin MCP 401 responses", func() {
+		oldOIDCEnabled := OIDCEnabled
+		oldLocalhostOnly := localhostOnly
+		defer func() {
+			OIDCEnabled = oldOIDCEnabled
+			localhostOnly = oldLocalhostOnly
+		}()
+		OIDCEnabled = true
+		localhostOnly = false
+
+		e.Use(basicAuthMiddleware)
+		e.POST("/mcp", func(c echo.Context) error {
+			return c.NoContent(http.StatusOK)
+		})
+
+		req := httptest.NewRequest(http.MethodPost, "/mcp", nil)
+		req.Header.Set("Origin", "https://inspector.example.com")
+		rec := serve(req)
+
+		Expect(rec.Code).To(Equal(http.StatusUnauthorized))
+		Expect(rec.Header().Get("Access-Control-Allow-Origin")).To(Equal("*"))
+		Expect(rec.Header().Get("Access-Control-Expose-Headers")).To(ContainSubstring("WWW-Authenticate"))
+		Expect(rec.Header().Get("WWW-Authenticate")).To(ContainSubstring("resource_metadata="))
+		Expect(rec.Header().Get("Access-Control-Allow-Credentials")).To(BeEmpty())
 	})
 
 	ginkgo.It("completes registration, authorization, consent and code issuance", func() {
@@ -132,6 +197,23 @@ var _ = ginkgo.Describe("OAuth dynamic client registration", func() {
 		Expect(loginRec.Code).To(Equal(http.StatusFound))
 		Expect(loginRec.Header().Get("Location")).To(Equal("/oidc/consent?auth_request_id=" + authRequestID))
 
+		// Calling the provider callback before consent must not issue a code.
+		prematureCallbackReq := httptest.NewRequest(http.MethodGet, "/authorize/callback?id="+authRequestID, nil)
+		prematureCallbackReq.AddCookie(txCookie)
+		prematureCallbackRec := serve(prematureCallbackReq)
+		Expect(prematureCallbackRec.Code).To(Equal(http.StatusFound))
+		Expect(prematureCallbackRec.Header().Values("Set-Cookie")).To(BeEmpty())
+		prematureRedirect, err := url.Parse(prematureCallbackRec.Header().Get("Location"))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(prematureRedirect.Query().Get("code")).To(BeEmpty())
+		Expect(prematureRedirect.Query().Get("error")).To(Equal("interaction_required"))
+
+		var pending oidc.AuthRequest
+		Expect(DefaultContext.DB().Where("id = ?", authRequestID).First(&pending).Error).To(Succeed())
+		Expect(pending.Done()).To(BeFalse())
+		Expect(pending.Code).To(BeNil())
+		Expect(pending.Resource).To(Equal(oidc.MCPResourceURL("http://localhost:8080")))
+
 		// The consent screen must name the client and show where the code goes.
 		consentReq := httptest.NewRequest(http.MethodGet, "/oidc/consent?auth_request_id="+authRequestID, nil)
 		consentReq.AddCookie(txCookie)
@@ -180,6 +262,7 @@ var _ = ginkgo.Describe("OAuth dynamic client registration", func() {
 		challenge := base64.RawURLEncoding.EncodeToString(sum[:])
 
 		const redirectURI = "http://127.0.0.1:1455/auth/callback"
+		resource := oidc.MCPResourceURL("http://localhost:8080")
 
 		authorizeRec := serve(httptest.NewRequest(http.MethodGet, "/authorize?"+url.Values{
 			"client_id":             {clientID},
@@ -189,6 +272,7 @@ var _ = ginkgo.Describe("OAuth dynamic client registration", func() {
 			"state":                 {"state-tok"},
 			"code_challenge":        {challenge},
 			"code_challenge_method": {"S256"},
+			"resource":              {resource},
 		}.Encode(), nil))
 		Expect(authorizeRec.Code).To(Equal(http.StatusFound))
 		txCookie := authorizeRec.Result().Cookies()[0]
@@ -224,13 +308,29 @@ var _ = ginkgo.Describe("OAuth dynamic client registration", func() {
 		postForm := func(form url.Values) map[string]any {
 			req := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(form.Encode()))
 			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
+			req.Header.Set("Origin", "https://inspector.example.com")
 			rec := serve(req)
 
 			Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+			Expect(rec.Header().Get("Access-Control-Allow-Origin")).To(Equal("*"))
+			Expect(rec.Header().Get("Access-Control-Allow-Credentials")).To(BeEmpty())
 			var tokens map[string]any
 			Expect(json.Unmarshal(rec.Body.Bytes(), &tokens)).To(Succeed())
 			return tokens
 		}
+
+		wrongResourceReq := httptest.NewRequest(http.MethodPost, "/oauth/token", strings.NewReader(url.Values{
+			"grant_type":    {"authorization_code"},
+			"code":          {code},
+			"redirect_uri":  {redirectURI},
+			"client_id":     {clientID},
+			"code_verifier": {verifier},
+			"resource":      {"https://unrelated.example.com/api"},
+		}.Encode()))
+		wrongResourceReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
+		wrongResourceRec := serve(wrongResourceReq)
+		Expect(wrongResourceRec.Code).To(Equal(http.StatusBadRequest))
+		Expect(wrongResourceRec.Body.String()).To(ContainSubstring("invalid_target"))
 
 		tokens := postForm(url.Values{
 			"grant_type":    {"authorization_code"},
@@ -238,6 +338,7 @@ var _ = ginkgo.Describe("OAuth dynamic client registration", func() {
 			"redirect_uri":  {redirectURI},
 			"client_id":     {clientID},
 			"code_verifier": {verifier},
+			"resource":      {resource},
 		})
 
 		accessToken, _ := tokens["access_token"].(string)
@@ -245,19 +346,24 @@ var _ = ginkgo.Describe("OAuth dynamic client registration", func() {
 		refreshToken, _ := tokens["refresh_token"].(string)
 		Expect(refreshToken).ToNot(BeEmpty(), "offline_access must yield a refresh token so clients survive restarts")
 
-		// The access token's audience is the dynamic client_id, which is exactly
-		// what authenticateOIDCToken has to accept for /mcp to work.
+		var persistedRefreshToken oidc.RefreshToken
+		Expect(DefaultContext.DB().Where("client_id = ?", clientID).Order("created_at DESC").First(&persistedRefreshToken).Error).To(Succeed())
+		Expect(persistedRefreshToken.Resource).To(Equal(resource))
+
 		claims := decodeJWTClaims(accessToken)
-		Expect(audienceHasKnownClient(claims["aud"])).To(BeTrue())
+		Expect(claims["aud"]).To(ConsistOf(resource))
+		Expect(claims["client_id"]).To(Equal(clientID))
 		Expect(claims["iss"]).To(Equal("http://localhost:8080"))
 
 		refreshed := postForm(url.Values{
 			"grant_type":    {"refresh_token"},
 			"refresh_token": {refreshToken},
 			"client_id":     {clientID},
+			"resource":      {resource},
 		})
 		Expect(refreshed["access_token"]).ToNot(BeEmpty())
 		Expect(refreshed["refresh_token"]).ToNot(BeEmpty())
+		Expect(decodeJWTClaims(refreshed["access_token"].(string))["aud"]).To(ConsistOf(resource))
 	})
 
 	ginkgo.It("drops the authorization request when consent is denied", func() {
@@ -271,6 +377,7 @@ var _ = ginkgo.Describe("OAuth dynamic client registration", func() {
 			"state":                 {"state-2"},
 			"code_challenge":        {"challenge-2"},
 			"code_challenge_method": {"S256"},
+			"resource":              {oidc.MCPResourceURL("http://localhost:8080")},
 		}.Encode()
 
 		authorizeRec := serve(httptest.NewRequest(http.MethodGet, authorizeURL, nil))
@@ -293,7 +400,13 @@ var _ = ginkgo.Describe("OAuth dynamic client registration", func() {
 			strings.NewReader(url.Values{"auth_request_id": {authRequestID}, "decision": {"deny"}}.Encode()))
 		denyReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
 		denyReq.AddCookie(txCookie)
-		Expect(serve(denyReq).Code).To(Equal(http.StatusOK))
+		denyRec := serve(denyReq)
+		Expect(denyRec.Code).To(Equal(http.StatusFound))
+		denialRedirect, err := url.Parse(denyRec.Header().Get("Location"))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(denialRedirect.Scheme + "://" + denialRedirect.Host + denialRedirect.Path).To(Equal("https://claude.ai/api/mcp/auth_callback"))
+		Expect(denialRedirect.Query().Get("error")).To(Equal("access_denied"))
+		Expect(denialRedirect.Query().Get("state")).To(Equal("state-2"))
 
 		var count int64
 		Expect(DefaultContext.DB().Table("oidc_auth_requests").Where("id = ?", authRequestID).Count(&count).Error).To(Succeed())
@@ -347,15 +460,20 @@ var _ = ginkgo.Describe("OAuth dynamic client registration", func() {
 		Expect(serve(httptest.NewRequest(http.MethodGet, authorizeURL, nil)).Code).To(Equal(http.StatusBadRequest))
 	})
 
-	ginkgo.It("accepts tokens issued to a dynamically registered client", func() {
+	ginkgo.It("requires the MCP resource for dynamically registered clients", func() {
 		client := registerClient(`{"client_name":"Claude","redirect_uris":["https://claude.ai/api/mcp/auth_callback"]}`)
-		clientID := client["client_id"].(string)
+		authorizeURL := "/authorize?" + url.Values{
+			"client_id":             {client["client_id"].(string)},
+			"response_type":         {"code"},
+			"redirect_uri":          {"https://claude.ai/api/mcp/auth_callback"},
+			"scope":                 {"openid"},
+			"code_challenge":        {"challenge"},
+			"code_challenge_method": {"S256"},
+		}.Encode()
 
-		Expect(audienceHasKnownClient(clientID)).To(BeTrue())
-		Expect(audienceHasKnownClient([]any{clientID})).To(BeTrue())
-		Expect(audienceHasKnownClient(oidc.ClientID)).To(BeTrue())
-		Expect(audienceHasKnownClient("some-other-client")).To(BeFalse())
-		Expect(audienceHasKnownClient(nil)).To(BeFalse())
+		rec := serve(httptest.NewRequest(http.MethodGet, authorizeURL, nil))
+		Expect(rec.Code).To(Equal(http.StatusBadRequest))
+		Expect(rec.Body.String()).To(ContainSubstring("invalid_target"))
 	})
 })
 

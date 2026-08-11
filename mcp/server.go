@@ -33,6 +33,7 @@ type MCPServer struct {
 //   - delegated access token auth: owner = access_token.created_by
 func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 	return func(c echov4.Context) error {
+		setCORSHeaders(c.Response().Header())
 		ctx := c.Request().Context().(context.Context)
 
 		owner, err := resolveOwner(ctx)
@@ -51,6 +52,14 @@ func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 
 		return next(c)
 	}
+}
+
+func setCORSHeaders(header http.Header) {
+	header.Set("Access-Control-Allow-Origin", "*")
+	header.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	header.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, MCP-Protocol-Version, MCP-Session-Id, Last-Event-ID")
+	header.Set("Access-Control-Expose-Headers", "WWW-Authenticate, MCP-Session-Id")
+	header.Del("Access-Control-Allow-Credentials")
 }
 
 func registerPlaybookTools(s *server.MCPServer, hooks *server.Hooks) {

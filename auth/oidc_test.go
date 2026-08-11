@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -163,6 +164,12 @@ var _ = ginkgo.Describe("OIDC", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(fetched.GetSubject()).To(Equal(person.ID.String()))
 			Expect(fetched.GetAuthTime()).ToNot(BeZero())
+			Expect(fetched.Done()).To(BeFalse())
+
+			Expect(provider.Storage.CompleteAuthRequest(ar.GetID())).To(Succeed())
+			completed, err := provider.Storage.AuthRequestByID(gocontext.TODO(), ar.GetID())
+			Expect(err).ToNot(HaveOccurred())
+			Expect(completed.Done()).To(BeTrue())
 		})
 
 		ginkgo.It("creates and retrieves refresh tokens", func() {
@@ -301,6 +308,81 @@ var _ = ginkgo.Describe("OIDC", func() {
 			authenticated, err := authenticateOIDCToken(c, tokenStr)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(authenticated).To(BeTrue())
+		})
+
+		ginkgo.It("confines dynamic-client access tokens to the MCP resource", func() {
+			privateKey, _, err := signing.PrivateKey()
+			Expect(err).To(BeNil())
+
+			oidcPublicKeyCache.Flush()
+			savedAuthMode := vars.AuthMode
+			savedFrontendURL := api.FrontendURL
+			savedPublicURL := api.PublicURL
+			savedOIDCEnabled := OIDCEnabled
+			savedLocalhostOnly := localhostOnly
+			vars.AuthMode = Clerk
+			api.FrontendURL = ""
+			api.PublicURL = "http://localhost:8080"
+			OIDCEnabled = true
+			localhostOnly = false
+			defer func() {
+				vars.AuthMode = savedAuthMode
+				api.FrontendURL = savedFrontendURL
+				api.PublicURL = savedPublicURL
+				OIDCEnabled = savedOIDCEnabled
+				localhostOnly = savedLocalhostOnly
+			}()
+
+			clientMetadata := base64.RawURLEncoding.EncodeToString([]byte(`{"r":["https://claude.ai/api/mcp/auth_callback"]}`))
+			clientID := "dcr_" + clientMetadata
+			resource := oidc.MCPResourceURL("http://localhost:8080")
+			claims := jwt.MapClaims{
+				"iss":       "http://localhost:8080",
+				"aud":       resource,
+				"client_id": clientID,
+				"sub":       person.ID.String(),
+				"exp":       time.Now().Add(time.Hour).Unix(),
+				"iat":       time.Now().Unix(),
+			}
+			token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+			tokenStr, err := token.SignedString(privateKey)
+			Expect(err).ToNot(HaveOccurred())
+
+			newContext := func(path string) echo.Context {
+				e := newEchoInstance(DefaultContext)
+				req := httptest.NewRequest(http.MethodGet, path, nil)
+				req = req.WithContext(DefaultContext.Wrap(req.Context()))
+				return e.NewContext(req, httptest.NewRecorder())
+			}
+
+			authenticated, err := authenticateOIDCToken(newContext(oidc.MCPResourcePath), tokenStr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(authenticated).To(BeTrue())
+
+			authenticated, err = authenticateOIDCToken(newContext("/auth/whoami"), tokenStr)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(authenticated).To(BeFalse())
+
+			e := newEchoInstance(DefaultContext)
+			e.Use(basicAuthMiddleware)
+			e.GET("/auth/whoami", func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+			e.GET(oidc.MCPResourcePath, func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+			request := func(path string) int {
+				req := httptest.NewRequest(http.MethodGet, path, nil)
+				req.Header.Set(echo.HeaderAuthorization, "Bearer "+tokenStr)
+				rec := httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+				return rec.Code
+			}
+			Expect(request(oidc.MCPResourcePath)).To(Equal(http.StatusOK))
+			Expect(request("/auth/whoami")).To(Equal(http.StatusUnauthorized))
+
+			claims["aud"] = clientID
+			legacyToken, err := jwt.NewWithClaims(jwt.SigningMethodRS256, claims).SignedString(privateKey)
+			Expect(err).ToNot(HaveOccurred())
+			authenticated, err = authenticateOIDCToken(newContext(oidc.MCPResourcePath), legacyToken)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(authenticated).To(BeFalse())
 		})
 
 		ginkgo.It("rejects a JWT signed by a different key", func() {
@@ -468,6 +550,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 			updated, err := provider.Storage.AuthRequestByID(gocontext.TODO(), ar.GetID())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(updated.GetSubject()).To(Equal(person.ID.String()))
+			Expect(updated.Done()).To(BeTrue())
 		})
 
 		ginkgo.It("rejects invalid credentials", func() {
@@ -720,6 +803,7 @@ CREATE TABLE IF NOT EXISTS oidc_public_keys (
 CREATE TABLE IF NOT EXISTS oidc_auth_requests (
 	id                   TEXT PRIMARY KEY,
 	client_id            TEXT NOT NULL,
+	resource             TEXT,
 	redirect_uri         TEXT NOT NULL,
 	scopes               TEXT[] NOT NULL DEFAULT '{}',
 	state                TEXT,
@@ -739,13 +823,17 @@ CREATE TABLE IF NOT EXISTS oidc_refresh_tokens (
 	id          TEXT PRIMARY KEY,
 	token       TEXT NOT NULL UNIQUE,
 	client_id   TEXT NOT NULL,
+	resource    TEXT,
 	subject     TEXT NOT NULL,
 	scopes      TEXT[] NOT NULL DEFAULT '{}',
 	auth_time   TIMESTAMPTZ NOT NULL,
 	rotation_id TEXT NOT NULL,
 	created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 	expires_at  TIMESTAMPTZ NOT NULL
-);`
+);
+
+ALTER TABLE oidc_auth_requests ADD COLUMN IF NOT EXISTS resource TEXT;
+ALTER TABLE oidc_refresh_tokens ADD COLUMN IF NOT EXISTS resource TEXT;`
 	Expect(ctx.DB().Exec(ddl).Error).To(Succeed())
 }
 

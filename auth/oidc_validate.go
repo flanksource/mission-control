@@ -56,7 +56,7 @@ func authenticateOIDCToken(c echo.Context, tokenStr string) (bool, error) {
 		if iss, _ := claims["iss"].(string); iss != issuer {
 			continue
 		}
-		if !audienceHasKnownClient(claims["aud"]) {
+		if !oidcTokenAudienceAllowed(c, claims, issuer) {
 			continue
 		}
 
@@ -82,22 +82,29 @@ func authenticateOIDCToken(c echo.Context, tokenStr string) (bool, error) {
 	return false, nil
 }
 
-// audienceHasKnownClient reports whether the aud claim names a client this
-// provider issues tokens for. Dynamically registered clients each carry their
-// own client_id, so this cannot be a comparison against a single constant.
-// aud is a string or an array of strings per RFC 7519.
-func audienceHasKnownClient(aud any) bool {
-	switch v := aud.(type) {
-	case string:
-		return oidcmodels.IsKnownClient(v)
-	case []any:
-		for _, entry := range v {
-			if s, ok := entry.(string); ok && oidcmodels.IsKnownClient(s) {
-				return true
-			}
-		}
+// oidcTokenAudienceAllowed confines dynamic-client credentials to the advertised MCP resource.
+func oidcTokenAudienceAllowed(c echo.Context, claims jwt.MapClaims, issuer string) bool {
+	clientID, _ := claims["client_id"].(string)
+	if clientID == "" || clientID == oidcmodels.ClientID {
+		return audienceEquals(claims["aud"], oidcmodels.ClientID)
 	}
-	return false
+	if !oidcmodels.IsDynamicClient(clientID) || c.Request().URL.Path != oidcmodels.MCPResourcePath {
+		return false
+	}
+	return audienceEquals(claims["aud"], oidcmodels.MCPResourceURL(issuer))
+}
+
+func audienceEquals(aud any, expected string) bool {
+	switch value := aud.(type) {
+	case string:
+		return value == expected
+	case []string:
+		return len(value) == 1 && value[0] == expected
+	case []any:
+		return len(value) == 1 && value[0] == expected
+	default:
+		return false
+	}
 }
 
 func loadOIDCPublicKeys(ctx context.Context) ([]*rsa.PublicKey, error) {

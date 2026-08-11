@@ -43,6 +43,8 @@ func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL string, passwordCh
 	}
 	loginHandler.oidcTxCookieValidator = oidcTxCookierManager
 
+	mountOAuthCORS(e)
+
 	// Custom login form (not part of the standard OIDC protocol paths).
 	e.GET("/oidc/login", loginHandler.ShowForm)
 	e.POST("/oidc/login", loginHandler.HandleSubmit)
@@ -61,12 +63,14 @@ func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL string, passwordCh
 	// Standard OIDC protocol endpoints — mounted at the root so that the issuer URL
 	// and the authorization_endpoint/token_endpoint values in the discovery document
 	// resolve to real routes on this server.
-	authorizeHandler := echo.WrapHandler(oidcTxCookierManager.issueOnAuthorize(provider.Handler))
-	callbackHandler := echo.WrapHandler(oidcTxCookierManager.requireOnAuthorizeCallback(provider.Handler))
+	authorizationProvider := withMCPResourceIndicator(provider.Handler, oidcIssuer)
+	authorizeHandler := echo.WrapHandler(oidcTxCookierManager.issueOnAuthorize(authorizationProvider))
+	callbackHandler := echo.WrapHandler(oidcTxCookierManager.requireOnAuthorizeCallback(provider.Handler, provider.Storage))
+	tokenHandler := echo.WrapHandler(mcpTokenEndpointHandler(provider.Handler, provider.Storage, oidcIssuer))
 	h := echo.WrapHandler(provider.Handler)
 	e.Any("/authorize", authorizeHandler)
 	e.Any("/authorize/*", callbackHandler)
-	e.Any("/oauth/token", h)
+	e.Any("/oauth/token", tokenHandler)
 	e.Any("/oauth/introspect", h)
 	e.Any("/userinfo", h)
 	e.Any("/keys", h)

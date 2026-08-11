@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/go-jose/go-jose/v4"
@@ -55,10 +56,11 @@ func NewStorage(ctx context.Context, signer *signingKey) *Storage {
 
 func (s *Storage) Health(_ gocontext.Context) error { return nil }
 
-func (s *Storage) CreateAuthRequest(_ gocontext.Context, req *oidc.AuthRequest, _ string) (op.AuthRequest, error) {
+func (s *Storage) CreateAuthRequest(ctx gocontext.Context, req *oidc.AuthRequest, _ string) (op.AuthRequest, error) {
 	ar := &AuthRequest{
 		ID:                  uuid.New().String(),
 		ClientID:            req.ClientID,
+		Resource:            resourceIndicatorFromContext(ctx),
 		RedirectURI:         req.RedirectURI,
 		Scopes:              pq.StringArray(req.Scopes),
 		State:               req.State,
@@ -123,7 +125,14 @@ func (s *Storage) CreateAccessAndRefreshTokens(_ gocontext.Context, req op.Token
 
 	now := time.Now()
 	clientID := ClientID
-	if aud := req.GetAudience(); len(aud) > 0 {
+	resource := ""
+	if request, ok := req.(interface {
+		GetClientID() string
+		GetResource() string
+	}); ok {
+		clientID = request.GetClientID()
+		resource = request.GetResource()
+	} else if aud := req.GetAudience(); len(aud) > 0 {
 		clientID = aud[0]
 	}
 
@@ -133,6 +142,7 @@ func (s *Storage) CreateAccessAndRefreshTokens(_ gocontext.Context, req op.Token
 		ID:         uuid.New().String(),
 		Token:      hashToken(rawRefreshToken),
 		ClientID:   clientID,
+		Resource:   resource,
 		Subject:    req.GetSubject(),
 		Scopes:     pq.StringArray(req.GetScopes()),
 		AuthTime:   now,
@@ -263,16 +273,28 @@ func (s *Storage) populateUserinfo(userinfo *oidc.UserInfo, subject string) erro
 	return nil
 }
 
-// SetAuthRequestSubject sets the subject on an auth request after login.
+// SetAuthRequestSubject records a successful login without completing consent.
 func (s *Storage) SetAuthRequestSubject(id, subject string) error {
-	now := time.Now()
 	result := s.ctx.DB().Model(&AuthRequest{}).
-		Where("id = ? AND expires_at > NOW() AND (subject = '' OR subject IS NULL)", id).
+		Where("id = ? AND expires_at > NOW() AND done = FALSE AND (subject = '' OR subject IS NULL)", id).
 		Updates(map[string]any{
 			"subject":   subject,
-			"auth_time": now,
-			"done":      true,
+			"auth_time": duty.Now(),
 		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected != 1 {
+		return fmt.Errorf("auth request not found or already authenticated")
+	}
+	return nil
+}
+
+// CompleteAuthRequest atomically records that all required interaction is complete.
+func (s *Storage) CompleteAuthRequest(id string) error {
+	result := s.ctx.DB().Model(&AuthRequest{}).
+		Where("id = ? AND expires_at > NOW() AND done = FALSE AND subject IS NOT NULL AND subject <> ''", id).
+		Update("done", true)
 	if result.Error != nil {
 		return result.Error
 	}

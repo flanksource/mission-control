@@ -27,6 +27,44 @@ type oauthProtectedResourceMetadata struct {
 	BearerMethods        []string `json:"bearer_methods_supported,omitempty"`
 }
 
+// mountOAuthCORS installs a credential-free policy before the server-wide CORS middleware.
+func mountOAuthCORS(e *echo.Echo) {
+	e.Pre(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if !isOAuthCORSPath(c.Request().URL.Path) {
+				return next(c)
+			}
+
+			setOAuthCORSHeaders(c.Response().Header())
+			if c.Request().Method == http.MethodOptions {
+				return c.NoContent(http.StatusNoContent)
+			}
+			return next(c)
+		}
+	})
+}
+
+func isOAuthCORSPath(path string) bool {
+	return path == openIDConfigurationPath ||
+		pathIsOrUnder(path, authorizationServerMetadataPath) ||
+		pathIsOrUnder(path, oauthProtectedResourcePrefix) ||
+		path == RegistrationEndpoint ||
+		path == "/oauth/token" ||
+		path == MCPResourcePath
+}
+
+func pathIsOrUnder(path, prefix string) bool {
+	return path == prefix || strings.HasPrefix(path, prefix+"/")
+}
+
+func setOAuthCORSHeaders(header http.Header) {
+	header.Set("Access-Control-Allow-Origin", "*")
+	header.Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	header.Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Accept, MCP-Protocol-Version, MCP-Session-Id, Last-Event-ID")
+	header.Set("Access-Control-Expose-Headers", "WWW-Authenticate, MCP-Session-Id")
+	header.Del("Access-Control-Allow-Credentials")
+}
+
 func mountOAuthRoutes(e *echo.Echo, oidcIssuer string, providerHandler http.Handler) {
 	// RFC 9728 OAuth 2.0 Protected Resource Metadata for MCP/OAuth clients.
 	prmHandler := oauthProtectedResourceMetadataHandler(oidcIssuer)
@@ -62,6 +100,7 @@ func authorizationServerMetadataHandler(providerHandler http.Handler) echo.Handl
 					c.Response().Header().Add(k, v)
 				}
 			}
+			setOAuthCORSHeaders(c.Response().Header())
 			return c.Blob(rec.status, rec.headers.Get(echo.HeaderContentType), rec.body.Bytes())
 		}
 
@@ -73,7 +112,7 @@ func authorizationServerMetadataHandler(providerHandler http.Handler) echo.Handl
 
 		// Discovery documents are public and cookie-free; browser-based clients
 		// such as the MCP Inspector fetch them cross-origin.
-		c.Response().Header().Set("Access-Control-Allow-Origin", "*")
+		setOAuthCORSHeaders(c.Response().Header())
 		return c.JSON(http.StatusOK, doc)
 	}
 }
@@ -126,6 +165,7 @@ func oauthProtectedResourceMetadataHandler(issuerURL string) echo.HandlerFunc {
 			BearerMethods:        []string{"header"},
 		}
 
+		setOAuthCORSHeaders(c.Response().Header())
 		return c.JSON(http.StatusOK, metadata)
 	}
 }

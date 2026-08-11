@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"html"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/flanksource/duty/context"
@@ -48,7 +49,7 @@ func (h *LoginHandler) ShowConsent(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
 	var authRequest AuthRequest
-	if err := ctx.DB().Where("id = ? AND expires_at > NOW()", id).First(&authRequest).Error; err != nil {
+	if err := ctx.DB().Where("id = ? AND expires_at > NOW() AND done = FALSE", id).First(&authRequest).Error; err != nil {
 		return c.String(http.StatusBadRequest, "authorization request not found or expired")
 	}
 	if authRequest.Subject == "" {
@@ -96,25 +97,58 @@ func (h *LoginHandler) HandleConsent(c echo.Context) error {
 
 	ctx := c.Request().Context().(context.Context)
 
-	if c.FormValue("decision") != "allow" {
-		// Drop the authorization request outright so the code can never be
-		// issued, then let the client's own timeout surface the refusal.
-		if err := h.storage.DeleteAuthRequest(c.Request().Context(), id); err != nil {
-			ctx.Logger.Errorf("failed to delete denied auth request %s: %v", id, err)
-		}
-		return c.HTML(http.StatusOK, "<p>Authorization denied. You can close this window.</p>")
-	}
-
 	var authRequest AuthRequest
-	if err := ctx.DB().Where("id = ? AND expires_at > NOW()", id).First(&authRequest).Error; err != nil {
+	if err := ctx.DB().Where("id = ? AND expires_at > NOW() AND done = FALSE", id).First(&authRequest).Error; err != nil {
 		return c.String(http.StatusBadRequest, "authorization request not found or expired")
 	}
 	if authRequest.Subject == "" {
 		return c.String(http.StatusUnauthorized, "not authenticated")
 	}
 
+	if c.FormValue("decision") != "allow" {
+		redirectURL, err := h.denialRedirectURL(c, &authRequest)
+		if err != nil {
+			return c.String(http.StatusBadRequest, "invalid client redirect URI")
+		}
+		if err := h.storage.DeleteAuthRequest(c.Request().Context(), id); err != nil {
+			ctx.Logger.Errorf("failed to delete denied auth request %s: %v", id, err)
+			return c.String(http.StatusInternalServerError, "failed to deny authorization")
+		}
+		if h.oidcTxCookieValidator != nil {
+			h.oidcTxCookieValidator.clearCookie(c.Response(), id)
+		}
+		return c.Redirect(http.StatusFound, redirectURL)
+	}
+
+	if err := h.storage.CompleteAuthRequest(id); err != nil {
+		return c.String(http.StatusBadRequest, "authorization request is no longer pending")
+	}
+
 	issuerCtx := op.ContextWithIssuer(c.Request().Context(), h.issuerURL)
 	return c.Redirect(http.StatusFound, op.AuthCallbackURL(h.provider)(issuerCtx, id))
+}
+
+// denialRedirectURL revalidates the stored redirect before returning an OAuth error.
+func (h *LoginHandler) denialRedirectURL(c echo.Context, authRequest *AuthRequest) (string, error) {
+	client, err := h.storage.GetClientByClientID(c.Request().Context(), authRequest.ClientID)
+	if err != nil || client == nil {
+		return "", fmt.Errorf("client is not registered")
+	}
+	if err := op.ValidateAuthReqRedirectURI(client, authRequest.RedirectURI, authRequest.GetResponseType()); err != nil {
+		return "", fmt.Errorf("redirect URI is not registered: %w", err)
+	}
+
+	redirectURL, err := url.Parse(authRequest.RedirectURI)
+	if err != nil {
+		return "", err
+	}
+	query := redirectURL.Query()
+	query.Set("error", "access_denied")
+	if authRequest.State != "" {
+		query.Set("state", authRequest.State)
+	}
+	redirectURL.RawQuery = query.Encode()
+	return redirectURL.String(), nil
 }
 
 // completeLogin finishes an authorization once the user's identity is known,
@@ -133,6 +167,9 @@ func (h *LoginHandler) completeLogin(c echo.Context, authRequestID, personID str
 
 	if requiresConsent(authRequest.ClientID) {
 		return c.Redirect(http.StatusFound, consentRedirectURL(authRequestID))
+	}
+	if err := h.storage.CompleteAuthRequest(authRequestID); err != nil {
+		return err
 	}
 
 	issuerCtx := op.ContextWithIssuer(c.Request().Context(), h.issuerURL)
