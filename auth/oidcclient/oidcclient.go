@@ -81,57 +81,56 @@ func RandomBase64(n int) string {
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
+// TokenError is a non-2xx response from the token endpoint, carrying the RFC
+// 6749 §5.2 `error` code. Callers need that code rather than the message,
+// because it is what separates a terminally dead grant from a transient
+// failure — see Terminal.
+type TokenError struct {
+	StatusCode  int    `json:"-"`
+	Code        string `json:"error"`
+	Description string `json:"error_description"`
+	Body        string `json:"-"`
+}
+
+func (e *TokenError) Error() string {
+	if e.Code == "" {
+		if e.Body == "" {
+			return fmt.Sprintf("token endpoint returned %d", e.StatusCode)
+		}
+		return fmt.Sprintf("token endpoint returned %d: %s", e.StatusCode, e.Body)
+	}
+	if e.Description == "" {
+		return fmt.Sprintf("token endpoint returned %d: %s", e.StatusCode, e.Code)
+	}
+	return fmt.Sprintf("token endpoint returned %d: %s: %s", e.StatusCode, e.Code, e.Description)
+}
+
+// Terminal reports whether the grant is permanently dead. `invalid_grant` means
+// the server will never accept this token again, so retrying it — or keeping it
+// on disk — is pointless; only a fresh login recovers.
+func (e *TokenError) Terminal() bool {
+	return e.Code == "invalid_grant"
+}
+
 func ExchangeCode(tokenEndpoint, code, redirectURI, verifier string) (*Tokens, error) {
-	form := url.Values{
+	return postTokenRequest(tokenEndpoint, url.Values{
 		"grant_type":    {"authorization_code"},
 		"code":          {code},
 		"redirect_uri":  {redirectURI},
 		"client_id":     {"mc-cli"},
 		"code_verifier": {verifier},
-	}
-
-	resp, err := HTTPClient.R(context.Background()).
-		Header("Content-Type", "application/x-www-form-urlencoded").
-		Post(tokenEndpoint, form.Encode())
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		msg := strings.TrimSpace(string(body))
-		if msg == "" {
-			return nil, fmt.Errorf("token endpoint returned %d", resp.StatusCode)
-		}
-		return nil, fmt.Errorf("token endpoint returned %d: %s", resp.StatusCode, msg)
-	}
-
-	var result struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		IDToken      string `json:"id_token"`
-		ExpiresIn    int    `json:"expires_in"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return nil, err
-	}
-
-	return &Tokens{
-		AccessToken:  result.AccessToken,
-		RefreshToken: result.RefreshToken,
-		IDToken:      result.IDToken,
-		ExpiresAt:    time.Now().Add(time.Duration(result.ExpiresIn) * time.Second),
-	}, nil
+	})
 }
 
 func RefreshToken(tokenEndpoint, refreshToken string) (*Tokens, error) {
-	form := url.Values{
+	return postTokenRequest(tokenEndpoint, url.Values{
 		"grant_type":    {"refresh_token"},
 		"refresh_token": {refreshToken},
 		"client_id":     {"mc-cli"},
-	}
+	})
+}
 
+func postTokenRequest(tokenEndpoint string, form url.Values) (*Tokens, error) {
 	resp, err := HTTPClient.R(context.Background()).
 		Header("Content-Type", "application/x-www-form-urlencoded").
 		Post(tokenEndpoint, form.Encode())
@@ -142,11 +141,9 @@ func RefreshToken(tokenEndpoint, refreshToken string) (*Tokens, error) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		msg := strings.TrimSpace(string(body))
-		if msg == "" {
-			return nil, fmt.Errorf("token endpoint returned %d", resp.StatusCode)
-		}
-		return nil, fmt.Errorf("token endpoint returned %d: %s", resp.StatusCode, msg)
+		tokenErr := &TokenError{StatusCode: resp.StatusCode, Body: strings.TrimSpace(string(body))}
+		_ = json.Unmarshal(body, tokenErr)
+		return nil, tokenErr
 	}
 
 	var result struct {
