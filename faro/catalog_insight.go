@@ -159,43 +159,120 @@ var CatalogInsightGet = &cobra.Command{
 	},
 }
 
-func remoteSearchInsights(searchQuery, agent string, limit int) (*catalogInsightSearchResult, error) {
-	client, err := clientcmd.RemoteClient()
-	if err != nil {
-		return nil, err
-	}
+// insightSearchUnlimited is the limit that asks for every matching insight. The search
+// endpoint caps a single request at query.MaxSearchResourcesLimit, so anything larger —
+// including "all of them" — is reached by paging rather than by a bigger request.
+const insightSearchUnlimited = 0
 
-	if limit <= 0 {
-		limit = 100
-	}
-	requestLimit := limit
-	if requestLimit < clientapi.MaxSearchResourcesLimit {
-		requestLimit++
-	}
-
-	resp, err := client.SearchCatalog(context.Background(), clientapi.SearchResourcesRequest{
-		Limit:      requestLimit,
+// searchInsightPage reads one page. `sort=id` gives the scan a stable total order, which
+// offset paging is meaningless without.
+func searchInsightPage(client *sdk.Client, searchQuery, agent string, size, offset int) ([]query.SelectedResource, error) {
+	paged := fmt.Sprintf("%s sort=id offset=%d", searchQuery, offset)
+	resp, err := client.SearchCatalog(context.Background(), query.SearchResourcesRequest{
+		Limit:      size,
 		Timestamps: true,
-		ConfigAnalysis: []clientapi.ResourceSelector{{
-			Search: searchQuery,
+		ConfigAnalysis: []types.ResourceSelector{{
+			Search: strings.TrimSpace(paged),
 			Agent:  agent,
 		}},
 	})
 	if err != nil {
 		return nil, err
 	}
+	return resp.ConfigAnalysis, nil
+}
 
-	totalAtLeast := len(resp.ConfigAnalysis)
-	limited := len(resp.ConfigAnalysis) > limit
-	if limit >= clientapi.MaxSearchResourcesLimit && len(resp.ConfigAnalysis) == limit {
-		limited = true
-	}
-	if len(resp.ConfigAnalysis) > limit {
-		resp.ConfigAnalysis = resp.ConfigAnalysis[:limit]
+// searchInsightIDs pages until the server returns a short page, deduplicating as it goes.
+//
+// The dedup is load-bearing, not defensive: the search view is built without an ORDER BY
+// of its own (duty queryTableWithResourceSelectors), and offset paging over it repeats the
+// row on every page boundary — measured as one duplicate per boundary against a live
+// catalog. Discarding a row already seen keeps the result correct whether or not that is
+// fixed upstream.
+// Returns up to limit+1 rows: the extra row is what separates "exactly limit matches"
+// from "limit matches and more remain", and the caller truncates it away.
+func searchInsightIDs(client *sdk.Client, searchQuery, agent string, limit int) ([]query.SelectedResource, bool, error) {
+	want := insightSearchUnlimited
+	if limit > insightSearchUnlimited {
+		want = limit + 1
 	}
 
-	ids := make([]string, len(resp.ConfigAnalysis))
-	for i, item := range resp.ConfigAnalysis {
+	size := query.MaxSearchResourcesLimit
+	if want > insightSearchUnlimited && want < size {
+		size = want
+	}
+
+	var selected []query.SelectedResource
+	seen := make(map[string]struct{})
+	for offset := 0; ; offset += size {
+		page, err := searchInsightPage(client, searchQuery, agent, size, offset)
+		if err != nil {
+			return nil, false, err
+		}
+		fresh := 0
+		for _, item := range page {
+			if _, duplicate := seen[item.ID]; duplicate {
+				continue
+			}
+			seen[item.ID] = struct{}{}
+			selected = append(selected, item)
+			fresh++
+			if want > insightSearchUnlimited && len(selected) == want {
+				return selected, true, nil
+			}
+		}
+		if len(page) < size {
+			return selected, false, nil
+		}
+		// One duplicate per page boundary is expected; a whole page of them is not. It
+		// means the server ignored `offset` and is serving the same page, so continuing
+		// would loop forever rather than eventually finish.
+		if fresh == 0 {
+			return nil, false, fmt.Errorf(
+				"insight search repeated all %d rows at offset %d; the server is ignoring offset, so paging cannot complete",
+				len(page), offset)
+		}
+	}
+}
+
+// searchSetsPagingKey reports a search expression that sets a key paging owns. It matches
+// whole tokens rather than substrings, so a value that merely contains one of them —
+// `name=resort=weekly` — is not mistaken for the caller setting a sort key.
+func searchSetsPagingKey(searchQuery string) (string, bool) {
+	for _, field := range strings.Fields(searchQuery) {
+		for _, key := range []string{"sort", "offset"} {
+			if strings.HasPrefix(field, key+"=") {
+				return key, true
+			}
+		}
+	}
+	return "", false
+}
+
+func remoteSearchInsights(searchQuery, agent string, limit int) (*catalogInsightSearchResult, error) {
+	// A caller who hand-rolled paging must not get a second, conflicting one layered
+	// underneath, so this is rejected rather than quietly overridden.
+	if key, set := searchSetsPagingKey(searchQuery); set {
+		return nil, fmt.Errorf("insight search %q sets %s; paging owns sort and offset, so remove it from the search expression", searchQuery, key)
+	}
+
+	client, err := clientcmd.RemoteClient()
+	if err != nil {
+		return nil, err
+	}
+
+	selected, limited, err := searchInsightIDs(client, searchQuery, agent, limit)
+	if err != nil {
+		return nil, err
+	}
+	// Counted before the extra row is dropped, so it stays a true lower bound: exact
+	// when nothing was truncated, and one past the limit when something was.
+	totalAtLeast := len(selected)
+	if limited {
+		selected = selected[:limit]
+	}
+	ids := make([]string, len(selected))
+	for i, item := range selected {
 		ids[i] = item.ID
 	}
 	details, err := client.GetCatalogInsights(context.Background(), ids)
@@ -207,9 +284,9 @@ func remoteSearchInsights(searchQuery, agent string, limit int) (*catalogInsight
 		detailsByID[detail.ID.String()] = detail
 	}
 
-	out := make([]catalogInsightSearchHit, 0, len(resp.ConfigAnalysis))
-	orderedDetails := make([]sdk.CatalogInsightDetail, 0, len(resp.ConfigAnalysis))
-	for _, s := range resp.ConfigAnalysis {
+	out := make([]catalogInsightSearchHit, 0, len(selected))
+	orderedDetails := make([]sdk.CatalogInsightDetail, 0, len(selected))
+	for _, s := range selected {
 		hit := catalogInsightSearchHit{
 			ID:            s.ID,
 			Agent:         s.Agent,
@@ -272,7 +349,8 @@ func remoteGetInsight(id string) (any, error) {
 
 func init() {
 	CatalogInsight.PersistentFlags().StringVar(&insightSearchAgent, "agent", "all", "Filter by agent id or name ('all' for every agent)")
-	CatalogInsight.PersistentFlags().IntVar(&insightSearchLimit, "limit", 100, "Maximum number of results")
+	CatalogInsight.PersistentFlags().IntVar(&insightSearchLimit, "limit", 100,
+		"Maximum number of results; 0 returns every match, paging the whole catalog if needed")
 	CatalogInsight.Flags().BoolVar(&insightSearchFull, "full", false, "Return full insight records")
 	CatalogInsightSearch.Flags().BoolVar(&insightSearchFull, "full", false, "Return full insight records")
 	CatalogInsight.AddCommand(CatalogInsightSearch, CatalogInsightGet)
