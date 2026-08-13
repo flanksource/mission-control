@@ -108,7 +108,7 @@ func runWhoami(cmd *cobra.Command, _ []string) error {
 
 	dbConn := resolvedDBConnection(mcCtx)
 	report.Database = probeDatabase(dbConn)
-	report.Auth = probeAuth(cmd.Context(), cfg, mcCtx, dbConn, whoamiRefresh)
+	report.Auth = probeAuth(cmd.Context(), mcCtx, dbConn, whoamiRefresh)
 
 	if whoamiJSON {
 		data, err := json.MarshalIndent(report, "", "  ")
@@ -123,11 +123,22 @@ func runWhoami(cmd *cobra.Command, _ []string) error {
 	return whoamiStatusError(report)
 }
 
+// whoamiStatusError reports only the probes that actually failed. A skipped
+// database probe is not one: faro talks to the API, so a direct connection is
+// optional context, not a requirement. Auth is what the command exists to
+// answer, so anything short of ok — including a missing token — fails.
 func whoamiStatusError(report whoamiReport) error {
-	if report.Database.Status == "ok" && report.Auth.Status == "ok" {
+	var failures []string
+	if report.Database.Status != "ok" && report.Database.Status != "skipped" {
+		failures = append(failures, "database="+statusLine(report.Database.Status, report.Database.Error))
+	}
+	if report.Auth.Status != "ok" {
+		failures = append(failures, "auth="+statusLine(report.Auth.Status, report.Auth.Error))
+	}
+	if len(failures) == 0 {
 		return nil
 	}
-	return fmt.Errorf("whoami status failed: database=%s auth=%s", report.Database.Status, report.Auth.Status)
+	return fmt.Errorf("whoami status failed: %s", strings.Join(failures, " "))
 }
 
 func resolvedDBConnection(mcCtx *MCContext) string {
@@ -181,7 +192,7 @@ func probeDatabase(conn string) whoamiDatabase {
 	return out
 }
 
-func probeAuth(parent gocontext.Context, cfg *MCConfig, mcCtx *MCContext, dbConn string, refresh bool) whoamiAuth {
+func probeAuth(parent gocontext.Context, mcCtx *MCContext, dbConn string, refresh bool) whoamiAuth {
 	out := whoamiAuth{Status: "skipped"}
 	if mcCtx == nil {
 		out.Error = "no current context"
@@ -195,30 +206,38 @@ func probeAuth(parent gocontext.Context, cfg *MCConfig, mcCtx *MCContext, dbConn
 	out.Configured = true
 	out.Server = mcCtx.Server
 	token := mcCtx.AccessToken()
-	if mcCtx.OIDC != nil {
+	switch {
+	case mcCtx.NeedsReauth != "":
+		out.TokenSource = "oidc"
+		out.RefreshStatus = "unavailable: " + mcCtx.NeedsReauth
+		out.Status = "invalid"
+		out.Error = mcCtx.ReauthError().Error()
+		return out
+	case mcCtx.OIDC != nil:
 		out.TokenSource = "oidc"
 		out.TokenExpires = formatTime(mcCtx.OIDC.ExpiresAt)
 		out.TokenTTL = formatTTL(mcCtx.OIDC.ExpiresAt)
-		if refresh && oidcTokenExpiring(mcCtx.OIDC) && mcCtx.OIDC.RefreshToken != "" {
-			refreshed, err := refreshOIDCTokens(mcCtx.Server, mcCtx.OIDC)
-			if err != nil {
+		switch {
+		case !oidcTokenExpiring(mcCtx.OIDC):
+			out.RefreshStatus = "not needed"
+		case mcCtx.OIDC.RefreshToken == "":
+			out.RefreshStatus = "unavailable: no refresh token"
+		case !refresh:
+			out.RefreshStatus = "needed"
+		default:
+			// --refresh spends the single-use refresh token, so it is opt-in:
+			// a diagnostic must not be able to consume the credential it is
+			// diagnosing.
+			if err := refreshContextToken(mcCtx); err != nil {
 				out.RefreshStatus = "failed: " + err.Error()
 			} else {
-				mcCtx.SetOIDCTokens(refreshed)
 				token = mcCtx.AccessToken()
 				out.RefreshStatus = "refreshed"
 				out.TokenExpires = formatTime(mcCtx.OIDC.ExpiresAt)
 				out.TokenTTL = formatTTL(mcCtx.OIDC.ExpiresAt)
-				updateContextOIDCTokens(cfg, mcCtx.Name, refreshed)
 			}
-		} else if oidcTokenExpiring(mcCtx.OIDC) && mcCtx.OIDC.RefreshToken == "" {
-			out.RefreshStatus = "unavailable: no refresh token"
-		} else if oidcTokenExpiring(mcCtx.OIDC) {
-			out.RefreshStatus = "needed"
-		} else {
-			out.RefreshStatus = "not needed"
 		}
-	} else if token != "" {
+	case token != "":
 		out.TokenSource = "context"
 	}
 
@@ -261,37 +280,66 @@ func probeAuth(parent gocontext.Context, cfg *MCConfig, mcCtx *MCContext, dbConn
 	return out
 }
 
+// whoamiEndpointTimeout bounds each candidate individually. A shared budget let a hanging first
+// candidate starve the second, which then failed with a derived "context deadline exceeded" —
+// an error describing the timer rather than the endpoint.
+var whoamiEndpointTimeout = 15 * time.Second
+
+// whoamiAttempt records why one candidate endpoint failed, so an exhausted candidate list can
+// report every URL it tried instead of only the last one.
+type whoamiAttempt struct {
+	endpoint string
+	err      error
+}
+
 func callWhoami(parent gocontext.Context, server, token string) (map[string]any, []string, string, int, error) {
 	if parent == nil {
 		parent = gocontext.Background()
 	}
-	ctx, cancel := gocontext.WithTimeout(parent, 15*time.Second)
-	defer cancel()
 
-	var lastErr error
+	var attempts []whoamiAttempt
 	var lastStatus int
 	candidates := whoamiEndpointCandidates(server)
 	for _, endpoint := range candidates {
 		base := strings.TrimSuffix(endpoint, "/auth/whoami")
-		decoded, statusCode, err := NewAPIClientForServer(base, token).Whoami(ctx)
+		decoded, statusCode, err := whoamiAttemptOnce(parent, base, token)
 		lastStatus = statusCode
 		if err != nil {
 			if (statusCode == http.StatusNotFound || errors.Is(err, sdk.ErrHTMLResponse)) && len(candidates) > 1 {
-				lastErr = err
+				attempts = append(attempts, whoamiAttempt{endpoint, err})
 				continue
 			}
 			if statusCode == 0 {
-				lastErr = err
+				attempts = append(attempts, whoamiAttempt{endpoint, err})
 				continue
 			}
 			return nil, nil, endpoint, statusCode, err
 		}
 		return decoded.Payload.User, decoded.Payload.Roles, endpoint, statusCode, nil
 	}
-	if lastErr != nil {
-		return nil, nil, "", lastStatus, lastErr
+	if len(attempts) > 0 {
+		return nil, nil, "", lastStatus, whoamiAttemptsError(attempts)
 	}
 	return nil, nil, "", lastStatus, fmt.Errorf("no whoami endpoint candidates for %s", server)
+}
+
+func whoamiAttemptOnce(parent gocontext.Context, base, token string) (*sdk.WhoamiResponse, int, error) {
+	ctx, cancel := gocontext.WithTimeout(parent, whoamiEndpointTimeout)
+	defer cancel()
+	return NewAPIClientForServer(base, token).Whoami(ctx)
+}
+
+// whoamiAttemptsError names each endpoint tried alongside its own failure. A single-candidate
+// failure keeps the bare error so existing messages are unchanged.
+func whoamiAttemptsError(attempts []whoamiAttempt) error {
+	if len(attempts) == 1 {
+		return attempts[0].err
+	}
+	lines := make([]string, 0, len(attempts))
+	for _, attempt := range attempts {
+		lines = append(lines, fmt.Sprintf("\n  %s\n    -> %s", attempt.endpoint, attempt.err))
+	}
+	return errors.New("no whoami endpoint answered:" + strings.Join(lines, ""))
 }
 
 func whoamiEndpointCandidates(server string) []string {
