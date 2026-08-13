@@ -13,7 +13,7 @@ import (
 )
 
 var _ = ginkgo.Describe("auth login", func() {
-	var oldOIDCLogin func(*cobra.Command, string, io.Writer) (*oidcclient.Tokens, error)
+	var oldOIDCLogin func(*cobra.Command, string, io.Writer) (*oidcclient.Tokens, *oidcclient.Discovery, error)
 
 	ginkgo.BeforeEach(func() {
 		oldOIDCLogin = oidcLogin
@@ -60,9 +60,9 @@ var _ = ginkgo.Describe("auth login", func() {
 		loginServer = server.URL
 
 		var gotLoginServer string
-		oidcLogin = func(_ *cobra.Command, server string, _ io.Writer) (*oidcclient.Tokens, error) {
+		oidcLogin = func(_ *cobra.Command, server string, _ io.Writer) (*oidcclient.Tokens, *oidcclient.Discovery, error) {
 			gotLoginServer = server
-			return &oidcclient.Tokens{AccessToken: "oauth-token", ExpiresAt: time.Now().Add(time.Hour)}, nil
+			return &oidcclient.Tokens{AccessToken: "oauth-token", ExpiresAt: time.Now().Add(time.Hour)}, nil, nil
 		}
 
 		cmd := &cobra.Command{}

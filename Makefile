@@ -2,6 +2,8 @@ NAME=incident-commander
 OS   = $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH = $(shell uname -m | sed 's/x86_64/amd64/')
 DATE = $(shell date  "+%Y-%m-%d %H:%M:%S")
+GIT_COMMIT = $(shell git rev-parse HEAD 2>/dev/null || echo none)
+BUILD_DATE = $(shell date -u "+%Y-%m-%dT%H:%M:%SZ")
 ifeq ($(VERSION),)
   VERSION_TAG=$(shell git describe --abbrev=0 --tags --exact-match --match 'v[0-9]*' 2>/dev/null || echo latest)
 else
@@ -21,6 +23,8 @@ endif
 
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/.bin
+## Where `make faro:install` puts the faro binary
+FARO_INSTALL_DIR ?= /usr/local/bin
 HOMEBREW_NODE_PATHS := /usr/local/opt/node/bin /opt/homebrew/opt/node/bin /opt/homebrew/opt/node@24/bin
 export PATH := $(LOCALBIN):$(foreach p,$(HOMEBREW_NODE_PATHS),$(if $(wildcard $(p)/node),$(p):))$(PATH)
 $(LOCALBIN):
@@ -59,7 +63,7 @@ $(TAILWIND_JS):
 
 .PHONY: help
 help: ## Display this help.
-	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+	@awk 'BEGIN {printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9\\:-]+:.*##/ { split($$0, p, "##"); name = p[1]; sub(/:[^:]*$$/, "", name); gsub(/\\/, "", name); printf "  \033[36m%-15s\033[0m %s\n", name, p[2] } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 .PHONY: static
 static: $(TAILWIND_JS) manifests generate fmt ginkgo ui
@@ -136,23 +140,34 @@ windows:
 
 # faro is a slim Mission Control client (remote-only surfaces). Built for the
 # requested matrix: linux amd64/arm64, darwin amd64/arm64, windows amd64/arm64.
+# `faro version` falls back to the VCS stamps Go embeds when these are unset.
+FARO_LDFLAGS = -X "main.version=$(VERSION_TAG)" -X "main.commit=$(GIT_COMMIT)" -X "main.date=$(BUILD_DATE)"
+
 .PHONY: faro-linux
 faro-linux: $(TAILWIND_JS)
-	GOOS=linux GOARCH=amd64 go build -o ./.bin/faro_linux_amd64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
-	GOOS=linux GOARCH=arm64 go build -o ./.bin/faro_linux_arm64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=linux GOARCH=amd64 go build -o ./.bin/faro_linux_amd64 -ldflags '$(FARO_LDFLAGS)' ./faro
+	GOOS=linux GOARCH=arm64 go build -o ./.bin/faro_linux_arm64 -ldflags '$(FARO_LDFLAGS)' ./faro
 
 .PHONY: faro-darwin
 faro-darwin: $(TAILWIND_JS)
-	GOOS=darwin GOARCH=amd64 go build -o ./.bin/faro_darwin_amd64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
-	GOOS=darwin GOARCH=arm64 go build -o ./.bin/faro_darwin_arm64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=darwin GOARCH=amd64 go build -o ./.bin/faro_darwin_amd64 -ldflags '$(FARO_LDFLAGS)' ./faro
+	GOOS=darwin GOARCH=arm64 go build -o ./.bin/faro_darwin_arm64 -ldflags '$(FARO_LDFLAGS)' ./faro
 
 .PHONY: faro-windows
 faro-windows: $(TAILWIND_JS)
-	GOOS=windows GOARCH=amd64 go build -o ./.bin/faro_windows_amd64.exe -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
-	GOOS=windows GOARCH=arm64 go build -o ./.bin/faro_windows_arm64.exe -ldflags "-X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=windows GOARCH=amd64 go build -o ./.bin/faro_windows_amd64.exe -ldflags '$(FARO_LDFLAGS)' ./faro
+	GOOS=windows GOARCH=arm64 go build -o ./.bin/faro_windows_arm64.exe -ldflags '$(FARO_LDFLAGS)' ./faro
 
 .PHONY: faro
 faro: faro-linux faro-darwin faro-windows
+
+.PHONY: faro-build
+faro-build: $(LOCALBIN) $(TAILWIND_JS) ## Build faro for this machine into .bin/faro
+	CGO_ENABLED=0 go build -o $(LOCALBIN)/faro -ldflags '$(FARO_LDFLAGS)' ./faro
+
+.PHONY: faro\:install
+faro\:install: faro-build ## Build faro and install it to /usr/local/bin (override with FARO_INSTALL_DIR)
+	install -m 0755 $(LOCALBIN)/faro $(FARO_INSTALL_DIR)/faro
 
 .PHONY: binaries
 binaries: linux darwin windows faro compress

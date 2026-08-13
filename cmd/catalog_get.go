@@ -16,6 +16,7 @@ import (
 	"github.com/samber/lo"
 
 	icAPI "github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/clientcmd"
 )
 
 type catalogGetOptions struct {
@@ -37,17 +38,17 @@ func buildCatalogGetOptionsFromFlags(flags map[string]string) (catalogGetOptions
 	opts := catalogGetOptions{
 		Since: since,
 		Sections: icAPI.CatalogReportSections{
-			Changes:       boolFlag(flags, "changes", false),
-			Insights:      boolFlag(flags, "insights", false),
-			Relationships: boolFlag(flags, "relationships", true),
-			Access:        boolFlag(flags, "access", false),
-			AccessLogs:    boolFlag(flags, "access-logs", false),
-			ConfigJSON:    boolFlag(flags, "config-json", true),
+			Changes:       clientcmd.BoolFlag(flags, "changes", false),
+			Insights:      clientcmd.BoolFlag(flags, "insights", false),
+			Relationships: clientcmd.BoolFlag(flags, "relationships", true),
+			Access:        clientcmd.BoolFlag(flags, "access", false),
+			AccessLogs:    clientcmd.BoolFlag(flags, "access-logs", false),
+			ConfigJSON:    clientcmd.BoolFlag(flags, "config-json", true),
 		},
-		PlaybookRuns: boolFlag(flags, "playbook-runs", true),
+		PlaybookRuns: clientcmd.BoolFlag(flags, "playbook-runs", true),
 	}
 
-	if boolFlag(flags, "all", false) {
+	if clientcmd.BoolFlag(flags, "all", false) {
 		opts.Sections = icAPI.CatalogReportSections{
 			Changes: true, Insights: true, Relationships: true,
 			Access: true, AccessLogs: true, ConfigJSON: true,
@@ -77,18 +78,6 @@ func buildCatalogGetOptionsFromFlags(flags map[string]string) (catalogGetOptions
 	}
 
 	return opts, nil
-}
-
-func boolFlag(flags map[string]string, key string, def bool) bool {
-	raw, ok := flags[key]
-	if !ok || raw == "" {
-		return def
-	}
-	v, err := strconv.ParseBool(raw)
-	if err != nil {
-		return def
-	}
-	return v
 }
 
 // resolveConfigsForCommand resolves configs for commands that accept multiple matches.

@@ -19,7 +19,7 @@ var _ = ginkgo.Describe("whoami command", func() {
 		}))
 		defer server.Close()
 
-		report := probeAuth(context.TODO(), &MCConfig{}, &MCContext{
+		report := probeAuth(context.TODO(), &MCContext{
 			Name:   "test",
 			Server: server.URL,
 			Token:  "test-token",
@@ -48,19 +48,43 @@ var _ = ginkgo.Describe("whoami command", func() {
 		Expect(endpoint).To(Equal(server.URL + "/api/auth/whoami"))
 	})
 
-	ginkgo.It("fails when database status is not ok", func() {
+	ginkgo.It("succeeds when no database is configured and auth is ok", func() {
 		err := whoamiStatusError(whoamiReport{
-			Database: whoamiDatabase{Status: "error"},
+			Database: whoamiDatabase{Status: "skipped", Error: "no database configured"},
 			Auth:     whoamiAuth{Status: "ok"},
 		})
-		Expect(err).To(MatchError("whoami status failed: database=error auth=ok"))
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	ginkgo.It("fails when a configured database is unreachable", func() {
+		err := whoamiStatusError(whoamiReport{
+			Database: whoamiDatabase{Configured: true, Status: "error", Error: "connection refused"},
+			Auth:     whoamiAuth{Status: "ok"},
+		})
+		Expect(err).To(MatchError("whoami status failed: database=error (connection refused)"))
 	})
 
 	ginkgo.It("fails when auth status is not ok", func() {
 		err := whoamiStatusError(whoamiReport{
 			Database: whoamiDatabase{Status: "ok"},
-			Auth:     whoamiAuth{Status: "invalid"},
+			Auth:     whoamiAuth{Status: "invalid", Error: "token expired"},
 		})
-		Expect(err).To(MatchError("whoami status failed: database=ok auth=invalid"))
+		Expect(err).To(MatchError("whoami status failed: auth=invalid (token expired)"))
+	})
+
+	ginkgo.It("fails when no token is configured", func() {
+		err := whoamiStatusError(whoamiReport{
+			Database: whoamiDatabase{Status: "skipped", Error: "no database configured"},
+			Auth:     whoamiAuth{Status: "skipped", Error: "no token configured"},
+		})
+		Expect(err).To(MatchError("whoami status failed: auth=skipped (no token configured)"))
+	})
+
+	ginkgo.It("reports every failing probe", func() {
+		err := whoamiStatusError(whoamiReport{
+			Database: whoamiDatabase{Configured: true, Status: "error", Error: "connection refused"},
+			Auth:     whoamiAuth{Status: "invalid", Error: "token expired"},
+		})
+		Expect(err).To(MatchError("whoami status failed: database=error (connection refused) auth=invalid (token expired)"))
 	})
 })

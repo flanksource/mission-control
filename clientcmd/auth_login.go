@@ -24,13 +24,16 @@ var AuthLoginCmd = &cobra.Command{
 }
 
 var (
-	loginServer string
-	loginToken  string
+	loginServer          string
+	loginToken           string
+	loginCredentialStore string
 )
 
 func init() {
 	AuthLoginCmd.Flags().StringVar(&loginServer, "server", "", "Mission Control server URL (required)")
 	AuthLoginCmd.Flags().StringVar(&loginToken, "token", "", "Store this access token instead of starting the OIDC browser flow")
+	AuthLoginCmd.Flags().StringVar(&loginCredentialStore, "credential-store", "",
+		"Where to keep credentials: keychain (OS keychain) or file. Detected once at login and recorded in the config")
 	_ = AuthLoginCmd.MarkFlagRequired("server")
 }
 
@@ -40,63 +43,69 @@ func runAuthLogin(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	if loginToken != "" {
-		contextName, err := saveTokenContext(apiServer, loginToken)
+		contextName, store, err := saveTokenContext(apiServer, loginToken)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "Token stored for %s\n", apiServer)
+		fmt.Fprintf(cmd.OutOrStdout(), "Token stored for %s (%s)\n", apiServer, store)
 		fmt.Fprintf(cmd.OutOrStdout(), "Context %q saved for %s\n", contextName, apiServer)
 		fmt.Fprintf(cmd.OutOrStdout(), "Run `whoami` to verify connectivity.\n")
 		return nil
 	}
 
-	tokens, err := performOIDCLoginForAPIBase(cmd, apiServer, cmd.OutOrStdout())
+	tokens, endpoints, err := performOIDCLoginForAPIBase(cmd, apiServer, cmd.OutOrStdout())
 	if err != nil {
 		return err
 	}
-	contextName, err := saveLoginContext(apiServer, tokens)
+	contextName, store, err := saveLoginContext(apiServer, tokens, endpoints)
 	if err != nil {
 		return err
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "\nLogin successful!\n\n")
-	fmt.Fprintf(cmd.OutOrStdout(), "OIDC tokens saved to: %s\n", configPath())
+	fmt.Fprintf(cmd.OutOrStdout(), "Credentials saved to: %s (%s)\n", configDir(), store)
 	fmt.Fprintf(cmd.OutOrStdout(), "Context %q saved for %s\n", contextName, apiServer)
 	fmt.Fprintf(cmd.OutOrStdout(), "Access token expires: %s\n", tokens.ExpiresAt.Format(time.RFC3339))
 
 	return nil
 }
 
-func performOIDCLoginForAPIBase(cmd *cobra.Command, apiServer string, status io.Writer) (*oidcclient.Tokens, error) {
+func performOIDCLoginForAPIBase(cmd *cobra.Command, apiServer string, status io.Writer) (*oidcclient.Tokens, *oidcclient.Discovery, error) {
 	var lastErr error
 	for _, loginServer := range oidcLoginServerCandidates(apiServer) {
-		tokens, err := oidcLogin(cmd, loginServer, status)
+		tokens, endpoints, err := oidcLogin(cmd, loginServer, status)
 		if err == nil {
-			return tokens, nil
+			return tokens, endpoints, nil
 		}
 		lastErr = err
 	}
-	return nil, fmt.Errorf("OIDC login failed for %s: %w", apiServer, lastErr)
+	return nil, nil, fmt.Errorf("OIDC login failed for %s: %w", apiServer, lastErr)
 }
 
-func saveLoginContext(serverURL string, tokens *oidcclient.Tokens) (string, error) {
+func saveLoginContext(serverURL string, tokens *oidcclient.Tokens, endpoints *oidcclient.Discovery) (string, string, error) {
 	return saveAuthContext(serverURL, func(ctx *MCContext) {
 		ctx.SetOIDCTokens(tokens)
+		ctx.Endpoints = endpoints
 	})
 }
 
-func saveTokenContext(serverURL, token string) (string, error) {
+func saveTokenContext(serverURL, token string) (string, string, error) {
 	return saveAuthContext(serverURL, func(ctx *MCContext) {
 		ctx.Token = token
 		ctx.OIDC = nil
+		ctx.NeedsReauth = ""
 	})
 }
 
-func saveAuthContext(serverURL string, apply func(*MCContext)) (string, error) {
+func saveAuthContext(serverURL string, apply func(*MCContext)) (string, string, error) {
 	cfg, err := LoadConfig()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
+	if err := ChooseCredentialStore(cfg, loginCredentialStore); err != nil {
+		return "", "", err
+	}
+
 	name := ServerToContextName(serverURL)
 	ctx := MCContext{Name: name, Server: serverURL}
 	if existing := cfg.GetContext(name); existing != nil {
@@ -106,30 +115,33 @@ func saveAuthContext(serverURL string, apply func(*MCContext)) (string, error) {
 	apply(&ctx)
 	cfg.SetContext(ctx)
 	cfg.CurrentContext = name
-	return name, SaveConfig(cfg)
+	return name, cfg.CredentialStore, SaveConfig(cfg)
 }
 
 var oidcLogin = PerformOIDCLogin
 
-func PerformOIDCLogin(cmd *cobra.Command, serverURL string, status io.Writer) (*oidcclient.Tokens, error) {
+// PerformOIDCLogin runs the authorization-code flow with PKCE and returns the
+// tokens along with the provider metadata they came from, so the caller can pin
+// the token endpoint instead of re-discovering it on every refresh.
+func PerformOIDCLogin(cmd *cobra.Command, serverURL string, status io.Writer) (*oidcclient.Tokens, *oidcclient.Discovery, error) {
 	if status == nil {
 		status = io.Discard
 	}
 	endpoints, err := oidcclient.Discover(serverURL + "/.well-known/openid-configuration")
 	if err != nil {
-		return nil, fmt.Errorf("OIDC discovery failed: %w", err)
+		return nil, nil, fmt.Errorf("OIDC discovery failed: %w", err)
 	}
 
 	verifier, challenge, err := oidcclient.GeneratePKCE()
 	if err != nil {
-		return nil, fmt.Errorf("PKCE generation failed: %w", err)
+		return nil, nil, fmt.Errorf("PKCE generation failed: %w", err)
 	}
 	state := oidcclient.RandomBase64(16)
 	nonce := oidcclient.RandomBase64(16)
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
-		return nil, fmt.Errorf("failed to start local server: %w", err)
+		return nil, nil, fmt.Errorf("failed to start local server: %w", err)
 	}
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", listener.Addr().(*net.TCPAddr).Port)
 
@@ -192,20 +204,20 @@ func PerformOIDCLogin(cmd *cobra.Command, serverURL string, status io.Writer) (*
 	select {
 	case code = <-codeCh:
 	case err = <-errCh:
-		return nil, err
+		return nil, nil, err
 	case <-time.After(5 * time.Minute):
-		return nil, fmt.Errorf("login timed out")
+		return nil, nil, fmt.Errorf("login timed out")
 	}
 
 	tokens, err := oidcclient.ExchangeCode(endpoints.TokenEndpoint, code, redirectURI, verifier)
 	if err != nil {
-		return nil, fmt.Errorf("token exchange failed: %w", err)
+		return nil, nil, fmt.Errorf("token exchange failed: %w", err)
 	}
 
 	if err := oidcclient.ValidateNonce(tokens.IDToken, nonce); err != nil {
-		return nil, fmt.Errorf("nonce validation failed: %w", err)
+		return nil, nil, fmt.Errorf("nonce validation failed: %w", err)
 	}
-	return tokens, nil
+	return tokens, endpoints, nil
 }
 
 func openBrowser(url string) error {
