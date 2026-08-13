@@ -112,6 +112,27 @@ func (c *Client) SearchCatalog(ctx context.Context, req query.SearchResourcesReq
 	return &out, nil
 }
 
+// SearchCatalogChanges returns config-scoped catalog changes, including changes
+// reached through the requested relationship direction.
+func (c *Client) SearchCatalogChanges(ctx context.Context, req query.CatalogChangesSearchRequest) (*query.CatalogChangesSearchResponse, error) {
+	r, err := c.R(ctx).Post(c.apiPath("/catalog/changes"), req)
+	if err != nil {
+		return nil, err
+	}
+	if !r.IsOK() {
+		body, _ := r.AsString()
+		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
+			return nil, ErrHTMLResponse
+		}
+		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
+	}
+	var out query.CatalogChangesSearchResponse
+	if err := decodeJSON(r, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
 // GetCatalogItem fetches a single catalog item by id (GET /resources/:id).
 func (c *Client) GetCatalogItem(ctx context.Context, id string) (*models.ConfigItem, error) {
 	r, err := c.R(ctx).Get(c.apiPath("/resources/" + id))

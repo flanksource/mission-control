@@ -63,6 +63,109 @@ var _ = ginkgo.Describe("faro catalog change", func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
+	ginkgo.It("fetches config-scoped downstream changes including soft relationships", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			Expect(r.Method).To(Equal(http.MethodPost))
+			Expect(r.URL.Path).To(Equal("/catalog/changes"))
+
+			var got query.CatalogChangesSearchRequest
+			Expect(json.NewDecoder(r.Body).Decode(&got)).To(Succeed())
+			Expect(got.CatalogID).To(Equal("03e294e4-a297-5047-5325-3041303b1ce0"))
+			Expect(got.Recursive).To(Equal(query.CatalogChangeRecursiveDownstream))
+			Expect(got.Depth).To(Equal(5))
+			Expect(got.Soft).To(BeTrue())
+			Expect(got.PageSize).To(Equal(25))
+			Expect(got.SortBy).To(Equal("-created_at"))
+
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"total":1,"changes":[{"id":"0274d556-6257-426a-b651-0a9bc35c26d8","config_id":"21e7586d-31fb-453c-a205-d73dc6b58eaa","agent_id":"00000000-0000-0000-0000-000000000000","name":"api","type":"Kubernetes::Deployment","tags":{"namespace":"production"},"change_type":"diff","created_at":"2026-06-24T16:41:38Z"}]}`))
+		}))
+		defer server.Close()
+		storeRemoteContext(server.URL)
+
+		items, err := remoteSearchRelatedChanges(catalogChangeSearchOptions{
+			ConfigID: "03e294e4-a297-5047-5325-3041303b1ce0",
+			Related:  query.CatalogChangeRecursiveDownstream,
+			Depth:    5,
+			Soft:     true,
+			Limit:    25,
+		})
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(items).To(HaveLen(1))
+		Expect(items[0].ConfigID).To(Equal("21e7586d-31fb-453c-a205-d73dc6b58eaa"))
+		Expect(items[0].Name).To(Equal("api"))
+		Expect(items[0].Namespace).To(Equal("production"))
+		Expect(items[0].ConfigType).To(Equal("Kubernetes::Deployment"))
+		Expect(items[0].ChangeType).To(Equal("diff"))
+	})
+
+	validationTests := []struct {
+		name        string
+		searchQuery string
+		opts        catalogChangeSearchOptions
+		errorText   string
+	}{
+		{name: "requires a query or config", errorText: "query or --config is required"},
+		{
+			name:        "rejects query with config",
+			searchQuery: "change_type=diff",
+			opts:        catalogChangeSearchOptions{ConfigID: "03e294e4-a297-5047-5325-3041303b1ce0", Depth: 5, Related: query.CatalogChangeRecursiveNone},
+			errorText:   "cannot be used together",
+		},
+		{
+			name:      "rejects relationship flags without config",
+			opts:      catalogChangeSearchOptions{Depth: 5, Related: query.CatalogChangeRecursiveDownstream, RelatedSet: true},
+			errorText: "require --config",
+		},
+		{
+			name:      "validates config UUID",
+			opts:      catalogChangeSearchOptions{ConfigID: "not-a-uuid", Depth: 5, Related: query.CatalogChangeRecursiveNone},
+			errorText: "invalid --config UUID",
+		},
+		{
+			name:      "validates related direction",
+			opts:      catalogChangeSearchOptions{ConfigID: "03e294e4-a297-5047-5325-3041303b1ce0", Depth: 5, Related: "sideways"},
+			errorText: "--related must be one of",
+		},
+		{
+			name:      "validates depth",
+			opts:      catalogChangeSearchOptions{ConfigID: "03e294e4-a297-5047-5325-3041303b1ce0", Related: query.CatalogChangeRecursiveDownstream},
+			errorText: "--depth must be greater than zero",
+		},
+		{
+			name:      "rejects soft with no relationship traversal",
+			opts:      catalogChangeSearchOptions{ConfigID: "03e294e4-a297-5047-5325-3041303b1ce0", Depth: 5, Related: query.CatalogChangeRecursiveNone, Soft: true, SoftSet: true},
+			errorText: "require --related",
+		},
+		{
+			name:        "accepts a global query",
+			searchQuery: "change_type=diff",
+			opts:        catalogChangeSearchOptions{Depth: 5, Related: query.CatalogChangeRecursiveNone},
+		},
+		{
+			name: "accepts config relationship traversal",
+			opts: catalogChangeSearchOptions{
+				ConfigID: "03e294e4-a297-5047-5325-3041303b1ce0",
+				Depth:    5,
+				Related:  query.CatalogChangeRecursiveAll,
+				Soft:     true,
+				SoftSet:  true,
+			},
+		},
+	}
+
+	for _, tt := range validationTests {
+		ginkgo.It(tt.name, func() {
+			err := validateCatalogChangeSearch(tt.searchQuery, tt.opts)
+			if tt.errorText == "" {
+				Expect(err).ToNot(HaveOccurred())
+			} else {
+				Expect(err).To(MatchError(ContainSubstring(tt.errorText)))
+			}
+		})
+	}
+
 	ginkgo.It("gets full change details from the PostgREST endpoint", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			Expect(r.Method).To(Equal(http.MethodGet))

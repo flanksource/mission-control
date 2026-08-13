@@ -103,15 +103,18 @@ Use "search" to find change IDs, then "get" to fetch the full change record.`
   faro catalog change get <change-id>`
 
 	if searchCmd := catalogSubcommand(changesCmd, "search"); searchCmd != nil {
-		searchCmd.Short = "Search catalog changes using the query language"
-		searchCmd.Long = `Search catalog change events using the catalog query language.
+		searchCmd.Short = "Search global or config-scoped catalog changes"
+		searchCmd.Long = `Search catalog change events globally using the query language, or scope the
+results to a catalog config and its related upstream or downstream configs.
 
-Use this to find historical changes by change type, catalog resource type,
-source, severity, name, tags, or other indexed fields. The result rows include
-change IDs that can be passed to "faro catalog change get".`
+Global searches accept change type, catalog resource type, source, severity,
+name, tags, and other indexed fields. Config-scoped searches accept relationship
+direction, depth, and soft relationship options. Result rows include change IDs
+that can be passed to "faro catalog change get".`
 		searchCmd.Example = `  faro catalog change search 'change_type=diff'
   faro catalog change search 'change_type=diff type=Kubernetes::Deployment'
-  faro catalog change search 'severity=critical source=kubernetes' --limit 50`
+  faro catalog change search --config <config-id>
+  faro catalog change search --config <config-id> --related downstream --soft --depth 5`
 	}
 
 	if getCmd := catalogSubcommand(changesCmd, "get"); getCmd != nil {

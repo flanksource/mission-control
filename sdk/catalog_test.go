@@ -34,6 +34,38 @@ var _ = ginkgo.Describe("catalog client", func() {
 		Expect(resp.Configs[0].Name).To(Equal("api"))
 	})
 
+	ginkgo.It("posts a config-scoped catalog changes request", func() {
+		var gotBody query.CatalogChangesSearchRequest
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			Expect(r.Method).To(Equal(http.MethodPost))
+			Expect(r.URL.Path).To(Equal("/catalog/changes"))
+			Expect(json.NewDecoder(r.Body).Decode(&gotBody)).To(Succeed())
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"total":1,"changes":[{"id":"change-1","config_id":"config-1","name":"api","type":"Kubernetes::Deployment","change_type":"diff"}]}`))
+		}))
+		defer server.Close()
+
+		resp, err := New(server.URL, "tok").SearchCatalogChanges(context.Background(), query.CatalogChangesSearchRequest{
+			BaseCatalogSearch: query.BaseCatalogSearch{
+				CatalogID: "config-1",
+				Recursive: query.CatalogChangeRecursiveDownstream,
+				Depth:     5,
+				Soft:      true,
+				PageSize:  25,
+			},
+		})
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(gotBody.CatalogID).To(Equal("config-1"))
+		Expect(gotBody.Recursive).To(Equal(query.CatalogChangeRecursiveDownstream))
+		Expect(gotBody.Depth).To(Equal(5))
+		Expect(gotBody.Soft).To(BeTrue())
+		Expect(gotBody.PageSize).To(Equal(25))
+		Expect(resp.Total).To(Equal(int64(1)))
+		Expect(resp.Changes).To(HaveLen(1))
+		Expect(resp.Changes[0].ConfigID).To(Equal("config-1"))
+	})
+
 	ginkgo.It("gets a single catalog item by id", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			Expect(r.Method).To(Equal(http.MethodGet))
