@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"time"
 
@@ -9,16 +10,36 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/clientcmd"
+	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
 
-var changeSearchLimit int
+var (
+	changeSearchConfig  string
+	changeSearchDepth   int
+	changeSearchLimit   int
+	changeSearchRelated string
+	changeSearchSoft    bool
+)
+
+type catalogChangeSearchOptions struct {
+	ConfigID   string
+	Depth      int
+	DepthSet   bool
+	Limit      int
+	Related    query.ChangeRelationDirection
+	RelatedSet bool
+	Soft       bool
+	SoftSet    bool
+}
 
 type catalogChangeSearchHit struct {
 	ID         string     `json:"id"`
+	ConfigID   string     `json:"config_id,omitempty"`
 	Agent      string     `json:"agent,omitempty"`
 	Name       string     `json:"name,omitempty"`
 	Namespace  string     `json:"namespace,omitempty"`
+	ConfigType string     `json:"config_type,omitempty"`
 	ChangeType string     `json:"change_type,omitempty"`
 	CreatedAt  *time.Time `json:"created_at,omitempty"`
 }
@@ -30,23 +51,85 @@ var CatalogChange = &cobra.Command{
 }
 
 var CatalogChangeSearch = &cobra.Command{
-	Use:   "search <QUERY>",
-	Short: "Search catalog changes using the PEG search grammar",
-	Long: `Search catalog changes using the PEG search grammar used by the web UI.
+	Use:   "search [QUERY]",
+	Short: "Search global or config-scoped catalog changes",
+	Long: `Search catalog changes globally using the PEG search grammar, or fetch
+changes for a catalog config and its related configs.
 
 Examples:
   catalog change search change_type=diff
   catalog change search "change_type=diff type=deployment"
-  catalog change search "severity=critical source=kubernetes" --limit 50`,
-	Args: cobra.MinimumNArgs(1),
+  catalog change search --config <config-id>
+  catalog change search --config <config-id> --related downstream --soft --depth 5`,
+	Args: func(cmd *cobra.Command, args []string) error {
+		return validateCatalogChangeSearch(strings.Join(args, " "), catalogChangeSearchOptions{
+			ConfigID:   changeSearchConfig,
+			Depth:      changeSearchDepth,
+			DepthSet:   cmd.Flags().Changed("depth"),
+			Limit:      changeSearchLimit,
+			Related:    query.ChangeRelationDirection(changeSearchRelated),
+			RelatedSet: cmd.Flags().Changed("related"),
+			Soft:       changeSearchSoft,
+			SoftSet:    cmd.Flags().Changed("soft"),
+		})
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		results, err := remoteSearchChanges(strings.Join(args, " "), changeSearchLimit)
+		var results []catalogChangeSearchHit
+		var err error
+		if strings.TrimSpace(changeSearchConfig) != "" {
+			results, err = remoteSearchRelatedChanges(catalogChangeSearchOptions{
+				ConfigID: strings.TrimSpace(changeSearchConfig),
+				Depth:    changeSearchDepth,
+				Limit:    changeSearchLimit,
+				Related:  query.ChangeRelationDirection(changeSearchRelated),
+				Soft:     changeSearchSoft,
+			})
+		} else {
+			results, err = remoteSearchChanges(strings.Join(args, " "), changeSearchLimit)
+		}
 		if err != nil {
 			return err
 		}
 		clicky.MustPrint(results, clicky.Flags.FormatOptions)
 		return nil
 	},
+}
+
+func validateCatalogChangeSearch(searchQuery string, opts catalogChangeSearchOptions) error {
+	hasQuery := strings.TrimSpace(searchQuery) != ""
+	hasConfig := strings.TrimSpace(opts.ConfigID) != ""
+
+	if !hasConfig && (opts.RelatedSet || opts.SoftSet || opts.DepthSet) {
+		return fmt.Errorf("--related, --soft, and --depth require --config")
+	}
+	if !hasQuery && !hasConfig {
+		return fmt.Errorf("a search query or --config is required")
+	}
+	if hasQuery && hasConfig {
+		return fmt.Errorf("search query and --config cannot be used together")
+	}
+	if !hasConfig {
+		return nil
+	}
+	if _, err := uuid.Parse(opts.ConfigID); err != nil {
+		return fmt.Errorf("invalid --config UUID: %w", err)
+	}
+
+	switch opts.Related {
+	case query.CatalogChangeRecursiveNone,
+		query.CatalogChangeRecursiveDownstream,
+		query.CatalogChangeRecursiveUpstream,
+		query.CatalogChangeRecursiveAll:
+	default:
+		return fmt.Errorf("--related must be one of none, downstream, upstream, or all")
+	}
+	if opts.Depth <= 0 {
+		return fmt.Errorf("--depth must be greater than zero")
+	}
+	if opts.Related == query.CatalogChangeRecursiveNone && (opts.SoftSet || opts.DepthSet) {
+		return fmt.Errorf("--soft and --depth require --related to be downstream, upstream, or all")
+	}
+	return nil
 }
 
 var CatalogChangeGet = &cobra.Command{
@@ -98,6 +181,46 @@ func remoteSearchChanges(searchQuery string, limit int) ([]catalogChangeSearchHi
 	return out, nil
 }
 
+func remoteSearchRelatedChanges(opts catalogChangeSearchOptions) ([]catalogChangeSearchHit, error) {
+	client, err := clientcmd.RemoteClient()
+	if err != nil {
+		return nil, err
+	}
+
+	if opts.Limit <= 0 {
+		opts.Limit = 100
+	}
+
+	resp, err := client.SearchCatalogChanges(context.Background(), query.CatalogChangesSearchRequest{
+		BaseCatalogSearch: query.BaseCatalogSearch{
+			CatalogID: opts.ConfigID,
+			Depth:     opts.Depth,
+			PageSize:  opts.Limit,
+			Recursive: opts.Related,
+			Soft:      opts.Soft,
+			SortBy:    "-created_at",
+		},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]catalogChangeSearchHit, 0, len(resp.Changes))
+	for _, change := range resp.Changes {
+		out = append(out, catalogChangeSearchHit{
+			ID:         change.ID,
+			ConfigID:   change.ConfigID,
+			Agent:      change.AgentID,
+			Name:       change.ConfigName,
+			Namespace:  change.Tags["namespace"],
+			ConfigType: change.ConfigType,
+			ChangeType: change.ChangeType,
+			CreatedAt:  change.CreatedAt,
+		})
+	}
+	return out, nil
+}
+
 func remoteGetChange(id string) (any, error) {
 	client, err := clientcmd.RemoteClient()
 	if err != nil {
@@ -107,7 +230,11 @@ func remoteGetChange(id string) (any, error) {
 }
 
 func init() {
+	CatalogChangeSearch.Flags().StringVar(&changeSearchConfig, "config", "", "Catalog config UUID to scope changes")
+	CatalogChangeSearch.Flags().IntVar(&changeSearchDepth, "depth", 5, "Maximum relationship traversal depth")
 	CatalogChangeSearch.Flags().IntVar(&changeSearchLimit, "limit", 100, "Maximum number of results")
+	CatalogChangeSearch.Flags().StringVar(&changeSearchRelated, "related", string(query.CatalogChangeRecursiveNone), "Related config direction: none, downstream, upstream, or all")
+	CatalogChangeSearch.Flags().BoolVar(&changeSearchSoft, "soft", false, "Include soft relationships")
 	CatalogChange.AddCommand(CatalogChangeSearch, CatalogChangeGet)
 	clicky.RegisterSubCommand("catalog", CatalogChange)
 }
