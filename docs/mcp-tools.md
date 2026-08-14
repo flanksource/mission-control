@@ -39,7 +39,7 @@
 | [`search_catalog_access_log`](#search_catalog_access_log) | read-only | Search historical sign-in and access activity logs for a specific infrastructure configuration item. |
 | [`search_catalog_access_mapping`](#search_catalog_access_mapping) | read-only | Search the current access state and RBAC mappings for infrastructure resources to audit who currently holds permissions. |
 | [`search_catalog_access_reviews`](#search_catalog_access_reviews) | read-only | Search historical access review and certification events to verify when user permissions were last audited or validated. |
-| [`search_catalog_changes`](#search_catalog_changes) | read-only | Search and find configuration change events across catalog items. |
+| [`search_catalog_changes`](#search_catalog_changes) | read-only | Search configuration change events globally or for a config and its related configs. |
 | [`search_health_checks`](#search_health_checks) | read-only | Search and find health checks returning JSON array with check metadata |
 | `{playbook}_{namespace}_{category}` | mutating | Dynamic per-session playbook tools. Parameters derived from playbook spec. |
 | `view_{name}_{namespace}` | read-only | Dynamic view tools synced hourly. Returns table rows by default with select/page/limit controls. |
@@ -323,7 +323,14 @@ Search historical access review and certification events to verify when user per
 
 ### `search_catalog_changes`
 
-Search and find configuration change events across catalog items.
+Search configuration change events globally or for a config and its related configs.
+	Related config changes:
+	- For a global search, provide query.
+	- To fetch changes for one config, omit query and provide config_id.
+	- Set related to downstream, upstream, or all to include related configs. The default is none.
+	- Set soft=true to include soft relationships during related traversal. The default is false.
+	- depth controls the maximum relationship traversal depth and defaults to 5.
+
 	IMPORTANT - Column Selection for Token Efficiency:
 	ALWAYS specify the "select" parameter with only the columns you need to minimize token usage.
 	Default columns (id,config_id,name,type,change_type,severity,summary,created_at,first_observed,count) provide essential change metadata.
@@ -331,12 +338,14 @@ Search and find configuration change events across catalog items.
 	Available columns for CatalogChange:
 	- Lightweight: id, config_id, name, type, change_type, severity, summary, created_at, first_observed, count, external_created_by, created_by, source, deleted_at, agent_id, tags
 	- Heavy (avoid unless needed): config, details, diff - these are large JSON fields containing full configuration data, change details, and diffs
+	- Config-scoped searches return lightweight columns only.
 
 	Examples:
 	- For basic change listing: "id,config_id,name,type,change_type,severity,created_at"
 	- For change analysis: "id,config_id,change_type,severity,summary,first_observed,count"
 	- For critical changes: "id,config_id,name,change_type,severity,summary,source"
 	- Only when full details needed: "id,config_id,change_type,severity,summary,details"
+	- For downstream changes including soft relationships: config_id=<uuid>, related=downstream, soft=true, depth=5
 
 **Hints:** read-only
 
@@ -344,9 +353,13 @@ Search and find configuration change events across catalog items.
 
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
+| `config_id` | string |  | Config UUID whose changes should be returned. |
+| `depth` | integer |  | Maximum related config traversal depth. |
 | `limit` | number |  | Number of results to return. |
-| `query` | string | Yes | Search query We can search all the catalog changes via query Use the tool: list_catalog_types to get all the types first to make inference is better (cache them for 15m) FORMAL PEG GRAMMAR: Query = AndQuery _ OrQuery* OrQuery = _ '\|' _ AndQuery AndQuery = _ FieldQuery _ FieldQuery* FieldQuery = _ '(' _ Query _ ')' _ / _ Field _ / _ '-' Word _ / _ (Word / Identifier) _ Field = Source _ Operator _ Value Source = Identifier ('.' Identifier)* Operator = "<=" / ">=" / "=" / ":" / "!=" / "<" / ">" Value = DateTime / ISODate / Time / Measure / Float / Integer / Identifier / String String = '"' [^"]* '"' ISODate = [0-9]{4} '-' [0-9]{2} '-' [0-9]{2} Time = [0-2][0-9] ':' [0-5][0-9] ':' [0-5][0-9] DateTime = "now" (("+" / "-") Integer DurationUnit)? / ISODate ? Time? DurationUnit = "s" / "m" / "h" / "d" / "w" / "mo" / "y" Word = String / '-'? [@a-zA-Z0-9-]+ Integer = [+-]?[0-9]+ ![a-zA-Z0-9_-] Float = [+-]? [0-9] '.' [0-9]+ Measure = (Integer / Float) Identifier Identifier = [@a-zA-Z0-9_\,-:\[\]]+ _ = [ \t] EOF = !. |
+| `query` | string |  | Global search query. |
+| `related` | string |  | Related config direction. |
 | `select` | array |  | a list of columns to return. |
+| `soft` | boolean |  | Include soft relationships in related config traversal. |
 
 ### `search_health_checks`
 

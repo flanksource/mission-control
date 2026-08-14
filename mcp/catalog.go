@@ -129,12 +129,47 @@ func describeConfigHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 }
 
 func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	q, err := req.RequireString("query")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+	q := strings.TrimSpace(req.GetString("query", ""))
+	configID := strings.TrimSpace(req.GetString("config_id", ""))
+	if q == "" && configID == "" {
+		return mcp.NewToolResultError("query or config_id is required"), nil
+	}
+	if q != "" && configID != "" {
+		return mcp.NewToolResultError("query and config_id cannot be used together"), nil
+	}
+
+	args := req.GetArguments()
+	if configID == "" {
+		if _, ok := args["related"]; ok {
+			return mcp.NewToolResultError("related, depth, and soft require config_id"), nil
+		}
+		if _, ok := args["depth"]; ok {
+			return mcp.NewToolResultError("related, depth, and soft require config_id"), nil
+		}
+		if _, ok := args["soft"]; ok {
+			return mcp.NewToolResultError("related, depth, and soft require config_id"), nil
+		}
 	}
 
 	limit := req.GetInt("limit", defaultQueryLimit)
+	related := query.ChangeRelationDirection(req.GetString("related", string(query.CatalogChangeRecursiveNone)))
+	switch related {
+	case query.CatalogChangeRecursiveNone,
+		query.CatalogChangeRecursiveDownstream,
+		query.CatalogChangeRecursiveUpstream,
+		query.CatalogChangeRecursiveAll:
+	default:
+		return mcp.NewToolResultError("related must be one of none, downstream, upstream, or all"), nil
+	}
+
+	depth := req.GetInt("depth", 5)
+	if depth <= 0 {
+		return mcp.NewToolResultError("depth must be greater than zero"), nil
+	}
+	soft := req.GetBool("soft", false)
+	if related == query.CatalogChangeRecursiveNone && soft {
+		return mcp.NewToolResultError("soft requires related to be downstream, upstream, or all"), nil
+	}
 
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
@@ -143,8 +178,31 @@ func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest
 
 	selectCols := req.GetStringSlice("select", defaultSelectConfigChangesView)
 
-	var cis []map[string]any
+	var cis any
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		if configID != "" {
+			if _, err := uuid.Parse(configID); err != nil {
+				return fmt.Errorf("invalid config_id: %w", err)
+			}
+
+			response, err := query.FindCatalogChanges(rlsCtx, query.CatalogChangesSearchRequest{
+				BaseCatalogSearch: query.BaseCatalogSearch{
+					CatalogID: configID,
+					Depth:     depth,
+					PageSize:  limit,
+					Recursive: related,
+					Soft:      soft,
+					SortBy:    "-created_at",
+				},
+			})
+			if err != nil {
+				return err
+			}
+
+			cis, err = selectConfigChangeColumns(response.Changes, selectCols)
+			return err
+		}
+
 		// NOTE: we're reading QueryTableColumnsWithResourceSelectors into map[string]any instead of []models.CatalogChange
 		// because, with a select clause with few columns, we only want to print those fields as columns in the markdown table.
 		//
@@ -161,6 +219,30 @@ func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	return structToMCPResponse(req, cis), nil
+}
+
+func selectConfigChangeColumns(changes []query.ConfigChangeRow, columns []string) ([]map[string]any, error) {
+	data, err := json.Marshal(changes)
+	if err != nil {
+		return nil, err
+	}
+
+	var rows []map[string]any
+	if err := json.Unmarshal(data, &rows); err != nil {
+		return nil, err
+	}
+
+	selected := make([]map[string]any, 0, len(rows))
+	for _, row := range rows {
+		item := make(map[string]any, len(columns))
+		for _, column := range columns {
+			if value, ok := row[column]; ok {
+				item[column] = value
+			}
+		}
+		selected = append(selected, item)
+	}
+	return selected, nil
 }
 
 func relatedCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -455,6 +537,13 @@ func registerCatalog(s *server.MCPServer) {
 	`
 
 	catalogChangesDescription := `
+	Related config changes:
+	- For a global search, provide query.
+	- To fetch changes for one config, omit query and provide config_id.
+	- Set related to downstream, upstream, or all to include related configs. The default is none.
+	- Set soft=true to include soft relationships during related traversal. The default is false.
+	- depth controls the maximum relationship traversal depth and defaults to 5.
+
 	IMPORTANT - Column Selection for Token Efficiency:
 	ALWAYS specify the "select" parameter with only the columns you need to minimize token usage.
 	Default columns (id,config_id,name,type,change_type,severity,summary,created_at,first_observed,count) provide essential change metadata.
@@ -462,20 +551,43 @@ func registerCatalog(s *server.MCPServer) {
 	Available columns for CatalogChange:
 	- Lightweight: id, config_id, name, type, change_type, severity, summary, created_at, first_observed, count, external_created_by, created_by, source, deleted_at, agent_id, tags
 	- Heavy (avoid unless needed): config, details, diff - these are large JSON fields containing full configuration data, change details, and diffs
+	- Config-scoped searches return lightweight columns only.
 
 	Examples:
 	- For basic change listing: "id,config_id,name,type,change_type,severity,created_at"
 	- For change analysis: "id,config_id,change_type,severity,summary,first_observed,count"
 	- For critical changes: "id,config_id,name,change_type,severity,summary,source"
 	- Only when full details needed: "id,config_id,change_type,severity,summary,details"
+	- For downstream changes including soft relationships: config_id=<uuid>, related=downstream, soft=true, depth=5
 	`
 
 	searchCatalogChangesTool := mcp.NewTool(toolSearchCatalogChanges,
-		mcp.WithDescription("Search and find configuration change events across catalog items."+catalogChangesDescription),
+		mcp.WithDescription("Search configuration change events globally or for a config and its related configs."+catalogChangesDescription),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
-			mcp.Required(),
-			mcp.Description("Search query"+configChangeQueryDescription),
+			mcp.Description("Global search query. Required unless config_id is provided."+configChangeQueryDescription),
+		),
+		mcp.WithString("config_id",
+			mcp.Description("Config UUID whose changes should be returned. Use instead of query."),
+		),
+		mcp.WithString("related",
+			mcp.Description("Related config direction. Requires config_id. Default: none."),
+			mcp.Enum(
+				string(query.CatalogChangeRecursiveNone),
+				string(query.CatalogChangeRecursiveDownstream),
+				string(query.CatalogChangeRecursiveUpstream),
+				string(query.CatalogChangeRecursiveAll),
+			),
+			mcp.DefaultString(string(query.CatalogChangeRecursiveNone)),
+		),
+		mcp.WithInteger("depth",
+			mcp.Description("Maximum related config traversal depth. Requires config_id and related traversal. Default: 5."),
+			mcp.DefaultNumber(5),
+			mcp.Min(1),
+		),
+		mcp.WithBoolean("soft",
+			mcp.Description("Include soft relationships in related config traversal. Requires config_id and related traversal. Default: false."),
+			mcp.DefaultBool(false),
 		),
 		mcp.WithNumber("limit", mcp.Description(fmt.Sprintf("Number of results to return. Default: %d", defaultQueryLimit))),
 		mcp.WithArray("select",

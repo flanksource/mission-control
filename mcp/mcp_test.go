@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
@@ -181,6 +182,113 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 
 			ids := []string{dummy.EKSClusterCreateChange.ID, dummy.KubernetesNodeAChange.ID}
 			checkResultInMCPResponse(result.Content, ids)
+		})
+
+		ginkgo.It("should search changes for hard and soft related configs", func() {
+			createdAt := time.Now()
+			hardRootID := uuid.New()
+			hardRelatedID := uuid.New()
+			softRootID := uuid.New()
+			softRelatedID := uuid.New()
+			configs := []models.ConfigItem{
+				{
+					ID:          hardRootID,
+					Name:        lo.ToPtr("mcp-hard-root"),
+					Type:        lo.ToPtr("Test::Root"),
+					ConfigClass: "Root",
+				},
+				{
+					ID:          hardRelatedID,
+					Name:        lo.ToPtr("mcp-hard-related"),
+					Type:        lo.ToPtr("Test::Child"),
+					ConfigClass: "Child",
+					ParentID:    &hardRootID,
+					Path:        hardRootID.String(),
+				},
+				{
+					ID:          softRootID,
+					Name:        lo.ToPtr("mcp-soft-root"),
+					Type:        lo.ToPtr("Test::Root"),
+					ConfigClass: "Root",
+				},
+				{
+					ID:          softRelatedID,
+					Name:        lo.ToPtr("mcp-soft-related"),
+					Type:        lo.ToPtr("Test::Related"),
+					ConfigClass: "Related",
+				},
+			}
+			softRelationship := models.ConfigRelationship{
+				ConfigID:  softRootID.String(),
+				RelatedID: softRelatedID.String(),
+				Relation:  "mcp-test",
+			}
+			hardRelatedChange := models.ConfigChange{
+				ID:         uuid.New().String(),
+				ConfigID:   hardRelatedID.String(),
+				ChangeType: "mcp-related-hard",
+				CreatedAt:  &createdAt,
+				Severity:   models.SeverityInfo,
+				Source:     "mcp-test",
+			}
+			softRelatedChange := models.ConfigChange{
+				ID:         uuid.New().String(),
+				ConfigID:   softRelatedID.String(),
+				ChangeType: "mcp-related-soft",
+				CreatedAt:  &createdAt,
+				Severity:   models.SeverityInfo,
+				Source:     "mcp-test",
+			}
+			Expect(DefaultContext.DB().Create(&configs).Error).To(Succeed())
+			Expect(DefaultContext.DB().Create(&softRelationship).Error).To(Succeed())
+			Expect(DefaultContext.DB().Create([]models.ConfigChange{hardRelatedChange, softRelatedChange}).Error).To(Succeed())
+			defer func() {
+				Expect(DefaultContext.DB().Where("id IN ?", []string{hardRelatedChange.ID, softRelatedChange.ID}).Delete(&models.ConfigChange{}).Error).To(Succeed())
+				Expect(DefaultContext.DB().Where("config_id = ? AND related_id = ? AND relation = ?", softRelationship.ConfigID, softRelationship.RelatedID, softRelationship.Relation).Delete(&models.ConfigRelationship{}).Error).To(Succeed())
+				Expect(DefaultContext.DB().Where("id IN ?", []uuid.UUID{hardRootID, hardRelatedID, softRootID, softRelatedID}).Delete(&models.ConfigItem{}).Error).To(Succeed())
+			}()
+
+			hardResult, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolSearchCatalogChanges,
+					Arguments: map[string]any{
+						"config_id": hardRootID.String(),
+						"related":   "downstream",
+						"depth":     5,
+						"select":    []string{"id", "config_id", "change_type"},
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			checkResultInMCPResponse(hardResult.Content, []string{hardRelatedChange.ID})
+
+			withoutSoft, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolSearchCatalogChanges,
+					Arguments: map[string]any{
+						"config_id": softRootID.String(),
+						"related":   "downstream",
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			checkResultNotInMCPResponse(withoutSoft.Content, []string{softRelatedChange.ID})
+
+			withSoft, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolSearchCatalogChanges,
+					Arguments: map[string]any{
+						"config_id": softRootID.String(),
+						"related":   "downstream",
+						"soft":      true,
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			checkResultInMCPResponse(withSoft.Content, []string{softRelatedChange.ID})
 		})
 
 		ginkgo.It("should get related configs", func() {
