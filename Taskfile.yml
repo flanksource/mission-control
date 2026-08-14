@@ -300,7 +300,7 @@ tasks:
     cmds:
       - mkdir -p {{.BIN_DIR}}
       - >-
-        go build -o {{.FARO_BINARY}} -ldflags "-X \"main.version={{.VERSION}} built at {{.BUILD_DATE}}\"" ./faro
+        go build -trimpath -o {{.FARO_BINARY}} -ldflags "-s -w -X \"main.version={{.VERSION}} built at {{.BUILD_DATE}}\"" ./faro
     sources:
       - "**/*.go"
       - "{{.TAILWIND_JS}}"
@@ -316,7 +316,7 @@ tasks:
     desc: Build and install the faro client to the default go bin (go env GOBIN)
     cmds:
       - >-
-        go install -ldflags "-X \"main.version={{.VERSION}} built at {{.BUILD_DATE}}\"" ./faro
+        go install -trimpath -ldflags "-s -w -X \"main.version={{.VERSION}} built at {{.BUILD_DATE}}\"" ./faro
 
   faro:run:
     desc: Build and run faro (pass args after --, e.g. `task faro:run -- whoami`)

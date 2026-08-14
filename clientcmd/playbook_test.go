@@ -3,6 +3,7 @@ package clientcmd
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -113,6 +114,68 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(summary.Run.Status).To(Equal(models.PlaybookRunStatusCompleted))
 		Expect(stderr.String()).To(BeEmpty())
+	})
+
+	actionResults := []struct {
+		name         string
+		actionType   string
+		result       map[string]any
+		expectedType any
+		expected     []string
+	}{
+		{
+			name:       "SQL",
+			actionType: "sql",
+			result: map[string]any{
+				"columns": []string{"name", "ready"},
+				"rows":    []map[string]any{{"name": "api", "ready": true}},
+			},
+			expectedType: sqlResult{},
+			expected:     []string{"api", "true"},
+		},
+		{
+			name:       "exec",
+			actionType: "exec",
+			result: map[string]any{
+				"stdout":   "ok",
+				"stderr":   "warning",
+				"exitCode": 2,
+				"path":     "/bin/sh",
+				"args":     []string{"-c", "echo ok"},
+				"extra":    map[string]any{"commit": "abc123"},
+			},
+			expectedType: execResult{},
+			expected:     []string{"Stdout:", "ok", "Stderr:", "warning", "Exit Code: 2"},
+		},
+		{
+			name:       "HTTP",
+			actionType: "http",
+			result: map[string]any{
+				"code":    200,
+				"headers": map[string]string{"Content-Type": "application/json"},
+				"content": `{"ready":true}`,
+			},
+			expectedType: httpResult{},
+			expected:     []string{"Status: 200", "Content-Type: application/json", `{"ready":true}`},
+		},
+	}
+	for _, tt := range actionResults {
+		ginkgo.It("preserves "+tt.name+" action result formatting", func() {
+			result := resolveActionResult(tt.actionType, tt.result)
+			Expect(result).To(BeAssignableToTypeOf(tt.expectedType))
+			formatted := fmt.Sprint(result)
+			for _, expected := range tt.expected {
+				Expect(formatted).To(ContainSubstring(expected))
+			}
+		})
+	}
+
+	ginkgo.It("preserves exec action metadata", func() {
+		result := resolveActionResult("exec", actionResults[1].result)
+		Expect(result).To(Equal(execResult{
+			Stdout: "ok", Stderr: "warning", ExitCode: 2,
+			Path: "/bin/sh", Args: []string{"-c", "echo ok"}, Extra: map[string]any{"commit": "abc123"},
+		}))
 	})
 
 	ginkgo.It("prints only the action result for playbook run summaries", func() {

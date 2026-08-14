@@ -5,15 +5,17 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/flanksource/clicky"
+	clickyapi "github.com/flanksource/clicky/api"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/spf13/cobra"
 )
@@ -220,6 +222,140 @@ type PlaybookActionOutput struct {
 	Result any    `json:"result" yaml:"result"`
 }
 
+type sqlResult struct {
+	Query   string           `json:"query,omitempty"`
+	Rows    []map[string]any `json:"rows,omitempty"`
+	Count   int              `json:"count"`
+	Columns []string         `json:"columns,omitempty"`
+}
+
+func (r sqlResult) String() string   { return r.table().String() }
+func (r sqlResult) ANSI() string     { return "\n" + r.table().ANSI() }
+func (r sqlResult) HTML() string     { return r.table().HTML() }
+func (r sqlResult) Markdown() string { return "\n" + r.table().Markdown() }
+
+func (r sqlResult) table() clickyapi.TextTable {
+	headers := make([]clickyapi.Textable, len(r.Columns))
+	for i, col := range r.Columns {
+		headers[i] = clicky.Text(col, "font-bold")
+	}
+
+	rows := make([]clickyapi.TableRow, len(r.Rows))
+	for i, row := range r.Rows {
+		tr := make(clickyapi.TableRow)
+		for _, col := range r.Columns {
+			val := "NULL"
+			if v, exists := row[col]; exists && v != nil {
+				val = fmt.Sprint(v)
+			}
+			tr[col] = clickyapi.TypedValue{Textable: clicky.Text(val, "")}
+		}
+		rows[i] = tr
+	}
+
+	return clickyapi.TextTable{
+		Headers:    headers,
+		Rows:       rows,
+		FieldNames: r.Columns,
+	}
+}
+
+type execResult struct {
+	Stdout   string         `json:"stdout"`
+	Stderr   string         `json:"stderr"`
+	ExitCode int            `json:"exitCode"`
+	Path     string         `json:"path"`
+	Args     []string       `json:"args"`
+	Extra    map[string]any `json:"extra,omitempty"`
+}
+
+func (r execResult) String() string   { return r.plain(false) }
+func (r execResult) ANSI() string     { return r.plain(true) }
+func (r execResult) HTML() string     { return "<pre>" + r.plain(false) + "</pre>" }
+func (r execResult) Markdown() string { return "```\n" + r.plain(false) + "\n```" }
+
+func (r execResult) plain(colors bool) string {
+	var b strings.Builder
+
+	if r.Stdout != "" {
+		if colors {
+			b.WriteString(clicky.Text("Stdout:", "font-bold text-green-600").ANSI())
+		} else {
+			b.WriteString("Stdout:")
+		}
+		b.WriteString("\n")
+		b.WriteString(strings.TrimSpace(r.Stdout))
+		b.WriteString("\n")
+	}
+
+	if r.Stderr != "" {
+		if colors {
+			b.WriteString(clicky.Text("Stderr:", "font-bold text-red-600").ANSI())
+		} else {
+			b.WriteString("Stderr:")
+		}
+		b.WriteString("\n")
+		b.WriteString(strings.TrimSpace(r.Stderr))
+		b.WriteString("\n")
+	}
+
+	if r.ExitCode != 0 {
+		if colors {
+			b.WriteString(clicky.Text(fmt.Sprintf("Exit Code: %d", r.ExitCode), "text-red-600").ANSI())
+		} else {
+			fmt.Fprintf(&b, "Exit Code: %d", r.ExitCode)
+		}
+		b.WriteString("\n")
+	}
+
+	return strings.TrimRight(b.String(), "\n")
+}
+
+type httpResult struct {
+	Content    string            `json:"content"`
+	Headers    map[string]string `json:"headers"`
+	StatusCode int               `json:"code"`
+}
+
+func (r httpResult) String() string   { return r.plain(false) }
+func (r httpResult) ANSI() string     { return r.plain(true) }
+func (r httpResult) HTML() string     { return "<pre>" + r.plain(false) + "</pre>" }
+func (r httpResult) Markdown() string { return "```\n" + r.plain(false) + "\n```" }
+
+func (r httpResult) plain(colors bool) string {
+	var b strings.Builder
+
+	statusLabel := fmt.Sprintf("Status: %d", r.StatusCode)
+	if colors {
+		style := "text-green-600"
+		if r.StatusCode >= 400 {
+			style = "text-red-600"
+		}
+		b.WriteString(clicky.Text(statusLabel, "font-bold "+style).ANSI())
+	} else {
+		b.WriteString(statusLabel)
+	}
+	b.WriteString("\n")
+
+	if len(r.Headers) > 0 {
+		keys := make([]string, 0, len(r.Headers))
+		for k := range r.Headers {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			fmt.Fprintf(&b, "  %s: %s\n", k, r.Headers[k])
+		}
+	}
+
+	if r.Content != "" {
+		b.WriteString("\n")
+		b.WriteString(r.Content)
+	}
+
+	return strings.TrimRight(b.String(), "\n")
+}
+
 func PlaybookActionResults(summary *sdk.PlaybookSummary) PlaybookRunOutput {
 	if summary == nil || len(summary.Actions) == 0 {
 		return PlaybookRunOutput{Result: map[string]any{}}
@@ -270,17 +406,17 @@ func resolveActionResult(actionType string, raw map[string]any) any {
 	}
 	switch actionType {
 	case "sql":
-		var r actions.SQLResult
+		var r sqlResult
 		if err := json.Unmarshal(data, &r); err == nil {
 			return r
 		}
 	case "exec":
-		var r actions.ExecDetails
+		var r execResult
 		if err := json.Unmarshal(data, &r); err == nil {
 			return r
 		}
 	case "http":
-		var r actions.HTTPResult
+		var r httpResult
 		if err := json.Unmarshal(data, &r); err == nil {
 			return r
 		}
