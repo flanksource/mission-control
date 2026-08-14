@@ -13,7 +13,6 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/spf13/cobra"
 )
@@ -270,17 +269,17 @@ func resolveActionResult(actionType string, raw map[string]any) any {
 	}
 	switch actionType {
 	case "sql":
-		var r actions.SQLResult
+		var r api.PlaybookSQLResult
 		if err := json.Unmarshal(data, &r); err == nil {
 			return r
 		}
 	case "exec":
-		var r actions.ExecDetails
+		var r api.PlaybookExecResult
 		if err := json.Unmarshal(data, &r); err == nil {
 			return r
 		}
 	case "http":
-		var r actions.HTTPResult
+		var r api.PlaybookHTTPResult
 		if err := json.Unmarshal(data, &r); err == nil {
 			return r
 		}
