@@ -1,3 +1,5 @@
+//go:build !faro
+
 package clientcmd
 
 import (

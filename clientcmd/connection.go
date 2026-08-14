@@ -363,13 +363,8 @@ func runConnectionAdd(flags *ConnectionFlags) error {
 		}
 	}
 
-	if flags.DryRun {
-		out, err := marshalDryRunOutput(flags)
-		if err != nil {
-			return fmt.Errorf("failed to marshal dry-run output: %w", err)
-		}
-		fmt.Print(string(out))
-		return nil
+	if handled, err := runConnectionDryRun(flags); handled || err != nil {
+		return err
 	}
 
 	if err := validateConnectionFlags(flags); err != nil {

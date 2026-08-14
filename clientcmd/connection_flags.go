@@ -238,7 +238,7 @@ func addCommonFlags(cmd *cobra.Command, flags *ConnectionFlags) {
 	cmd.Flags().StringVar(&flags.Name, "name", "", "Connection name (required)")
 	cmd.Flags().StringVar(&flags.Namespace, "namespace", "", "Connection namespace (required)")
 	cmd.Flags().BoolVar(&flags.Test, "test", false, "Test connection before saving")
-	cmd.Flags().BoolVar(&flags.DryRun, "dry-run", false, "Output Kubernetes YAML instead of saving to database")
+	addConnectionDryRunFlag(cmd, flags)
 	_ = cmd.MarkFlagRequired("name")
 	_ = cmd.MarkFlagRequired("namespace")
 }

@@ -138,18 +138,18 @@ windows:
 # requested matrix: linux amd64/arm64, darwin amd64/arm64, windows amd64/arm64.
 .PHONY: faro-linux
 faro-linux: $(TAILWIND_JS)
-	GOOS=linux GOARCH=amd64 go build -trimpath -o ./.bin/faro_linux_amd64 -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
-	GOOS=linux GOARCH=arm64 go build -trimpath -o ./.bin/faro_linux_arm64 -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=linux GOARCH=amd64 go build -tags=faro -trimpath -o ./.bin/faro_linux_amd64 -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=linux GOARCH=arm64 go build -tags=faro -trimpath -o ./.bin/faro_linux_arm64 -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
 
 .PHONY: faro-darwin
 faro-darwin: $(TAILWIND_JS)
-	GOOS=darwin GOARCH=amd64 go build -trimpath -o ./.bin/faro_darwin_amd64 -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
-	GOOS=darwin GOARCH=arm64 go build -trimpath -o ./.bin/faro_darwin_arm64 -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=darwin GOARCH=amd64 go build -tags=faro -trimpath -o ./.bin/faro_darwin_amd64 -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=darwin GOARCH=arm64 go build -tags=faro -trimpath -o ./.bin/faro_darwin_arm64 -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
 
 .PHONY: faro-windows
 faro-windows: $(TAILWIND_JS)
-	GOOS=windows GOARCH=amd64 go build -trimpath -o ./.bin/faro_windows_amd64.exe -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
-	GOOS=windows GOARCH=arm64 go build -trimpath -o ./.bin/faro_windows_arm64.exe -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=windows GOARCH=amd64 go build -tags=faro -trimpath -o ./.bin/faro_windows_amd64.exe -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=windows GOARCH=arm64 go build -tags=faro -trimpath -o ./.bin/faro_windows_arm64.exe -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
 
 .PHONY: faro
 faro: faro-linux faro-darwin faro-windows
