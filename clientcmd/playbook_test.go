@@ -130,7 +130,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 				"columns": []string{"name", "ready"},
 				"rows":    []map[string]any{{"name": "api", "ready": true}},
 			},
-			expectedType: sqlResult{},
+			expectedType: api.PlaybookSQLResult{},
 			expected:     []string{"api", "true"},
 		},
 		{
@@ -144,7 +144,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 				"args":     []string{"-c", "echo ok"},
 				"extra":    map[string]any{"commit": "abc123"},
 			},
-			expectedType: execResult{},
+			expectedType: api.PlaybookExecResult{},
 			expected:     []string{"Stdout:", "ok", "Stderr:", "warning", "Exit Code: 2"},
 		},
 		{
@@ -155,7 +155,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 				"headers": map[string]string{"Content-Type": "application/json"},
 				"content": `{"ready":true}`,
 			},
-			expectedType: httpResult{},
+			expectedType: api.PlaybookHTTPResult{},
 			expected:     []string{"Status: 200", "Content-Type: application/json", `{"ready":true}`},
 		},
 	}
@@ -172,7 +172,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 
 	ginkgo.It("preserves exec action metadata", func() {
 		result := resolveActionResult("exec", actionResults[1].result)
-		Expect(result).To(Equal(execResult{
+		Expect(result).To(Equal(api.PlaybookExecResult{
 			Stdout: "ok", Stderr: "warning", ExitCode: 2,
 			Path: "/bin/sh", Args: []string{"-c", "echo ok"}, Extra: map[string]any{"commit": "abc123"},
 		}))
