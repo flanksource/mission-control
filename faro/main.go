@@ -98,7 +98,7 @@ func main() {
 
 	logger.BindFlags(root.PersistentFlags())
 	clientcmd.RegisterClientCommands(root)
-	root.AddCommand(refreshCacheCmd())
+	root.AddCommand(Catalog, refreshCacheCmd())
 
 	refreshErr, registerErr := clientcmd.SetupContextCachedPluginCommands(ctx, root, os.Args[1:])
 	if refreshErr != nil {
@@ -108,9 +108,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, registerErr)
 	}
 
-	// clicky.GenerateCLI materializes the registered remote "catalog" entity
-	// (see catalog.go) into `catalog list` / `catalog get` commands.
-	clicky.GenerateCLI(root)
 	if c, _, err := root.Find([]string{"catalog"}); err == nil && c != nil {
 		documentCatalogCommand(c)
 		clicky.BindAllFlags(c.PersistentFlags(), "format")

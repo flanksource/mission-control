@@ -235,5 +235,5 @@ func init() {
 	CatalogChangeSearch.Flags().StringVar(&changeSearchRelated, "related", string(clientapi.CatalogChangeRecursiveNone), "Related config direction: none, downstream, upstream, or all")
 	CatalogChangeSearch.Flags().BoolVar(&changeSearchSoft, "soft", false, "Include soft relationships")
 	CatalogChange.AddCommand(CatalogChangeSearch, CatalogChangeGet)
-	clicky.RegisterSubCommand("catalog", CatalogChange)
+	Catalog.AddCommand(CatalogChange)
 }

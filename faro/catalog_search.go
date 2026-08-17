@@ -74,5 +74,5 @@ func init() {
 	Search.Flags().StringVar(&searchAgent, "agent", "all", "Filter by agent id or name ('all' for every agent)")
 	Search.Flags().BoolVar(&searchFull, "full", false, "Return complete catalog items")
 	Search.Flags().IntVar(&searchLimit, "limit", 100, "Maximum number of results")
-	clicky.RegisterSubCommand("catalog", Search)
+	Catalog.AddCommand(Search)
 }

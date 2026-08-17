@@ -271,5 +271,5 @@ func init() {
 	CatalogInsight.Flags().BoolVar(&insightSearchFull, "full", false, "Return full insight records")
 	CatalogInsightSearch.Flags().BoolVar(&insightSearchFull, "full", false, "Return full insight records")
 	CatalogInsight.AddCommand(CatalogInsightSearch, CatalogInsightGet)
-	clicky.RegisterSubCommand("catalog", CatalogInsight)
+	Catalog.AddCommand(CatalogInsight)
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/flanksource/clicky"
@@ -28,7 +29,45 @@ type catalogGetFlags struct {
 	Relationships bool `flag:"relationships" help:"Return the config relationship tree instead of the item"`
 }
 
-func (catalogGetFlags) ClickyActionFlags() {}
+var catalogListOptions catalogListOpts
+var catalogGetOptions catalogGetFlags
+
+var Catalog = &cobra.Command{
+	Use:     "catalog",
+	Aliases: []string{"configs"},
+}
+
+var CatalogList = &cobra.Command{
+	Use:   "list",
+	Short: "List catalog resources",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		items, err := remoteList(catalogListOptions)
+		if err != nil {
+			return err
+		}
+		clicky.MustPrint(items, clicky.Flags.FormatOptions)
+		return nil
+	},
+}
+
+var CatalogGet = &cobra.Command{
+	Use:               "get <id>",
+	Aliases:           []string{"inspect"},
+	Short:             "Get a catalog resource",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeCatalogIDs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		result, err := remoteGet(args[0], map[string]string{
+			"relationships": strconv.FormatBool(catalogGetOptions.Relationships),
+		})
+		if err != nil {
+			return err
+		}
+		clicky.MustPrint(result, clicky.Flags.FormatOptions)
+		return nil
+	},
+}
 
 // joinTagSelectors flattens repeated --tag values into a comma-separated label
 // selector, stripping the stray brackets clicky's []string round-trip can add.
@@ -190,12 +229,13 @@ func completeCatalogIDs(_ *cobra.Command, _ []string, toComplete string) ([]stri
 }
 
 func init() {
-	clicky.RegisterEntity(clicky.Entity[catalogItem, catalogListOpts, any]{
-		Name:         "catalog",
-		Aliases:      []string{"configs"},
-		List:         remoteList,
-		GetFlags:     catalogGetFlags{},
-		GetWithFlags: remoteGet,
-		ValidArgs:    completeCatalogIDs,
-	})
+	CatalogList.Flags().StringVar(&catalogListOptions.Query, "query", "", "Free-form text or catalog query expression")
+	CatalogList.Flags().StringVar(&catalogListOptions.Type, "type", "", "Filter by type (comma-separated, supports ! negation)")
+	CatalogList.Flags().StringVar(&catalogListOptions.Namespace, "namespace", "", "Filter by namespace")
+	CatalogList.Flags().StringSliceVar(&catalogListOptions.Tag, "tag", nil, "Filter by tag as a label selector (repeatable: --tag cluster=foo)")
+	CatalogList.Flags().StringVar(&catalogListOptions.Agent, "agent", "all", "Filter by agent id or name ('all' for every agent)")
+	CatalogList.Flags().IntVar(&catalogListOptions.Limit, "limit", 100, "Maximum number of results")
+	CatalogList.Flags().BoolVar(&catalogListOptions.Full, "full", false, "Return complete catalog items")
+	CatalogGet.Flags().BoolVar(&catalogGetOptions.Relationships, "relationships", false, "Return the config relationship tree instead of the item")
+	Catalog.AddCommand(CatalogList, CatalogGet)
 }
