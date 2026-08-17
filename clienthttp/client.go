@@ -24,7 +24,7 @@ type Client struct {
 }
 
 func NewClient() *Client {
-	var transport http.RoundTripper = http.DefaultTransport
+	var transport = http.RoundTripper(http.DefaultTransport)
 	transport = harRoundTripper{next: transport}
 	transport = loggingRoundTripper{next: transport}
 	return &Client{

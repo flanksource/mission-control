@@ -66,7 +66,7 @@ func (d DescriptionList) ANSI() string {
 		if value, ok := item.Value.(Textable); ok {
 			b.WriteString(value.ANSI())
 		} else {
-			b.WriteString(fmt.Sprint(item.Value))
+			fmt.Fprint(&b, item.Value)
 		}
 	}
 	return b.String()
