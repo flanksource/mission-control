@@ -90,7 +90,7 @@ var PlaybookHistory = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return printClicky(cmd.OutOrStdout(), runs, "pretty")
+		return printClicky(cmd.OutOrStdout(), playbookRuns(runs), "pretty")
 	},
 }
 

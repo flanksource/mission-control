@@ -46,7 +46,7 @@ var CatalogList = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		clicky.MustPrint(items, clicky.Flags.FormatOptions)
+		clicky.MustPrint(catalogListItems(items), clicky.Flags.FormatOptions)
 		return nil
 	},
 }
@@ -199,7 +199,11 @@ func remoteGet(id string, flags map[string]string) (any, error) {
 		return nil, err
 	}
 	if flags["relationships"] == "true" {
-		return client.GetCatalogRelationships(context.Background(), id)
+		relationships, err := client.GetCatalogRelationships(context.Background(), id)
+		if err != nil {
+			return nil, err
+		}
+		return catalogRelationshipsView(relationships), nil
 	}
 	ctx := context.Background()
 	item, err := client.GetCatalogItem(ctx, id)

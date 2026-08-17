@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -14,6 +15,108 @@ import (
 )
 
 type catalogItem clientapi.ConfigItem
+
+type catalogListItem struct {
+	catalogItem
+}
+
+type catalogRelationshipNode clientapi.ConfigTreeNode
+
+type catalogRelationships struct {
+	ID       uuid.UUID                `json:"id"`
+	Incoming *catalogRelationshipNode `json:"incoming"`
+	Outgoing *catalogRelationshipNode `json:"outgoing"`
+}
+
+func catalogListItems(items []catalogItem) []catalogListItem {
+	result := make([]catalogListItem, len(items))
+	for i, item := range items {
+		result[i] = catalogListItem{catalogItem: item}
+	}
+	return result
+}
+
+func (c catalogListItem) MarshalJSON() ([]byte, error) {
+	data, err := json.Marshal(c.catalogItem)
+	if err != nil {
+		return nil, err
+	}
+	if len(data) < 2 || data[0] != '{' {
+		return data, nil
+	}
+	id, err := json.Marshal(c.GetID())
+	if err != nil {
+		return nil, err
+	}
+	prefix := append([]byte(`{"_id":`), id...)
+	prefix = append(prefix, ',')
+	return append(prefix, data[1:]...), nil
+}
+
+func (c catalogListItem) MarshalYAML() (any, error) {
+	data, err := c.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	var value any
+	if err := json.Unmarshal(data, &value); err != nil {
+		return nil, err
+	}
+	return value, nil
+}
+
+func (c catalogListItem) Columns() []api.ColumnDef {
+	row := c.catalogItem.PrettyRow(nil)
+	keys := make([]string, 0, len(row))
+	for key := range row {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		left := api.ExtractOrderValue(row[keys[i]].Style)
+		right := api.ExtractOrderValue(row[keys[j]].Style)
+		if left != right {
+			return left < right
+		}
+		return keys[i] < keys[j]
+	})
+
+	columns := []api.ColumnDef{api.Column("_id").Hidden().Build()}
+	for _, key := range keys {
+		columns = append(columns, api.ColumnDef{Name: key, Label: key, Style: row[key].Style})
+	}
+	return columns
+}
+
+func (c catalogListItem) Row() map[string]any {
+	prettyRow := c.catalogItem.PrettyRow(nil)
+	row := make(map[string]any, len(prettyRow)+1)
+	row["_id"] = c.GetID()
+	for key, value := range prettyRow {
+		row[key] = value
+	}
+	return row
+}
+
+func (c catalogListItem) PrettyRow(opts any) map[string]api.Text {
+	row := c.catalogItem.PrettyRow(opts)
+	row["_id"] = clicky.Text(c.GetID())
+	return row
+}
+
+func catalogRelationshipsView(value *clientapi.CatalogRelationships) *catalogRelationships {
+	if value == nil {
+		return nil
+	}
+	return &catalogRelationships{
+		ID:       value.ID,
+		Incoming: (*catalogRelationshipNode)(value.Incoming),
+		Outgoing: (*catalogRelationshipNode)(value.Outgoing),
+	}
+}
+
+func (n catalogRelationshipNode) Pretty() api.Text {
+	return catalogItemSummary(n.ConfigItem)
+}
 
 func (c catalogItem) GetID() string {
 	return c.ID.String()

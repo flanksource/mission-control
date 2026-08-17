@@ -8,7 +8,7 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/incident-commander/clientapi"
-	"github.com/flanksource/incident-commander/sdk"
+	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -64,7 +64,7 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 		compact := catalogInsightSearchOutput(result, false)
 		Expect(compact).To(BeAssignableToTypeOf([]catalogInsightSearchHit{}))
 		full := catalogInsightSearchOutput(result, true)
-		Expect(full).To(BeAssignableToTypeOf([]sdk.CatalogInsightDetail{}))
+		Expect(full).To(BeAssignableToTypeOf([]catalogInsightDetailView{}))
 		compactJSON, err := json.Marshal(compact)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(string(compactJSON)).ToNot(ContainSubstring(`"message"`))
@@ -147,6 +147,34 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 		})
 	}
 
+	ginkgo.It("restores semantic full insight output without changing its wire shape", func() {
+		detail := clientapi.CatalogInsightDetail{
+			ID:           uuid.New(),
+			ConfigID:     uuid.New(),
+			Analyzer:     "no-public-ip",
+			Summary:      "instance has a public IP",
+			Status:       "open",
+			Severity:     "high",
+			AnalysisType: "security",
+			Analysis:     map[string]any{"rule": "R1"},
+		}
+		view := catalogInsightDetailViewOf(detail)
+
+		rendered, err := clicky.Format([]catalogInsightDetailView{view}, clicky.FormatOptions{Pretty: true, NoColor: true})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(rendered).To(And(
+			ContainSubstring("🔒"),
+			MatchRegexp(`(?i)security`),
+			MatchRegexp(`(?i)high`),
+		))
+
+		originalJSON, err := json.Marshal(detail)
+		Expect(err).ToNot(HaveOccurred())
+		viewJSON, err := json.Marshal(view)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(viewJSON).To(MatchJSON(originalJSON))
+	})
+
 	ginkgo.It("defaults insight search empty limit to 100", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var got clientapi.SearchResourcesRequest
@@ -179,7 +207,7 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 		result, err := remoteGetInsight("521bae33-e4c3-42eb-a9c5-071ab92940b5")
 
 		Expect(err).ToNot(HaveOccurred())
-		insight := result.(*sdk.CatalogInsightDetail)
+		insight := result.(*catalogInsightDetailView)
 		Expect(insight.Analyzer).To(Equal("no-public-ip"))
 		Expect(insight.Config).ToNot(BeNil())
 		Expect(insight.Config.ConfigClass).To(Equal("EC2"))

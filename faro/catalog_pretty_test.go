@@ -12,6 +12,90 @@ import (
 )
 
 var _ = ginkgo.Describe("faro catalog pretty output", func() {
+	ginkgo.It("keeps catalog entity IDs as hidden list metadata", func() {
+		name := "api"
+		typ := "Kubernetes::Deployment"
+		id := uuid.New()
+		items := catalogListItems([]catalogItem{{
+			ID:          id,
+			Name:        &name,
+			Type:        &typ,
+			ConfigClass: "Deployment",
+		}})
+
+		Expect(items).To(HaveLen(1))
+		Expect(items[0].Columns()[0]).To(And(
+			HaveField("Name", "_id"),
+			HaveField("Hidden", true),
+		))
+		Expect(items[0].Row()).To(HaveKeyWithValue("_id", id.String()))
+
+		structured, err := clicky.Format(items, clicky.FormatOptions{JSON: true})
+		Expect(err).ToNot(HaveOccurred())
+		var rows []map[string]any
+		Expect(json.Unmarshal([]byte(structured), &rows)).To(Succeed())
+		Expect(rows).To(HaveLen(1))
+		Expect(rows[0]).To(And(
+			HaveKeyWithValue("_id", id.String()),
+			HaveKeyWithValue("id", id.String()),
+		))
+		structuredYAML, err := clicky.Format(items, clicky.FormatOptions{YAML: true})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(structuredYAML).To(And(
+			ContainSubstring("_id: "+id.String()),
+			ContainSubstring("id: "+id.String()),
+		))
+
+		pretty, err := clicky.Format(items, clicky.FormatOptions{Pretty: true, NoColor: true})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(pretty).To(And(
+			ContainSubstring("api"),
+			Not(ContainSubstring("_id")),
+			Not(ContainSubstring(id.String())),
+		))
+	})
+
+	ginkgo.It("renders relationship roots compactly without changing their wire shape", func() {
+		incomingName := "cluster"
+		outgoingName := "deployment"
+		childName := "raw-child-should-not-render"
+		incomingType := "Kubernetes::Cluster"
+		outgoingType := "Kubernetes::Deployment"
+		childType := "Kubernetes::Pod"
+		value := &clientapi.CatalogRelationships{
+			ID: uuid.New(),
+			Incoming: &clientapi.ConfigTreeNode{
+				ConfigItem: clientapi.ConfigItem{Name: &incomingName, Type: &incomingType, ConfigClass: "Cluster"},
+				EdgeType:   "parent",
+				Children: []*clientapi.ConfigTreeNode{{
+					ConfigItem: clientapi.ConfigItem{Name: &childName, Type: &childType, ConfigClass: "Pod"},
+				}},
+			},
+			Outgoing: &clientapi.ConfigTreeNode{
+				ConfigItem: clientapi.ConfigItem{Name: &outgoingName, Type: &outgoingType, ConfigClass: "Deployment"},
+				Relation:   "depends-on",
+			},
+		}
+		view := catalogRelationshipsView(value)
+
+		pretty, err := clicky.Format(view, clicky.FormatOptions{Pretty: true, NoColor: true})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(pretty).To(And(
+			ContainSubstring(incomingName),
+			ContainSubstring(incomingType),
+			ContainSubstring(outgoingName),
+			ContainSubstring(outgoingType),
+			Not(ContainSubstring(childName)),
+			Not(ContainSubstring("depends-on")),
+		))
+
+		originalJSON, err := json.Marshal(value)
+		Expect(err).ToNot(HaveOccurred())
+		viewJSON, err := json.Marshal(view)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(viewJSON).To(MatchJSON(originalJSON))
+	})
+
 	ginkgo.It("shows complete properties and additional config metadata", func() {
 		name := "api"
 		typ := "Kubernetes::Deployment"

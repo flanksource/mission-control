@@ -127,7 +127,7 @@ func runCatalogInsightSearch(cmd *cobra.Command, args []string) error {
 
 func catalogInsightSearchOutput(result *catalogInsightSearchResult, full bool) any {
 	if full {
-		return result.Details
+		return catalogInsightDetailViews(result.Details)
 	}
 	return result.Items
 }
@@ -262,7 +262,12 @@ func remoteGetInsight(id string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return client.GetCatalogInsight(context.Background(), id)
+	detail, err := client.GetCatalogInsight(context.Background(), id)
+	if err != nil {
+		return nil, err
+	}
+	view := catalogInsightDetailViewOf(*detail)
+	return &view, nil
 }
 
 func init() {
