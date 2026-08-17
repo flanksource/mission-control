@@ -22,6 +22,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/playbook/runner"
@@ -39,6 +40,7 @@ func RegisterRoutes(e *echo.Echo) {
 	prefix := "playbook"
 	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
 	playbookGroup.GET("/list", HandlePlaybookList, rbac.Playbook(policy.ActionRead))
+	playbookGroup.POST("/apply", HandlePlaybookApply, rbac.Playbook(policy.ActionUpdate))
 	playbookGroup.POST("/webhook/:webhook_path", HandleWebhook)
 	playbookGroup.GET("/webhook/:webhook_path", HandleWebhook)
 
@@ -54,6 +56,106 @@ func RegisterRoutes(e *echo.Echo) {
 	runGroup.GET("/:id", HandleGetPlaybookRun, rbac.Playbook(policy.ActionRead))
 	runGroup.POST("/approve/:run_id", HandlePlaybookRunApproval)
 	runGroup.POST("/cancel/:run_id", HandlePlaybookRunCancel, rbac.Playbook(policy.ActionUpdate))
+}
+
+func HandlePlaybookApply(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+	var req clientapi.PlaybookApplyRequest
+	if err := c.Bind(&req); err != nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request: %v", err))
+	}
+
+	response, err := applyPlaybook(ctx, req)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+	status := http.StatusOK
+	if response.Created {
+		status = http.StatusCreated
+	}
+	return c.JSON(status, response)
+}
+
+func applyPlaybook(ctx context.Context, req clientapi.PlaybookApplyRequest) (*clientapi.PlaybookApplyResponse, error) {
+	if req.Namespace == "" {
+		req.Namespace = "default"
+	}
+	if req.Name == "" {
+		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "playbook name is required")
+	}
+
+	spec, err := v1.ParseAndValidatePlaybookSpec(req.Spec)
+	if err != nil {
+		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid playbook spec: %v", err)
+	}
+
+	var existing []models.Playbook
+	if err := ctx.DB().
+		Where("namespace = ? AND name = ? AND deleted_at IS NULL", req.Namespace, req.Name).
+		Find(&existing).Error; err != nil {
+		return nil, ctx.Oops().Wrap(err)
+	}
+
+	var target *models.Playbook
+	if len(existing) == 1 {
+		target = &existing[0]
+	} else if len(existing) > 1 {
+		for i := range existing {
+			if existing[i].Category == spec.Category {
+				if target != nil {
+					return nil, dutyAPI.Errorf(dutyAPI.ECONFLICT, "multiple playbooks match %s/%s in category %q", req.Namespace, req.Name, spec.Category)
+				}
+				target = &existing[i]
+			}
+		}
+		if target == nil {
+			return nil, dutyAPI.Errorf(dutyAPI.ECONFLICT, "multiple playbooks match %s/%s; specify an existing category", req.Namespace, req.Name)
+		}
+	}
+
+	created := target == nil
+	if created {
+		target = &models.Playbook{
+			ID:        uuid.New(),
+			Namespace: req.Namespace,
+			Name:      req.Name,
+			Source:    models.SourceUI,
+		}
+	} else if target.Source != models.SourceUI {
+		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "playbook %s/%s was not created through the API and cannot be applied", target.Namespace, target.Name)
+	}
+
+	title := spec.Title
+	if title == "" {
+		title = req.Name
+	}
+	target.Title = title
+	target.Icon = spec.Icon
+	target.Description = spec.Description
+	target.Category = spec.Category
+	target.Spec = types.JSON(req.Spec)
+	if err := ctx.DB().Save(target).Error; err != nil {
+		return nil, ctx.Oops().Wrap(err)
+	}
+
+	return &clientapi.PlaybookApplyResponse{
+		Playbook: clientapi.Playbook{
+			ID:          target.ID,
+			Namespace:   target.Namespace,
+			Name:        target.Name,
+			Title:       target.Title,
+			Icon:        target.Icon,
+			Description: target.Description,
+			Spec:        json.RawMessage(target.Spec),
+			Source:      target.Source,
+			Category:    target.Category,
+			CreatedBy:   target.CreatedBy,
+			CreatedAt:   target.CreatedAt,
+			UpdatedAt:   target.UpdatedAt,
+			DeletedAt:   target.DeletedAt,
+		},
+		Created: created,
+	}, nil
 }
 
 type RunResponse struct {

@@ -185,8 +185,8 @@ func playbookListItem(playbook models.Playbook, parameters types.JSON) api.Playb
 		Source:      playbook.Source,
 		Category:    playbook.Category,
 		CreatedAt:   &createdAt,
-		Parameters:  parameters,
-		Spec:        playbook.Spec,
+		Parameters:  json.RawMessage(parameters),
+		Spec:        json.RawMessage(playbook.Spec),
 	}
 }
 
