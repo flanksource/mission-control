@@ -13,7 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flanksource/incident-commander/clienthttp"
+	commonshttp "github.com/flanksource/commons/http"
+	"github.com/flanksource/incident-commander/pkg/httpobservability"
 )
 
 type Tokens struct {
@@ -31,11 +32,11 @@ type Discovery struct {
 
 var HTTPClient = NewHTTPClient()
 
-func NewHTTPClient() *clienthttp.Client {
-	return clienthttp.NewClient().
+func NewHTTPClient() *commonshttp.Client {
+	return httpobservability.Apply(commonshttp.NewClient().
 		Timeout(30*time.Second).
 		Header("Accept", "application/json").
-		UserAgent("mission-control-cli")
+		UserAgent("mission-control-cli"))
 }
 
 func Discover(discoveryURL string) (*Discovery, error) {

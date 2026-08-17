@@ -6,9 +6,10 @@ import (
 	"os"
 	"time"
 
+	"github.com/flanksource/commons/har"
 	"github.com/spf13/cobra"
 
-	"github.com/flanksource/incident-commander/clienthttp"
+	"github.com/flanksource/incident-commander/pkg/httpobservability"
 )
 
 // pluginHARPath is the value of the global --har flag. When non-empty,
@@ -35,16 +36,16 @@ func StartHAR() func() error {
 // startHAR returns a fresh HAR collector if --har was passed (and no capture is
 // already active) plus a writer closure that persists it once the command
 // finishes; otherwise returns (nil, no-op).
-func startHAR() (*clienthttp.HARCollector, func() error) {
+func startHAR() (*har.Collector, func() error) {
 	if pluginHARPath == "" || harActive {
 		return nil, func() error { return nil }
 	}
 	harActive = true
-	collector := clienthttp.NewHARCollector(clienthttp.HARConfig{
+	collector := har.NewCollector(har.HARConfig{
 		MaxBodySize:         64 * 1024,
 		CaptureContentTypes: []string{"application/json", "application/clicky+json", "application/x-www-form-urlencoded"},
 	})
-	restore := clienthttp.SetHARCollector(collector)
+	restore := httpobservability.SetHARCollector(collector)
 	return collector, func() error {
 		harActive = false
 		restore()
@@ -52,14 +53,14 @@ func startHAR() (*clienthttp.HARCollector, func() error) {
 	}
 }
 
-func writeHAR(path string, collector *clienthttp.HARCollector) error {
+func writeHAR(path string, collector *har.Collector) error {
 	if collector == nil {
 		return nil
 	}
-	file := clienthttp.HARFile{
-		Log: clienthttp.HARLog{
+	file := har.File{
+		Log: har.Log{
 			Version: "1.2",
-			Creator: clienthttp.HARCreator{Name: "mission-control-cli", Version: time.Now().UTC().Format(time.RFC3339)},
+			Creator: har.Creator{Name: "mission-control-cli", Version: time.Now().UTC().Format(time.RFC3339)},
 			Entries: collector.Entries(),
 		},
 	}
