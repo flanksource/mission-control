@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/flanksource/clicky"
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/clientapi"
-	"github.com/flanksource/incident-commander/clientlog"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/spf13/cobra"
 )
@@ -165,11 +165,11 @@ func runRemotePlaybook(cmd *cobra.Command, args []string) error {
 
 	playbookRef := item.Namespace + "/" + item.Name
 	if !playbookWait {
-		clientlog.V(1).Infof("type=playbook_run_scheduled playbook=%s run_id=%s starts_at=%s", playbookRef, response.RunID, response.StartsAt)
+		logger.V(1).Infof("type=playbook_run_scheduled playbook=%s run_id=%s starts_at=%s", playbookRef, response.RunID, response.StartsAt)
 		return nil
 	}
 
-	clientlog.V(1).Infof("type=playbook_run_scheduled playbook=%s run_id=%s starts_at=%s", playbookRef, response.RunID, response.StartsAt)
+	logger.V(1).Infof("type=playbook_run_scheduled playbook=%s run_id=%s starts_at=%s", playbookRef, response.RunID, response.StartsAt)
 	summary, err := waitForRemotePlaybookRun(cmd.ErrOrStderr(), client, response.RunID)
 	if err != nil {
 		return err

@@ -10,8 +10,8 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/clientapi"
-	"github.com/flanksource/incident-commander/clientlog"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
@@ -185,7 +185,7 @@ func waitForRemotePlaybookRunWithInterval(_ io.Writer, client *sdk.Client, runID
 		runStatus := string(summary.Run.Status)
 		isFinal := summary.Run.Status.Final()
 		if runStatus != lastRunStatus && !isFinal {
-			clientlog.V(1).Infof("type=playbook_run_status run_id=%s status=%s", runID, runStatus)
+			logger.V(1).Infof("type=playbook_run_status run_id=%s status=%s", runID, runStatus)
 			lastRunStatus = runStatus
 		}
 		for _, action := range summary.Actions {
@@ -195,14 +195,14 @@ func waitForRemotePlaybookRunWithInterval(_ io.Writer, client *sdk.Client, runID
 				continue
 			}
 			if action.Error != nil && *action.Error != "" {
-				clientlog.V(1).Infof("type=playbook_action_status action=%s status=%s error=%s", action.Name, status, *action.Error)
+				logger.V(1).Infof("type=playbook_action_status action=%s status=%s error=%s", action.Name, status, *action.Error)
 			} else {
-				clientlog.V(1).Infof("type=playbook_action_status action=%s status=%s", action.Name, status)
+				logger.V(1).Infof("type=playbook_action_status action=%s status=%s", action.Name, status)
 			}
 			lastActions[key] = status
 		}
 		if runStatus != lastRunStatus && isFinal {
-			clientlog.V(1).Infof("type=playbook_run_status run_id=%s status=%s", runID, runStatus)
+			logger.V(1).Infof("type=playbook_run_status run_id=%s status=%s", runID, runStatus)
 			lastRunStatus = runStatus
 		}
 
