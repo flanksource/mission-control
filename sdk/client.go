@@ -59,7 +59,8 @@ func NewWithAuthHeader(serverURL, authHeader string, opts ...ClientOption) *Clie
 	client := http.NewClient().
 		BaseURL(serverURL).
 		Header("Content-Type", "application/json").
-		UserAgent("mission-control-cli")
+		UserAgent("mission-control-cli").
+		RedirectPolicy(0)
 	if authHeader != "" {
 		client = client.Header("Authorization", authHeader)
 	}

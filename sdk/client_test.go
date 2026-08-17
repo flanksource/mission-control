@@ -85,6 +85,29 @@ var _ = ginkgo.Describe("GetConnection HTML detection", func() {
 		Expect(called).To(BeFalse())
 	})
 
+	ginkgo.It("does not forward provider tokens across redirects", func() {
+		targetCalled := false
+		target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			targetCalled = true
+			Expect(r.Header.Get("Authorization")).To(BeEmpty())
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer target.Close()
+
+		source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			Expect(r.Header.Get("Authorization")).To(Equal("Bearer provider-token"))
+			http.Redirect(w, r, target.URL+"/capture", http.StatusFound)
+		}))
+		defer source.Close()
+
+		_, _, err := New(source.URL, "", WithTokenProvider(func(context.Context) (string, error) {
+			return "provider-token", nil
+		})).Whoami(context.Background())
+
+		Expect(err).To(HaveOccurred())
+		Expect(targetCalled).To(BeFalse())
+	})
+
 	ginkgo.It("returns ErrHTMLResponse when server returns HTML with 200 OK", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
