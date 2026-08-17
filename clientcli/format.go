@@ -60,12 +60,25 @@ func (formatManager) FormatWithOptions(options FormatOptions, data any) (string,
 	if options.Filter != "" {
 		return "", fmt.Errorf("--filter is not available in the lightweight client")
 	}
+	if options.Tree {
+		return "", fmt.Errorf("--tree is not available in the lightweight client")
+	}
 	format := legacyFormat(options)
 	if format == "" {
 		format = canonicalFormat(options.Format)
 	}
 	if format == "" {
 		format = "pretty"
+	}
+	if options.Table {
+		if format != "pretty" {
+			return "", fmt.Errorf("--table cannot be combined with --%s", format)
+		}
+		table, ok := tableData(data)
+		if !ok {
+			return "", fmt.Errorf("--table requires a list of records")
+		}
+		return renderTable(table, "pretty"), nil
 	}
 
 	switch format {
@@ -109,6 +122,13 @@ func (m formatManager) FormatToFile(options FormatOptions, data any) error {
 }
 
 func formatPretty(data any, noColor bool) (string, error) {
+	if value, ok := data.(pretty); ok {
+		text := value.Pretty()
+		if noColor {
+			return text.String(), nil
+		}
+		return text.ANSI(), nil
+	}
 	if text, ok := data.(api.Textable); ok {
 		if noColor {
 			return text.String(), nil
@@ -135,17 +155,26 @@ type prettyRow interface {
 	PrettyRow(any) map[string]api.Text
 }
 
+type pretty interface {
+	Pretty() api.Text
+}
+
 func tableData(data any) (renderedTable, bool) {
 	value := reflect.ValueOf(data)
-	if !value.IsValid() || value.Kind() != reflect.Slice || value.Len() == 0 {
+	if !value.IsValid() || value.Kind() != reflect.Slice {
 		return renderedTable{}, false
+	}
+	if value.Len() == 0 {
+		return emptyTable(value.Type().Elem())
 	}
 
 	first := value.Index(0)
+	var item any
 	if first.Kind() == reflect.Pointer && first.IsNil() {
-		return renderedTable{}, false
+		item = reflect.New(first.Type().Elem()).Interface()
+	} else {
+		item = first.Interface()
 	}
-	item := first.Interface()
 	if row, ok := item.(columnRow); ok {
 		columns := row.Columns()
 		table := renderedTable{headers: make([]string, len(columns))}
@@ -153,10 +182,14 @@ func tableData(data any) (renderedTable, bool) {
 			table.headers[i] = column.DisplayLabel()
 		}
 		for i := 0; i < value.Len(); i++ {
-			row := value.Index(i).Interface().(columnRow).Row()
 			values := make([]string, len(columns))
-			for j, column := range columns {
-				values[j] = cellString(row[column.Name])
+			if item, ok := rowItem(value.Index(i)); ok {
+				if typed, ok := item.(columnRow); ok {
+					row := typed.Row()
+					for j, column := range columns {
+						values[j] = cellString(row[column.Name])
+					}
+				}
 			}
 			table.rows = append(table.rows, values)
 		}
@@ -164,23 +197,21 @@ func tableData(data any) (renderedTable, bool) {
 	}
 
 	if row, ok := item.(prettyRow); ok {
-		preferred := []string{"name", "type", "class", "health", "status", "cost", "age"}
 		firstRow := row.PrettyRow(nil)
-		keys := make([]string, 0, len(firstRow))
-		for _, key := range preferred {
-			if _, exists := firstRow[key]; exists {
-				keys = append(keys, key)
-			}
-		}
+		keys := prettyRowKeys(firstRow)
 		table := renderedTable{headers: make([]string, len(keys))}
 		for i, key := range keys {
 			table.headers[i] = title(key)
 		}
 		for i := 0; i < value.Len(); i++ {
-			row := value.Index(i).Interface().(prettyRow).PrettyRow(nil)
 			values := make([]string, len(keys))
-			for j, key := range keys {
-				values[j] = row[key].String()
+			if item, ok := rowItem(value.Index(i)); ok {
+				if typed, ok := item.(prettyRow); ok {
+					row := typed.PrettyRow(nil)
+					for j, key := range keys {
+						values[j] = row[key].String()
+					}
+				}
 			}
 			table.rows = append(table.rows, values)
 		}
@@ -202,6 +233,10 @@ func tableData(data any) (renderedTable, bool) {
 	for i := 0; i < value.Len(); i++ {
 		row := value.Index(i)
 		if row.Kind() == reflect.Pointer {
+			if row.IsNil() {
+				table.rows = append(table.rows, make([]string, len(fields)))
+				continue
+			}
 			row = row.Elem()
 		}
 		values := make([]string, len(fields))
@@ -211,6 +246,63 @@ func tableData(data any) (renderedTable, bool) {
 		table.rows = append(table.rows, values)
 	}
 	return table, true
+}
+
+func emptyTable(itemType reflect.Type) (renderedTable, bool) {
+	var item any
+	if itemType.Kind() == reflect.Pointer {
+		item = reflect.New(itemType.Elem()).Interface()
+	} else {
+		item = reflect.Zero(itemType).Interface()
+	}
+	if row, ok := item.(columnRow); ok {
+		columns := row.Columns()
+		table := renderedTable{headers: make([]string, len(columns))}
+		for i, column := range columns {
+			table.headers[i] = column.DisplayLabel()
+		}
+		return table, true
+	}
+	if row, ok := item.(prettyRow); ok {
+		values := row.PrettyRow(nil)
+		keys := prettyRowKeys(values)
+		table := renderedTable{headers: make([]string, len(keys))}
+		for i, key := range keys {
+			table.headers[i] = title(key)
+		}
+		return table, true
+	}
+	typeOfItem := itemType
+	if typeOfItem.Kind() == reflect.Pointer {
+		typeOfItem = typeOfItem.Elem()
+	}
+	if typeOfItem.Kind() != reflect.Struct || typeOfItem == reflect.TypeOf(time.Time{}) {
+		return renderedTable{}, false
+	}
+	fields := exportedFields(typeOfItem)
+	table := renderedTable{headers: make([]string, len(fields))}
+	for i, field := range fields {
+		table.headers[i] = title(field.name)
+	}
+	return table, true
+}
+
+func prettyRowKeys(row map[string]api.Text) []string {
+	preferred := []string{"name", "type", "class", "health", "status", "cost", "age"}
+	keys := make([]string, 0, len(row))
+	for _, key := range preferred {
+		if _, exists := row[key]; exists {
+			keys = append(keys, key)
+		}
+	}
+	return keys
+}
+
+func rowItem(value reflect.Value) (any, bool) {
+	if value.Kind() == reflect.Pointer && value.IsNil() {
+		return nil, false
+	}
+	return value.Interface(), true
 }
 
 type fieldInfo struct {
@@ -257,6 +349,9 @@ func formatCSV(data any) (string, error) {
 }
 
 func formatMarkdown(data any) (string, error) {
+	if value, ok := data.(pretty); ok {
+		return value.Pretty().Markdown(), nil
+	}
 	if text, ok := data.(api.Textable); ok {
 		return text.Markdown(), nil
 	}
@@ -268,15 +363,22 @@ func formatMarkdown(data any) (string, error) {
 }
 
 func formatHTML(data any) (string, error) {
+	if value, ok := data.(pretty); ok {
+		return htmlDocument(value.Pretty().HTML()), nil
+	}
 	if text, ok := data.(api.Textable); ok {
-		return text.HTML(), nil
+		return htmlDocument(text.HTML()), nil
 	}
 	table, ok := tableData(data)
 	if !ok {
 		plain := prettyValue(reflect.ValueOf(data), 0, true)
-		return "<pre>" + html.EscapeString(plain) + "</pre>", nil
+		return htmlDocument("<pre>" + html.EscapeString(plain) + "</pre>"), nil
 	}
-	return renderTable(table, "html"), nil
+	return htmlDocument(renderTable(table, "html")), nil
+}
+
+func htmlDocument(body string) string {
+	return "<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>Faro output</title></head><body>" + body + "</body></html>"
 }
 
 func renderTable(table renderedTable, format string) string {
