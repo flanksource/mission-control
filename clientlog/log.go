@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/spf13/pflag"
 )
@@ -53,7 +55,7 @@ func Configure(flags *pflag.FlagSet) {
 	}
 	level := parseLevel(configuredLevel)
 	if verbosity > 0 {
-		level = slog.LevelDebug - slog.Level(verbosity-1)*4
+		level = verbosityLevel(verbosity)
 	}
 	options := &slog.HandlerOptions{AddSource: configuredCaller, Level: level}
 	if configuredJSON {
@@ -64,7 +66,11 @@ func Configure(flags *pflag.FlagSet) {
 }
 
 func Debugf(format string, args ...any) {
-	logf(slog.LevelDebug, format, args...)
+	logf(slog.LevelDebug, "", format, args...)
+}
+
+func NamedDebugf(name, format string, args ...any) {
+	logf(slog.LevelDebug, name, format, args...)
 }
 
 type VerboseLogger struct {
@@ -76,34 +82,65 @@ func V(level int) VerboseLogger {
 }
 
 func (l VerboseLogger) Infof(format string, args ...any) {
-	level := slog.LevelDebug - slog.Level(max(l.level-1, 0))*4
-	logf(level, format, args...)
+	logf(verbosityLevel(l.level), "", format, args...)
 }
 
-func logf(level slog.Level, format string, args ...any) {
+func logf(level slog.Level, name, format string, args ...any) {
 	ctx := context.Background()
 	if !slog.Default().Enabled(ctx, level) {
 		return
 	}
-	slog.Log(ctx, level, fmt.Sprintf(format, args...))
+	pcs := [1]uintptr{}
+	runtime.Callers(3, pcs[:])
+	record := slog.NewRecord(time.Now(), level, fmt.Sprintf(format, args...), pcs[0])
+	if name != "" {
+		record.AddAttrs(slog.String("logger", name))
+	}
+	_ = slog.Default().Handler().Handle(ctx, record)
 }
 
 func parseLevel(value string) slog.Level {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "trace":
-		return slog.LevelDebug - 4
+		return slog.LevelDebug - 1
 	case "debug":
 		return slog.LevelDebug
 	case "warn", "warning":
 		return slog.LevelWarn
 	case "error":
 		return slog.LevelError
+	case "fatal":
+		return slog.LevelError + 1
+	case "silent":
+		return slog.Level(100)
 	case "info", "":
 		return slog.LevelInfo
 	default:
-		if numeric, err := strconv.Atoi(value); err == nil && numeric > 0 {
-			return slog.LevelDebug - slog.Level(numeric-1)*4
+		if trace, ok := strings.CutPrefix(strings.ToLower(value), "trace"); ok {
+			if numeric, err := strconv.Atoi(trace); err == nil && numeric >= 0 {
+				return slog.LevelDebug - 1 - slog.Level(numeric)
+			}
+		}
+		if numeric, err := strconv.Atoi(value); err == nil {
+			return verbosityLevel(numeric)
 		}
 		return slog.LevelInfo
+	}
+}
+
+func verbosityLevel(value int) slog.Level {
+	switch {
+	case value <= -3:
+		return slog.LevelError + 1
+	case value == -2:
+		return slog.LevelError
+	case value == -1:
+		return slog.LevelWarn
+	case value == 0:
+		return slog.LevelInfo
+	case value == 1:
+		return slog.LevelDebug
+	default:
+		return slog.LevelDebug - slog.Level(value-1)
 	}
 }

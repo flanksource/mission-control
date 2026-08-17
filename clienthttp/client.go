@@ -228,6 +228,6 @@ func (t loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 	if response != nil {
 		status = fmt.Sprint(response.StatusCode)
 	}
-	clientlog.Debugf("%s\t%s\t%s\t%s", request.Method, redactURL(request.URL), status, time.Since(start))
+	clientlog.NamedDebugf("http", "%s\t%s\t%s\t%s", request.Method, redactURL(request.URL), status, time.Since(start))
 	return response, err
 }
