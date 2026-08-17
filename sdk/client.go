@@ -14,7 +14,6 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 
-	icapi "github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/pkg/httpobservability"
 )
@@ -369,9 +368,9 @@ type PlaybookRunResponse struct {
 }
 
 type PlaybookSummary struct {
-	Playbook models.Playbook            `json:"playbook,omitempty"`
-	Run      models.PlaybookRun         `json:"run,omitempty"`
-	Actions  []models.PlaybookRunAction `json:"actions,omitempty"`
+	Playbook clientapi.Playbook            `json:"playbook,omitempty"`
+	Run      clientapi.PlaybookRun         `json:"run,omitempty"`
+	Actions  []clientapi.PlaybookRunAction `json:"actions,omitempty"`
 }
 
 func (c *Client) TestConnection(id string) (*TestResult, error) {
@@ -416,8 +415,8 @@ func (c *Client) InvokePluginOperation(name, operation, configID string, params 
 	return []byte(body), nil
 }
 
-func (c *Client) ListPlaybooks(opts PlaybookListOptions) ([]icapi.PlaybookListItem, error) {
-	var playbooks []icapi.PlaybookListItem
+func (c *Client) ListPlaybooks(opts PlaybookListOptions) ([]clientapi.PlaybookListItem, error) {
+	var playbooks []clientapi.PlaybookListItem
 	req := c.R(context.Background())
 	if opts.ConfigID != "" {
 		req.QueryParam("config_id", opts.ConfigID)

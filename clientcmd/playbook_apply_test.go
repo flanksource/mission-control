@@ -26,13 +26,10 @@ spec:
 		Expect(err).ToNot(HaveOccurred())
 		Expect(params.Namespace).To(Equal("ops"))
 		Expect(params.Name).To(Equal("restart"))
-		Expect(params.Title).To(Equal("Restart workload"))
-		Expect(params.Category).To(Equal("Kubernetes"))
-		Expect(params.Description).To(Equal("Restarts a workload"))
 		Expect(params.Spec).To(MatchJSON(`{"title":"Restart workload","category":"Kubernetes","description":"Restarts a workload","actions":[{"name":"echo","exec":{"script":"echo ok"}}]}`))
 	})
 
-	ginkgo.It("defaults the namespace and title", func() {
+	ginkgo.It("defaults the namespace", func() {
 		params, err := parsePlaybookManifest([]byte(`
 kind: Playbook
 metadata:
@@ -46,11 +43,10 @@ spec:
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(params.Namespace).To(Equal("default"))
-		Expect(params.Title).To(Equal("diagnose"))
 	})
 
-	ginkgo.It("rejects schema-invalid manifests before making a request", func() {
-		_, err := parsePlaybookManifest([]byte(`
+	ginkgo.It("leaves full schema validation to the server", func() {
+		params, err := parsePlaybookManifest([]byte(`
 kind: Playbook
 metadata:
   name: invalid
@@ -62,7 +58,8 @@ spec:
         script: echo ok
 `))
 
-		Expect(err).To(MatchError(ContainSubstring("Additional property unexpected is not allowed")))
+		Expect(err).ToNot(HaveOccurred())
+		Expect(params.Spec).To(MatchJSON(`{"unexpected":true,"actions":[{"name":"echo","exec":{"script":"echo ok"}}]}`))
 	})
 
 	ginkgo.It("rejects other manifest kinds", func() {

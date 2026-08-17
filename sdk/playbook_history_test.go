@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -25,17 +25,17 @@ var _ = ginkgo.Describe("ListPlaybookRuns", func() {
 			Expect(r.URL.Query().Get("order")).To(Equal("created_at.desc"))
 			Expect(r.URL.Query().Get("limit")).To(Equal("5"))
 			w.Header().Set("Content-Type", "application/json")
-			Expect(json.NewEncoder(w).Encode([]models.PlaybookRun{{
-				ID: runID, PlaybookID: playbookID, Status: models.PlaybookRunStatusFailed,
+			Expect(json.NewEncoder(w).Encode([]clientapi.PlaybookRun{{
+				ID: runID, PlaybookID: playbookID, Status: clientapi.PlaybookRunStatusFailed,
 			}})).To(Succeed())
 		}))
 		defer server.Close()
 
 		runs, err := New(server.URL, "token").ListPlaybookRuns(context.Background(), PlaybookRunListOptions{
 			PlaybookID: &playbookID,
-			Statuses: []models.PlaybookRunStatus{
-				models.PlaybookRunStatusFailed,
-				models.PlaybookRunStatusTimedOut,
+			Statuses: []clientapi.PlaybookRunStatus{
+				clientapi.PlaybookRunStatusFailed,
+				clientapi.PlaybookRunStatusTimedOut,
 			},
 			Limit: 5,
 		})

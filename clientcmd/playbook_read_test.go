@@ -2,23 +2,22 @@ package clientcmd
 
 import (
 	"bytes"
+	"encoding/json"
 
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/clientapi"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = ginkgo.Describe("playbook read and delete commands", func() {
 	ginkgo.It("renders get output as an applicable Playbook manifest", func() {
-		manifest, err := playbookManifestFromItem(api.PlaybookListItem{
+		manifest, err := playbookManifestFromItem(clientapi.PlaybookListItem{
 			Namespace:   "ops",
 			Name:        "restart",
 			Title:       "Restart",
 			Category:    "Kubernetes",
 			Description: "Restarts a workload",
-			Spec:        types.JSON(`{"actions":[{"name":"echo","exec":{"script":"echo ok"}}]}`),
+			Spec:        json.RawMessage(`{"actions":[{"name":"echo","exec":{"script":"echo ok"}}]}`),
 		})
 		Expect(err).ToNot(HaveOccurred())
 		var output bytes.Buffer
@@ -45,10 +44,10 @@ spec:
 		statuses, err := parsePlaybookRunStatuses([]string{"failed,timed_out", "completed"})
 
 		Expect(err).ToNot(HaveOccurred())
-		Expect(statuses).To(Equal([]models.PlaybookRunStatus{
-			models.PlaybookRunStatusFailed,
-			models.PlaybookRunStatusTimedOut,
-			models.PlaybookRunStatusCompleted,
+		Expect(statuses).To(Equal([]clientapi.PlaybookRunStatus{
+			clientapi.PlaybookRunStatusFailed,
+			clientapi.PlaybookRunStatusTimedOut,
+			clientapi.PlaybookRunStatusCompleted,
 		}))
 	})
 

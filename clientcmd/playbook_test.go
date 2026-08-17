@@ -10,14 +10,12 @@ import (
 	"time"
 
 	"github.com/flanksource/clicky"
-	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
 
-	"github.com/flanksource/incident-commander/api"
-	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/sdk"
 )
 
@@ -55,7 +53,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 	ginkgo.It("resolves playbook refs by id, namespace/name, and unambiguous name", func() {
 		firstID := uuid.New()
 		secondID := uuid.New()
-		playbooks := []api.PlaybookListItem{
+		playbooks := []clientapi.PlaybookListItem{
 			{ID: firstID, Namespace: "default", Name: "restart"},
 			{ID: secondID, Namespace: "ops", Name: "diagnose"},
 		}
@@ -96,14 +94,14 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 			Expect(r.URL.Path).To(Equal("/playbook/run/" + runID.String() + "/status"))
 			w.Header().Set("Content-Type", "application/json")
 			Expect(json.NewEncoder(w).Encode(sdk.PlaybookSummary{
-				Run: models.PlaybookRun{
+				Run: clientapi.PlaybookRun{
 					ID:     runID,
-					Status: models.PlaybookRunStatusCompleted,
+					Status: clientapi.PlaybookRunStatusCompleted,
 				},
-				Actions: []models.PlaybookRunAction{{
+				Actions: []clientapi.PlaybookRunAction{{
 					ID:     actionID,
 					Name:   "echo",
-					Status: models.PlaybookActionStatusCompleted,
+					Status: clientapi.PlaybookActionStatus("completed"),
 				}},
 			})).To(Succeed())
 		}))
@@ -112,7 +110,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		var stderr bytes.Buffer
 		summary, err := waitForRemotePlaybookRun(&stderr, sdk.New(server.URL, "fake-token"), runID.String())
 		Expect(err).ToNot(HaveOccurred())
-		Expect(summary.Run.Status).To(Equal(models.PlaybookRunStatusCompleted))
+		Expect(summary.Run.Status).To(Equal(clientapi.PlaybookRunStatusCompleted))
 		Expect(stderr.String()).To(BeEmpty())
 	})
 
@@ -130,7 +128,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 				"columns": []string{"name", "ready"},
 				"rows":    []map[string]any{{"name": "api", "ready": true}},
 			},
-			expectedType: api.PlaybookSQLResult{},
+			expectedType: playbookSQLResult{},
 			expected:     []string{"api", "true"},
 		},
 		{
@@ -144,7 +142,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 				"args":     []string{"-c", "echo ok"},
 				"extra":    map[string]any{"commit": "abc123"},
 			},
-			expectedType: api.PlaybookExecResult{},
+			expectedType: playbookExecResult{},
 			expected:     []string{"Stdout:", "ok", "Stderr:", "warning", "Exit Code: 2"},
 		},
 		{
@@ -155,7 +153,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 				"headers": map[string]string{"Content-Type": "application/json"},
 				"content": `{"ready":true}`,
 			},
-			expectedType: api.PlaybookHTTPResult{},
+			expectedType: playbookHTTPResult{},
 			expected:     []string{"Status: 200", "Content-Type: application/json", `{"ready":true}`},
 		},
 	}
@@ -172,7 +170,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 
 	ginkgo.It("preserves exec action metadata", func() {
 		result := resolveActionResult("exec", actionResults[1].result)
-		Expect(result).To(Equal(api.PlaybookExecResult{
+		Expect(result).To(Equal(playbookExecResult{
 			Stdout: "ok", Stderr: "warning", ExitCode: 2,
 			Path: "/bin/sh", Args: []string{"-c", "echo ok"}, Extra: map[string]any{"commit": "abc123"},
 		}))
@@ -183,12 +181,12 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		var stdout bytes.Buffer
 
 		err := PrintPlaybookActionResults(&stdout, &sdk.PlaybookSummary{
-			Playbook: models.Playbook{Namespace: "ops", Name: "diagnose"},
-			Run:      models.PlaybookRun{ID: uuid.New(), Status: models.PlaybookRunStatusCompleted},
-			Actions: []models.PlaybookRunAction{{
+			Playbook: clientapi.Playbook{Namespace: "ops", Name: "diagnose"},
+			Run:      clientapi.PlaybookRun{ID: uuid.New(), Status: clientapi.PlaybookRunStatusCompleted},
+			Actions: []clientapi.PlaybookRunAction{{
 				ID:     actionID,
 				Name:   "HTTP Request",
-				Status: models.PlaybookActionStatusCompleted,
+				Status: clientapi.PlaybookActionStatus("completed"),
 				Result: map[string]any{"code": 200, "content": "37.59.119.142"},
 			}},
 		})
@@ -208,9 +206,9 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		var stdout bytes.Buffer
 
 		err := PrintPlaybookActionResults(&stdout, &sdk.PlaybookSummary{
-			Actions: []models.PlaybookRunAction{{
+			Actions: []clientapi.PlaybookRunAction{{
 				Name:   "HTTP Request",
-				Status: models.PlaybookActionStatusCompleted,
+				Status: clientapi.PlaybookActionStatus("completed"),
 				Result: map[string]any{"code": 200},
 			}},
 		})
@@ -224,7 +222,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		id := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 		var stdout bytes.Buffer
 
-		err := savePlaybookList(&stdout, []api.PlaybookListItem{{
+		err := savePlaybookList(&stdout, []clientapi.PlaybookListItem{{
 			ID:        id,
 			Category:  "Kubernetes",
 			Namespace: "monitoring",
@@ -247,7 +245,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		id := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 		var stdout bytes.Buffer
 
-		err := savePlaybookList(&stdout, []api.PlaybookListItem{{
+		err := savePlaybookList(&stdout, []clientapi.PlaybookListItem{{
 			ID:          id,
 			Category:    "Kubernetes",
 			Namespace:   "monitoring",
@@ -263,7 +261,7 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 	ginkgo.It("requires config id for cached playbooks with config selectors", func() {
 		id := uuid.MustParse("11111111-1111-1111-1111-111111111111")
 		spec := []byte(`{"configs":[{"types":["Kubernetes::Deployment"]}],"actions":[{"exec":{"script":"echo ok"}}]}`)
-		cmd := newCachedPlaybookCommand(api.PlaybookListItem{
+		cmd := newCachedPlaybookCommand(clientapi.PlaybookListItem{
 			ID:        id,
 			Namespace: "mission-control",
 			Name:      "kubernetes-update-image",
@@ -277,9 +275,9 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 	})
 
 	ginkgo.It("does not send templated defaults unless the cached playbook flag is changed", func() {
-		param := v1.PlaybookParameter{
+		param := clientapi.PlaybookParameter{
 			Name:    "container",
-			Type:    v1.PlaybookParameterTypeText,
+			Type:    "text",
 			Default: `$( .config.config | jq ".spec.template.spec.containers[0].name" )`,
 		}
 		cmd := &cobra.Command{Use: "kubernetes-update-image"}
@@ -287,12 +285,12 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		values := map[string]*string{"container": &value}
 		cmd.Flags().StringVar(values["container"], "container", value, "")
 
-		args, err := cachedPlaybookParamArgs(cmd, []v1.PlaybookParameter{param}, values)
+		args, err := cachedPlaybookParamArgs(cmd, []clientapi.PlaybookParameter{param}, values)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(args).To(BeEmpty())
 
 		Expect(cmd.Flags().Set("container", "api")).To(Succeed())
-		args, err = cachedPlaybookParamArgs(cmd, []v1.PlaybookParameter{param}, values)
+		args, err = cachedPlaybookParamArgs(cmd, []clientapi.PlaybookParameter{param}, values)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(args).To(Equal([]string{"container=api"}))
 	})

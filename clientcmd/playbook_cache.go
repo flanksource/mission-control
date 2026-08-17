@@ -12,8 +12,7 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/incident-commander/api"
-	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/spf13/cobra"
 )
@@ -46,7 +45,7 @@ func populatePlaybookCache(cmd *cobra.Command, dir string) ([]string, error) {
 	return names, nil
 }
 
-func listCachedPlaybooksFromDir(dir string) ([]api.PlaybookListItem, error) {
+func listCachedPlaybooksFromDir(dir string) ([]clientapi.PlaybookListItem, error) {
 	data, err := os.ReadFile(filepath.Join(dir, playbookCacheFile))
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -54,7 +53,7 @@ func listCachedPlaybooksFromDir(dir string) ([]api.PlaybookListItem, error) {
 		}
 		return nil, err
 	}
-	var items []api.PlaybookListItem
+	var items []clientapi.PlaybookListItem
 	if err := json.Unmarshal(data, &items); err != nil {
 		return nil, err
 	}
@@ -76,7 +75,7 @@ func RegisterContextCachedPlaybookCommands(root *cobra.Command) error {
 	return registerCachedPlaybookCommands(Playbook, root, items)
 }
 
-func registerCachedPlaybookCommands(playbookRoot, root *cobra.Command, items []api.PlaybookListItem) error {
+func registerCachedPlaybookCommands(playbookRoot, root *cobra.Command, items []clientapi.PlaybookListItem) error {
 	if playbookRoot == nil {
 		return nil
 	}
@@ -118,7 +117,7 @@ func findChildCommand(parent *cobra.Command, name string) *cobra.Command {
 	return nil
 }
 
-func cachedPlaybookCommandName(runRoot *cobra.Command, item api.PlaybookListItem) string {
+func cachedPlaybookCommandName(runRoot *cobra.Command, item clientapi.PlaybookListItem) string {
 	name := strings.TrimSpace(item.Name)
 	if name == "" {
 		return ""
@@ -132,7 +131,7 @@ func cachedPlaybookCommandName(runRoot *cobra.Command, item api.PlaybookListItem
 	return safeContextName(item.ID.String())
 }
 
-func newCachedPlaybookCommand(item api.PlaybookListItem, name string) *cobra.Command {
+func newCachedPlaybookCommand(item clientapi.PlaybookListItem, name string) *cobra.Command {
 	params := playbookParametersFromItem(item)
 	targetReq := playbookTargetRequirementFromItem(item)
 	values := map[string]*string{}
@@ -220,7 +219,7 @@ func newCachedPlaybookCommand(item api.PlaybookListItem, name string) *cobra.Com
 	return cmd
 }
 
-func cachedPlaybookParamArgs(cmd *cobra.Command, params []v1.PlaybookParameter, values map[string]*string) ([]string, error) {
+func cachedPlaybookParamArgs(cmd *cobra.Command, params []clientapi.PlaybookParameter, values map[string]*string) ([]string, error) {
 	args := make([]string, 0, len(values))
 	for _, p := range params {
 		value := ""
@@ -237,15 +236,15 @@ func cachedPlaybookParamArgs(cmd *cobra.Command, params []v1.PlaybookParameter, 
 	return args, nil
 }
 
-func playbookParameterHasDefault(p v1.PlaybookParameter) bool {
-	return strings.TrimSpace(string(p.Default)) != ""
+func playbookParameterHasDefault(p clientapi.PlaybookParameter) bool {
+	return strings.TrimSpace(p.Default) != ""
 }
 
-func playbookParametersFromItem(item api.PlaybookListItem) []v1.PlaybookParameter {
+func playbookParametersFromItem(item clientapi.PlaybookListItem) []clientapi.PlaybookParameter {
 	if len(item.Parameters) == 0 {
 		return nil
 	}
-	var params []v1.PlaybookParameter
+	var params []clientapi.PlaybookParameter
 	_ = json.Unmarshal(item.Parameters, &params)
 	return params
 }
@@ -256,11 +255,11 @@ type playbookTargetRequirement struct {
 	Check     bool
 }
 
-func playbookTargetRequirementFromItem(item api.PlaybookListItem) playbookTargetRequirement {
+func playbookTargetRequirementFromItem(item clientapi.PlaybookListItem) playbookTargetRequirement {
 	if len(item.Spec) == 0 {
 		return playbookTargetRequirement{}
 	}
-	var spec v1.PlaybookSpec
+	var spec clientapi.PlaybookSpecSummary
 	if err := json.Unmarshal(item.Spec, &spec); err != nil {
 		return playbookTargetRequirement{}
 	}
@@ -318,7 +317,7 @@ func markRequiredPlaybookTargetFlags(cmd *cobra.Command, req playbookTargetRequi
 	}
 }
 
-func validatePlaybookTargetFlags(item api.PlaybookListItem, req playbookTargetRequirement, configID, componentID, checkID string) error {
+func validatePlaybookTargetFlags(item clientapi.PlaybookListItem, req playbookTargetRequirement, configID, componentID, checkID string) error {
 	if !req.any() {
 		return nil
 	}
@@ -342,7 +341,7 @@ func validatePlaybookTargetFlags(item api.PlaybookListItem, req playbookTargetRe
 	return nil
 }
 
-func formatCachedPlaybookLong(item api.PlaybookListItem, params []v1.PlaybookParameter) string {
+func formatCachedPlaybookLong(item clientapi.PlaybookListItem, params []clientapi.PlaybookParameter) string {
 	var b strings.Builder
 	if item.Description != "" {
 		b.WriteString(item.Description)
@@ -377,7 +376,7 @@ func formatCachedPlaybookLong(item api.PlaybookListItem, params []v1.PlaybookPar
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func playbookRef(item api.PlaybookListItem) string {
+func playbookRef(item clientapi.PlaybookListItem) string {
 	if item.Namespace == "" {
 		return item.Name
 	}

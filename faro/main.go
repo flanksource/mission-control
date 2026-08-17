@@ -11,7 +11,6 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/spf13/cobra"
 )
@@ -80,9 +79,6 @@ func main() {
 	if len(commit) > 8 {
 		version = fmt.Sprintf("%v, commit %v, built at %v", version, commit[0:8], date)
 	}
-
-	api.BuildVersion = version
-	api.BuildCommit = commit
 
 	root := &cobra.Command{
 		Use:          "faro",

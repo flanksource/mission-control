@@ -5,19 +5,19 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/google/uuid"
 )
 
 // PlaybookRunListOptions filters playbook execution history.
 type PlaybookRunListOptions struct {
 	PlaybookID *uuid.UUID
-	Statuses   []models.PlaybookRunStatus
+	Statuses   []clientapi.PlaybookRunStatus
 	Limit      int
 }
 
 // ListPlaybookRuns returns top-level playbook runs in reverse chronological order.
-func (c *Client) ListPlaybookRuns(ctx context.Context, opts PlaybookRunListOptions) ([]models.PlaybookRun, error) {
+func (c *Client) ListPlaybookRuns(ctx context.Context, opts PlaybookRunListOptions) ([]clientapi.PlaybookRun, error) {
 	limit := opts.Limit
 	if limit <= 0 {
 		limit = 20
@@ -47,7 +47,7 @@ func (c *Client) ListPlaybookRuns(ctx context.Context, opts PlaybookRunListOptio
 		return nil, postgrestError(response)
 	}
 
-	var runs []models.PlaybookRun
+	var runs []clientapi.PlaybookRun
 	if err := decodeJSON(response, &runs); err != nil {
 		return nil, err
 	}

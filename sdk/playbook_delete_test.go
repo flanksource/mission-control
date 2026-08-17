@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"time"
 
-	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,7 +27,7 @@ var _ = ginkgo.Describe("DeletePlaybook", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(deletedAt).To(BeTemporally("~", time.Now(), time.Second))
 			w.Header().Set("Content-Type", "application/json")
-			Expect(json.NewEncoder(w).Encode([]models.Playbook{{ID: id, Source: models.SourceUI}})).To(Succeed())
+			Expect(json.NewEncoder(w).Encode([]clientapi.Playbook{{ID: id, Source: clientapi.SourceUI}})).To(Succeed())
 		}))
 		defer server.Close()
 

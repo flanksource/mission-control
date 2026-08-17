@@ -11,8 +11,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
@@ -20,7 +19,7 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-func resolvePlaybookRef(playbooks []api.PlaybookListItem, ref string, namespace string) (*api.PlaybookListItem, error) {
+func resolvePlaybookRef(playbooks []clientapi.PlaybookListItem, ref string, namespace string) (*clientapi.PlaybookListItem, error) {
 	if id, err := uuid.Parse(ref); err == nil {
 		for i := range playbooks {
 			if playbooks[i].ID == id {
@@ -39,7 +38,7 @@ func resolvePlaybookRef(playbooks []api.PlaybookListItem, ref string, namespace 
 		return nil, fmt.Errorf("playbook %s not found", ref)
 	}
 
-	var matches []api.PlaybookListItem
+	var matches []clientapi.PlaybookListItem
 	for _, item := range playbooks {
 		if item.Name == ref && item.Namespace == namespace {
 			matches = append(matches, item)
@@ -60,7 +59,7 @@ func resolvePlaybookRef(playbooks []api.PlaybookListItem, ref string, namespace 
 		return &matches[0], nil
 	}
 	if len(matches) > 1 {
-		names := lo.Map(matches, func(item api.PlaybookListItem, _ int) string {
+		names := lo.Map(matches, func(item clientapi.PlaybookListItem, _ int) string {
 			return item.Namespace + "/" + item.Name
 		})
 		return nil, fmt.Errorf("playbook name %q is ambiguous; use namespace/name (matches: %s)", ref, strings.Join(names, ", "))
@@ -186,7 +185,7 @@ func waitForRemotePlaybookRunWithInterval(_ io.Writer, client *sdk.Client, runID
 		}
 
 		runStatus := string(summary.Run.Status)
-		isFinal := lo.Contains(models.PlaybookRunStatusFinalStates, summary.Run.Status)
+		isFinal := summary.Run.Status.Final()
 		if runStatus != lastRunStatus && !isFinal {
 			logger.V(1).Infof("type=playbook_run_status run_id=%s status=%s", runID, runStatus)
 			lastRunStatus = runStatus
@@ -234,7 +233,7 @@ func SaveOutputToWriter(w io.Writer, object any, file string, format string) err
 	return err
 }
 
-func savePlaybookList(w io.Writer, items []api.PlaybookListItem, asJSON bool) error {
+func savePlaybookList(w io.Writer, items []clientapi.PlaybookListItem, asJSON bool) error {
 	var out bytes.Buffer
 	if asJSON {
 		b, _ := json.MarshalIndent(items, "", "  ")

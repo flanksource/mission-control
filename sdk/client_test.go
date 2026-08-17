@@ -10,12 +10,12 @@ import (
 	"testing"
 
 	"github.com/flanksource/commons/har"
-	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	icapi "github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/pkg/httpobservability"
 )
 
@@ -267,14 +267,14 @@ var _ = ginkgo.Describe("Playbook client", func() {
 			Expect(r.URL.Path).To(Equal("/playbook/run/" + runID.String() + "/status"))
 			w.Header().Set("Content-Type", "application/json")
 			Expect(json.NewEncoder(w).Encode(PlaybookSummary{
-				Run: models.PlaybookRun{
+				Run: clientapi.PlaybookRun{
 					ID:     runID,
-					Status: models.PlaybookRunStatusCompleted,
+					Status: clientapi.PlaybookRunStatusCompleted,
 				},
-				Actions: []models.PlaybookRunAction{{
+				Actions: []clientapi.PlaybookRunAction{{
 					ID:     uuid.New(),
 					Name:   "echo",
-					Status: models.PlaybookActionStatusCompleted,
+					Status: clientapi.PlaybookActionStatus("completed"),
 				}},
 			})).To(Succeed())
 		}))
@@ -282,7 +282,7 @@ var _ = ginkgo.Describe("Playbook client", func() {
 
 		summary, err := New(server.URL, "fake-token").GetPlaybookRunStatus(runID.String())
 		Expect(err).ToNot(HaveOccurred())
-		Expect(summary.Run.Status).To(Equal(models.PlaybookRunStatusCompleted))
+		Expect(summary.Run.Status).To(Equal(clientapi.PlaybookRunStatusCompleted))
 		Expect(summary.Actions).To(HaveLen(1))
 	})
 })

@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
@@ -86,27 +86,18 @@ func parsePlaybookManifest(manifest []byte) (*sdk.PlaybookApplyParams, error) {
 		return nil, fmt.Errorf("playbook spec is required")
 	}
 
-	spec, err := v1.ParseAndValidatePlaybookSpec(playbook.Spec)
-	if err != nil {
+	var spec clientapi.PlaybookSpecSummary
+	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
 		return nil, fmt.Errorf("invalid playbook spec: %w", err)
 	}
 	namespace := playbook.Metadata.Namespace
 	if namespace == "" {
 		namespace = "default"
 	}
-	title := spec.Title
-	if title == "" {
-		title = playbook.Metadata.Name
-	}
-
 	return &sdk.PlaybookApplyParams{
-		Namespace:   namespace,
-		Name:        playbook.Metadata.Name,
-		Title:       title,
-		Icon:        spec.Icon,
-		Description: spec.Description,
-		Category:    spec.Category,
-		Spec:        playbook.Spec,
+		Namespace: namespace,
+		Name:      playbook.Metadata.Name,
+		Spec:      playbook.Spec,
 	}, nil
 }
 
