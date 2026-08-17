@@ -15,7 +15,6 @@ import (
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
-	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 	"sigs.k8s.io/yaml"
 )
 
@@ -128,12 +127,11 @@ func readParamFile(file string) (map[string]string, error) {
 	if file == "" {
 		return params, nil
 	}
-	f, err := os.Open(file)
+	data, err := os.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
-	defer f.Close()
-	if err := yamlutil.NewYAMLOrJSONDecoder(f, 1024).Decode(&params); err != nil {
+	if err := yaml.Unmarshal(data, &params); err != nil {
 		return nil, err
 	}
 	return params, nil
