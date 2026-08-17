@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/flanksource/clicky"
-	clickyapi "github.com/flanksource/clicky/api"
 	"github.com/flanksource/incident-commander/clientapi"
+	clicky "github.com/flanksource/incident-commander/clientcli"
+	clickyapi "github.com/flanksource/incident-commander/clientcli/api"
 )
 
 type playbookSQLResult clientapi.PlaybookSQLResult

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/flanksource/clicky/formatters"
 	"github.com/flanksource/incident-commander/clientapi"
+	clicky "github.com/flanksource/incident-commander/clientcli"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -108,10 +108,9 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 
 		Expect(wrapped).To(MatchJSON(original))
 
-		yamlFormatter := formatters.NewYAMLFormatter()
-		originalYAML, err := yamlFormatter.FormatValue(item)
+		originalYAML, err := clicky.Format(item, clicky.FormatOptions{YAML: true})
 		Expect(err).ToNot(HaveOccurred())
-		wrappedYAML, err := yamlFormatter.FormatValue(detail)
+		wrappedYAML, err := clicky.Format(detail, clicky.FormatOptions{YAML: true})
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(wrappedYAML).To(MatchYAML(originalYAML))

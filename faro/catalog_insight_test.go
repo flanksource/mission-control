@@ -6,9 +6,8 @@ import (
 	"net/http/httptest"
 	"time"
 
-	"github.com/flanksource/clicky"
-	clickyAPI "github.com/flanksource/clicky/api"
 	"github.com/flanksource/incident-commander/clientapi"
+	clicky "github.com/flanksource/incident-commander/clientcli"
 	"github.com/flanksource/incident-commander/sdk"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -90,8 +89,6 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 			HaveKey("Severity"),
 			HaveKey("LastObserved"),
 		))
-		clickyAPI.SetTerminalWidth(240)
-		ginkgo.DeferCleanup(clickyAPI.InvalidateTerminalSize)
 		rendered, err := clicky.Format([]catalogInsightSearchHit{row}, clicky.FormatOptions{Pretty: true, NoColor: true})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(rendered).To(And(

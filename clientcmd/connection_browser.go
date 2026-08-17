@@ -20,9 +20,9 @@ import (
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/cdproto/storage"
 	"github.com/chromedp/chromedp"
-	"github.com/flanksource/clicky"
-	"github.com/flanksource/clicky/api"
-	"github.com/flanksource/clicky/api/icons"
+	clicky "github.com/flanksource/incident-commander/clientcli"
+	"github.com/flanksource/incident-commander/clientcli/api"
+	"github.com/flanksource/incident-commander/clientcli/api/icons"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 

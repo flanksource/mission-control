@@ -5,7 +5,7 @@ import (
 	"io"
 	"strings"
 
-	"github.com/flanksource/clicky"
+	clicky "github.com/flanksource/incident-commander/clientcli"
 )
 
 func printClicky(w io.Writer, data any, defaultFormat string) error {

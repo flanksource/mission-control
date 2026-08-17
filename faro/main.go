@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flanksource/clicky"
 	"github.com/flanksource/commons/logger"
+	clicky "github.com/flanksource/incident-commander/clientcli"
 	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/spf13/cobra"
 )

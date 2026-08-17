@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flanksource/clicky"
 	"github.com/flanksource/incident-commander/clientapi"
+	clicky "github.com/flanksource/incident-commander/clientcli"
 	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"

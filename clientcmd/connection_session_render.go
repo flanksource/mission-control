@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	clickyapi "github.com/flanksource/clicky/api"
+	clickyapi "github.com/flanksource/incident-commander/clientcli/api"
 
 	"github.com/flanksource/incident-commander/clientapi"
 )
