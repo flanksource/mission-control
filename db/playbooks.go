@@ -240,6 +240,22 @@ func FindPlaybookByWebhookPath(ctx context.Context, path string) (*models.Playbo
 	return &p, nil
 }
 
+// ValidatePlaybookWebhookPath ensures that a webhook path belongs to at most one playbook.
+func ValidatePlaybookWebhookPath(ctx context.Context, spec *v1.PlaybookSpec, existing *models.Playbook) error {
+	if spec.On == nil || spec.On.Webhook == nil || spec.On.Webhook.Path == "" {
+		return nil
+	}
+
+	other, err := FindPlaybookByWebhookPath(ctx, spec.On.Webhook.Path)
+	if err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+	if other != nil && (existing == nil || other.ID != existing.ID) {
+		return dutyAPI.Errorf(dutyAPI.ECONFLICT, "playbook with webhook path %s already exists", spec.On.Webhook.Path)
+	}
+	return nil
+}
+
 func PersistPlaybookFromCRD(ctx context.Context, obj *v1.Playbook) error {
 	_, err := SavePlaybook(ctx, obj)
 	return err
@@ -273,14 +289,8 @@ func SavePlaybook(ctx context.Context, obj *v1.Playbook) (*models.Playbook, erro
 		playbook.ID = _playbook.ID
 	}
 
-	if obj.Spec.On != nil && obj.Spec.On.Webhook != nil && obj.Spec.On.Webhook.Path != "" {
-		existing, err := FindPlaybookByWebhookPath(ctx, obj.Spec.On.Webhook.Path)
-		if err != nil {
-			return nil, err
-		} else if existing != nil && playbook.ID != existing.ID {
-			// TODO: We can move this unique constraint handling to DB once we upgrade to Postgres 15+
-			return nil, dutyAPI.Errorf(dutyAPI.ECONFLICT, "Playbook with webhook path %s already exists", obj.Spec.On.Webhook.Path)
-		}
+	if err := ValidatePlaybookWebhookPath(ctx, &obj.Spec, playbook); err != nil {
+		return nil, err
 	}
 
 	if playbook.CreatedBy == nil {

@@ -1,7 +1,11 @@
 package permissions_test
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"time"
 
@@ -13,6 +17,7 @@ import (
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/patrickmn/go-cache"
@@ -22,7 +27,10 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/db"
+	echoSrv "github.com/flanksource/incident-commander/echo"
+	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
@@ -1192,6 +1200,93 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(tx.Model(&models.View{}).Where("deleted_at IS NULL").Count(&guestNoPermsViewCount).Error).To(BeNil())
 			Expect(guestNoPermsViewCount).To(Equal(int64(0)), "guest user with no permissions should see no views")
 		})
+	})
+
+	It("enforces playbook apply operations and RLS scopes", func() {
+		user := setup.CreateUserWithRole(DefaultContext, "Scoped Playbook Editor", "scoped-playbook-editor@test.com", policy.RoleGuest)
+		allowed := &models.Playbook{
+			ID:        uuid.New(),
+			Namespace: "default",
+			Name:      "allowed-" + uuid.NewString(),
+			Title:     "Allowed",
+			Source:    models.SourceUI,
+			Spec:      types.JSON(`{"actions":[{"name":"echo","exec":{"script":"echo ok"}}]}`),
+		}
+		blocked := &models.Playbook{
+			ID:        uuid.New(),
+			Namespace: "default",
+			Name:      "blocked-" + uuid.NewString(),
+			Title:     "Blocked",
+			Source:    models.SourceUI,
+			Spec:      types.JSON(`{"actions":[{"name":"echo","exec":{"script":"echo ok"}}]}`),
+		}
+		permissions := []*models.Permission{
+			{
+				ID:          uuid.New(),
+				Name:        "read-allowed-playbook",
+				Namespace:   "default",
+				Action:      policy.ActionRead,
+				Subject:     user.ID.String(),
+				SubjectType: models.PermissionSubjectTypePerson,
+				PlaybookID:  &allowed.ID,
+			},
+			{
+				ID:          uuid.New(),
+				Name:        "update-playbooks",
+				Namespace:   "default",
+				Action:      policy.ActionUpdate,
+				Subject:     user.ID.String(),
+				SubjectType: models.PermissionSubjectTypePerson,
+				Object:      policy.ObjectPlaybooks,
+			},
+		}
+
+		Expect(DefaultContext.DB().Create([]*models.Playbook{allowed, blocked}).Error).ToNot(HaveOccurred())
+		Expect(DefaultContext.DB().Create(permissions).Error).ToNot(HaveOccurred())
+		Expect(rbac.ReloadPolicy()).ToNot(HaveOccurred())
+		auth.InvalidateRLSCacheForUser(user.ID.String())
+		DeferCleanup(func() {
+			auth.InvalidateRLSCacheForUser(user.ID.String())
+			Expect(DefaultContext.DB().Delete(permissions).Error).ToNot(HaveOccurred())
+			Expect(DefaultContext.DB().Unscoped().Delete([]*models.Playbook{allowed, blocked}).Error).ToNot(HaveOccurred())
+			Expect(DefaultContext.DB().Delete(user).Error).ToNot(HaveOccurred())
+			Expect(rbac.ReloadPolicy()).ToNot(HaveOccurred())
+		})
+
+		apply := func(target *models.Playbook) *httptest.ResponseRecorder {
+			requestBody, err := json.Marshal(clientapi.PlaybookApplyRequest{
+				Namespace: target.Namespace,
+				Name:      target.Name,
+				Spec:      json.RawMessage(`{"title":"Changed","actions":[{"name":"echo","exec":{"script":"echo changed"}}]}`),
+			})
+			Expect(err).ToNot(HaveOccurred())
+			req := httptest.NewRequest(http.MethodPost, "/playbook/apply", bytes.NewReader(requestBody)).
+				WithContext(DefaultContext.WithUser(user))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			recorder := httptest.NewRecorder()
+			e := echo.New()
+			c := e.NewContext(req, recorder)
+			Expect(echoSrv.RLSMiddleware(playbook.HandlePlaybookApply)(c)).To(Succeed())
+			return recorder
+		}
+
+		recorder := apply(blocked)
+		Expect(recorder.Code).To(Equal(http.StatusForbidden))
+
+		var persisted models.Playbook
+		Expect(DefaultContext.DB().First(&persisted, "id = ?", blocked.ID).Error).ToNot(HaveOccurred())
+		Expect(persisted.Title).To(Equal("Blocked"))
+
+		permissions[1].Action = policy.ActionCreate
+		Expect(DefaultContext.DB().Model(permissions[1]).Update("action", policy.ActionCreate).Error).ToNot(HaveOccurred())
+		Expect(rbac.ReloadPolicy()).ToNot(HaveOccurred())
+		auth.InvalidateRLSCacheForUser(user.ID.String())
+
+		recorder = apply(allowed)
+		Expect(recorder.Code).To(Equal(http.StatusForbidden))
+		persisted = models.Playbook{}
+		Expect(DefaultContext.DB().First(&persisted, "id = ?", allowed.ID).Error).ToNot(HaveOccurred())
+		Expect(persisted.Title).To(Equal("Allowed"))
 	})
 
 	Describe("View ABAC Permissions", func() {
