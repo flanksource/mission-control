@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flanksource/duty"
-	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/spf13/cobra"
 )
@@ -43,7 +41,7 @@ type whoamiContext struct {
 	Error        string   `json:"error,omitempty"`
 }
 
-type whoamiDatabase struct {
+type WhoamiDatabase struct {
 	Configured bool   `json:"configured"`
 	Status     string `json:"status"`
 	URL        string `json:"url,omitempty"`
@@ -68,16 +66,29 @@ type whoamiAuth struct {
 	Error         string             `json:"error,omitempty"`
 }
 
-type accessTokenStatus struct {
-	ID          string `json:"id,omitempty"`
-	PersonID    string `json:"person_id,omitempty"`
-	ExpiresAt   string `json:"expires_at,omitempty"`
-	AutoRenew   bool   `json:"auto_renew"`
-	Renewed     bool   `json:"renewed"`
-	Status      string `json:"status"`
-	Error       string `json:"error,omitempty"`
-	expiresTime *time.Time
+type AccessTokenStatus struct {
+	ID          string     `json:"id,omitempty"`
+	PersonID    string     `json:"person_id,omitempty"`
+	ExpiresAt   string     `json:"expires_at,omitempty"`
+	AutoRenew   bool       `json:"auto_renew"`
+	Renewed     bool       `json:"renewed"`
+	Status      string     `json:"status"`
+	Error       string     `json:"error,omitempty"`
+	ExpiresTime *time.Time `json:"-"`
 }
+
+type whoamiDatabase = WhoamiDatabase
+type accessTokenStatus = AccessTokenStatus
+
+// LocalWhoamiOps provides the database checks available only in the full server binary.
+type LocalWhoamiOps interface {
+	DefaultDBConnection() string
+	ProbeDatabase(string) WhoamiDatabase
+	InspectAccessToken(string, string) *AccessTokenStatus
+}
+
+// LocalWhoami is registered by the full server binary and remains nil in Faro.
+var LocalWhoami LocalWhoamiOps
 
 func runWhoami(cmd *cobra.Command, _ []string) error {
 	cfg, err := LoadConfig()
@@ -134,7 +145,10 @@ func resolvedDBConnection(mcCtx *MCContext) string {
 	if mcCtx != nil && mcCtx.DB != "" {
 		return mcCtx.DB
 	}
-	return dutyAPI.DefaultConfig.ReadEnv().ConnectionString
+	if LocalWhoami != nil {
+		return LocalWhoami.DefaultDBConnection()
+	}
+	return ""
 }
 
 func probeDatabase(conn string) whoamiDatabase {
@@ -146,39 +160,12 @@ func probeDatabase(conn string) whoamiDatabase {
 	}
 
 	out.URL = redactURL(conn)
-	start := time.Now()
-	db, err := duty.NewDB(conn)
-	if err != nil {
+	if LocalWhoami == nil {
 		out.Status = "error"
-		out.Error = err.Error()
+		out.Error = "database probing is unavailable in this binary"
 		return out
 	}
-	defer db.Close()
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(0)
-
-	ctx, cancel := gocontext.WithTimeout(gocontext.Background(), 10*time.Second)
-	defer cancel()
-	if err := db.PingContext(ctx); err != nil {
-		out.Status = "error"
-		out.Error = err.Error()
-		out.Latency = time.Since(start).Round(time.Millisecond).String()
-		return out
-	}
-
-	var database, user string
-	if err := db.QueryRowContext(ctx, "SELECT current_database(), current_user").Scan(&database, &user); err != nil {
-		out.Status = "error"
-		out.Error = err.Error()
-		out.Latency = time.Since(start).Round(time.Millisecond).String()
-		return out
-	}
-
-	out.Status = "ok"
-	out.Database = database
-	out.User = user
-	out.Latency = time.Since(start).Round(time.Millisecond).String()
-	return out
+	return LocalWhoami.ProbeDatabase(conn)
 }
 
 func probeAuth(parent gocontext.Context, cfg *MCConfig, mcCtx *MCContext, dbConn string, refresh bool) whoamiAuth {
@@ -253,12 +240,19 @@ func probeAuth(parent gocontext.Context, cfg *MCConfig, mcCtx *MCContext, dbConn
 
 	after := inspectAccessToken(dbConn, token)
 	if after != nil {
-		if before != nil && before.expiresTime != nil && after.expiresTime != nil && after.expiresTime.After(*before.expiresTime) {
+		if before != nil && before.ExpiresTime != nil && after.ExpiresTime != nil && after.ExpiresTime.After(*before.ExpiresTime) {
 			after.Renewed = true
 		}
 		out.AccessToken = after
 	}
 	return out
+}
+
+func inspectAccessToken(conn, token string) *accessTokenStatus {
+	if LocalWhoami == nil || conn == "" || token == "" {
+		return nil
+	}
+	return LocalWhoami.InspectAccessToken(conn, token)
 }
 
 func callWhoami(parent gocontext.Context, server, token string) (map[string]any, []string, string, int, error) {
