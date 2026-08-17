@@ -4,384 +4,230 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/types"
-	"github.com/samber/lo"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/flanksource/incident-commander/clientapi"
 	"sigs.k8s.io/yaml"
-
-	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
-func envVar(val string) types.EnvVar {
-	return types.EnvVar{ValueStatic: val}
+type manifestMetadata struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
 }
 
-func envVarPtr(val string) *types.EnvVar {
-	if val == "" {
+type connectionManifest struct {
+	APIVersion string           `json:"apiVersion"`
+	Kind       string           `json:"kind"`
+	Metadata   manifestMetadata `json:"metadata"`
+	Spec       map[string]any   `json:"spec"`
+}
+
+type secretManifest struct {
+	APIVersion string            `json:"apiVersion"`
+	Kind       string            `json:"kind"`
+	Metadata   manifestMetadata  `json:"metadata"`
+	StringData map[string]string `json:"stringData"`
+}
+
+func envVar(value string) clientapi.EnvVar {
+	return clientapi.EnvVar{ValueStatic: value}
+}
+
+func envVarPtr(value string) *clientapi.EnvVar {
+	if value == "" {
 		return nil
 	}
-	return &types.EnvVar{ValueStatic: val}
+	return &clientapi.EnvVar{ValueStatic: value}
 }
 
-func envVarSecretRef(secretName, key string) types.EnvVar {
-	return types.EnvVar{
-		ValueFrom: &types.EnvVarSource{
-			SecretKeyRef: &types.SecretKeySelector{
-				LocalObjectReference: types.LocalObjectReference{Name: secretName},
-				Key:                  key,
-			},
+func envVarSecretRef(secretName, key string) clientapi.EnvVar {
+	return clientapi.EnvVar{
+		ValueFrom: &clientapi.EnvVarSource{
+			SecretKeyRef: &clientapi.SecretKeySelector{Name: secretName, Key: key},
 		},
 	}
 }
 
-func buildConnectionCRD(flags *ConnectionFlags) v1.Connection {
-	conn := v1.Connection{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "mission-control.flanksource.com/v1",
-			Kind:       "Connection",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      flags.Name,
-			Namespace: flags.Namespace,
-		},
+func buildConnectionCRD(flags *ConnectionFlags) connectionManifest {
+	manifest := connectionManifest{
+		APIVersion: "mission-control.flanksource.com/v1",
+		Kind:       "Connection",
+		Metadata:   manifestMetadata{Name: flags.Name, Namespace: flags.Namespace},
+		Spec:       make(map[string]any),
 	}
 
 	switch flags.Type {
-	case models.ConnectionTypeAWS:
-		conn.Spec.AWS = buildAWSSpec(flags)
-
-	case models.ConnectionTypeAWSKMS:
-		conn.Spec.AWSKMS = &v1.ConnectionAWSKMS{
-			ConnectionAWS: *buildAWSSpec(flags),
-			KeyID:         flags.KeyID,
+	case clientapi.ConnectionTypeAWS:
+		manifest.Spec["aws"] = buildAWSSpec(flags)
+	case clientapi.ConnectionTypeAWSKMS:
+		spec := buildAWSSpec(flags)
+		spec["keyID"] = flags.KeyID
+		manifest.Spec["awskms"] = spec
+	case clientapi.ConnectionTypeS3:
+		spec := buildAWSSpec(flags)
+		spec["bucket"] = flags.Bucket
+		spec["usePathStyle"] = flags.UsePathStyle
+		manifest.Spec["s3"] = spec
+	case clientapi.ConnectionTypeAzure:
+		manifest.Spec["azure"] = buildAzureSpec(flags)
+	case clientapi.ConnectionTypeAzureKeyVault:
+		spec := buildAzureSpec(flags)
+		spec["keyID"] = flags.KeyID
+		manifest.Spec["azureKeyVault"] = spec
+	case clientapi.ConnectionTypeAzureDevops:
+		manifest.Spec["azureDevops"] = map[string]any{
+			"url": flags.URL, "organization": flags.Organization, "personalAccessToken": envVar(flags.PersonalAccessToken),
 		}
-
-	case models.ConnectionTypeS3:
-		conn.Spec.S3 = &v1.ConnectionAWSS3{
-			ConnectionAWS: *buildAWSSpec(flags),
-			Bucket:        flags.Bucket,
-			UsePathStyle:  flags.UsePathStyle,
+	case clientapi.ConnectionTypeGCP:
+		manifest.Spec["gcp"] = buildGCPSpec(flags)
+	case clientapi.ConnectionTypeGCS:
+		spec := buildGCPSpec(flags)
+		spec["bucket"] = flags.Bucket
+		manifest.Spec["gcs"] = spec
+	case clientapi.ConnectionTypeGCPKMS:
+		spec := buildGCPSpec(flags)
+		spec["keyID"] = flags.KeyID
+		manifest.Spec["gcpkms"] = spec
+	case clientapi.ConnectionTypePostgres:
+		manifest.Spec["postgres"] = buildDatabaseSpec(flags, true)
+	case clientapi.ConnectionTypeMySQL:
+		manifest.Spec["mysql"] = buildDatabaseSpec(flags, true)
+	case clientapi.ConnectionTypeSQLServer:
+		spec := buildDatabaseSpec(flags, false)
+		spec["trustServerCertificate"] = flags.TrustServerCertificate
+		manifest.Spec["mssql"] = spec
+	case clientapi.ConnectionTypeMongo:
+		spec := buildDatabaseSpec(flags, true)
+		spec["replicaSet"] = flags.ReplicaSet
+		manifest.Spec["mongo"] = spec
+	case clientapi.ConnectionTypeSlack:
+		manifest.Spec["slack"] = map[string]any{
+			"token": envVar(flags.Token), "channel": flags.Channel, "botName": flags.BotName,
+			"color": flags.Color, "icon": flags.Icon, "thread_ts": flags.ThreadTS, "title": flags.Title,
 		}
-
-	case models.ConnectionTypeAzure:
-		conn.Spec.Azure = &v1.ConnectionAzure{
-			ClientID:     envVar(flags.ClientID),
-			ClientSecret: envVar(flags.ClientSecret),
-			TenantID:     envVar(flags.TenantID),
+	case clientapi.ConnectionTypeDiscord:
+		manifest.Spec["discord"] = map[string]any{"webhookID": flags.WebhookID, "token": flags.Token}
+	case clientapi.ConnectionTypeEmail:
+		manifest.Spec["smtp"] = map[string]any{
+			"host": flags.Host, "username": envVar(flags.Username), "password": envVar(flags.Password),
+			"port": flags.Port, "fromAddress": flags.FromAddress, "fromName": flags.FromName,
+			"subject": flags.Subject, "auth": flags.Auth, "insecureTLS": flags.InsecureTLS,
 		}
-
-	case models.ConnectionTypeAzureKeyVault:
-		conn.Spec.AzureKeyVault = &v1.ConnectionAzureKeyVault{
-			ConnectionAzure: v1.ConnectionAzure{
-				ClientID:     envVar(flags.ClientID),
-				ClientSecret: envVar(flags.ClientSecret),
-				TenantID:     envVar(flags.TenantID),
-			},
-			KeyID: flags.KeyID,
+	case clientapi.ConnectionTypeTelegram:
+		manifest.Spec["telegram"] = map[string]any{"token": envVar(flags.Token), "chats": envVar(flags.Chats)}
+	case clientapi.ConnectionTypeNtfy:
+		manifest.Spec["ntfy"] = map[string]any{
+			"host": flags.Host, "topic": flags.Topic, "username": envVar(flags.Username), "password": envVar(flags.Password),
 		}
-
-	case models.ConnectionTypeAzureDevops:
-		conn.Spec.AzureDevops = &v1.ConnectionAzureDevops{
-			URL:                 flags.URL,
-			Organization:        flags.Organization,
-			PersonalAccessToken: envVar(flags.PersonalAccessToken),
+	case clientapi.ConnectionTypePushbullet:
+		manifest.Spec["pushbullet"] = map[string]any{"token": envVar(flags.Token), "targets": flags.Targets}
+	case clientapi.ConnectionTypePushover:
+		manifest.Spec["pushover"] = map[string]any{"token": envVar(flags.Token), "user": flags.User}
+	case clientapi.ConnectionTypeHTTP:
+		manifest.Spec["http"] = map[string]any{
+			"url": flags.URL, "insecureTLS": flags.InsecureTLS, "username": envVarPtr(flags.Username),
+			"password": envVarPtr(flags.Password), "bearer": envVar(flags.Bearer),
 		}
-
-	case models.ConnectionTypeGCP:
-		conn.Spec.GCP = &v1.ConnectionGCP{
-			Endpoint:    envVar(flags.URL),
-			Certificate: envVar(flags.Certificate),
+	case clientapi.ConnectionTypeGit:
+		manifest.Spec["git"] = map[string]any{
+			"url": flags.URL, "ref": flags.Ref, "certificate": envVarPtr(flags.Certificate),
+			"username": envVarPtr(flags.Username), "password": envVarPtr(flags.Password),
 		}
-
-	case models.ConnectionTypeGCS:
-		conn.Spec.GCS = &v1.ConnectionGCS{
-			ConnectionGCP: v1.ConnectionGCP{
-				Endpoint:    envVar(flags.URL),
-				Certificate: envVar(flags.Certificate),
-			},
-			Bucket: flags.Bucket,
+	case clientapi.ConnectionTypeGithub:
+		manifest.Spec["github"] = map[string]any{"url": flags.URL, "personalAccessToken": envVar(flags.PersonalAccessToken)}
+	case clientapi.ConnectionTypeGitlab:
+		manifest.Spec["gitlab"] = map[string]any{"url": flags.URL, "personalAccessToken": envVar(flags.PersonalAccessToken)}
+	case clientapi.ConnectionTypeKubernetes:
+		manifest.Spec["kubernetes"] = map[string]any{"certificate": envVar(flags.Certificate)}
+	case clientapi.ConnectionTypeFolder:
+		manifest.Spec["folder"] = map[string]any{"path": flags.Path}
+	case clientapi.ConnectionTypeSFTP:
+		manifest.Spec["sftp"] = map[string]any{
+			"host": envVar(flags.Host), "username": envVar(flags.Username), "password": envVar(flags.Password),
+			"port": flags.Port, "path": flags.Path,
 		}
-
-	case models.ConnectionTypeGCPKMS:
-		conn.Spec.GCPKMS = &v1.ConnectionGCPKMS{
-			ConnectionGCP: v1.ConnectionGCP{
-				Endpoint:    envVar(flags.URL),
-				Certificate: envVar(flags.Certificate),
-			},
-			KeyID: flags.KeyID,
+	case clientapi.ConnectionTypeSMB:
+		manifest.Spec["smb"] = map[string]any{
+			"server": envVar(flags.Host), "username": envVar(flags.Username), "password": envVar(flags.Password),
 		}
-
-	case models.ConnectionTypePostgres:
-		conn.Spec.Postgres = &v1.ConnectionPostgres{
-			URL:         envVar(flags.URL),
-			Host:        envVar(flags.Host),
-			Username:    envVar(flags.Username),
-			Password:    envVar(flags.Password),
-			Database:    envVar(flags.Database),
-			InsecureTLS: flags.InsecureTLS,
+	case clientapi.ConnectionTypePrometheus:
+		manifest.Spec["prometheus"] = map[string]any{
+			"url": envVar(flags.URL), "username": envVar(flags.Username),
+			"password": envVar(flags.Password), "bearer": envVar(flags.Bearer),
 		}
-
-	case models.ConnectionTypeMySQL:
-		conn.Spec.MySQL = &v1.ConnectionMySQL{
-			URL:         envVar(flags.URL),
-			Host:        envVar(flags.Host),
-			Username:    envVar(flags.Username),
-			Password:    envVar(flags.Password),
-			Database:    envVar(flags.Database),
-			InsecureTLS: flags.InsecureTLS,
+	case clientapi.ConnectionTypeLoki:
+		manifest.Spec["loki"] = map[string]any{
+			"url": flags.URL, "username": envVar(flags.Username), "password": envVar(flags.Password),
 		}
-
-	case models.ConnectionTypeSQLServer:
-		conn.Spec.MSSQL = &v1.ConnectionMSSQL{
-			URL:                    envVar(flags.URL),
-			Host:                   envVar(flags.Host),
-			Username:               envVar(flags.Username),
-			Password:               envVar(flags.Password),
-			Database:               envVar(flags.Database),
-			TrustServerCertificate: lo.ToPtr(flags.TrustServerCertificate),
+	case clientapi.ConnectionTypeOpenAI:
+		manifest.Spec["openai"] = buildAIModelSpec(flags, true)
+	case clientapi.ConnectionTypeAnthropic:
+		manifest.Spec["anthropic"] = buildAIModelSpec(flags, true)
+	case clientapi.ConnectionTypeOllama:
+		manifest.Spec["ollama"] = buildAIModelSpec(flags, true)
+	case clientapi.ConnectionTypeGemini:
+		manifest.Spec["gemini"] = buildAIModelSpec(flags, false)
+	case clientapi.ConnectionTypeElasticSearch:
+		manifest.Spec["elasticsearch"] = map[string]any{
+			"url": flags.URL, "username": envVar(flags.Username), "password": envVar(flags.Password), "insecureTLS": flags.InsecureTLS,
 		}
-
-	case models.ConnectionTypeMongo:
-		conn.Spec.Mongo = &v1.ConnectionMongo{
-			URL:         envVar(flags.URL),
-			Host:        envVar(flags.Host),
-			Username:    envVar(flags.Username),
-			Password:    envVar(flags.Password),
-			Database:    envVar(flags.Database),
-			ReplicaSet:  flags.ReplicaSet,
-			InsecureTLS: flags.InsecureTLS,
-		}
-
-	case models.ConnectionTypeSlack:
-		conn.Spec.Slack = &v1.ConnectionSlack{
-			Token:    envVar(flags.Token),
-			Channel:  flags.Channel,
-			BotName:  flags.BotName,
-			Color:    flags.Color,
-			Icon:     flags.Icon,
-			ThreadTS: flags.ThreadTS,
-			Title:    flags.Title,
-		}
-
-	case models.ConnectionTypeDiscord:
-		conn.Spec.Discord = &v1.ConnectionDiscord{
-			WebhookID: flags.WebhookID,
-			Token:     flags.Token,
-		}
-
-	case models.ConnectionTypeEmail:
-		conn.Spec.SMTP = &v1.ConnectionSMTP{
-			Host:        flags.Host,
-			Username:    envVar(flags.Username),
-			Password:    envVar(flags.Password),
-			Port:        flags.Port,
-			FromAddress: flags.FromAddress,
-			FromName:    flags.FromName,
-			Subject:     flags.Subject,
-			Auth:        v1.SMTPAuth(flags.Auth),
-			InsecureTLS: flags.InsecureTLS,
-		}
-
-	case models.ConnectionTypeTelegram:
-		conn.Spec.Telegram = &v1.ConnectionTelegram{
-			Token: envVar(flags.Token),
-			Chats: envVar(flags.Chats),
-		}
-
-	case models.ConnectionTypeNtfy:
-		conn.Spec.Ntfy = &v1.ConnectionNtfy{
-			Host:     flags.Host,
-			Topic:    flags.Topic,
-			Username: envVar(flags.Username),
-			Password: envVar(flags.Password),
-		}
-
-	case models.ConnectionTypePushbullet:
-		conn.Spec.Pushbullet = &v1.ConnectionPushbullet{
-			Token:   envVar(flags.Token),
-			Targets: flags.Targets,
-		}
-
-	case models.ConnectionTypePushover:
-		conn.Spec.Pushover = &v1.ConnectionPushover{
-			Token: envVar(flags.Token),
-			User:  flags.User,
-		}
-
-	case models.ConnectionTypeHTTP:
-		conn.Spec.HTTP = &v1.ConnectionHTTP{
-			URL:         flags.URL,
-			InsecureTLS: flags.InsecureTLS,
-			Username:    envVarPtr(flags.Username),
-			Password:    envVarPtr(flags.Password),
-			Bearer:      envVar(flags.Bearer),
-		}
-
-	case models.ConnectionTypeGit:
-		conn.Spec.Git = &v1.ConnectionGit{
-			URL:         flags.URL,
-			Ref:         flags.Ref,
-			Certificate: envVarPtr(flags.Certificate),
-			Username:    envVarPtr(flags.Username),
-			Password:    envVarPtr(flags.Password),
-		}
-
-	case models.ConnectionTypeGithub:
-		conn.Spec.GitHub = &v1.ConnectionGitHub{
-			URL:                 flags.URL,
-			PersonalAccessToken: envVar(flags.PersonalAccessToken),
-		}
-
-	case models.ConnectionTypeGitlab:
-		conn.Spec.GitLab = &v1.ConnectionGitLab{
-			URL:                 flags.URL,
-			PersonalAccessToken: envVar(flags.PersonalAccessToken),
-		}
-
-	case models.ConnectionTypeKubernetes:
-		conn.Spec.Kubernetes = &v1.ConnectionKubernetes{
-			Certificate: envVar(flags.Certificate),
-		}
-
-	case models.ConnectionTypeFolder:
-		conn.Spec.Folder = &v1.ConnectionFolder{
-			Path: flags.Path,
-		}
-
-	case models.ConnectionTypeSFTP:
-		conn.Spec.SFTP = &v1.ConnectionSFTP{
-			Host:     envVar(flags.Host),
-			Username: envVar(flags.Username),
-			Password: envVar(flags.Password),
-			Port:     flags.Port,
-			Path:     flags.Path,
-		}
-
-	case models.ConnectionTypeSMB:
-		conn.Spec.SMB = &v1.ConnectionSMB{
-			Server:   envVar(flags.Host),
-			Username: envVar(flags.Username),
-			Password: envVar(flags.Password),
-		}
-
-	case models.ConnectionTypePrometheus:
-		conn.Spec.Prometheus = &v1.ConnectionPrometheus{
-			URL:    envVar(flags.URL),
-			Bearer: envVar(flags.Bearer),
-		}
-		conn.Spec.Prometheus.Authentication.Username = envVar(flags.Username)
-		conn.Spec.Prometheus.Authentication.Password = envVar(flags.Password)
-
-	case models.ConnectionTypeLoki:
-		conn.Spec.Loki = &v1.ConnectionLoki{
-			URL:      flags.URL,
-			Username: envVar(flags.Username),
-			Password: envVar(flags.Password),
-		}
-
-	case models.ConnectionTypeOpenAI:
-		conn.Spec.OpenAI = &v1.ConnectionOpenAI{
-			ApiKey: envVar(flags.ApiKey),
-		}
-		if flags.URL != "" {
-			conn.Spec.OpenAI.BaseURL = &types.EnvVar{ValueStatic: flags.URL}
-		}
-		if flags.Model != "" {
-			conn.Spec.OpenAI.Model = &flags.Model
-		}
-
-	case models.ConnectionTypeAnthropic:
-		conn.Spec.Anthropic = &v1.ConnectionAnthropic{
-			ApiKey: envVar(flags.ApiKey),
-		}
-		if flags.URL != "" {
-			conn.Spec.Anthropic.BaseURL = &types.EnvVar{ValueStatic: flags.URL}
-		}
-		if flags.Model != "" {
-			conn.Spec.Anthropic.Model = &flags.Model
-		}
-
-	case models.ConnectionTypeOllama:
-		conn.Spec.Ollama = &v1.ConnectionOllama{
-			BaseURL: envVar(flags.URL),
-			ApiKey:  envVar(flags.ApiKey),
-		}
-		if flags.Model != "" {
-			conn.Spec.Ollama.Model = &flags.Model
-		}
-
-	case models.ConnectionTypeGemini:
-		conn.Spec.Gemini = &v1.ConnectionGemini{
-			ApiKey: envVar(flags.ApiKey),
-		}
-		if flags.Model != "" {
-			conn.Spec.Gemini.Model = &flags.Model
-		}
-
-	case models.ConnectionTypeElasticSearch:
-		conn.Spec.Elasticsearch = &v1.ConnectionElasticsearch{
-			URL:         flags.URL,
-			Username:    envVar(flags.Username),
-			Password:    envVar(flags.Password),
-			InsecureTLS: flags.InsecureTLS,
-		}
-
-	case models.ConnectionTypeRedis:
-		conn.Spec.Redis = &v1.ConnectionRedis{
-			URL:      flags.URL,
-			Username: envVar(flags.Username),
-			Password: envVar(flags.Password),
+	case clientapi.ConnectionTypeRedis:
+		manifest.Spec["redis"] = map[string]any{
+			"url": flags.URL, "username": envVar(flags.Username), "password": envVar(flags.Password),
 		}
 	}
 
-	return conn
+	return manifest
 }
 
-func marshalConnectionCRD(conn v1.Connection) ([]byte, error) {
-	// Marshal to JSON first, then clean up empty fields via map manipulation
-	// to avoid noise from deprecated zero-value struct fields on ConnectionSpec
-	jsonBytes, err := json.Marshal(conn)
-	if err != nil {
-		return nil, err
-	}
-
-	var raw map[string]any
-	if err := json.Unmarshal(jsonBytes, &raw); err != nil {
-		return nil, err
-	}
-
-	cleanEmptyFields(raw)
-	delete(raw, "status")
-
-	if metadata, ok := raw["metadata"].(map[string]any); ok {
-		delete(metadata, "creationTimestamp")
-	}
-
-	return yaml.Marshal(raw)
-}
-
-func buildAWSSpec(flags *ConnectionFlags) *v1.ConnectionAWS {
-	aws := &v1.ConnectionAWS{
-		URL:    envVar(flags.URL),
-		Region: flags.Region,
-	}
+func buildAWSSpec(flags *ConnectionFlags) map[string]any {
+	spec := map[string]any{"url": envVar(flags.URL), "region": flags.Region}
 	if flags.FromProfile != "" {
-		aws.AccessKey = envVarSecretRef(flags.Name, "AWS_ACCESS_KEY_ID")
-		aws.SecretKey = envVarSecretRef(flags.Name, "AWS_SECRET_ACCESS_KEY")
+		spec["accessKey"] = envVarSecretRef(flags.Name, "AWS_ACCESS_KEY_ID")
+		spec["secretKey"] = envVarSecretRef(flags.Name, "AWS_SECRET_ACCESS_KEY")
 		if flags.SessionToken != "" {
-			aws.SessionToken = envVarSecretRef(flags.Name, "AWS_SESSION_TOKEN")
+			spec["sessionToken"] = envVarSecretRef(flags.Name, "AWS_SESSION_TOKEN")
 		}
 	} else {
-		aws.AccessKey = envVar(flags.AccessKey)
-		aws.SecretKey = envVar(flags.SecretKey)
-		aws.Profile = flags.Profile
+		spec["accessKey"] = envVar(flags.AccessKey)
+		spec["secretKey"] = envVar(flags.SecretKey)
+		spec["profile"] = flags.Profile
 	}
-	return aws
+	return spec
 }
 
-func buildSecret(flags *ConnectionFlags) corev1.Secret {
+func buildAzureSpec(flags *ConnectionFlags) map[string]any {
+	return map[string]any{
+		"clientID": envVar(flags.ClientID), "clientSecret": envVar(flags.ClientSecret), "tenantID": envVar(flags.TenantID),
+	}
+}
+
+func buildGCPSpec(flags *ConnectionFlags) map[string]any {
+	return map[string]any{"endpoint": envVar(flags.URL), "certificate": envVar(flags.Certificate)}
+}
+
+func buildDatabaseSpec(flags *ConnectionFlags, insecureTLS bool) map[string]any {
+	spec := map[string]any{
+		"url": envVar(flags.URL), "host": envVar(flags.Host), "username": envVar(flags.Username),
+		"password": envVar(flags.Password), "database": envVar(flags.Database),
+	}
+	if insecureTLS {
+		spec["insecureTLS"] = flags.InsecureTLS
+	}
+	return spec
+}
+
+func buildAIModelSpec(flags *ConnectionFlags, includeURL bool) map[string]any {
+	spec := map[string]any{"apiKey": envVar(flags.ApiKey), "model": flags.Model}
+	if includeURL {
+		spec["url"] = envVar(flags.URL)
+	}
+	return spec
+}
+
+func marshalConnectionCRD(manifest connectionManifest) ([]byte, error) {
+	return marshalManifest(manifest)
+}
+
+func buildSecret(flags *ConnectionFlags) secretManifest {
 	data := map[string]string{
 		"AWS_ACCESS_KEY_ID":     flags.AccessKey,
 		"AWS_SECRET_ACCESS_KEY": flags.SecretKey,
@@ -389,76 +235,68 @@ func buildSecret(flags *ConnectionFlags) corev1.Secret {
 	if flags.SessionToken != "" {
 		data["AWS_SESSION_TOKEN"] = flags.SessionToken
 	}
-	return corev1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Secret",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      flags.Name,
-			Namespace: flags.Namespace,
-		},
+	return secretManifest{
+		APIVersion: "v1",
+		Kind:       "Secret",
+		Metadata:   manifestMetadata{Name: flags.Name, Namespace: flags.Namespace},
 		StringData: data,
 	}
 }
 
+func marshalManifest(manifest any) ([]byte, error) {
+	jsonBytes, err := json.Marshal(manifest)
+	if err != nil {
+		return nil, err
+	}
+	var raw map[string]any
+	if err := json.Unmarshal(jsonBytes, &raw); err != nil {
+		return nil, err
+	}
+	cleanEmptyFields(raw)
+	return yaml.Marshal(raw)
+}
+
 func marshalDryRunOutput(flags *ConnectionFlags) ([]byte, error) {
-	conn := buildConnectionCRD(flags)
-	connYAML, err := marshalConnectionCRD(conn)
+	connectionYAML, err := marshalConnectionCRD(buildConnectionCRD(flags))
 	if err != nil {
 		return nil, fmt.Errorf("marshaling connection: %w", err)
 	}
-
 	if flags.FromProfile == "" {
-		return connYAML, nil
+		return connectionYAML, nil
 	}
 
-	secret := buildSecret(flags)
-	secretJSON, err := json.Marshal(secret)
-	if err != nil {
-		return nil, fmt.Errorf("marshaling secret: %w", err)
-	}
-	var raw map[string]any
-	if err := json.Unmarshal(secretJSON, &raw); err != nil {
-		return nil, fmt.Errorf("unmarshaling secret: %w", err)
-	}
-	cleanEmptyFields(raw)
-	delete(raw, "status")
-	if metadata, ok := raw["metadata"].(map[string]any); ok {
-		delete(metadata, "creationTimestamp")
-	}
-	secretYAML, err := yaml.Marshal(raw)
+	secretYAML, err := marshalManifest(buildSecret(flags))
 	if err != nil {
 		return nil, fmt.Errorf("marshaling secret YAML: %w", err)
 	}
-	return append(secretYAML, append([]byte("---\n"), connYAML...)...), nil
+	return append(secretYAML, append([]byte("---\n"), connectionYAML...)...), nil
 }
 
-func cleanEmptyFields(m map[string]any) {
-	for k, v := range m {
-		switch val := v.(type) {
+func cleanEmptyFields(values map[string]any) {
+	for key, value := range values {
+		switch typed := value.(type) {
 		case map[string]any:
-			cleanEmptyFields(val)
-			if len(val) == 0 {
-				delete(m, k)
+			cleanEmptyFields(typed)
+			if len(typed) == 0 {
+				delete(values, key)
 			}
 		case string:
-			if val == "" {
-				delete(m, k)
+			if typed == "" {
+				delete(values, key)
 			}
 		case bool:
-			if !val {
-				delete(m, k)
+			if !typed {
+				delete(values, key)
 			}
 		case float64:
-			if val == 0 {
-				delete(m, k)
+			if typed == 0 {
+				delete(values, key)
 			}
 		case nil:
-			delete(m, k)
+			delete(values, key)
 		case []any:
-			if len(val) == 0 {
-				delete(m, k)
+			if len(typed) == 0 {
+				delete(values, key)
 			}
 		}
 	}
