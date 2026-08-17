@@ -165,7 +165,10 @@ func probeDatabase(conn string) whoamiDatabase {
 		out.Error = "database probing is unavailable in this binary"
 		return out
 	}
-	return LocalWhoami.ProbeDatabase(conn)
+	probe := LocalWhoami.ProbeDatabase(conn)
+	probe.Configured = out.Configured
+	probe.URL = out.URL
+	return probe
 }
 
 func probeAuth(parent gocontext.Context, cfg *MCConfig, mcCtx *MCContext, dbConn string, refresh bool) whoamiAuth {
