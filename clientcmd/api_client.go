@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/auth/oidcclient"
+	"github.com/flanksource/incident-commander/clientlog"
 	"github.com/flanksource/incident-commander/sdk"
 )
 
@@ -43,17 +43,17 @@ func resolveContextToken(mcCtx *MCContext) (string, error) {
 	}
 
 	previousAccessToken := mcCtx.OIDC.AccessToken
-	logger.Debugf("refreshing OIDC token for context %q server %s", mcCtx.Name, mcCtx.Server)
+	clientlog.Debugf("refreshing OIDC token for context %q server %s", mcCtx.Name, mcCtx.Server)
 	refreshed, err := refreshOIDCTokens(mcCtx.Server, mcCtx.OIDC)
 	if err != nil {
-		logger.Debugf("failed to refresh OIDC token for context %q server %s: %v", mcCtx.Name, mcCtx.Server, err)
+		clientlog.Debugf("failed to refresh OIDC token for context %q server %s: %v", mcCtx.Name, mcCtx.Server, err)
 		if mcCtx.Token != "" && mcCtx.Token != previousAccessToken {
 			return mcCtx.Token, nil
 		}
 		return "", fmt.Errorf("refresh OIDC token for %s: %w", mcCtx.Server, err)
 	}
 
-	logger.Debugf("refreshed OIDC token for context %q server %s", mcCtx.Name, mcCtx.Server)
+	clientlog.Debugf("refreshed OIDC token for context %q server %s", mcCtx.Name, mcCtx.Server)
 	mcCtx.SetOIDCTokens(refreshed)
 	if cfg, err := LoadConfig(); err == nil {
 		updateContextOIDCTokens(cfg, mcCtx.Name, refreshed)

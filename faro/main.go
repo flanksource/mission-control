@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flanksource/commons/logger"
 	clicky "github.com/flanksource/incident-commander/clientcli"
 	"github.com/flanksource/incident-commander/clientcmd"
+	"github.com/flanksource/incident-commander/clientlog"
 	"github.com/spf13/cobra"
 )
 
@@ -96,7 +96,7 @@ func main() {
 	})
 	root.SetUsageTemplate(root.UsageTemplate() + fmt.Sprintf("\nversion: %s\n ", version))
 
-	logger.BindFlags(root.PersistentFlags())
+	clientlog.BindFlags(root.PersistentFlags())
 	clientcmd.RegisterClientCommands(root)
 	root.AddCommand(Catalog, refreshCacheCmd())
 
@@ -117,8 +117,7 @@ func main() {
 
 	harFlush := func() error { return nil }
 	root.PersistentPreRunE = func(cmd *cobra.Command, _ []string) error {
-		logger.UseCobraFlags(cmd.Flags())
-		logger.UseSlog()
+		clientlog.Configure(cmd.Flags())
 		harFlush = clientcmd.StartHAR()
 		return nil
 	}

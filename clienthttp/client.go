@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/incident-commander/clientlog"
 )
 
 type Middleware func(http.RoundTripper) http.RoundTripper
@@ -228,6 +228,6 @@ func (t loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 	if response != nil {
 		status = fmt.Sprint(response.StatusCode)
 	}
-	logger.GetLogger("http").V(logger.Debug).Infof("%s\t%s\t%s\t%s", request.Method, redactURL(request.URL), status, time.Since(start))
+	clientlog.Debugf("%s\t%s\t%s\t%s", request.Method, redactURL(request.URL), status, time.Since(start))
 	return response, err
 }
