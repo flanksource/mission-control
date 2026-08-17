@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	"github.com/flanksource/commons/http"
-	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/clientapi"
@@ -249,8 +248,8 @@ func (c *Client) Whoami(ctx context.Context) (*WhoamiResponse, int, error) {
 	return &result, r.StatusCode, nil
 }
 
-func (c *Client) GetConnection(name, namespace string) (*models.Connection, error) {
-	var connections []models.Connection
+func (c *Client) GetConnection(name, namespace string) (*clientapi.Connection, error) {
+	var connections []clientapi.Connection
 	r, err := c.R(context.Background()).
 		QueryParam("name", "eq."+name).
 		QueryParam("namespace", "eq."+namespace).
@@ -272,7 +271,7 @@ func (c *Client) GetConnection(name, namespace string) (*models.Connection, erro
 	return &connections[0], nil
 }
 
-func (c *Client) SaveConnection(conn *models.Connection) error {
+func (c *Client) SaveConnection(conn *clientapi.Connection) error {
 	r, err := c.R(context.Background()).
 		Header("Prefer", "resolution=merge-duplicates,return=representation").
 		Post("/db/connections", conn)

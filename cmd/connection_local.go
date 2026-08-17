@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/yaml"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/flanksource/incident-commander/connection"
 	"github.com/flanksource/incident-commander/db"
@@ -56,13 +57,14 @@ func (localConnectionOps) LoadAWSProfile(flags *clientcmd.ConnectionFlags) error
 	return nil
 }
 
-func (localConnectionOps) AddViaDB(flags *clientcmd.ConnectionFlags, conn *models.Connection) error {
+func (localConnectionOps) AddViaDB(flags *clientcmd.ConnectionFlags, conn *clientapi.Connection) error {
 	ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)
 	if err != nil {
 		return err
 	}
 	shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 	defer stop()
+	modelConn := connectionToModel(*conn)
 
 	var existing models.Connection
 	err = ctx.DB().Where("name = ? AND namespace = ? AND deleted_at IS NULL", flags.Name, flags.Namespace).First(&existing).Error
@@ -74,14 +76,14 @@ func (localConnectionOps) AddViaDB(flags *clientcmd.ConnectionFlags, conn *model
 	}
 
 	if isUpdate {
-		conn.ID = existing.ID
-		conn.CreatedAt = existing.CreatedAt
+		modelConn.ID = existing.ID
+		modelConn.CreatedAt = existing.CreatedAt
 	} else {
-		conn.ID = uuid.New()
+		modelConn.ID = uuid.New()
 	}
 
 	if flags.Test {
-		hydrated, err := ctx.HydrateConnection(conn)
+		hydrated, err := ctx.HydrateConnection(&modelConn)
 		if err != nil {
 			return fmt.Errorf("failed to hydrate connection: %w", err)
 		}
@@ -94,7 +96,7 @@ func (localConnectionOps) AddViaDB(flags *clientcmd.ConnectionFlags, conn *model
 		fmt.Println("\nConnection test passed")
 	}
 
-	if err := ctx.DB().Save(conn).Error; err != nil {
+	if err := ctx.DB().Save(&modelConn).Error; err != nil {
 		return fmt.Errorf("failed to save connection: %w", err)
 	}
 
@@ -125,7 +127,7 @@ func (localConnectionOps) TestSaved(name, namespace string, overrides *clientcmd
 	}
 
 	if clicky.Flags.LevelCount >= 1 {
-		clientcmd.PrintConnectionState(conn, clicky.Flags.LevelCount)
+		clientcmd.PrintConnectionState(connectionFromModel(conn), clicky.Flags.LevelCount)
 	}
 
 	hydrated, err := ctx.HydrateConnection(&conn)
@@ -153,7 +155,8 @@ func (localConnectionOps) TestTransient(flags *clientcmd.ConnectionFlags) (any, 
 		return nil, fmt.Errorf("failed to build connection: %w", err)
 	}
 
-	return hydrateAndTest(&conn)
+	modelConn := connectionToModel(conn)
+	return hydrateAndTest(&modelConn)
 }
 
 func (localConnectionOps) TestFile(filename string) (any, error) {
@@ -179,7 +182,7 @@ func (localConnectionOps) TestFile(filename string) (any, error) {
 	return hydrateAndTest(&conn)
 }
 
-func (localConnectionOps) GetConnection(name, namespace string) (*models.Connection, error) {
+func (localConnectionOps) GetConnection(name, namespace string) (*clientapi.Connection, error) {
 	ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)
 	if err != nil {
 		return nil, err
@@ -194,10 +197,11 @@ func (localConnectionOps) GetConnection(name, namespace string) (*models.Connect
 		}
 		return nil, fmt.Errorf("failed to load connection %s/%s: %w", namespace, name, err)
 	}
-	return &conn, nil
+	result := connectionFromModel(conn)
+	return &result, nil
 }
 
-func (localConnectionOps) SaveConnection(conn *models.Connection) error {
+func (localConnectionOps) SaveConnection(conn *clientapi.Connection) error {
 	ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)
 	if err != nil {
 		return err
@@ -205,10 +209,49 @@ func (localConnectionOps) SaveConnection(conn *models.Connection) error {
 	shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 	defer stop()
 
-	if conn.ID == uuid.Nil {
-		conn.ID = uuid.New()
+	modelConn := connectionToModel(*conn)
+	if modelConn.ID == uuid.Nil {
+		modelConn.ID = uuid.New()
 	}
-	return ctx.DB().Save(conn).Error
+	return ctx.DB().Save(&modelConn).Error
+}
+
+func connectionFromModel(conn models.Connection) clientapi.Connection {
+	return clientapi.Connection{
+		ID:          conn.ID,
+		Name:        conn.Name,
+		Namespace:   conn.Namespace,
+		Source:      conn.Source,
+		Type:        conn.Type,
+		URL:         conn.URL,
+		Username:    conn.Username,
+		Password:    conn.Password,
+		Properties:  map[string]string(conn.Properties),
+		Certificate: conn.Certificate,
+		InsecureTLS: conn.InsecureTLS,
+		CreatedAt:   conn.CreatedAt,
+		UpdatedAt:   conn.UpdatedAt,
+		CreatedBy:   conn.CreatedBy,
+	}
+}
+
+func connectionToModel(conn clientapi.Connection) models.Connection {
+	return models.Connection{
+		ID:          conn.ID,
+		Name:        conn.Name,
+		Namespace:   conn.Namespace,
+		Source:      conn.Source,
+		Type:        conn.Type,
+		URL:         conn.URL,
+		Username:    conn.Username,
+		Password:    conn.Password,
+		Properties:  map[string]string(conn.Properties),
+		Certificate: conn.Certificate,
+		InsecureTLS: conn.InsecureTLS,
+		CreatedAt:   conn.CreatedAt,
+		UpdatedAt:   conn.UpdatedAt,
+		CreatedBy:   conn.CreatedBy,
+	}
 }
 
 func hydrateAndTest(conn *models.Connection) (any, error) {

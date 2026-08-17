@@ -23,8 +23,6 @@ import (
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/clicky/api"
 	"github.com/flanksource/clicky/api/icons"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
@@ -787,7 +785,7 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 		for i, c := range data.Cookies {
 			parts[i] = c.Name + "=" + c.Value
 		}
-		headersJSON, err := json.Marshal([]types.EnvVar{{Name: "Cookie", ValueStatic: strings.Join(parts, "; ")}})
+		headersJSON, err := json.Marshal([]clientapi.EnvVar{{Name: "Cookie", ValueStatic: strings.Join(parts, "; ")}})
 		if err != nil {
 			return fmt.Errorf("failed to marshal headers: %w", err)
 		}
@@ -826,12 +824,12 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 		connURL = "https://graph.microsoft.com/v1.0/me"
 	}
 
-	conn := models.Connection{
+	conn := clientapi.Connection{
 		Name:       flags.Name,
 		Namespace:  flags.Namespace,
-		Type:       models.ConnectionTypeHTTP,
+		Type:       clientapi.ConnectionTypeHTTP,
 		URL:        connURL,
-		Source:     models.SourceUI,
+		Source:     clientapi.SourceUI,
 		Properties: props,
 	}
 
@@ -1075,7 +1073,7 @@ func injectSessionStorage(browserCtx gocontext.Context, origin string, items map
 	return chromedp.Run(browserCtx, chromedp.Evaluate(js, nil))
 }
 
-func PrintConnectionState(conn models.Connection, verbose int) {
+func PrintConnectionState(conn clientapi.Connection, verbose int) {
 	fmt.Fprintf(os.Stderr, "Connection: %s/%s (type=%s)\n", conn.Namespace, conn.Name, conn.Type)
 
 	if bearer := conn.Properties["bearer"]; bearer != "" {
