@@ -56,6 +56,28 @@ var _ = ginkgo.Describe("whoami command", func() {
 		Expect(err).To(MatchError("whoami status failed: database=error auth=ok"))
 	})
 
+	ginkgo.It("succeeds when the database probe is unavailable but remote auth works", func() {
+		err := whoamiStatusError(whoamiReport{
+			Database: whoamiDatabase{Status: "skipped"},
+			Auth:     whoamiAuth{Status: "ok"},
+		})
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	ginkgo.It("skips configured database probes in the lean client", func() {
+		previous := LocalWhoami
+		LocalWhoami = nil
+		ginkgo.DeferCleanup(func() {
+			LocalWhoami = previous
+		})
+
+		report := probeDatabase("postgres://user:password@database.example.com/mission_control")
+		Expect(report.Configured).To(BeTrue())
+		Expect(report.Status).To(Equal("skipped"))
+		Expect(report.URL).ToNot(ContainSubstring("password"))
+		Expect(report.Error).To(Equal("database probing is unavailable in this binary"))
+	})
+
 	ginkgo.It("fails when auth status is not ok", func() {
 		err := whoamiStatusError(whoamiReport{
 			Database: whoamiDatabase{Status: "ok"},

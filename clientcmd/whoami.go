@@ -135,7 +135,7 @@ func runWhoami(cmd *cobra.Command, _ []string) error {
 }
 
 func whoamiStatusError(report whoamiReport) error {
-	if report.Database.Status == "ok" && report.Auth.Status == "ok" {
+	if (report.Database.Status == "ok" || report.Database.Status == "skipped") && report.Auth.Status == "ok" {
 		return nil
 	}
 	return fmt.Errorf("whoami status failed: database=%s auth=%s", report.Database.Status, report.Auth.Status)
@@ -161,7 +161,7 @@ func probeDatabase(conn string) whoamiDatabase {
 
 	out.URL = redactURL(conn)
 	if LocalWhoami == nil {
-		out.Status = "error"
+		out.Status = "skipped"
 		out.Error = "database probing is unavailable in this binary"
 		return out
 	}
