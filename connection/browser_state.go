@@ -1,31 +1,19 @@
 package connection
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/url"
 	"strings"
 	"time"
 
 	"github.com/flanksource/clicky/api"
+
+	"github.com/flanksource/incident-commander/clientapi"
 )
 
 // LocalStorageItem mirrors Playwright's per-origin localStorage entry.
-type LocalStorageItem struct {
-	Name  string `json:"name"`
-	Value string `json:"value"`
-}
+type LocalStorageItem = clientapi.LocalStorageItem
 
-type Cookie struct {
-	Name     string  `json:"name"`
-	Value    string  `json:"value"`
-	Domain   string  `json:"domain"`
-	Path     string  `json:"path"`
-	Expires  float64 `json:"expires"`
-	HTTPOnly bool    `json:"httpOnly"`
-	Secure   bool    `json:"secure"`
-	SameSite string  `json:"sameSite"`
-}
+type Cookie clientapi.Cookie
 
 type Cookies []Cookie
 
@@ -110,21 +98,14 @@ func truncateStr(s string, maxLen int) string {
 	return s[:maxLen] + "..."
 }
 
-type SessionOrigin struct {
-	Origin       string             `json:"origin"`
-	LocalStorage []LocalStorageItem `json:"localStorage,omitempty"`
-}
+type SessionOrigin = clientapi.SessionOrigin
 
-type PlaywrightSessionState struct {
-	Cookies Cookies         `json:"cookies" pretty:"table"`
-	Origins []SessionOrigin `json:"origins,omitempty"`
-	Tokens  []JWT           `json:"tokens,omitempty"`
-}
+type PlaywrightSessionState clientapi.PlaywrightSessionState
 
 func (p PlaywrightSessionState) Pretty() api.Text {
 	t := api.Text{}
 	if len(p.Cookies) > 0 {
-		t = t.Add(p.Cookies.Pretty())
+		t = t.Add(cookiesFromClient(p.Cookies).Pretty())
 	}
 	if len(p.Origins) > 0 {
 		if len(p.Cookies) > 0 {
@@ -142,7 +123,7 @@ func (p PlaywrightSessionState) Pretty() api.Text {
 		}
 		t = t.AddText(fmt.Sprintf("%d tokens", len(p.Tokens)), "font-bold")
 		for _, tok := range p.Tokens {
-			t = t.NewLine().Add(tok.Pretty())
+			t = t.NewLine().Add(JWT(tok).Pretty())
 		}
 	}
 	return t
@@ -151,7 +132,7 @@ func (p PlaywrightSessionState) Pretty() api.Text {
 func (p PlaywrightSessionState) PrettyFull() api.Text {
 	t := api.Text{}
 	if len(p.Cookies) > 0 {
-		t = t.Add(p.Cookies.PrettyFull())
+		t = t.Add(cookiesFromClient(p.Cookies).PrettyFull())
 	}
 	if len(p.Origins) > 0 {
 		if len(p.Cookies) > 0 {
@@ -173,59 +154,32 @@ func (p PlaywrightSessionState) PrettyFull() api.Text {
 		}
 		t = t.AddText(fmt.Sprintf("%d tokens", len(p.Tokens)), "font-bold")
 		for _, tok := range p.Tokens {
-			t = t.NewLine().Add(tok.PrettyFull())
+			t = t.NewLine().Add(JWT(tok).PrettyFull())
 		}
 	}
 	return t
 }
 
 func NewPlaywrightSessionState(cookies Cookies, sessionStorage map[string]string, origins []SessionOrigin, connURL string) PlaywrightSessionState {
-	state := PlaywrightSessionState{
-		Cookies: cookies,
-		Origins: origins,
-	}
+	return PlaywrightSessionState(clientapi.NewPlaywrightSessionState(cookiesToClient(cookies), sessionStorage, origins, connURL))
+}
 
-	var tokens []JWT
-	for key, value := range sessionStorage {
-		if !strings.Contains(key, "accesstoken") && !strings.Contains(key, "idtoken") {
-			continue
-		}
-		secret := ExtractSecret(value)
-		if secret == "" {
-			continue
-		}
-		if jwt := DecodeJWT(secret); jwt != nil {
-			tokens = append(tokens, *jwt)
-		}
+func cookiesToClient(cookies Cookies) clientapi.Cookies {
+	result := make(clientapi.Cookies, len(cookies))
+	for i, cookie := range cookies {
+		result[i] = clientapi.Cookie(cookie)
 	}
-	state.Tokens = tokens
+	return result
+}
 
-	if connURL != "" {
-		if u, err := url.Parse(connURL); err == nil && u.Host != "" {
-			connOrigin := fmt.Sprintf("%s://%s", u.Scheme, u.Host)
-			has := false
-			for _, o := range state.Origins {
-				if o.Origin == connOrigin {
-					has = true
-					break
-				}
-			}
-			if !has {
-				state.Origins = append(state.Origins, SessionOrigin{Origin: connOrigin})
-			}
-		}
+func cookiesFromClient(cookies clientapi.Cookies) Cookies {
+	result := make(Cookies, len(cookies))
+	for i, cookie := range cookies {
+		result[i] = Cookie(cookie)
 	}
-
-	return state
+	return result
 }
 
 func ExtractSecret(jsonValue string) string {
-	var entry map[string]any
-	if err := json.Unmarshal([]byte(jsonValue), &entry); err != nil {
-		return ""
-	}
-	if secret, ok := entry["secret"].(string); ok {
-		return secret
-	}
-	return ""
+	return clientapi.ExtractSecret(jsonValue)
 }

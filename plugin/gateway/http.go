@@ -25,7 +25,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/flanksource/clicky/rpc"
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -34,11 +33,12 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"github.com/flanksource/incident-commander/clientapi"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/api"
 	"github.com/flanksource/incident-commander/plugin/machinery"
-	"github.com/flanksource/incident-commander/plugin/manifestcache"
+	"github.com/flanksource/incident-commander/plugin/manifestadapter"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
@@ -67,10 +67,7 @@ type PluginListing struct {
 	Operations  []*api.OperationDef `json:"operations,omitempty"`
 }
 
-type ClickyRPCListing struct {
-	Name    string         `json:"name"`
-	Service rpc.RPCService `json:"service"`
-}
+type ClickyRPCListing = clientapi.PluginRPCListing
 
 // ListPlugins returns every running plugin whose CRD selector matches the
 // (optional) config_id query parameter. With no config_id, returns every
@@ -140,7 +137,7 @@ func listPluginsClickyRPC(c echo.Context) error {
 		}
 		out = append(out, ClickyRPCListing{
 			Name:    e.Name,
-			Service: manifestcache.ManifestToService(e.Manifest),
+			Service: manifestadapter.ManifestToService(e.Manifest),
 		})
 	}
 	return c.JSON(http.StatusOK, out)

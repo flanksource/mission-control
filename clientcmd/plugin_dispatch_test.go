@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/flanksource/clicky/rpc"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/sdk"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -46,7 +46,7 @@ var _ = ginkgo.Describe("plugin dispatch server error formatting", func() {
 var _ = ginkgo.Describe("plugin operation input validation", func() {
 	ginkgo.It("requires config id for config-scoped operations without printing usage", func() {
 		called := false
-		cmd := newOperationCommandWithDispatcher("arthas", rpc.RPCOperation{
+		cmd := newOperationCommandWithDispatcher("arthas", clientapi.PluginOperation{
 			Name: "session-create",
 			Tags: []string{"config"},
 		}, func(*cobra.Command, string, string, map[string]string, string, bool) error {
@@ -63,10 +63,10 @@ var _ = ginkgo.Describe("plugin operation input validation", func() {
 
 	ginkgo.It("requires manifest-declared parameters before dispatch", func() {
 		called := false
-		cmd := newOperationCommandWithDispatcher("logs", rpc.RPCOperation{
+		cmd := newOperationCommandWithDispatcher("logs", clientapi.PluginOperation{
 			Name: "tail",
 			Tags: []string{"config"},
-			Parameters: []rpc.RPCParameter{
+			Parameters: []clientapi.PluginParameter{
 				{Name: "namespace", Required: true},
 				{Name: "podName", Required: true},
 				{Name: "tailLines"},
@@ -85,10 +85,10 @@ var _ = ginkgo.Describe("plugin operation input validation", func() {
 
 	ginkgo.It("dispatches when config id and required parameters are present", func() {
 		called := false
-		cmd := newOperationCommandWithDispatcher("logs", rpc.RPCOperation{
+		cmd := newOperationCommandWithDispatcher("logs", clientapi.PluginOperation{
 			Name: "tail",
 			Tags: []string{"config"},
-			Parameters: []rpc.RPCParameter{
+			Parameters: []clientapi.PluginParameter{
 				{Name: "podName", Required: true},
 			},
 		}, func(_ *cobra.Command, plugin, op string, params map[string]string, configID string, raw bool) error {
@@ -114,7 +114,7 @@ var _ = ginkgo.Describe("plugin operation input validation", func() {
 			Code:       "HANDLER_ERROR",
 			Message:    "config_item_id is required",
 		}
-		cmd := newOperationCommandWithDispatcher("arthas", rpc.RPCOperation{
+		cmd := newOperationCommandWithDispatcher("arthas", clientapi.PluginOperation{
 			Name: "session-create",
 		}, func(*cobra.Command, string, string, map[string]string, string, bool) error {
 			return fmt.Errorf("forward to http://localhost:8080: %s", formatPluginServerError(serverErr))

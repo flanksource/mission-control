@@ -26,7 +26,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/flanksource/clicky/rpc"
+	"github.com/flanksource/incident-commander/clientapi"
 )
 
 // Source enumerates the two ways the cache can be populated.
@@ -39,12 +39,12 @@ const (
 
 // Entry is the on-disk envelope for a single plugin's cached schema.
 type Entry struct {
-	Source         Source         `json:"source"`
-	BinaryPath     string         `json:"binary_path,omitempty"`
-	BinaryChecksum string         `json:"binary_checksum,omitempty"`
-	ServerURL      string         `json:"server_url,omitempty"`
-	CachedAt       time.Time      `json:"cached_at"`
-	Service        rpc.RPCService `json:"service"`
+	Source         Source                  `json:"source"`
+	BinaryPath     string                  `json:"binary_path,omitempty"`
+	BinaryChecksum string                  `json:"binary_checksum,omitempty"`
+	ServerURL      string                  `json:"server_url,omitempty"`
+	CachedAt       time.Time               `json:"cached_at"`
+	Service        clientapi.PluginService `json:"service"`
 }
 
 var (

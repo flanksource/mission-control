@@ -1,4 +1,4 @@
-package manifestcache
+package localcache
 
 import (
 	"os"
@@ -13,12 +13,12 @@ var _ = ginkgo.Describe("findBinary", func() {
 		dir := ginkgo.GinkgoT().TempDir()
 		versionDir := filepath.Join(dir, "kubernetes-logs", "v1.2.3")
 		Expect(os.MkdirAll(versionDir, 0o755)).To(Succeed())
-		bin := filepath.Join(versionDir, "kubernetes-logs")
-		Expect(os.WriteFile(bin, []byte("binary"), 0o755)).To(Succeed())
+		binary := filepath.Join(versionDir, "kubernetes-logs")
+		Expect(os.WriteFile(binary, []byte("binary"), 0o755)).To(Succeed())
 		Expect(os.Symlink("v1.2.3", filepath.Join(dir, "kubernetes-logs", "latest"))).To(Succeed())
 
 		got, err := findBinary(dir, "kubernetes-logs")
-		Expect(err).ToNot(HaveOccurred())
+		Expect(err).NotTo(HaveOccurred())
 		Expect(got).To(Equal(filepath.Join(dir, "kubernetes-logs", "latest", "kubernetes-logs")))
 	})
 
@@ -26,11 +26,11 @@ var _ = ginkgo.Describe("findBinary", func() {
 		dir := ginkgo.GinkgoT().TempDir()
 		pluginDir := filepath.Join(dir, "kubernetes-logs")
 		Expect(os.MkdirAll(pluginDir, 0o755)).To(Succeed())
-		bin := filepath.Join(pluginDir, "kubernetes-logs")
-		Expect(os.WriteFile(bin, []byte("binary"), 0o755)).To(Succeed())
+		binary := filepath.Join(pluginDir, "kubernetes-logs")
+		Expect(os.WriteFile(binary, []byte("binary"), 0o755)).To(Succeed())
 
 		got, err := findBinary(dir, "kubernetes-logs")
-		Expect(err).ToNot(HaveOccurred())
-		Expect(got).To(Equal(bin))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(got).To(Equal(binary))
 	})
 })

@@ -10,12 +10,12 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/flanksource/clicky/rpc"
 	"github.com/flanksource/commons/http"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 
 	icapi "github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/pkg/httpobservability"
 )
 
@@ -287,12 +287,7 @@ func (c *Client) SaveConnection(conn *models.Connection) error {
 	return nil
 }
 
-type pluginRPCListItem struct {
-	Name    string         `json:"name"`
-	Service rpc.RPCService `json:"service"`
-}
-
-func (c *Client) ListPluginRPCServices(ctx context.Context) ([]rpc.RPCService, error) {
+func (c *Client) ListPluginRPCServices(ctx context.Context) ([]clientapi.PluginService, error) {
 	resp, err := c.R(ctx).
 		QueryParam("format", "clicky-rpc").
 		Get(c.apiPath("/api/plugins"))
@@ -310,11 +305,11 @@ func (c *Client) ListPluginRPCServices(ctx context.Context) ([]rpc.RPCService, e
 	if err != nil {
 		return nil, fmt.Errorf("read body: %w", err)
 	}
-	var items []pluginRPCListItem
+	var items []clientapi.PluginRPCListing
 	if err := json.Unmarshal([]byte(body), &items); err != nil {
 		return nil, fmt.Errorf("decode listing: %w", err)
 	}
-	out := make([]rpc.RPCService, 0, len(items))
+	out := make([]clientapi.PluginService, 0, len(items))
 	for _, it := range items {
 		svc := it.Service
 		if svc.Name == "" {

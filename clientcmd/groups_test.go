@@ -4,8 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/flanksource/clicky/rpc"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/plugin/manifestcache"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -43,10 +43,10 @@ var _ = ginkgo.Describe("command grouping", func() {
 
 		Expect(manifestcache.Write(manifestcache.Entry{
 			Source: manifestcache.SourceRemoteServer,
-			Service: rpc.RPCService{
+			Service: clientapi.PluginService{
 				Name:        "postgres",
 				Description: "Postgres diagnostics",
-				Operations:  []rpc.RPCOperation{{Name: "sessions"}},
+				Operations:  []clientapi.PluginOperation{{Name: "sessions"}},
 			},
 		})).To(Succeed())
 
@@ -118,7 +118,7 @@ var _ = ginkgo.Describe("command grouping", func() {
 		defer cleanup()
 		Expect(manifestcache.Write(manifestcache.Entry{
 			Source:  manifestcache.SourceRemoteServer,
-			Service: rpc.RPCService{Name: "s3", Operations: []rpc.RPCOperation{{Name: "ls"}}},
+			Service: clientapi.PluginService{Name: "s3", Operations: []clientapi.PluginOperation{{Name: "ls"}}},
 		})).To(Succeed())
 
 		root := &cobra.Command{Use: "faro"}
