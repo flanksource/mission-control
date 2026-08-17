@@ -45,8 +45,8 @@ spec:
 		Expect(params.Namespace).To(Equal("default"))
 	})
 
-	ginkgo.It("leaves full schema validation to the server", func() {
-		params, err := parsePlaybookManifest([]byte(`
+	ginkgo.It("rejects schema-invalid manifests before making a request", func() {
+		_, err := parsePlaybookManifest([]byte(`
 kind: Playbook
 metadata:
   name: invalid
@@ -58,8 +58,7 @@ spec:
         script: echo ok
 `))
 
-		Expect(err).ToNot(HaveOccurred())
-		Expect(params.Spec).To(MatchJSON(`{"unexpected":true,"actions":[{"name":"echo","exec":{"script":"echo ok"}}]}`))
+		Expect(err).To(MatchError(ContainSubstring("Additional property unexpected is not allowed")))
 	})
 
 	ginkgo.It("rejects other manifest kinds", func() {

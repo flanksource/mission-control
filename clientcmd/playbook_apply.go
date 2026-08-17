@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/flanksource/incident-commander/clientapi"
+	"github.com/flanksource/incident-commander/config/schemas"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
@@ -86,9 +86,12 @@ func parsePlaybookManifest(manifest []byte) (*sdk.PlaybookApplyParams, error) {
 		return nil, fmt.Errorf("playbook spec is required")
 	}
 
-	var spec clientapi.PlaybookSpecSummary
-	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
+	validationErr, err := schemas.ValidatePlaybookSpec(playbook.Spec)
+	if err != nil {
 		return nil, fmt.Errorf("invalid playbook spec: %w", err)
+	}
+	if validationErr != nil {
+		return nil, fmt.Errorf("invalid playbook spec: %w", validationErr)
 	}
 	namespace := playbook.Metadata.Namespace
 	if namespace == "" {
