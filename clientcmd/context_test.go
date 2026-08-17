@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"time"
 
 	"github.com/flanksource/incident-commander/auth/oidcclient"
@@ -344,6 +345,57 @@ var _ = ginkgo.Describe("API base resolution", func() {
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(resolved).To(Equal(server.URL))
+	})
+
+	ginkgo.It("persists the canonical API base after an HTTP to HTTPS redirect", func() {
+		canonical := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/api/health" {
+				_, _ = w.Write([]byte("OK"))
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		defer canonical.Close()
+
+		frontend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, canonical.URL+r.URL.RequestURI(), http.StatusPermanentRedirect)
+		}))
+		defer frontend.Close()
+
+		previousDefaultClient := http.DefaultClient
+		http.DefaultClient = canonical.Client()
+		ginkgo.DeferCleanup(func() {
+			http.DefaultClient = previousDefaultClient
+		})
+
+		resolved, err := ResolveAPIBase(frontend.URL)
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(resolved).To(Equal(canonical.URL + "/api"))
+	})
+
+	ginkgo.It("does not follow redirects on authenticated API requests", func() {
+		var redirectedRequests atomic.Int32
+		redirectTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			redirectedRequests.Add(1)
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer redirectTarget.Close()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			Expect(r.Header.Get("Authorization")).To(Equal("Bearer secret-token"))
+			http.Redirect(w, r, redirectTarget.URL+r.URL.RequestURI(), http.StatusPermanentRedirect)
+		}))
+		defer server.Close()
+
+		response, err := NewAPIClientForServer(server.URL, "secret-token").
+			R(context.Background()).
+			Get("/health")
+
+		Expect(err).ToNot(HaveOccurred())
+		defer response.Body.Close()
+		Expect(response.StatusCode).To(Equal(http.StatusPermanentRedirect))
+		Expect(redirectedRequests.Load()).To(BeZero())
 	})
 
 	ginkgo.It("stores the resolved API base for context add", func() {
