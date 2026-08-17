@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"time"
 
-	"github.com/flanksource/duty/query"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/sdk"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -24,7 +24,7 @@ var _ = ginkgo.Describe("faro catalog change", func() {
 			Expect(r.Method).To(Equal(http.MethodPost))
 			Expect(r.URL.Path).To(Equal("/resources/search"))
 
-			var got query.SearchResourcesRequest
+			var got clientapi.SearchResourcesRequest
 			Expect(json.NewDecoder(r.Body).Decode(&got)).To(Succeed())
 			Expect(got.Limit).To(Equal(25))
 			Expect(got.Timestamps).To(BeTrue())
@@ -50,7 +50,7 @@ var _ = ginkgo.Describe("faro catalog change", func() {
 
 	ginkgo.It("defaults change search empty limit to 100", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var got query.SearchResourcesRequest
+			var got clientapi.SearchResourcesRequest
 			Expect(json.NewDecoder(r.Body).Decode(&got)).To(Succeed())
 			Expect(got.Limit).To(Equal(100))
 			w.Header().Set("Content-Type", "application/json")
@@ -68,10 +68,10 @@ var _ = ginkgo.Describe("faro catalog change", func() {
 			Expect(r.Method).To(Equal(http.MethodPost))
 			Expect(r.URL.Path).To(Equal("/catalog/changes"))
 
-			var got query.CatalogChangesSearchRequest
+			var got clientapi.CatalogChangesSearchRequest
 			Expect(json.NewDecoder(r.Body).Decode(&got)).To(Succeed())
 			Expect(got.CatalogID).To(Equal("03e294e4-a297-5047-5325-3041303b1ce0"))
-			Expect(got.Recursive).To(Equal(query.CatalogChangeRecursiveDownstream))
+			Expect(got.Recursive).To(Equal(clientapi.CatalogChangeRecursiveDownstream))
 			Expect(got.Depth).To(Equal(5))
 			Expect(got.Soft).To(BeTrue())
 			Expect(got.PageSize).To(Equal(25))
@@ -85,7 +85,7 @@ var _ = ginkgo.Describe("faro catalog change", func() {
 
 		items, err := remoteSearchRelatedChanges(catalogChangeSearchOptions{
 			ConfigID: "03e294e4-a297-5047-5325-3041303b1ce0",
-			Related:  query.CatalogChangeRecursiveDownstream,
+			Related:  clientapi.CatalogChangeRecursiveDownstream,
 			Depth:    5,
 			Soft:     true,
 			Limit:    25,
@@ -110,17 +110,17 @@ var _ = ginkgo.Describe("faro catalog change", func() {
 		{
 			name:        "rejects query with config",
 			searchQuery: "change_type=diff",
-			opts:        catalogChangeSearchOptions{ConfigID: "03e294e4-a297-5047-5325-3041303b1ce0", Depth: 5, Related: query.CatalogChangeRecursiveNone},
+			opts:        catalogChangeSearchOptions{ConfigID: "03e294e4-a297-5047-5325-3041303b1ce0", Depth: 5, Related: clientapi.CatalogChangeRecursiveNone},
 			errorText:   "cannot be used together",
 		},
 		{
 			name:      "rejects relationship flags without config",
-			opts:      catalogChangeSearchOptions{Depth: 5, Related: query.CatalogChangeRecursiveDownstream, RelatedSet: true},
+			opts:      catalogChangeSearchOptions{Depth: 5, Related: clientapi.CatalogChangeRecursiveDownstream, RelatedSet: true},
 			errorText: "require --config",
 		},
 		{
 			name:      "validates config UUID",
-			opts:      catalogChangeSearchOptions{ConfigID: "not-a-uuid", Depth: 5, Related: query.CatalogChangeRecursiveNone},
+			opts:      catalogChangeSearchOptions{ConfigID: "not-a-uuid", Depth: 5, Related: clientapi.CatalogChangeRecursiveNone},
 			errorText: "invalid --config UUID",
 		},
 		{
@@ -130,25 +130,25 @@ var _ = ginkgo.Describe("faro catalog change", func() {
 		},
 		{
 			name:      "validates depth",
-			opts:      catalogChangeSearchOptions{ConfigID: "03e294e4-a297-5047-5325-3041303b1ce0", Related: query.CatalogChangeRecursiveDownstream},
+			opts:      catalogChangeSearchOptions{ConfigID: "03e294e4-a297-5047-5325-3041303b1ce0", Related: clientapi.CatalogChangeRecursiveDownstream},
 			errorText: "--depth must be greater than zero",
 		},
 		{
 			name:      "rejects soft with no relationship traversal",
-			opts:      catalogChangeSearchOptions{ConfigID: "03e294e4-a297-5047-5325-3041303b1ce0", Depth: 5, Related: query.CatalogChangeRecursiveNone, Soft: true, SoftSet: true},
+			opts:      catalogChangeSearchOptions{ConfigID: "03e294e4-a297-5047-5325-3041303b1ce0", Depth: 5, Related: clientapi.CatalogChangeRecursiveNone, Soft: true, SoftSet: true},
 			errorText: "require --related",
 		},
 		{
 			name:        "accepts a global query",
 			searchQuery: "change_type=diff",
-			opts:        catalogChangeSearchOptions{Depth: 5, Related: query.CatalogChangeRecursiveNone},
+			opts:        catalogChangeSearchOptions{Depth: 5, Related: clientapi.CatalogChangeRecursiveNone},
 		},
 		{
 			name: "accepts config relationship traversal",
 			opts: catalogChangeSearchOptions{
 				ConfigID: "03e294e4-a297-5047-5325-3041303b1ce0",
 				Depth:    5,
-				Related:  query.CatalogChangeRecursiveAll,
+				Related:  clientapi.CatalogChangeRecursiveAll,
 				Soft:     true,
 				SoftSet:  true,
 			},

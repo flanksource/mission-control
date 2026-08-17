@@ -9,19 +9,40 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/clicky/api"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/types"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/google/uuid"
 )
 
+type catalogItem clientapi.ConfigItem
+
+func (c catalogItem) GetID() string {
+	return c.ID.String()
+}
+
+func (c catalogItem) GetName() string {
+	return stringValue(c.Name, "")
+}
+
 // catalogItemDetail keeps the ConfigItem wire shape while expanding its human-readable view.
 type catalogItemDetail struct {
-	models.ConfigItem `yaml:",inline"`
-	Summary           *models.ConfigItemSummary `json:"-" yaml:"-"`
+	clientapi.ConfigItem `yaml:",inline"`
+	Summary              *clientapi.ConfigItemSummary `json:"-" yaml:"-"`
+}
+
+func (r catalogItemDetail) MarshalYAML() (any, error) {
+	data, err := json.Marshal(r.ConfigItem)
+	if err != nil {
+		return nil, err
+	}
+	var value any
+	if err := json.Unmarshal(data, &value); err != nil {
+		return nil, err
+	}
+	return value, nil
 }
 
 func (r catalogItemDetail) Pretty() api.Text {
-	t := r.ConfigItem.Pretty().NewLine().Append(catalogItemDetails(r.ConfigItem, r.Summary))
+	t := catalogItemSummary(r.ConfigItem).NewLine().Append(catalogItemDetails(r.ConfigItem, r.Summary))
 
 	if r.Properties != nil && len(*r.Properties) > 0 {
 		t = t.NewLine().AddText("Properties", "font-bold").NewLine().Append(catalogItemProperties(*r.Properties))
@@ -34,7 +55,70 @@ func (r catalogItemDetail) Pretty() api.Text {
 	return t
 }
 
-func catalogItemDetails(c models.ConfigItem, summary *models.ConfigItemSummary) api.DescriptionList {
+func (c catalogItem) Pretty() api.Text {
+	return catalogItemSummary(clientapi.ConfigItem(c))
+}
+
+func (c catalogItem) PrettyRow(_ any) map[string]api.Text {
+	item := clientapi.ConfigItem(c)
+	row := map[string]api.Text{
+		"name":   clicky.Text(stringValue(item.Name, "<unnamed>"), "font-bold"),
+		"type":   clicky.Text(stringValue(item.Type, "-"), "text-gray-600"),
+		"class":  clicky.Text(item.ConfigClass, "text-blue-600"),
+		"health": clicky.Text("", "text-gray-400"),
+	}
+	if item.Health != nil {
+		row["health"] = catalogHealth(*item.Health)
+	}
+	if item.Status != nil {
+		row["status"] = clicky.Text(*item.Status, "text-gray-700")
+	}
+	if item.CostTotal30d > 0 {
+		row["cost"] = clicky.Text(fmt.Sprintf("$%.2f", item.CostTotal30d), "text-green-700")
+	}
+	if !item.CreatedAt.IsZero() {
+		row["age"] = api.Human(time.Since(item.CreatedAt), "text-gray-600")
+	}
+	return row
+}
+
+func catalogItemSummary(c clientapi.ConfigItem) api.Text {
+	t := clicky.Text("")
+	if c.Health != nil {
+		t = t.Add(catalogHealth(*c.Health)).AddText(" ")
+	}
+	t = t.AddText(stringValue(c.Name, "<unnamed>"), "font-bold")
+	if c.Type != nil {
+		t = t.AddText(" ").Add(clicky.Text(*c.Type, "text-xs text-gray-600 bg-gray-100").Wrap("(", ")"))
+	}
+	if c.ConfigClass != "" {
+		t = t.AddText(" ").Add(clicky.Text(c.ConfigClass, "text-xs text-blue-600 bg-blue-50"))
+	}
+	if len(c.Tags) > 0 {
+		t = t.NewLine().AddText("  Tags: ", "text-sm text-gray-500")
+		for key, value := range c.Tags {
+			t = t.Add(clicky.Text(fmt.Sprintf("%s=%s", key, value), "text-xs bg-gray-100 text-gray-700").Wrap("[", "]")).AddText(" ")
+		}
+	}
+	return t
+}
+
+func catalogHealth(health string) api.Text {
+	switch health {
+	case "healthy":
+		return clicky.Text("✓ ", "text-green-600").Append(health, "capitalize text-green-600")
+	case "unhealthy":
+		return clicky.Text("✗ ", "text-red-600").Append(health, "capitalize text-red-600")
+	case "warning":
+		return clicky.Text("! ", "text-yellow-600").Append(health, "capitalize text-yellow-600")
+	case "unknown":
+		return clicky.Text("? ", "text-gray-500").Append(health, "capitalize text-gray-500")
+	default:
+		return clicky.Text(health, "text-gray-500")
+	}
+}
+
+func catalogItemDetails(c clientapi.ConfigItem, summary *clientapi.ConfigItemSummary) api.DescriptionList {
 	items := []api.KeyValuePair{
 		{Key: "ID", Value: c.ID.String()},
 		{Key: "Type", Value: stringValue(c.Type, "-")},
@@ -43,7 +127,7 @@ func catalogItemDetails(c models.ConfigItem, summary *models.ConfigItemSummary) 
 	}
 
 	if c.Health != nil {
-		items = append(items, api.KeyValuePair{Key: "Health", Value: c.Health.Pretty()})
+		items = append(items, api.KeyValuePair{Key: "Health", Value: catalogHealth(*c.Health)})
 	}
 	if c.Status != nil {
 		items = append(items, api.KeyValuePair{Key: "Status", Value: *c.Status})
@@ -108,7 +192,7 @@ func catalogItemDetails(c models.ConfigItem, summary *models.ConfigItemSummary) 
 	return api.DescriptionList{Items: items}
 }
 
-func catalogItemProperties(properties types.Properties) api.DescriptionList {
+func catalogItemProperties(properties clientapi.CatalogProperties) api.DescriptionList {
 	items := make([]api.KeyValuePair, 0, len(properties))
 	for i, property := range properties {
 		label := fmt.Sprintf("Property %d", i+1)
@@ -124,7 +208,7 @@ func catalogItemProperties(properties types.Properties) api.DescriptionList {
 	return api.DescriptionList{Items: items}
 }
 
-func catalogPropertyValue(property *types.Property) string {
+func catalogPropertyValue(property *clientapi.CatalogProperty) string {
 	if property == nil {
 		return "-"
 	}

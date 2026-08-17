@@ -9,8 +9,7 @@ import (
 
 	"github.com/flanksource/clicky"
 	clickyapi "github.com/flanksource/clicky/api"
-	"github.com/flanksource/duty/query"
-	"github.com/flanksource/duty/types"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/spf13/cobra"
@@ -170,14 +169,14 @@ func remoteSearchInsights(searchQuery, agent string, limit int) (*catalogInsight
 		limit = 100
 	}
 	requestLimit := limit
-	if requestLimit < query.MaxSearchResourcesLimit {
+	if requestLimit < clientapi.MaxSearchResourcesLimit {
 		requestLimit++
 	}
 
-	resp, err := client.SearchCatalog(context.Background(), query.SearchResourcesRequest{
+	resp, err := client.SearchCatalog(context.Background(), clientapi.SearchResourcesRequest{
 		Limit:      requestLimit,
 		Timestamps: true,
-		ConfigAnalysis: []types.ResourceSelector{{
+		ConfigAnalysis: []clientapi.ResourceSelector{{
 			Search: searchQuery,
 			Agent:  agent,
 		}},
@@ -188,7 +187,7 @@ func remoteSearchInsights(searchQuery, agent string, limit int) (*catalogInsight
 
 	totalAtLeast := len(resp.ConfigAnalysis)
 	limited := len(resp.ConfigAnalysis) > limit
-	if limit >= query.MaxSearchResourcesLimit && len(resp.ConfigAnalysis) == limit {
+	if limit >= clientapi.MaxSearchResourcesLimit && len(resp.ConfigAnalysis) == limit {
 		limited = true
 	}
 	if len(resp.ConfigAnalysis) > limit {

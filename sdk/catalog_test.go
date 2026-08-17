@@ -10,14 +10,14 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/flanksource/duty/query"
+	"github.com/flanksource/incident-commander/clientapi"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = ginkgo.Describe("catalog client", func() {
 	ginkgo.It("posts a search request and decodes configs", func() {
-		var gotBody query.SearchResourcesRequest
+		var gotBody clientapi.SearchResourcesRequest
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			Expect(r.Method).To(Equal(http.MethodPost))
 			Expect(r.URL.Path).To(Equal("/resources/search"))
@@ -27,7 +27,7 @@ var _ = ginkgo.Describe("catalog client", func() {
 		}))
 		defer server.Close()
 
-		resp, err := New(server.URL, "tok").SearchCatalog(context.Background(), query.SearchResourcesRequest{Limit: 5})
+		resp, err := New(server.URL, "tok").SearchCatalog(context.Background(), clientapi.SearchResourcesRequest{Limit: 5})
 		Expect(err).ToNot(HaveOccurred())
 		Expect(gotBody.Limit).To(Equal(5))
 		Expect(resp.Configs).To(HaveLen(1))
@@ -35,7 +35,7 @@ var _ = ginkgo.Describe("catalog client", func() {
 	})
 
 	ginkgo.It("posts a config-scoped catalog changes request", func() {
-		var gotBody query.CatalogChangesSearchRequest
+		var gotBody clientapi.CatalogChangesSearchRequest
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			Expect(r.Method).To(Equal(http.MethodPost))
 			Expect(r.URL.Path).To(Equal("/catalog/changes"))
@@ -45,10 +45,10 @@ var _ = ginkgo.Describe("catalog client", func() {
 		}))
 		defer server.Close()
 
-		resp, err := New(server.URL, "tok").SearchCatalogChanges(context.Background(), query.CatalogChangesSearchRequest{
-			BaseCatalogSearch: query.BaseCatalogSearch{
+		resp, err := New(server.URL, "tok").SearchCatalogChanges(context.Background(), clientapi.CatalogChangesSearchRequest{
+			BaseCatalogSearch: clientapi.BaseCatalogSearch{
 				CatalogID: "config-1",
-				Recursive: query.CatalogChangeRecursiveDownstream,
+				Recursive: clientapi.CatalogChangeRecursiveDownstream,
 				Depth:     5,
 				Soft:      true,
 				PageSize:  25,
@@ -57,7 +57,7 @@ var _ = ginkgo.Describe("catalog client", func() {
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(gotBody.CatalogID).To(Equal("config-1"))
-		Expect(gotBody.Recursive).To(Equal(query.CatalogChangeRecursiveDownstream))
+		Expect(gotBody.Recursive).To(Equal(clientapi.CatalogChangeRecursiveDownstream))
 		Expect(gotBody.Depth).To(Equal(5))
 		Expect(gotBody.Soft).To(BeTrue())
 		Expect(gotBody.PageSize).To(Equal(25))
@@ -267,7 +267,7 @@ var _ = ginkgo.Describe("catalog client", func() {
 		}))
 		defer server.Close()
 
-		_, err := New(server.URL, "tok").SearchCatalog(context.Background(), query.SearchResourcesRequest{})
+		_, err := New(server.URL, "tok").SearchCatalog(context.Background(), clientapi.SearchResourcesRequest{})
 		Expect(err).To(MatchError(ErrHTMLResponse))
 	})
 })

@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/flanksource/duty/query"
+	"github.com/flanksource/incident-commander/clientapi"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -23,7 +23,7 @@ var _ = ginkgo.Describe("faro catalog search", func() {
 			Expect(r.URL.Path).To(Equal("/resources/search"))
 			w.Header().Set("Content-Type", "application/json")
 
-			var got query.SearchResourcesRequest
+			var got clientapi.SearchResourcesRequest
 			Expect(json.NewDecoder(r.Body).Decode(&got)).To(Succeed())
 			Expect(got.Limit).To(Equal(25))
 			Expect(got.Timestamps).To(BeTrue())
@@ -49,7 +49,7 @@ var _ = ginkgo.Describe("faro catalog search", func() {
 
 	ginkgo.It("defaults an empty limit to 100", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var got query.SearchResourcesRequest
+			var got clientapi.SearchResourcesRequest
 			Expect(json.NewDecoder(r.Body).Decode(&got)).To(Succeed())
 			Expect(got.Limit).To(Equal(100))
 			w.Header().Set("Content-Type", "application/json")

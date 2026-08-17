@@ -5,8 +5,7 @@ import (
 	"time"
 
 	"github.com/flanksource/clicky/formatters"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/types"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -25,13 +24,13 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 		configJSON := `{"apiVersion":"apps/v1","spec":{"replicas":3}}`
 		zero := int64(0)
 		max := int64(10)
-		labels := types.JSONStringMap{"app": "api"}
+		labels := map[string]string{"app": "api"}
 		costPerMinute := 0.00125
 		costTotal1h := 0.075
 		costTotal1d := 1.8
 		costTotal30d := 54.0
 
-		item := models.ConfigItem{
+		item := clientapi.ConfigItem{
 			ID:          uuid.New(),
 			ScraperID:   &scraper,
 			AgentID:     uuid.New(),
@@ -47,11 +46,11 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 			ParentID:    &parentID,
 			Path:        "cluster/default/api",
 			Labels:      &labels,
-			Tags:        types.JSONStringMap{"environment": "production"},
-			Properties: &types.Properties{
+			Tags:          map[string]string{"environment": "production"},
+			Properties: &clientapi.CatalogProperties{
 				{Label: "Namespace", Text: "default"},
 				{Name: "restart_count", Value: &zero, Max: &max, Unit: "restarts", Status: "stable"},
-				{Name: "documentation", Links: []types.Link{{URL: "https://example.com/api"}}},
+				{Name: "documentation", Links: []clientapi.CatalogLink{{URL: "https://example.com/api"}}},
 				{Name: "empty_property"},
 			},
 			CreatedAt:  time.Date(2026, 7, 1, 8, 0, 0, 0, time.UTC),
@@ -61,7 +60,7 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 
 		output := (catalogItemDetail{
 			ConfigItem: item,
-			Summary: &models.ConfigItemSummary{
+			Summary: &clientapi.ConfigItemSummary{
 				CostPerMinute: &costPerMinute,
 				CostTotal1h:   &costTotal1h,
 				CostTotal1d:   &costTotal1d,
@@ -95,11 +94,11 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 	ginkgo.It("preserves the ConfigItem JSON and YAML shapes", func() {
 		name := "api"
 		typ := "Kubernetes::Pod"
-		item := models.ConfigItem{ID: uuid.New(), Name: &name, Type: &typ, ConfigClass: "Pod"}
+		item := clientapi.ConfigItem{ID: uuid.New(), Name: &name, Type: &typ, ConfigClass: "Pod"}
 		cost := 54.0
 		detail := catalogItemDetail{
 			ConfigItem: item,
-			Summary:    &models.ConfigItemSummary{CostTotal30d: &cost},
+			Summary:    &clientapi.ConfigItemSummary{CostTotal30d: &cost},
 		}
 
 		original, err := json.Marshal(item)

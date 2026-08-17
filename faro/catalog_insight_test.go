@@ -8,7 +8,7 @@ import (
 
 	"github.com/flanksource/clicky"
 	clickyAPI "github.com/flanksource/clicky/api"
-	"github.com/flanksource/duty/query"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/sdk"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -28,7 +28,7 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 			case "/resources/search":
 				Expect(r.Method).To(Equal(http.MethodPost))
 
-				var got query.SearchResourcesRequest
+				var got clientapi.SearchResourcesRequest
 				Expect(json.NewDecoder(r.Body).Decode(&got)).To(Succeed())
 				Expect(got.Limit).To(Equal(26))
 				Expect(got.Timestamps).To(BeTrue())
@@ -152,7 +152,7 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 
 	ginkgo.It("defaults insight search empty limit to 100", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			var got query.SearchResourcesRequest
+			var got clientapi.SearchResourcesRequest
 			Expect(json.NewDecoder(r.Body).Decode(&got)).To(Succeed())
 			Expect(got.Limit).To(Equal(101))
 			w.Header().Set("Content-Type", "application/json")

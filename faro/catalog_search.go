@@ -5,9 +5,7 @@ import (
 	"strings"
 
 	"github.com/flanksource/clicky"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/query"
-	"github.com/flanksource/duty/types"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/spf13/cobra"
 )
@@ -47,7 +45,7 @@ Examples:
 
 // remoteSearch runs the grammar search against the remote server and mirrors
 // the compact or full result shape selected by `catalog list`.
-func remoteSearch(searchQuery, agent string, limit int, full bool) ([]models.ConfigItem, error) {
+func remoteSearch(searchQuery, agent string, limit int, full bool) ([]catalogItem, error) {
 	client, err := clientcmd.RemoteClient()
 	if err != nil {
 		return nil, err
@@ -57,10 +55,10 @@ func remoteSearch(searchQuery, agent string, limit int, full bool) ([]models.Con
 		limit = 100
 	}
 
-	resp, err := client.SearchCatalog(context.Background(), query.SearchResourcesRequest{
+	resp, err := client.SearchCatalog(context.Background(), clientapi.SearchResourcesRequest{
 		Limit:      limit,
 		Timestamps: true,
-		Configs: []types.ResourceSelector{{
+		Configs: []clientapi.ResourceSelector{{
 			Search: searchQuery,
 			Agent:  agent,
 		}},

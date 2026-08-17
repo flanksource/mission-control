@@ -5,81 +5,22 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
-	"time"
 
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/query"
-	"github.com/flanksource/duty/types"
-	"github.com/google/uuid"
+	"github.com/flanksource/incident-commander/clientapi"
 	"golang.org/x/sync/errgroup"
 )
 
-// CatalogRelationships mirrors the server's catalog relationships response
-// (catalog.ConfigRelationshipsResponse) without importing the heavy catalog
-// package. Both directions are config trees rooted at ID.
-type CatalogRelationships struct {
-	ID       uuid.UUID             `json:"id"`
-	Incoming *query.ConfigTreeNode `json:"incoming"`
-	Outgoing *query.ConfigTreeNode `json:"outgoing"`
-}
-
-type CatalogChangeConfig struct {
-	ID          string `json:"id"`
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	ConfigClass string `json:"config_class"`
-}
-
-type CatalogChangeDetail struct {
-	ID                string               `json:"id"`
-	ConfigID          string               `json:"config_id"`
-	ChangeType        string               `json:"change_type"`
-	CreatedAt         *time.Time           `json:"created_at,omitempty"`
-	ExternalCreatedBy *string              `json:"external_created_by,omitempty"`
-	Source            *string              `json:"source,omitempty"`
-	Diff              *string              `json:"diff,omitempty"`
-	Details           map[string]any       `json:"details,omitempty"`
-	Patches           any                  `json:"patches,omitempty"`
-	CreatedBy         *uuid.UUID           `json:"created_by,omitempty"`
-	Config            *CatalogChangeConfig `json:"config,omitempty"`
-	Artifacts         []map[string]any     `json:"artifacts,omitempty"`
-}
-
-type CatalogInsightDetail struct {
-	ID            uuid.UUID                `json:"id"`
-	ConfigID      uuid.UUID                `json:"config_id"`
-	ScraperID     *uuid.UUID               `json:"scraper_id,omitempty"`
-	Analyzer      string                   `json:"analyzer"`
-	Message       string                   `json:"message,omitempty"`
-	Summary       string                   `json:"summary,omitempty"`
-	Status        string                   `json:"status,omitempty"`
-	Severity      models.Severity          `json:"severity,omitempty"`
-	AnalysisType  models.AnalysisType      `json:"analysis_type,omitempty"`
-	Analysis      types.JSONMap            `json:"analysis,omitempty"`
-	Properties    *types.Properties        `json:"properties,omitempty"`
-	Source        string                   `json:"source,omitempty"`
-	FirstObserved *time.Time               `json:"first_observed,omitempty"`
-	LastObserved  *time.Time               `json:"last_observed,omitempty"`
-	IsPushed      bool                     `json:"is_pushed,omitempty"`
-	Config        *CatalogChangeConfig     `json:"config,omitempty"`
-	Evidences     []CatalogInsightEvidence `json:"evidences,omitempty"`
-}
-
-type CatalogInsightEvidence struct {
-	Hypothesis *CatalogInsightHypothesis `json:"hypothesis,omitempty"`
-}
-
-type CatalogInsightHypothesis struct {
-	Incident *CatalogInsightIncident `json:"incident,omitempty"`
-}
-
-type CatalogInsightIncident struct {
-	IncidentID string `json:"incident_id,omitempty"`
-}
+type CatalogRelationships = clientapi.CatalogRelationships
+type CatalogChangeConfig = clientapi.CatalogChangeConfig
+type CatalogChangeDetail = clientapi.CatalogChangeDetail
+type CatalogInsightDetail = clientapi.CatalogInsightDetail
+type CatalogInsightEvidence = clientapi.CatalogInsightEvidence
+type CatalogInsightHypothesis = clientapi.CatalogInsightHypothesis
+type CatalogInsightIncident = clientapi.CatalogInsightIncident
 
 // catalogItemResponse bridges PostgREST's native JSONB config to ConfigItem's JSON string field.
 type catalogItemResponse struct {
-	models.ConfigItem
+	clientapi.ConfigItem
 	Config json.RawMessage `json:"config"`
 }
 
@@ -93,7 +34,7 @@ const catalogInsightBatchConcurrency = 4
 
 // SearchCatalog runs a resource search against the remote server
 // (POST /resources/search).
-func (c *Client) SearchCatalog(ctx context.Context, req query.SearchResourcesRequest) (*query.SearchResourcesResponse, error) {
+func (c *Client) SearchCatalog(ctx context.Context, req clientapi.SearchResourcesRequest) (*clientapi.SearchResourcesResponse, error) {
 	r, err := c.R(ctx).Post(c.apiPath("/resources/search"), req)
 	if err != nil {
 		return nil, err
@@ -105,7 +46,7 @@ func (c *Client) SearchCatalog(ctx context.Context, req query.SearchResourcesReq
 		}
 		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
 	}
-	var out query.SearchResourcesResponse
+	var out clientapi.SearchResourcesResponse
 	if err := decodeJSON(r, &out); err != nil {
 		return nil, err
 	}
@@ -114,7 +55,7 @@ func (c *Client) SearchCatalog(ctx context.Context, req query.SearchResourcesReq
 
 // SearchCatalogChanges returns config-scoped catalog changes, including changes
 // reached through the requested relationship direction.
-func (c *Client) SearchCatalogChanges(ctx context.Context, req query.CatalogChangesSearchRequest) (*query.CatalogChangesSearchResponse, error) {
+func (c *Client) SearchCatalogChanges(ctx context.Context, req clientapi.CatalogChangesSearchRequest) (*clientapi.CatalogChangesSearchResponse, error) {
 	r, err := c.R(ctx).Post(c.apiPath("/catalog/changes"), req)
 	if err != nil {
 		return nil, err
@@ -126,7 +67,7 @@ func (c *Client) SearchCatalogChanges(ctx context.Context, req query.CatalogChan
 		}
 		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
 	}
-	var out query.CatalogChangesSearchResponse
+	var out clientapi.CatalogChangesSearchResponse
 	if err := decodeJSON(r, &out); err != nil {
 		return nil, err
 	}
@@ -134,7 +75,7 @@ func (c *Client) SearchCatalogChanges(ctx context.Context, req query.CatalogChan
 }
 
 // GetCatalogItem fetches a single catalog item by id (GET /resources/:id).
-func (c *Client) GetCatalogItem(ctx context.Context, id string) (*models.ConfigItem, error) {
+func (c *Client) GetCatalogItem(ctx context.Context, id string) (*clientapi.ConfigItem, error) {
 	r, err := c.R(ctx).Get(c.apiPath("/resources/" + id))
 	if err != nil {
 		return nil, err
@@ -146,7 +87,7 @@ func (c *Client) GetCatalogItem(ctx context.Context, id string) (*models.ConfigI
 		}
 		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
 	}
-	var out models.ConfigItem
+	var out clientapi.ConfigItem
 	if err := decodeJSON(r, &out); err != nil {
 		return nil, err
 	}
@@ -154,7 +95,7 @@ func (c *Client) GetCatalogItem(ctx context.Context, id string) (*models.ConfigI
 }
 
 // GetCatalogItemSummary fetches a catalog item's computed summary fields.
-func (c *Client) GetCatalogItemSummary(ctx context.Context, id string) (*models.ConfigItemSummary, error) {
+func (c *Client) GetCatalogItemSummary(ctx context.Context, id string) (*clientapi.ConfigItemSummary, error) {
 	r, err := c.R(ctx).
 		QueryParam("id", "eq."+id).
 		QueryParam("select", "*").
@@ -170,7 +111,7 @@ func (c *Client) GetCatalogItemSummary(ctx context.Context, id string) (*models.
 		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
 	}
 
-	var out []models.ConfigItemSummary
+	var out []clientapi.ConfigItemSummary
 	if err := decodeJSON(r, &out); err != nil {
 		return nil, err
 	}
@@ -182,13 +123,13 @@ func (c *Client) GetCatalogItemSummary(ctx context.Context, id string) (*models.
 
 // GetCatalogItems fetches available catalog items in bounded batches, preserves
 // requested order, and omits IDs that are no longer visible during hydration.
-func (c *Client) GetCatalogItems(ctx context.Context, ids []string) ([]models.ConfigItem, error) {
+func (c *Client) GetCatalogItems(ctx context.Context, ids []string) ([]clientapi.ConfigItem, error) {
 	if len(ids) == 0 {
-		return []models.ConfigItem{}, nil
+		return []clientapi.ConfigItem{}, nil
 	}
 
 	batchCount := (len(ids) + catalogItemBatchSize - 1) / catalogItemBatchSize
-	batches := make([][]models.ConfigItem, batchCount)
+	batches := make([][]clientapi.ConfigItem, batchCount)
 	group, groupCtx := errgroup.WithContext(ctx)
 	group.SetLimit(catalogItemBatchConcurrency)
 
@@ -209,14 +150,14 @@ func (c *Client) GetCatalogItems(ctx context.Context, ids []string) ([]models.Co
 		return nil, err
 	}
 
-	itemsByID := make(map[string]models.ConfigItem, len(ids))
+	itemsByID := make(map[string]clientapi.ConfigItem, len(ids))
 	for _, batch := range batches {
 		for _, item := range batch {
 			itemsByID[item.ID.String()] = item
 		}
 	}
 
-	result := make([]models.ConfigItem, 0, len(ids))
+	result := make([]clientapi.ConfigItem, 0, len(ids))
 	for _, id := range ids {
 		item, ok := itemsByID[id]
 		if ok {
@@ -226,7 +167,7 @@ func (c *Client) GetCatalogItems(ctx context.Context, ids []string) ([]models.Co
 	return result, nil
 }
 
-func (c *Client) getCatalogItemsBatch(ctx context.Context, ids []string) ([]models.ConfigItem, error) {
+func (c *Client) getCatalogItemsBatch(ctx context.Context, ids []string) ([]clientapi.ConfigItem, error) {
 	r, err := c.R(ctx).
 		QueryParam("id", "in.("+strings.Join(ids, ",")+")").
 		QueryParam("select", "*").
@@ -247,7 +188,7 @@ func (c *Client) getCatalogItemsBatch(ctx context.Context, ids []string) ([]mode
 		return nil, err
 	}
 
-	out := make([]models.ConfigItem, 0, len(response))
+	out := make([]clientapi.ConfigItem, 0, len(response))
 	for _, raw := range response {
 		item := raw.ConfigItem
 		rawConfig := strings.TrimSpace(string(raw.Config))
