@@ -3,7 +3,7 @@ package clientcmd
 import (
 	"fmt"
 
-	clicky "github.com/flanksource/incident-commander/clientcli"
+	"github.com/flanksource/clicky"
 	"github.com/spf13/cobra"
 )
 

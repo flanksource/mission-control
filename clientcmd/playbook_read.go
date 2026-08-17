@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/flanksource/clicky"
 	"github.com/flanksource/incident-commander/clientapi"
-	clicky "github.com/flanksource/incident-commander/clientcli"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/spf13/cobra"
 )

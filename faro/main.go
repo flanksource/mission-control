@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	clicky "github.com/flanksource/incident-commander/clientcli"
+	"github.com/flanksource/clicky"
 	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/flanksource/incident-commander/clientlog"
 	"github.com/spf13/cobra"

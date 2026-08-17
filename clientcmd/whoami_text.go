@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	clicky "github.com/flanksource/incident-commander/clientcli"
-	clickyapi "github.com/flanksource/incident-commander/clientcli/api"
+	"github.com/flanksource/clicky"
+	clickyapi "github.com/flanksource/clicky/api"
 )
 
 func printWhoami(w io.Writer, report whoamiReport) {

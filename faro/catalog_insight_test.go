@@ -6,8 +6,8 @@ import (
 	"net/http/httptest"
 	"time"
 
+	"github.com/flanksource/clicky"
 	"github.com/flanksource/incident-commander/clientapi"
-	clicky "github.com/flanksource/incident-commander/clientcli"
 	"github.com/flanksource/incident-commander/sdk"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

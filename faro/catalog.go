@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/flanksource/clicky"
 	"github.com/flanksource/incident-commander/clientapi"
-	clicky "github.com/flanksource/incident-commander/clientcli"
 	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/google/uuid"
