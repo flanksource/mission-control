@@ -9,14 +9,13 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/flanksource/commons/har"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	icapi "github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/clientapi"
-	"github.com/flanksource/incident-commander/pkg/httpobservability"
+	"github.com/flanksource/incident-commander/clienthttp"
 )
 
 func TestSDK(t *testing.T) {
@@ -26,8 +25,8 @@ func TestSDK(t *testing.T) {
 
 var _ = ginkgo.Describe("GetConnection HTML detection", func() {
 	ginkgo.It("uses the shared HAR collector automatically", func() {
-		collector := har.NewCollector(har.HARConfig{CaptureContentTypes: []string{"application/json"}})
-		restore := httpobservability.SetHARCollector(collector)
+		collector := clienthttp.NewHARCollector(clienthttp.HARConfig{CaptureContentTypes: []string{"application/json"}})
+		restore := clienthttp.SetHARCollector(collector)
 		defer restore()
 
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

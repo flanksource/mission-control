@@ -10,11 +10,10 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/flanksource/commons/http"
 	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/clientapi"
-	"github.com/flanksource/incident-commander/pkg/httpobservability"
+	http "github.com/flanksource/incident-commander/clienthttp"
 )
 
 var (
@@ -63,7 +62,7 @@ func NewWithAuthHeader(serverURL, authHeader string, opts ...ClientOption) *Clie
 	if authHeader != "" {
 		client = client.Header("Authorization", authHeader)
 	}
-	out := &Client{Client: httpobservability.Apply(client), serverURL: strings.TrimRight(serverURL, "/")}
+	out := &Client{Client: client, serverURL: strings.TrimRight(serverURL, "/")}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(out)

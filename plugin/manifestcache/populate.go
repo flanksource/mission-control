@@ -6,10 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flanksource/commons/har"
-
 	"github.com/flanksource/incident-commander/clientapi"
-	"github.com/flanksource/incident-commander/pkg/httpobservability"
+	"github.com/flanksource/incident-commander/clienthttp"
 	"github.com/flanksource/incident-commander/sdk"
 )
 
@@ -27,7 +25,7 @@ type PopulateOptions struct {
 	ClearExisting bool
 
 	// HAR is an optional collector that captures the cache refresh request.
-	HAR *har.Collector
+	HAR *clienthttp.HARCollector
 }
 
 // PopulateAPI fetches schemas from the configured server and writes one
@@ -38,7 +36,7 @@ func PopulateAPI(ctx gocontext.Context, opts PopulateOptions) ([]string, error) 
 	}
 	restore := func() {}
 	if opts.HAR != nil {
-		restore = httpobservability.SetHARCollector(opts.HAR)
+		restore = clienthttp.SetHARCollector(opts.HAR)
 	}
 	defer restore()
 

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/flanksource/commons/http"
 	"github.com/flanksource/incident-commander/clientapi"
+	http "github.com/flanksource/incident-commander/clienthttp"
 )
 
 type PlaybookApplyParams = clientapi.PlaybookApplyRequest
