@@ -4,66 +4,56 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	stdhttp "net/http"
 	"strings"
 
 	"github.com/flanksource/commons/http"
-	"github.com/flanksource/incident-commander/clientapi"
+	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 )
 
-type PlaybookApplyParams = clientapi.PlaybookApplyRequest
-type PlaybookApplyResult = clientapi.PlaybookApplyResponse
+// PlaybookApplyParams contains the canonical database fields derived from a Playbook manifest.
+type PlaybookApplyParams struct {
+	Namespace   string
+	Name        string
+	Title       string
+	Icon        string
+	Description string
+	Category    string
+	Spec        json.RawMessage
+}
+
+// PlaybookApplyResult describes whether apply created or updated the playbook.
+type PlaybookApplyResult struct {
+	Playbook models.Playbook
+	Created  bool
+}
 
 type playbookWrite struct {
-	Namespace   string          `json:"namespace"`
-	Name        string          `json:"name"`
-	Title       string          `json:"title"`
-	Icon        string          `json:"icon"`
-	Description string          `json:"description"`
-	Category    string          `json:"category"`
-	Spec        json.RawMessage `json:"spec"`
-	Source      string          `json:"source,omitempty"`
+	Namespace   string     `json:"namespace"`
+	Name        string     `json:"name"`
+	Title       string     `json:"title"`
+	Icon        string     `json:"icon"`
+	Description string     `json:"description"`
+	Category    string     `json:"category"`
+	Spec        types.JSON `json:"spec"`
+	Source      string     `json:"source,omitempty"`
 }
 
-// ApplyPlaybook applies through the server API, falling back to the legacy PostgREST flow during rolling upgrades.
+// ApplyPlaybook creates or updates an API-owned playbook using the legacy SDK contract.
 func (c *Client) ApplyPlaybook(ctx context.Context, params PlaybookApplyParams) (*PlaybookApplyResult, error) {
-	response, err := c.R(ctx).Post(c.apiPath("/playbook/apply"), params)
-	if err != nil {
-		return nil, err
-	}
-	if response.StatusCode == stdhttp.StatusNotFound {
-		_, _ = response.AsString()
-		return c.applyPlaybookLegacy(ctx, params)
-	}
-	if !response.IsOK() {
-		return nil, postgrestError(response)
-	}
-	var result PlaybookApplyResult
-	if err := decodeJSON(response, &result); err != nil {
-		return nil, fmt.Errorf("decode playbook apply response: %w", err)
-	}
-	return &result, nil
-}
-
-func (c *Client) applyPlaybookLegacy(ctx context.Context, params PlaybookApplyParams) (*PlaybookApplyResult, error) {
-	var spec clientapi.PlaybookSpecSummary
-	if err := json.Unmarshal(params.Spec, &spec); err != nil {
-		return nil, fmt.Errorf("decode playbook spec for legacy apply: %w", err)
-	}
-
 	existing, err := c.findPlaybooksForApply(ctx, params.Namespace, params.Name)
 	if err != nil {
 		return nil, err
 	}
 
-	var target *clientapi.Playbook
+	var target *models.Playbook
 	if len(existing) == 1 {
 		target = &existing[0]
 	} else if len(existing) > 1 {
 		for i := range existing {
-			if existing[i].Category == spec.Category {
+			if existing[i].Category == params.Category {
 				if target != nil {
-					return nil, fmt.Errorf("multiple playbooks match %s/%s in category %q", params.Namespace, params.Name, spec.Category)
+					return nil, fmt.Errorf("multiple playbooks match %s/%s in category %q", params.Namespace, params.Name, params.Category)
 				}
 				target = &existing[i]
 			}
@@ -73,28 +63,24 @@ func (c *Client) applyPlaybookLegacy(ctx context.Context, params PlaybookApplyPa
 		}
 	}
 
-	title := spec.Title
-	if title == "" {
-		title = params.Name
-	}
 	write := playbookWrite{
 		Namespace:   params.Namespace,
 		Name:        params.Name,
-		Title:       title,
-		Icon:        spec.Icon,
-		Description: spec.Description,
-		Category:    spec.Category,
-		Spec:        params.Spec,
+		Title:       params.Title,
+		Icon:        params.Icon,
+		Description: params.Description,
+		Category:    params.Category,
+		Spec:        types.JSON(params.Spec),
 	}
 	if target == nil {
-		write.Source = clientapi.SourceUI
+		write.Source = models.SourceUI
 		playbook, err := c.createPlaybook(ctx, write)
 		if err != nil {
 			return nil, err
 		}
 		return &PlaybookApplyResult{Playbook: *playbook, Created: true}, nil
 	}
-	if target.Source != clientapi.SourceUI {
+	if target.Source != models.SourceUI {
 		return nil, fmt.Errorf("playbook %s/%s was not created through the API and cannot be applied", target.Namespace, target.Name)
 	}
 
@@ -105,7 +91,7 @@ func (c *Client) applyPlaybookLegacy(ctx context.Context, params PlaybookApplyPa
 	return &PlaybookApplyResult{Playbook: *playbook}, nil
 }
 
-func (c *Client) findPlaybooksForApply(ctx context.Context, namespace, name string) ([]clientapi.Playbook, error) {
+func (c *Client) findPlaybooksForApply(ctx context.Context, namespace, name string) ([]models.Playbook, error) {
 	response, err := c.R(ctx).
 		QueryParam("namespace", "eq."+namespace).
 		QueryParam("name", "eq."+name).
@@ -119,14 +105,14 @@ func (c *Client) findPlaybooksForApply(ctx context.Context, namespace, name stri
 		return nil, postgrestError(response)
 	}
 
-	var playbooks []clientapi.Playbook
+	var playbooks []models.Playbook
 	if err := decodeJSON(response, &playbooks); err != nil {
 		return nil, err
 	}
 	return playbooks, nil
 }
 
-func (c *Client) createPlaybook(ctx context.Context, write playbookWrite) (*clientapi.Playbook, error) {
+func (c *Client) createPlaybook(ctx context.Context, write playbookWrite) (*models.Playbook, error) {
 	response, err := c.R(ctx).
 		Header("Prefer", "return=representation").
 		Post(c.apiPath("/db/playbooks"), write)
@@ -136,7 +122,7 @@ func (c *Client) createPlaybook(ctx context.Context, write playbookWrite) (*clie
 	return decodePlaybookWriteResponse(response)
 }
 
-func (c *Client) updatePlaybook(ctx context.Context, id string, write playbookWrite) (*clientapi.Playbook, error) {
+func (c *Client) updatePlaybook(ctx context.Context, id string, write playbookWrite) (*models.Playbook, error) {
 	response, err := c.R(ctx).
 		Header("Prefer", "return=representation").
 		QueryParam("id", "eq."+id).
@@ -147,7 +133,7 @@ func (c *Client) updatePlaybook(ctx context.Context, id string, write playbookWr
 	return decodePlaybookWriteResponse(response)
 }
 
-func decodePlaybookWriteResponse(response *http.Response) (*clientapi.Playbook, error) {
+func decodePlaybookWriteResponse(response *http.Response) (*models.Playbook, error) {
 	if !response.IsOK() {
 		return nil, postgrestError(response)
 	}
@@ -156,7 +142,7 @@ func decodePlaybookWriteResponse(response *http.Response) (*clientapi.Playbook, 
 	if err != nil {
 		return nil, err
 	}
-	var playbooks []clientapi.Playbook
+	var playbooks []models.Playbook
 	if err := json.Unmarshal([]byte(body), &playbooks); err != nil {
 		return nil, fmt.Errorf("failed to decode playbook write response: %w", err)
 	}
@@ -174,5 +160,43 @@ func postgrestError(response *http.Response) error {
 	if looksLikeHTML(response.Header.Get("Content-Type"), body) {
 		return ErrHTMLResponse
 	}
-	return newServerError(response.StatusCode, []byte(strings.TrimSpace(body)))
+	serverErr := &ServerError{StatusCode: response.StatusCode, Body: []byte(strings.TrimSpace(body))}
+	var payload struct {
+		Code       any            `json:"code"`
+		Error      string         `json:"error"`
+		Message    string         `json:"message"`
+		Trace      string         `json:"trace"`
+		Time       any            `json:"time"`
+		Context    map[string]any `json:"context"`
+		Hint       string         `json:"hint"`
+		Public     string         `json:"public"`
+		Stacktrace string         `json:"stacktrace"`
+	}
+	if json.Unmarshal(serverErr.Body, &payload) == nil {
+		serverErr.Code = stringifyServerErrorField(payload.Code)
+		serverErr.Message = payload.Error
+		if serverErr.Message == "" {
+			serverErr.Message = payload.Message
+		}
+		serverErr.Trace = payload.Trace
+		serverErr.Time = stringifyServerErrorField(payload.Time)
+		serverErr.Context = payload.Context
+		serverErr.Hint = payload.Hint
+		serverErr.Public = payload.Public
+		serverErr.Stacktrace = payload.Stacktrace
+	}
+	return serverErr
+}
+
+func stringifyServerErrorField(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return typed
+	case fmt.Stringer:
+		return typed.String()
+	default:
+		return fmt.Sprint(typed)
+	}
 }

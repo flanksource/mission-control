@@ -7,7 +7,7 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/incident-commander/clientapi"
-	"github.com/flanksource/incident-commander/sdk"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )

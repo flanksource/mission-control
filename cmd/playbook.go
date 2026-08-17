@@ -21,7 +21,7 @@ import (
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/playbook/runner"
-	"github.com/flanksource/incident-commander/sdk"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"

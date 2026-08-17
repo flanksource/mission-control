@@ -11,7 +11,7 @@ import (
 	clickyapi "github.com/flanksource/clicky/api"
 	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/clientcmd"
-	"github.com/flanksource/incident-commander/sdk"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/spf13/cobra"
 )
 

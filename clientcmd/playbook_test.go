@@ -16,7 +16,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
 
-	"github.com/flanksource/incident-commander/sdk"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 )
 
 var _ = ginkgo.Describe("playbook CLI helpers", func() {

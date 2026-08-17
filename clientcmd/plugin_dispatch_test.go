@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/flanksource/incident-commander/clientapi"
-	"github.com/flanksource/incident-commander/sdk"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"

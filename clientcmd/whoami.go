@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flanksource/incident-commander/sdk"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/spf13/cobra"
 )
 

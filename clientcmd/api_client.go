@@ -7,7 +7,7 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/auth/oidcclient"
-	"github.com/flanksource/incident-commander/sdk"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 )
 
 func NewAPIClient(mcCtx *MCContext, opts ...sdk.ClientOption) *sdk.Client {

@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	"github.com/flanksource/incident-commander/config/schemas"
-	"github.com/flanksource/incident-commander/sdk"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/spf13/cobra"
 	"sigs.k8s.io/yaml"
 )

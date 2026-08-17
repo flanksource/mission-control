@@ -10,7 +10,7 @@ import (
 
 	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/pkg/httpobservability"
-	"github.com/flanksource/incident-commander/sdk"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 )
 
 // PopulateOptions controls how the cache is filled from Mission Control.

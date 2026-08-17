@@ -1,15 +1,15 @@
-package sdk
+package client
 
 import (
 	"context"
 	"time"
 
-	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/google/uuid"
 )
 
 // DeletePlaybook soft-deletes an API-owned playbook.
-func (c *Client) DeletePlaybook(ctx context.Context, id uuid.UUID) (*models.Playbook, error) {
+func (c *Client) DeletePlaybook(ctx context.Context, id uuid.UUID) (*clientapi.Playbook, error) {
 	response, err := c.R(ctx).
 		Header("Prefer", "return=representation").
 		QueryParam("id", "eq."+id.String()).
