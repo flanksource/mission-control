@@ -72,6 +72,13 @@ var _ = ginkgo.Describe("auth login", func() {
 		Expect(gotLoginServer).To(Equal(server.URL))
 		expectOIDCContext(server.URL+"/api", "oauth-token")
 	})
+
+	ginkgo.It("escapes the server URL in the callback page", func() {
+		rendered := renderCallbackSuccessHTML(`https://example.com/"><script>alert(1)</script>`)
+
+		Expect(rendered).To(ContainSubstring(`https://example.com/&#34;&gt;&lt;script&gt;alert(1)&lt;/script&gt;/oidc/static/tailwind.min.js`))
+		Expect(rendered).ToNot(ContainSubstring(`<script>alert(1)</script>`))
+	})
 })
 
 func authHealthServer(frontend bool) *httptest.Server {
