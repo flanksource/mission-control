@@ -19,11 +19,9 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/playbook/runner"
@@ -41,7 +39,6 @@ func RegisterRoutes(e *echo.Echo) {
 	prefix := "playbook"
 	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
 	playbookGroup.GET("/list", HandlePlaybookList, rbac.Playbook(policy.ActionRead))
-	playbookGroup.POST("/apply", HandlePlaybookApply, echoSrv.RLSMiddleware)
 	playbookGroup.POST("/webhook/:webhook_path", HandleWebhook)
 	playbookGroup.GET("/webhook/:webhook_path", HandleWebhook)
 
@@ -57,137 +54,6 @@ func RegisterRoutes(e *echo.Echo) {
 	runGroup.GET("/:id", HandleGetPlaybookRun, rbac.Playbook(policy.ActionRead))
 	runGroup.POST("/approve/:run_id", HandlePlaybookRunApproval)
 	runGroup.POST("/cancel/:run_id", HandlePlaybookRunCancel, rbac.Playbook(policy.ActionUpdate))
-}
-
-func HandlePlaybookApply(c echo.Context) error {
-	ctx := c.Request().Context().(context.Context)
-	var req clientapi.PlaybookApplyRequest
-	if err := c.Bind(&req); err != nil {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request: %v", err))
-	}
-
-	response, err := applyPlaybook(ctx, req, func(action string) error {
-		return authorizePlaybookApply(ctx, action)
-	})
-	if err != nil {
-		return dutyAPI.WriteError(c, err)
-	}
-	status := http.StatusOK
-	if response.Created {
-		status = http.StatusCreated
-	}
-	return c.JSON(status, response)
-}
-
-func authorizePlaybookApply(ctx context.Context, action string) error {
-	if dutyRBAC.Enforcer() == nil {
-		return nil
-	}
-	if ctx.User() == nil {
-		return ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in")
-	}
-	if !dutyRBAC.CheckContext(ctx, policy.ObjectPlaybooks, action) {
-		return ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("you do not have permission to %s playbooks", action)
-	}
-	return nil
-}
-
-func applyPlaybook(ctx context.Context, req clientapi.PlaybookApplyRequest, authorize func(action string) error) (*clientapi.PlaybookApplyResponse, error) {
-	if req.Namespace == "" {
-		req.Namespace = "default"
-	}
-	if req.Name == "" {
-		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "playbook name is required")
-	}
-
-	spec, err := v1.ParseAndValidatePlaybookSpec(req.Spec)
-	if err != nil {
-		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid playbook spec: %v", err)
-	}
-
-	var response *clientapi.PlaybookApplyResponse
-	err = ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
-		var existing []models.Playbook
-		if err := txCtx.DB().
-			Where("namespace = ? AND name = ? AND deleted_at IS NULL", req.Namespace, req.Name).
-			Find(&existing).Error; err != nil {
-			return txCtx.Oops().Wrap(err)
-		}
-
-		var target *models.Playbook
-		if len(existing) == 1 {
-			target = &existing[0]
-		} else if len(existing) > 1 {
-			for i := range existing {
-				if existing[i].Category == spec.Category {
-					if target != nil {
-						return dutyAPI.Errorf(dutyAPI.ECONFLICT, "multiple playbooks match %s/%s in category %q", req.Namespace, req.Name, spec.Category)
-					}
-					target = &existing[i]
-				}
-			}
-			if target == nil {
-				return dutyAPI.Errorf(dutyAPI.ECONFLICT, "multiple playbooks match %s/%s; specify an existing category", req.Namespace, req.Name)
-			}
-		}
-
-		created := target == nil
-		action := policy.ActionUpdate
-		if created {
-			action = policy.ActionCreate
-		}
-		if err := authorize(action); err != nil {
-			return err
-		}
-
-		if created {
-			target = &models.Playbook{
-				ID:        uuid.New(),
-				Namespace: req.Namespace,
-				Name:      req.Name,
-				Source:    models.SourceUI,
-			}
-		} else if target.Source != models.SourceUI {
-			return dutyAPI.Errorf(dutyAPI.EINVALID, "playbook %s/%s was not created through the API and cannot be applied", target.Namespace, target.Name)
-		}
-
-		title := spec.Title
-		if title == "" {
-			title = req.Name
-		}
-		target.Title = title
-		target.Icon = spec.Icon
-		target.Description = spec.Description
-		target.Category = spec.Category
-		target.Spec = types.JSON(req.Spec)
-		if err := db.ValidatePlaybookWebhookPath(txCtx, spec, target); err != nil {
-			return err
-		}
-		if err := txCtx.DB().Save(target).Error; err != nil {
-			return txCtx.Oops().Wrap(err)
-		}
-
-		response = &clientapi.PlaybookApplyResponse{
-			Playbook: clientapi.Playbook{
-				ID:          target.ID,
-				Namespace:   target.Namespace,
-				Name:        target.Name,
-				Title:       target.Title,
-				Icon:        target.Icon,
-				Description: target.Description,
-				Spec:        json.RawMessage(target.Spec),
-				Source:      target.Source,
-				Category:    target.Category,
-				CreatedBy:   target.CreatedBy,
-				CreatedAt:   target.CreatedAt,
-				UpdatedAt:   target.UpdatedAt,
-				DeletedAt:   target.DeletedAt,
-			},
-			Created: created,
-		}
-		return nil
-	})
-	return response, err
 }
 
 type RunResponse struct {
