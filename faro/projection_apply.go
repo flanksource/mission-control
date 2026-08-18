@@ -15,7 +15,7 @@ import (
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
-	"github.com/google/cel-go/cel"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/ohler55/ojg/jp"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -213,40 +213,36 @@ func (r ProjectionApplyResult) RowDetail() api.Textable {
 }
 
 type compiledProjection struct {
-	env      *cel.Env
-	where    cel.Program
-	filter   cel.Program
-	matches  []cel.Program
+	where    *gomplate.Template
+	filter   *gomplate.Template
+	matches  []*gomplate.Template
 	mappings map[string]compiledProjectionSet
 }
 
 type compiledProjectionSet struct {
 	config ProjectionSet
-	value  cel.Program
-	when   cel.Program
-	match  cel.Program
+	value  *gomplate.Template
+	when   *gomplate.Template
+	match  *gomplate.Template
 }
 
 func compileProjection(projection Projection) (*compiledProjection, error) {
-	env, err := newProjectionEnv()
-	if err != nil {
-		return nil, err
-	}
-	compiled := &compiledProjection{env: env, mappings: map[string]compiledProjectionSet{}}
+	var err error
+	compiled := &compiledProjection{mappings: map[string]compiledProjectionSet{}}
 	if projection.Spec.Source.Where != "" {
-		compiled.where, err = compileProjectionExpression(env, projection.Spec.Source.Where)
+		compiled.where, err = compileProjectionExpression(projection.Spec.Source.Where)
 		if err != nil {
 			return nil, fmt.Errorf("spec.source.where: %w", err)
 		}
 	}
 	if projection.Spec.Target != nil && projection.Spec.Target.Filter != "" {
-		compiled.filter, err = compileProjectionExpression(env, projection.Spec.Target.Filter)
+		compiled.filter, err = compileProjectionExpression(projection.Spec.Target.Filter)
 		if err != nil {
 			return nil, fmt.Errorf("spec.target.filter: %w", err)
 		}
 	}
 	for index, expression := range projection.Spec.Match {
-		program, err := compileProjectionExpression(env, expression)
+		program, err := compileProjectionExpression(expression)
 		if err != nil {
 			return nil, fmt.Errorf("spec.match[%d]: %w", index, err)
 		}
@@ -256,19 +252,19 @@ func compileProjection(projection Projection) (*compiledProjection, error) {
 		if _, err := jp.ParseString(path); err != nil {
 			return nil, fmt.Errorf("spec.set key %q: %w", path, err)
 		}
-		value, err := compileProjectionExpression(env, mapping.Value)
+		value, err := compileProjectionExpression(mapping.Value)
 		if err != nil {
 			return nil, fmt.Errorf("spec.set[%q].value: %w", path, err)
 		}
 		entry := compiledProjectionSet{config: mapping, value: value}
 		if mapping.When != "" {
-			entry.when, err = compileProjectionExpression(env, mapping.When)
+			entry.when, err = compileProjectionExpression(mapping.When)
 			if err != nil {
 				return nil, fmt.Errorf("spec.set[%q].when: %w", path, err)
 			}
 		}
 		if mapping.Match != "" {
-			entry.match, err = compileProjectionExpression(env, mapping.Match)
+			entry.match, err = compileProjectionExpression(mapping.Match)
 			if err != nil {
 				return nil, fmt.Errorf("spec.set[%q].match: %w", path, err)
 			}
@@ -668,7 +664,7 @@ func mergeUniqueProjectionValues(current, incoming any) ([]any, error) {
 	return result, nil
 }
 
-func replaceMatchingProjectionValues(program cel.Program, current, incoming any, activation map[string]any) ([]any, error) {
+func replaceMatchingProjectionValues(program *gomplate.Template, current, incoming any, activation map[string]any) ([]any, error) {
 	existing, ok := current.([]any)
 	if current == nil {
 		existing, ok = []any{}, true

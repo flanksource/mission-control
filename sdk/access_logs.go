@@ -64,9 +64,9 @@ type AccessHistoryOptions struct {
 	Limit     int
 }
 
-func (o AccessHistoryOptions) params(userColumn string) url.Values {
+func (o AccessHistoryOptions) params(userColumn, order string) url.Values {
 	params := url.Values{}
-	params.Set("order", "created_at.desc")
+	params.Set("order", order)
 	if len(o.ConfigIDs) > 0 {
 		params.Set("config_id", inList(o.ConfigIDs))
 	}
@@ -84,7 +84,7 @@ func (o AccessHistoryOptions) params(userColumn string) url.Values {
 
 // ListAccessLogs returns sign-in records against configs, newest first.
 func (c *Client) ListAccessLogs(ctx context.Context, opts AccessHistoryOptions) ([]AccessLog, int, error) {
-	params := opts.params("external_user_id")
+	params := opts.params("external_user_id", "created_at.desc,config_id,external_user_id,scraper_id")
 	params.Set("select", accessLogSelect)
 
 	logs, total, err := pgGetAccess(ctx, c, "config_access_logs", params, compareAccessLogs)
@@ -115,7 +115,7 @@ func compareAccessLogs(a, b AccessLog) int {
 
 // ListAccessReviews returns recorded grant reviews, newest first.
 func (c *Client) ListAccessReviews(ctx context.Context, opts AccessHistoryOptions) ([]AccessReview, int, error) {
-	reviews, total, err := pgGetAccess(ctx, c, "access_reviews", opts.params("external_user_id"), compareAccessReviews)
+	reviews, total, err := pgGetAccess(ctx, c, "access_reviews", opts.params("external_user_id", "created_at.desc,id"), compareAccessReviews)
 	if err != nil {
 		return nil, 0, err
 	}

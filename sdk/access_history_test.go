@@ -37,7 +37,7 @@ var _ = ginkgo.Describe("access history", func() {
 
 		q := seen["config_access_logs"]
 		Expect(q.Get("select")).To(Equal(accessLogSelect))
-		Expect(q.Get("order")).To(Equal("created_at.desc"))
+		Expect(q.Get("order")).To(Equal("created_at.desc,config_id,external_user_id,scraper_id"))
 		Expect(q.Get("config_id")).To(Equal("in.(" + config1 + ")"))
 		Expect(q.Get("external_user_id")).To(Equal("in.(" + userOne + ")"))
 		Expect(q.Get("created_at")).To(Equal("gte.2026-05-01T00:00:00Z"))

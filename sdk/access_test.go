@@ -70,7 +70,7 @@ var _ = ginkgo.Describe("access grants", func() {
 
 		q := seen["config_access_summary"]
 		Expect(q.Get("deleted_at")).To(Equal("is.null"))
-		Expect(q.Get("order")).To(Equal("config_name,user"))
+		Expect(q.Get("order")).To(Equal("config_name,config_id,user,external_user_id,external_group_id,role,created_at"))
 		Expect(q.Get("config_id")).To(Equal("in.(" + config1 + ")"))
 		Expect(q.Get("config_type.filter")).To(Equal("Azure::EnterpriseApplication"))
 		Expect(q.Get("role.filter")).To(Equal("Owner"))
@@ -251,7 +251,7 @@ var _ = ginkgo.Describe("access rollups", func() {
 		Expect(rows[0].DistinctUsers).To(Equal(9))
 
 		q := seen["config_access_summary_by_config"]
-		Expect(q.Get("order")).To(Equal("access_count.desc,config_name"))
+		Expect(q.Get("order")).To(Equal("access_count.desc,config_name,config_id"))
 		Expect(q.Get("config_id")).To(Equal("in.(" + config1 + ")"))
 		Expect(q.Get("config_type.filter")).To(Equal("Azure::EnterpriseApplication"))
 		Expect(q.Get("limit")).To(Equal("25"))
