@@ -102,7 +102,7 @@ Use "search" to find change IDs, then "get" to fetch the full change record.`
   faro catalog change search 'type=Kubernetes::Deployment source=kubernetes' --limit 50
   faro catalog change get <change-id>`
 
-	if searchCmd := catalogSubcommand(changesCmd, "search"); searchCmd != nil {
+	if searchCmd := subcommand(changesCmd, "search"); searchCmd != nil {
 		searchCmd.Short = "Search global or config-scoped catalog changes"
 		searchCmd.Long = `Search catalog change events globally using the query language, or scope the
 results to a catalog config and its related upstream or downstream configs.
