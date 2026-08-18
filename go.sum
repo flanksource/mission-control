@@ -420,8 +420,6 @@ github.com/flanksource/clicky v1.21.56 h1:sQ4aqPvgzocrAFw8tEc022W0z6almcjkl4UUfm
 github.com/flanksource/clicky v1.21.56/go.mod h1:av7NkRWI5h8CP8GSG+Y1G3HnAvy3FHfXUsItcH0FJ5o=
 github.com/flanksource/commons v1.56.0 h1:/L1eWb3iLDM3UQEgd6vCTlG9Kbl6ssH6S0YR5f026IY=
 github.com/flanksource/commons v1.56.0/go.mod h1:gupTCRqGpgD8dd2ooE7bMDJxkfcVKvkPVuHg3cWkW+Q=
-github.com/flanksource/commons-test v0.1.13 h1:DLb3q1a7d+BpfxZDy2bdY8ZA5z1+UTYFEO9DYd15bw4=
-github.com/flanksource/commons-test v0.1.13/go.mod h1:T0zLA9F55jlaOhtvjj1Ot7QZQhtn2baAuflT+27ueG8=
 github.com/flanksource/commons-test v0.1.15 h1:YmGO7jeaFdbyfJCWpzIJNxU8j4b3QNPwfLT/5UoaUck=
 github.com/flanksource/commons-test v0.1.15/go.mod h1:7Ir8vYdYuKuAY/t4h1F5bwupdNXzG+ygctX2pxosrbI=
 github.com/flanksource/deps v1.0.35 h1:tHxhkJSsJBWRmx7lR/X1rI8diz6tu0dsGb7GCROfuIQ=
@@ -432,8 +430,6 @@ github.com/flanksource/gomplate/v3 v3.24.89 h1:yDuHmOQU2rf35vMELRgzMJ3q3H4pFdL+9
 github.com/flanksource/gomplate/v3 v3.24.89/go.mod h1:tcjpBIaHboWVPUYt973dGLCWgTD1sOHdiFgA/AaPBPQ=
 github.com/flanksource/is-healthy v1.0.90 h1:YV4rmL9y1BOgg0FZsWF7FgMBiHyf1FS3oJG6mB8o4VY=
 github.com/flanksource/is-healthy v1.0.90/go.mod h1:fTjFuG/3G4NFLEmaOAyyzlZB0i0CCBpvjq3UqceSfSg=
-github.com/flanksource/kopper v1.0.25 h1:DM9unut3wwWf4AF5NSLxo/F4DKLFZ2WofkcYojLSatw=
-github.com/flanksource/kopper v1.0.25/go.mod h1:x4tSLzAxvfdvd3bnE+1RkGQ4ZTWMmScBp8f4IqlBvTE=
 github.com/flanksource/kopper v1.0.31 h1:IDrTNI+QNxsx/43QF12/P9huSeYq7mkr5gxQDRfLIfA=
 github.com/flanksource/kopper v1.0.31/go.mod h1:kTnu6spvOyWMJubO5F6ymF8ZSLvKrcJfYZc3Zsc7M9k=
 github.com/flanksource/kubectl-neat v1.0.4 h1:t5/9CqgE84oEtB0KitgJ2+WIeLfD+RhXSxYrqb4X8yI=

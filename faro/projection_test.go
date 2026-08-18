@@ -440,9 +440,7 @@ systems:
 	})
 
 	ginkgo.It("renders dynamic projection values as text", func() {
-		env, err := newProjectionEnv()
-		Expect(err).ToNot(HaveOccurred())
-		program, err := compileProjectionExpression(env, `text(source.health) + ":" + text(source.alerts) + ":" + text(source.disabled)`)
+		program, err := compileProjectionExpression( `text(source.health) + ":" + text(source.alerts) + ":" + text(source.disabled)`)
 		Expect(err).ToNot(HaveOccurred())
 
 		value, err := evalProjectionValue(program, map[string]any{
@@ -454,9 +452,7 @@ systems:
 	})
 
 	ginkgo.It("preserves a CEL null as a native null", func() {
-		env, err := newProjectionEnv()
-		Expect(err).ToNot(HaveOccurred())
-		program, err := compileProjectionExpression(env, `null`)
+		program, err := compileProjectionExpression( `null`)
 		Expect(err).ToNot(HaveOccurred())
 
 		value, err := evalProjectionValue(program, map[string]any{})
@@ -711,9 +707,7 @@ entries:
 	})
 
 	ginkgo.It("renders timestamps as the calendar date registers record", func() {
-		env, err := newProjectionEnv()
-		Expect(err).ToNot(HaveOccurred())
-		program, err := compileProjectionExpression(env, `date(source.first_observed)`)
+		program, err := compileProjectionExpression( `date(source.first_observed)`)
 		Expect(err).ToNot(HaveOccurred())
 
 		value, err := evalProjectionValue(program, map[string]any{
@@ -725,9 +719,7 @@ entries:
 	})
 
 	ginkgo.It("capitalises vendor-lowercased names so registers read as proper nouns", func() {
-		env, err := newProjectionEnv()
-		Expect(err).ToNot(HaveOccurred())
-		program, err := compileProjectionExpression(env, `title(source.distro) + " " + source.version`)
+		program, err := compileProjectionExpression( `source.distro.title() + " " + source.version`)
 		Expect(err).ToNot(HaveOccurred())
 
 		value, err := evalProjectionValue(program, map[string]any{
@@ -741,10 +733,8 @@ entries:
 	// Config properties arrive as strings, so a register that wants to record a count or a
 	// score as a number has no way to get one without this.
 	ginkgo.It("parses a catalog property string into a number", func() {
-		env, err := newProjectionEnv()
-		Expect(err).ToNot(HaveOccurred())
-		program, err := compileProjectionExpression(env,
-			`{"high": number(source.properties["High Alerts"]), "score": number(source.properties["OpenSSF Score"])}`)
+		program, err := compileProjectionExpression(
+			`{"high": source.properties["High Alerts"].int(), "score": source.properties["OpenSSF Score"].float()}`)
 		Expect(err).ToNot(HaveOccurred())
 
 		value, err := evalProjectionValue(program, map[string]any{
@@ -752,15 +742,14 @@ entries:
 		})
 
 		Expect(err).ToNot(HaveOccurred())
-		// A count writes as 17, not 17.0 — every CEL result is routed through structpb,
-		// whose only numeric type is a float64, so integral values are narrowed back.
+		// A count writes as 17, not 17.0 — a constructed map is converted through
+		// structpb, whose only numeric type is a float64, so integral values are
+		// narrowed back on the way out.
 		Expect(value).To(Equal(map[string]any{"high": int64(17), "score": 6.9}))
 	})
 
 	ginkgo.It("refuses a property that is not a number rather than reading it as zero", func() {
-		env, err := newProjectionEnv()
-		Expect(err).ToNot(HaveOccurred())
-		program, err := compileProjectionExpression(env, `number(source.alerts)`)
+		program, err := compileProjectionExpression( `source.alerts.int()`)
 		Expect(err).ToNot(HaveOccurred())
 
 		_, err = evalProjectionValue(program, map[string]any{"source": map[string]any{"alerts": "several"}})
@@ -770,11 +759,9 @@ entries:
 
 	// Converting a float64 beyond int64's range is undefined in Go and lands as the minimum
 	// int64 on amd64, so a byte count past 2^63 would be written to a register as a large
-	// negative number. It stays a double instead.
-	ginkgo.It("keeps a number too large for an int as a double rather than overflowing it", func() {
-		env, err := newProjectionEnv()
-		Expect(err).ToNot(HaveOccurred())
-		program, err := compileProjectionExpression(env, `number(source.bytes)`)
+	// negative number. .int() refuses it and .float() is what carries it.
+	ginkgo.It("carries a number too large for an int as a double", func() {
+		program, err := compileProjectionExpression( `source.bytes.float()`)
 		Expect(err).ToNot(HaveOccurred())
 
 		const beyondInt64 = "18446744073709551616" // 2^64
@@ -788,9 +775,7 @@ entries:
 	})
 
 	ginkgo.It("refuses NaN rather than writing it to a register", func() {
-		env, err := newProjectionEnv()
-		Expect(err).ToNot(HaveOccurred())
-		program, err := compileProjectionExpression(env, `number(source.score)`)
+		program, err := compileProjectionExpression( `source.score.float()`)
 		Expect(err).ToNot(HaveOccurred())
 
 		_, err = evalProjectionValue(program, map[string]any{"source": map[string]any{"score": "NaN"}})
@@ -799,9 +784,7 @@ entries:
 	})
 
 	ginkgo.It("rejects a date() argument that is not a timestamp", func() {
-		env, err := newProjectionEnv()
-		Expect(err).ToNot(HaveOccurred())
-		program, err := compileProjectionExpression(env, `date(source.first_observed)`)
+		program, err := compileProjectionExpression( `date(source.first_observed)`)
 		Expect(err).ToNot(HaveOccurred())
 
 		_, err = evalProjectionValue(program, map[string]any{

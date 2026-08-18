@@ -45,7 +45,7 @@ type AccessGrantOptions struct {
 func (o AccessGrantOptions) params() url.Values {
 	params := url.Values{}
 	params.Set("deleted_at", "is.null")
-	params.Set("order", "config_name,user")
+	params.Set("order", "config_name,config_id,user,external_user_id,external_group_id,role,created_at")
 	if len(o.ConfigIDs) > 0 {
 		params.Set("config_id", inList(o.ConfigIDs))
 	}
@@ -216,7 +216,7 @@ func (c *Client) ListAccessSummaryByUser(ctx context.Context, limit int) ([]Acce
 // narrowed by the config filters. Only valid when CanUseConfigRollup.
 func (c *Client) ListAccessSummaryByConfig(ctx context.Context, opts AccessGrantOptions) ([]AccessSummaryByConfig, int, error) {
 	params := url.Values{}
-	params.Set("order", "access_count.desc,config_name")
+	params.Set("order", "access_count.desc,config_name,config_id")
 	if len(opts.ConfigIDs) > 0 {
 		params.Set("config_id", inList(opts.ConfigIDs))
 	}

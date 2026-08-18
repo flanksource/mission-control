@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync/atomic"
 
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -93,5 +94,38 @@ var _ = ginkgo.Describe("access query batching", func() {
 		Expect(total).To(Equal(int(requests.Load()) * 2))
 		Expect(grants).To(HaveLen(1))
 		Expect(grants[0].User).To(Equal(fmt.Sprintf("user-%02d", 100-requests.Load())))
+	})
+
+	ginkgo.It("pages past the server response cap up to the requested limit", func() {
+		var offsets []int
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			offset, err := strconv.Atoi(r.URL.Query().Get("offset"))
+			if r.URL.Query().Get("offset") == "" {
+				offset = 0
+				err = nil
+			}
+			Expect(err).ToNot(HaveOccurred())
+			offsets = append(offsets, offset)
+			w.Header().Set("Content-Type", "application/json")
+			if offset == 0 {
+				w.Header().Set("Content-Range", "0-1/3")
+				_, _ = fmt.Fprintf(w, `[
+					{"config_id":%q,"config_name":"config","external_user_id":%q,"user":"alpha","role":"Reader"},
+					{"config_id":%q,"config_name":"config","external_user_id":%q,"user":"bravo","role":"Reader"}
+				]`, config1, userOne, config1, userOne)
+				return
+			}
+			Expect(offset).To(Equal(2))
+			w.Header().Set("Content-Range", "2-2/3")
+			_, _ = fmt.Fprintf(w, `[{"config_id":%q,"config_name":"config","external_user_id":%q,"user":"charlie","role":"Reader"}]`, config1, userOne)
+		}))
+		defer server.Close()
+
+		grants, total, err := New(server.URL, "tok").ListAccessGrants(context.Background(), AccessGrantOptions{Limit: 10_000})
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(total).To(Equal(3))
+		Expect(grants).To(HaveLen(3))
+		Expect(offsets).To(Equal([]int{0, 2}))
 	})
 })
