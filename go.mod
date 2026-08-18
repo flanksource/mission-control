@@ -13,7 +13,7 @@ require (
 	github.com/flanksource/duty v1.0.1371
 	github.com/flanksource/gomplate/v3 v3.24.89
 	github.com/flanksource/incident-commander/plugin/api v0.0.0
-	github.com/flanksource/kopper v1.0.25
+	github.com/flanksource/kopper v1.0.31
 	github.com/gomarkdown/markdown v0.0.0-20260411013819-759bbc3e3207
 	github.com/google/cel-go v0.31.0
 	github.com/google/go-cmp v0.7.0
@@ -469,7 +469,7 @@ replace github.com/flanksource/incident-commander/plugin/api => ./plugin/api
 
 // replace github.com/flanksource/clicky => ../clicky
 
-// replace github.com/flanksource/gomplate/v3 => ../gomplate
+replace github.com/flanksource/gomplate/v3 => ../gomplate
 
 // replace github.com/flanksource/commons => ../commons
 
