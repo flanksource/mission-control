@@ -3,7 +3,7 @@ package sdk
 import (
 	"context"
 	"encoding/json"
-	"testing"
+	"sync"
 
 	"github.com/flanksource/clicky/rpc"
 	"github.com/flanksource/duty/models"
@@ -14,11 +14,6 @@ import (
 
 	icapi "github.com/flanksource/incident-commander/api"
 )
-
-func TestSDKCompatibility(t *testing.T) {
-	RegisterFailHandler(ginkgo.Fail)
-	ginkgo.RunSpecs(t, "SDK compatibility")
-}
 
 var (
 	_ func(string, string, ...ClientOption) *Client = New
@@ -51,6 +46,24 @@ var (
 )
 
 var _ = ginkgo.Describe("public SDK compatibility", func() {
+	ginkgo.It("accesses the initialized delegated client concurrently", func() {
+		client := New("http://mission-control.example", "token")
+		delegates := make(chan any, 16)
+		var group sync.WaitGroup
+		for range 16 {
+			group.Add(1)
+			go func() {
+				defer group.Done()
+				delegates <- client.leanClient()
+			}()
+		}
+		group.Wait()
+		close(delegates)
+		for delegate := range delegates {
+			Expect(delegate).To(BeIdenticalTo(client.lean))
+		}
+	})
+
 	ginkgo.It("retains the model-backed playbook fields", func() {
 		params := PlaybookApplyParams{
 			Namespace: "default", Name: "restart", Title: "Restart", Icon: "play",

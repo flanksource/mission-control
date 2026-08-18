@@ -58,8 +58,8 @@ type Connection struct {
 	Properties  map[string]string `json:"properties,omitempty"`
 	Certificate string            `json:"certificate,omitempty"`
 	InsecureTLS bool              `json:"insecure_tls,omitempty"`
-	CreatedAt   time.Time         `json:"created_at,omitempty"`
-	UpdatedAt   time.Time         `json:"updated_at,omitempty"`
+	CreatedAt   time.Time         `json:"created_at,omitempty,omitzero"`
+	UpdatedAt   time.Time         `json:"updated_at,omitempty,omitzero"`
 	CreatedBy   *uuid.UUID        `json:"created_by,omitempty"`
 }
 

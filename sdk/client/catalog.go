@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/flanksource/incident-commander/clientapi"
+	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -32,6 +33,26 @@ const catalogItemBatchConcurrency = 4
 const catalogInsightBatchSize = 100
 const catalogInsightBatchConcurrency = 4
 
+func normalizeCatalogID(id string) (string, error) {
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return "", fmt.Errorf("invalid catalog id %q: %w", id, err)
+	}
+	return parsed.String(), nil
+}
+
+func normalizeCatalogIDs(ids []string) ([]string, error) {
+	normalized := make([]string, len(ids))
+	for i, id := range ids {
+		parsed, err := normalizeCatalogID(id)
+		if err != nil {
+			return nil, err
+		}
+		normalized[i] = parsed
+	}
+	return normalized, nil
+}
+
 // SearchCatalog runs a resource search against the remote server
 // (POST /resources/search).
 func (c *Client) SearchCatalog(ctx context.Context, req clientapi.SearchResourcesRequest) (*clientapi.SearchResourcesResponse, error) {
@@ -40,11 +61,7 @@ func (c *Client) SearchCatalog(ctx context.Context, req clientapi.SearchResource
 		return nil, err
 	}
 	if !r.IsOK() {
-		body, _ := r.AsString()
-		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
-			return nil, ErrHTMLResponse
-		}
-		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
+		return nil, postgrestError(r)
 	}
 	var out clientapi.SearchResourcesResponse
 	if err := decodeJSON(r, &out); err != nil {
@@ -61,11 +78,7 @@ func (c *Client) SearchCatalogChanges(ctx context.Context, req clientapi.Catalog
 		return nil, err
 	}
 	if !r.IsOK() {
-		body, _ := r.AsString()
-		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
-			return nil, ErrHTMLResponse
-		}
-		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
+		return nil, postgrestError(r)
 	}
 	var out clientapi.CatalogChangesSearchResponse
 	if err := decodeJSON(r, &out); err != nil {
@@ -76,16 +89,16 @@ func (c *Client) SearchCatalogChanges(ctx context.Context, req clientapi.Catalog
 
 // GetCatalogItem fetches a single catalog item by id (GET /resources/:id).
 func (c *Client) GetCatalogItem(ctx context.Context, id string) (*clientapi.ConfigItem, error) {
+	id, err := normalizeCatalogID(id)
+	if err != nil {
+		return nil, err
+	}
 	r, err := c.R(ctx).Get(c.apiPath("/resources/" + id))
 	if err != nil {
 		return nil, err
 	}
 	if !r.IsOK() {
-		body, _ := r.AsString()
-		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
-			return nil, ErrHTMLResponse
-		}
-		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
+		return nil, postgrestError(r)
 	}
 	var out clientapi.ConfigItem
 	if err := decodeJSON(r, &out); err != nil {
@@ -126,6 +139,11 @@ func (c *Client) GetCatalogItemSummary(ctx context.Context, id string) (*clienta
 func (c *Client) GetCatalogItems(ctx context.Context, ids []string) ([]clientapi.ConfigItem, error) {
 	if len(ids) == 0 {
 		return []clientapi.ConfigItem{}, nil
+	}
+	var err error
+	ids, err = normalizeCatalogIDs(ids)
+	if err != nil {
+		return nil, err
 	}
 
 	batchCount := (len(ids) + catalogItemBatchSize - 1) / catalogItemBatchSize
@@ -176,11 +194,7 @@ func (c *Client) getCatalogItemsBatch(ctx context.Context, ids []string) ([]clie
 		return nil, err
 	}
 	if !r.IsOK() {
-		body, _ := r.AsString()
-		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
-			return nil, ErrHTMLResponse
-		}
-		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
+		return nil, postgrestError(r)
 	}
 
 	var response []catalogItemResponse
@@ -208,6 +222,10 @@ func (c *Client) getCatalogItemsBatch(ctx context.Context, ids []string) ([]clie
 
 // GetCatalogChange fetches full details for a catalog change from PostgREST.
 func (c *Client) GetCatalogChange(ctx context.Context, id string) (*CatalogChangeDetail, error) {
+	id, err := normalizeCatalogID(id)
+	if err != nil {
+		return nil, err
+	}
 	r, err := c.R(ctx).
 		QueryParam("id", "eq."+id).
 		QueryParam("select", catalogChangeDetailSelect).
@@ -216,11 +234,7 @@ func (c *Client) GetCatalogChange(ctx context.Context, id string) (*CatalogChang
 		return nil, err
 	}
 	if !r.IsOK() {
-		body, _ := r.AsString()
-		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
-			return nil, ErrHTMLResponse
-		}
-		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
+		return nil, postgrestError(r)
 	}
 	var out []CatalogChangeDetail
 	if err := decodeJSON(r, &out); err != nil {
@@ -234,6 +248,10 @@ func (c *Client) GetCatalogChange(ctx context.Context, id string) (*CatalogChang
 
 // GetCatalogInsight fetches full details for a catalog insight from PostgREST.
 func (c *Client) GetCatalogInsight(ctx context.Context, id string) (*CatalogInsightDetail, error) {
+	id, err := normalizeCatalogID(id)
+	if err != nil {
+		return nil, err
+	}
 	r, err := c.R(ctx).
 		QueryParam("id", "eq."+id).
 		QueryParam("select", catalogInsightDetailSelect).
@@ -242,11 +260,7 @@ func (c *Client) GetCatalogInsight(ctx context.Context, id string) (*CatalogInsi
 		return nil, err
 	}
 	if !r.IsOK() {
-		body, _ := r.AsString()
-		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
-			return nil, ErrHTMLResponse
-		}
-		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
+		return nil, postgrestError(r)
 	}
 	var out []CatalogInsightDetail
 	if err := decodeJSON(r, &out); err != nil {
@@ -262,6 +276,11 @@ func (c *Client) GetCatalogInsight(ctx context.Context, id string) (*CatalogInsi
 func (c *Client) GetCatalogInsights(ctx context.Context, ids []string) ([]CatalogInsightDetail, error) {
 	if len(ids) == 0 {
 		return []CatalogInsightDetail{}, nil
+	}
+	var err error
+	ids, err = normalizeCatalogIDs(ids)
+	if err != nil {
+		return nil, err
 	}
 
 	batchCount := (len(ids) + catalogInsightBatchSize - 1) / catalogInsightBatchSize
@@ -302,11 +321,7 @@ func (c *Client) getCatalogInsightsBatch(ctx context.Context, ids []string) ([]C
 		return nil, err
 	}
 	if !r.IsOK() {
-		body, _ := r.AsString()
-		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
-			return nil, ErrHTMLResponse
-		}
-		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
+		return nil, postgrestError(r)
 	}
 
 	var out []CatalogInsightDetail
@@ -319,16 +334,16 @@ func (c *Client) getCatalogInsightsBatch(ctx context.Context, ids []string) ([]C
 // GetCatalogRelationships fetches the incoming/outgoing config tree for a
 // catalog item (GET /catalog/:id/relationships).
 func (c *Client) GetCatalogRelationships(ctx context.Context, id string) (*CatalogRelationships, error) {
+	id, err := normalizeCatalogID(id)
+	if err != nil {
+		return nil, err
+	}
 	r, err := c.R(ctx).Get(c.apiPath("/catalog/" + id + "/relationships"))
 	if err != nil {
 		return nil, err
 	}
 	if !r.IsOK() {
-		body, _ := r.AsString()
-		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
-			return nil, ErrHTMLResponse
-		}
-		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
+		return nil, postgrestError(r)
 	}
 	var out CatalogRelationships
 	if err := decodeJSON(r, &out); err != nil {

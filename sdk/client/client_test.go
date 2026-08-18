@@ -165,6 +165,20 @@ var _ = ginkgo.Describe("TestConnection HTML detection", func() {
 })
 
 var _ = ginkgo.Describe("Plugin operation server errors", func() {
+	ginkgo.It("normalizes invocation paths for API-prefixed servers", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			Expect(r.URL.Path).To(Equal("/api/plugins/arthas/invoke/session"))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		}))
+		defer server.Close()
+
+		body, err := New(server.URL+"/api", "fake-token").InvokePluginOperation("arthas", "session", "", json.RawMessage(`{}`))
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(body).To(MatchJSON(`{"ok":true}`))
+	})
+
 	ginkgo.It("returns structured oops server errors", func() {
 		payload := `{
 			"code": "HANDLER_ERROR",

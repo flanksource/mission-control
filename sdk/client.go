@@ -69,10 +69,6 @@ func NewWithAuthHeader(serverURL, authHeader string, opts ...ClientOption) *Clie
 }
 
 func (c *Client) leanClient() *lean.Client {
-	if c.lean == nil {
-		c.lean = lean.New(c.serverURL, "")
-	}
-	c.lean.Client = c.Client
 	return c.lean
 }
 

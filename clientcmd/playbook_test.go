@@ -168,6 +168,19 @@ var _ = ginkgo.Describe("playbook CLI helpers", func() {
 		})
 	}
 
+	ginkgo.It("escapes exec and HTTP results in HTML output", func() {
+		payload := `</pre><script>alert("x")</script>`
+		execHTML := (playbookExecResult{Stdout: payload}).HTML()
+		httpHTML := (playbookHTTPResult{StatusCode: 200, Headers: map[string]string{"X-Test": payload}, Content: payload}).HTML()
+
+		for _, output := range []string{execHTML, httpHTML} {
+			Expect(output).ToNot(ContainSubstring("<script>"))
+			Expect(output).To(ContainSubstring("&lt;script&gt;"))
+			Expect(output).To(HavePrefix("<pre>"))
+			Expect(output).To(HaveSuffix("</pre>"))
+		}
+	})
+
 	ginkgo.It("preserves exec action metadata", func() {
 		result := resolveActionResult("exec", actionResults[1].result)
 		Expect(result).To(Equal(playbookExecResult{

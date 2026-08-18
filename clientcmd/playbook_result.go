@@ -2,6 +2,7 @@ package clientcmd
 
 import (
 	"fmt"
+	"html"
 	"sort"
 	"strings"
 
@@ -41,9 +42,11 @@ func (r playbookSQLResult) table() clickyapi.TextTable {
 
 type playbookExecResult clientapi.PlaybookExecResult
 
-func (r playbookExecResult) String() string   { return r.plain(false) }
-func (r playbookExecResult) ANSI() string     { return r.plain(true) }
-func (r playbookExecResult) HTML() string     { return "<pre>" + r.plain(false) + "</pre>" }
+func (r playbookExecResult) String() string { return r.plain(false) }
+func (r playbookExecResult) ANSI() string   { return r.plain(true) }
+func (r playbookExecResult) HTML() string {
+	return "<pre>" + html.EscapeString(r.plain(false)) + "</pre>"
+}
 func (r playbookExecResult) Markdown() string { return "```\n" + r.plain(false) + "\n```" }
 
 func (r playbookExecResult) plain(colors bool) string {
@@ -81,9 +84,11 @@ func (r playbookExecResult) plain(colors bool) string {
 
 type playbookHTTPResult clientapi.PlaybookHTTPResult
 
-func (r playbookHTTPResult) String() string   { return r.plain(false) }
-func (r playbookHTTPResult) ANSI() string     { return r.plain(true) }
-func (r playbookHTTPResult) HTML() string     { return "<pre>" + r.plain(false) + "</pre>" }
+func (r playbookHTTPResult) String() string { return r.plain(false) }
+func (r playbookHTTPResult) ANSI() string   { return r.plain(true) }
+func (r playbookHTTPResult) HTML() string {
+	return "<pre>" + html.EscapeString(r.plain(false)) + "</pre>"
+}
 func (r playbookHTTPResult) Markdown() string { return "```\n" + r.plain(false) + "\n```" }
 
 func (r playbookHTTPResult) plain(colors bool) string {

@@ -2,6 +2,7 @@ package clientcmd
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -96,8 +97,13 @@ func prettyCookies(cookies clientapi.Cookies, full bool) clickyapi.Text {
 	for _, cookie := range cookies {
 		domains[cookie.Domain]++
 	}
-	for domain, count := range domains {
-		text = text.AddText(fmt.Sprintf("  %s(%d)", domain, count), "text-muted")
+	names := make([]string, 0, len(domains))
+	for domain := range domains {
+		names = append(names, domain)
+	}
+	sort.Strings(names)
+	for _, domain := range names {
+		text = text.AddText(fmt.Sprintf("  %s(%d)", domain, domains[domain]), "text-muted")
 	}
 	for _, cookie := range cookies {
 		text = text.NewLine().AddText("  "+cookie.Name, "font-bold").

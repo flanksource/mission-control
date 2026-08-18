@@ -15,6 +15,12 @@ import (
 	"golang.org/x/crypto/argon2"
 )
 
+const (
+	maxAccessTokenTimeCost    uint32 = 10
+	maxAccessTokenMemoryCost  uint32 = 256 * 1024
+	maxAccessTokenParallelism uint8  = 64
+)
+
 type localWhoamiOps struct{}
 
 func (localWhoamiOps) DefaultDBConnection() string {
@@ -123,6 +129,11 @@ func hashMissionControlAccessToken(token string) (string, error) {
 	parallelism, err := parseUint8(fields[4])
 	if err != nil {
 		return "", err
+	}
+	if timeCost == 0 || timeCost > maxAccessTokenTimeCost ||
+		memoryCost > maxAccessTokenMemoryCost ||
+		parallelism == 0 || parallelism > maxAccessTokenParallelism {
+		return "", fmt.Errorf("invalid access token format")
 	}
 
 	hash := argon2.IDKey([]byte(fields[0]), []byte(fields[1]), timeCost, memoryCost, parallelism, 20)

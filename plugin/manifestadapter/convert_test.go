@@ -77,9 +77,12 @@ var _ = ginkgo.Describe("ManifestToService", func() {
 		Expect(operation.Schema.Properties["mode"].Enum).To(ConsistOf("cpu", "heap", "trace"))
 
 		parameters := map[string]bool{}
+		parameterNames := make([]string, 0, len(operation.Parameters))
 		for _, parameter := range operation.Parameters {
 			parameters[parameter.Name] = parameter.Required
+			parameterNames = append(parameterNames, parameter.Name)
 		}
+		Expect(parameterNames).To(Equal([]string{"mode", "podName", "port"}))
 		Expect(parameters).To(HaveKeyWithValue("podName", true))
 		Expect(parameters).To(HaveKey("port"))
 		Expect(parameters).To(HaveKey("mode"))

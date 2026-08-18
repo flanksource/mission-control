@@ -104,8 +104,9 @@ func findBinary(dir, name string) (string, error) {
 		return "", fmt.Errorf("manifestcache: scan %s: %w", dir, err)
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasPrefix(entry.Name(), name) {
-			return filepath.Join(dir, entry.Name()), nil
+		candidate := filepath.Join(dir, entry.Name())
+		if strings.HasPrefix(entry.Name(), name) && isBinaryFile(candidate) {
+			return candidate, nil
 		}
 	}
 	return "", fmt.Errorf("manifestcache: plugin %q not found in %s", name, dir)
@@ -113,7 +114,7 @@ func findBinary(dir, name string) (string, error) {
 
 func isBinaryFile(path string) bool {
 	info, err := os.Stat(path)
-	return err == nil && !info.IsDir()
+	return err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0
 }
 
 func dialAndCaptureManifest(ctx gocontext.Context, binPath string, timeout time.Duration) (*api.PluginManifest, error) {
@@ -129,6 +130,7 @@ func dialAndCaptureManifest(ctx gocontext.Context, binPath string, timeout time.
 		},
 		Cmd:              cmd,
 		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolGRPC},
+		StartTimeout:     timeout,
 		Managed:          true,
 	})
 	defer cli.Kill()

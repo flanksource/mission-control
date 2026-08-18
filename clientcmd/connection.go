@@ -88,6 +88,8 @@ var connectionAddTypeSpecs = []connectionTypeSpec{
 	{Name: "mysql", Type: clientapi.ConnectionTypeMySQL, Short: "Add a MySQL connection"},
 	{Name: "mssql", Type: clientapi.ConnectionTypeSQLServer, Aliases: []string{"sqlserver", "sql-server"}, Short: "Add a SQL Server connection"},
 	{Name: "mongo", Type: clientapi.ConnectionTypeMongo, Aliases: []string{"mongodb"}, Short: "Add a MongoDB connection"},
+	{Name: "elasticsearch", Type: clientapi.ConnectionTypeElasticSearch, Aliases: []string{"elastic-search"}, Short: "Add an ElasticSearch connection"},
+	{Name: "redis", Type: clientapi.ConnectionTypeRedis, Short: "Add a Redis connection"},
 	{Name: "aws", Type: clientapi.ConnectionTypeAWS, Short: "Add an AWS connection"},
 	{Name: "aws-kms", Type: clientapi.ConnectionTypeAWSKMS, Aliases: []string{"awskms"}, Short: "Add an AWS KMS connection"},
 	{Name: "s3", Type: clientapi.ConnectionTypeS3, Short: "Add an S3 connection"},
@@ -329,7 +331,7 @@ func validateConnectionFlags(flags *ConnectionFlags) error {
 			return fmt.Errorf("--host and --share are required for SMB connections")
 		}
 
-	case clientapi.ConnectionTypePrometheus, clientapi.ConnectionTypeLoki:
+	case clientapi.ConnectionTypePrometheus, clientapi.ConnectionTypeLoki, clientapi.ConnectionTypeElasticSearch, clientapi.ConnectionTypeRedis:
 		if flags.URL == "" {
 			return fmt.Errorf("--url is required for %s connections", flags.Type)
 		}

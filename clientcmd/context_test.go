@@ -374,6 +374,32 @@ var _ = ginkgo.Describe("API base resolution", func() {
 		Expect(resolved).To(Equal(canonical.URL + "/api"))
 	})
 
+	ginkgo.It("rejects HTTPS to HTTP health redirects", func() {
+		insecure := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path == "/api/health" {
+				_, _ = w.Write([]byte("OK"))
+				return
+			}
+			http.NotFound(w, r)
+		}))
+		defer insecure.Close()
+
+		secure := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, insecure.URL+r.URL.RequestURI(), http.StatusPermanentRedirect)
+		}))
+		defer secure.Close()
+
+		previousDefaultClient := http.DefaultClient
+		http.DefaultClient = secure.Client()
+		ginkgo.DeferCleanup(func() {
+			http.DefaultClient = previousDefaultClient
+		})
+
+		_, err := ResolveAPIBase(secure.URL)
+
+		Expect(err).To(MatchError(ContainSubstring("health probe redirected from HTTPS to http")))
+	})
+
 	ginkgo.It("does not follow redirects on authenticated API requests", func() {
 		var redirectedRequests atomic.Int32
 		redirectTarget := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

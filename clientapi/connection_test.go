@@ -30,9 +30,7 @@ var _ = ginkgo.Describe("Connection DTO", func() {
 			"source":"UI",
 			"type":"http",
 			"url":"https://example.com",
-			"properties":{"bearer":"token"},
-			"created_at":"0001-01-01T00:00:00Z",
-			"updated_at":"0001-01-01T00:00:00Z"
+			"properties":{"bearer":"token"}
 		}`))
 	})
 })

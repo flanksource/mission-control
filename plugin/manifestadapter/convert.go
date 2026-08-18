@@ -2,6 +2,8 @@
 package manifestadapter
 
 import (
+	"sort"
+
 	"google.golang.org/protobuf/types/known/structpb"
 
 	"github.com/flanksource/incident-commander/clientapi"
@@ -63,9 +65,15 @@ func paramsSchemaToPlugin(value *structpb.Struct) (clientapi.Schema, []clientapi
 	for _, name := range schema.Required {
 		required[name] = true
 	}
+	fieldNames := make([]string, 0, len(properties.Fields))
+	for fieldName := range properties.Fields {
+		fieldNames = append(fieldNames, fieldName)
+	}
+	sort.Strings(fieldNames)
+
 	parameters := make([]clientapi.PluginParameter, 0, len(properties.Fields))
-	for fieldName, fieldValue := range properties.Fields {
-		fieldSchema := fieldValue.GetStructValue()
+	for _, fieldName := range fieldNames {
+		fieldSchema := properties.Fields[fieldName].GetStructValue()
 		property := clientapi.Property{Type: "string"}
 		if fieldSchema != nil {
 			if propertyType := stringField(fieldSchema, "type"); propertyType != "" {

@@ -205,6 +205,9 @@ func BuildConnectionFromFlags(flags *ConnectionFlags) (clientapi.Connection, err
 	case clientapi.ConnectionTypeLoki:
 		// URL, username, password already set
 
+	case clientapi.ConnectionTypeElasticSearch, clientapi.ConnectionTypeRedis:
+		conn.URL = flags.URL
+
 	case clientapi.ConnectionTypeFacet:
 		conn.Password = flags.Token
 		if flags.TimestampURL != "" {
@@ -435,6 +438,17 @@ func addTypeSpecificFlags(cmd *cobra.Command, flags *ConnectionFlags, connType s
 		cmd.Flags().StringVar(&flags.URL, "url", "", "Loki URL")
 		cmd.Flags().StringVar(&flags.Username, "username", "", "Basic auth username")
 		cmd.Flags().StringVar(&flags.Password, "password", "", "Basic auth password")
+
+	case clientapi.ConnectionTypeElasticSearch:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "ElasticSearch URL")
+		cmd.Flags().StringVar(&flags.Username, "username", "", "Basic auth username")
+		cmd.Flags().StringVar(&flags.Password, "password", "", "Basic auth password")
+		cmd.Flags().BoolVar(&flags.InsecureTLS, "insecure-tls", false, "Skip TLS verification")
+
+	case clientapi.ConnectionTypeRedis:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "Redis address")
+		cmd.Flags().StringVar(&flags.Username, "username", "", "Redis username")
+		cmd.Flags().StringVar(&flags.Password, "password", "", "Redis password")
 
 	case clientapi.ConnectionTypeFacet:
 		cmd.Flags().StringVar(&flags.URL, "url", "", "Facet service URL (required)")

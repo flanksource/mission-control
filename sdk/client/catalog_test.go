@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 
 	"github.com/flanksource/incident-commander/clientapi"
+	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -67,15 +68,16 @@ var _ = ginkgo.Describe("catalog client", func() {
 	})
 
 	ginkgo.It("gets a single catalog item by id", func() {
+		id := "3a96d327-2a6b-4a3a-9b2a-1f0f6b6b6b6b"
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			Expect(r.Method).To(Equal(http.MethodGet))
-			Expect(r.URL.Path).To(Equal("/resources/abc"))
+			Expect(r.URL.Path).To(Equal("/resources/" + id))
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"id":"3a96d327-2a6b-4a3a-9b2a-1f0f6b6b6b6b","name":"my-config"}`))
 		}))
 		defer server.Close()
 
-		item, err := New(server.URL, "tok").GetCatalogItem(context.Background(), "abc")
+		item, err := New(server.URL, "tok").GetCatalogItem(context.Background(), id)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(item.Name).ToNot(BeNil())
 		Expect(*item.Name).To(Equal("my-config"))
@@ -234,6 +236,23 @@ var _ = ginkgo.Describe("catalog client", func() {
 		Expect(insight.Config.Name).To(Equal("prod-instance"))
 	})
 
+	ginkgo.It("rejects malformed catalog IDs before issuing requests", func() {
+		var requestCount atomic.Int32
+		server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			requestCount.Add(1)
+		}))
+		defer server.Close()
+
+		first := "521bae33-e4c3-42eb-a9c5-071ab92940b5"
+		second := "21e7586d-31fb-453c-a205-d73dc6b58eaa"
+		_, err := New(server.URL, "tok").GetCatalogInsights(context.Background(), []string{first + "," + second})
+		Expect(err).To(MatchError(ContainSubstring("invalid catalog id")))
+
+		_, err = New(server.URL, "tok").GetCatalogItem(context.Background(), "../health")
+		Expect(err).To(MatchError(ContainSubstring("invalid catalog id")))
+		Expect(requestCount.Load()).To(BeZero())
+	})
+
 	ginkgo.It("returns not found for an empty catalog change response", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json")
@@ -241,23 +260,42 @@ var _ = ginkgo.Describe("catalog client", func() {
 		}))
 		defer server.Close()
 
-		_, err := New(server.URL, "tok").GetCatalogChange(context.Background(), "missing")
+		_, err := New(server.URL, "tok").GetCatalogChange(context.Background(), uuid.NewString())
 		Expect(errors.Is(err, ErrNotFound)).To(BeTrue())
 	})
 
 	ginkgo.It("fetches relationships and exposes both tree directions", func() {
+		id := uuid.NewString()
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			Expect(r.URL.Path).To(Equal("/catalog/root-id/relationships"))
+			Expect(r.URL.Path).To(Equal("/catalog/" + id + "/relationships"))
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"id":"00000000-0000-0000-0000-000000000000","outgoing":{"id":"00000000-0000-0000-0000-000000000000","name":"root"}}`))
 		}))
 		defer server.Close()
 
-		rels, err := New(server.URL, "tok").GetCatalogRelationships(context.Background(), "root-id")
+		rels, err := New(server.URL, "tok").GetCatalogRelationships(context.Background(), id)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(rels.Outgoing).ToNot(BeNil())
 		Expect(rels.Outgoing.Name).ToNot(BeNil())
 		Expect(*rels.Outgoing.Name).To(Equal("root"))
+	})
+
+	ginkgo.It("returns typed server errors for catalog failures", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte(`{"code":"PGRST100","error":"bad filter","trace":"trace-1"}`))
+		}))
+		defer server.Close()
+
+		_, err := New(server.URL, "tok").SearchCatalog(context.Background(), clientapi.SearchResourcesRequest{})
+
+		var serverErr *ServerError
+		Expect(errors.As(err, &serverErr)).To(BeTrue(), "got: %v", err)
+		Expect(serverErr.StatusCode).To(Equal(http.StatusBadRequest))
+		Expect(serverErr.Code).To(Equal("PGRST100"))
+		Expect(serverErr.Message).To(Equal("bad filter"))
+		Expect(serverErr.Trace).To(Equal("trace-1"))
 	})
 
 	ginkgo.It("returns ErrHTMLResponse when the frontend answers a catalog search", func() {

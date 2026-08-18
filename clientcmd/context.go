@@ -496,6 +496,9 @@ func probeAPIHealth(ctx gocontext.Context, baseURL string) (string, bool, error)
 	}
 
 	finalURL := *resp.Request.URL
+	if req.URL.Scheme == "https" && finalURL.Scheme != "https" {
+		return "", false, fmt.Errorf("health probe redirected from HTTPS to %s", finalURL.Scheme)
+	}
 	finalURL.RawQuery = ""
 	finalURL.Fragment = ""
 	finalURL.RawPath = ""

@@ -11,6 +11,8 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -298,6 +300,10 @@ func SavePlaybook(ctx context.Context, obj *v1.Playbook) (*models.Playbook, erro
 	}
 
 	if err := tx.Clauses(clause.Returning{}).Save(&playbook).Error; err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation && pgErr.ConstraintName == "playbooks_webhook_path_key" {
+			return nil, dutyAPI.Errorf(dutyAPI.ECONFLICT, "playbook with webhook path %s already exists", obj.Spec.On.Webhook.Path)
+		}
 		return nil, err
 	}
 
