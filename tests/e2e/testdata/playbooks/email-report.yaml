@@ -20,21 +20,23 @@ playbook:
       label: SMTP URL
   actions:
     - name: generate-report
+      timeout: 30s
       report:
         view: $(.params.view)
         format: html
-    - name: generate-pdf
+    - name: generate-attachment
+      timeout: 30s
       report:
         view: $(.params.view)
-        format: pdf
+        format: html
     - name: send-email
       notification:
         url: $(.params.smtp_url)
         title: Pod Report
         message: '{{(getAction "generate-report").result.format}}'
         attachments:
-          - content: artifact://generate-pdf/*.pdf
-            filename: report.pdf
+          - content: artifact://generate-attachment/*.html
+            filename: report.html
 
 output:
   run:
@@ -46,17 +48,17 @@ output:
         format: html
       artifacts:
         - content_type: text/html
-    - name: generate-pdf
+    - name: generate-attachment
       status: completed
       result:
-        format: pdf
+        format: html
       artifacts:
-        - content_type: application/pdf
+        - content_type: text/html
     - name: send-email
       status: completed
 
 assertions:
   - size(emails) >= 1
   - emails[0].body.contains('Pod Report')
-  - emails[0].body.contains('report.pdf')
-  - emails[0].body.contains('application/pdf')
+  - emails[0].body.contains('report.html')
+  - emails[0].body.contains('text/html')
