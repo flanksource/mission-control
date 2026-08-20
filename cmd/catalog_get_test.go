@@ -80,6 +80,21 @@ var _ = ginkgo.Describe("buildCatalogGetOutput", func() {
 })
 
 var _ = ginkgo.Describe("buildDetailsSection", func() {
+	ginkgo.It("includes the 30-day cost", func() {
+		cost := 54.32
+		r := CatalogGetResult{
+			ConfigItem: models.ConfigItem{
+				ID:   uuid.New(),
+				Name: lo.ToPtr("test"),
+				Type: lo.ToPtr("AWS::EC2::Instance"),
+			},
+			CostTotal30d: &cost,
+		}
+		dl := buildDetailsSection(r)
+
+		Expect(dl.Items).To(ContainElement(HaveField("Value", "$54.32")))
+	})
+
 	ginkgo.It("includes scraper and last scraped time", func() {
 		scraperID := "scraper-123"
 		lastScraped := time.Now().Add(-10 * time.Minute)

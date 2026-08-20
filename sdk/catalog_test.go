@@ -81,6 +81,29 @@ var _ = ginkgo.Describe("catalog client", func() {
 		Expect(*item.Name).To(Equal("my-config"))
 	})
 
+	ginkgo.It("gets computed catalog cost fields from the summary view", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			Expect(r.Method).To(Equal(http.MethodGet))
+			Expect(r.URL.Path).To(Equal("/db/configs"))
+			Expect(r.URL.Query().Get("id")).To(Equal("eq.abc"))
+			Expect(r.URL.Query().Get("select")).To(Equal("*"))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`[{"id":"3a96d327-2a6b-4a3a-9b2a-1f0f6b6b6b6b","cost_per_minute":0.00125,"cost_total_1h":0.075,"cost_total_1d":1.8,"cost_total_30d":54}]`))
+		}))
+		defer server.Close()
+
+		summary, err := New(server.URL, "tok").GetCatalogItemSummary(context.Background(), "abc")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(summary.CostPerMinute).ToNot(BeNil())
+		Expect(*summary.CostPerMinute).To(Equal(0.00125))
+		Expect(summary.CostTotal1h).ToNot(BeNil())
+		Expect(*summary.CostTotal1h).To(Equal(0.075))
+		Expect(summary.CostTotal1d).ToNot(BeNil())
+		Expect(*summary.CostTotal1d).To(Equal(1.8))
+		Expect(summary.CostTotal30d).ToNot(BeNil())
+		Expect(*summary.CostTotal30d).To(Equal(54.0))
+	})
+
 	ginkgo.It("gets complete catalog items in bounded batches and preserves requested order", func() {
 		ids := make([]string, 201)
 		for i := range ids {

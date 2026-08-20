@@ -17,10 +17,11 @@ import (
 // catalogItemDetail keeps the ConfigItem wire shape while expanding its human-readable view.
 type catalogItemDetail struct {
 	models.ConfigItem `yaml:",inline"`
+	Summary           *models.ConfigItemSummary `json:"-" yaml:"-"`
 }
 
 func (r catalogItemDetail) Pretty() api.Text {
-	t := r.ConfigItem.Pretty().NewLine().Append(catalogItemDetails(r.ConfigItem))
+	t := r.ConfigItem.Pretty().NewLine().Append(catalogItemDetails(r.ConfigItem, r.Summary))
 
 	if r.Properties != nil && len(*r.Properties) > 0 {
 		t = t.NewLine().AddText("Properties", "font-bold").NewLine().Append(catalogItemProperties(*r.Properties))
@@ -33,7 +34,7 @@ func (r catalogItemDetail) Pretty() api.Text {
 	return t
 }
 
-func catalogItemDetails(c models.ConfigItem) api.DescriptionList {
+func catalogItemDetails(c models.ConfigItem, summary *models.ConfigItemSummary) api.DescriptionList {
 	items := []api.KeyValuePair{
 		{Key: "ID", Value: c.ID.String()},
 		{Key: "Type", Value: stringValue(c.Type, "-")},
@@ -68,17 +69,19 @@ func catalogItemDetails(c models.ConfigItem) api.DescriptionList {
 	if len(c.ExternalID) > 0 {
 		items = append(items, api.KeyValuePair{Key: "External ID", Value: strings.Join(c.ExternalID, ", ")})
 	}
-	if c.CostPerMinute != 0 {
-		items = append(items, api.KeyValuePair{Key: "Cost per Minute", Value: fmt.Sprintf("$%.6f", c.CostPerMinute)})
-	}
-	if c.CostTotal1d != 0 {
-		items = append(items, api.KeyValuePair{Key: "Cost (1d)", Value: fmt.Sprintf("$%.2f", c.CostTotal1d)})
-	}
-	if c.CostTotal7d != 0 {
-		items = append(items, api.KeyValuePair{Key: "Cost (7d)", Value: fmt.Sprintf("$%.2f", c.CostTotal7d)})
-	}
-	if c.CostTotal30d != 0 {
-		items = append(items, api.KeyValuePair{Key: "Cost (30d)", Value: fmt.Sprintf("$%.2f", c.CostTotal30d)})
+	if summary != nil {
+		if summary.CostPerMinute != nil && *summary.CostPerMinute != 0 {
+			items = append(items, api.KeyValuePair{Key: "Cost per Minute", Value: fmt.Sprintf("$%.6f", *summary.CostPerMinute)})
+		}
+		if summary.CostTotal1h != nil && *summary.CostTotal1h != 0 {
+			items = append(items, api.KeyValuePair{Key: "Cost (1h)", Value: fmt.Sprintf("$%.2f", *summary.CostTotal1h)})
+		}
+		if summary.CostTotal1d != nil && *summary.CostTotal1d != 0 {
+			items = append(items, api.KeyValuePair{Key: "Cost (1d)", Value: fmt.Sprintf("$%.2f", *summary.CostTotal1d)})
+		}
+		if summary.CostTotal30d != nil && *summary.CostTotal30d != 0 {
+			items = append(items, api.KeyValuePair{Key: "Cost (30d)", Value: fmt.Sprintf("$%.2f", *summary.CostTotal30d)})
+		}
 	}
 	if !c.CreatedAt.IsZero() {
 		items = append(items, api.KeyValuePair{Key: "Created", Value: c.CreatedAt.Format(time.RFC3339)})
