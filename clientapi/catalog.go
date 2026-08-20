@@ -124,7 +124,7 @@ type ConfigItemSummary struct {
 	Ready           bool               `json:"ready"`
 	Path            string             `json:"path,omitempty"`
 	Changes         int                `json:"changes,omitempty"`
-	Analysis        *map[string]any     `json:"analysis,omitempty"`
+	Analysis        *map[string]any    `json:"analysis,omitempty"`
 }
 
 type CatalogText struct {

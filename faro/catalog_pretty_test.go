@@ -130,7 +130,7 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 			ParentID:    &parentID,
 			Path:        "cluster/default/api",
 			Labels:      &labels,
-			Tags:          map[string]string{"environment": "production"},
+			Tags:        map[string]string{"environment": "production"},
 			Properties: &clientapi.CatalogProperties{
 				{Label: "Namespace", Text: "default"},
 				{Name: "restart_count", Value: &zero, Max: &max, Unit: "restarts", Status: "stable"},
