@@ -67,6 +67,22 @@ func MarkTimedOutPlaybookRuns(ctx context.Context) *job.Job {
 	}
 }
 
+func ReapOrphanedPlaybookActions(ctx context.Context) *job.Job {
+	return &job.Job{
+		Name:          "ReapOrphanedPlaybookActions",
+		Schedule:      "@every 1m",
+		Context:       ctx,
+		JobHistory:    true,
+		JitterDisable: true,
+		Retention:     job.RetentionFailed,
+		RunNow:        true,
+		Singleton:     true,
+		Fn: func(ctx job.JobRuntime) error {
+			return playbook.ReapOrphanedActions(ctx.Context)
+		},
+	}
+}
+
 func CleanupDeletedPlaybooks(ctx context.Context) *job.Job {
 	return &job.Job{
 		Name:       "CleanupDeletedPlaybooks",

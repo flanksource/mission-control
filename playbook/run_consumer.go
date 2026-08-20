@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flanksource/commons/collections/syncmap"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/postq"
@@ -23,6 +24,8 @@ import (
 	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/flanksource/incident-commander/playbook/runner"
 )
+
+var activePlaybookActions = syncmap.New[uuid.UUID, struct{}]()
 
 type playbookRunError struct {
 	RunID    uuid.UUID
@@ -225,7 +228,14 @@ func getNextAction(db *gorm.DB) (*models.PlaybookRunAction, error) {
 	return &action[0], nil
 }
 
-// ActionConsumer picks up scheduled actions runs scheduled for agents
+// claimedAgentAction carries the resolved action ready for execution outside a transaction.
+type claimedAgentAction struct {
+	runAction   *models.PlaybookRunAction
+	spec        *v1.PlaybookAction
+	templateEnv actions.TemplateEnv
+}
+
+// ActionAgentConsumer picks up scheduled actions runs scheduled for agents
 func ActionAgentConsumer(ctx context.Context) (int, error) {
 	if ctx.Properties().On(false, "playbook.runner.disabled") {
 		return 0, nil
@@ -233,6 +243,75 @@ func ActionAgentConsumer(ctx context.Context) (int, error) {
 
 	ctx.Logger = ctx.Logger.WithSkipReportLevel(-1)
 
+	if ctx.Properties().On(false, "playbook.action.transactional") {
+		return actionAgentConsumerInTransaction(ctx)
+	}
+
+	claimed, err := claimNextAgentAction(ctx)
+	if err != nil {
+		return 1, err
+	}
+	if claimed == nil {
+		return 0, nil
+	}
+
+	ctx = ctx.WithObject(claimed.runAction)
+	activePlaybookActions.Store(claimed.runAction.ID, struct{}{})
+	defer activePlaybookActions.Delete(claimed.runAction.ID)
+
+	// ExecuteAndSaveAction runs outside a transaction so result updates stream to the UI.
+	if err := runner.ExecuteAndSaveAction(ctx, claimed.spec.PlaybookID, claimed.runAction, *claimed.spec, claimed.templateEnv); err != nil {
+		return 1, failClaimedAction(ctx, claimed.runAction, err)
+	}
+
+	return 1, nil
+}
+
+// claimNextAgentAction resolves and validates the next waiting agent action, then marks it
+// running and commits so the row lock is released before execution. Resolution and validation
+// happen before the running commit, so a failure there rolls back and the action stays waiting
+// to be retried. Returns nil when there is nothing to run.
+func claimNextAgentAction(ctx context.Context) (*claimedAgentAction, error) {
+	var claimed *claimedAgentAction
+
+	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
+		actionData, runAction, err := getNextActionForAgent(ctx.DB())
+		if err != nil {
+			return err
+		}
+		if actionData == nil {
+			return nil
+		}
+		ctx = ctx.WithObject(runAction, actionData)
+
+		var templateEnv actions.TemplateEnv
+		if err := json.Unmarshal(actionData.Env, &templateEnv); err != nil {
+			return oops.Wrap(err)
+		}
+
+		spec, err := getActionSpec(ctx, *actionData, runAction, templateEnv)
+		if err != nil {
+			return oops.Wrap(err)
+		}
+
+		if err := spec.Validate(); err != nil {
+			return ctx.Oops().Wrap(err)
+		}
+
+		if err := runAction.Start(ctx.DB()); err != nil {
+			return err
+		}
+
+		claimed = &claimedAgentAction{runAction: runAction, spec: spec, templateEnv: templateEnv}
+		return nil
+	})
+
+	return claimed, err
+}
+
+// actionAgentConsumerInTransaction runs the entire agent action inside a single transaction.
+// It is the revertible fallback for the streaming path, gated behind playbook.action.transactional.
+func actionAgentConsumerInTransaction(ctx context.Context) (int, error) {
 	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
 		action, run, err := getNextActionForAgent(ctx.DB())
 		if err != nil {
@@ -279,14 +358,86 @@ func failOrRetryRun(tx *gorm.DB, run *models.PlaybookRun, err error) error {
 	return run.Fail(tx, err)
 }
 
+func failClaimedAction(ctx context.Context, action *models.PlaybookRunAction, actionErr error) error {
+	var current models.PlaybookRunAction
+	if err := ctx.DB().Select("status").Where("id = ?", action.ID).First(&current).Error; err != nil {
+		return oops.Join(actionErr, ctx.Oops("db").Wrapf(err, "failed to check action status"))
+	}
+	if current.Status != models.PlaybookActionStatusRunning {
+		return actionErr
+	}
+	if err := action.Fail(ctx.DB(), "", actionErr); err != nil {
+		return oops.Join(actionErr, ctx.Oops("db").Wrapf(err, "failed to mark action failed"))
+	}
+	return actionErr
+}
+
 // ActionConsumer picks up scheduled actions runs them.
-func ActionConsumer(parentCtx context.Context) (int, error) {
-	if parentCtx.Properties().On(false, "playbook.runner.disabled") {
+func ActionConsumer(ctx context.Context) (int, error) {
+	if ctx.Properties().On(false, "playbook.runner.disabled") {
 		return 0, nil
 	}
 
-	parentCtx.Logger = parentCtx.Logger.WithSkipReportLevel(-1)
+	ctx.Logger = ctx.Logger.WithSkipReportLevel(-1)
 
+	if ctx.Properties().On(false, "playbook.action.transactional") {
+		return actionConsumerInTransaction(ctx)
+	}
+
+	action, run, err := claimNextAction(ctx)
+	if err != nil {
+		return 1, err
+	}
+	if action == nil {
+		return 0, nil
+	}
+
+	ctx = ctx.WithObject(action)
+	activePlaybookActions.Store(action.ID, struct{}{})
+	defer activePlaybookActions.Delete(action.ID)
+
+	// Execution runs outside a transaction so that per-write result updates (e.g. the
+	// report action's progress logs) commit immediately and stream to the UI, instead
+	// of being buffered until the whole action commits. The active action registry keeps
+	// the reaper from reclaiming an action that is still executing in this process.
+	if err := runner.RunAction(ctx, run, action); err != nil {
+		return 1, failClaimedAction(ctx, action, err)
+	}
+
+	return 1, nil
+}
+
+// claimNextAction selects the next scheduled action, marks it running and commits in a
+// short transaction so the FOR UPDATE row lock is released before execution begins.
+// Returns a nil action when there is nothing to run.
+func claimNextAction(ctx context.Context) (*models.PlaybookRunAction, *models.PlaybookRun, error) {
+	var action *models.PlaybookRunAction
+	var run *models.PlaybookRun
+
+	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
+		var err error
+		action, err = getNextAction(ctx.DB())
+		if err != nil {
+			return oops.Wrap(err)
+		}
+		if action == nil {
+			return nil
+		}
+
+		run, err = action.GetRun(ctx.DB())
+		if err != nil {
+			return err
+		}
+
+		return action.Start(ctx.DB())
+	})
+
+	return action, run, err
+}
+
+// actionConsumerInTransaction runs the entire action inside a single transaction. It is
+// the revertible fallback for the streaming path, gated behind playbook.action.transactional.
+func actionConsumerInTransaction(parentCtx context.Context) (int, error) {
 	err := parentCtx.Transaction(func(ctx context.Context, _ trace.Span) error {
 		action, err := getNextAction(ctx.DB())
 		if err != nil {
