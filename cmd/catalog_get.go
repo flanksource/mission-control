@@ -153,6 +153,7 @@ func resolveConfigs(ctx context.Context, args []string, limit int) ([]models.Con
 type CatalogGetResult struct {
 	models.ConfigItem `json:",inline"`
 	LastScrapedTime   *time.Time                   `json:"last_scraped_time,omitempty"`
+	CostTotal30d      *float64                     `json:"cost_total_30d,omitempty"`
 	Related           []query.RelatedConfig        `json:"related,omitempty"`
 	Insights          []models.ConfigAnalysis      `json:"insights,omitempty"`
 	Changes           []models.ConfigChange        `json:"changes,omitempty"`
@@ -202,6 +203,12 @@ func buildCatalogGetResult(ctx context.Context, config *models.ConfigItem, opts 
 	if err := ctx.DB().Where("config_id = ?", id).First(&lastScraped).Error; err == nil {
 		result.LastScrapedTime = lastScraped.LastScrapedTime
 	}
+
+	var summary models.ConfigItemSummary
+	if err := ctx.DB().Select("cost_total_30d").Where("id = ?", id).First(&summary).Error; err != nil {
+		return nil, fmt.Errorf("failed to get config cost: %w", err)
+	}
+	result.CostTotal30d = summary.CostTotal30d
 
 	if opts.Sections.Relationships {
 		result.Related, err = query.GetRelatedConfigs(ctx, query.RelationQuery{
@@ -399,8 +406,8 @@ func buildDetailsSection(r CatalogGetResult) api.DescriptionList {
 		items = append(items, api.KeyValuePair{Key: "External ID", Value: strings.Join(c.ExternalID, ", ")})
 	}
 
-	if c.CostTotal30d > 0 {
-		items = append(items, api.KeyValuePair{Key: "Cost (30d)", Value: fmt.Sprintf("$%.2f", c.CostTotal30d)})
+	if r.CostTotal30d != nil && *r.CostTotal30d > 0 {
+		items = append(items, api.KeyValuePair{Key: "Cost (30d)", Value: fmt.Sprintf("$%.2f", *r.CostTotal30d)})
 	}
 
 	if !c.CreatedAt.IsZero() {

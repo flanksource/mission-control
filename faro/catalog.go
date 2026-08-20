@@ -164,11 +164,16 @@ func remoteGet(id string, flags map[string]string) (any, error) {
 	if flags["relationships"] == "true" {
 		return client.GetCatalogRelationships(context.Background(), id)
 	}
-	item, err := client.GetCatalogItem(context.Background(), id)
+	ctx := context.Background()
+	item, err := client.GetCatalogItem(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	return &catalogItemDetail{ConfigItem: *item}, nil
+	summary, err := client.GetCatalogItemSummary(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	return &catalogItemDetail{ConfigItem: *item, Summary: summary}, nil
 }
 
 func completeCatalogIDs(_ *cobra.Command, _ []string, toComplete string) ([]string, cobra.ShellCompDirective) {

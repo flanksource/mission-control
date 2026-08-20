@@ -153,6 +153,33 @@ func (c *Client) GetCatalogItem(ctx context.Context, id string) (*models.ConfigI
 	return &out, nil
 }
 
+// GetCatalogItemSummary fetches a catalog item's computed summary fields.
+func (c *Client) GetCatalogItemSummary(ctx context.Context, id string) (*models.ConfigItemSummary, error) {
+	r, err := c.R(ctx).
+		QueryParam("id", "eq."+id).
+		QueryParam("select", "*").
+		Get(c.apiPath("/db/configs"))
+	if err != nil {
+		return nil, err
+	}
+	if !r.IsOK() {
+		body, _ := r.AsString()
+		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
+			return nil, ErrHTMLResponse
+		}
+		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
+	}
+
+	var out []models.ConfigItemSummary
+	if err := decodeJSON(r, &out); err != nil {
+		return nil, err
+	}
+	if len(out) == 0 {
+		return nil, ErrNotFound
+	}
+	return &out[0], nil
+}
+
 // GetCatalogItems fetches available catalog items in bounded batches, preserves
 // requested order, and omits IDs that are no longer visible during hydration.
 func (c *Client) GetCatalogItems(ctx context.Context, ids []string) ([]models.ConfigItem, error) {

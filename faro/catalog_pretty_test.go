@@ -26,28 +26,28 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 		zero := int64(0)
 		max := int64(10)
 		labels := types.JSONStringMap{"app": "api"}
+		costPerMinute := 0.00125
+		costTotal1h := 0.075
+		costTotal1d := 1.8
+		costTotal30d := 54.0
 
 		item := models.ConfigItem{
-			ID:            uuid.New(),
-			ScraperID:     &scraper,
-			AgentID:       uuid.New(),
-			ConfigClass:   "Deployment",
-			ExternalID:    []string{"default/api"},
-			Type:          &typ,
-			Status:        &status,
-			Ready:         true,
-			Name:          &name,
-			Description:   &description,
-			Config:        &configJSON,
-			Source:        &source,
-			ParentID:      &parentID,
-			Path:          "cluster/default/api",
-			CostPerMinute: 0.00125,
-			CostTotal1d:   1.8,
-			CostTotal7d:   12.6,
-			CostTotal30d:  54,
-			Labels:        &labels,
-			Tags:          types.JSONStringMap{"environment": "production"},
+			ID:          uuid.New(),
+			ScraperID:   &scraper,
+			AgentID:     uuid.New(),
+			ConfigClass: "Deployment",
+			ExternalID:  []string{"default/api"},
+			Type:        &typ,
+			Status:      &status,
+			Ready:       true,
+			Name:        &name,
+			Description: &description,
+			Config:      &configJSON,
+			Source:      &source,
+			ParentID:    &parentID,
+			Path:        "cluster/default/api",
+			Labels:      &labels,
+			Tags:        types.JSONStringMap{"environment": "production"},
 			Properties: &types.Properties{
 				{Label: "Namespace", Text: "default"},
 				{Name: "restart_count", Value: &zero, Max: &max, Unit: "restarts", Status: "stable"},
@@ -59,14 +59,25 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 			UpdatedAt:  &updatedAt,
 		}
 
-		output := (catalogItemDetail{ConfigItem: item}).Pretty().String()
+		output := (catalogItemDetail{
+			ConfigItem: item,
+			Summary: &models.ConfigItemSummary{
+				CostPerMinute: &costPerMinute,
+				CostTotal1h:   &costTotal1h,
+				CostTotal1d:   &costTotal1d,
+				CostTotal30d:  &costTotal30d,
+			},
+		}).Pretty().String()
 
 		for _, expected := range []string{
 			"production API",
 			"cluster-prod",
 			"cluster/default/api",
 			"default/api",
-			"Cost per Minute",
+			"$0.001250",
+			"$0.07",
+			"$1.80",
+			"$54.00",
 			"2026-07-01T08:00:00Z",
 			"Properties",
 			"Namespace",
@@ -85,10 +96,15 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 		name := "api"
 		typ := "Kubernetes::Pod"
 		item := models.ConfigItem{ID: uuid.New(), Name: &name, Type: &typ, ConfigClass: "Pod"}
+		cost := 54.0
+		detail := catalogItemDetail{
+			ConfigItem: item,
+			Summary:    &models.ConfigItemSummary{CostTotal30d: &cost},
+		}
 
 		original, err := json.Marshal(item)
 		Expect(err).ToNot(HaveOccurred())
-		wrapped, err := json.Marshal(catalogItemDetail{ConfigItem: item})
+		wrapped, err := json.Marshal(detail)
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(wrapped).To(MatchJSON(original))
@@ -96,7 +112,7 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 		yamlFormatter := formatters.NewYAMLFormatter()
 		originalYAML, err := yamlFormatter.FormatValue(item)
 		Expect(err).ToNot(HaveOccurred())
-		wrappedYAML, err := yamlFormatter.FormatValue(catalogItemDetail{ConfigItem: item})
+		wrappedYAML, err := yamlFormatter.FormatValue(detail)
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(wrappedYAML).To(MatchYAML(originalYAML))
