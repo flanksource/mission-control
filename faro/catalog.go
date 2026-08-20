@@ -35,6 +35,11 @@ var catalogGetOptions catalogGetFlags
 var Catalog = &cobra.Command{
 	Use:     "catalog",
 	Aliases: []string{"configs"},
+	Short:   "Manage catalog resources",
+	Args:    cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return cmd.Help()
+	},
 }
 
 var CatalogList = &cobra.Command{

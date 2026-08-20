@@ -169,6 +169,9 @@ func (c catalogItem) PrettyRow(_ any) map[string]api.Text {
 		"type":   clicky.Text(stringValue(item.Type, "-"), "text-gray-600"),
 		"class":  clicky.Text(item.ConfigClass, "text-blue-600"),
 		"health": clicky.Text("", "text-gray-400"),
+		"status": clicky.Text("", "text-gray-700"),
+		"cost":   clicky.Text("", "text-green-700"),
+		"age":    clicky.Text("", "text-gray-600"),
 	}
 	if item.Health != nil {
 		row["health"] = catalogHealth(*item.Health)

@@ -109,6 +109,10 @@ func (c *Client) GetCatalogItem(ctx context.Context, id string) (*clientapi.Conf
 
 // GetCatalogItemSummary fetches a catalog item's computed summary fields.
 func (c *Client) GetCatalogItemSummary(ctx context.Context, id string) (*clientapi.ConfigItemSummary, error) {
+	id, err := normalizeCatalogID(id)
+	if err != nil {
+		return nil, err
+	}
 	r, err := c.R(ctx).
 		QueryParam("id", "eq."+id).
 		QueryParam("select", "*").
@@ -117,11 +121,7 @@ func (c *Client) GetCatalogItemSummary(ctx context.Context, id string) (*clienta
 		return nil, err
 	}
 	if !r.IsOK() {
-		body, _ := r.AsString()
-		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
-			return nil, ErrHTMLResponse
-		}
-		return nil, fmt.Errorf("server returned %d: %s", r.StatusCode, strings.TrimSpace(body))
+		return nil, postgrestError(r)
 	}
 
 	var out []clientapi.ConfigItemSummary
