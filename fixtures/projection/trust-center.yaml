@@ -34,6 +34,7 @@ spec:
     query:
       identityAccess:
         limit: 2000
+        principalTypes: [users, groups]
         userTypes:
           - when: 'source.user_type == "Group"'
             identityType: skip
