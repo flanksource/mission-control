@@ -143,6 +143,15 @@ func (c *Client) GetCatalogItem(ctx context.Context, id string) (*models.ConfigI
 	if err != nil {
 		return nil, err
 	}
+	if !r.IsOK() {
+		body, _ := r.AsString()
+		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
+			return nil, ErrHTMLResponse
+		}
+		// newServerError rather than fmt.Errorf: formatting the status into a string discards it,
+		// which makes IsNotFound blind to a 404 the server was explicit about.
+		return nil, newServerError(r.StatusCode, []byte(strings.TrimSpace(body)))
+	}
 	var out models.ConfigItem
 	if err := convertJSON(item, &out); err != nil {
 		return nil, err

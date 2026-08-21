@@ -41,7 +41,7 @@ type Client struct {
 	*http.Client
 	serverURL     string
 	tokenProvider TokenProvider
-	lean          *lean.Client
+	retry         RetryPolicy
 }
 
 func New(serverURL, token string, opts ...ClientOption) *Client {
@@ -60,12 +60,24 @@ func NewWithAuthHeader(serverURL, authHeader string, opts ...ClientOption) *Clie
 		serverURL: strings.TrimRight(serverURL, "/"),
 		lean:      leanClient,
 	}
+	// Options are read before the middleware stack is built, because retry has to be installed
+	// first: middlewares are applied last-registered-innermost, so the first one registered is the
+	// outermost, and only an outermost retry sees a whole attempt. Do not also set RetryStrategy on
+	// this client — commons would then run its own retry loop inside this one.
+	out := &Client{Client: client, serverURL: strings.TrimRight(serverURL, "/")}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(out)
 		}
 	}
+	if out.retry.enabled() {
+		out.Client = out.Client.Use(retryMiddleware(out.retry))
+	}
+	// Inside retry, so each attempt is traced and captured as its own request rather than being
+	// collapsed into one entry that hides how many were made.
+	out.Client = httpobservability.Apply(out.Client)
 	if out.tokenProvider != nil {
+		// Innermost, so a token refreshed between attempts is picked up by the next one.
 		out.Client = out.Client.Use(tokenProviderMiddleware(out.tokenProvider))
 	}
 	out.lean.Client = out.Client

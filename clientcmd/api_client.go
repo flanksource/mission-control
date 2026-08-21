@@ -20,8 +20,12 @@ func NewAPIClient(mcCtx *MCContext, opts ...sdk.ClientOption) *sdk.Client {
 	return NewAPIClientForServer(mcCtx.Server, mcCtx.AccessToken(), opts...)
 }
 
+// Retry is applied here rather than at each command's client so every context-bound client shares
+// one policy. It is prepended so an explicit caller option still wins, and it is safe to apply
+// this broadly because the policy itself decides what may be replayed: a client that only ever
+// writes never retries, whatever the flag says.
 func NewAPIClientForServer(server, token string, opts ...sdk.ClientOption) *sdk.Client {
-	return sdk.New(server, token, opts...)
+	return sdk.New(server, token, append([]sdk.ClientOption{retryOption()}, opts...)...)
 }
 
 func contextTokenProvider(mcCtx *MCContext) sdk.TokenProvider {

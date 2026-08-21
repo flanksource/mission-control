@@ -21,4 +21,5 @@ func RegisterClientCommands(root *cobra.Command) {
 	root.AddCommand(AuthCmd, ContextCmd, WhoamiCmd, Playbook, Connection, PluginCmd)
 	pluginHostRoot = root
 	registerPluginHARFlag(root)
+	registerRetryFlags(root)
 }
