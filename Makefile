@@ -88,6 +88,27 @@ e2e: $(TAILWIND_JS) ui
 fmt:
 	go fmt ./...
 
+.PHONY: check-clientapi-dependencies
+check-clientapi-dependencies:
+	@dependencies="$$(go list -deps -f '{{if and (not .Standard) (ne .ImportPath "github.com/flanksource/incident-commander/clientapi")}}{{.ImportPath}}{{end}}' ./clientapi)" || exit $$?; \
+	unexpected="$$(printf '%s\n' "$$dependencies" | sed '/^$$/d' | sort -u | grep -vxF 'github.com/google/uuid' || true)"; \
+	if [ -n "$$unexpected" ]; then \
+		echo "clientapi dependency boundary violation"; \
+		echo ""; \
+		echo "clientapi defines the shared wire types used by Faro and the SDK. It must remain"; \
+		echo "lightweight because every production dependency added here becomes part of Faro's"; \
+		echo "transitive dependency graph and increases the client binary size."; \
+		echo ""; \
+		echo "Only the Go standard library and github.com/google/uuid are allowed. Move"; \
+		echo "dependency-specific behavior or conversion into the calling client, SDK, or server"; \
+		echo "adapter instead of expanding clientapi's dependency boundary."; \
+		echo ""; \
+		echo "Unexpected dependencies:"; \
+		printf '%s\n' "$$unexpected" | sed 's/^/  - /'; \
+		exit 1; \
+	fi; \
+	echo "clientapi dependency check passed"
+
 .PHONY: modernize
 modernize: ## Run modernize against code.
 	$(MODERNIZE) ./...
