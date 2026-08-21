@@ -9,11 +9,11 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.41.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.34.0 // indirect
-	github.com/flanksource/commons v1.56.0
+	github.com/flanksource/commons v1.57.0
 	github.com/flanksource/duty v1.0.1371
 	github.com/flanksource/gomplate/v3 v3.24.89
-	github.com/flanksource/incident-commander/plugin/api v0.0.0
-	github.com/flanksource/kopper v1.0.25
+	github.com/flanksource/incident-commander/plugin/api v0.0.5
+	github.com/flanksource/kopper v1.0.31
 	github.com/gomarkdown/markdown v0.0.0-20260411013819-759bbc3e3207
 	github.com/google/cel-go v0.31.0
 	github.com/google/go-cmp v0.7.0
@@ -22,8 +22,8 @@ require (
 	github.com/labstack/echo-contrib v0.50.1
 	github.com/labstack/echo/v4 v4.15.2
 	github.com/lib/pq v1.12.3
-	github.com/onsi/ginkgo/v2 v2.29.0
-	github.com/onsi/gomega v1.40.0
+	github.com/onsi/ginkgo/v2 v2.32.1
+	github.com/onsi/gomega v1.42.1
 	github.com/ory/client-go v1.22.39
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
@@ -52,8 +52,8 @@ require (
 	github.com/emersion/go-smtp v0.24.0
 	github.com/firebase/genkit/go v1.9.0
 	github.com/flanksource/artifacts v1.0.24
-	github.com/flanksource/clicky v1.21.55
-	github.com/flanksource/commons-test v0.1.13
+	github.com/flanksource/clicky v1.21.56
+	github.com/flanksource/commons-test v0.1.15
 	github.com/flanksource/deps v1.0.41
 	github.com/fluxcd/pkg/gittestserver v0.28.0
 	github.com/fsnotify/fsnotify v1.10.1
@@ -130,6 +130,7 @@ require (
 	github.com/agnivade/levenshtein v1.2.1 // indirect
 	github.com/ajstarks/svgo v0.0.0-20211024235047-1546f124cd8b // indirect
 	github.com/alecthomas/chroma/v2 v2.23.1 // indirect
+	github.com/alpkeskin/gotoon v0.1.1 // indirect
 	github.com/antchfx/xmlquery v1.5.1 // indirect
 	github.com/antchfx/xpath v1.3.6 // indirect
 	github.com/anthropics/anthropic-sdk-go v1.23.0 // indirect
@@ -199,7 +200,7 @@ require (
 	github.com/exaring/otelpgx v0.11.1 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/flanksource/is-healthy v1.0.90 // indirect
+	github.com/flanksource/is-healthy v1.0.91 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/flanksource/sandbox-runtime v1.0.2 // indirect
 	github.com/fluxcd/gitkit v0.6.0 // indirect
