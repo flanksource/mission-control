@@ -23,13 +23,11 @@ import (
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/clicky/api"
 	"github.com/flanksource/clicky/api/icons"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 
-	"github.com/flanksource/incident-commander/connection"
-	"github.com/flanksource/incident-commander/sdk"
+	"github.com/flanksource/incident-commander/clientapi"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 )
 
 type loginWaitResult struct {
@@ -296,28 +294,28 @@ func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*b
 
 func displayCapturedState(data *browserSessionData, flags browserLoginFlags) {
 	verbose := clicky.Flags.LevelCount
-	var cookies connection.Cookies
+	var cookies clientapi.Cookies
 	for _, c := range data.Cookies {
-		cookies = append(cookies, connection.Cookie{
+		cookies = append(cookies, clientapi.Cookie{
 			Name: c.Name, Value: c.Value, Domain: c.Domain,
 			Path: c.Path, Expires: float64(c.Expires),
 			HTTPOnly: c.HTTPOnly, Secure: c.Secure,
 			SameSite: string(c.SameSite),
 		})
 	}
-	state := connection.NewPlaywrightSessionState(cookies, data.SessionStorage, nil, flags.URL)
+	state := clientapi.NewPlaywrightSessionState(cookies, data.SessionStorage, nil, flags.URL)
 	switch {
 	case verbose >= 2:
-		fmt.Fprintln(os.Stderr, state.PrettyFull().ANSI())
+		fmt.Fprintln(os.Stderr, prettySessionState(state, true).ANSI())
 	case verbose >= 1:
-		fmt.Fprintln(os.Stderr, state.Pretty().ANSI())
+		fmt.Fprintln(os.Stderr, prettySessionState(state, false).ANSI())
 	case data.AutoDetected:
 		printBearerSummary(data.BearerTokens, flags)
 	default:
 		selectedAud, _ := selectBearerToken(data.BearerTokens, flags.RequireBearerAud, flags.RequireBearerScope)
 		for _, aud := range sortedAudiences(data.BearerTokens) {
-			if jwt := connection.DecodeJWT(data.BearerTokens[aud]); jwt != nil {
-				t := jwt.Pretty()
+			if jwt := clientapi.DecodeJWT(data.BearerTokens[aud]); jwt != nil {
+				t := prettyJWT(*jwt, false)
 				if aud == selectedAud {
 					t = api.Text{}.Add(icons.Check.WithStyle("text-green-500")).Append(" bearer ").Add(t)
 				}
@@ -332,14 +330,14 @@ func printBearerSummary(tokens map[string]string, flags browserLoginFlags) {
 		return
 	}
 	selectedAud, _ := selectBearerToken(tokens, flags.RequireBearerAud, flags.RequireBearerScope)
-	jwt := connection.DecodeJWT(tokens[selectedAud])
+	jwt := clientapi.DecodeJWT(tokens[selectedAud])
 	if jwt == nil {
 		return
 	}
 	fmt.Fprintln(os.Stderr, api.Text{}.
 		Add(icons.Check.WithStyle("text-green-500")).
 		Appendf(" bearer aud=%s scopes=%d expires=%s",
-			jwt.Audience, jwt.ScopeCount(), time.Until(jwt.ExpiresAt).Round(time.Second)).
+			jwt.Audience, jwtScopeCount(*jwt), time.Until(jwt.ExpiresAt).Round(time.Second)).
 		ANSI())
 }
 
@@ -371,7 +369,7 @@ func pickBearerToken(result loginWaitResult) (map[string]string, bool, error) {
 	options := make([]huh.Option[string], 0, len(auds)+1)
 	for _, aud := range auds {
 		label := aud
-		if jwt := connection.DecodeJWT(result.Tokens[aud]); jwt != nil {
+		if jwt := clientapi.DecodeJWT(result.Tokens[aud]); jwt != nil {
 			remaining := time.Until(jwt.ExpiresAt).Round(time.Second)
 			if remaining > 0 {
 				label = fmt.Sprintf("%s  (expires in %s)", aud, remaining)
@@ -525,9 +523,9 @@ func waitForLoginComplete(browserCtx gocontext.Context, flags browserLoginFlags)
 					tokens := extractBearerTokens(session)
 					validAuds := make([]string, 0)
 					var matched string
-					var matchedJWT *connection.JWT
+					var matchedJWT *clientapi.JWT
 					for aud, token := range tokens {
-						jwt := connection.DecodeJWT(token)
+						jwt := clientapi.DecodeJWT(token)
 						if jwt == nil || time.Until(jwt.ExpiresAt) <= 0 {
 							continue
 						}
@@ -543,7 +541,7 @@ func waitForLoginComplete(browserCtx gocontext.Context, flags browserLoginFlags)
 						}
 					}
 					if matched != "" {
-						fmt.Fprintf(os.Stderr, "Found valid token for %s (scopes=%d, expires in %s)\n", matched, matchedJWT.ScopeCount(), time.Until(matchedJWT.ExpiresAt).Round(time.Second))
+						fmt.Fprintf(os.Stderr, "Found valid token for %s (scopes=%d, expires in %s)\n", matched, jwtScopeCount(*matchedJWT), time.Until(matchedJWT.ExpiresAt).Round(time.Second))
 						select {
 						case bearerCh <- tokens:
 						default:
@@ -679,7 +677,7 @@ func hasRequiredToken(tokens map[string]string, flags browserLoginFlags) bool {
 		if flags.RequireBearerAud != "" && !strings.Contains(aud, flags.RequireBearerAud) {
 			continue
 		}
-		jwt := connection.DecodeJWT(token)
+		jwt := clientapi.DecodeJWT(token)
 		if jwt == nil || time.Until(jwt.ExpiresAt) <= 0 {
 			continue
 		}
@@ -706,16 +704,16 @@ func extractBearerTokens(session map[string]string) map[string]string {
 		if secret == "" {
 			continue
 		}
-		jwt := connection.DecodeJWT(secret)
+		jwt := clientapi.DecodeJWT(secret)
 		if jwt == nil || jwt.Audience == "" {
 			continue
 		}
 		if !jwt.ExpiresAt.IsZero() && time.Until(jwt.ExpiresAt) <= 0 {
 			continue
 		}
-		if jwt.ScopeCount() > scopeCounts[jwt.Audience] {
+		if jwtScopeCount(*jwt) > scopeCounts[jwt.Audience] {
 			tokens[jwt.Audience] = secret
-			scopeCounts[jwt.Audience] = jwt.ScopeCount()
+			scopeCounts[jwt.Audience] = jwtScopeCount(*jwt)
 		}
 	}
 	return tokens
@@ -728,16 +726,16 @@ func selectBearerToken(tokens map[string]string, requiredAud, requiredScope stri
 		if !strings.Contains(aud, requiredAud) {
 			continue
 		}
-		jwt := connection.DecodeJWT(token)
+		jwt := clientapi.DecodeJWT(token)
 		if jwt == nil {
 			continue
 		}
 		if requiredScope != "" && !strings.Contains(jwt.Scopes, requiredScope) {
 			continue
 		}
-		if jwt.ScopeCount() > bestScopes {
+		if jwtScopeCount(*jwt) > bestScopes {
 			bestAud = aud
-			bestScopes = jwt.ScopeCount()
+			bestScopes = jwtScopeCount(*jwt)
 		}
 	}
 	if bestAud != "" {
@@ -758,10 +756,10 @@ func sortedAudiences(tokens map[string]string) []string {
 func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSessionData) error {
 	props := make(map[string]string)
 
-	// Convert chromedp cookies to connection.Cookies
-	var cookies connection.Cookies
+	// Convert chromedp cookies to the cached session format.
+	var cookies clientapi.Cookies
 	for _, c := range data.Cookies {
-		cookies = append(cookies, connection.Cookie{
+		cookies = append(cookies, clientapi.Cookie{
 			Name:     c.Name,
 			Value:    c.Value,
 			Domain:   c.Domain,
@@ -774,7 +772,7 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 	}
 
 	// Build Playwright-compatible storage state
-	sessionState := connection.NewPlaywrightSessionState(cookies, data.SessionStorage, nil, flags.URL)
+	sessionState := clientapi.NewPlaywrightSessionState(cookies, data.SessionStorage, nil, flags.URL)
 	storageJSON, err := json.Marshal(sessionState)
 	if err != nil {
 		return fmt.Errorf("failed to marshal storage state: %w", err)
@@ -787,7 +785,7 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 		for i, c := range data.Cookies {
 			parts[i] = c.Name + "=" + c.Value
 		}
-		headersJSON, err := json.Marshal([]types.EnvVar{{Name: "Cookie", ValueStatic: strings.Join(parts, "; ")}})
+		headersJSON, err := json.Marshal([]clientapi.EnvVar{{Name: "Cookie", ValueStatic: strings.Join(parts, "; ")}})
 		if err != nil {
 			return fmt.Errorf("failed to marshal headers: %w", err)
 		}
@@ -826,12 +824,12 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 		connURL = "https://graph.microsoft.com/v1.0/me"
 	}
 
-	conn := models.Connection{
+	conn := clientapi.Connection{
 		Name:       flags.Name,
 		Namespace:  flags.Namespace,
-		Type:       models.ConnectionTypeHTTP,
+		Type:       clientapi.ConnectionTypeHTTP,
 		URL:        connURL,
-		Source:     models.SourceUI,
+		Source:     clientapi.SourceUI,
 		Properties: props,
 	}
 
@@ -871,7 +869,7 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 			auds = []string{selectedAud}
 		}
 		for _, aud := range auds {
-			jwt := connection.DecodeJWT(data.BearerTokens[aud])
+			jwt := clientapi.DecodeJWT(data.BearerTokens[aud])
 			if jwt == nil {
 				continue
 			}
@@ -882,7 +880,7 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 				t = t.Append("  bearer_"+aud, "text-muted")
 			}
 			t = t.Appendf(" aud=%s", jwt.Audience).
-				Appendf(" scopes=%d", jwt.ScopeCount()).
+				Appendf(" scopes=%d", jwtScopeCount(*jwt)).
 				Appendf(" expires=%s", time.Until(jwt.ExpiresAt).Round(time.Second))
 			fmt.Fprintln(cmd.OutOrStdout(), t.ANSI())
 		}
@@ -925,7 +923,7 @@ func runBrowserTest(cmd *cobra.Command, args []string) error {
 	defer browserCancel()
 
 	if storageJSON := conn.Properties["storageState"]; storageJSON != "" {
-		var state connection.PlaywrightSessionState
+		var state clientapi.PlaywrightSessionState
 		if err := json.Unmarshal([]byte(storageJSON), &state); err != nil {
 			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to parse storageState: %v\n", err)
 		} else if err := injectCookies(browserCtx, state.Cookies); err != nil {
@@ -1023,7 +1021,7 @@ func detectLoginPage(browserCtx gocontext.Context) error {
 	return nil
 }
 
-func injectCookies(browserCtx gocontext.Context, cookies connection.Cookies) error {
+func injectCookies(browserCtx gocontext.Context, cookies clientapi.Cookies) error {
 	if len(cookies) == 0 {
 		return nil
 	}
@@ -1075,26 +1073,26 @@ func injectSessionStorage(browserCtx gocontext.Context, origin string, items map
 	return chromedp.Run(browserCtx, chromedp.Evaluate(js, nil))
 }
 
-func PrintConnectionState(conn models.Connection, verbose int) {
+func PrintConnectionState(conn clientapi.Connection, verbose int) {
 	fmt.Fprintf(os.Stderr, "Connection: %s/%s (type=%s)\n", conn.Namespace, conn.Name, conn.Type)
 
 	if bearer := conn.Properties["bearer"]; bearer != "" {
-		if jwt := connection.DecodeJWT(bearer); jwt != nil {
+		if jwt := clientapi.DecodeJWT(bearer); jwt != nil {
 			if verbose >= 2 {
-				fmt.Fprintln(os.Stderr, jwt.PrettyFull().ANSI())
+				fmt.Fprintln(os.Stderr, prettyJWT(*jwt, true).ANSI())
 			} else {
-				fmt.Fprintln(os.Stderr, jwt.Pretty().ANSI())
+				fmt.Fprintln(os.Stderr, prettyJWT(*jwt, false).ANSI())
 			}
 		}
 	}
 
 	if storageJSON := conn.Properties["storageState"]; storageJSON != "" {
-		var state connection.PlaywrightSessionState
+		var state clientapi.PlaywrightSessionState
 		if err := json.Unmarshal([]byte(storageJSON), &state); err == nil {
 			if verbose >= 2 {
-				fmt.Fprintln(os.Stderr, state.PrettyFull().ANSI())
+				fmt.Fprintln(os.Stderr, prettySessionState(state, true).ANSI())
 			} else {
-				fmt.Fprintln(os.Stderr, state.Pretty().ANSI())
+				fmt.Fprintln(os.Stderr, prettySessionState(state, false).ANSI())
 			}
 		}
 	}

@@ -3,6 +3,7 @@ package clientcmd
 import (
 	"context"
 	"fmt"
+	"html"
 	"io"
 	"net"
 	"net/http"
@@ -134,7 +135,7 @@ func PerformOIDCLogin(cmd *cobra.Command, serverURL string, status io.Writer) (*
 	redirectURI := fmt.Sprintf("http://127.0.0.1:%d/callback", listener.Addr().(*net.TCPAddr).Port)
 
 	// Render the success page with absolute URLs to the MC server's static assets
-	successHTML := strings.ReplaceAll(static.CallbackSuccessHTML, "/oidc/static/", serverURL+"/oidc/static/")
+	successHTML := renderCallbackSuccessHTML(serverURL)
 
 	codeCh := make(chan string, 1)
 	errCh := make(chan error, 1)
@@ -206,6 +207,11 @@ func PerformOIDCLogin(cmd *cobra.Command, serverURL string, status io.Writer) (*
 		return nil, fmt.Errorf("nonce validation failed: %w", err)
 	}
 	return tokens, nil
+}
+
+func renderCallbackSuccessHTML(serverURL string) string {
+	assetBase := html.EscapeString(serverURL + "/oidc/static/")
+	return strings.ReplaceAll(static.CallbackSuccessHTML, "/oidc/static/", assetBase)
 }
 
 func openBrowser(url string) error {

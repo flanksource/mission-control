@@ -5,9 +5,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/flanksource/clicky/rpc"
 	"github.com/spf13/cobra"
 
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/plugin/manifestcache"
 )
 
@@ -98,13 +98,13 @@ func newPluginRoot(entry manifestcache.Entry, topLevel bool) *cobra.Command {
 	return root
 }
 
-func newOperationCommand(plugin string, op rpc.RPCOperation) *cobra.Command {
+func newOperationCommand(plugin string, op clientapi.PluginOperation) *cobra.Command {
 	return newOperationCommandWithDispatcher(plugin, op, dispatchOperation)
 }
 
 type operationDispatcher func(cmd *cobra.Command, plugin, op string, params map[string]string, configID string, raw bool) error
 
-func newOperationCommandWithDispatcher(plugin string, op rpc.RPCOperation, dispatcher operationDispatcher) *cobra.Command {
+func newOperationCommandWithDispatcher(plugin string, op clientapi.PluginOperation, dispatcher operationDispatcher) *cobra.Command {
 	var (
 		params   pluginParams
 		configID string
@@ -128,7 +128,7 @@ func newOperationCommandWithDispatcher(plugin string, op rpc.RPCOperation, dispa
 	return cmd
 }
 
-func validateOperationInputs(op rpc.RPCOperation, params map[string]string, configID string) error {
+func validateOperationInputs(op clientapi.PluginOperation, params map[string]string, configID string) error {
 	if operationRequiresConfigID(op) && strings.TrimSpace(configID) == "" {
 		return fmt.Errorf("--config-id is required for config-scoped operation %q", op.Name)
 	}
@@ -148,7 +148,7 @@ func validateOperationInputs(op rpc.RPCOperation, params map[string]string, conf
 	return nil
 }
 
-func operationRequiresConfigID(op rpc.RPCOperation) bool {
+func operationRequiresConfigID(op clientapi.PluginOperation) bool {
 	for _, tag := range op.Tags {
 		if tag == "config" {
 			return true
@@ -185,7 +185,7 @@ func formatPluginLong(entry manifestcache.Entry, topLevel bool) string {
 // of parameters (Required, Default, Description). Parameters come from
 // the cached schema; an empty list means the operation accepts free-form
 // `--param k=v` only.
-func formatOperationLong(op rpc.RPCOperation) string {
+func formatOperationLong(op clientapi.PluginOperation) string {
 	var b strings.Builder
 	if op.Description != "" {
 		b.WriteString(op.Description)
@@ -198,7 +198,7 @@ func formatOperationLong(op rpc.RPCOperation) string {
 		return strings.TrimRight(b.String(), "\n")
 	}
 	b.WriteString("\nParameters (pass via --param key=value):\n")
-	params := append([]rpc.RPCParameter(nil), op.Parameters...)
+	params := append([]clientapi.PluginParameter(nil), op.Parameters...)
 	sort.SliceStable(params, func(i, j int) bool { return params[i].Name < params[j].Name })
 	for _, p := range params {
 		marker := " "

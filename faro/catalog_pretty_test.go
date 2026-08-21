@@ -4,15 +4,98 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/flanksource/clicky/formatters"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/types"
+	"github.com/flanksource/clicky"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
 var _ = ginkgo.Describe("faro catalog pretty output", func() {
+	ginkgo.It("keeps catalog entity IDs as hidden list metadata", func() {
+		name := "api"
+		typ := "Kubernetes::Deployment"
+		id := uuid.New()
+		items := catalogListItems([]catalogItem{{
+			ID:          id,
+			Name:        &name,
+			Type:        &typ,
+			ConfigClass: "Deployment",
+		}})
+
+		Expect(items).To(HaveLen(1))
+		Expect(items[0].Columns()[0]).To(And(
+			HaveField("Name", "_id"),
+			HaveField("Hidden", true),
+		))
+		Expect(items[0].Row()).To(HaveKeyWithValue("_id", id.String()))
+
+		structured, err := clicky.Format(items, clicky.FormatOptions{JSON: true})
+		Expect(err).ToNot(HaveOccurred())
+		var rows []map[string]any
+		Expect(json.Unmarshal([]byte(structured), &rows)).To(Succeed())
+		Expect(rows).To(HaveLen(1))
+		Expect(rows[0]).To(And(
+			HaveKeyWithValue("_id", id.String()),
+			HaveKeyWithValue("id", id.String()),
+		))
+		structuredYAML, err := clicky.Format(items, clicky.FormatOptions{YAML: true})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(structuredYAML).To(And(
+			ContainSubstring("_id: "+id.String()),
+			ContainSubstring("id: "+id.String()),
+		))
+
+		pretty, err := clicky.Format(items, clicky.FormatOptions{Pretty: true, NoColor: true})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(pretty).To(And(
+			ContainSubstring("api"),
+			Not(ContainSubstring("_id")),
+			Not(ContainSubstring(id.String())),
+		))
+	})
+
+	ginkgo.It("renders relationship roots compactly without changing their wire shape", func() {
+		incomingName := "cluster"
+		outgoingName := "deployment"
+		childName := "raw-child-should-not-render"
+		incomingType := "Kubernetes::Cluster"
+		outgoingType := "Kubernetes::Deployment"
+		childType := "Kubernetes::Pod"
+		value := &clientapi.CatalogRelationships{
+			ID: uuid.New(),
+			Incoming: &clientapi.ConfigTreeNode{
+				ConfigItem: clientapi.ConfigItem{Name: &incomingName, Type: &incomingType, ConfigClass: "Cluster"},
+				EdgeType:   "parent",
+				Children: []*clientapi.ConfigTreeNode{{
+					ConfigItem: clientapi.ConfigItem{Name: &childName, Type: &childType, ConfigClass: "Pod"},
+				}},
+			},
+			Outgoing: &clientapi.ConfigTreeNode{
+				ConfigItem: clientapi.ConfigItem{Name: &outgoingName, Type: &outgoingType, ConfigClass: "Deployment"},
+				Relation:   "depends-on",
+			},
+		}
+		view := catalogRelationshipsView(value)
+
+		pretty, err := clicky.Format(view, clicky.FormatOptions{Pretty: true, NoColor: true})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(pretty).To(And(
+			ContainSubstring(incomingName),
+			ContainSubstring(incomingType),
+			ContainSubstring(outgoingName),
+			ContainSubstring(outgoingType),
+			Not(ContainSubstring(childName)),
+			Not(ContainSubstring("depends-on")),
+		))
+
+		originalJSON, err := json.Marshal(value)
+		Expect(err).ToNot(HaveOccurred())
+		viewJSON, err := json.Marshal(view)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(viewJSON).To(MatchJSON(originalJSON))
+	})
+
 	ginkgo.It("shows complete properties and additional config metadata", func() {
 		name := "api"
 		typ := "Kubernetes::Deployment"
@@ -25,13 +108,13 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 		configJSON := `{"apiVersion":"apps/v1","spec":{"replicas":3}}`
 		zero := int64(0)
 		max := int64(10)
-		labels := types.JSONStringMap{"app": "api"}
+		labels := map[string]string{"app": "api"}
 		costPerMinute := 0.00125
 		costTotal1h := 0.075
 		costTotal1d := 1.8
 		costTotal30d := 54.0
 
-		item := models.ConfigItem{
+		item := clientapi.ConfigItem{
 			ID:          uuid.New(),
 			ScraperID:   &scraper,
 			AgentID:     uuid.New(),
@@ -47,11 +130,11 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 			ParentID:    &parentID,
 			Path:        "cluster/default/api",
 			Labels:      &labels,
-			Tags:        types.JSONStringMap{"environment": "production"},
-			Properties: &types.Properties{
+			Tags:        map[string]string{"environment": "production"},
+			Properties: &clientapi.CatalogProperties{
 				{Label: "Namespace", Text: "default"},
 				{Name: "restart_count", Value: &zero, Max: &max, Unit: "restarts", Status: "stable"},
-				{Name: "documentation", Links: []types.Link{{URL: "https://example.com/api"}}},
+				{Name: "documentation", Links: []clientapi.CatalogLink{{URL: "https://example.com/api"}}},
 				{Name: "empty_property"},
 			},
 			CreatedAt:  time.Date(2026, 7, 1, 8, 0, 0, 0, time.UTC),
@@ -61,7 +144,7 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 
 		output := (catalogItemDetail{
 			ConfigItem: item,
-			Summary: &models.ConfigItemSummary{
+			Summary: &clientapi.ConfigItemSummary{
 				CostPerMinute: &costPerMinute,
 				CostTotal1h:   &costTotal1h,
 				CostTotal1d:   &costTotal1d,
@@ -95,11 +178,11 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 	ginkgo.It("preserves the ConfigItem JSON and YAML shapes", func() {
 		name := "api"
 		typ := "Kubernetes::Pod"
-		item := models.ConfigItem{ID: uuid.New(), Name: &name, Type: &typ, ConfigClass: "Pod"}
+		item := clientapi.ConfigItem{ID: uuid.New(), Name: &name, Type: &typ, ConfigClass: "Pod"}
 		cost := 54.0
 		detail := catalogItemDetail{
 			ConfigItem: item,
-			Summary:    &models.ConfigItemSummary{CostTotal30d: &cost},
+			Summary:    &clientapi.ConfigItemSummary{CostTotal30d: &cost},
 		}
 
 		original, err := json.Marshal(item)
@@ -109,10 +192,9 @@ var _ = ginkgo.Describe("faro catalog pretty output", func() {
 
 		Expect(wrapped).To(MatchJSON(original))
 
-		yamlFormatter := formatters.NewYAMLFormatter()
-		originalYAML, err := yamlFormatter.FormatValue(item)
+		originalYAML, err := clicky.Format(item, clicky.FormatOptions{YAML: true})
 		Expect(err).ToNot(HaveOccurred())
-		wrappedYAML, err := yamlFormatter.FormatValue(detail)
+		wrappedYAML, err := clicky.Format(detail, clicky.FormatOptions{YAML: true})
 		Expect(err).ToNot(HaveOccurred())
 
 		Expect(wrappedYAML).To(MatchYAML(originalYAML))

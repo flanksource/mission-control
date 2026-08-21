@@ -1,4 +1,4 @@
-package sdk
+package client
 
 import (
 	"context"
@@ -10,12 +10,12 @@ import (
 	"testing"
 
 	"github.com/flanksource/commons/har"
-	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	icapi "github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/pkg/httpobservability"
 )
 
@@ -85,6 +85,29 @@ var _ = ginkgo.Describe("GetConnection HTML detection", func() {
 		Expect(called).To(BeFalse())
 	})
 
+	ginkgo.It("does not forward provider tokens across redirects", func() {
+		targetCalled := false
+		target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			targetCalled = true
+			Expect(r.Header.Get("Authorization")).To(BeEmpty())
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer target.Close()
+
+		source := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			Expect(r.Header.Get("Authorization")).To(Equal("Bearer provider-token"))
+			http.Redirect(w, r, target.URL+"/capture", http.StatusFound)
+		}))
+		defer source.Close()
+
+		_, _, err := New(source.URL, "", WithTokenProvider(func(context.Context) (string, error) {
+			return "provider-token", nil
+		})).Whoami(context.Background())
+
+		Expect(err).To(HaveOccurred())
+		Expect(targetCalled).To(BeFalse())
+	})
+
 	ginkgo.It("returns ErrHTMLResponse when server returns HTML with 200 OK", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -142,6 +165,20 @@ var _ = ginkgo.Describe("TestConnection HTML detection", func() {
 })
 
 var _ = ginkgo.Describe("Plugin operation server errors", func() {
+	ginkgo.It("normalizes invocation paths for API-prefixed servers", func() {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			Expect(r.URL.Path).To(Equal("/api/plugins/arthas/invoke/session"))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(`{"ok":true}`))
+		}))
+		defer server.Close()
+
+		body, err := New(server.URL+"/api", "fake-token").InvokePluginOperation("arthas", "session", "", json.RawMessage(`{}`))
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(body).To(MatchJSON(`{"ok":true}`))
+	})
+
 	ginkgo.It("returns structured oops server errors", func() {
 		payload := `{
 			"code": "HANDLER_ERROR",
@@ -267,14 +304,14 @@ var _ = ginkgo.Describe("Playbook client", func() {
 			Expect(r.URL.Path).To(Equal("/playbook/run/" + runID.String() + "/status"))
 			w.Header().Set("Content-Type", "application/json")
 			Expect(json.NewEncoder(w).Encode(PlaybookSummary{
-				Run: models.PlaybookRun{
+				Run: clientapi.PlaybookRun{
 					ID:     runID,
-					Status: models.PlaybookRunStatusCompleted,
+					Status: clientapi.PlaybookRunStatusCompleted,
 				},
-				Actions: []models.PlaybookRunAction{{
+				Actions: []clientapi.PlaybookRunAction{{
 					ID:     uuid.New(),
 					Name:   "echo",
-					Status: models.PlaybookActionStatusCompleted,
+					Status: clientapi.PlaybookActionStatus("completed"),
 				}},
 			})).To(Succeed())
 		}))
@@ -282,7 +319,7 @@ var _ = ginkgo.Describe("Playbook client", func() {
 
 		summary, err := New(server.URL, "fake-token").GetPlaybookRunStatus(runID.String())
 		Expect(err).ToNot(HaveOccurred())
-		Expect(summary.Run.Status).To(Equal(models.PlaybookRunStatusCompleted))
+		Expect(summary.Run.Status).To(Equal(clientapi.PlaybookRunStatusCompleted))
 		Expect(summary.Actions).To(HaveLen(1))
 	})
 })

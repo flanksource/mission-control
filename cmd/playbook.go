@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,12 +15,13 @@ import (
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/playbook/runner"
-	"github.com/flanksource/incident-commander/sdk"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
@@ -202,10 +204,24 @@ func runLocalPlaybook(cmd *cobra.Command, args []string) error {
 		shutdown.ShutdownAndExit(1, err.Error())
 	}
 
+	actions := make([]clientapi.PlaybookRunAction, len(summary.Actions))
+	for i, action := range summary.Actions {
+		actions[i] = clientapi.PlaybookRunAction{
+			ID:            action.ID,
+			Name:          action.Name,
+			PlaybookRunID: action.PlaybookRunID,
+			Status:        clientapi.PlaybookActionStatus(action.Status),
+			Result:        map[string]any(action.Result),
+			Error:         action.Error,
+		}
+	}
 	if err := clientcmd.PrintPlaybookActionResults(cmd.OutOrStdout(), &sdk.PlaybookSummary{
-		Playbook: summary.Playbook,
-		Run:      summary.Run,
-		Actions:  summary.Actions,
+		Playbook: clientapi.Playbook{Spec: json.RawMessage(summary.Playbook.Spec)},
+		Run: clientapi.PlaybookRun{
+			ID:     summary.Run.ID,
+			Status: clientapi.PlaybookRunStatus(summary.Run.Status),
+		},
+		Actions: actions,
 	}); err != nil {
 		shutdown.ShutdownAndExit(1, err.Error())
 	}

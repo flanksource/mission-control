@@ -9,6 +9,22 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+type fakeLocalWhoami struct {
+	database WhoamiDatabase
+}
+
+func (f fakeLocalWhoami) DefaultDBConnection() string {
+	return ""
+}
+
+func (f fakeLocalWhoami) ProbeDatabase(string) WhoamiDatabase {
+	return f.database
+}
+
+func (f fakeLocalWhoami) InspectAccessToken(string, string) *AccessTokenStatus {
+	return nil
+}
+
 var _ = ginkgo.Describe("whoami command", func() {
 	ginkgo.It("validates the context token against the whoami endpoint", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -54,6 +70,49 @@ var _ = ginkgo.Describe("whoami command", func() {
 			Auth:     whoamiAuth{Status: "ok"},
 		})
 		Expect(err).To(MatchError("whoami status failed: database=error auth=ok"))
+	})
+
+	ginkgo.It("succeeds when the database probe is unavailable but remote auth works", func() {
+		err := whoamiStatusError(whoamiReport{
+			Database: whoamiDatabase{Status: "skipped"},
+			Auth:     whoamiAuth{Status: "ok"},
+		})
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	ginkgo.It("skips configured database probes in the lean client", func() {
+		previous := LocalWhoami
+		LocalWhoami = nil
+		ginkgo.DeferCleanup(func() {
+			LocalWhoami = previous
+		})
+
+		report := probeDatabase("postgres://user:password@database.example.com/mission_control")
+		Expect(report.Configured).To(BeTrue())
+		Expect(report.Status).To(Equal("skipped"))
+		Expect(report.URL).ToNot(ContainSubstring("password"))
+		Expect(report.Error).To(Equal("database probing is unavailable in this binary"))
+	})
+
+	ginkgo.It("preserves the redacted database URL from local probes", func() {
+		previous := LocalWhoami
+		LocalWhoami = fakeLocalWhoami{database: WhoamiDatabase{
+			Status:   "ok",
+			Database: "mission_control",
+			User:     "mission-control",
+		}}
+		ginkgo.DeferCleanup(func() {
+			LocalWhoami = previous
+		})
+
+		report := probeDatabase("postgres://user:password@database.example.com/mission_control")
+
+		Expect(report.Configured).To(BeTrue())
+		Expect(report.Status).To(Equal("ok"))
+		Expect(report.Database).To(Equal("mission_control"))
+		Expect(report.User).To(Equal("mission-control"))
+		Expect(report.URL).To(ContainSubstring("database.example.com/mission_control"))
+		Expect(report.URL).ToNot(ContainSubstring("password"))
 	})
 
 	ginkgo.It("fails when auth status is not ok", func() {

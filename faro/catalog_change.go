@@ -7,8 +7,7 @@ import (
 	"time"
 
 	"github.com/flanksource/clicky"
-	"github.com/flanksource/duty/query"
-	"github.com/flanksource/duty/types"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -27,7 +26,7 @@ type catalogChangeSearchOptions struct {
 	Depth      int
 	DepthSet   bool
 	Limit      int
-	Related    query.ChangeRelationDirection
+	Related    clientapi.ChangeRelationDirection
 	RelatedSet bool
 	Soft       bool
 	SoftSet    bool
@@ -67,7 +66,7 @@ Examples:
 			Depth:      changeSearchDepth,
 			DepthSet:   cmd.Flags().Changed("depth"),
 			Limit:      changeSearchLimit,
-			Related:    query.ChangeRelationDirection(changeSearchRelated),
+			Related:    clientapi.ChangeRelationDirection(changeSearchRelated),
 			RelatedSet: cmd.Flags().Changed("related"),
 			Soft:       changeSearchSoft,
 			SoftSet:    cmd.Flags().Changed("soft"),
@@ -81,7 +80,7 @@ Examples:
 				ConfigID: strings.TrimSpace(changeSearchConfig),
 				Depth:    changeSearchDepth,
 				Limit:    changeSearchLimit,
-				Related:  query.ChangeRelationDirection(changeSearchRelated),
+				Related:  clientapi.ChangeRelationDirection(changeSearchRelated),
 				Soft:     changeSearchSoft,
 			})
 		} else {
@@ -116,17 +115,17 @@ func validateCatalogChangeSearch(searchQuery string, opts catalogChangeSearchOpt
 	}
 
 	switch opts.Related {
-	case query.CatalogChangeRecursiveNone,
-		query.CatalogChangeRecursiveDownstream,
-		query.CatalogChangeRecursiveUpstream,
-		query.CatalogChangeRecursiveAll:
+	case clientapi.CatalogChangeRecursiveNone,
+		clientapi.CatalogChangeRecursiveDownstream,
+		clientapi.CatalogChangeRecursiveUpstream,
+		clientapi.CatalogChangeRecursiveAll:
 	default:
 		return fmt.Errorf("--related must be one of none, downstream, upstream, or all")
 	}
 	if opts.Depth <= 0 {
 		return fmt.Errorf("--depth must be greater than zero")
 	}
-	if opts.Related == query.CatalogChangeRecursiveNone && (opts.SoftSet || opts.DepthSet) {
+	if opts.Related == clientapi.CatalogChangeRecursiveNone && (opts.SoftSet || opts.DepthSet) {
 		return fmt.Errorf("--soft and --depth require --related to be downstream, upstream, or all")
 	}
 	return nil
@@ -156,10 +155,10 @@ func remoteSearchChanges(searchQuery string, limit int) ([]catalogChangeSearchHi
 		limit = 100
 	}
 
-	resp, err := client.SearchCatalog(context.Background(), query.SearchResourcesRequest{
+	resp, err := client.SearchCatalog(context.Background(), clientapi.SearchResourcesRequest{
 		Limit:      limit,
 		Timestamps: true,
-		ConfigChanges: []types.ResourceSelector{{
+		ConfigChanges: []clientapi.ResourceSelector{{
 			Search: searchQuery,
 		}},
 	})
@@ -191,8 +190,8 @@ func remoteSearchRelatedChanges(opts catalogChangeSearchOptions) ([]catalogChang
 		opts.Limit = 100
 	}
 
-	resp, err := client.SearchCatalogChanges(context.Background(), query.CatalogChangesSearchRequest{
-		BaseCatalogSearch: query.BaseCatalogSearch{
+	resp, err := client.SearchCatalogChanges(context.Background(), clientapi.CatalogChangesSearchRequest{
+		BaseCatalogSearch: clientapi.BaseCatalogSearch{
 			CatalogID: opts.ConfigID,
 			Depth:     opts.Depth,
 			PageSize:  opts.Limit,
@@ -233,8 +232,8 @@ func init() {
 	CatalogChangeSearch.Flags().StringVar(&changeSearchConfig, "config", "", "Catalog config UUID to scope changes")
 	CatalogChangeSearch.Flags().IntVar(&changeSearchDepth, "depth", 5, "Maximum relationship traversal depth")
 	CatalogChangeSearch.Flags().IntVar(&changeSearchLimit, "limit", 100, "Maximum number of results")
-	CatalogChangeSearch.Flags().StringVar(&changeSearchRelated, "related", string(query.CatalogChangeRecursiveNone), "Related config direction: none, downstream, upstream, or all")
+	CatalogChangeSearch.Flags().StringVar(&changeSearchRelated, "related", string(clientapi.CatalogChangeRecursiveNone), "Related config direction: none, downstream, upstream, or all")
 	CatalogChangeSearch.Flags().BoolVar(&changeSearchSoft, "soft", false, "Include soft relationships")
 	CatalogChange.AddCommand(CatalogChangeSearch, CatalogChangeGet)
-	clicky.RegisterSubCommand("catalog", CatalogChange)
+	Catalog.AddCommand(CatalogChange)
 }

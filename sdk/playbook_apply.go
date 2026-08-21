@@ -39,7 +39,7 @@ type playbookWrite struct {
 	Source      string     `json:"source,omitempty"`
 }
 
-// ApplyPlaybook creates an API-owned playbook or updates an API-owned playbook with the same identity.
+// ApplyPlaybook creates or updates an API-owned playbook using the legacy SDK contract.
 func (c *Client) ApplyPlaybook(ctx context.Context, params PlaybookApplyParams) (*PlaybookApplyResult, error) {
 	existing, err := c.findPlaybooksForApply(ctx, params.Namespace, params.Name)
 	if err != nil {
@@ -160,5 +160,43 @@ func postgrestError(response *http.Response) error {
 	if looksLikeHTML(response.Header.Get("Content-Type"), body) {
 		return ErrHTMLResponse
 	}
-	return newServerError(response.StatusCode, []byte(strings.TrimSpace(body)))
+	serverErr := &ServerError{StatusCode: response.StatusCode, Body: []byte(strings.TrimSpace(body))}
+	var payload struct {
+		Code       any            `json:"code"`
+		Error      string         `json:"error"`
+		Message    string         `json:"message"`
+		Trace      string         `json:"trace"`
+		Time       any            `json:"time"`
+		Context    map[string]any `json:"context"`
+		Hint       string         `json:"hint"`
+		Public     string         `json:"public"`
+		Stacktrace string         `json:"stacktrace"`
+	}
+	if json.Unmarshal(serverErr.Body, &payload) == nil {
+		serverErr.Code = stringifyServerErrorField(payload.Code)
+		serverErr.Message = payload.Error
+		if serverErr.Message == "" {
+			serverErr.Message = payload.Message
+		}
+		serverErr.Trace = payload.Trace
+		serverErr.Time = stringifyServerErrorField(payload.Time)
+		serverErr.Context = payload.Context
+		serverErr.Hint = payload.Hint
+		serverErr.Public = payload.Public
+		serverErr.Stacktrace = payload.Stacktrace
+	}
+	return serverErr
+}
+
+func stringifyServerErrorField(value any) string {
+	switch typed := value.(type) {
+	case nil:
+		return ""
+	case string:
+		return typed
+	case fmt.Stringer:
+		return typed.String()
+	default:
+		return fmt.Sprint(typed)
+	}
 }

@@ -11,7 +11,6 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/spf13/cobra"
 )
@@ -81,9 +80,6 @@ func main() {
 		version = fmt.Sprintf("%v, commit %v, built at %v", version, commit[0:8], date)
 	}
 
-	api.BuildVersion = version
-	api.BuildCommit = commit
-
 	root := &cobra.Command{
 		Use:          "faro",
 		Short:        "Slim Mission Control client",
@@ -102,7 +98,7 @@ func main() {
 
 	logger.BindFlags(root.PersistentFlags())
 	clientcmd.RegisterClientCommands(root)
-	root.AddCommand(refreshCacheCmd())
+	root.AddCommand(Catalog, refreshCacheCmd())
 
 	refreshErr, registerErr := clientcmd.SetupContextCachedPluginCommands(ctx, root, os.Args[1:])
 	if refreshErr != nil {
@@ -112,9 +108,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, registerErr)
 	}
 
-	// clicky.GenerateCLI materializes the registered remote "catalog" entity
-	// (see catalog.go) into `catalog list` / `catalog get` commands.
-	clicky.GenerateCLI(root)
 	if c, _, err := root.Find([]string{"catalog"}); err == nil && c != nil {
 		documentCatalogCommand(c)
 		clicky.BindAllFlags(c.PersistentFlags(), "format")

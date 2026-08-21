@@ -311,7 +311,8 @@ func postgrestInterceptor(next echov4.HandlerFunc) echov4.HandlerFunc {
 		if err != nil {
 			return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "playbook validation failed: %v", err))
 		}
-		if err := validatePlaybookWebhookPath(c, spec, existing); err != nil {
+		ctx := c.Request().Context().(context.Context)
+		if err := db.ValidatePlaybookWebhookPath(ctx, spec, existing); err != nil {
 			return dutyApi.WriteError(c, err)
 		}
 
@@ -367,23 +368,6 @@ func validatePlaybookSource(method string, requestData map[string]any, existing 
 	source, ok := sourceValue.(string)
 	if !ok || source != models.SourceUI {
 		return dutyApi.Errorf(dutyApi.EINVALID, "playbook source must be %q", models.SourceUI)
-	}
-	return nil
-}
-
-// validatePlaybookWebhookPath applies the uniqueness rule used by CRD persistence.
-func validatePlaybookWebhookPath(c echov4.Context, spec *v1.PlaybookSpec, existing *models.Playbook) error {
-	if spec.On == nil || spec.On.Webhook == nil || spec.On.Webhook.Path == "" {
-		return nil
-	}
-
-	ctx := c.Request().Context().(context.Context)
-	other, err := db.FindPlaybookByWebhookPath(ctx, spec.On.Webhook.Path)
-	if err != nil {
-		return ctx.Oops().Wrap(err)
-	}
-	if other != nil && (existing == nil || other.ID != existing.ID) {
-		return dutyApi.Errorf(dutyApi.ECONFLICT, "playbook with webhook path %s already exists", spec.On.Webhook.Path)
 	}
 	return nil
 }

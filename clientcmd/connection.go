@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 
 	"github.com/flanksource/clicky"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/sdk"
+	"github.com/flanksource/incident-commander/clientapi"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
@@ -17,17 +17,17 @@ import (
 // client leaves this nil and operates exclusively against a remote server.
 type LocalConnectionOps interface {
 	LoadAWSProfile(flags *ConnectionFlags) error
-	AddViaDB(flags *ConnectionFlags, conn *models.Connection) error
+	AddViaDB(flags *ConnectionFlags, conn *clientapi.Connection) error
 	TestSaved(name, namespace string, overrides *ConnectionFlags) (any, error)
 	TestTransient(flags *ConnectionFlags) (any, error)
 	TestFile(filename string) (any, error)
-	GetConnection(name, namespace string) (*models.Connection, error)
-	SaveConnection(conn *models.Connection) error
+	GetConnection(name, namespace string) (*clientapi.Connection, error)
+	SaveConnection(conn *clientapi.Connection) error
 }
 
 // browserGetConnection loads a connection remotely when an API context is set,
 // otherwise via the local DB implementation.
-func browserGetConnection(name, namespace string) (*models.Connection, error) {
+func browserGetConnection(name, namespace string) (*clientapi.Connection, error) {
 	if mc, ok := ContextHasAPI(); ok {
 		return NewAPIClient(mc).GetConnection(name, namespace)
 	}
@@ -39,7 +39,7 @@ func browserGetConnection(name, namespace string) (*models.Connection, error) {
 
 // browserSaveConnection saves a connection remotely when an API context is set,
 // otherwise via the local DB implementation.
-func browserSaveConnection(conn *models.Connection) error {
+func browserSaveConnection(conn *clientapi.Connection) error {
 	if mc, ok := ContextHasAPI(); ok {
 		return NewAPIClient(mc).SaveConnection(conn)
 	}
@@ -83,41 +83,43 @@ type connectionTypeSpec struct {
 }
 
 var connectionAddTypeSpecs = []connectionTypeSpec{
-	{Name: "slack", Type: models.ConnectionTypeSlack, Short: "Add a Slack connection"},
-	{Name: "postgres", Type: models.ConnectionTypePostgres, Short: "Add a Postgres connection"},
-	{Name: "mysql", Type: models.ConnectionTypeMySQL, Short: "Add a MySQL connection"},
-	{Name: "mssql", Type: models.ConnectionTypeSQLServer, Aliases: []string{"sqlserver", "sql-server"}, Short: "Add a SQL Server connection"},
-	{Name: "mongo", Type: models.ConnectionTypeMongo, Aliases: []string{"mongodb"}, Short: "Add a MongoDB connection"},
-	{Name: "aws", Type: models.ConnectionTypeAWS, Short: "Add an AWS connection"},
-	{Name: "aws-kms", Type: models.ConnectionTypeAWSKMS, Aliases: []string{"awskms"}, Short: "Add an AWS KMS connection"},
-	{Name: "s3", Type: models.ConnectionTypeS3, Short: "Add an S3 connection"},
-	{Name: "azure", Type: models.ConnectionTypeAzure, Short: "Add an Azure connection"},
-	{Name: "azure-keyvault", Type: models.ConnectionTypeAzureKeyVault, Aliases: []string{"azure-key-vault"}, Short: "Add an Azure Key Vault connection"},
-	{Name: "azure-devops", Type: models.ConnectionTypeAzureDevops, Aliases: []string{"azuredevops"}, Short: "Add an Azure DevOps connection"},
-	{Name: "gcp", Type: models.ConnectionTypeGCP, Short: "Add a GCP connection"},
-	{Name: "gcs", Type: models.ConnectionTypeGCS, Short: "Add a GCS connection"},
-	{Name: "gcp-kms", Type: models.ConnectionTypeGCPKMS, Aliases: []string{"gcpkms"}, Short: "Add a GCP KMS connection"},
-	{Name: "facet", Type: models.ConnectionTypeFacet, Short: "Add a Facet connection"},
-	{Name: "discord", Type: models.ConnectionTypeDiscord, Short: "Add a Discord connection"},
-	{Name: "smtp", Type: models.ConnectionTypeEmail, Aliases: []string{"email"}, Short: "Add an SMTP connection"},
-	{Name: "telegram", Type: models.ConnectionTypeTelegram, Short: "Add a Telegram connection"},
-	{Name: "ntfy", Type: models.ConnectionTypeNtfy, Short: "Add an Ntfy connection"},
-	{Name: "pushbullet", Type: models.ConnectionTypePushbullet, Short: "Add a Pushbullet connection"},
-	{Name: "pushover", Type: models.ConnectionTypePushover, Short: "Add a Pushover connection"},
-	{Name: "http", Type: models.ConnectionTypeHTTP, Short: "Add an HTTP connection"},
-	{Name: "git", Type: models.ConnectionTypeGit, Short: "Add a Git connection"},
-	{Name: "github", Type: models.ConnectionTypeGithub, Short: "Add a GitHub connection"},
-	{Name: "gitlab", Type: models.ConnectionTypeGitlab, Short: "Add a GitLab connection"},
-	{Name: "kubernetes", Type: models.ConnectionTypeKubernetes, Short: "Add a Kubernetes connection"},
-	{Name: "folder", Type: models.ConnectionTypeFolder, Short: "Add a folder connection"},
-	{Name: "sftp", Type: models.ConnectionTypeSFTP, Short: "Add an SFTP connection"},
-	{Name: "smb", Type: models.ConnectionTypeSMB, Short: "Add an SMB connection"},
-	{Name: "prometheus", Type: models.ConnectionTypePrometheus, Short: "Add a Prometheus connection"},
-	{Name: "loki", Type: models.ConnectionTypeLoki, Short: "Add a Loki connection"},
-	{Name: "openai", Type: models.ConnectionTypeOpenAI, Short: "Add an OpenAI connection"},
-	{Name: "anthropic", Type: models.ConnectionTypeAnthropic, Short: "Add an Anthropic connection"},
-	{Name: "ollama", Type: models.ConnectionTypeOllama, Short: "Add an Ollama connection"},
-	{Name: "gemini", Type: models.ConnectionTypeGemini, Short: "Add a Gemini connection"},
+	{Name: "slack", Type: clientapi.ConnectionTypeSlack, Short: "Add a Slack connection"},
+	{Name: "postgres", Type: clientapi.ConnectionTypePostgres, Short: "Add a Postgres connection"},
+	{Name: "mysql", Type: clientapi.ConnectionTypeMySQL, Short: "Add a MySQL connection"},
+	{Name: "mssql", Type: clientapi.ConnectionTypeSQLServer, Aliases: []string{"sqlserver", "sql-server"}, Short: "Add a SQL Server connection"},
+	{Name: "mongo", Type: clientapi.ConnectionTypeMongo, Aliases: []string{"mongodb"}, Short: "Add a MongoDB connection"},
+	{Name: "elasticsearch", Type: clientapi.ConnectionTypeElasticSearch, Aliases: []string{"elastic-search"}, Short: "Add an ElasticSearch connection"},
+	{Name: "redis", Type: clientapi.ConnectionTypeRedis, Short: "Add a Redis connection"},
+	{Name: "aws", Type: clientapi.ConnectionTypeAWS, Short: "Add an AWS connection"},
+	{Name: "aws-kms", Type: clientapi.ConnectionTypeAWSKMS, Aliases: []string{"awskms"}, Short: "Add an AWS KMS connection"},
+	{Name: "s3", Type: clientapi.ConnectionTypeS3, Short: "Add an S3 connection"},
+	{Name: "azure", Type: clientapi.ConnectionTypeAzure, Short: "Add an Azure connection"},
+	{Name: "azure-keyvault", Type: clientapi.ConnectionTypeAzureKeyVault, Aliases: []string{"azure-key-vault"}, Short: "Add an Azure Key Vault connection"},
+	{Name: "azure-devops", Type: clientapi.ConnectionTypeAzureDevops, Aliases: []string{"azuredevops"}, Short: "Add an Azure DevOps connection"},
+	{Name: "gcp", Type: clientapi.ConnectionTypeGCP, Short: "Add a GCP connection"},
+	{Name: "gcs", Type: clientapi.ConnectionTypeGCS, Short: "Add a GCS connection"},
+	{Name: "gcp-kms", Type: clientapi.ConnectionTypeGCPKMS, Aliases: []string{"gcpkms"}, Short: "Add a GCP KMS connection"},
+	{Name: "facet", Type: clientapi.ConnectionTypeFacet, Short: "Add a Facet connection"},
+	{Name: "discord", Type: clientapi.ConnectionTypeDiscord, Short: "Add a Discord connection"},
+	{Name: "smtp", Type: clientapi.ConnectionTypeEmail, Aliases: []string{"email"}, Short: "Add an SMTP connection"},
+	{Name: "telegram", Type: clientapi.ConnectionTypeTelegram, Short: "Add a Telegram connection"},
+	{Name: "ntfy", Type: clientapi.ConnectionTypeNtfy, Short: "Add an Ntfy connection"},
+	{Name: "pushbullet", Type: clientapi.ConnectionTypePushbullet, Short: "Add a Pushbullet connection"},
+	{Name: "pushover", Type: clientapi.ConnectionTypePushover, Short: "Add a Pushover connection"},
+	{Name: "http", Type: clientapi.ConnectionTypeHTTP, Short: "Add an HTTP connection"},
+	{Name: "git", Type: clientapi.ConnectionTypeGit, Short: "Add a Git connection"},
+	{Name: "github", Type: clientapi.ConnectionTypeGithub, Short: "Add a GitHub connection"},
+	{Name: "gitlab", Type: clientapi.ConnectionTypeGitlab, Short: "Add a GitLab connection"},
+	{Name: "kubernetes", Type: clientapi.ConnectionTypeKubernetes, Short: "Add a Kubernetes connection"},
+	{Name: "folder", Type: clientapi.ConnectionTypeFolder, Short: "Add a folder connection"},
+	{Name: "sftp", Type: clientapi.ConnectionTypeSFTP, Short: "Add an SFTP connection"},
+	{Name: "smb", Type: clientapi.ConnectionTypeSMB, Short: "Add an SMB connection"},
+	{Name: "prometheus", Type: clientapi.ConnectionTypePrometheus, Short: "Add a Prometheus connection"},
+	{Name: "loki", Type: clientapi.ConnectionTypeLoki, Short: "Add a Loki connection"},
+	{Name: "openai", Type: clientapi.ConnectionTypeOpenAI, Short: "Add an OpenAI connection"},
+	{Name: "anthropic", Type: clientapi.ConnectionTypeAnthropic, Short: "Add an Anthropic connection"},
+	{Name: "ollama", Type: clientapi.ConnectionTypeOllama, Short: "Add an Ollama connection"},
+	{Name: "gemini", Type: clientapi.ConnectionTypeGemini, Short: "Add a Gemini connection"},
 }
 
 type ConnectionFlags struct {
@@ -240,7 +242,7 @@ func kubeconfigDefault() string {
 
 func validateConnectionFlags(flags *ConnectionFlags) error {
 	switch flags.Type {
-	case models.ConnectionTypeSlack:
+	case clientapi.ConnectionTypeSlack:
 		if flags.Token == "" {
 			return fmt.Errorf("--token is required for Slack connections")
 		}
@@ -248,103 +250,103 @@ func validateConnectionFlags(flags *ConnectionFlags) error {
 			return fmt.Errorf("--channel is required for Slack connections")
 		}
 
-	case models.ConnectionTypePostgres, models.ConnectionTypeMySQL, models.ConnectionTypeSQLServer, models.ConnectionTypeMongo:
+	case clientapi.ConnectionTypePostgres, clientapi.ConnectionTypeMySQL, clientapi.ConnectionTypeSQLServer, clientapi.ConnectionTypeMongo:
 		if flags.URL == "" && flags.Host == "" {
 			return fmt.Errorf("--url or --host is required for database connections")
 		}
 
-	case models.ConnectionTypeAWS, models.ConnectionTypeAWSKMS, models.ConnectionTypeS3:
+	case clientapi.ConnectionTypeAWS, clientapi.ConnectionTypeAWSKMS, clientapi.ConnectionTypeS3:
 		// AWS can use instance profiles, so credentials are optional
 
-	case models.ConnectionTypeAzure, models.ConnectionTypeAzureKeyVault:
+	case clientapi.ConnectionTypeAzure, clientapi.ConnectionTypeAzureKeyVault:
 		if flags.ClientID == "" || flags.ClientSecret == "" || flags.TenantID == "" {
 			return fmt.Errorf("--client-id, --client-secret, and --tenant-id are required for Azure connections")
 		}
 
-	case models.ConnectionTypeAzureDevops:
+	case clientapi.ConnectionTypeAzureDevops:
 		if flags.PersonalAccessToken == "" {
 			return fmt.Errorf("--personal-access-token is required for Azure DevOps connections")
 		}
 
-	case models.ConnectionTypeGCP, models.ConnectionTypeGCS, models.ConnectionTypeGCPKMS:
+	case clientapi.ConnectionTypeGCP, clientapi.ConnectionTypeGCS, clientapi.ConnectionTypeGCPKMS:
 		// GCP can use default credentials, so certificate is optional
 
-	case models.ConnectionTypeDiscord:
+	case clientapi.ConnectionTypeDiscord:
 		if flags.WebhookID == "" || flags.Token == "" {
 			return fmt.Errorf("--webhook-id and --token are required for Discord connections")
 		}
 
-	case models.ConnectionTypeEmail:
+	case clientapi.ConnectionTypeEmail:
 		if flags.Host == "" {
 			return fmt.Errorf("--host is required for SMTP connections")
 		}
 
-	case models.ConnectionTypeTelegram:
+	case clientapi.ConnectionTypeTelegram:
 		if flags.Token == "" {
 			return fmt.Errorf("--token is required for Telegram connections")
 		}
 
-	case models.ConnectionTypeNtfy:
+	case clientapi.ConnectionTypeNtfy:
 		if flags.Host == "" || flags.Topic == "" {
 			return fmt.Errorf("--host and --topic are required for Ntfy connections")
 		}
 
-	case models.ConnectionTypePushbullet:
+	case clientapi.ConnectionTypePushbullet:
 		if flags.Token == "" {
 			return fmt.Errorf("--token is required for Pushbullet connections")
 		}
 
-	case models.ConnectionTypePushover:
+	case clientapi.ConnectionTypePushover:
 		if flags.Token == "" || flags.User == "" {
 			return fmt.Errorf("--token and --user are required for Pushover connections")
 		}
 
-	case models.ConnectionTypeHTTP:
+	case clientapi.ConnectionTypeHTTP:
 		if flags.URL == "" {
 			return fmt.Errorf("--url is required for HTTP connections")
 		}
 
-	case models.ConnectionTypeGit:
+	case clientapi.ConnectionTypeGit:
 		if flags.URL == "" {
 			return fmt.Errorf("--url is required for Git connections")
 		}
 
-	case models.ConnectionTypeGithub, models.ConnectionTypeGitlab:
+	case clientapi.ConnectionTypeGithub, clientapi.ConnectionTypeGitlab:
 		if flags.PersonalAccessToken == "" {
 			return fmt.Errorf("--personal-access-token is required for GitHub/GitLab connections")
 		}
 
-	case models.ConnectionTypeFolder:
+	case clientapi.ConnectionTypeFolder:
 		if flags.Path == "" {
 			return fmt.Errorf("--path is required for folder connections")
 		}
 
-	case models.ConnectionTypeSFTP:
+	case clientapi.ConnectionTypeSFTP:
 		if flags.Host == "" {
 			return fmt.Errorf("--host is required for SFTP connections")
 		}
 
-	case models.ConnectionTypeSMB:
+	case clientapi.ConnectionTypeSMB:
 		if flags.Host == "" || flags.Share == "" {
 			return fmt.Errorf("--host and --share are required for SMB connections")
 		}
 
-	case models.ConnectionTypePrometheus, models.ConnectionTypeLoki:
+	case clientapi.ConnectionTypePrometheus, clientapi.ConnectionTypeLoki, clientapi.ConnectionTypeElasticSearch, clientapi.ConnectionTypeRedis:
 		if flags.URL == "" {
 			return fmt.Errorf("--url is required for %s connections", flags.Type)
 		}
 
-	case models.ConnectionTypeOpenAI, models.ConnectionTypeAnthropic, models.ConnectionTypeGemini:
+	case clientapi.ConnectionTypeOpenAI, clientapi.ConnectionTypeAnthropic, clientapi.ConnectionTypeGemini:
 		if flags.ApiKey == "" {
 			return fmt.Errorf("--api-key is required for %s connections", flags.Type)
 		}
 
-	case models.ConnectionTypeOllama:
+	case clientapi.ConnectionTypeOllama:
 		if flags.URL == "" {
 			return fmt.Errorf("--url is required for Ollama connections")
 		}
 
-	case models.ConnectionTypeFacet:
+	case clientapi.ConnectionTypeFacet:
 		if flags.URL == "" {
 			return fmt.Errorf("--url is required for Facet connections")
 		}
@@ -390,7 +392,7 @@ func runConnectionAdd(flags *ConnectionFlags) error {
 	return LocalConnections.AddViaDB(flags, &conn)
 }
 
-func runConnectionAddViaAPI(mcCtx *MCContext, flags *ConnectionFlags, conn *models.Connection) error {
+func runConnectionAddViaAPI(mcCtx *MCContext, flags *ConnectionFlags, conn *clientapi.Connection) error {
 	client := NewAPIClient(mcCtx)
 
 	existing, err := client.GetConnection(flags.Name, flags.Namespace)

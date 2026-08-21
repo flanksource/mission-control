@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/flanksource/duty/query"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/clientcmd"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -71,7 +71,7 @@ func catalogSearchServer(expectedPath string) *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		Expect(r.Method).To(Equal(http.MethodPost))
 		Expect(r.URL.Path).To(Equal(expectedPath))
-		var got query.SearchResourcesRequest
+		var got clientapi.SearchResourcesRequest
 		Expect(json.NewDecoder(r.Body).Decode(&got)).To(Succeed())
 		Expect(got.Limit).To(Equal(5))
 		Expect(got.Timestamps).To(BeTrue())

@@ -13,8 +13,9 @@ import (
 
 	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/flanksource/incident-commander/plugin/api"
-	"github.com/flanksource/incident-commander/plugin/machinery/local"
+	pluginlocal "github.com/flanksource/incident-commander/plugin/machinery/local"
 	"github.com/flanksource/incident-commander/plugin/manifestcache"
+	"github.com/flanksource/incident-commander/plugin/manifestcache/localcache"
 )
 
 func init() {
@@ -44,8 +45,8 @@ func refreshPluginCacheFromBinary(cmd *cobra.Command, name string) (*manifestcac
 
 	ctx, cancel := gocontext.WithTimeout(cmd.Context(), 30*time.Second)
 	defer cancel()
-	return manifestcache.PopulateLocal(ctx, name, manifestcache.PopulateOptions{
-		BinaryDir: local.PluginPath(),
+	return localcache.Populate(ctx, name, localcache.PopulateOptions{
+		BinaryDir: pluginlocal.PluginPath(),
 		CacheDir:  cacheDir,
 	})
 }
@@ -54,7 +55,7 @@ func refreshPluginCacheFromBinary(cmd *cobra.Command, name string) (*manifestcac
 // invokes the operation, and shuts the plugin down. Used when the CLI has
 // no API context configured (DB-only / local dev).
 func dispatchLocal(cmd *cobra.Command, pluginName, op string, params map[string]string, configID string, raw bool) error {
-	binPath, err := manifestcache.FindBinaryFor(pluginName)
+	binPath, err := localcache.FindBinaryFor(pluginName)
 	if err != nil {
 		return err
 	}
@@ -101,7 +102,7 @@ func dispatchLocal(cmd *cobra.Command, pluginName, op string, params map[string]
 // dialPlugin spawns binPath, completes the go-plugin handshake, and returns
 // both the client (for Kill) and the typed local.Client (for RPC calls).
 // The caller must invoke cli.Kill() when finished.
-func dialPlugin(binPath string) (*goplugin.Client, *local.Client, error) {
+func dialPlugin(binPath string) (*goplugin.Client, *pluginlocal.Client, error) {
 	cmd := osExec.Command(binPath)
 	cmd.Env = append(os.Environ(),
 		fmt.Sprintf("%s=%s", api.Handshake.MagicCookieKey, api.Handshake.MagicCookieValue),
@@ -109,7 +110,7 @@ func dialPlugin(binPath string) (*goplugin.Client, *local.Client, error) {
 	cli := goplugin.NewClient(&goplugin.ClientConfig{
 		HandshakeConfig: api.Handshake,
 		Plugins: map[string]goplugin.Plugin{
-			api.PluginName: &local.GRPCPlugin{},
+			api.PluginName: &pluginlocal.GRPCPlugin{},
 		},
 		Cmd:              cmd,
 		AllowedProtocols: []goplugin.Protocol{goplugin.ProtocolGRPC},
@@ -125,7 +126,7 @@ func dialPlugin(binPath string) (*goplugin.Client, *local.Client, error) {
 		cli.Kill()
 		return nil, nil, fmt.Errorf("plugin dispense: %w", err)
 	}
-	pluginCli, ok := raw.(*local.Client)
+	pluginCli, ok := raw.(*pluginlocal.Client)
 	if !ok {
 		cli.Kill()
 		return nil, nil, fmt.Errorf("plugin: unexpected dispense type %T", raw)

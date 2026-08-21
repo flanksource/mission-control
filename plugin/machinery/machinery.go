@@ -15,6 +15,7 @@ import (
 	"github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/api"
 	"github.com/flanksource/incident-commander/plugin/machinery/local"
+	"github.com/flanksource/incident-commander/plugin/manifestadapter"
 	"github.com/flanksource/incident-commander/plugin/manifestcache"
 )
 
@@ -126,7 +127,7 @@ func writeManifestCache(ctx dutyContext.Context, entry *plugin.Entry, sup *local
 		ctx.Logger.V(2).Infof("plugin %s: skip manifest cache (hash %s: %v)", entry.Name, entry.InstalledPath, err)
 		return
 	}
-	service := manifestcache.ManifestToService(sup.Manifest())
+	service := manifestadapter.ManifestToService(sup.Manifest())
 	if service.Name == "" {
 		service.Name = entry.Name
 	}

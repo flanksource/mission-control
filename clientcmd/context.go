@@ -447,9 +447,9 @@ func ResolveAPIBase(serverURL string) (string, error) {
 
 	var failures []string
 	for _, candidate := range apiBaseCandidates(serverURL) {
-		ok, err := probeAPIHealth(gocontext.Background(), candidate)
+		resolved, ok, err := probeAPIHealth(gocontext.Background(), candidate)
 		if err == nil && ok {
-			return candidate, nil
+			return resolved, nil
 		}
 		if err != nil {
 			failures = append(failures, fmt.Sprintf("%s: %v", candidate, err))
@@ -468,30 +468,46 @@ func apiBaseCandidates(serverURL string) []string {
 	return uniqueStrings([]string{serverURL + "/api", serverURL})
 }
 
-func probeAPIHealth(ctx gocontext.Context, baseURL string) (bool, error) {
+func probeAPIHealth(ctx gocontext.Context, baseURL string) (string, bool, error) {
 	healthURL, err := url.JoinPath(baseURL, "health")
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
 	ctx, cancel := gocontext.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return false, nil
+		return "", false, nil
 	}
 	body, err := io.ReadAll(io.LimitReader(resp.Body, 64))
 	if err != nil {
-		return false, err
+		return "", false, err
 	}
-	return strings.TrimSpace(string(body)) == "OK", nil
+	if strings.TrimSpace(string(body)) != "OK" {
+		return "", false, nil
+	}
+
+	finalURL := *resp.Request.URL
+	if req.URL.Scheme == "https" && finalURL.Scheme != "https" {
+		return "", false, fmt.Errorf("health probe redirected from HTTPS to %s", finalURL.Scheme)
+	}
+	finalURL.RawQuery = ""
+	finalURL.Fragment = ""
+	finalURL.RawPath = ""
+	finalPath := strings.TrimSuffix(finalURL.Path, "/")
+	if !strings.HasSuffix(finalPath, "/health") {
+		return "", false, fmt.Errorf("health probe redirected to an unexpected path: %s", finalURL.String())
+	}
+	finalURL.Path = strings.TrimSuffix(finalPath, "/health")
+	return strings.TrimRight(finalURL.String(), "/"), true, nil
 }
 
 func init() {

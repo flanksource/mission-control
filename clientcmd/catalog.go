@@ -3,7 +3,7 @@ package clientcmd
 import (
 	"fmt"
 
-	"github.com/flanksource/incident-commander/sdk"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 )
 
 // RemoteClient returns an SDK client bound to the current Mission Control

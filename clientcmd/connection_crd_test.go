@@ -116,6 +116,56 @@ spec:
 `,
 		},
 		{
+			name: "elasticsearch",
+			flags: ConnectionFlags{
+				Name:        "search",
+				Namespace:   "default",
+				Type:        models.ConnectionTypeElasticSearch,
+				URL:         "https://search.example.com",
+				Username:    "elastic",
+				Password:    "secret",
+				InsecureTLS: true,
+			},
+			expected: `apiVersion: mission-control.flanksource.com/v1
+kind: Connection
+metadata:
+  name: search
+  namespace: default
+spec:
+  elasticsearch:
+    insecureTLS: true
+    password:
+      value: secret
+    url: https://search.example.com
+    username:
+      value: elastic
+`,
+		},
+		{
+			name: "redis",
+			flags: ConnectionFlags{
+				Name:      "cache",
+				Namespace: "default",
+				Type:      models.ConnectionTypeRedis,
+				URL:       "redis.example.com:6379",
+				Username:  "app",
+				Password:  "secret",
+			},
+			expected: `apiVersion: mission-control.flanksource.com/v1
+kind: Connection
+metadata:
+  name: cache
+  namespace: default
+spec:
+  redis:
+    password:
+      value: secret
+    url: redis.example.com:6379
+    username:
+      value: app
+`,
+		},
+		{
 			name: "folder",
 			flags: ConnectionFlags{
 				Name:      "artifacts",
@@ -143,6 +193,38 @@ spec:
 			Expect(string(out)).To(Equal(tt.expected))
 		})
 	}
+})
+
+var _ = ginkgo.Describe("ElasticSearch and Redis connection commands", func() {
+	for _, connectionType := range []string{models.ConnectionTypeElasticSearch, models.ConnectionTypeRedis} {
+		ginkgo.It("registers and builds "+connectionType+" connections", func() {
+			cmd, _, err := ConnectionAdd.Find([]string{connectionType})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cmd).NotTo(BeNil())
+			Expect(cmd.Flags().Lookup("url")).NotTo(BeNil())
+			Expect(cmd.Flags().Lookup("username")).NotTo(BeNil())
+			Expect(cmd.Flags().Lookup("password")).NotTo(BeNil())
+
+			flags := ConnectionFlags{Type: connectionType, URL: "service.example.com", Username: "app", Password: "secret"}
+			Expect(validateConnectionFlags(&flags)).To(Succeed())
+			connection, err := BuildConnectionFromFlags(&flags)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(connection.Type).To(Equal(connectionType))
+			Expect(connection.URL).To(Equal("service.example.com"))
+			Expect(connection.Username).To(Equal("app"))
+			Expect(connection.Password).To(Equal("secret"))
+		})
+	}
+
+	ginkgo.It("adds insecure TLS only to ElasticSearch", func() {
+		elasticsearch, _, err := ConnectionAdd.Find([]string{models.ConnectionTypeElasticSearch})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(elasticsearch.Flags().Lookup("insecure-tls")).NotTo(BeNil())
+
+		redis, _, err := ConnectionAdd.Find([]string{models.ConnectionTypeRedis})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(redis.Flags().Lookup("insecure-tls")).To(BeNil())
+	})
 })
 
 var _ = ginkgo.Describe("MarshalDryRunOutput", func() {

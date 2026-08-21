@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/flanksource/clicky/rpc"
+	"github.com/flanksource/incident-commander/clientapi"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -32,10 +32,10 @@ var _ = ginkgo.Describe("Sidecar cache", func() {
 		entry := Entry{
 			Source:    SourceRemoteServer,
 			ServerURL: "https://example.test",
-			Service: rpc.RPCService{
+			Service: clientapi.PluginService{
 				Name:    "alpha",
 				Version: "v1.2.3",
-				Operations: []rpc.RPCOperation{
+				Operations: []clientapi.PluginOperation{
 					{Name: "op-a", Description: "first op"},
 					{Name: "op-b", Description: "second op"},
 				},
@@ -63,7 +63,7 @@ var _ = ginkgo.Describe("Sidecar cache", func() {
 			Source:         SourceLocalBinary,
 			BinaryPath:     bin,
 			BinaryChecksum: sum,
-			Service:        rpc.RPCService{Name: "beta"},
+			Service:        clientapi.PluginService{Name: "beta"},
 		})).To(Succeed())
 
 		fresh, err := Get("beta")
@@ -88,7 +88,7 @@ var _ = ginkgo.Describe("Sidecar cache", func() {
 			Source:         SourceLocalBinary,
 			BinaryPath:     bin,
 			BinaryChecksum: sum,
-			Service:        rpc.RPCService{Name: "gamma"},
+			Service:        clientapi.PluginService{Name: "gamma"},
 		})).To(Succeed())
 
 		Expect(os.Remove(bin)).To(Succeed())
@@ -108,7 +108,7 @@ var _ = ginkgo.Describe("Sidecar cache", func() {
 	ginkgo.It("Delete removes the sidecar and is idempotent", func() {
 		Expect(Write(Entry{
 			Source:  SourceRemoteServer,
-			Service: rpc.RPCService{Name: "epsilon"},
+			Service: clientapi.PluginService{Name: "epsilon"},
 		})).To(Succeed())
 
 		Expect(Path("epsilon")).To(BeAnExistingFile())
@@ -119,8 +119,8 @@ var _ = ginkgo.Describe("Sidecar cache", func() {
 	})
 
 	ginkgo.It("List returns every cached entry, skipping non-JSON files", func() {
-		Expect(Write(Entry{Source: SourceRemoteServer, Service: rpc.RPCService{Name: "one"}})).To(Succeed())
-		Expect(Write(Entry{Source: SourceRemoteServer, Service: rpc.RPCService{Name: "two"}})).To(Succeed())
+		Expect(Write(Entry{Source: SourceRemoteServer, Service: clientapi.PluginService{Name: "one"}})).To(Succeed())
+		Expect(Write(Entry{Source: SourceRemoteServer, Service: clientapi.PluginService{Name: "two"}})).To(Succeed())
 		Expect(os.WriteFile(filepath.Join(Dir(), "README.md"), []byte("ignore"), 0o644)).To(Succeed())
 
 		entries, err := List()
@@ -139,7 +139,7 @@ var _ = ginkgo.Describe("Sidecar cache", func() {
 	ginkgo.It("Write leaves no temp file behind on a successful rename", func() {
 		Expect(Write(Entry{
 			Source:  SourceRemoteServer,
-			Service: rpc.RPCService{Name: "zeta"},
+			Service: clientapi.PluginService{Name: "zeta"},
 		})).To(Succeed())
 
 		entries, err := os.ReadDir(Dir())

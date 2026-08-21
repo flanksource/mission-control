@@ -6,9 +6,8 @@ import (
 	"strings"
 
 	"github.com/flanksource/clicky"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/sdk"
+	"github.com/flanksource/incident-commander/clientapi"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/spf13/cobra"
 )
 
@@ -50,7 +49,7 @@ var DeletePlaybook = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if item.Source != models.SourceUI {
+		if item.Source != clientapi.SourceUI {
 			return fmt.Errorf("playbook %s/%s was not created through the API and cannot be deleted", item.Namespace, item.Name)
 		}
 		_, client, err := playbookAPIClient(cmd)
@@ -91,11 +90,11 @@ var PlaybookHistory = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return printClicky(cmd.OutOrStdout(), runs, "pretty")
+		return printClicky(cmd.OutOrStdout(), playbookRuns(runs), "pretty")
 	},
 }
 
-func getRemotePlaybook(cmd *cobra.Command, ref string) (*api.PlaybookListItem, error) {
+func getRemotePlaybook(cmd *cobra.Command, ref string) (*clientapi.PlaybookListItem, error) {
 	items, err := listRemotePlaybooks(cmd, sdk.PlaybookListOptions{})
 	if err != nil {
 		return nil, err
@@ -103,7 +102,7 @@ func getRemotePlaybook(cmd *cobra.Command, ref string) (*api.PlaybookListItem, e
 	return resolvePlaybookRef(items, ref, playbookNamespace)
 }
 
-func playbookManifestFromItem(item api.PlaybookListItem) (*playbookManifest, error) {
+func playbookManifestFromItem(item clientapi.PlaybookListItem) (*playbookManifest, error) {
 	var spec map[string]any
 	if err := json.Unmarshal(item.Spec, &spec); err != nil {
 		return nil, fmt.Errorf("invalid stored playbook spec: %w", err)
@@ -140,24 +139,24 @@ func playbookManifestFromItem(item api.PlaybookListItem) (*playbookManifest, err
 	}, nil
 }
 
-func parsePlaybookRunStatuses(values []string) ([]models.PlaybookRunStatus, error) {
-	valid := map[models.PlaybookRunStatus]struct{}{
-		models.PlaybookRunStatusCancelled:       {},
-		models.PlaybookRunStatusTimedOut:        {},
-		models.PlaybookRunStatusCompleted:       {},
-		models.PlaybookRunStatusFailed:          {},
-		models.PlaybookRunStatusPendingApproval: {},
-		models.PlaybookRunStatusRunning:         {},
-		models.PlaybookRunStatusScheduled:       {},
-		models.PlaybookRunStatusSleeping:        {},
-		models.PlaybookRunStatusRetrying:        {},
-		models.PlaybookRunStatusWaiting:         {},
+func parsePlaybookRunStatuses(values []string) ([]clientapi.PlaybookRunStatus, error) {
+	valid := map[clientapi.PlaybookRunStatus]struct{}{
+		clientapi.PlaybookRunStatusCancelled:       {},
+		clientapi.PlaybookRunStatusTimedOut:        {},
+		clientapi.PlaybookRunStatusCompleted:       {},
+		clientapi.PlaybookRunStatusFailed:          {},
+		clientapi.PlaybookRunStatusPendingApproval: {},
+		clientapi.PlaybookRunStatusRunning:         {},
+		clientapi.PlaybookRunStatusScheduled:       {},
+		clientapi.PlaybookRunStatusSleeping:        {},
+		clientapi.PlaybookRunStatusRetrying:        {},
+		clientapi.PlaybookRunStatusWaiting:         {},
 	}
 
-	var statuses []models.PlaybookRunStatus
+	var statuses []clientapi.PlaybookRunStatus
 	for _, value := range values {
 		for _, part := range strings.Split(value, ",") {
-			status := models.PlaybookRunStatus(strings.TrimSpace(part))
+			status := clientapi.PlaybookRunStatus(strings.TrimSpace(part))
 			if _, ok := valid[status]; !ok {
 				return nil, fmt.Errorf("invalid playbook run status %q", part)
 			}

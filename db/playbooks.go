@@ -11,6 +11,8 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -185,8 +187,8 @@ func playbookListItem(playbook models.Playbook, parameters types.JSON) api.Playb
 		Source:      playbook.Source,
 		Category:    playbook.Category,
 		CreatedAt:   &createdAt,
-		Parameters:  parameters,
-		Spec:        playbook.Spec,
+		Parameters:  json.RawMessage(parameters),
+		Spec:        json.RawMessage(playbook.Spec),
 	}
 }
 
@@ -240,6 +242,22 @@ func FindPlaybookByWebhookPath(ctx context.Context, path string) (*models.Playbo
 	return &p, nil
 }
 
+// ValidatePlaybookWebhookPath ensures that a webhook path belongs to at most one playbook.
+func ValidatePlaybookWebhookPath(ctx context.Context, spec *v1.PlaybookSpec, existing *models.Playbook) error {
+	if spec.On == nil || spec.On.Webhook == nil || spec.On.Webhook.Path == "" {
+		return nil
+	}
+
+	other, err := FindPlaybookByWebhookPath(ctx, spec.On.Webhook.Path)
+	if err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+	if other != nil && (existing == nil || other.ID != existing.ID) {
+		return dutyAPI.Errorf(dutyAPI.ECONFLICT, "playbook with webhook path %s already exists", spec.On.Webhook.Path)
+	}
+	return nil
+}
+
 func PersistPlaybookFromCRD(ctx context.Context, obj *v1.Playbook) error {
 	_, err := SavePlaybook(ctx, obj)
 	return err
@@ -273,14 +291,8 @@ func SavePlaybook(ctx context.Context, obj *v1.Playbook) (*models.Playbook, erro
 		playbook.ID = _playbook.ID
 	}
 
-	if obj.Spec.On != nil && obj.Spec.On.Webhook != nil && obj.Spec.On.Webhook.Path != "" {
-		existing, err := FindPlaybookByWebhookPath(ctx, obj.Spec.On.Webhook.Path)
-		if err != nil {
-			return nil, err
-		} else if existing != nil && playbook.ID != existing.ID {
-			// TODO: We can move this unique constraint handling to DB once we upgrade to Postgres 15+
-			return nil, dutyAPI.Errorf(dutyAPI.ECONFLICT, "Playbook with webhook path %s already exists", obj.Spec.On.Webhook.Path)
-		}
+	if err := ValidatePlaybookWebhookPath(ctx, &obj.Spec, playbook); err != nil {
+		return nil, err
 	}
 
 	if playbook.CreatedBy == nil {
@@ -288,6 +300,10 @@ func SavePlaybook(ctx context.Context, obj *v1.Playbook) (*models.Playbook, erro
 	}
 
 	if err := tx.Clauses(clause.Returning{}).Save(&playbook).Error; err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation && pgErr.ConstraintName == "playbooks_webhook_path_key" {
+			return nil, dutyAPI.Errorf(dutyAPI.ECONFLICT, "playbook with webhook path %s already exists", obj.Spec.On.Webhook.Path)
+		}
 		return nil, err
 	}
 

@@ -2,14 +2,13 @@ package main
 
 import (
 	"context"
+	"strconv"
 	"strings"
 
 	"github.com/flanksource/clicky"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/query"
-	"github.com/flanksource/duty/types"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/clientcmd"
-	"github.com/flanksource/incident-commander/sdk"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
@@ -30,7 +29,50 @@ type catalogGetFlags struct {
 	Relationships bool `flag:"relationships" help:"Return the config relationship tree instead of the item"`
 }
 
-func (catalogGetFlags) ClickyActionFlags() {}
+var catalogListOptions catalogListOpts
+var catalogGetOptions catalogGetFlags
+
+var Catalog = &cobra.Command{
+	Use:     "catalog",
+	Aliases: []string{"configs"},
+	Short:   "Manage catalog resources",
+	Args:    cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		return cmd.Help()
+	},
+}
+
+var CatalogList = &cobra.Command{
+	Use:   "list",
+	Short: "List catalog resources",
+	Args:  cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error {
+		items, err := remoteList(catalogListOptions)
+		if err != nil {
+			return err
+		}
+		clicky.MustPrint(catalogListItems(items), clicky.Flags.FormatOptions)
+		return nil
+	},
+}
+
+var CatalogGet = &cobra.Command{
+	Use:               "get <id>",
+	Aliases:           []string{"inspect"},
+	Short:             "Get a catalog resource",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeCatalogIDs,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		result, err := remoteGet(args[0], map[string]string{
+			"relationships": strconv.FormatBool(catalogGetOptions.Relationships),
+		})
+		if err != nil {
+			return err
+		}
+		clicky.MustPrint(result, clicky.Flags.FormatOptions)
+		return nil
+	},
+}
 
 // joinTagSelectors flattens repeated --tag values into a comma-separated label
 // selector, stripping the stray brackets clicky's []string round-trip can add.
@@ -51,7 +93,7 @@ func joinTagSelectors(tags []string) string {
 
 // remoteList backs `catalog list`, returning lightweight search hits by default
 // and hydrating complete items only when requested.
-func remoteList(opts catalogListOpts) ([]models.ConfigItem, error) {
+func remoteList(opts catalogListOpts) ([]catalogItem, error) {
 	client, err := clientcmd.RemoteClient()
 	if err != nil {
 		return nil, err
@@ -62,24 +104,24 @@ func remoteList(opts catalogListOpts) ([]models.ConfigItem, error) {
 		agent = "all"
 	}
 
-	selector := types.ResourceSelector{
+	selector := clientapi.ResourceSelector{
 		Search:      opts.Query,
 		Agent:       agent,
 		Namespace:   opts.Namespace,
 		TagSelector: joinTagSelectors(opts.Tag),
 	}
 	if opts.Type != "" {
-		selector.Types = types.Items(strings.Split(opts.Type, ","))
+		selector.Types = strings.Split(opts.Type, ",")
 	}
 	limit := opts.Limit
 	if limit == 0 {
 		limit = 100
 	}
 
-	resp, err := client.SearchCatalog(context.Background(), query.SearchResourcesRequest{
+	resp, err := client.SearchCatalog(context.Background(), clientapi.SearchResourcesRequest{
 		Limit:      limit,
 		Timestamps: true,
-		Configs:    []types.ResourceSelector{selector},
+		Configs:    []clientapi.ResourceSelector{selector},
 	})
 	if err != nil {
 		return nil, err
@@ -88,7 +130,7 @@ func remoteList(opts catalogListOpts) ([]models.ConfigItem, error) {
 	return catalogItemsFromSearch(context.Background(), client, resp.Configs, opts.Full)
 }
 
-func catalogItemsFromSearch(ctx context.Context, client *sdk.Client, items []query.SelectedResource, full bool) ([]models.ConfigItem, error) {
+func catalogItemsFromSearch(ctx context.Context, client *sdk.Client, items []clientapi.SelectedResource, full bool) ([]catalogItem, error) {
 	if full {
 		ids := make([]string, len(items))
 		for i, item := range items {
@@ -99,15 +141,15 @@ func catalogItemsFromSearch(ctx context.Context, client *sdk.Client, items []que
 			return nil, err
 		}
 
-		fullItemsByID := make(map[string]models.ConfigItem, len(fullItems))
+		fullItemsByID := make(map[string]clientapi.ConfigItem, len(fullItems))
 		for _, item := range fullItems {
 			fullItemsByID[item.ID.String()] = item
 		}
 
-		out := make([]models.ConfigItem, 0, len(items))
+		out := make([]catalogItem, 0, len(items))
 		for _, item := range items {
 			if fullItem, ok := fullItemsByID[item.ID]; ok {
-				out = append(out, fullItem)
+				out = append(out, catalogItem(fullItem))
 			} else {
 				out = append(out, selectedResourceToConfigItem(item))
 			}
@@ -115,15 +157,15 @@ func catalogItemsFromSearch(ctx context.Context, client *sdk.Client, items []que
 		return out, nil
 	}
 
-	out := make([]models.ConfigItem, 0, len(items))
+	out := make([]catalogItem, 0, len(items))
 	for _, item := range items {
 		out = append(out, selectedResourceToConfigItem(item))
 	}
 	return out, nil
 }
 
-func selectedResourceToConfigItem(s query.SelectedResource) models.ConfigItem {
-	ci := models.ConfigItem{ConfigClass: s.Type}
+func selectedResourceToConfigItem(s clientapi.SelectedResource) catalogItem {
+	ci := clientapi.ConfigItem{ConfigClass: s.Type}
 	if id, err := uuid.Parse(s.ID); err == nil {
 		ci.ID = id
 	}
@@ -140,18 +182,18 @@ func selectedResourceToConfigItem(s query.SelectedResource) models.ConfigItem {
 		ci.Status = &status
 	}
 	if s.Health != "" {
-		health := models.Health(s.Health)
+		health := s.Health
 		ci.Health = &health
 	}
 	if len(s.Tags) > 0 {
-		ci.Tags = types.JSONStringMap(s.Tags)
+		ci.Tags = s.Tags
 	}
 	if s.CreatedAt != nil {
 		ci.CreatedAt = *s.CreatedAt
 	}
 	ci.UpdatedAt = s.UpdatedAt
 	ci.DeletedAt = s.DeletedAt
-	return ci
+	return catalogItem(ci)
 }
 
 // remoteGet backs `catalog get <id>`. With --relationships it returns the
@@ -162,7 +204,11 @@ func remoteGet(id string, flags map[string]string) (any, error) {
 		return nil, err
 	}
 	if flags["relationships"] == "true" {
-		return client.GetCatalogRelationships(context.Background(), id)
+		relationships, err := client.GetCatalogRelationships(context.Background(), id)
+		if err != nil {
+			return nil, err
+		}
+		return catalogRelationshipsView(relationships), nil
 	}
 	ctx := context.Background()
 	item, err := client.GetCatalogItem(ctx, id)
@@ -192,12 +238,13 @@ func completeCatalogIDs(_ *cobra.Command, _ []string, toComplete string) ([]stri
 }
 
 func init() {
-	clicky.RegisterEntity(clicky.Entity[models.ConfigItem, catalogListOpts, any]{
-		Name:         "catalog",
-		Aliases:      []string{"configs"},
-		List:         remoteList,
-		GetFlags:     catalogGetFlags{},
-		GetWithFlags: remoteGet,
-		ValidArgs:    completeCatalogIDs,
-	})
+	CatalogList.Flags().StringVar(&catalogListOptions.Query, "query", "", "Free-form text or catalog query expression")
+	CatalogList.Flags().StringVar(&catalogListOptions.Type, "type", "", "Filter by type (comma-separated, supports ! negation)")
+	CatalogList.Flags().StringVar(&catalogListOptions.Namespace, "namespace", "", "Filter by namespace")
+	CatalogList.Flags().StringSliceVar(&catalogListOptions.Tag, "tag", nil, "Filter by tag as a label selector (repeatable: --tag cluster=foo)")
+	CatalogList.Flags().StringVar(&catalogListOptions.Agent, "agent", "all", "Filter by agent id or name ('all' for every agent)")
+	CatalogList.Flags().IntVar(&catalogListOptions.Limit, "limit", 100, "Maximum number of results")
+	CatalogList.Flags().BoolVar(&catalogListOptions.Full, "full", false, "Return complete catalog items")
+	CatalogGet.Flags().BoolVar(&catalogGetOptions.Relationships, "relationships", false, "Return the config relationship tree instead of the item")
+	Catalog.AddCommand(CatalogList, CatalogGet)
 }

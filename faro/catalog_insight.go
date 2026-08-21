@@ -9,10 +9,9 @@ import (
 
 	"github.com/flanksource/clicky"
 	clickyapi "github.com/flanksource/clicky/api"
-	"github.com/flanksource/duty/query"
-	"github.com/flanksource/duty/types"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/clientcmd"
-	"github.com/flanksource/incident-commander/sdk"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/spf13/cobra"
 )
 
@@ -128,7 +127,7 @@ func runCatalogInsightSearch(cmd *cobra.Command, args []string) error {
 
 func catalogInsightSearchOutput(result *catalogInsightSearchResult, full bool) any {
 	if full {
-		return result.Details
+		return catalogInsightDetailViews(result.Details)
 	}
 	return result.Items
 }
@@ -170,14 +169,14 @@ func remoteSearchInsights(searchQuery, agent string, limit int) (*catalogInsight
 		limit = 100
 	}
 	requestLimit := limit
-	if requestLimit < query.MaxSearchResourcesLimit {
+	if requestLimit < clientapi.MaxSearchResourcesLimit {
 		requestLimit++
 	}
 
-	resp, err := client.SearchCatalog(context.Background(), query.SearchResourcesRequest{
+	resp, err := client.SearchCatalog(context.Background(), clientapi.SearchResourcesRequest{
 		Limit:      requestLimit,
 		Timestamps: true,
-		ConfigAnalysis: []types.ResourceSelector{{
+		ConfigAnalysis: []clientapi.ResourceSelector{{
 			Search: searchQuery,
 			Agent:  agent,
 		}},
@@ -188,7 +187,7 @@ func remoteSearchInsights(searchQuery, agent string, limit int) (*catalogInsight
 
 	totalAtLeast := len(resp.ConfigAnalysis)
 	limited := len(resp.ConfigAnalysis) > limit
-	if limit >= query.MaxSearchResourcesLimit && len(resp.ConfigAnalysis) == limit {
+	if limit >= clientapi.MaxSearchResourcesLimit && len(resp.ConfigAnalysis) == limit {
 		limited = true
 	}
 	if len(resp.ConfigAnalysis) > limit {
@@ -263,7 +262,12 @@ func remoteGetInsight(id string) (any, error) {
 	if err != nil {
 		return nil, err
 	}
-	return client.GetCatalogInsight(context.Background(), id)
+	detail, err := client.GetCatalogInsight(context.Background(), id)
+	if err != nil {
+		return nil, err
+	}
+	view := catalogInsightDetailViewOf(*detail)
+	return &view, nil
 }
 
 func init() {
@@ -272,5 +276,5 @@ func init() {
 	CatalogInsight.Flags().BoolVar(&insightSearchFull, "full", false, "Return full insight records")
 	CatalogInsightSearch.Flags().BoolVar(&insightSearchFull, "full", false, "Return full insight records")
 	CatalogInsight.AddCommand(CatalogInsightSearch, CatalogInsightGet)
-	clicky.RegisterSubCommand("catalog", CatalogInsight)
+	Catalog.AddCommand(CatalogInsight)
 }

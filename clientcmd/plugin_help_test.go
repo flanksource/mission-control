@@ -3,7 +3,7 @@ package clientcmd
 import (
 	"path/filepath"
 
-	"github.com/flanksource/clicky/rpc"
+	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/plugin/manifestcache"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -18,11 +18,11 @@ var _ = ginkgo.Describe("cached plugin command registration", func() {
 		Expect(manifestcache.Write(manifestcache.Entry{
 			Source:    manifestcache.SourceRemoteServer,
 			ServerURL: "http://localhost:8080",
-			Service: rpc.RPCService{
+			Service: clientapi.PluginService{
 				Name:        "kubernetes-logs",
 				Description: "Kubernetes logs",
 				Version:     "v1.2.3",
-				Operations: []rpc.RPCOperation{{
+				Operations: []clientapi.PluginOperation{{
 					Name:        "tail",
 					Description: "Tail pod logs",
 				}},
@@ -55,9 +55,9 @@ var _ = ginkgo.Describe("cached plugin command registration", func() {
 
 		Expect(manifestcache.Write(manifestcache.Entry{
 			Source: manifestcache.SourceRemoteServer,
-			Service: rpc.RPCService{
+			Service: clientapi.PluginService{
 				Name: "plugin",
-				Operations: []rpc.RPCOperation{{
+				Operations: []clientapi.PluginOperation{{
 					Name: "run",
 				}},
 			},

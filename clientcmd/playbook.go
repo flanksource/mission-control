@@ -9,11 +9,8 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/api"
-	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/sdk"
+	"github.com/flanksource/incident-commander/clientapi"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/spf13/cobra"
 )
 
@@ -128,7 +125,7 @@ func playbookAPIClient(cmd *cobra.Command) (*MCContext, *sdk.Client, error) {
 	return mcCtx, NewAPIClient(mcCtx), nil
 }
 
-func listRemotePlaybooks(cmd *cobra.Command, opts sdk.PlaybookListOptions) ([]api.PlaybookListItem, error) {
+func listRemotePlaybooks(cmd *cobra.Command, opts sdk.PlaybookListOptions) ([]clientapi.PlaybookListItem, error) {
 	_, client, err := playbookAPIClient(cmd)
 	if err != nil {
 		return nil, err
@@ -180,7 +177,7 @@ func runRemotePlaybook(cmd *cobra.Command, args []string) error {
 	if err := PrintPlaybookActionResults(cmd.OutOrStdout(), summary); err != nil {
 		return err
 	}
-	if summary.Run.Status != models.PlaybookRunStatusCompleted {
+	if summary.Run.Status != clientapi.PlaybookRunStatusCompleted {
 		return fmt.Errorf("playbook run status: %s", summary.Run.Status)
 	}
 	return nil
@@ -242,17 +239,26 @@ func PlaybookActionResults(summary *sdk.PlaybookSummary) PlaybookRunOutput {
 
 // resolveActionTypes parses the playbook spec to build a map from action name
 // to action type, using the existing PlaybookAction.ActionType() method.
-func resolveActionTypes(spec types.JSON) map[string]string {
+func resolveActionTypes(spec json.RawMessage) map[string]string {
 	if len(spec) == 0 {
 		return nil
 	}
-	var ps v1.PlaybookSpec
+	var ps clientapi.PlaybookSpecSummary
 	if err := json.Unmarshal(spec, &ps); err != nil {
 		return nil
 	}
 	m := make(map[string]string, len(ps.Actions))
-	for _, a := range ps.Actions {
-		m[a.Name] = a.ActionType()
+	for _, action := range ps.Actions {
+		var name string
+		if err := json.Unmarshal(action["name"], &name); err != nil || name == "" {
+			continue
+		}
+		for _, actionType := range []string{"exec", "http", "sql", "ai", "pod", "logs", "notification", "gitops", "github", "azureDevopsPipeline", "prometheus", "report", "catalog"} {
+			if raw := action[actionType]; len(raw) > 0 && string(raw) != "null" {
+				m[name] = actionType
+				break
+			}
+		}
 	}
 	return m
 }
@@ -269,17 +275,17 @@ func resolveActionResult(actionType string, raw map[string]any) any {
 	}
 	switch actionType {
 	case "sql":
-		var r api.PlaybookSQLResult
+		var r playbookSQLResult
 		if err := json.Unmarshal(data, &r); err == nil {
 			return r
 		}
 	case "exec":
-		var r api.PlaybookExecResult
+		var r playbookExecResult
 		if err := json.Unmarshal(data, &r); err == nil {
 			return r
 		}
 	case "http":
-		var r api.PlaybookHTTPResult
+		var r playbookHTTPResult
 		if err := json.Unmarshal(data, &r); err == nil {
 			return r
 		}
