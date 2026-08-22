@@ -52,7 +52,7 @@ require (
 	github.com/emersion/go-smtp v0.24.0
 	github.com/firebase/genkit/go v1.9.0
 	github.com/flanksource/artifacts v1.0.24
-	github.com/flanksource/clicky v1.21.55
+	github.com/flanksource/clicky v1.21.56
 	github.com/flanksource/commons-test v0.1.13
 	github.com/flanksource/deps v1.0.41
 	github.com/fluxcd/pkg/gittestserver v0.28.0
@@ -130,6 +130,7 @@ require (
 	github.com/agnivade/levenshtein v1.2.1 // indirect
 	github.com/ajstarks/svgo v0.0.0-20211024235047-1546f124cd8b // indirect
 	github.com/alecthomas/chroma/v2 v2.23.1 // indirect
+	github.com/alpkeskin/gotoon v0.1.1 // indirect
 	github.com/antchfx/xmlquery v1.5.1 // indirect
 	github.com/antchfx/xpath v1.3.6 // indirect
 	github.com/anthropics/anthropic-sdk-go v1.23.0 // indirect
