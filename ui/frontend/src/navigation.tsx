@@ -1,5 +1,10 @@
-import { Link, type LinkProps } from "react-router-dom";
-import type { AnchorHTMLAttributes, ReactNode } from "react";
+import { Link, useLocation, useNavigate, type LinkProps } from "react-router-dom";
+import { useMemo, type AnchorHTMLAttributes, type ReactNode } from "react";
+import {
+  RouterProvider,
+  type RenderLink,
+  type RouterAdapter,
+} from "@flanksource/clicky-ui/rpc";
 
 export const UI_BASE = "/ui";
 
