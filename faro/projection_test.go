@@ -69,7 +69,7 @@ spec:
 			Metadata:   ProjectionMetadata{Name: "ambiguous"},
 			Spec: ProjectionSpec{Source: ProjectionSource{Query: ProjectionQuery{
 				Configs:        &ProjectionConfigsQuery{Limit: 10},
-				IdentityAccess: &ProjectionIdentityAccessQuery{Limit: 10, UserTypes: defaultIdentityTypeRules()},
+				IdentityAccess: &ProjectionIdentityAccessQuery{Limit: 10, PrincipalTypes: []string{"users"}, UserTypes: defaultIdentityTypeRules()},
 			}}},
 		}
 
@@ -440,7 +440,7 @@ systems:
 	})
 
 	ginkgo.It("renders dynamic projection values as text", func() {
-		program, err := compileProjectionExpression( `text(source.health) + ":" + text(source.alerts) + ":" + text(source.disabled)`)
+		program, err := compileProjectionExpression(`text(source.health) + ":" + text(source.alerts) + ":" + text(source.disabled)`)
 		Expect(err).ToNot(HaveOccurred())
 
 		value, err := evalProjectionValue(program, map[string]any{
@@ -452,7 +452,7 @@ systems:
 	})
 
 	ginkgo.It("preserves a CEL null as a native null", func() {
-		program, err := compileProjectionExpression( `null`)
+		program, err := compileProjectionExpression(`null`)
 		Expect(err).ToNot(HaveOccurred())
 
 		value, err := evalProjectionValue(program, map[string]any{})
@@ -670,7 +670,7 @@ entries:
 		body, err := os.ReadFile(targetPath)
 		Expect(err).ToNot(HaveOccurred())
 		for _, line := range strings.Split(strings.TrimRight(string(body), "\n"), "\n") {
-			Expect(len(line) - len(strings.TrimLeft(line, " "))).To(BeNumerically("<=", 6),
+			Expect(len(line)-len(strings.TrimLeft(line, " "))).To(BeNumerically("<=", 6),
 				"line is indented far past its parent key: %q", line)
 		}
 	})
@@ -707,7 +707,7 @@ entries:
 	})
 
 	ginkgo.It("renders timestamps as the calendar date registers record", func() {
-		program, err := compileProjectionExpression( `date(source.first_observed)`)
+		program, err := compileProjectionExpression(`date(source.first_observed)`)
 		Expect(err).ToNot(HaveOccurred())
 
 		value, err := evalProjectionValue(program, map[string]any{
@@ -719,7 +719,7 @@ entries:
 	})
 
 	ginkgo.It("capitalises vendor-lowercased names so registers read as proper nouns", func() {
-		program, err := compileProjectionExpression( `source.distro.title() + " " + source.version`)
+		program, err := compileProjectionExpression(`source.distro.title() + " " + source.version`)
 		Expect(err).ToNot(HaveOccurred())
 
 		value, err := evalProjectionValue(program, map[string]any{
@@ -749,7 +749,7 @@ entries:
 	})
 
 	ginkgo.It("refuses a property that is not a number rather than reading it as zero", func() {
-		program, err := compileProjectionExpression( `source.alerts.int()`)
+		program, err := compileProjectionExpression(`source.alerts.int()`)
 		Expect(err).ToNot(HaveOccurred())
 
 		_, err = evalProjectionValue(program, map[string]any{"source": map[string]any{"alerts": "several"}})
@@ -761,7 +761,7 @@ entries:
 	// int64 on amd64, so a byte count past 2^63 would be written to a register as a large
 	// negative number. .int() refuses it and .float() is what carries it.
 	ginkgo.It("carries a number too large for an int as a double", func() {
-		program, err := compileProjectionExpression( `source.bytes.float()`)
+		program, err := compileProjectionExpression(`source.bytes.float()`)
 		Expect(err).ToNot(HaveOccurred())
 
 		const beyondInt64 = "18446744073709551616" // 2^64
@@ -775,7 +775,7 @@ entries:
 	})
 
 	ginkgo.It("refuses NaN rather than writing it to a register", func() {
-		program, err := compileProjectionExpression( `source.score.float()`)
+		program, err := compileProjectionExpression(`source.score.float()`)
 		Expect(err).ToNot(HaveOccurred())
 
 		_, err = evalProjectionValue(program, map[string]any{"source": map[string]any{"score": "NaN"}})
@@ -784,7 +784,7 @@ entries:
 	})
 
 	ginkgo.It("rejects a date() argument that is not a timestamp", func() {
-		program, err := compileProjectionExpression( `date(source.first_observed)`)
+		program, err := compileProjectionExpression(`date(source.first_observed)`)
 		Expect(err).ToNot(HaveOccurred())
 
 		_, err = evalProjectionValue(program, map[string]any{

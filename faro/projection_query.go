@@ -202,7 +202,10 @@ func queryInsightProjection(config ProjectionInsightsQuery) ([]map[string]any, e
 }
 
 func queryIdentityAccessProjection(config ProjectionIdentityAccessQuery, projectionContext map[string]any) ([]map[string]any, []ProjectionWarning, error) {
-	export, err := buildAccessExport(accessExportOptions{Limit: config.Limit, RequireComplete: true, UserTypes: config.UserTypes})
+	export, err := buildAccessExport(accessExportOptions{
+		Limit: config.Limit, RequireComplete: true,
+		PrincipalTypes: config.PrincipalTypes, UserTypes: config.UserTypes,
+	})
 	if err != nil {
 		return nil, nil, err
 	}
@@ -216,7 +219,7 @@ func queryIdentityAccessProjection(config ProjectionIdentityAccessQuery, project
 		if _, ok := mapped["tenant"]; !ok {
 			mapped["tenant"] = ""
 		}
-		for _, field := range []string{"groups", "config_access"} {
+		for _, field := range []string{"groups", "members", "config_access"} {
 			rows, _ := mapped[field].([]any)
 			for _, raw := range rows {
 				if row, ok := raw.(map[string]any); ok {

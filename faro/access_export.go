@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -20,10 +19,12 @@ import (
 )
 
 var exportLimit int
+var exportPrincipalTypes []string
 
 type accessExportOptions struct {
 	Limit           int
 	RequireComplete bool
+	PrincipalTypes  []string
 	UserTypes       []ProjectionUserTypeRule
 }
 
@@ -43,6 +44,8 @@ type RegisterGrant struct {
 	Role            string   `json:"role" yaml:"role"`
 	RoleExternalIDs []string `json:"role_external_ids" yaml:"role_external_ids"`
 	Grant           string   `json:"grant" yaml:"grant"`
+	ExternalUserID  string   `json:"external_user_id,omitempty" yaml:"external_user_id,omitempty"`
+	ExternalGroupID string   `json:"external_group_id,omitempty" yaml:"external_group_id,omitempty"`
 	CreatedAt       *string  `json:"created_at" yaml:"created_at"`
 	LastSignedInAt  *string  `json:"last_signed_in_at" yaml:"last_signed_in_at"`
 	LastReviewedAt  *string  `json:"last_reviewed_at" yaml:"last_reviewed_at"`
@@ -56,22 +59,34 @@ type RegisterGroup struct {
 	Tenant    string `json:"tenant,omitempty" yaml:"tenant,omitempty"`
 }
 
+type RegisterMember struct {
+	ExternalUserID string  `json:"external_user_id" yaml:"external_user_id"`
+	Name           string  `json:"name" yaml:"name"`
+	Email          string  `json:"email,omitempty" yaml:"email,omitempty"`
+	UserType       string  `json:"user_type" yaml:"user_type"`
+	AddedAt        *string `json:"added_at" yaml:"added_at"`
+	LastSignedInAt *string `json:"last_signed_in_at,omitempty" yaml:"last_signed_in_at,omitempty"`
+}
+
 // RegisterIdentity is the scraped half of an identity-register entry. It carries
 // no review state — owner, privilege_level, review_decision and the rest are
 // determinations the governance repository owns, and faro cannot evidence them.
 type RegisterIdentity struct {
-	ID               string          `json:"id" yaml:"id"`
-	IdentityType     string          `json:"identity_type" yaml:"identity_type"`
-	IdentityProvider string          `json:"identity_provider" yaml:"identity_provider"`
-	Name             string          `json:"name,omitempty" yaml:"name,omitempty"`
-	Email            string          `json:"email,omitempty" yaml:"email,omitempty"`
-	Aliases          []string        `json:"aliases" yaml:"aliases"`
-	ExternalUserID   string          `json:"external_user_id" yaml:"external_user_id"`
-	UserType         string          `json:"user_type" yaml:"user_type"`
-	Tenant           string          `json:"tenant,omitempty" yaml:"tenant,omitempty"`
-	ProvisionedAt    *string         `json:"provisioned_at" yaml:"provisioned_at"`
-	Groups           []RegisterGroup `json:"groups" yaml:"groups"`
-	ConfigAccess     []RegisterGrant `json:"config_access" yaml:"config_access"`
+	ID               string           `json:"id" yaml:"id"`
+	IdentityType     string           `json:"identity_type" yaml:"identity_type"`
+	IdentityProvider string           `json:"identity_provider" yaml:"identity_provider"`
+	Name             string           `json:"name,omitempty" yaml:"name,omitempty"`
+	Email            string           `json:"email,omitempty" yaml:"email,omitempty"`
+	Aliases          []string         `json:"aliases" yaml:"aliases"`
+	ExternalUserID   string           `json:"external_user_id,omitempty" yaml:"external_user_id,omitempty"`
+	ExternalGroupID  string           `json:"external_group_id,omitempty" yaml:"external_group_id,omitempty"`
+	UserType         string           `json:"user_type" yaml:"user_type"`
+	GroupType        string           `json:"group_type,omitempty" yaml:"group_type,omitempty"`
+	Tenant           string           `json:"tenant,omitempty" yaml:"tenant,omitempty"`
+	ProvisionedAt    *string          `json:"provisioned_at" yaml:"provisioned_at"`
+	Groups           []RegisterGroup  `json:"groups" yaml:"groups"`
+	Members          []RegisterMember `json:"members" yaml:"members"`
+	ConfigAccess     []RegisterGrant  `json:"config_access" yaml:"config_access"`
 }
 
 // AccessExportResult is the document `access users export` prints.
@@ -112,7 +127,7 @@ func identityProvider(grants []sdk.AccessGrant) string {
 func registerGrants(grants []sdk.AccessGrant) []RegisterGrant {
 	rows := make([]RegisterGrant, 0, len(grants))
 	for _, grant := range grants {
-		rows = append(rows, RegisterGrant{
+		row := RegisterGrant{
 			ConfigID:        grant.ConfigID.String(),
 			ConfigName:      grant.ConfigName,
 			ConfigType:      grant.ConfigType,
@@ -122,7 +137,14 @@ func registerGrants(grants []sdk.AccessGrant) []RegisterGrant {
 			CreatedAt:       registerDate(&grant.CreatedAt),
 			LastSignedInAt:  registerDate(grant.LastSignedInAt),
 			LastReviewedAt:  registerDate(grant.LastReviewedAt),
-		})
+		}
+		if grant.ExternalGroupID != nil {
+			row.ExternalGroupID = grant.ExternalGroupID.String()
+			row.Grant = "direct"
+		} else if grant.ExternalUserID != uuid.Nil {
+			row.ExternalUserID = grant.ExternalUserID.String()
+		}
+		rows = append(rows, row)
 	}
 	return rows
 }
@@ -181,6 +203,9 @@ func projectRegisterIdentitiesUsingRules(
 ) ([]RegisterIdentity, []ProjectionWarning, error) {
 	grantsByUser := map[uuid.UUID][]sdk.AccessGrant{}
 	for _, grant := range grants {
+		if grant.ExternalGroupID != nil {
+			continue
+		}
 		grantsByUser[grant.ExternalUserID] = append(grantsByUser[grant.ExternalUserID], grant)
 	}
 
@@ -199,7 +224,7 @@ func projectRegisterIdentitiesUsingRules(
 		if identityType == identityTypeSkip {
 			// Loud, not silent: a principal holding access that produces no entry is
 			// exactly the kind of omission an access review must not discover late.
-			logger.Warnf("skipping %s (%s): group principals are represented by their members' group:<name> grants, not as their own entry", user.Name, user.UserType)
+			logger.Warnf("skipping external user %s (%s): its configured identity type is skip", user.Name, user.UserType)
 			continue
 		}
 
@@ -253,21 +278,26 @@ func projectRegisterIdentitiesUsingRules(
 	return entries, warnings, nil
 }
 
-// unattributedGrants counts the grants no exported entry accounts for, keyed by the
-// principal holding them. Kubernetes-style group bindings (system:authenticated and
-// friends) are recorded against a nil external user, so a per-user register cannot
-// represent them — but they are often the broadest access in the estate, and
-// dropping them without a word is exactly the omission an access review must not
-// discover late.
+// unattributedGrants counts the grants no exported user or group entry accounts for,
+// keyed by the principal holding them.
 func unattributedGrants(entries []RegisterIdentity, grants []sdk.AccessGrant) map[string]int {
-	exported := make(map[string]bool, len(entries))
+	exportedUsers := make(map[string]bool, len(entries))
+	exportedGroups := make(map[string]bool, len(entries))
 	for _, entry := range entries {
-		exported[entry.ExternalUserID] = true
+		if entry.ExternalUserID != "" {
+			exportedUsers[entry.ExternalUserID] = true
+		}
+		if entry.ExternalGroupID != "" {
+			exportedGroups[entry.ExternalGroupID] = true
+		}
 	}
 
 	orphaned := map[string]int{}
 	for _, grant := range grants {
-		if exported[grant.ExternalUserID.String()] {
+		if grant.ExternalGroupID != nil && exportedGroups[grant.ExternalGroupID.String()] {
+			continue
+		}
+		if grant.ExternalGroupID == nil && exportedUsers[grant.ExternalUserID.String()] {
 			continue
 		}
 		holder := grant.GroupName
@@ -280,57 +310,6 @@ func unattributedGrants(entries []RegisterIdentity, grants []sdk.AccessGrant) ma
 		orphaned[holder]++
 	}
 	return orphaned
-}
-
-// groupsByUser resolves every group membership in one pass, so the export costs a
-// fixed number of requests rather than one per user.
-func groupsByUser(ctx context.Context, client *sdk.Client, options accessExportOptions) (map[uuid.UUID][]RegisterGroup, error) {
-	groups, total, err := client.ListExternalGroups(ctx, sdk.IdentityOptions{Limit: options.Limit})
-	if err != nil {
-		return nil, err
-	}
-	if options.RequireComplete {
-		if err := requireCompleteProjection("groups", len(groups), total, options.Limit); err != nil {
-			return nil, err
-		}
-	}
-	warnTruncated("groups", len(groups), total)
-	if len(groups) == 0 {
-		return map[uuid.UUID][]RegisterGroup{}, nil
-	}
-
-	byID := make(map[uuid.UUID]sdk.ExternalGroupSummary, len(groups))
-	ids := make([]string, 0, len(groups))
-	for _, group := range groups {
-		byID[group.ID] = group
-		ids = append(ids, group.ID.String())
-	}
-
-	members, err := client.GetGroupMembers(ctx, ids)
-	if err != nil {
-		return nil, err
-	}
-
-	membership := map[uuid.UUID][]RegisterGroup{}
-	for _, member := range members {
-		if member.MembershipDeletedAt != nil {
-			continue
-		}
-		group, ok := byID[member.GroupID]
-		if !ok {
-			continue
-		}
-		membership[member.UserID] = append(membership[member.UserID], RegisterGroup{
-			ID:        group.ID.String(),
-			Name:      group.Name,
-			GroupType: group.GroupType,
-			Tenant:    group.Tenant,
-		})
-	}
-	for user := range membership {
-		sort.Slice(membership[user], func(i, j int) bool { return membership[user][i].ID < membership[user][j].ID })
-	}
-	return membership, nil
 }
 
 // accessContextName names the Mission Control context this export came from, so
@@ -366,7 +345,7 @@ Examples:
   faro access users export --format json=identities.json`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		export, err := buildAccessExport(accessExportOptions{Limit: exportLimit})
+		export, err := buildAccessExport(accessExportOptions{Limit: exportLimit, PrincipalTypes: exportPrincipalTypes})
 		if err != nil {
 			return err
 		}
@@ -384,16 +363,28 @@ func buildAccessExport(options accessExportOptions) (AccessExportResult, error) 
 		return AccessExportResult{}, err
 	}
 
-	users, total, err := client.ListExternalUsers(ctx, sdk.IdentityOptions{Limit: options.Limit})
-	if err != nil {
+	principalTypes := options.PrincipalTypes
+	if len(principalTypes) == 0 {
+		principalTypes = []string{"users"}
+	}
+	if err := validatePrincipalTypes(principalTypes); err != nil {
 		return AccessExportResult{}, err
 	}
-	if options.RequireComplete {
-		if err := requireCompleteProjection("users", len(users), total, options.Limit); err != nil {
+
+	var users []models.ExternalUser
+	var total int
+	if containsPrincipalType(principalTypes, "users") {
+		users, total, err = client.ListExternalUsers(ctx, sdk.IdentityOptions{Limit: options.Limit})
+		if err != nil {
 			return AccessExportResult{}, err
 		}
+		if options.RequireComplete {
+			if err := requireCompleteProjection("users", len(users), total, options.Limit); err != nil {
+				return AccessExportResult{}, err
+			}
+		}
+		warnTruncated("users", len(users), total)
 	}
-	warnTruncated("users", len(users), total)
 
 	grants, grantTotal, err := client.ListAccessGrants(ctx, sdk.AccessGrantOptions{Limit: options.Limit})
 	if err != nil {
@@ -406,22 +397,39 @@ func buildAccessExport(options accessExportOptions) (AccessExportResult, error) 
 	}
 	warnTruncated("access entries", len(grants), grantTotal)
 
-	membership, err := groupsByUser(ctx, client, options)
+	groupData, err := loadAccessGroups(ctx, client, options)
 	if err != nil {
 		return AccessExportResult{}, err
 	}
 
-	rules, err := compileIdentityTypeRules(options.UserTypes)
-	if err != nil {
-		return AccessExportResult{}, err
+	var entries []RegisterIdentity
+	var warnings []ProjectionWarning
+	if containsPrincipalType(principalTypes, "users") {
+		rules, err := compileIdentityTypeRules(options.UserTypes)
+		if err != nil {
+			return AccessExportResult{}, err
+		}
+		entries, warnings, err = projectRegisterIdentitiesUsingRules(users, grants, groupData.byUser, rules)
+		if err != nil {
+			return AccessExportResult{}, err
+		}
 	}
-	entries, warnings, err := projectRegisterIdentitiesUsingRules(users, grants, membership, rules)
-	if err != nil {
-		return AccessExportResult{}, err
+	if containsPrincipalType(principalTypes, "groups") {
+		entries = append(entries, projectRegisterGroups(groupData.groups, grants, groupData.members)...)
 	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].ID < entries[j].ID })
 
-	for holder, count := range unattributedGrants(entries, grants) {
-		logger.Warnf("%d grant(s) held by %q are not attributable to an external user and are absent from this export; review them via `faro access permissions`", count, holder)
+	relevantGrants := make([]sdk.AccessGrant, 0, len(grants))
+	for _, grant := range grants {
+		if grant.ExternalGroupID != nil && containsPrincipalType(principalTypes, "groups") {
+			relevantGrants = append(relevantGrants, grant)
+		}
+		if grant.ExternalGroupID == nil && containsPrincipalType(principalTypes, "users") {
+			relevantGrants = append(relevantGrants, grant)
+		}
+	}
+	for holder, count := range unattributedGrants(entries, relevantGrants) {
+		logger.Warnf("%d grant(s) held by %q are not attributable to an exported user or group and are absent from this export; review them via `faro access permissions`", count, holder)
 	}
 
 	contextName, err := accessContextName()
@@ -439,7 +447,7 @@ func buildAccessExport(options accessExportOptions) (AccessExportResult, error) 
 
 func loadAccessExport(path string) (AccessExportResult, error) {
 	if path == "" {
-		return buildAccessExport(accessExportOptions{Limit: exportLimit})
+		return buildAccessExport(accessExportOptions{Limit: exportLimit, PrincipalTypes: []string{"users"}})
 	}
 	body, err := os.ReadFile(path)
 	if err != nil {
@@ -460,6 +468,7 @@ func loadAccessExport(path string) (AccessExportResult, error) {
 
 func init() {
 	AccessExport.Flags().IntVar(&exportLimit, "limit", 0, "Maximum number of users (0 for no limit)")
+	AccessExport.Flags().StringSliceVar(&exportPrincipalTypes, "principal-types", []string{"users"}, "Principal types to export: users,groups")
 	clicky.BindAllFlags(AccessExport.PersistentFlags(), "format")
 	clicky.RegisterSubCommand("access/users", AccessExport)
 }
