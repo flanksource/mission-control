@@ -1,6 +1,7 @@
-package clientcmd
+package mccontext
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -110,7 +111,7 @@ var _ = ginkgo.Describe("OIDC refresh", func() {
 		defer endpoint.server.Close()
 
 		mcCtx := seedExpiringContext("beta", endpoint.server.URL+"/token", "refresh-1")
-		Expect(refreshContextToken(mcCtx)).To(Succeed())
+		Expect(RefreshContextToken(mcCtx)).To(Succeed())
 
 		Expect(endpoint.count()).To(Equal(1))
 		Expect(mcCtx.OIDC.AccessToken).To(Equal("access-after-refresh-1"))
@@ -127,7 +128,7 @@ var _ = ginkgo.Describe("OIDC refresh", func() {
 		defer endpoint.server.Close()
 
 		mcCtx := seedExpiringContext("beta", endpoint.server.URL+"/token", "refresh-1")
-		Expect(refreshContextToken(mcCtx)).To(Succeed())
+		Expect(RefreshContextToken(mcCtx)).To(Succeed())
 
 		config, err := os.ReadFile(configPath())
 		Expect(err).ToNot(HaveOccurred())
@@ -157,7 +158,7 @@ var _ = ginkgo.Describe("OIDC refresh", func() {
 		Expect(os.Chmod(configDir(), 0500)).To(Succeed())
 		defer func() { _ = os.Chmod(configDir(), 0700) }()
 
-		err := refreshContextToken(mcCtx)
+		err := RefreshContextToken(mcCtx)
 
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(`refusing to rotate the refresh token for context "beta"`))
@@ -180,7 +181,7 @@ var _ = ginkgo.Describe("OIDC refresh", func() {
 
 		mcCtx := seedExpiringContext("beta", endpoint.server.URL+"/token", "refresh-1")
 
-		err := refreshContextToken(mcCtx)
+		err := RefreshContextToken(mcCtx)
 		Expect(os.Chmod(configDir(), 0700)).To(Succeed())
 
 		Expect(err).To(HaveOccurred())
@@ -198,7 +199,7 @@ var _ = ginkgo.Describe("OIDC refresh", func() {
 
 		mcCtx := seedExpiringContext("beta", endpoint.server.URL+"/token", "spent-token")
 
-		err := refreshContextToken(mcCtx)
+		err := RefreshContextToken(mcCtx)
 
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(`context "beta" needs re-authentication (refresh token rejected)`))
@@ -219,7 +220,7 @@ var _ = ginkgo.Describe("OIDC refresh", func() {
 		mcCtx := seedExpiringContext("beta", endpoint.server.URL+"/token", "refresh-1")
 		mcCtx.NeedsReauth = "refresh token rejected"
 
-		_, err := resolveContextToken(mcCtx)
+		_, err := ResolveContextToken(mcCtx)
 
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("needs re-authentication"))
@@ -234,7 +235,7 @@ var _ = ginkgo.Describe("OIDC refresh", func() {
 
 		mcCtx := seedExpiringContext("beta", endpoint.server.URL+"/token", "refresh-1")
 
-		err := refreshContextToken(mcCtx)
+		err := RefreshContextToken(mcCtx)
 
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("refresh OIDC token for http://mission-control.local/api"))
@@ -269,7 +270,7 @@ var _ = ginkgo.Describe("OIDC refresh", func() {
 					return
 				}
 				contexts[i] = cfg.GetContext("beta")
-				results[i] = refreshContextToken(contexts[i])
+				results[i] = RefreshContextToken(contexts[i])
 			}()
 		}
 
@@ -285,4 +286,64 @@ var _ = ginkgo.Describe("OIDC refresh", func() {
 			Expect(ctx.OIDC.RefreshToken).To(Equal("rotated-refresh-1"))
 		}
 	})
+
+	ginkgo.It("refreshes expiring embedded OIDC tokens for API clients", func() {
+		var tokenRequests int
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/.well-known/openid-configuration":
+				w.Header().Set("Content-Type", "application/json")
+				Expect(json.NewEncoder(w).Encode(map[string]string{
+					"authorization_endpoint": r.Host + "/authorize",
+					"token_endpoint":         "http://" + r.Host + "/token",
+					"userinfo_endpoint":      r.Host + "/userinfo",
+				})).To(Succeed())
+			case "/token":
+				tokenRequests++
+				Expect(r.ParseForm()).To(Succeed())
+				Expect(r.Form.Get("grant_type")).To(Equal("refresh_token"))
+				Expect(r.Form.Get("refresh_token")).To(Equal("refresh-token"))
+				w.Header().Set("Content-Type", "application/json")
+				Expect(json.NewEncoder(w).Encode(map[string]any{
+					"access_token":  "new-token",
+					"refresh_token": "next-refresh-token",
+					"id_token":      "id-token",
+					"expires_in":    3600,
+				})).To(Succeed())
+			default:
+				http.NotFound(w, r)
+			}
+		}))
+		defer server.Close()
+
+		cfg := &MCConfig{
+			CurrentContext: "local",
+			Contexts: []MCContext{{
+				Name:   "local",
+				Server: server.URL,
+				OIDC: &oidcclient.Tokens{
+					AccessToken:  "old-token",
+					RefreshToken: "refresh-token",
+					ExpiresAt:    time.Now().Add(-time.Minute),
+				},
+			}},
+		}
+		Expect(SaveConfig(cfg)).To(Succeed())
+
+		mcCtx := cfg.GetContext("local")
+		token, err := ContextTokenProvider(mcCtx)(context.Background())
+
+		Expect(err).ToNot(HaveOccurred())
+		Expect(token).To(Equal("new-token"))
+		Expect(mcCtx.Token).To(BeEmpty())
+		Expect(mcCtx.OIDC.AccessToken).To(Equal("new-token"))
+		Expect(mcCtx.OIDC.RefreshToken).To(Equal("next-refresh-token"))
+		Expect(tokenRequests).To(Equal(1))
+
+		reloaded, err := LoadConfig()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(reloaded.GetContext("local").Token).To(BeEmpty())
+		Expect(reloaded.GetContext("local").OIDC.AccessToken).To(Equal("new-token"))
+	})
+
 })

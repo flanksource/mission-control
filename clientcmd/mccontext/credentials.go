@@ -1,4 +1,4 @@
-package clientcmd
+package mccontext
 
 import (
 	"bytes"

@@ -74,9 +74,10 @@ func configPath() string {
 	return filepath.Join(configDir(), "config.json")
 }
 
-// ConfigDir is where config.json and the profile cache live. Exported for the
-// commands that manage those directories.
-func ConfigDir() string { return configDir() }
+// ConfigDir is where config.json and the profile cache live, and ConfigPath is
+// config.json itself. Exported for the commands that report or manage them.
+func ConfigDir() string  { return configDir() }
+func ConfigPath() string { return configPath() }
 
 func ProfileDir(namespace, name string) string {
 	return filepath.Join(configDir(), "profiles", namespace+"_"+name)

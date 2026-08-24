@@ -1,22 +1,53 @@
-package clientcmd
+package mccontext
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/auth/oidcclient"
 	"github.com/flanksource/incident-commander/clientcmd/credentials"
-	"github.com/flanksource/incident-commander/sdk"
+	sdk "github.com/flanksource/incident-commander/sdk/client"
 )
+
+// RetryAttempts and RetryDelay are the client's transient-failure policy.
+// Defaults live here rather than only in the CLI's flag registration because
+// the plugin cache is populated before cobra parses anything, and it would
+// otherwise read a zero policy.
+var (
+	RetryAttempts = 3
+	RetryDelay    = time.Second
+)
+
+// RetryOption is the one place the policy becomes a client option.
+func RetryOption() sdk.ClientOption {
+	return sdk.WithRetry(RetryAttempts, RetryDelay)
+}
+
+// RemoteClient returns an SDK client bound to the current Mission Control
+// context. The returned client's token provider resolves and refreshes the
+// stored token per request, so callers without a cobra command (e.g. clicky
+// entity handlers) can use it directly. Errors when no server context is set.
+func RemoteClient() (*sdk.Client, error) {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	mcCtx := cfg.CurrentMCContext()
+	if mcCtx == nil || mcCtx.Server == "" {
+		return nil, fmt.Errorf("no Mission Control server context configured; run `auth login --server <url>` or `context add --server <url> --use`")
+	}
+	return NewAPIClient(mcCtx), nil
+}
 
 func NewAPIClient(mcCtx *MCContext, opts ...sdk.ClientOption) *sdk.Client {
 	if mcCtx == nil {
 		return nil
 	}
-	opts = append([]sdk.ClientOption{sdk.WithTokenProvider(contextTokenProvider(mcCtx))}, opts...)
+	opts = append([]sdk.ClientOption{sdk.WithTokenProvider(ContextTokenProvider(mcCtx))}, opts...)
 	return NewAPIClientForServer(mcCtx.Server, mcCtx.AccessToken(), opts...)
 }
 
@@ -25,19 +56,22 @@ func NewAPIClient(mcCtx *MCContext, opts ...sdk.ClientOption) *sdk.Client {
 // this broadly because the policy itself decides what may be replayed: a client that only ever
 // writes never retries, whatever the flag says.
 func NewAPIClientForServer(server, token string, opts ...sdk.ClientOption) *sdk.Client {
-	return sdk.New(server, token, append([]sdk.ClientOption{retryOption()}, opts...)...)
+	return sdk.New(server, token, append([]sdk.ClientOption{RetryOption()}, opts...)...)
 }
 
-func contextTokenProvider(mcCtx *MCContext) sdk.TokenProvider {
+func ContextTokenProvider(mcCtx *MCContext) func(context.Context) (string, error) {
 	var mu sync.Mutex
 	return func(context.Context) (string, error) {
 		mu.Lock()
 		defer mu.Unlock()
-		return resolveContextToken(mcCtx)
+		return ResolveContextToken(mcCtx)
 	}
 }
 
-func resolveContextToken(mcCtx *MCContext) (string, error) {
+// ResolveContextToken returns a usable access token for the context, refreshing
+// an expiring OIDC token first. Exported because the login flow checks whether
+// a stored refresh token still works before starting a browser login.
+func ResolveContextToken(mcCtx *MCContext) (string, error) {
 	if mcCtx == nil {
 		return "", nil
 	}
@@ -47,19 +81,19 @@ func resolveContextToken(mcCtx *MCContext) (string, error) {
 	if mcCtx.Server == "" || !shouldRefreshOIDCToken(mcCtx.OIDC) {
 		return mcCtx.AccessToken(), nil
 	}
-	if err := refreshContextToken(mcCtx); err != nil {
+	if err := RefreshContextToken(mcCtx); err != nil {
 		return "", err
 	}
 	return mcCtx.AccessToken(), nil
 }
 
-// refreshContextToken exchanges the refresh token and persists the rotated one.
+// RefreshContextToken exchanges the refresh token and persists the rotated one.
 //
 // The server rotates refresh tokens single-use with no grace window, so the
 // whole exchange runs under a cross-process lock and re-reads the credential
 // inside it: a token spent by a concurrent process must never be spent again,
 // and a token this process spends must be persisted or loudly reported.
-func refreshContextToken(mcCtx *MCContext) error {
+func RefreshContextToken(mcCtx *MCContext) error {
 	cfg, err := LoadConfig()
 	if err != nil {
 		return err
@@ -86,7 +120,7 @@ func refreshContextToken(mcCtx *MCContext) error {
 			mcCtx.NeedsReauth = "no refresh token"
 			return mcCtx.ReauthError()
 		}
-		if !oidcTokenExpiring(cred.OIDC) {
+		if !OIDCTokenExpiring(cred.OIDC) {
 			logger.Debugf("context %q was refreshed by another process while waiting for the lock", mcCtx.Name)
 			return nil
 		}
@@ -149,5 +183,5 @@ func carryForwardTokens(refreshed, previous *oidcclient.Tokens) {
 }
 
 func shouldRefreshOIDCToken(tokens *oidcclient.Tokens) bool {
-	return tokens != nil && oidcTokenExpiring(tokens) && tokens.RefreshToken != ""
+	return tokens != nil && OIDCTokenExpiring(tokens) && tokens.RefreshToken != ""
 }
