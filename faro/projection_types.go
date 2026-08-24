@@ -71,8 +71,32 @@ type ProjectionConfigsQuery struct {
 }
 
 type ProjectionIdentityAccessQuery struct {
-	Limit     int                      `json:"limit" yaml:"limit"`
-	UserTypes []ProjectionUserTypeRule `json:"userTypes" yaml:"userTypes"`
+	Limit          int                      `json:"limit" yaml:"limit"`
+	PrincipalTypes []string                 `json:"principalTypes" yaml:"principalTypes"`
+	UserTypes      []ProjectionUserTypeRule `json:"userTypes,omitempty" yaml:"userTypes,omitempty"`
+}
+
+func containsPrincipalType(principalTypes []string, expected string) bool {
+	for _, principalType := range principalTypes {
+		if principalType == expected {
+			return true
+		}
+	}
+	return false
+}
+
+func validatePrincipalTypes(principalTypes []string) error {
+	seen := map[string]bool{}
+	for index, principalType := range principalTypes {
+		if principalType != "users" && principalType != "groups" {
+			return fmt.Errorf("principalTypes[%d] must be users or groups", index)
+		}
+		if seen[principalType] {
+			return fmt.Errorf("principalTypes[%d] duplicates %q", index, principalType)
+		}
+		seen[principalType] = true
+	}
+	return nil
 }
 
 type ProjectionUserTypeRule struct {
@@ -106,9 +130,8 @@ type ProjectionTarget struct {
 	Select string `json:"select" yaml:"select"`
 	Filter string `json:"filter,omitempty" yaml:"filter,omitempty"`
 	Create *bool  `json:"create,omitempty" yaml:"create,omitempty"`
-	// Aggregate allows many sources to fold into one target. Every mapping must
-	// then use a list strategy, because a scalar write under fan-in silently
-	// discards every source but the last.
+	// Aggregate allows many sources to fold into one target. Scalar mappings must
+	// be guarded, and conflicting writes fail during application.
 	Aggregate bool `json:"aggregate,omitempty" yaml:"aggregate,omitempty"`
 }
 
@@ -310,7 +333,13 @@ func (p Projection) validate() error {
 		if identityAccess.Limit <= 0 {
 			return fmt.Errorf("spec.source.query.identityAccess.limit must be greater than zero")
 		}
-		if len(identityAccess.UserTypes) == 0 {
+		if len(identityAccess.PrincipalTypes) == 0 {
+			return fmt.Errorf("spec.source.query.identityAccess.principalTypes must contain at least one principal type")
+		}
+		if err := validatePrincipalTypes(identityAccess.PrincipalTypes); err != nil {
+			return fmt.Errorf("spec.source.query.identityAccess.%w", err)
+		}
+		if containsPrincipalType(identityAccess.PrincipalTypes, "users") && len(identityAccess.UserTypes) == 0 {
 			return fmt.Errorf("spec.source.query.identityAccess.userTypes must contain at least one rule")
 		}
 		for index, rule := range identityAccess.UserTypes {
@@ -372,8 +401,8 @@ func (p Projection) validate() error {
 		default:
 			return fmt.Errorf("spec.set[%q].strategy %q is not supported", path, mapping.Strategy)
 		}
-		if p.Spec.Target.Aggregate && (mapping.Strategy == "" || mapping.Strategy == "replace") {
-			return fmt.Errorf("spec.set[%q] must use strategy mergeUnique or replaceMatching because spec.target.aggregate folds many sources into one target; a scalar write would keep only the last source", path)
+		if p.Spec.Target.Aggregate && (mapping.Strategy == "" || mapping.Strategy == "replace") && strings.TrimSpace(mapping.When) == "" {
+			return fmt.Errorf("spec.set[%q] must use strategy mergeUnique or replaceMatching, or guard its scalar write with when, because spec.target.aggregate folds many sources into one target", path)
 		}
 	}
 	return nil

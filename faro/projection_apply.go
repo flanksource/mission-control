@@ -12,10 +12,10 @@ import (
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/clicky/api"
 	"github.com/flanksource/clicky/api/icons"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
-	"github.com/flanksource/gomplate/v3"
 	"github.com/ohler55/ojg/jp"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
@@ -337,7 +337,8 @@ func applyProjection(projection Projection, source projectionSourceResult, dryRu
 			return result, fmt.Errorf("projection %s source %s matches target indexes %v", projection.Metadata.Name, identity, matches)
 		}
 		index := matches[0]
-		if previous, ok := claimed[index]; ok {
+		previous := claimed[index]
+		if len(previous) > 0 {
 			if !projection.Spec.Target.Aggregate {
 				return result, fmt.Errorf("projection %s target index %d is matched by both %s and %s", projection.Metadata.Name, index, previous[0], identity)
 			}
@@ -346,7 +347,16 @@ func applyProjection(projection Projection, source projectionSourceResult, dryRu
 			result.Matched++
 		}
 		claimed[index] = append(claimed[index], identity)
-		changes, err := applyProjectionMappings(compiled, file, projection.Spec.Target.Select, index, sourceItem, targets[index], source.Context)
+		changes, err := applyProjectionMappings(projectionMappingApplyOptions{
+			Compiled:       compiled,
+			File:           file,
+			Selector:       projection.Spec.Target.Select,
+			Index:          index,
+			Source:         sourceItem,
+			Target:         targets[index],
+			Context:        source.Context,
+			AggregatedWith: previous,
+		})
 		if err != nil {
 			return result, fmt.Errorf("projection %s source %s: %w", projection.Metadata.Name, identity, err)
 		}
@@ -477,15 +487,26 @@ func selectProjectionSources(projection Projection, source projectionSourceResul
 	return filterProjectionSources(compiled, source)
 }
 
-func applyProjectionMappings(compiled *compiledProjection, file *ast.File, selector string, index int, source, target, projectionContext map[string]any) ([]string, error) {
+type projectionMappingApplyOptions struct {
+	Compiled       *compiledProjection
+	File           *ast.File
+	Selector       string
+	Index          int
+	Source         map[string]any
+	Target         map[string]any
+	Context        map[string]any
+	AggregatedWith []string
+}
+
+func applyProjectionMappings(options projectionMappingApplyOptions) ([]string, error) {
 	var changed []string
-	evaluationTarget, err := projectionMap(target)
+	evaluationTarget, err := projectionMap(options.Target)
 	if err != nil {
 		return nil, fmt.Errorf("copy target for expression evaluation: %w", err)
 	}
-	for _, path := range projectionMappingPaths(compiled) {
-		mapping := compiled.mappings[path]
-		activation := projectionActivation(source, evaluationTarget, projectionContext, nil)
+	for _, path := range projectionMappingPaths(options.Compiled) {
+		mapping := options.Compiled.mappings[path]
+		activation := projectionActivation(options.Source, evaluationTarget, options.Context, nil)
 		if mapping.when != nil {
 			apply, err := evalProjectionBool(mapping.when, activation)
 			if err != nil {
@@ -500,13 +521,16 @@ func applyProjectionMappings(compiled *compiledProjection, file *ast.File, selec
 			return nil, fmt.Errorf("set %s: %w", path, err)
 		}
 		jsonPath, _ := jp.ParseString(path)
-		current := jsonPath.Get(target)
+		current := jsonPath.Get(options.Target)
 		if len(current) > 1 {
 			return nil, fmt.Errorf("set %s selects %d values; each key must select at most one", path, len(current))
 		}
 		var currentValue any
 		if len(current) == 1 {
 			currentValue = current[0]
+		}
+		if len(options.AggregatedWith) > 0 && (mapping.config.Strategy == "" || mapping.config.Strategy == "replace") && !projectionValuesEqual(currentValue, value) {
+			return nil, fmt.Errorf("aggregate scalar %s conflicts between %s and %s", path, options.AggregatedWith[0], projectionItemIdentity(options.Source))
 		}
 		value, err = mergeProjectionValue(mapping, currentValue, value, activation)
 		if err != nil {
@@ -515,11 +539,11 @@ func applyProjectionMappings(compiled *compiledProjection, file *ast.File, selec
 		if projectionValuesEqual(currentValue, value) {
 			continue
 		}
-		if err := jsonPath.SetOne(target, value); err != nil {
+		if err := jsonPath.SetOne(options.Target, value); err != nil {
 			return nil, err
 		}
-		entryPath := strings.TrimSuffix(selector, "[*]") + fmt.Sprintf("[%d]", index)
-		flowStyle, err := projectionTargetYAMLFlowStyle(file, entryPath)
+		entryPath := strings.TrimSuffix(options.Selector, "[*]") + fmt.Sprintf("[%d]", options.Index)
+		flowStyle, err := projectionTargetYAMLFlowStyle(options.File, entryPath)
 		if err != nil {
 			return nil, err
 		}
@@ -528,7 +552,7 @@ func applyProjectionMappings(compiled *compiledProjection, file *ast.File, selec
 			if err := jsonPath.SetOne(fragment, value); err != nil {
 				return nil, err
 			}
-			if err := mergeProjectionYAML(file, entryPath, fragment, flowStyle); err != nil {
+			if err := mergeProjectionYAML(options.File, entryPath, fragment, flowStyle); err != nil {
 				return nil, err
 			}
 		} else {
@@ -536,14 +560,14 @@ func applyProjectionMappings(compiled *compiledProjection, file *ast.File, selec
 			// entry's. A flow list inside a block-style entry re-rendered as a block
 			// list gets indented to the column its inline value started at.
 			valuePath := entryPath + strings.TrimPrefix(path, "$")
-			valueFlowStyle, ok, err := projectionValueYAMLFlowStyle(file, valuePath)
+			valueFlowStyle, ok, err := projectionValueYAMLFlowStyle(options.File, valuePath)
 			if err != nil {
 				return nil, err
 			}
 			if ok {
 				flowStyle = valueFlowStyle
 			}
-			if err := replaceProjectionYAML(file, valuePath, value, flowStyle); err != nil {
+			if err := replaceProjectionYAML(options.File, valuePath, value, flowStyle); err != nil {
 				return nil, err
 			}
 		}

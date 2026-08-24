@@ -168,7 +168,7 @@ var _ = ginkgo.Describe("access users export", func() {
 		Expect(entries).To(BeEmpty())
 		Expect(warnings).To(Equal([]ProjectionWarning{{
 			Source:  "external-user-" + serviceID.String(),
-			Message: "Kubernetes ServiceAccount subject has no namespace for external user " + serviceID.String() + " (kubernetes/prod-cluster/serviceaccount//gadget)",
+			Message: "kubernetes ServiceAccount subject has no namespace for external user " + serviceID.String() + " (kubernetes/prod-cluster/serviceaccount//gadget)",
 			Count:   1,
 		}}))
 	})

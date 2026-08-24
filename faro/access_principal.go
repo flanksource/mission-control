@@ -9,7 +9,7 @@ import (
 	"github.com/flanksource/duty/models"
 )
 
-var errMissingServiceAccountNamespace = errors.New("Kubernetes ServiceAccount subject has no namespace")
+var errMissingServiceAccountNamespace = errors.New("kubernetes ServiceAccount subject has no namespace")
 
 func isMissingServiceAccountNamespace(err error) bool {
 	return errors.Is(err, errMissingServiceAccountNamespace)
@@ -35,7 +35,7 @@ func canonicalWorkloadPrincipal(user models.ExternalUser, provider string) (stri
 			continue
 		}
 		if strings.TrimSpace(parts[4]) == "" {
-			return "", fmt.Errorf("Kubernetes ServiceAccount alias %q has no name", alias)
+			return "", fmt.Errorf("kubernetes ServiceAccount alias %q has no name", alias)
 		}
 		principals["system:serviceaccount:"+parts[3]+":"+parts[4]] = struct{}{}
 	}
@@ -50,10 +50,10 @@ func canonicalWorkloadPrincipal(user models.ExternalUser, provider string) (stri
 			values = append(values, principal)
 		}
 		sort.Strings(values)
-		return "", fmt.Errorf("Kubernetes ServiceAccount aliases resolve to multiple principals: %s", strings.Join(values, ", "))
+		return "", fmt.Errorf("kubernetes ServiceAccount aliases resolve to multiple principals: %s", strings.Join(values, ", "))
 	}
 	if missingNamespace {
 		return "", fmt.Errorf("%w for external user %s (%s)", errMissingServiceAccountNamespace, user.ID, strings.Join(user.Aliases, ", "))
 	}
-	return "", fmt.Errorf("Kubernetes ServiceAccount %s has no canonical Kubernetes/<cluster>/ServiceAccount/<namespace>/<name> alias", user.ID)
+	return "", fmt.Errorf("kubernetes ServiceAccount %s has no canonical Kubernetes/<cluster>/ServiceAccount/<namespace>/<name> alias", user.ID)
 }

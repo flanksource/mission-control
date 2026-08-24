@@ -1,6 +1,7 @@
 package echo
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/flanksource/clicky"
@@ -9,7 +10,9 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/google/uuid"
 	echov4 "github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 )
 
 // GetResource handles GET /resources/:id and returns a single catalog item.
@@ -19,14 +22,24 @@ import (
 // get the models.ConfigItem as-is.
 func GetResource(c echov4.Context) error {
 	ctx := c.Request().Context().(context.Context)
-	id := c.Param("id")
-	if id == "" {
-		return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "id is required"))
+	// Parsing here rather than letting the id reach the query is what separates a bad request from
+	// a server fault: config_items.id is a uuid column, so a non-uuid path segment raises SQLSTATE
+	// 22P02, which carries no domain code and would otherwise be reported as a 500.
+	id, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "invalid config item id: %s", c.Param("id")))
 	}
 
-	item, err := query.ConfigItemFromCache(ctx, id)
+	item, err := query.ConfigItemFromCache(ctx, id.String())
 	if err != nil {
-		return dutyApi.WriteError(c, err)
+		// ConfigItemFromCache reports a miss with a bare gorm.ErrRecordNotFound, which carries no
+		// domain code, so WriteError would default it to EINTERNAL and answer a routine "no such
+		// id" with a 500. The translation belongs here: gorm's error is the right contract for a
+		// storage primitive, and this is the boundary where it becomes an HTTP status.
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.ENOTFOUND, "config item %s not found", id))
+		}
+		return dutyApi.WriteError(c, ctx.Oops().Wrapf(err, "get config item %s", id))
 	}
 
 	if wantsClicky(c.Request().Header.Get("Accept")) {
