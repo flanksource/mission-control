@@ -26,10 +26,6 @@
     "@iconify-json/tabler": "^1.2.0",
     "@iconify-json/vscode-icons": "^1.2.45",
     "@iconify/react": "^5.1.0",
-    "@radix-ui/react-compose-refs": "^1.1.2",
-    "@radix-ui/react-slot": "^1.2.3",
-    "@tanstack/query-core": "^5.100.1",
-    "@tanstack/react-query": "^5.100.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "js-yaml": "^4.3.1",
@@ -67,5 +63,6 @@
     "lightningcss-darwin-x64": "^1.32.0",
     "lightningcss-linux-arm64-gnu": "^1.32.0",
     "lightningcss-linux-x64-gnu": "^1.32.0"
-  }
+  },
+  "packageManager": "pnpm@11.22.0+sha512.1ff870c4c6133dfd88fb2afc46dd13d47f09c9794b438c6fdb47ca98caf3bc16381ee0be93a091b8e3824cf01f889f46d7d9e20910fb0be1ab0fb5baa80dd621"
 }
