@@ -38,3 +38,28 @@ export function AppLink({ href, children, ...props }: AppLinkProps) {
     </Link>
   );
 }
+
+export const renderLink: RenderLink = ({ to, className, children, title, key }) => (
+  <Link key={key} to={routerPathFromHref(to)} className={className} title={title}>
+    {children}
+  </Link>
+);
+
+// clicky-ui nav surfaces read routing through RouterContext; this bridges it to
+// react-router, translating between /ui-prefixed hrefs and router paths.
+export function AppRouterProvider({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const adapter = useMemo<RouterAdapter>(
+    () => ({
+      pathname: `${UI_BASE}${location.pathname}`,
+      renderLink,
+      navigate: (to, opts) =>
+        navigate(routerPathFromHref(to), { replace: opts?.replace }),
+    }),
+    [location.pathname, navigate],
+  );
+
+  return <RouterProvider adapter={adapter}>{children}</RouterProvider>;
+}
