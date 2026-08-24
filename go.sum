@@ -422,8 +422,8 @@ github.com/flanksource/clicky v1.21.56 h1:sQ4aqPvgzocrAFw8tEc022W0z6almcjkl4UUfm
 github.com/flanksource/clicky v1.21.56/go.mod h1:av7NkRWI5h8CP8GSG+Y1G3HnAvy3FHfXUsItcH0FJ5o=
 github.com/flanksource/commons v1.56.0 h1:/L1eWb3iLDM3UQEgd6vCTlG9Kbl6ssH6S0YR5f026IY=
 github.com/flanksource/commons v1.56.0/go.mod h1:gupTCRqGpgD8dd2ooE7bMDJxkfcVKvkPVuHg3cWkW+Q=
-github.com/flanksource/commons-test v0.1.15 h1:YmGO7jeaFdbyfJCWpzIJNxU8j4b3QNPwfLT/5UoaUck=
-github.com/flanksource/commons-test v0.1.15/go.mod h1:7Ir8vYdYuKuAY/t4h1F5bwupdNXzG+ygctX2pxosrbI=
+github.com/flanksource/commons-test v0.1.13 h1:DLb3q1a7d+BpfxZDy2bdY8ZA5z1+UTYFEO9DYd15bw4=
+github.com/flanksource/commons-test v0.1.13/go.mod h1:T0zLA9F55jlaOhtvjj1Ot7QZQhtn2baAuflT+27ueG8=
 github.com/flanksource/deps v1.0.41 h1:ftvgd7KOtaqe3s1GY4JMSzso86YuyAeMK7Lh5z/MURA=
 github.com/flanksource/deps v1.0.41/go.mod h1:EvS1kCbri1Lj2qWUqS1+K0JxHjelwiXpL+lvDXn8h+U=
 github.com/flanksource/duty v1.0.1371 h1:OupvY/vdfnX9byl80FVtVWx/hrNnK2Yjtwrij56jeZM=
