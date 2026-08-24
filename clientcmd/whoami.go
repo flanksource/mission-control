@@ -119,7 +119,7 @@ func runWhoami(cmd *cobra.Command, _ []string) error {
 
 	dbConn := resolvedDBConnection(mcCtx)
 	report.Database = probeDatabase(dbConn)
-	report.Auth = probeAuth(cmd.Context(), cfg, mcCtx, dbConn, whoamiRefresh)
+	report.Auth = probeAuth(cmd.Context(), mcCtx, dbConn, whoamiRefresh)
 
 	if whoamiJSON {
 		data, err := json.MarshalIndent(report, "", "  ")
@@ -134,11 +134,22 @@ func runWhoami(cmd *cobra.Command, _ []string) error {
 	return whoamiStatusError(report)
 }
 
+// whoamiStatusError reports only the probes that actually failed. A skipped
+// database probe is not one: faro talks to the API, so a direct connection is
+// optional context, not a requirement. Auth is what the command exists to
+// answer, so anything short of ok — including a missing token — fails.
 func whoamiStatusError(report whoamiReport) error {
-	if (report.Database.Status == "ok" || report.Database.Status == "skipped") && report.Auth.Status == "ok" {
+	var failures []string
+	if report.Database.Status != "ok" && report.Database.Status != "skipped" {
+		failures = append(failures, "database="+statusLine(report.Database.Status, report.Database.Error))
+	}
+	if report.Auth.Status != "ok" {
+		failures = append(failures, "auth="+statusLine(report.Auth.Status, report.Auth.Error))
+	}
+	if len(failures) == 0 {
 		return nil
 	}
-	return fmt.Errorf("whoami status failed: database=%s auth=%s", report.Database.Status, report.Auth.Status)
+	return fmt.Errorf("whoami status failed: %s", strings.Join(failures, " "))
 }
 
 func resolvedDBConnection(mcCtx *MCContext) string {
@@ -171,7 +182,7 @@ func probeDatabase(conn string) whoamiDatabase {
 	return probe
 }
 
-func probeAuth(parent gocontext.Context, cfg *MCConfig, mcCtx *MCContext, dbConn string, refresh bool) whoamiAuth {
+func probeAuth(parent gocontext.Context, mcCtx *MCContext, dbConn string, refresh bool) whoamiAuth {
 	out := whoamiAuth{Status: "skipped"}
 	if mcCtx == nil {
 		out.Error = "no current context"
@@ -185,30 +196,38 @@ func probeAuth(parent gocontext.Context, cfg *MCConfig, mcCtx *MCContext, dbConn
 	out.Configured = true
 	out.Server = mcCtx.Server
 	token := mcCtx.AccessToken()
-	if mcCtx.OIDC != nil {
+	switch {
+	case mcCtx.NeedsReauth != "":
+		out.TokenSource = "oidc"
+		out.RefreshStatus = "unavailable: " + mcCtx.NeedsReauth
+		out.Status = "invalid"
+		out.Error = mcCtx.ReauthError().Error()
+		return out
+	case mcCtx.OIDC != nil:
 		out.TokenSource = "oidc"
 		out.TokenExpires = formatTime(mcCtx.OIDC.ExpiresAt)
 		out.TokenTTL = formatTTL(mcCtx.OIDC.ExpiresAt)
-		if refresh && oidcTokenExpiring(mcCtx.OIDC) && mcCtx.OIDC.RefreshToken != "" {
-			refreshed, err := refreshOIDCTokens(mcCtx.Server, mcCtx.OIDC)
-			if err != nil {
+		switch {
+		case !oidcTokenExpiring(mcCtx.OIDC):
+			out.RefreshStatus = "not needed"
+		case mcCtx.OIDC.RefreshToken == "":
+			out.RefreshStatus = "unavailable: no refresh token"
+		case !refresh:
+			out.RefreshStatus = "needed"
+		default:
+			// --refresh spends the single-use refresh token, so it is opt-in:
+			// a diagnostic must not be able to consume the credential it is
+			// diagnosing.
+			if err := refreshContextToken(mcCtx); err != nil {
 				out.RefreshStatus = "failed: " + err.Error()
 			} else {
-				mcCtx.SetOIDCTokens(refreshed)
 				token = mcCtx.AccessToken()
 				out.RefreshStatus = "refreshed"
 				out.TokenExpires = formatTime(mcCtx.OIDC.ExpiresAt)
 				out.TokenTTL = formatTTL(mcCtx.OIDC.ExpiresAt)
-				updateContextOIDCTokens(cfg, mcCtx.Name, refreshed)
 			}
-		} else if oidcTokenExpiring(mcCtx.OIDC) && mcCtx.OIDC.RefreshToken == "" {
-			out.RefreshStatus = "unavailable: no refresh token"
-		} else if oidcTokenExpiring(mcCtx.OIDC) {
-			out.RefreshStatus = "needed"
-		} else {
-			out.RefreshStatus = "not needed"
 		}
-	} else if token != "" {
+	case token != "":
 		out.TokenSource = "context"
 	}
 
