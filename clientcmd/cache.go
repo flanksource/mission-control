@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	"github.com/flanksource/incident-commander/plugin/manifestcache"
 )
 
@@ -35,17 +36,17 @@ func PreselectContextFromArgs(args []string) string {
 		}
 
 		if arg == "--context" && i+1 < len(args) {
-			contextFlag = args[i+1]
-			return contextFlag
+			mccontext.ContextFlag = args[i+1]
+			return mccontext.ContextFlag
 		}
 
 		if after, ok := strings.CutPrefix(arg, "--context="); ok {
-			contextFlag = after
-			return contextFlag
+			mccontext.ContextFlag = after
+			return mccontext.ContextFlag
 		}
 	}
 
-	return contextFlag
+	return mccontext.ContextFlag
 }
 
 func contextCacheBaseDir() string {
@@ -86,11 +87,11 @@ func ContextCacheDir(contextName string) string {
 	return filepath.Join(contextCacheBaseDir(), "context-"+safeContextName(contextName))
 }
 
-func contextCacheDir(mc *MCContext) string {
+func contextCacheDir(mc *mccontext.MCContext) string {
 	return ContextCacheDir(mc.Name)
 }
 
-func contextPluginCacheDir(mc *MCContext) string {
+func contextPluginCacheDir(mc *mccontext.MCContext) string {
 	return filepath.Join(contextCacheDir(mc), "plugins")
 }
 
@@ -107,12 +108,12 @@ func CurrentContextPluginCacheDir() (string, error) {
 	return contextPluginCacheDir(mc), nil
 }
 
-func contextLastRanPath(mc *MCContext) string {
+func contextLastRanPath(mc *mccontext.MCContext) string {
 	return filepath.Join(contextCacheDir(mc), "last-ran.txt")
 }
 
-func currentMCContext() (*MCContext, error) {
-	cfg, err := LoadConfig()
+func currentMCContext() (*mccontext.MCContext, error) {
+	cfg, err := mccontext.LoadConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +126,7 @@ func currentMCContext() (*MCContext, error) {
 	return mc, nil
 }
 
-func shouldRefreshContextCache(mc *MCContext, now time.Time) bool {
+func shouldRefreshContextCache(mc *mccontext.MCContext, now time.Time) bool {
 	data, err := os.ReadFile(contextLastRanPath(mc))
 	if err != nil {
 		return true
@@ -137,7 +138,7 @@ func shouldRefreshContextCache(mc *MCContext, now time.Time) bool {
 	return !now.Before(lastRan.Add(contextCacheTTL))
 }
 
-func writeContextLastRan(mc *MCContext, now time.Time) error {
+func writeContextLastRan(mc *mccontext.MCContext, now time.Time) error {
 	path := contextLastRanPath(mc)
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
@@ -191,7 +192,7 @@ func refreshCurrentContextCache(ctx gocontext.Context, force bool) (*ContextCach
 		return result, nil
 	}
 
-	token, err := resolveContextToken(mc)
+	token, err := mccontext.ResolveContextToken(mc)
 	if err != nil {
 		return result, err
 	}

@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	sdk "github.com/flanksource/incident-commander/sdk/client"
 )
 
@@ -22,7 +23,7 @@ var LocalPluginDispatch func(cmd *cobra.Command, plugin, op string, params map[s
 // dispatchOperation routes an operation invocation to either the HTTP API
 // (when an API context is configured) or a locally-spawned plugin binary.
 func dispatchOperation(cmd *cobra.Command, plugin, op string, params map[string]string, configID string, raw bool) error {
-	if mc, ok := ContextHasAPI(); ok {
+	if mc, ok := mccontext.ContextHasAPI(); ok {
 		return dispatchAPI(cmd, mc, plugin, op, params, configID, raw)
 	}
 	if LocalPluginDispatch != nil {
@@ -34,7 +35,7 @@ func dispatchOperation(cmd *cobra.Command, plugin, op string, params map[string]
 // dispatchAPI forwards the operation to the configured Mission Control
 // server. The response is whatever the plugin returned; we honour
 // `--json` by passing it through and otherwise pretty-print JSON bodies.
-func dispatchAPI(cmd *cobra.Command, mc *MCContext, plugin, op string, params map[string]string, configID string, raw bool) error {
+func dispatchAPI(cmd *cobra.Command, mc *mccontext.MCContext, plugin, op string, params map[string]string, configID string, raw bool) error {
 	if params == nil {
 		params = map[string]string{}
 	}
@@ -49,7 +50,7 @@ func dispatchAPI(cmd *cobra.Command, mc *MCContext, plugin, op string, params ma
 			fmt.Fprintln(cmd.ErrOrStderr(), err)
 		}
 	}()
-	client := NewAPIClient(mc, sdk.WithAccept("application/clicky+json,application/json"))
+	client := mccontext.NewAPIClient(mc, sdk.WithAccept("application/clicky+json,application/json"))
 
 	ctx, cancel := gocontext.WithTimeout(cmd.Context(), 60*time.Second)
 	defer cancel()

@@ -15,6 +15,7 @@ import (
 
 	"github.com/flanksource/incident-commander/auth/oidc/static"
 	"github.com/flanksource/incident-commander/auth/oidcclient"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	"github.com/spf13/cobra"
 )
 
@@ -39,7 +40,7 @@ func init() {
 }
 
 func runAuthLogin(cmd *cobra.Command, _ []string) error {
-	apiServer, err := ResolveAPIBase(loginServer)
+	apiServer, err := mccontext.ResolveAPIBase(loginServer)
 	if err != nil {
 		return err
 	}
@@ -64,7 +65,7 @@ func runAuthLogin(cmd *cobra.Command, _ []string) error {
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "\nLogin successful!\n\n")
-	fmt.Fprintf(cmd.OutOrStdout(), "Credentials saved to: %s (%s)\n", configDir(), store)
+	fmt.Fprintf(cmd.OutOrStdout(), "Credentials saved to: %s (%s)\n", mccontext.ConfigDir(), store)
 	fmt.Fprintf(cmd.OutOrStdout(), "Context %q saved for %s\n", contextName, apiServer)
 	fmt.Fprintf(cmd.OutOrStdout(), "Access token expires: %s\n", tokens.ExpiresAt.Format(time.RFC3339))
 
@@ -73,7 +74,7 @@ func runAuthLogin(cmd *cobra.Command, _ []string) error {
 
 func performOIDCLoginForAPIBase(cmd *cobra.Command, apiServer string, status io.Writer) (*oidcclient.Tokens, *oidcclient.Discovery, error) {
 	var lastErr error
-	for _, loginServer := range oidcLoginServerCandidates(apiServer) {
+	for _, loginServer := range mccontext.OIDCLoginServerCandidates(apiServer) {
 		tokens, endpoints, err := oidcLogin(cmd, loginServer, status)
 		if err == nil {
 			return tokens, endpoints, nil
@@ -84,31 +85,31 @@ func performOIDCLoginForAPIBase(cmd *cobra.Command, apiServer string, status io.
 }
 
 func saveLoginContext(serverURL string, tokens *oidcclient.Tokens, endpoints *oidcclient.Discovery) (string, string, error) {
-	return saveAuthContext(serverURL, func(ctx *MCContext) {
+	return saveAuthContext(serverURL, func(ctx *mccontext.MCContext) {
 		ctx.SetOIDCTokens(tokens)
 		ctx.Endpoints = endpoints
 	})
 }
 
 func saveTokenContext(serverURL, token string) (string, string, error) {
-	return saveAuthContext(serverURL, func(ctx *MCContext) {
+	return saveAuthContext(serverURL, func(ctx *mccontext.MCContext) {
 		ctx.Token = token
 		ctx.OIDC = nil
 		ctx.NeedsReauth = ""
 	})
 }
 
-func saveAuthContext(serverURL string, apply func(*MCContext)) (string, string, error) {
-	cfg, err := LoadConfig()
+func saveAuthContext(serverURL string, apply func(*mccontext.MCContext)) (string, string, error) {
+	cfg, err := mccontext.LoadConfig()
 	if err != nil {
 		return "", "", err
 	}
-	if err := ChooseCredentialStore(cfg, loginCredentialStore); err != nil {
+	if err := mccontext.ChooseCredentialStore(cfg, loginCredentialStore); err != nil {
 		return "", "", err
 	}
 
-	name := ServerToContextName(serverURL)
-	ctx := MCContext{Name: name, Server: serverURL}
+	name := mccontext.ServerToContextName(serverURL)
+	ctx := mccontext.MCContext{Name: name, Server: serverURL}
 	if existing := cfg.GetContext(name); existing != nil {
 		ctx = *existing
 		ctx.Server = serverURL
@@ -116,7 +117,7 @@ func saveAuthContext(serverURL string, apply func(*MCContext)) (string, string, 
 	apply(&ctx)
 	cfg.SetContext(ctx)
 	cfg.CurrentContext = name
-	return name, cfg.CredentialStore, SaveConfig(cfg)
+	return name, cfg.CredentialStore, mccontext.SaveConfig(cfg)
 }
 
 var oidcLogin = PerformOIDCLogin

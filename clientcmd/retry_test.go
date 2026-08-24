@@ -6,6 +6,8 @@ import (
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
+
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 )
 
 var _ = ginkgo.Describe("retry flags", func() {
@@ -24,12 +26,12 @@ var _ = ginkgo.Describe("retry flags", func() {
 		root := &cobra.Command{Use: "test"}
 		RegisterClientCommands(root)
 		ginkgo.DeferCleanup(func(retries int, delay time.Duration) {
-			retriesFlag, retryDelayFlag = retries, delay
-		}, retriesFlag, retryDelayFlag)
+			mccontext.RetryAttempts, mccontext.RetryDelay = retries, delay
+		}, mccontext.RetryAttempts, mccontext.RetryDelay)
 
 		Expect(root.PersistentFlags().Parse([]string{"--retries=7", "--retry-delay=250ms"})).To(Succeed())
 
-		Expect(retriesFlag).To(Equal(7))
-		Expect(retryDelayFlag).To(Equal(250 * time.Millisecond))
+		Expect(mccontext.RetryAttempts).To(Equal(7))
+		Expect(mccontext.RetryDelay).To(Equal(250 * time.Millisecond))
 	})
 })

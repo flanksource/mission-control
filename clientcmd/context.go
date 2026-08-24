@@ -1,240 +1,14 @@
 package clientcmd
 
 import (
-	gocontext "context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
-	"net/url"
-	"os"
-	"path/filepath"
-	"strings"
-	"time"
 
 	"github.com/charmbracelet/huh"
-	"github.com/flanksource/incident-commander/auth/oidcclient"
-	"github.com/flanksource/incident-commander/clientcmd/credentials"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	"github.com/spf13/cobra"
 )
-
-type MCContext struct {
-	Name      string `json:"name"`
-	Server    string `json:"server,omitempty"`
-	DB        string `json:"db,omitempty"`
-	Endpoints *oidcclient.Discovery `json:"endpoints,omitempty"`
-	Properties map[string]string    `json:"properties,omitempty"`
-
-	// Token, OIDC and NeedsReauth are secrets and live in the credential store,
-	// never in config.json. LoadConfig hydrates them; SaveConfig writes them
-	// back.
-	Token       string             `json:"-"`
-	OIDC        *oidcclient.Tokens `json:"-"`
-	NeedsReauth string             `json:"-"`
-}
-
-type MCConfig struct {
-	CurrentContext string `json:"current_context"`
-
-	// CredentialStore is chosen once, at login, and honoured verbatim
-	// afterwards. Re-detecting it at runtime would silently write a plaintext
-	// refresh token for a user who asked for the keychain.
-	CredentialStore string `json:"credential_store,omitempty"`
-
-	Contexts []MCContext `json:"contexts"`
-
-	// hydrated is what the credential store held when this config was loaded,
-	// and loadedStore is which store that was. SaveConfig diffs against them to
-	// write only the credentials that changed, to delete the ones whose context
-	// is gone, and to move every credential across when the backend changes.
-	hydrated    map[string]*credentials.Credential
-	loadedStore string
-}
-
-var contextFlag string
-
-func configDir() string {
-	dir, err := os.UserConfigDir()
-	if err != nil {
-		home, _ := os.UserHomeDir()
-		dir = filepath.Join(home, ".config")
-	}
-	return filepath.Join(dir, "mission-control")
-}
-
-func configPath() string {
-	return filepath.Join(configDir(), "config.json")
-}
-
-func ProfileDir(namespace, name string) string {
-	return filepath.Join(configDir(), "profiles", namespace+"_"+name)
-}
-
-// LoadConfig reads config.json and hydrates each context's secrets from the
-// credential store, migrating any secrets still inline in config.json first.
-func LoadConfig() (*MCConfig, error) {
-	data, err := os.ReadFile(configPath())
-	if err != nil {
-		if os.IsNotExist(err) {
-			return &MCConfig{}, nil
-		}
-		return nil, err
-	}
-	var cfg MCConfig
-	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, fmt.Errorf("failed to parse config: %w", err)
-	}
-	inline, err := inlineCredentials(data)
-	if err != nil {
-		return nil, err
-	}
-	if err := hydrateCredentials(&cfg, inline); err != nil {
-		return nil, err
-	}
-	if len(inline) > 0 {
-		migrateInlineCredentials(&cfg)
-	}
-	return &cfg, nil
-}
-
-// SaveConfig persists config.json and any credential that differs from what the
-// store held at load. It is the only save path: a caller that mutates a
-// context's secret and saves must not be able to lose it silently.
-func SaveConfig(cfg *MCConfig) error {
-	store, err := cfg.store()
-	if err != nil {
-		return err
-	}
-	previous, err := cfg.previousStore()
-	if err != nil {
-		return err
-	}
-	return credentials.WithLock(configDir(), func() error {
-		if err := cfg.syncCredentials(store, previous); err != nil {
-			return err
-		}
-		return saveConfigLocked(cfg)
-	})
-}
-
-func saveConfigLocked(cfg *MCConfig) error {
-	if err := os.MkdirAll(configDir(), 0700); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-	return credentials.WriteAtomic(configPath(), data)
-}
-
-func (c *MCConfig) GetContext(name string) *MCContext {
-	for i := range c.Contexts {
-		if c.Contexts[i].Name == name {
-			return &c.Contexts[i]
-		}
-	}
-	return nil
-}
-
-func (c *MCConfig) SetContext(ctx MCContext) {
-	for i := range c.Contexts {
-		if c.Contexts[i].Name == ctx.Name {
-			c.Contexts[i] = ctx
-			return
-		}
-	}
-	c.Contexts = append(c.Contexts, ctx)
-}
-
-func (c *MCConfig) RemoveContext(name string) bool {
-	for i := range c.Contexts {
-		if c.Contexts[i].Name == name {
-			c.Contexts = append(c.Contexts[:i], c.Contexts[i+1:]...)
-			if c.CurrentContext == name {
-				c.CurrentContext = ""
-				if len(c.Contexts) == 1 {
-					c.CurrentContext = c.Contexts[0].Name
-				}
-			}
-			return true
-		}
-	}
-	return false
-}
-
-func (c *MCConfig) CurrentMCContext() *MCContext {
-	if contextFlag != "" {
-		return c.GetContext(contextFlag)
-	}
-	if c.CurrentContext == "" {
-		return nil
-	}
-	return c.GetContext(c.CurrentContext)
-}
-
-func ServerToContextName(serverURL string) string {
-	u, err := url.Parse(serverURL)
-	if err != nil {
-		return strings.NewReplacer("://", "_", "/", "_", ":", "_").Replace(serverURL)
-	}
-	return u.Hostname()
-}
-
-func ContextHasAPI() (*MCContext, bool) {
-	cfg, _ := LoadConfig()
-	if cfg == nil {
-		return nil, false
-	}
-	ctx := cfg.CurrentMCContext()
-	return ctx, ctx != nil && ctx.Server != "" && ctx.HasAuth()
-}
-
-// HasAuth reports whether the context holds a credential that can still work.
-// A refresh token the server has already rejected does not count — see
-// NeedsReauth.
-func (c *MCContext) HasAuth() bool {
-	if c == nil || c.NeedsReauth != "" {
-		return false
-	}
-	return c.AccessToken() != "" || (c.OIDC != nil && c.OIDC.RefreshToken != "")
-}
-
-// ReauthError is the one message a user with a dead credential should see: what
-// is wrong, and the exact command that fixes it.
-func (c *MCContext) ReauthError() error {
-	return fmt.Errorf("context %q needs re-authentication (%s)\n  run: %s auth login --server %s",
-		c.Name, c.NeedsReauth, filepath.Base(os.Args[0]), c.Server)
-}
-
-func (c *MCContext) AccessToken() string {
-	if c == nil {
-		return ""
-	}
-	if c.OIDC != nil && c.OIDC.AccessToken != "" {
-		return c.OIDC.AccessToken
-	}
-	return c.Token
-}
-
-func (c *MCContext) SetOIDCTokens(tokens *oidcclient.Tokens) {
-	if c == nil {
-		return
-	}
-	c.OIDC = cloneOIDCTokens(tokens)
-	c.NeedsReauth = ""
-	if tokens != nil && tokens.AccessToken != "" {
-		c.Token = ""
-	}
-}
-
-func cloneOIDCTokens(tokens *oidcclient.Tokens) *oidcclient.Tokens {
-	if tokens == nil {
-		return nil
-	}
-	clone := *tokens
-	return &clone
-}
 
 var ContextCmd = &cobra.Command{
 	Use:   "context",
@@ -246,7 +20,7 @@ var contextUseCmd = &cobra.Command{
 	Short: "Switch the current context",
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := LoadConfig()
+		cfg, err := mccontext.LoadConfig()
 		if err != nil {
 			return err
 		}
@@ -283,7 +57,7 @@ var contextUseCmd = &cobra.Command{
 		}
 
 		cfg.CurrentContext = name
-		if err := SaveConfig(cfg); err != nil {
+		if err := mccontext.SaveConfig(cfg); err != nil {
 			return err
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Switched to context %q\n", name)
@@ -295,7 +69,7 @@ var contextListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all contexts",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := LoadConfig()
+		cfg, err := mccontext.LoadConfig()
 		if err != nil {
 			return err
 		}
@@ -324,7 +98,7 @@ var contextRemoveCmd = &cobra.Command{
 	Short:   "Remove a Mission Control context",
 	Args:    cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := LoadConfig()
+		cfg, err := mccontext.LoadConfig()
 		if err != nil {
 			return err
 		}
@@ -360,7 +134,7 @@ var contextRemoveCmd = &cobra.Command{
 		if !cfg.RemoveContext(name) {
 			return fmt.Errorf("context %q not found", name)
 		}
-		if err := SaveConfig(cfg); err != nil {
+		if err := mccontext.SaveConfig(cfg); err != nil {
 			return err
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "Removed context %q\n", name)
@@ -375,7 +149,7 @@ var contextCurrentCmd = &cobra.Command{
 	Use:   "current",
 	Short: "Show the current context",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		cfg, err := LoadConfig()
+		cfg, err := mccontext.LoadConfig()
 		if err != nil {
 			return err
 		}
@@ -415,19 +189,19 @@ Examples:
 			return fmt.Errorf("at least one of --server or --db-url is required")
 		}
 
-		cfg, err := LoadConfig()
+		cfg, err := mccontext.LoadConfig()
 		if err != nil {
 			return err
 		}
 
 		existingCtx := cfg.GetContext(contextAddName)
 		existing := existingCtx != nil
-		ctx := MCContext{Name: contextAddName}
+		ctx := mccontext.MCContext{Name: contextAddName}
 		if existingCtx != nil {
 			ctx = *existingCtx
 		}
 		if cmd.Flags().Changed("server") {
-			server, err := ResolveAPIBase(contextAddServer)
+			server, err := mccontext.ResolveAPIBase(contextAddServer)
 			if err != nil {
 				return err
 			}
@@ -446,7 +220,7 @@ Examples:
 			ctx.OIDC = nil
 			ctx.NeedsReauth = ""
 		}
-		if err := ChooseCredentialStore(cfg, ""); err != nil {
+		if err := mccontext.ChooseCredentialStore(cfg, ""); err != nil {
 			return err
 		}
 		if ctx.Server != "" && !cmd.Flags().Changed("token") && !ctx.HasAuth() {
@@ -460,7 +234,7 @@ Examples:
 			cfg.CurrentContext = contextAddName
 		}
 
-		if err := SaveConfig(cfg); err != nil {
+		if err := mccontext.SaveConfig(cfg); err != nil {
 			return err
 		}
 
@@ -476,18 +250,18 @@ Examples:
 	},
 }
 
-func EnsureContextToken(cmd *cobra.Command, ctx *MCContext, status io.Writer) error {
+func EnsureContextToken(cmd *cobra.Command, ctx *mccontext.MCContext, status io.Writer) error {
 	if ctx == nil || ctx.Server == "" || ctx.AccessToken() != "" {
 		return nil
 	}
 	if ctx.OIDC != nil && ctx.OIDC.RefreshToken != "" {
-		if token, err := resolveContextToken(ctx); err == nil && token != "" {
+		if token, err := mccontext.ResolveContextToken(ctx); err == nil && token != "" {
 			return nil
 		}
 	}
 
 	var lastErr error
-	for _, loginServer := range oidcLoginServerCandidates(ctx.Server) {
+	for _, loginServer := range mccontext.OIDCLoginServerCandidates(ctx.Server) {
 		fmt.Fprintf(status, "No token configured for context %q; starting OIDC login for %s\n", ctx.Name, loginServer)
 		tokens, endpoints, err := oidcLogin(cmd, loginServer, status)
 		if err == nil {
@@ -498,88 +272,6 @@ func EnsureContextToken(cmd *cobra.Command, ctx *MCContext, status io.Writer) er
 		lastErr = err
 	}
 	return fmt.Errorf("OAuth login failed for %s: %w", ctx.Server, lastErr)
-}
-
-func oidcLoginServerCandidates(serverURL string) []string {
-	serverURL = strings.TrimRight(serverURL, "/")
-	if strings.HasSuffix(serverURL, "/api") {
-		return uniqueStrings([]string{strings.TrimSuffix(serverURL, "/api"), serverURL})
-	}
-	return uniqueStrings([]string{serverURL})
-}
-
-// ResolveAPIBase probes both the frontend proxy API path and the direct backend
-// path, returning the base URL that serves Mission Control's unauthenticated
-// /health endpoint.
-func ResolveAPIBase(serverURL string) (string, error) {
-	serverURL = strings.TrimRight(serverURL, "/")
-	if serverURL == "" {
-		return "", fmt.Errorf("server URL is required")
-	}
-
-	var failures []string
-	for _, candidate := range apiBaseCandidates(serverURL) {
-		resolved, ok, err := probeAPIHealth(gocontext.Background(), candidate)
-		if err == nil && ok {
-			return resolved, nil
-		}
-		if err != nil {
-			failures = append(failures, fmt.Sprintf("%s: %v", candidate, err))
-		} else {
-			failures = append(failures, fmt.Sprintf("%s: /health did not return OK", candidate))
-		}
-	}
-	return "", fmt.Errorf("could not find Mission Control API for %s (%s)", serverURL, strings.Join(failures, "; "))
-}
-
-func apiBaseCandidates(serverURL string) []string {
-	serverURL = strings.TrimRight(serverURL, "/")
-	if strings.HasSuffix(serverURL, "/api") {
-		return uniqueStrings([]string{serverURL, strings.TrimSuffix(serverURL, "/api")})
-	}
-	return uniqueStrings([]string{serverURL + "/api", serverURL})
-}
-
-func probeAPIHealth(ctx gocontext.Context, baseURL string) (string, bool, error) {
-	healthURL, err := url.JoinPath(baseURL, "health")
-	if err != nil {
-		return "", false, err
-	}
-	ctx, cancel := gocontext.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, healthURL, nil)
-	if err != nil {
-		return "", false, err
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return "", false, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return "", false, nil
-	}
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 64))
-	if err != nil {
-		return "", false, err
-	}
-	if strings.TrimSpace(string(body)) != "OK" {
-		return "", false, nil
-	}
-
-	finalURL := *resp.Request.URL
-	if req.URL.Scheme == "https" && finalURL.Scheme != "https" {
-		return "", false, fmt.Errorf("health probe redirected from HTTPS to %s", finalURL.Scheme)
-	}
-	finalURL.RawQuery = ""
-	finalURL.Fragment = ""
-	finalURL.RawPath = ""
-	finalPath := strings.TrimSuffix(finalURL.Path, "/")
-	if !strings.HasSuffix(finalPath, "/health") {
-		return "", false, fmt.Errorf("health probe redirected to an unexpected path: %s", finalURL.String())
-	}
-	finalURL.Path = strings.TrimSuffix(finalPath, "/health")
-	return strings.TrimRight(finalURL.String(), "/"), true, nil
 }
 
 func init() {

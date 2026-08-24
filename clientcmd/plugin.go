@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	"github.com/spf13/cobra"
 )
 
@@ -89,7 +90,7 @@ func runPluginRefreshCache(cmd *cobra.Command, args []string) error {
 	var names []string
 	var err error
 
-	if mc, ok := ContextHasAPI(); ok {
+	if mc, ok := mccontext.ContextHasAPI(); ok {
 		ctx, cancel := gocontext.WithTimeout(cmd.Context(), 30*time.Second)
 		defer cancel()
 

@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/flanksource/incident-commander/clientapi"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	sdk "github.com/flanksource/incident-commander/sdk/client"
 )
 
@@ -204,7 +205,7 @@ func runBrowserLogin(cmd *cobra.Command, args []string) error {
 }
 
 func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*browserSessionData, func(), error) {
-	userDataDir := ProfileDir(flags.Namespace, flags.Name)
+	userDataDir := mccontext.ProfileDir(flags.Namespace, flags.Name)
 
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.Flag("headless", false),
