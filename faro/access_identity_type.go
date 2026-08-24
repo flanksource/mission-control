@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/flanksource/duty/models"
-	"github.com/google/cel-go/cel"
+	"github.com/flanksource/gomplate/v3"
 )
 
 const identityTypeSkip = ""
@@ -13,23 +13,19 @@ const identityTypeSkip = ""
 type compiledIdentityTypeRule struct {
 	index        int
 	identityType string
-	when         cel.Program
+	when         *gomplate.Template
 }
 
 func compileIdentityTypeRules(rules []ProjectionUserTypeRule) ([]compiledIdentityTypeRule, error) {
 	if len(rules) == 0 {
 		rules = defaultIdentityTypeRules()
 	}
-	env, err := newProjectionEnv()
-	if err != nil {
-		return nil, err
-	}
 	compiled := make([]compiledIdentityTypeRule, 0, len(rules))
 	for index, rule := range rules {
 		if err := rule.validate(index); err != nil {
 			return nil, err
 		}
-		program, err := compileProjectionExpression(env, rule.When)
+		program, err := compileProjectionExpression(rule.When)
 		if err != nil {
 			return nil, fmt.Errorf("userTypes[%d].when: %w", index, err)
 		}
