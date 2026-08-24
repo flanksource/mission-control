@@ -270,44 +270,66 @@ func probeAuth(parent gocontext.Context, mcCtx *MCContext, dbConn string, refres
 	return out
 }
 
-func inspectAccessToken(conn, token string) *accessTokenStatus {
-	if LocalWhoami == nil || conn == "" || token == "" {
-		return nil
-	}
-	return LocalWhoami.InspectAccessToken(conn, token)
+// whoamiEndpointTimeout bounds each candidate individually. A shared budget let a hanging first
+// candidate starve the second, which then failed with a derived "context deadline exceeded" —
+// an error describing the timer rather than the endpoint.
+var whoamiEndpointTimeout = 15 * time.Second
+
+// whoamiAttempt records why one candidate endpoint failed, so an exhausted candidate list can
+// report every URL it tried instead of only the last one.
+type whoamiAttempt struct {
+	endpoint string
+	err      error
 }
 
 func callWhoami(parent gocontext.Context, server, token string) (map[string]any, []string, string, int, error) {
 	if parent == nil {
 		parent = gocontext.Background()
 	}
-	ctx, cancel := gocontext.WithTimeout(parent, 15*time.Second)
-	defer cancel()
 
-	var lastErr error
+	var attempts []whoamiAttempt
 	var lastStatus int
 	candidates := whoamiEndpointCandidates(server)
 	for _, endpoint := range candidates {
 		base := strings.TrimSuffix(endpoint, "/auth/whoami")
-		decoded, statusCode, err := NewAPIClientForServer(base, token).Whoami(ctx)
+		decoded, statusCode, err := whoamiAttemptOnce(parent, base, token)
 		lastStatus = statusCode
 		if err != nil {
 			if (statusCode == http.StatusNotFound || errors.Is(err, sdk.ErrHTMLResponse)) && len(candidates) > 1 {
-				lastErr = err
+				attempts = append(attempts, whoamiAttempt{endpoint, err})
 				continue
 			}
 			if statusCode == 0 {
-				lastErr = err
+				attempts = append(attempts, whoamiAttempt{endpoint, err})
 				continue
 			}
 			return nil, nil, endpoint, statusCode, err
 		}
 		return decoded.Payload.User, decoded.Payload.Roles, endpoint, statusCode, nil
 	}
-	if lastErr != nil {
-		return nil, nil, "", lastStatus, lastErr
+	if len(attempts) > 0 {
+		return nil, nil, "", lastStatus, whoamiAttemptsError(attempts)
 	}
 	return nil, nil, "", lastStatus, fmt.Errorf("no whoami endpoint candidates for %s", server)
+}
+
+func whoamiAttemptOnce(parent gocontext.Context, base, token string) (*sdk.WhoamiResponse, int, error) {
+	ctx, cancel := gocontext.WithTimeout(parent, whoamiEndpointTimeout)
+	defer cancel()
+	return NewAPIClientForServer(base, token).Whoami(ctx)
+}
+
+// whoamiAttemptsError names each endpoint tried alongside its own failure. A single-candidate
+// failure keeps the bare error so existing messages are unchanged.
+func whoamiAttemptsError(attempts []whoamiAttempt) error {
+	if len(attempts) == 1 {
+		return attempts[0].err
+	}
+	lines := make([]string, 0, len(attempts))
+	for _, attempt := range attempts {
+		lines = append(lines, fmt.Sprintf("\n  %s\n    -> %s", attempt.endpoint, attempt.err))
+	}
+	return errors.New("no whoami endpoint answered:" + strings.Join(lines, ""))
 }
 
 func whoamiEndpointCandidates(server string) []string {
