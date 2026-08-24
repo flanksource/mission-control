@@ -10,8 +10,7 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/clicky/api"
-	"github.com/flanksource/duty/query"
-	"github.com/flanksource/incident-commander/sdk"
+	"github.com/flanksource/incident-commander/clientapi"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -180,7 +179,7 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			var got clientapi.SearchResourcesRequest
 			Expect(json.NewDecoder(r.Body).Decode(&got)).To(Succeed())
-			Expect(got.Limit).To(Equal(query.MaxSearchResourcesLimit))
+			Expect(got.Limit).To(Equal(clientapi.MaxSearchResourcesLimit))
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"config_analysis":[]}`))
 		}))
@@ -200,7 +199,7 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 			w.Header().Set("Content-Type", "application/json")
 			switch r.URL.Path {
 			case "/resources/search":
-				var got query.SearchResourcesRequest
+				var got clientapi.SearchResourcesRequest
 				Expect(json.NewDecoder(r.Body).Decode(&got)).To(Succeed())
 				search := got.ConfigAnalysis[0].Search
 				*seen = append(*seen, search)
@@ -232,9 +231,9 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 	ginkgo.It("pages until a short page and walks the offsets in order", func() {
 		var seen []string
 		server := insightPageServer(map[int][]string{
-			0:                                 ids(0, query.MaxSearchResourcesLimit),
-			query.MaxSearchResourcesLimit:     ids(query.MaxSearchResourcesLimit, query.MaxSearchResourcesLimit),
-			2 * query.MaxSearchResourcesLimit: ids(2*query.MaxSearchResourcesLimit, 5),
+			0:                                     ids(0, clientapi.MaxSearchResourcesLimit),
+			clientapi.MaxSearchResourcesLimit:     ids(clientapi.MaxSearchResourcesLimit, clientapi.MaxSearchResourcesLimit),
+			2 * clientapi.MaxSearchResourcesLimit: ids(2*clientapi.MaxSearchResourcesLimit, 5),
 		}, &seen)
 		defer server.Close()
 		storeRemoteContext(server.URL)
@@ -242,12 +241,12 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 		result, err := remoteSearchInsights("status=resolved", "all", insightSearchUnlimited)
 
 		Expect(err).ToNot(HaveOccurred())
-		Expect(result.Items).To(HaveLen(2*query.MaxSearchResourcesLimit + 5))
+		Expect(result.Items).To(HaveLen(2*clientapi.MaxSearchResourcesLimit + 5))
 		Expect(result.Limited).To(BeFalse())
 		Expect(seen).To(Equal([]string{
 			"status=resolved sort=id offset=0",
-			fmt.Sprintf("status=resolved sort=id offset=%d", query.MaxSearchResourcesLimit),
-			fmt.Sprintf("status=resolved sort=id offset=%d", 2*query.MaxSearchResourcesLimit),
+			fmt.Sprintf("status=resolved sort=id offset=%d", clientapi.MaxSearchResourcesLimit),
+			fmt.Sprintf("status=resolved sort=id offset=%d", 2*clientapi.MaxSearchResourcesLimit),
 		}))
 	})
 
@@ -258,8 +257,8 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 		var seen []string
 		boundary := "00000000-0000-0000-0000-0000000000ff"
 		server := insightPageServer(map[int][]string{
-			0:                             append(ids(0, query.MaxSearchResourcesLimit-1), boundary),
-			query.MaxSearchResourcesLimit: {boundary, "00000000-0000-0000-0000-000000000fff"},
+			0:                                 append(ids(0, clientapi.MaxSearchResourcesLimit-1), boundary),
+			clientapi.MaxSearchResourcesLimit: {boundary, "00000000-0000-0000-0000-000000000fff"},
 		}, &seen)
 		defer server.Close()
 		storeRemoteContext(server.URL)
@@ -267,8 +266,8 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 		result, err := remoteSearchInsights("status=resolved", "all", insightSearchUnlimited)
 
 		Expect(err).ToNot(HaveOccurred())
-		Expect(result.Items).To(HaveLen(query.MaxSearchResourcesLimit + 1))
-		Expect(distinctIDs(result.Items)).To(HaveLen(query.MaxSearchResourcesLimit + 1))
+		Expect(result.Items).To(HaveLen(clientapi.MaxSearchResourcesLimit + 1))
+		Expect(distinctIDs(result.Items)).To(HaveLen(clientapi.MaxSearchResourcesLimit + 1))
 	})
 
 	ginkgo.It("stops at an explicit limit and reports the result as limited", func() {
@@ -344,11 +343,11 @@ var _ = ginkgo.Describe("faro catalog insights", func() {
 	// a duplicate, so without a guard the loop never terminates.
 	ginkgo.It("fails rather than looping when the server ignores offset", func() {
 		var seen []string
-		page := ids(0, query.MaxSearchResourcesLimit)
+		page := ids(0, clientapi.MaxSearchResourcesLimit)
 		server := insightPageServer(map[int][]string{
-			0:                                 page,
-			query.MaxSearchResourcesLimit:     page,
-			2 * query.MaxSearchResourcesLimit: page,
+			0:                                     page,
+			clientapi.MaxSearchResourcesLimit:     page,
+			2 * clientapi.MaxSearchResourcesLimit: page,
 		}, &seen)
 		defer server.Close()
 		storeRemoteContext(server.URL)

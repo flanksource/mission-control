@@ -13,7 +13,7 @@ import (
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/clicky/formatters"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/clientcmd"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -194,7 +194,7 @@ var _ = ginkgo.Describe("faro access detail views", func() {
 	})
 
 	ginkgo.It("fails loudly when no Mission Control context is configured", func() {
-		Expect(clientcmd.SaveConfig(&clientcmd.MCConfig{})).To(Succeed())
+		Expect(mccontext.SaveConfig(&mccontext.MCConfig{})).To(Succeed())
 
 		_, _, err := accessClient()
 

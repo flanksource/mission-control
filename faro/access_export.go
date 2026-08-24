@@ -12,7 +12,7 @@ import (
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/clientcmd"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	"github.com/flanksource/incident-commander/sdk"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -315,7 +315,7 @@ func unattributedGrants(entries []RegisterIdentity, grants []sdk.AccessGrant) ma
 // accessContextName names the Mission Control context this export came from, so
 // the consuming register can cite its provenance without being told separately.
 func accessContextName() (string, error) {
-	cfg, err := clientcmd.LoadConfig()
+	cfg, err := mccontext.LoadConfig()
 	if err != nil {
 		return "", err
 	}
