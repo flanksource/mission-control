@@ -3,11 +3,10 @@ import {
   Icon,
   type ClickyCommandRuntime,
   type ClickyResolvedCommand,
-  type RenderLink,
 } from "@flanksource/clicky-ui";
 import { EntityExplorerApp } from "@flanksource/clicky-ui/rpc";
 import { MissionControlLogo } from "@flanksource/icons/mi";
-import { Link, Navigate, NavLink, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, Navigate, NavLink, Route, Routes, useNavigate, useParams } from "react-router-dom";
 import { apiClient } from "./api";
 import { CatalogSidebar } from "./CatalogSidebar";
 import { TypeView } from "./TypeView";
@@ -17,13 +16,7 @@ import { CommandPalette, CommandPaletteButton } from "./CommandPalette";
 import { PlaybookBrowser } from "./playbooks/PlaybookBrowser";
 import { SettingsBrowser } from "./settings/SettingsBrowser";
 import { SettingsMenu } from "./settings/SettingsMenu";
-import { UI_BASE, routerPathFromHref } from "./navigation";
-
-const renderLink: RenderLink = ({ to, className, children, title, key }) => (
-  <Link key={key} to={routerPathFromHref(to)} className={className} title={title}>
-    {children}
-  </Link>
-);
+import { AppRouterProvider, UI_BASE, routerPathFromHref } from "./navigation";
 
 export function App() {
   const navigate = useNavigate();
@@ -45,84 +38,86 @@ export function App() {
   );
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
-      <CommandPalette
-        open={commandPaletteOpen}
-        onOpenChange={setCommandPaletteOpen}
-        onNavigate={navigateTo}
-      />
-      <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-muted/30">
-        <Link to="/" className="flex h-14 items-center border-b border-border px-4 hover:bg-accent/40">
-          <MissionControlLogo square={false} size={36} title="Mission Control" className="w-auto" />
-        </Link>
-        <div className="min-h-0 flex-1 overflow-auto">
-          <div className="border-b border-border p-2">
-            <div className="mb-2">
-              <CommandPaletteButton onClick={() => setCommandPaletteOpen(true)} />
+    <AppRouterProvider>
+      <div className="flex h-screen w-screen overflow-hidden bg-background text-foreground">
+        <CommandPalette
+          open={commandPaletteOpen}
+          onOpenChange={setCommandPaletteOpen}
+          onNavigate={navigateTo}
+        />
+        <aside className="flex w-72 shrink-0 flex-col border-r border-border bg-muted/30">
+          <Link to="/" className="flex h-14 items-center border-b border-border px-4 hover:bg-accent/40">
+            <MissionControlLogo square={false} size={36} title="Mission Control" className="w-auto" />
+          </Link>
+          <div className="min-h-0 flex-1 overflow-auto">
+            <div className="border-b border-border p-2">
+              <div className="mb-2">
+                <CommandPaletteButton onClick={() => setCommandPaletteOpen(true)} />
+              </div>
+              <SidebarButton
+                to="/access/users"
+                icon="lucide:user"
+                label="Access Users"
+              />
+              <SidebarButton
+                to="/access/groups"
+                icon="lucide:users"
+                label="Access Groups"
+              />
+              <SidebarButton
+                to="/playbooks"
+                icon="lucide:book-open-check"
+                label="Playbooks"
+              />
+              <SidebarButton
+                to="/settings/scrapers"
+                icon="lucide:radar"
+                label="Scrapers"
+              />
+              <SidebarButton
+                to="/settings/scrape-plugins"
+                icon="lucide:plug-zap"
+                label="Scrape Plugins"
+              />
             </div>
-            <SidebarButton
-              to="/access/users"
-              icon="lucide:user"
-              label="Access Users"
-            />
-            <SidebarButton
-              to="/access/groups"
-              icon="lucide:users"
-              label="Access Groups"
-            />
-            <SidebarButton
-              to="/playbooks"
-              icon="lucide:book-open-check"
-              label="Playbooks"
-            />
-            <SidebarButton
-              to="/settings/scrapers"
-              icon="lucide:radar"
-              label="Scrapers"
-            />
-            <SidebarButton
-              to="/settings/scrape-plugins"
-              icon="lucide:plug-zap"
-              label="Scrape Plugins"
-            />
+            <CatalogSidebar />
           </div>
-          <CatalogSidebar />
-        </div>
-        <div className="flex flex-col gap-density-2 border-t border-border p-2">
-          <NavLink
-            to="/explorer"
-            className={({ isActive }) => [
-              "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              isActive
-                ? "bg-accent text-accent-foreground"
-                : "text-foreground/80 hover:bg-accent hover:text-accent-foreground",
-            ].join(" ")}
-          >
-            <Icon name="lucide:database-zap" className="h-4 w-4 shrink-0 text-muted-foreground" />
-            <span>API Explorer</span>
-          </NavLink>
-          <SettingsMenu />
-        </div>
-      </aside>
+          <div className="flex flex-col gap-density-2 border-t border-border p-2">
+            <NavLink
+              to="/explorer"
+              className={({ isActive }) => [
+                "flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                isActive
+                  ? "bg-accent text-accent-foreground"
+                  : "text-foreground/80 hover:bg-accent hover:text-accent-foreground",
+              ].join(" ")}
+            >
+              <Icon name="lucide:database-zap" className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <span>API Explorer</span>
+            </NavLink>
+            <SettingsMenu />
+          </div>
+        </aside>
 
-      <main className="min-h-0 min-w-0 flex-1 overflow-auto">
-        <Routes>
-          <Route index element={<Home />} />
-          <Route path="type/:configType" element={<TypeRoute />} />
-          <Route path="item/:id" element={<ItemRoute commandRuntime={commandRuntime} />} />
-          <Route path="access/:mode" element={<AccessRoute />} />
-          <Route path="access/:mode/:id" element={<AccessRoute />} />
-          <Route path="playbooks" element={<PlaybookBrowser mode="list" />} />
-          <Route path="playbooks/runs" element={<PlaybookBrowser mode="runs" />} />
-          <Route path="playbooks/runs/:runId" element={<PlaybookRunRoute />} />
-          <Route path="settings/scrapers" element={<SettingsScrapersRoute />} />
-          <Route path="settings/scrapers/:scraperId" element={<SettingsScrapersRoute />} />
-          <Route path="settings/scrape-plugins" element={<SettingsBrowser mode="scrape-plugins" />} />
-          <Route path="explorer/*" element={<ExplorerRoute />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </main>
-    </div>
+        <main className="min-h-0 min-w-0 flex-1 overflow-auto">
+          <Routes>
+            <Route index element={<Home />} />
+            <Route path="type/:configType" element={<TypeRoute />} />
+            <Route path="item/:id" element={<ItemRoute commandRuntime={commandRuntime} />} />
+            <Route path="access/:mode" element={<AccessRoute />} />
+            <Route path="access/:mode/:id" element={<AccessRoute />} />
+            <Route path="playbooks" element={<PlaybookBrowser mode="list" />} />
+            <Route path="playbooks/runs" element={<PlaybookBrowser mode="runs" />} />
+            <Route path="playbooks/runs/:runId" element={<PlaybookRunRoute />} />
+            <Route path="settings/scrapers" element={<SettingsScrapersRoute />} />
+            <Route path="settings/scrapers/:scraperId" element={<SettingsScrapersRoute />} />
+            <Route path="settings/scrape-plugins" element={<SettingsBrowser mode="scrape-plugins" />} />
+            <Route path="explorer/*" element={<ExplorerRoute />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </main>
+      </div>
+    </AppRouterProvider>
   );
 }
 
@@ -161,16 +156,7 @@ function SettingsScrapersRoute() {
 }
 
 function ExplorerRoute() {
-  const location = useLocation();
-  const pathname = `${UI_BASE}${location.pathname}`;
-  return (
-    <EntityExplorerApp
-      client={apiClient}
-      pathname={pathname}
-      renderLink={renderLink}
-      basePath={`${UI_BASE}/explorer`}
-    />
-  );
+  return <EntityExplorerApp client={apiClient} basePath={`${UI_BASE}/explorer`} />;
 }
 
 function SidebarButton({
