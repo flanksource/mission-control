@@ -2,6 +2,11 @@ package sdk
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/flanksource/duty/models"
@@ -38,6 +43,32 @@ type CatalogChangeDetail struct {
 	CreatedBy         *uuid.UUID           `json:"created_by,omitempty"`
 	Config            *CatalogChangeConfig `json:"config,omitempty"`
 	Artifacts         []map[string]any     `json:"artifacts,omitempty"`
+}
+
+// CatalogChange is a config-scoped row from catalog_changes.
+type CatalogChange struct {
+	ID                string         `json:"id"`
+	ConfigID          string         `json:"config_id"`
+	Name              *string        `json:"name,omitempty"`
+	Type              *string        `json:"type,omitempty"`
+	ConfigClass       *string        `json:"config_class,omitempty"`
+	ChangeType        string         `json:"change_type"`
+	Severity          string         `json:"severity,omitempty"`
+	Source            string         `json:"source,omitempty"`
+	Summary           string         `json:"summary,omitempty"`
+	CreatedAt         *time.Time     `json:"created_at,omitempty"`
+	ExternalCreatedBy *string        `json:"external_created_by,omitempty"`
+	Details           map[string]any `json:"details,omitempty"`
+	Patches           any            `json:"patches,omitempty"`
+	Diff              *string        `json:"diff,omitempty"`
+	Count             int            `json:"count,omitempty"`
+}
+
+type CatalogChangeOptions struct {
+	ChangeTypes []string
+	Sources     []string
+	Since       *time.Time
+	Limit       int
 }
 
 type CatalogInsightDetail struct {
@@ -158,7 +189,32 @@ func (c *Client) GetCatalogChange(ctx context.Context, id string) (*CatalogChang
 	return &out, nil
 }
 
-// GetCatalogInsight fetches full details for a catalog insight.
+// ListCatalogChanges returns config-scoped history from catalog_changes. The
+// exact total lets projection callers fail rather than silently producing a
+// partial audit history.
+func (c *Client) ListCatalogChanges(ctx context.Context, opts CatalogChangeOptions) ([]CatalogChange, int, error) {
+	params := url.Values{}
+	params.Set("select", "*")
+	params.Set("order", "created_at.desc")
+	if len(opts.ChangeTypes) > 0 {
+		params.Set("change_type", inList(opts.ChangeTypes))
+	}
+	if len(opts.Sources) > 0 {
+		params.Set("source", inList(opts.Sources))
+	}
+	if opts.Since != nil {
+		params.Set("created_at", "gte."+opts.Since.UTC().Format(time.RFC3339))
+	}
+	if opts.Limit > 0 {
+		params.Set("limit", strconv.Itoa(opts.Limit))
+	}
+
+	var out []CatalogChange
+	total, err := c.pgGet(ctx, "catalog_changes", params, &out)
+	return out, total, err
+}
+
+// GetCatalogInsight fetches full details for a catalog insight from PostgREST.
 func (c *Client) GetCatalogInsight(ctx context.Context, id string) (*CatalogInsightDetail, error) {
 	insight, err := c.leanClient().GetCatalogInsight(ctx, id)
 	if err != nil {

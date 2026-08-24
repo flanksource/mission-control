@@ -23,12 +23,11 @@ func pgGetAccess[T any](ctx context.Context, client *Client, table string, param
 	total := 0
 	totalKnown := true
 	for _, batch := range batches {
-		var page []T
-		batchTotal, err := client.pgGet(ctx, table, batch, &page)
+		batchRows, batchTotal, err := pgGetAccessBatch[T](ctx, client, table, batch)
 		if err != nil {
 			return nil, 0, err
 		}
-		rows = append(rows, page...)
+		rows = append(rows, batchRows...)
 		if batchTotal < 0 {
 			totalKnown = false
 		} else {
@@ -46,6 +45,37 @@ func pgGetAccess[T any](ctx context.Context, client *Client, table string, param
 		total = -1
 	}
 	return rows, total, nil
+}
+
+func pgGetAccessBatch[T any](ctx context.Context, client *Client, table string, params url.Values) ([]T, int, error) {
+	requestedLimit, _ := strconv.Atoi(params.Get("limit"))
+	rows := make([]T, 0)
+	total := -1
+	for {
+		pageParams := cloneValues(params)
+		if len(rows) > 0 {
+			pageParams.Set("offset", strconv.Itoa(len(rows)))
+			pageParams.Set("limit", strconv.Itoa(requestedLimit-len(rows)))
+		}
+		var page []T
+		pageTotal, err := client.pgGet(ctx, table, pageParams, &page)
+		if err != nil {
+			return nil, 0, err
+		}
+		if total >= 0 && pageTotal >= 0 && pageTotal != total {
+			return nil, 0, fmt.Errorf("%s total changed from %d to %d while paging", table, total, pageTotal)
+		}
+		if total < 0 {
+			total = pageTotal
+		}
+		rows = append(rows, page...)
+		if requestedLimit == 0 || total < 0 || len(rows) >= min(requestedLimit, total) {
+			return rows, total, nil
+		}
+		if len(page) == 0 {
+			return nil, 0, fmt.Errorf("%s returned no rows at offset %d before reported total %d", table, len(rows), total)
+		}
+	}
 }
 
 func batchAccessParams(params url.Values) ([]url.Values, error) {
