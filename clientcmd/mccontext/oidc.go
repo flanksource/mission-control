@@ -1,17 +1,18 @@
-package clientcmd
+package mccontext
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty"
 	"github.com/flanksource/incident-commander/auth/oidcclient"
 )
 
-func oidcServerCandidates(server string) []string {
+// OIDCServerCandidates lists the URLs worth attempting provider discovery
+// against: a server recorded as the frontend's /api path publishes its
+// well-known document at the root too.
+func OIDCServerCandidates(server string) []string {
 	server = strings.TrimRight(server, "/")
 	candidates := []string{server}
 	if strings.HasSuffix(server, "/api") {
@@ -20,19 +21,20 @@ func oidcServerCandidates(server string) []string {
 	return uniqueStrings(candidates)
 }
 
-func oidcTokenExpiring(tokens *oidcclient.Tokens) bool {
+// OIDCTokenExpiring reports whether a token set is unusable or about to be.
+func OIDCTokenExpiring(tokens *oidcclient.Tokens) bool {
 	if tokens == nil {
 		return false
 	}
 	return tokens.AccessToken == "" || (!tokens.ExpiresAt.IsZero() && time.Until(tokens.ExpiresAt) < time.Minute)
 }
 
-// discoverOIDCEndpoints resolves the provider metadata for a server. Unlike the
+// DiscoverOIDCEndpoints resolves the provider metadata for a server. Unlike the
 // grant itself, discovery is idempotent and safe to attempt against every
 // candidate — it spends nothing.
-func discoverOIDCEndpoints(server string) (*oidcclient.Discovery, error) {
+func DiscoverOIDCEndpoints(server string) (*oidcclient.Discovery, error) {
 	var lastErr error
-	for _, candidate := range oidcServerCandidates(server) {
+	for _, candidate := range OIDCServerCandidates(server) {
 		endpoints, err := oidcclient.Discover(strings.TrimRight(candidate, "/") + "/.well-known/openid-configuration")
 		if err == nil {
 			return endpoints, nil
@@ -51,7 +53,7 @@ func contextTokenEndpoint(cfg *MCConfig, mcCtx *MCContext) (string, error) {
 		return mcCtx.Endpoints.TokenEndpoint, nil
 	}
 
-	endpoints, err := discoverOIDCEndpoints(mcCtx.Server)
+	endpoints, err := DiscoverOIDCEndpoints(mcCtx.Server)
 	if err != nil {
 		return "", err
 	}
