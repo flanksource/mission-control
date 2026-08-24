@@ -10,12 +10,14 @@ import (
 	stdhttp "net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/flanksource/commons/http"
 	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/pkg/httpobservability"
+	internalretry "github.com/flanksource/incident-commander/sdk/internal/retry"
 )
 
 var (
@@ -45,6 +47,7 @@ type Client struct {
 	*http.Client
 	serverURL     string
 	tokenProvider TokenProvider
+	retry         internalretry.Policy
 }
 
 func New(serverURL, token string, opts ...ClientOption) *Client {
@@ -65,16 +68,26 @@ func NewWithAuthHeader(serverURL, authHeader string, opts ...ClientOption) *Clie
 	if authHeader != "" {
 		client = client.Header("Authorization", authHeader)
 	}
-	out := &Client{Client: httpobservability.Apply(client), serverURL: strings.TrimRight(serverURL, "/")}
+	out := &Client{Client: client, serverURL: strings.TrimRight(serverURL, "/")}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(out)
 		}
 	}
+	if out.retry.Retries > 0 {
+		out.Client = out.Client.Use(internalretry.Middleware(out.retry))
+	}
+	out.Client = httpobservability.Apply(out.Client)
 	if out.tokenProvider != nil {
 		out.Client = out.Client.Use(tokenProviderMiddleware(out.tokenProvider))
 	}
 	return out
+}
+
+func WithRetry(retries int, delay time.Duration) ClientOption {
+	return func(c *Client) {
+		c.retry = internalretry.Policy{Retries: retries, Delay: delay}
+	}
 }
 
 func WithTokenProvider(provider TokenProvider) ClientOption {
@@ -209,6 +222,10 @@ func newServerError(statusCode int, body []byte) *ServerError {
 	err.Public = payload.Public
 	err.Stacktrace = payload.Stacktrace
 	return err
+}
+
+func NewServerError(statusCode int, body []byte) *ServerError {
+	return newServerError(statusCode, body)
 }
 
 func stringifyServerErrorField(value any) string {

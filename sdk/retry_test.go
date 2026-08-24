@@ -28,7 +28,8 @@ var (
 const (
 	readPost   = "/resources/search"
 	writePost  = "/playbook/run"
-	mountedGet = "/api/resources/abc"
+	catalogID  = "3a96d327-2a6b-4a3a-9b2a-1f0f6b6b6b6b"
+	mountedGet = "/api/resources/" + catalogID
 )
 
 var _ = ginkgo.Describe("retry policy", func() {
@@ -112,7 +113,7 @@ var _ = ginkgo.Describe("client retry", func() {
 		defer server.Close()
 
 		_, err := New(server.URL, "tok", WithRetry(3, time.Millisecond)).
-			GetCatalogItem(context.Background(), "abc")
+			GetCatalogItem(context.Background(), catalogID)
 
 		Expect(err).To(HaveOccurred())
 		Expect(seen.Load()).To(Equal(int32(1)))
@@ -140,7 +141,7 @@ var _ = ginkgo.Describe("client retry", func() {
 		defer server.Close()
 
 		_, err := New(server.URL, "tok", WithRetry(2, time.Millisecond)).
-			GetCatalogItem(context.Background(), "abc")
+			GetCatalogItem(context.Background(), catalogID)
 
 		Expect(err).To(HaveOccurred())
 		Expect(seen.Load()).To(Equal(int32(3)))
@@ -162,7 +163,7 @@ var _ = ginkgo.Describe("client retry", func() {
 		defer server.Close()
 
 		item, err := New(server.URL, "tok", WithRetry(3, time.Millisecond)).
-			GetCatalogItem(context.Background(), "abc")
+			GetCatalogItem(context.Background(), catalogID)
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(*item.Name).To(Equal("my-config"))
@@ -192,7 +193,7 @@ var _ = ginkgo.Describe("client retry", func() {
 
 		started := time.Now()
 		// A delay long enough that finishing quickly can only mean the wait was interrupted.
-		_, err := New(server.URL, "tok", WithRetry(3, 30*time.Second)).GetCatalogItem(ctx, "abc")
+		_, err := New(server.URL, "tok", WithRetry(3, 30*time.Second)).GetCatalogItem(ctx, catalogID)
 
 		Expect(err).To(HaveOccurred())
 		Expect(time.Since(started)).To(BeNumerically("<", 5*time.Second))
@@ -205,7 +206,7 @@ var _ = ginkgo.Describe("client retry", func() {
 
 		started := time.Now()
 		_, err := New(server.URL, "tok", WithRetry(0, 30*time.Second)).
-			GetCatalogItem(context.Background(), "abc")
+			GetCatalogItem(context.Background(), catalogID)
 
 		Expect(err).To(HaveOccurred())
 		Expect(seen.Load()).To(Equal(int32(1)))
@@ -229,7 +230,7 @@ var _ = ginkgo.Describe("client retry", func() {
 			WithRetry(3, time.Millisecond),
 			WithUserAgent("mission-control-cli/test"),
 			WithAccept("application/json"),
-		).GetCatalogItem(context.Background(), "abc")
+		).GetCatalogItem(context.Background(), catalogID)
 
 		Expect(err).ToNot(HaveOccurred())
 		Expect(agent).To(Equal("mission-control-cli/test"))
@@ -240,7 +241,7 @@ var _ = ginkgo.Describe("client retry", func() {
 		server, seen := serving(unavailable)
 		defer server.Close()
 
-		_, err := New(server.URL, "tok").GetCatalogItem(context.Background(), "abc")
+		_, err := New(server.URL, "tok").GetCatalogItem(context.Background(), catalogID)
 
 		Expect(err).To(HaveOccurred())
 		Expect(seen.Load()).To(Equal(int32(1)))

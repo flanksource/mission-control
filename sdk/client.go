@@ -15,17 +15,19 @@ import (
 
 	icapi "github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/clientapi"
+	"github.com/flanksource/incident-commander/pkg/httpobservability"
 	lean "github.com/flanksource/incident-commander/sdk/client"
+	internalretry "github.com/flanksource/incident-commander/sdk/internal/retry"
 )
 
 var (
-	// ErrHTMLResponse is returned when the server responded with HTML on a JSON
-	// endpoint, such as when a frontend or ingress handled the request.
-	ErrHTMLResponse = errors.New("server returned HTML instead of JSON")
-
-	// ErrNotFound is returned when a requested resource does not exist.
-	ErrNotFound = errors.New("not found")
+	ErrHTMLResponse = lean.ErrHTMLResponse
+	ErrNotFound     = lean.ErrNotFound
 )
+
+func newServerError(statusCode int, body []byte) *ServerError {
+	return lean.NewServerError(statusCode, body)
+}
 
 // IsNotFound reports whether err represents a missing resource.
 func IsNotFound(err error) bool {
@@ -42,6 +44,7 @@ type Client struct {
 	serverURL     string
 	tokenProvider TokenProvider
 	retry         RetryPolicy
+	lean          *lean.Client
 }
 
 func New(serverURL, token string, opts ...ClientOption) *Client {
@@ -54,30 +57,25 @@ func New(serverURL, token string, opts ...ClientOption) *Client {
 
 // NewWithAuthHeader returns a client using the provided Authorization header.
 func NewWithAuthHeader(serverURL, authHeader string, opts ...ClientOption) *Client {
-	leanClient := lean.NewWithAuthHeader(serverURL, authHeader)
-	out := &Client{
-		Client:    leanClient.Client,
-		serverURL: strings.TrimRight(serverURL, "/"),
-		lean:      leanClient,
+	client := http.NewClient().
+		BaseURL(serverURL).
+		Header("Content-Type", "application/json").
+		UserAgent("mission-control-cli").
+		RedirectPolicy(0)
+	if authHeader != "" {
+		client = client.Header("Authorization", authHeader)
 	}
-	// Options are read before the middleware stack is built, because retry has to be installed
-	// first: middlewares are applied last-registered-innermost, so the first one registered is the
-	// outermost, and only an outermost retry sees a whole attempt. Do not also set RetryStrategy on
-	// this client — commons would then run its own retry loop inside this one.
-	out := &Client{Client: client, serverURL: strings.TrimRight(serverURL, "/")}
+	out := &Client{Client: client, serverURL: strings.TrimRight(serverURL, "/"), lean: lean.New(serverURL, "")}
 	for _, opt := range opts {
 		if opt != nil {
 			opt(out)
 		}
 	}
-	if out.retry.enabled() {
-		out.Client = out.Client.Use(retryMiddleware(out.retry))
+	if out.retry.Retries > 0 {
+		out.Client = out.Client.Use(internalretry.Middleware(out.retry))
 	}
-	// Inside retry, so each attempt is traced and captured as its own request rather than being
-	// collapsed into one entry that hides how many were made.
 	out.Client = httpobservability.Apply(out.Client)
 	if out.tokenProvider != nil {
-		// Innermost, so a token refreshed between attempts is picked up by the next one.
 		out.Client = out.Client.Use(tokenProviderMiddleware(out.tokenProvider))
 	}
 	out.lean.Client = out.Client

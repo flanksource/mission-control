@@ -2,11 +2,8 @@ package sdk
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/flanksource/duty/models"
@@ -142,15 +139,6 @@ func (c *Client) GetCatalogItem(ctx context.Context, id string) (*models.ConfigI
 	item, err := c.leanClient().GetCatalogItem(ctx, id)
 	if err != nil {
 		return nil, err
-	}
-	if !r.IsOK() {
-		body, _ := r.AsString()
-		if looksLikeHTML(r.Header.Get("Content-Type"), body) {
-			return nil, ErrHTMLResponse
-		}
-		// newServerError rather than fmt.Errorf: formatting the status into a string discards it,
-		// which makes IsNotFound blind to a 404 the server was explicit about.
-		return nil, newServerError(r.StatusCode, []byte(strings.TrimSpace(body)))
 	}
 	var out models.ConfigItem
 	if err := convertJSON(item, &out); err != nil {
