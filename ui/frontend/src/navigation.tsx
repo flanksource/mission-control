@@ -1,5 +1,10 @@
-import { Link, type LinkProps } from "react-router-dom";
-import type { AnchorHTMLAttributes, ReactNode } from "react";
+import { Link, useLocation, useNavigate, type LinkProps } from "react-router-dom";
+import { useMemo, type AnchorHTMLAttributes, type ReactNode } from "react";
+import {
+  RouterProvider,
+  type RenderLink,
+  type RouterAdapter,
+} from "@flanksource/clicky-ui/rpc";
 
 export const UI_BASE = "/ui";
 
@@ -32,4 +37,29 @@ export function AppLink({ href, children, ...props }: AppLinkProps) {
       {children}
     </Link>
   );
+}
+
+export const renderLink: RenderLink = ({ to, className, children, title, key }) => (
+  <Link key={key} to={routerPathFromHref(to)} className={className} title={title}>
+    {children}
+  </Link>
+);
+
+// clicky-ui nav surfaces read routing through RouterContext; this bridges it to
+// react-router, translating between /ui-prefixed hrefs and router paths.
+export function AppRouterProvider({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const adapter = useMemo<RouterAdapter>(
+    () => ({
+      pathname: `${UI_BASE}${location.pathname}`,
+      renderLink,
+      navigate: (to, opts) =>
+        navigate(routerPathFromHref(to), { replace: opts?.replace }),
+    }),
+    [location.pathname, navigate],
+  );
+
+  return <RouterProvider adapter={adapter}>{children}</RouterProvider>;
 }
