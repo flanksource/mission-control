@@ -8,7 +8,7 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/incident-commander/clientapi"
-	"github.com/flanksource/incident-commander/clientcmd"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
@@ -146,7 +146,7 @@ var CatalogChangeGet = &cobra.Command{
 }
 
 func remoteSearchChanges(searchQuery string, limit int) ([]catalogChangeSearchHit, error) {
-	client, err := clientcmd.RemoteClient()
+	client, err := mccontext.RemoteClient()
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +181,7 @@ func remoteSearchChanges(searchQuery string, limit int) ([]catalogChangeSearchHi
 }
 
 func remoteSearchRelatedChanges(opts catalogChangeSearchOptions) ([]catalogChangeSearchHit, error) {
-	client, err := clientcmd.RemoteClient()
+	client, err := mccontext.RemoteClient()
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +221,7 @@ func remoteSearchRelatedChanges(opts catalogChangeSearchOptions) ([]catalogChang
 }
 
 func remoteGetChange(id string) (any, error) {
-	client, err := clientcmd.RemoteClient()
+	client, err := mccontext.RemoteClient()
 	if err != nil {
 		return nil, err
 	}

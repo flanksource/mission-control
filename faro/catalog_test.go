@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 
 	"github.com/flanksource/incident-commander/clientapi"
-	"github.com/flanksource/incident-commander/clientcmd"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -83,9 +83,9 @@ func catalogSearchServer(expectedPath string) *httptest.Server {
 }
 
 func storeRemoteContext(serverURL string) {
-	Expect(clientcmd.SaveConfig(&clientcmd.MCConfig{
+	Expect(mccontext.SaveConfig(&mccontext.MCConfig{
 		CurrentContext: "test",
-		Contexts: []clientcmd.MCContext{{
+		Contexts: []mccontext.MCContext{{
 			Name:   "test",
 			Server: serverURL,
 			Token:  "token",
