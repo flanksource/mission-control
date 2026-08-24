@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"time"
 
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -36,7 +37,7 @@ var _ = ginkgo.Describe("whoami command", func() {
 		}))
 		defer server.Close()
 
-		report := probeAuth(context.TODO(), &MCContext{
+		report := probeAuth(context.TODO(), &mccontext.MCContext{
 			Name:   "test",
 			Server: server.URL,
 			Token:  "test-token",

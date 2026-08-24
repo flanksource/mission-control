@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/clientapi"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/spf13/cobra"
 )
@@ -93,8 +94,8 @@ func isExistingFile(path string) bool {
 	return err == nil && !stat.IsDir()
 }
 
-func currentAPIContext(cmd *cobra.Command) (*MCContext, error) {
-	cfg, err := LoadConfig()
+func currentAPIContext(cmd *cobra.Command) (*mccontext.MCContext, error) {
+	cfg, err := mccontext.LoadConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -110,19 +111,19 @@ func currentAPIContext(cmd *cobra.Command) (*MCContext, error) {
 			return nil, err
 		}
 		cfg.SetContext(*mcCtx)
-		if err := SaveConfig(cfg); err != nil {
+		if err := mccontext.SaveConfig(cfg); err != nil {
 			return nil, err
 		}
 	}
 	return mcCtx, nil
 }
 
-func playbookAPIClient(cmd *cobra.Command) (*MCContext, *sdk.Client, error) {
+func playbookAPIClient(cmd *cobra.Command) (*mccontext.MCContext, *sdk.Client, error) {
 	mcCtx, err := currentAPIContext(cmd)
 	if err != nil {
 		return nil, nil, err
 	}
-	return mcCtx, NewAPIClient(mcCtx), nil
+	return mcCtx, mccontext.NewAPIClient(mcCtx), nil
 }
 
 func listRemotePlaybooks(cmd *cobra.Command, opts sdk.PlaybookListOptions) ([]clientapi.PlaybookListItem, error) {

@@ -1,30 +1,18 @@
 package clientcmd
 
 import (
-	"time"
-
 	"github.com/spf13/cobra"
 
-	"github.com/flanksource/incident-commander/sdk"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 )
 
-// Defaults are set here rather than only in the flag registration because the plugin cache is
-// populated before cobra parses anything, and it would otherwise read a zero policy.
-var (
-	retriesFlag    = 3
-	retryDelayFlag = time.Second
-)
-
-// registerRetryFlags attaches --retries and --retry-delay to the given root command. Called once
-// at init() time, alongside the other global client flags.
+// registerRetryFlags binds --retries and --retry-delay straight onto the client
+// policy. Called once at init() time, alongside the other global client flags.
+// The policy itself lives in mccontext, which owns client construction and is
+// read before cobra parses anything.
 func registerRetryFlags(root *cobra.Command) {
-	root.PersistentFlags().IntVar(&retriesFlag, "retries", retriesFlag,
+	root.PersistentFlags().IntVar(&mccontext.RetryAttempts, "retries", mccontext.RetryAttempts,
 		"Number of additional attempts for a request that fails transiently; 0 disables retry")
-	root.PersistentFlags().DurationVar(&retryDelayFlag, "retry-delay", retryDelayFlag,
+	root.PersistentFlags().DurationVar(&mccontext.RetryDelay, "retry-delay", mccontext.RetryDelay,
 		"Fixed delay between retry attempts")
-}
-
-// retryOption is the one place the CLI's flags become a client policy.
-func retryOption() sdk.ClientOption {
-	return sdk.WithRetry(retriesFlag, retryDelayFlag)
 }
