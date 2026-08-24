@@ -13,13 +13,14 @@ import (
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/clientapi"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/spf13/cobra"
 )
 
 const playbookCacheFile = "playbooks.json"
 
-func contextPlaybookCacheDir(mc *MCContext) string {
+func contextPlaybookCacheDir(mc *mccontext.MCContext) string {
 	return filepath.Join(contextCacheDir(mc), "playbooks")
 }
 

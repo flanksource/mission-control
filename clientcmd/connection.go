@@ -7,6 +7,7 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/incident-commander/clientapi"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -28,8 +29,8 @@ type LocalConnectionOps interface {
 // browserGetConnection loads a connection remotely when an API context is set,
 // otherwise via the local DB implementation.
 func browserGetConnection(name, namespace string) (*clientapi.Connection, error) {
-	if mc, ok := ContextHasAPI(); ok {
-		return NewAPIClient(mc).GetConnection(name, namespace)
+	if mc, ok := mccontext.ContextHasAPI(); ok {
+		return mccontext.NewAPIClient(mc).GetConnection(name, namespace)
 	}
 	if LocalConnections == nil {
 		return nil, errNoLocalConnections
@@ -40,8 +41,8 @@ func browserGetConnection(name, namespace string) (*clientapi.Connection, error)
 // browserSaveConnection saves a connection remotely when an API context is set,
 // otherwise via the local DB implementation.
 func browserSaveConnection(conn *clientapi.Connection) error {
-	if mc, ok := ContextHasAPI(); ok {
-		return NewAPIClient(mc).SaveConnection(conn)
+	if mc, ok := mccontext.ContextHasAPI(); ok {
+		return mccontext.NewAPIClient(mc).SaveConnection(conn)
 	}
 	if LocalConnections == nil {
 		return errNoLocalConnections
@@ -383,7 +384,7 @@ func runConnectionAdd(flags *ConnectionFlags) error {
 		return fmt.Errorf("failed to build connection: %w", err)
 	}
 
-	if mcCtx, ok := ContextHasAPI(); ok {
+	if mcCtx, ok := mccontext.ContextHasAPI(); ok {
 		return runConnectionAddViaAPI(mcCtx, flags, &conn)
 	}
 	if LocalConnections == nil {
@@ -392,8 +393,8 @@ func runConnectionAdd(flags *ConnectionFlags) error {
 	return LocalConnections.AddViaDB(flags, &conn)
 }
 
-func runConnectionAddViaAPI(mcCtx *MCContext, flags *ConnectionFlags, conn *clientapi.Connection) error {
-	client := NewAPIClient(mcCtx)
+func runConnectionAddViaAPI(mcCtx *mccontext.MCContext, flags *ConnectionFlags, conn *clientapi.Connection) error {
+	client := mccontext.NewAPIClient(mcCtx)
 
 	existing, err := client.GetConnection(flags.Name, flags.Namespace)
 	if err != nil {
