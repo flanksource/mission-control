@@ -16,6 +16,8 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/spf13/cobra"
+
+	"github.com/flanksource/incident-commander/clientcmd"
 )
 
 // joinTagSelectors flattens the tag slice into a comma-separated
@@ -178,7 +180,7 @@ type catalogTypeFilter struct{}
 func (catalogTypeFilter) Key() string   { return "type" }
 func (catalogTypeFilter) Label() string { return "Type" }
 func (catalogTypeFilter) Lookup(opts *catalogListOpts) (map[string]api.Textable, error) {
-	return echoFilterLookup(opts.Type), nil
+	return clientcmd.EchoFilterLookup(opts.Type), nil
 }
 func (catalogTypeFilter) Options(_ catalogListOpts) map[string]api.Textable { return nil }
 
@@ -187,7 +189,7 @@ type catalogStatusFilter struct{}
 func (catalogStatusFilter) Key() string   { return "status" }
 func (catalogStatusFilter) Label() string { return "Status" }
 func (catalogStatusFilter) Lookup(opts *catalogListOpts) (map[string]api.Textable, error) {
-	return echoFilterLookup(opts.Status), nil
+	return clientcmd.EchoFilterLookup(opts.Status), nil
 }
 func (catalogStatusFilter) Options(_ catalogListOpts) map[string]api.Textable { return nil }
 
@@ -196,7 +198,7 @@ type catalogHealthFilter struct{}
 func (catalogHealthFilter) Key() string   { return "health" }
 func (catalogHealthFilter) Label() string { return "Health" }
 func (catalogHealthFilter) Lookup(opts *catalogListOpts) (map[string]api.Textable, error) {
-	return echoFilterLookup(opts.Health), nil
+	return clientcmd.EchoFilterLookup(opts.Health), nil
 }
 func (catalogHealthFilter) Options(_ catalogListOpts) map[string]api.Textable {
 	return map[string]api.Textable{
@@ -222,22 +224,6 @@ func (catalogTagFilter) Lookup(opts *catalogListOpts) (map[string]api.Textable, 
 	return out, nil
 }
 func (catalogTagFilter) Options(_ catalogListOpts) map[string]api.Textable { return nil }
-
-func echoFilterLookup(value string) map[string]api.Textable {
-	if value == "" {
-		return nil
-	}
-	parts := strings.Split(value, ",")
-	out := make(map[string]api.Textable, len(parts))
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		out[p] = api.Text{Content: p}
-	}
-	return out
-}
 
 // completeConfigIDs provides shell completion for the <id> argument by
 // running a short list via the default options.

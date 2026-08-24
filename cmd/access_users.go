@@ -10,6 +10,7 @@ import (
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 
+	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/flanksource/incident-commander/db"
 )
 
@@ -46,9 +47,9 @@ func getAccessUser(id string, flags map[string]string) (any, error) {
 		return nil, err
 	}
 
-	all := boolFlag(flags, "all", false)
-	showAccess := all || boolFlag(flags, "access", true)
-	showGroups := all || boolFlag(flags, "groups", true)
+	all := clientcmd.BoolFlag(flags, "all", false)
+	showAccess := all || clientcmd.BoolFlag(flags, "access", true)
+	showGroups := all || clientcmd.BoolFlag(flags, "groups", true)
 
 	result := &AccessUserGetResult{User: *user}
 	if showAccess {
@@ -162,7 +163,7 @@ type accessUserNameFilter struct{}
 func (accessUserNameFilter) Key() string   { return "name" }
 func (accessUserNameFilter) Label() string { return "Name" }
 func (accessUserNameFilter) Lookup(opts *accessUserListOpts) (map[string]api.Textable, error) {
-	return echoFilterLookup(opts.Name), nil
+	return clientcmd.EchoFilterLookup(opts.Name), nil
 }
 func (accessUserNameFilter) Options(_ accessUserListOpts) map[string]api.Textable { return nil }
 
@@ -171,7 +172,7 @@ type accessUserTypeFilter struct{}
 func (accessUserTypeFilter) Key() string   { return "type" }
 func (accessUserTypeFilter) Label() string { return "Type" }
 func (accessUserTypeFilter) Lookup(opts *accessUserListOpts) (map[string]api.Textable, error) {
-	return echoFilterLookup(opts.Type), nil
+	return clientcmd.EchoFilterLookup(opts.Type), nil
 }
 func (accessUserTypeFilter) Options(_ accessUserListOpts) map[string]api.Textable { return nil }
 
