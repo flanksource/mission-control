@@ -6,7 +6,7 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/incident-commander/clientapi"
-	"github.com/flanksource/incident-commander/clientcmd"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	"github.com/spf13/cobra"
 )
 
@@ -46,7 +46,7 @@ Examples:
 // remoteSearch runs the grammar search against the remote server and mirrors
 // the compact or full result shape selected by `catalog list`.
 func remoteSearch(searchQuery, agent string, limit int, full bool) ([]catalogItem, error) {
-	client, err := clientcmd.RemoteClient()
+	client, err := mccontext.RemoteClient()
 	if err != nil {
 		return nil, err
 	}

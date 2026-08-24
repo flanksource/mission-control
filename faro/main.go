@@ -11,6 +11,7 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/spf13/cobra"
 )

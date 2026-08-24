@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/duty/connection"
 	"github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
@@ -50,6 +51,78 @@ type ProjectionQuery struct {
 	IdentityAccess *ProjectionIdentityAccessQuery `json:"identityAccess,omitempty" yaml:"identityAccess,omitempty"`
 	Changes        *ProjectionChangesQuery        `json:"changes,omitempty" yaml:"changes,omitempty"`
 	Insights       *ProjectionInsightsQuery       `json:"insights,omitempty" yaml:"insights,omitempty"`
+	HTTP           *ProjectionHTTPQuery           `json:"http,omitempty" yaml:"http,omitempty"`
+}
+
+// ProjectionHTTPQuery reads rows from an HTTP API instead of the Mission Control
+// catalog, for facts no scraper records.
+//
+// It is the one source kind that does not produce rows of its own. The APIs worth
+// projecting are addressed per resource — GitHub has no "languages for every
+// repository" endpoint, only /repos/{owner}/{repo}/languages — so the query reads
+// the entries spec.target.select already picks out and issues one request per
+// entry, with that entry bound to the URL template. Each response becomes that
+// entry's source row, which makes spec.match structural rather than a lookup.
+//
+// The request is declared with duty's HTTPConnection rather than fields of our
+// own: it is the shape the rest of the ecosystem already uses for "an HTTP
+// endpoint in YAML", it keeps credentials in EnvVars instead of literals in a
+// register repository, and it is already marked template:"true".
+type ProjectionHTTPQuery struct {
+	connection.HTTPConnection `json:",inline" yaml:",inline"`
+
+	// Method defaults to GET.
+	Method string `json:"method,omitempty" yaml:"method,omitempty"`
+
+	// Select is a JSONPath into the response body, for payloads that nest the
+	// object worth projecting. Omit it to use the whole body.
+	Select string `json:"select,omitempty" yaml:"select,omitempty"`
+
+	// Accepted bounds the wait when an API answers 202 while it computes the
+	// answer. GitHub's statistics endpoints do this on a cold cache. Exhausting
+	// the wait yields no row for that entry — never a zero, which would state
+	// that a repository had no commits.
+	Accepted ProjectionHTTPAccepted `json:"accepted,omitempty" yaml:"accepted,omitempty"`
+}
+
+type ProjectionHTTPAccepted struct {
+	Attempts int           `json:"attempts,omitempty" yaml:"attempts,omitempty"`
+	Wait     time.Duration `json:"wait,omitempty" yaml:"wait,omitempty"`
+}
+
+func (q ProjectionHTTPQuery) validate() error {
+	if strings.TrimSpace(q.URL) == "" {
+		return fmt.Errorf("spec.source.query.http.url is required")
+	}
+	if _, err := parseProjectionURLTemplate(q.URL); err != nil {
+		return fmt.Errorf("spec.source.query.http.url: %w", err)
+	}
+	if q.Accepted.Attempts < 0 {
+		return fmt.Errorf("spec.source.query.http.accepted.attempts must not be negative")
+	}
+
+	// HTTPConnection can express more than faro can honour. Every one of these
+	// needs the database- and Kubernetes-backed context that hydrates connections
+	// elsewhere, which faro does not have. Refusing them is the point: a
+	// projection that declared oauth and silently sent an unauthenticated request
+	// would fill a register with absent facts and look like a clean run.
+	unsupported := map[string]bool{
+		"connection": strings.TrimSpace(q.ConnectionName) != "",
+		"oauth":      !q.OAuth.IsEmpty(),
+		"awsSigV4":   q.AWSSigV4 != nil,
+		"tls.ca":     !q.TLS.CA.IsEmpty(),
+		"tls.cert":   !q.TLS.Cert.IsEmpty(),
+		"tls.key":    !q.TLS.Key.IsEmpty(),
+	}
+	for _, field := range []string{"connection", "oauth", "awsSigV4", "tls.ca", "tls.cert", "tls.key"} {
+		if unsupported[field] {
+			return fmt.Errorf(
+				"spec.source.query.http.%s is not supported: faro resolves credentials from the environment only, with no connection or secret store",
+				field,
+			)
+		}
+	}
+	return nil
 }
 
 type ProjectionInsightsQuery struct {
@@ -360,8 +433,20 @@ func (p Projection) validate() error {
 			return fmt.Errorf("spec.source.query.insights.limit must not be negative; omit it to project every matching insight")
 		}
 	}
+	if p.Spec.Source.Query.HTTP != nil {
+		queryCount++
+		if err := p.Spec.Source.Query.HTTP.validate(); err != nil {
+			return err
+		}
+		// The rows are the target's entries, so there is nothing to fan out over
+		// without one. Caught here rather than at apply time, where it would look
+		// like an empty API response.
+		if p.Spec.Target == nil {
+			return fmt.Errorf("spec.source.query.http requires spec.target; it issues one request per selected target entry")
+		}
+	}
 	if queryCount != 1 {
-		return fmt.Errorf("spec.source.query must contain exactly one of configs, identityAccess, changes, or insights")
+		return fmt.Errorf("spec.source.query must contain exactly one of configs, identityAccess, changes, insights, or http")
 	}
 
 	if p.Spec.Target == nil {

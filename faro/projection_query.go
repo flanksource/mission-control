@@ -11,7 +11,6 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/flanksource/incident-commander/sdk"
 )
 
@@ -43,14 +42,20 @@ func projectionSourceKind(projection Projection) string {
 		return "changes"
 	case query.Insights != nil:
 		return "insights"
+	case query.HTTP != nil:
+		return "http"
 	default:
 		return "no source"
 	}
 }
 
 func runProjectionQuery(projection Projection) (projectionSourceResult, error) {
+	// The http source never talks to Mission Control, so requiring a selected
+	// context would block projections that have nothing to do with the catalog.
+	// context.name is the only thing the context supplies, and an http projection
+	// that references it is free to fail on the empty string.
 	contextName, err := accessContextName()
-	if err != nil {
+	if err != nil && projection.Spec.Source.Query.HTTP == nil {
 		return projectionSourceResult{}, err
 	}
 	now := time.Now().UTC()
@@ -69,6 +74,8 @@ func runProjectionQuery(projection Projection) (projectionSourceResult, error) {
 		result.Items, err = queryChangeProjection(*query.Changes, now)
 	case query.Insights != nil:
 		result.Items, err = queryInsightProjection(*query.Insights)
+	case query.HTTP != nil:
+		result.Items, result.Warnings, err = queryHTTPProjection(projection, *query.HTTP)
 	default:
 		err = fmt.Errorf("projection %s contains no source query", projection.Metadata.Name)
 	}
@@ -79,7 +86,7 @@ func runProjectionQuery(projection Projection) (projectionSourceResult, error) {
 }
 
 func queryConfigProjection(config ProjectionConfigsQuery) ([]map[string]any, error) {
-	client, err := clientcmd.RemoteClient()
+	client, err := fullRemoteClient()
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +201,15 @@ func queryInsightProjection(config ProjectionInsightsQuery) ([]map[string]any, e
 		if err != nil {
 			return nil, err
 		}
-		mapped["properties_by_name"] = projectionPropertiesByName(detail.Properties)
+		var properties types.Properties
+		data, err := json.Marshal(detail.Properties)
+		if err != nil {
+			return nil, fmt.Errorf("catalog insight %s properties: %w", detail.ID, err)
+		}
+		if err := json.Unmarshal(data, &properties); err != nil {
+			return nil, fmt.Errorf("catalog insight %s properties: %w", detail.ID, err)
+		}
+		mapped["properties_by_name"] = projectionPropertiesByName(&properties)
 		items = append(items, mapped)
 	}
 	sort.Slice(items, func(i, j int) bool { return fmt.Sprint(items[i]["id"]) < fmt.Sprint(items[j]["id"]) })
@@ -233,7 +248,7 @@ func queryIdentityAccessProjection(config ProjectionIdentityAccessQuery, project
 }
 
 func queryChangeProjection(config ProjectionChangesQuery, now time.Time) ([]map[string]any, error) {
-	client, err := clientcmd.RemoteClient()
+	client, err := fullRemoteClient()
 	if err != nil {
 		return nil, err
 	}

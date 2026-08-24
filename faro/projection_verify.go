@@ -25,8 +25,18 @@ func verifyProjection(projection Projection) error {
 	if err != nil {
 		return err
 	}
-	if _, _, _, err := projectionTarget(body, projection.Spec.Target.Select); err != nil {
+	_, _, entries, err := projectionTarget(body, projection.Spec.Target.Select)
+	if err != nil {
 		return fmt.Errorf("projection %s target: %w", projection.Metadata.Name, err)
+	}
+	// An http source addresses each entry by templating its fields, so a URL naming
+	// a field the register does not carry is checkable without a single request —
+	// which is the whole point of verify. Left to apply time it would surface as
+	// every entry failing at once, against a live API.
+	if query := projection.Spec.Source.Query.HTTP; query != nil {
+		if err := verifyProjectionHTTPURL(*query, entries); err != nil {
+			return fmt.Errorf("projection %s spec.source.query.http.url: %w", projection.Metadata.Name, err)
+		}
 	}
 	entryPath := strings.TrimSuffix(projection.Spec.Target.Select, "[*]") + "[0]"
 	for path := range projection.Spec.Set {

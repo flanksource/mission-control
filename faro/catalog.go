@@ -7,7 +7,7 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/incident-commander/clientapi"
-	"github.com/flanksource/incident-commander/clientcmd"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -94,7 +94,7 @@ func joinTagSelectors(tags []string) string {
 // remoteList backs `catalog list`, returning lightweight search hits by default
 // and hydrating complete items only when requested.
 func remoteList(opts catalogListOpts) ([]catalogItem, error) {
-	client, err := clientcmd.RemoteClient()
+	client, err := mccontext.RemoteClient()
 	if err != nil {
 		return nil, err
 	}
@@ -199,7 +199,7 @@ func selectedResourceToConfigItem(s clientapi.SelectedResource) catalogItem {
 // remoteGet backs `catalog get <id>`. With --relationships it returns the
 // relationship tree; otherwise the full config item.
 func remoteGet(id string, flags map[string]string) (any, error) {
-	client, err := clientcmd.RemoteClient()
+	client, err := mccontext.RemoteClient()
 	if err != nil {
 		return nil, err
 	}

@@ -10,7 +10,7 @@ import (
 	"github.com/flanksource/clicky"
 	clickyapi "github.com/flanksource/clicky/api"
 	"github.com/flanksource/incident-commander/clientapi"
-	"github.com/flanksource/incident-commander/clientcmd"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/spf13/cobra"
 )
@@ -166,12 +166,12 @@ const insightSearchUnlimited = 0
 
 // searchInsightPage reads one page. `sort=id` gives the scan a stable total order, which
 // offset paging is meaningless without.
-func searchInsightPage(client *sdk.Client, searchQuery, agent string, size, offset int) ([]query.SelectedResource, error) {
+func searchInsightPage(client *sdk.Client, searchQuery, agent string, size, offset int) ([]clientapi.SelectedResource, error) {
 	paged := fmt.Sprintf("%s sort=id offset=%d", searchQuery, offset)
-	resp, err := client.SearchCatalog(context.Background(), query.SearchResourcesRequest{
+	resp, err := client.SearchCatalog(context.Background(), clientapi.SearchResourcesRequest{
 		Limit:      size,
 		Timestamps: true,
-		ConfigAnalysis: []types.ResourceSelector{{
+		ConfigAnalysis: []clientapi.ResourceSelector{{
 			Search: strings.TrimSpace(paged),
 			Agent:  agent,
 		}},
@@ -191,18 +191,18 @@ func searchInsightPage(client *sdk.Client, searchQuery, agent string, size, offs
 // fixed upstream.
 // Returns up to limit+1 rows: the extra row is what separates "exactly limit matches"
 // from "limit matches and more remain", and the caller truncates it away.
-func searchInsightIDs(client *sdk.Client, searchQuery, agent string, limit int) ([]query.SelectedResource, bool, error) {
+func searchInsightIDs(client *sdk.Client, searchQuery, agent string, limit int) ([]clientapi.SelectedResource, bool, error) {
 	want := insightSearchUnlimited
 	if limit > insightSearchUnlimited {
 		want = limit + 1
 	}
 
-	size := query.MaxSearchResourcesLimit
+	size := clientapi.MaxSearchResourcesLimit
 	if want > insightSearchUnlimited && want < size {
 		size = want
 	}
 
-	var selected []query.SelectedResource
+	var selected []clientapi.SelectedResource
 	seen := make(map[string]struct{})
 	for offset := 0; ; offset += size {
 		page, err := searchInsightPage(client, searchQuery, agent, size, offset)
@@ -256,7 +256,7 @@ func remoteSearchInsights(searchQuery, agent string, limit int) (*catalogInsight
 		return nil, fmt.Errorf("insight search %q sets %s; paging owns sort and offset, so remove it from the search expression", searchQuery, key)
 	}
 
-	client, err := clientcmd.RemoteClient()
+	client, err := mccontext.RemoteClient()
 	if err != nil {
 		return nil, err
 	}
@@ -335,7 +335,7 @@ func catalogInsightIssueIDs(detail sdk.CatalogInsightDetail) []string {
 }
 
 func remoteGetInsight(id string) (any, error) {
-	client, err := clientcmd.RemoteClient()
+	client, err := mccontext.RemoteClient()
 	if err != nil {
 		return nil, err
 	}

@@ -10,7 +10,6 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/flanksource/incident-commander/sdk"
 )
 
@@ -21,7 +20,7 @@ const accessConfigSearchLimit = 500
 // accessClient returns the remote client and a background context, the entry
 // point every access subcommand shares.
 func accessClient() (*sdk.Client, context.Context, error) {
-	client, err := clientcmd.RemoteClient()
+	client, err := fullRemoteClient()
 	if err != nil {
 		return nil, nil, err
 	}
