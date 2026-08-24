@@ -23,6 +23,7 @@ import (
 	"github.com/flanksource/incident-commander/auth/accesstoken"
 	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/flanksource/incident-commander/clientcmd"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/mail"
@@ -182,7 +183,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 }
 
 func applyContext() {
-	cfg, err := clientcmd.LoadConfig()
+	cfg, err := mccontext.LoadConfig()
 	if err != nil {
 		return
 	}

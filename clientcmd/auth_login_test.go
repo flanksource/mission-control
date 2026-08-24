@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flanksource/incident-commander/auth/oidcclient"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/spf13/cobra"
@@ -111,10 +112,10 @@ func expectOIDCContext(serverURL, token string) {
 	Expect(ctx.OIDC.AccessToken).To(Equal(token))
 }
 
-func expectContext(serverURL string) *MCContext {
-	cfg, err := LoadConfig()
+func expectContext(serverURL string) *mccontext.MCContext {
+	cfg, err := mccontext.LoadConfig()
 	Expect(err).ToNot(HaveOccurred())
-	name := ServerToContextName(serverURL)
+	name := mccontext.ServerToContextName(serverURL)
 	Expect(cfg.CurrentContext).To(Equal(name))
 	ctx := cfg.GetContext(name)
 	Expect(ctx).ToNot(BeNil())

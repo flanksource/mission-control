@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/flanksource/clicky"
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	"github.com/spf13/cobra"
 )
 
@@ -37,7 +38,7 @@ var (
 // runConnectionTestFromDB tests a saved connection. With an API context it runs
 // remotely; otherwise it delegates to the local DB implementation when present.
 func runConnectionTestFromDB(name, namespace string, overrides *ConnectionFlags) (any, error) {
-	if mcCtx, ok := ContextHasAPI(); ok {
+	if mcCtx, ok := mccontext.ContextHasAPI(); ok {
 		return runConnectionTestViaAPI(mcCtx, name, namespace)
 	}
 	if LocalConnections == nil {
@@ -46,12 +47,12 @@ func runConnectionTestFromDB(name, namespace string, overrides *ConnectionFlags)
 	return LocalConnections.TestSaved(name, namespace, overrides)
 }
 
-func runConnectionTestViaAPI(mcCtx *MCContext, name, namespace string) (any, error) {
+func runConnectionTestViaAPI(mcCtx *mccontext.MCContext, name, namespace string) (any, error) {
 	return callConnectionTestAPI(mcCtx, name, namespace)
 }
 
-func callConnectionTestAPI(mcCtx *MCContext, name, namespace string) (any, error) {
-	client := NewAPIClient(mcCtx)
+func callConnectionTestAPI(mcCtx *mccontext.MCContext, name, namespace string) (any, error) {
+	client := mccontext.NewAPIClient(mcCtx)
 
 	conn, err := client.GetConnection(name, namespace)
 	if err != nil {

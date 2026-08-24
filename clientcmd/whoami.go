@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/incident-commander/clientcmd/mccontext"
 	sdk "github.com/flanksource/incident-commander/sdk/client"
 	"github.com/spf13/cobra"
 )
@@ -91,7 +92,7 @@ type LocalWhoamiOps interface {
 var LocalWhoami LocalWhoamiOps
 
 func runWhoami(cmd *cobra.Command, _ []string) error {
-	cfg, err := LoadConfig()
+	cfg, err := mccontext.LoadConfig()
 	if err != nil {
 		return err
 	}
@@ -99,10 +100,10 @@ func runWhoami(cmd *cobra.Command, _ []string) error {
 	mcCtx := cfg.CurrentMCContext()
 	report := whoamiReport{
 		Context: whoamiContext{
-			ConfigPath: configPath(),
+			ConfigPath: mccontext.ConfigPath(),
 		},
 	}
-	if contextFlag != "" {
+	if mccontext.ContextFlag != "" {
 		report.Context.SelectedBy = "--context"
 	} else if cfg.CurrentContext != "" {
 		report.Context.SelectedBy = "current_context"
@@ -152,7 +153,7 @@ func whoamiStatusError(report whoamiReport) error {
 	return fmt.Errorf("whoami status failed: %s", strings.Join(failures, " "))
 }
 
-func resolvedDBConnection(mcCtx *MCContext) string {
+func resolvedDBConnection(mcCtx *mccontext.MCContext) string {
 	if mcCtx != nil && mcCtx.DB != "" {
 		return mcCtx.DB
 	}
@@ -182,7 +183,14 @@ func probeDatabase(conn string) whoamiDatabase {
 	return probe
 }
 
-func probeAuth(parent gocontext.Context, mcCtx *MCContext, dbConn string, refresh bool) whoamiAuth {
+func inspectAccessToken(conn, token string) *accessTokenStatus {
+	if LocalWhoami == nil || conn == "" || token == "" {
+		return nil
+	}
+	return LocalWhoami.InspectAccessToken(conn, token)
+}
+
+func probeAuth(parent gocontext.Context, mcCtx *mccontext.MCContext, dbConn string, refresh bool) whoamiAuth {
 	out := whoamiAuth{Status: "skipped"}
 	if mcCtx == nil {
 		out.Error = "no current context"
@@ -208,7 +216,7 @@ func probeAuth(parent gocontext.Context, mcCtx *MCContext, dbConn string, refres
 		out.TokenExpires = formatTime(mcCtx.OIDC.ExpiresAt)
 		out.TokenTTL = formatTTL(mcCtx.OIDC.ExpiresAt)
 		switch {
-		case !oidcTokenExpiring(mcCtx.OIDC):
+		case !mccontext.OIDCTokenExpiring(mcCtx.OIDC):
 			out.RefreshStatus = "not needed"
 		case mcCtx.OIDC.RefreshToken == "":
 			out.RefreshStatus = "unavailable: no refresh token"
@@ -218,7 +226,7 @@ func probeAuth(parent gocontext.Context, mcCtx *MCContext, dbConn string, refres
 			// --refresh spends the single-use refresh token, so it is opt-in:
 			// a diagnostic must not be able to consume the credential it is
 			// diagnosing.
-			if err := refreshContextToken(mcCtx); err != nil {
+			if err := mccontext.RefreshContextToken(mcCtx); err != nil {
 				out.RefreshStatus = "failed: " + err.Error()
 			} else {
 				token = mcCtx.AccessToken()
@@ -316,7 +324,7 @@ func callWhoami(parent gocontext.Context, server, token string) (map[string]any,
 func whoamiAttemptOnce(parent gocontext.Context, base, token string) (*sdk.WhoamiResponse, int, error) {
 	ctx, cancel := gocontext.WithTimeout(parent, whoamiEndpointTimeout)
 	defer cancel()
-	return NewAPIClientForServer(base, token).Whoami(ctx)
+	return mccontext.NewAPIClientForServer(base, token).Whoami(ctx)
 }
 
 // whoamiAttemptsError names each endpoint tried alongside its own failure. A single-candidate
