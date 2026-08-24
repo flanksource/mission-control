@@ -14,21 +14,41 @@ import (
 
 	"github.com/charmbracelet/huh"
 	"github.com/flanksource/incident-commander/auth/oidcclient"
+	"github.com/flanksource/incident-commander/clientcmd/credentials"
 	"github.com/spf13/cobra"
 )
 
 type MCContext struct {
-	Name       string             `json:"name"`
-	Server     string             `json:"server,omitempty"`
-	DB         string             `json:"db,omitempty"`
-	Token      string             `json:"token,omitempty"`
-	OIDC       *oidcclient.Tokens `json:"oidc,omitempty"`
-	Properties map[string]string  `json:"properties,omitempty"`
+	Name      string `json:"name"`
+	Server    string `json:"server,omitempty"`
+	DB        string `json:"db,omitempty"`
+	Endpoints *oidcclient.Discovery `json:"endpoints,omitempty"`
+	Properties map[string]string    `json:"properties,omitempty"`
+
+	// Token, OIDC and NeedsReauth are secrets and live in the credential store,
+	// never in config.json. LoadConfig hydrates them; SaveConfig writes them
+	// back.
+	Token       string             `json:"-"`
+	OIDC        *oidcclient.Tokens `json:"-"`
+	NeedsReauth string             `json:"-"`
 }
 
 type MCConfig struct {
-	CurrentContext string      `json:"current_context"`
-	Contexts       []MCContext `json:"contexts"`
+	CurrentContext string `json:"current_context"`
+
+	// CredentialStore is chosen once, at login, and honoured verbatim
+	// afterwards. Re-detecting it at runtime would silently write a plaintext
+	// refresh token for a user who asked for the keychain.
+	CredentialStore string `json:"credential_store,omitempty"`
+
+	Contexts []MCContext `json:"contexts"`
+
+	// hydrated is what the credential store held when this config was loaded,
+	// and loadedStore is which store that was. SaveConfig diffs against them to
+	// write only the credentials that changed, to delete the ones whose context
+	// is gone, and to move every credential across when the backend changes.
+	hydrated    map[string]*credentials.Credential
+	loadedStore string
 }
 
 var contextFlag string
@@ -50,6 +70,8 @@ func ProfileDir(namespace, name string) string {
 	return filepath.Join(configDir(), "profiles", namespace+"_"+name)
 }
 
+// LoadConfig reads config.json and hydrates each context's secrets from the
+// credential store, migrating any secrets still inline in config.json first.
 func LoadConfig() (*MCConfig, error) {
 	data, err := os.ReadFile(configPath())
 	if err != nil {
@@ -62,18 +84,48 @@ func LoadConfig() (*MCConfig, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %w", err)
 	}
+	inline, err := inlineCredentials(data)
+	if err != nil {
+		return nil, err
+	}
+	if err := hydrateCredentials(&cfg, inline); err != nil {
+		return nil, err
+	}
+	if len(inline) > 0 {
+		migrateInlineCredentials(&cfg)
+	}
 	return &cfg, nil
 }
 
+// SaveConfig persists config.json and any credential that differs from what the
+// store held at load. It is the only save path: a caller that mutates a
+// context's secret and saves must not be able to lose it silently.
 func SaveConfig(cfg *MCConfig) error {
-	if err := os.MkdirAll(filepath.Dir(configPath()), 0700); err != nil {
+	store, err := cfg.store()
+	if err != nil {
+		return err
+	}
+	previous, err := cfg.previousStore()
+	if err != nil {
+		return err
+	}
+	return credentials.WithLock(configDir(), func() error {
+		if err := cfg.syncCredentials(store, previous); err != nil {
+			return err
+		}
+		return saveConfigLocked(cfg)
+	})
+}
+
+func saveConfigLocked(cfg *MCConfig) error {
+	if err := os.MkdirAll(configDir(), 0700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(configPath(), data, 0600)
+	return credentials.WriteAtomic(configPath(), data)
 }
 
 func (c *MCConfig) GetContext(name string) *MCContext {
@@ -138,8 +190,21 @@ func ContextHasAPI() (*MCContext, bool) {
 	return ctx, ctx != nil && ctx.Server != "" && ctx.HasAuth()
 }
 
+// HasAuth reports whether the context holds a credential that can still work.
+// A refresh token the server has already rejected does not count — see
+// NeedsReauth.
 func (c *MCContext) HasAuth() bool {
-	return c != nil && (c.AccessToken() != "" || (c.OIDC != nil && c.OIDC.RefreshToken != ""))
+	if c == nil || c.NeedsReauth != "" {
+		return false
+	}
+	return c.AccessToken() != "" || (c.OIDC != nil && c.OIDC.RefreshToken != "")
+}
+
+// ReauthError is the one message a user with a dead credential should see: what
+// is wrong, and the exact command that fixes it.
+func (c *MCContext) ReauthError() error {
+	return fmt.Errorf("context %q needs re-authentication (%s)\n  run: %s auth login --server %s",
+		c.Name, c.NeedsReauth, filepath.Base(os.Args[0]), c.Server)
 }
 
 func (c *MCContext) AccessToken() string {
@@ -157,6 +222,7 @@ func (c *MCContext) SetOIDCTokens(tokens *oidcclient.Tokens) {
 		return
 	}
 	c.OIDC = cloneOIDCTokens(tokens)
+	c.NeedsReauth = ""
 	if tokens != nil && tokens.AccessToken != "" {
 		c.Token = ""
 	}
@@ -369,6 +435,7 @@ Examples:
 			if !cmd.Flags().Changed("token") {
 				ctx.Token = ""
 				ctx.OIDC = nil
+				ctx.NeedsReauth = ""
 			}
 		}
 		if cmd.Flags().Changed("db-url") {
@@ -377,6 +444,10 @@ Examples:
 		if cmd.Flags().Changed("token") {
 			ctx.Token = contextAddToken
 			ctx.OIDC = nil
+			ctx.NeedsReauth = ""
+		}
+		if err := ChooseCredentialStore(cfg, ""); err != nil {
+			return err
 		}
 		if ctx.Server != "" && !cmd.Flags().Changed("token") && !ctx.HasAuth() {
 			if err := EnsureContextToken(cmd, &ctx, cmd.ErrOrStderr()); err != nil {
@@ -418,9 +489,10 @@ func EnsureContextToken(cmd *cobra.Command, ctx *MCContext, status io.Writer) er
 	var lastErr error
 	for _, loginServer := range oidcLoginServerCandidates(ctx.Server) {
 		fmt.Fprintf(status, "No token configured for context %q; starting OIDC login for %s\n", ctx.Name, loginServer)
-		tokens, err := oidcLogin(cmd, loginServer, status)
+		tokens, endpoints, err := oidcLogin(cmd, loginServer, status)
 		if err == nil {
 			ctx.SetOIDCTokens(tokens)
+			ctx.Endpoints = endpoints
 			return nil
 		}
 		lastErr = err
