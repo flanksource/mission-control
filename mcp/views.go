@@ -205,7 +205,7 @@ func viewRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 	// We send rows, then (panel meta, panel rows) as args to clicky.
 	// It produces a markdown table for each item.
 	contents := make([]any, 0, 1+len(panels)*2)
-	if args.Bool("withRows", false) {
+	if args.Bool("withRows", true) {
 		contents = append(contents, rows)
 	}
 	if args.Bool("withPanels", false) {
