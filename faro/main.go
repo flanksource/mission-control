@@ -78,6 +78,22 @@ func main() {
 	root := &cobra.Command{
 		Use:          "faro",
 		Short:        "Slim Mission Control client",
+		Long: `Faro is a slim client for inspecting and operating a remote Mission Control server.
+
+When troubleshooting a failed or unhealthy catalog config, start with its
+change history. Include related configs to correlate upstream and downstream
+changes around the failure, then inspect the relevant change in full:
+
+  faro catalog change search --config <config-id> --related all --soft
+  faro catalog change get <change-id>
+
+Use --soft to include cross-domain relationships, such as between a Git
+repository, Kubernetes deployment, and Postgres database, so commits, merges,
+migrations, deployments, and failures can be compared in one timeline. Without
+--soft, relationship traversal follows only direct parent-child relationships.
+
+Change search results are ordered newest first. Use "faro catalog search" to
+find a config ID and "faro catalog get" to inspect its current state.`,
 		SilenceUsage: true,
 	}
 
