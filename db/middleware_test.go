@@ -29,7 +29,7 @@ var _ = ginkgo.Describe("Transform Query to postgREST", ginkgo.Ordered, func() {
 			},
 			output: url.Values{
 				"change_type": []string{"eq=diff"},
-				"and":         []string{"(or=(config_type.ilike.Kubernetes::Pod,config_type.ilike.kubernetes::Deployment))"},
+				"and":         []string{"(or(config_type.ilike.Kubernetes::Pod,config_type.ilike.kubernetes::Deployment))"},
 			},
 		},
 		{
@@ -47,7 +47,7 @@ var _ = ginkgo.Describe("Transform Query to postgREST", ginkgo.Ordered, func() {
 				"role.filter": []string{"Owner*,*Reader,!Legacy*"},
 			},
 			output: url.Values{
-				"and": []string{"(or=(role.ilike.Owner*,role.ilike.*Reader),role.not.ilike.Legacy*)"},
+				"and": []string{"(or(role.ilike.Owner*,role.ilike.*Reader),role.not.ilike.Legacy*)"},
 			},
 		},
 		{
@@ -57,7 +57,7 @@ var _ = ginkgo.Describe("Transform Query to postgREST", ginkgo.Ordered, func() {
 				"user_type.filter": []string{"!Service*"},
 			},
 			output: url.Values{
-				"and": []string{"(or=(role.ilike.Owner,role.ilike.Reader),user_type.not.ilike.Service*)"},
+				"and": []string{"(or(role.ilike.Owner,role.ilike.Reader),user_type.not.ilike.Service*)"},
 			},
 		},
 		{

@@ -152,7 +152,7 @@ func postgrestMatchItemTerms(field string, values []string) ([]string, error) {
 
 	terms := make([]string, 0, len(negative)+1)
 	if len(positive) > 0 {
-		terms = append(terms, "or=("+strings.Join(positive, ",")+")")
+		terms = append(terms, "or("+strings.Join(positive, ",")+")")
 	}
 	return append(terms, negative...), nil
 }
