@@ -58,7 +58,7 @@ func (h *LoginHandler) ShowConsent(c echo.Context) error {
 
 	clientName := authRequest.ClientID
 	if metadata, err := decodeClientID(authRequest.ClientID); err == nil {
-		clientName = (&dynamicClient{id: authRequest.ClientID, metadata: metadata}).DisplayName()
+		clientName = (&metadataClient{id: authRequest.ClientID, metadata: metadata}).DisplayName()
 	}
 
 	var person models.Person

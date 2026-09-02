@@ -264,47 +264,46 @@ func IsKnownClient(clientID string) bool {
 	return clientID == ClientID || IsDynamicClient(clientID)
 }
 
-// dynamicClient is a public client reconstructed from a dynamically registered
-// client_id. It mirrors cliClient except that redirect URIs come from the
-// client_id itself.
-type dynamicClient struct {
+// metadataClient is a public client reconstructed from DCR or CIMD metadata.
+// It mirrors cliClient except that the metadata supplies its identity and redirects.
+type metadataClient struct {
 	id       string
 	metadata *clientMetadata
 }
 
-var _ op.Client = (*dynamicClient)(nil)
+var _ op.Client = (*metadataClient)(nil)
 
-func (c *dynamicClient) GetID() string                    { return c.id }
-func (c *dynamicClient) RedirectURIs() []string           { return c.metadata.RedirectURIs }
-func (c *dynamicClient) PostLogoutRedirectURIs() []string { return nil }
-func (c *dynamicClient) ApplicationType() op.ApplicationType {
+func (c *metadataClient) GetID() string                    { return c.id }
+func (c *metadataClient) RedirectURIs() []string           { return c.metadata.RedirectURIs }
+func (c *metadataClient) PostLogoutRedirectURIs() []string { return nil }
+func (c *metadataClient) ApplicationType() op.ApplicationType {
 	return op.ApplicationTypeNative
 }
-func (c *dynamicClient) AuthMethod() oidc.AuthMethod { return oidc.AuthMethodNone }
-func (c *dynamicClient) ResponseTypes() []oidc.ResponseType {
+func (c *metadataClient) AuthMethod() oidc.AuthMethod { return oidc.AuthMethodNone }
+func (c *metadataClient) ResponseTypes() []oidc.ResponseType {
 	return []oidc.ResponseType{oidc.ResponseTypeCode}
 }
-func (c *dynamicClient) GrantTypes() []oidc.GrantType {
+func (c *metadataClient) GrantTypes() []oidc.GrantType {
 	return []oidc.GrantType{oidc.GrantTypeCode, oidc.GrantTypeRefreshToken}
 }
-func (c *dynamicClient) LoginURL(id string) string { return "/oidc/login?auth_request_id=" + id }
-func (c *dynamicClient) AccessTokenType() op.AccessTokenType {
+func (c *metadataClient) LoginURL(id string) string { return "/oidc/login?auth_request_id=" + id }
+func (c *metadataClient) AccessTokenType() op.AccessTokenType {
 	return op.AccessTokenTypeJWT
 }
-func (c *dynamicClient) IDTokenLifetime() time.Duration { return time.Hour }
-func (c *dynamicClient) DevMode() bool                  { return false }
-func (c *dynamicClient) RestrictAdditionalIdTokenScopes() func(scopes []string) []string {
+func (c *metadataClient) IDTokenLifetime() time.Duration { return time.Hour }
+func (c *metadataClient) DevMode() bool                  { return false }
+func (c *metadataClient) RestrictAdditionalIdTokenScopes() func(scopes []string) []string {
 	return func(scopes []string) []string { return scopes }
 }
-func (c *dynamicClient) RestrictAdditionalAccessTokenScopes() func(scopes []string) []string {
+func (c *metadataClient) RestrictAdditionalAccessTokenScopes() func(scopes []string) []string {
 	return func(scopes []string) []string { return scopes }
 }
-func (c *dynamicClient) IsScopeAllowed(scope string) bool     { return true }
-func (c *dynamicClient) IDTokenUserinfoClaimsAssertion() bool { return false }
-func (c *dynamicClient) ClockSkew() time.Duration             { return 0 }
+func (c *metadataClient) IsScopeAllowed(scope string) bool     { return true }
+func (c *metadataClient) IDTokenUserinfoClaimsAssertion() bool { return false }
+func (c *metadataClient) ClockSkew() time.Duration             { return 0 }
 
 // DisplayName returns the name to show on the consent screen.
-func (c *dynamicClient) DisplayName() string {
+func (c *metadataClient) DisplayName() string {
 	if c.metadata.Name != "" {
 		return c.metadata.Name
 	}
