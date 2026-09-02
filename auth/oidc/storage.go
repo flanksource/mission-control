@@ -240,7 +240,7 @@ func (s *Storage) GetClientByClientID(_ gocontext.Context, clientID string) (op.
 	if err != nil {
 		return nil, fmt.Errorf("unknown client: %w", err)
 	}
-	return &dynamicClient{id: clientID, metadata: metadata}, nil
+	return &metadataClient{id: clientID, metadata: metadata}, nil
 }
 
 func (s *Storage) AuthorizeClientIDSecret(_ gocontext.Context, _, _ string) error {
