@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	gohttp "net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,6 +19,7 @@ import (
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/secret"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/types"
@@ -947,7 +950,57 @@ var _ = Describe("Playbook", Ordered, func() {
 	})
 
 	var _ = Describe("Secret Parameters", Ordered, func() {
-		XIt("should not leak secrets in action output", func() {
+		It("should not leak secrets in action output", func() {
+			// Run encrypts secret parameters before executing the playbook, so redaction cannot be
+			// tested without a configured secret keeper. This local KMS endpoint supplies that
+			// dependency without requiring AWS credentials or network access.
+			kmsServer := httptest.NewServer(gohttp.HandlerFunc(func(w gohttp.ResponseWriter, r *gohttp.Request) {
+				var input struct {
+					CiphertextBlob string `json:"CiphertextBlob"`
+					Plaintext      string `json:"Plaintext"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+					gohttp.Error(w, err.Error(), gohttp.StatusBadRequest)
+					return
+				}
+
+				var output map[string]string
+				switch r.Header.Get("X-Amz-Target") {
+				case "TrentService.Encrypt":
+					output = map[string]string{"CiphertextBlob": input.Plaintext}
+				case "TrentService.Decrypt":
+					output = map[string]string{"Plaintext": input.CiphertextBlob}
+				default:
+					gohttp.Error(w, "unsupported KMS operation", gohttp.StatusBadRequest)
+					return
+				}
+
+				w.Header().Set("Content-Type", "application/x-amz-json-1.1")
+				if err := json.NewEncoder(w).Encode(output); err != nil {
+					gohttp.Error(w, err.Error(), gohttp.StatusInternalServerError)
+				}
+			}))
+			DeferCleanup(kmsServer.Close)
+			Expect(os.Setenv("AWS_ENDPOINT_URL_KMS", kmsServer.URL)).To(Succeed())
+			DeferCleanup(os.Unsetenv, "AWS_ENDPOINT_URL_KMS")
+
+			kmsConnection := models.Connection{
+				ID:        uuid.New(),
+				Name:      "test-secret-keeper",
+				Namespace: "default",
+				Source:    models.SourceCRD,
+				Type:      models.ConnectionTypeAWSKMS,
+				Username:  "test",
+				Password:  "test",
+				Properties: types.JSONStringMap{
+					"keyID":  "test-key",
+					"region": "us-east-1",
+				},
+			}
+			Expect(DefaultContext.DB().Create(&kmsConnection).Error).To(Succeed())
+			secret.KMSConnection = "connection://default/test-secret-keeper"
+			DeferCleanup(func() { secret.KMSConnection = "" })
+
 			run := createAndRunWithSecretParams(DefaultContext.WithUser(&dummy.JohnDoe), "action-secret-params", RunParams{
 				ConfigID: lo.ToPtr(dummy.EKSCluster.ID),
 			}, "super_secret_value", models.PlaybookRunStatusCompleted)
