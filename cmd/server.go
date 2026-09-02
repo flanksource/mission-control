@@ -33,6 +33,7 @@ import (
 	"github.com/flanksource/incident-commander/mcp"
 	"github.com/flanksource/incident-commander/metrics"
 	"github.com/flanksource/incident-commander/notification"
+	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/plugin/machinery"
 	pluginReconciler "github.com/flanksource/incident-commander/plugin/reconciler"
 	"github.com/flanksource/incident-commander/upstream/tunnel"
@@ -41,7 +42,6 @@ import (
 	// register event handlers & echo routers
 	_ "github.com/flanksource/incident-commander/artifacts"
 	_ "github.com/flanksource/incident-commander/catalog"
-	_ "github.com/flanksource/incident-commander/playbook"
 	_ "github.com/flanksource/incident-commander/plugin/gateway"
 	_ "github.com/flanksource/incident-commander/shorturl"
 	_ "github.com/flanksource/incident-commander/snapshot"
@@ -343,6 +343,7 @@ func tableUpdatesHandler(ctx context.Context) {
 		case v := <-playbooksUpdateChan:
 			tgOperation, id := tableActivityPayload(v)
 			query.InvalidateCacheByID[models.Playbook](id)
+			playbook.PurgeEventCache()
 
 			if tgOperation == TGOPUpdate {
 				if err := rbac.ReloadPolicy(); err != nil {

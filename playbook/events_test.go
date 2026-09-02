@@ -55,6 +55,7 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 
 			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&playbook).Error
 			Expect(err).NotTo(HaveOccurred())
+			PurgeEventCache()
 		})
 
 		ginkgo.AfterAll(func() {
@@ -153,6 +154,7 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 
 			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&playbook).Error
 			Expect(err).NotTo(HaveOccurred())
+			PurgeEventCache()
 		})
 
 		ginkgo.It("update health to something else other than unhealthy", func() {

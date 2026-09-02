@@ -53,7 +53,7 @@ var eventToSpecEvent = map[string]PlaybookSpecEvent{
 }
 
 var (
-	eventPlaybooksCache = cache.New(time.Hour*1, time.Hour*1)
+	eventPlaybooksCache = cache.New(5*time.Minute, 10*time.Minute)
 
 	EventRing *events.EventRing
 )
@@ -436,6 +436,7 @@ func FindPlaybooksForEvent(ctx context.Context, eventClass, event string) ([]mod
 	return playbooks, nil
 }
 
-func clearEventPlaybookCache() {
+// PurgeEventCache clears cached event-to-playbook mappings.
+func PurgeEventCache() {
 	eventPlaybooksCache.Flush()
 }

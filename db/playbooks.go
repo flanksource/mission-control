@@ -221,7 +221,7 @@ func FindPlaybooksForComponent(ctx context.Context, component models.Component) 
 
 func FindPlaybooksForEvent(ctx context.Context, eventClass, event string) ([]models.Playbook, error) {
 	var playbooks []models.Playbook
-	query := fmt.Sprintf(`SELECT * FROM playbooks WHERE spec->'on'->'%s' @> '[{"event": "%s"}]'`, eventClass, event)
+	query := fmt.Sprintf(`SELECT * FROM playbooks WHERE deleted_at IS NULL AND spec->'on'->'%s' @> '[{"event": "%s"}]'`, eventClass, event)
 	if err := ctx.DB().Raw(query).Scan(&playbooks).Error; err != nil {
 		return nil, err
 	}
