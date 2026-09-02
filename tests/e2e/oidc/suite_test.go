@@ -100,6 +100,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	allocCtx, _ := chromedp.NewExecAllocator(context.Background(),
 		append(chromedp.DefaultExecAllocatorOptions[:],
 			chromedp.NoSandbox,
+			chromedp.WSURLReadTimeout(60*time.Second),
 		)...,
 	)
 	chromectx, chromeCanc = chromedp.NewContext(allocCtx)
