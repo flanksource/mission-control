@@ -29,7 +29,6 @@ import (
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
-	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/mcp"
 	"github.com/flanksource/incident-commander/metrics"
 	"github.com/flanksource/incident-commander/notification"
@@ -317,7 +316,6 @@ func tableUpdatesHandler(ctx context.Context) {
 	permissionGroupUpdateChan := notifyRouter.GetOrCreateChannel("permission_groups")
 	scopeUpdateChan := notifyRouter.GetOrCreateChannel("scopes")
 	teamMembersUpdateChan := notifyRouter.GetOrCreateChannel("team_members")
-	connectionsUpdateChan := notifyRouter.GetOrCreateChannel("connections")
 
 	// use a single job instance to maintain retention
 	pushPlaybookActionsJob := jobs.PushPlaybookActions(ctx)
@@ -446,9 +444,6 @@ func tableUpdatesHandler(ctx context.Context) {
 
 			// Invalidate view scope cache
 			views.FlushScopeCache()
-
-		case <-connectionsUpdateChan:
-			mail.FlushSMTPCache()
 		}
 	}
 }

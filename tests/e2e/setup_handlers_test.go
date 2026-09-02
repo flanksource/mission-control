@@ -26,7 +26,6 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/mail"
 )
 
 type fixtureContext struct {
@@ -157,7 +156,6 @@ func (h *smtpHandler) Handle(fctx *fixtureContext) {
 			},
 		}
 		Expect(db.PersistConnectionFromCRD(DefaultContext, h.conn)).To(Succeed())
-		mail.FlushSMTPCache()
 	})
 
 	h.backend.clear()
@@ -182,7 +180,6 @@ func (h *smtpHandler) Handle(fctx *fixtureContext) {
 }
 
 func (h *smtpHandler) Cleanup() {
-	mail.FlushSMTPCache()
 	if h.srv != nil {
 		_ = h.srv.Close()
 	}
