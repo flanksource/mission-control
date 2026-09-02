@@ -41,8 +41,7 @@ const (
 
 	dynamicClientIDPrefix = "dcr_"
 
-	// maxClientIDLength bounds the work decodeClientID will do for an
-	// unauthenticated caller.
+	// maxClientIDLength bounds metadata client identifiers from unauthenticated callers.
 	maxClientIDLength = 4096
 
 	maxRedirectURIs      = 10
@@ -51,13 +50,13 @@ const (
 	maxRegistrationBody  = 16 << 10
 )
 
-// clientMetadata is the subset of RFC 7591 client metadata that is carried
-// inside the client_id. Field names are kept short because they are encoded into
-// every authorization request.
+// clientMetadata is the normalized public-client metadata used by DCR and CIMD.
+// Its compact field names keep DCR client identifiers short.
 type clientMetadata struct {
-	Name         string   `json:"n,omitempty"`
-	RedirectURIs []string `json:"r"`
-	IssuedAt     int64    `json:"i,omitempty"`
+	Name         string           `json:"n,omitempty"`
+	RedirectURIs []string         `json:"r"`
+	IssuedAt     int64            `json:"i,omitempty"`
+	GrantTypes   []oidc.GrantType `json:"g,omitempty"`
 }
 
 // registrationRequest is the RFC 7591 client metadata document sent by clients.
@@ -259,9 +258,14 @@ func IsDynamicClient(clientID string) bool {
 	return err == nil
 }
 
+// IsMetadataClient reports whether clientID identifies a DCR or CIMD client.
+func IsMetadataClient(clientID string) bool {
+	return IsDynamicClient(clientID) || isClientIDMetadataDocument(clientID)
+}
+
 // IsKnownClient reports whether clientID names a client this provider issues tokens for.
 func IsKnownClient(clientID string) bool {
-	return clientID == ClientID || IsDynamicClient(clientID)
+	return clientID == ClientID || IsMetadataClient(clientID)
 }
 
 // metadataClient is a public client reconstructed from DCR or CIMD metadata.
@@ -284,6 +288,9 @@ func (c *metadataClient) ResponseTypes() []oidc.ResponseType {
 	return []oidc.ResponseType{oidc.ResponseTypeCode}
 }
 func (c *metadataClient) GrantTypes() []oidc.GrantType {
+	if len(c.metadata.GrantTypes) > 0 {
+		return append([]oidc.GrantType(nil), c.metadata.GrantTypes...)
+	}
 	return []oidc.GrantType{oidc.GrantTypeCode, oidc.GrantTypeRefreshToken}
 }
 func (c *metadataClient) LoginURL(id string) string { return "/oidc/login?auth_request_id=" + id }
