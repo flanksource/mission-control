@@ -1,12 +1,11 @@
 package oidc
 
-// Consent for dynamically registered clients.
+// Consent for DCR and CIMD clients.
 //
-// Registration is open, so anyone can mint a client_id whose redirect URI points
-// at a host they control and send a victim an authorization link on Mission
-// Control's own domain. PKCE does not help — the attacker is the client and
-// holds the verifier. The consent screen is the only point in the flow where a
-// human sees where the authorization code is about to be sent.
+// Client metadata is caller-controlled, so anyone can name a redirect URI they
+// control and send a victim an authorization link on Mission Control's domain.
+// PKCE does not help — the attacker is the client and holds the verifier. The
+// consent screen is where a human sees where the authorization code will be sent.
 //
 // The built-in mc-cli client skips consent: the user started it from their own
 // terminal and its redirect URIs are fixed at compile time.
@@ -18,6 +17,7 @@ import (
 	"net/url"
 	"strings"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/auth/oidc/static"
@@ -57,8 +57,17 @@ func (h *LoginHandler) ShowConsent(c echo.Context) error {
 	}
 
 	clientName := authRequest.ClientID
-	if metadata, err := decodeClientID(authRequest.ClientID); err == nil {
-		clientName = (&metadataClient{id: authRequest.ClientID, metadata: metadata}).DisplayName()
+	if IsMetadataClient(authRequest.ClientID) {
+		client, err := h.storage.GetClientByClientID(c.Request().Context(), authRequest.ClientID)
+		if err != nil {
+			return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+		}
+		if err := op.ValidateAuthReqRedirectURI(client, authRequest.RedirectURI, authRequest.GetResponseType()); err != nil {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "redirect URI is no longer registered"))
+		}
+		if namedClient, ok := client.(interface{ DisplayName() string }); ok {
+			clientName = namedClient.DisplayName()
+		}
 	}
 
 	var person models.Person
@@ -152,7 +161,7 @@ func (h *LoginHandler) denialRedirectURL(c echo.Context, authRequest *AuthReques
 }
 
 // completeLogin finishes an authorization once the user's identity is known,
-// diverting through the consent screen for dynamically registered clients.
+// diverting through the consent screen for metadata-backed clients.
 func (h *LoginHandler) completeLogin(c echo.Context, authRequestID, personID string) error {
 	if err := h.storage.SetAuthRequestSubject(authRequestID, personID); err != nil {
 		return err
