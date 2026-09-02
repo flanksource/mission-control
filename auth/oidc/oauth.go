@@ -71,17 +71,16 @@ func mountOAuthRoutes(e *echo.Echo, oidcIssuer string, providerHandler http.Hand
 	e.GET(oauthProtectedResourcePrefix, prmHandler)
 	e.GET(oauthProtectedResourcePrefix+"/*", prmHandler)
 
-	// The zitadel provider builds the discovery document but has no hook for
-	// registration_endpoint, so the response is augmented on the way out. The
-	// same document answers RFC 8414, which zitadel does not serve at all.
+	// The zitadel provider builds the discovery document but has no hook for MCP
+	// client registration capabilities, so the response is augmented on the way
+	// out. The same document answers RFC 8414, which zitadel does not serve at all.
 	metadata := authorizationServerMetadataHandler(providerHandler)
 	e.GET(openIDConfigurationPath, metadata)
 	e.GET(authorizationServerMetadataPath, metadata)
 	e.GET(authorizationServerMetadataPath+"/*", metadata)
 }
 
-// authorizationServerMetadataHandler delegates to the zitadel discovery handler
-// and injects registration_endpoint into the result.
+// authorizationServerMetadataHandler adds CIMD and DCR capabilities to discovery.
 func authorizationServerMetadataHandler(providerHandler http.Handler) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		req := c.Request().Clone(c.Request().Context())
@@ -109,6 +108,7 @@ func authorizationServerMetadataHandler(providerHandler http.Handler) echo.Handl
 			issuer = detectRequestOrigin(c, "")
 		}
 		doc["registration_endpoint"] = strings.TrimRight(issuer, "/") + RegistrationEndpoint
+		doc["client_id_metadata_document_supported"] = true
 
 		// Discovery documents are public and cookie-free; browser-based clients
 		// such as the MCP Inspector fetch them cross-origin.

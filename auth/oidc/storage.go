@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flanksource/duty"
@@ -44,22 +45,28 @@ func (p *publicKey) Key() any                           { return p.key }
 
 // Storage implements op.Storage backed by Postgres.
 type Storage struct {
-	ctx       context.Context
-	signer    *signingKey
-	issuerURL string
+	ctx                      context.Context
+	signer                   *signingKey
+	issuerURL                string
+	clientIDMetadataResolver *clientIDMetadataResolver
 }
 
 var _ op.Storage = (*Storage)(nil)
 
 func NewStorage(ctx context.Context, signer *signingKey, issuerURL string) *Storage {
-	return &Storage{ctx: ctx, signer: signer, issuerURL: issuerURL}
+	return &Storage{
+		ctx:                      ctx,
+		signer:                   signer,
+		issuerURL:                issuerURL,
+		clientIDMetadataResolver: newClientIDMetadataResolver(),
+	}
 }
 
 func (s *Storage) Health(_ gocontext.Context) error { return nil }
 
-// deriveResource reconstructs the fixed MCP audience for stateless dynamic clients.
+// deriveResource reconstructs the fixed MCP audience for metadata-backed clients.
 func (s *Storage) deriveResource(clientID string) string {
-	if IsDynamicClient(clientID) {
+	if IsMetadataClient(clientID) {
 		return MCPResourceURL(s.issuerURL)
 	}
 	return ""
@@ -231,12 +238,20 @@ func (s *Storage) KeySet(_ gocontext.Context) ([]op.Key, error) {
 	return result, nil
 }
 
-func (s *Storage) GetClientByClientID(_ gocontext.Context, clientID string) (op.Client, error) {
+func (s *Storage) GetClientByClientID(ctx gocontext.Context, clientID string) (op.Client, error) {
 	if clientID == ClientID {
 		return &cliClient{}, nil
 	}
 
-	metadata, err := decodeClientID(clientID)
+	if strings.HasPrefix(clientID, dynamicClientIDPrefix) {
+		metadata, err := decodeClientID(clientID)
+		if err != nil {
+			return nil, fmt.Errorf("unknown client: %w", err)
+		}
+		return &metadataClient{id: clientID, metadata: metadata}, nil
+	}
+
+	metadata, err := s.clientIDMetadataResolver.resolve(ctx, clientID)
 	if err != nil {
 		return nil, fmt.Errorf("unknown client: %w", err)
 	}
