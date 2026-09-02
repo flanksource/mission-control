@@ -26,7 +26,6 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
-	"github.com/flanksource/incident-commander/mail"
 )
 
 func TestNotifications(t *testing.T) {
@@ -249,7 +248,6 @@ func setupSystemSMTPConnection() {
 	}
 
 	Expect(db.PersistConnectionFromCRD(DefaultContext, systemSMTPConnection)).To(Succeed())
-	mail.FlushSMTPCache()
 }
 
 func cleanupSystemSMTPConnection() error {
@@ -257,7 +255,6 @@ func cleanupSystemSMTPConnection() error {
 		return nil
 	}
 
-	mail.FlushSMTPCache()
 	return DefaultContext.DB().
 		Where("name = ? AND type = ? AND deleted_at IS NULL", "system", models.ConnectionTypeEmail).
 		Delete(&models.Connection{}).
