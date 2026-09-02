@@ -36,7 +36,6 @@ func (t *playbookRunError) Error() string {
 
 // Pg Notify channels for run and action updates
 const (
-	pgNotifyPlaybookSpecUpdated   = "playbook_spec_updated"
 	pgNotifyPlaybookRunUpdates    = "playbook_run_updates"
 	pgNotifyPlaybookActionUpdates = "playbook_action_updates"
 )
@@ -129,24 +128,16 @@ func StartPlaybookConsumers(ctx context.Context) error {
 			runUpdatesPGNotifyChannel         = make(chan string)
 			actionUpdatesPGNotifyChannel      = make(chan string)
 			actionAgentUpdatesPGNotifyChannel = make(chan string)
-			playbookSpecUpdatedChannel        = make(chan string)
 		)
 
 		go func() {
 			err := pg.ListenMany(ctx,
-				pg.ChannelListener{Channel: pgNotifyPlaybookSpecUpdated, Receiver: playbookSpecUpdatedChannel},
 				pg.ChannelListener{Channel: pgNotifyPlaybookRunUpdates, Receiver: runUpdatesPGNotifyChannel},
 				pg.ChannelListener{Channel: pgNotifyPlaybookActionUpdates, Receiver: actionUpdatesPGNotifyChannel},
 				pg.ChannelListener{Channel: pgNotifyPlaybookActionUpdates, Receiver: actionAgentUpdatesPGNotifyChannel},
 			)
 			if err != nil {
 				shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to listen for postgres notifications: %v", err))
-			}
-		}()
-
-		go func() {
-			for range playbookSpecUpdatedChannel {
-				clearEventPlaybookCache()
 			}
 		}()
 
