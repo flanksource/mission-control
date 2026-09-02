@@ -2,7 +2,6 @@ package playbook
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
@@ -18,8 +17,7 @@ import (
 )
 
 var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
-	// TODO: Fix this
-	var _ = ginkgo.Describe("Config Events", ginkgo.Ordered, ginkgo.Pending, func() {
+	var _ = ginkgo.Describe("Config Events", ginkgo.Ordered, func() {
 		var playbook models.Playbook
 		var newConfigItems []string
 
@@ -30,7 +28,7 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 					PlaybookTriggerEvents: v1.PlaybookTriggerEvents{
 						Config: []v1.PlaybookTriggerEvent{
 							{
-								Filter: fmt.Sprintf("config.config_class == '%s'", models.ConfigClassPod),
+								Filter: "config.config_class == 'DatabaseRole'",
 								Event:  "created",
 							},
 						},
@@ -85,7 +83,7 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 			events.ConsumeAll(DefaultContext)
 
 			var playbooks []models.PlaybookRun
-			err := DefaultContext.DB().Where("playbook_id = ?", playbook.ID).Find(&playbooks).Error
+			err := DefaultContext.DB().Where("config_id = ? and playbook_id = ?", newConfigItems[0], playbook.ID).Find(&playbooks).Error
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(playbooks)).To(Equal(0))
 		})
@@ -93,9 +91,9 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 		ginkgo.It("create a new config item that passes the playbook filter", func() {
 			newConfigItem := models.ConfigItem{
 				ID:          uuid.New(),
-				Name:        lo.ToPtr("airsonic"),
-				ConfigClass: models.ConfigClassPod,
-				Type:        lo.ToPtr("Kubernetes::Pod"),
+				Name:        lo.ToPtr("app-database-role"),
+				ConfigClass: "DatabaseRole",
+				Type:        lo.ToPtr("Kubernetes::DatabaseRole"),
 			}
 
 			err := DefaultContext.DB().Clauses(clause.Returning{}).Create(&newConfigItem).Error
@@ -106,9 +104,6 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 
 		ginkgo.It("Expect the event consumer to schedule a new playbook run", func() {
 			Eventually(func() models.PlaybookRunStatus {
-				// Manually publish a pg_notify event because for some reason the embedded db isn't reliable
-				err := DefaultContext.DB().Exec("NOTIFY event_queue_updates, 'config.created'").Error
-				Expect(err).NotTo(HaveOccurred())
 				events.ConsumeAll(DefaultContext)
 
 				var run models.PlaybookRun
