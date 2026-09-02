@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// MCPResourcePath is the only route dynamically registered OAuth clients may access.
+// MCPResourcePath is the only route metadata-backed OAuth clients may access.
 const MCPResourcePath = "/mcp"
 
 type resourceIndicatorContextKey struct{}
@@ -32,7 +32,7 @@ func withMCPResourceIndicator(next http.Handler, issuerURL string) http.Handler 
 			writeOAuthError(w, http.StatusBadRequest, "invalid_request", "authorization request cannot be parsed")
 			return
 		}
-		if !IsDynamicClient(r.Form.Get("client_id")) {
+		if !IsMetadataClient(r.Form.Get("client_id")) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -114,7 +114,7 @@ func (s *Storage) validateTokenResource(r *http.Request, expectedResource string
 		return nil
 	}
 
-	if !IsDynamicClient(clientID) {
+	if !IsMetadataClient(clientID) {
 		return nil
 	}
 	if resource != expectedResource {

@@ -82,13 +82,13 @@ func authenticateOIDCToken(c echo.Context, tokenStr string) (bool, error) {
 	return false, nil
 }
 
-// oidcTokenAudienceAllowed confines dynamic-client credentials to the advertised MCP resource.
+// oidcTokenAudienceAllowed confines metadata-backed client credentials to the MCP resource.
 func oidcTokenAudienceAllowed(c echo.Context, claims jwt.MapClaims, issuer string) bool {
 	clientID, _ := claims["client_id"].(string)
 	if clientID == "" || clientID == oidcmodels.ClientID {
 		return audienceEquals(claims["aud"], oidcmodels.ClientID)
 	}
-	if !oidcmodels.IsDynamicClient(clientID) || c.Request().URL.Path != oidcmodels.MCPResourcePath {
+	if !oidcmodels.IsMetadataClient(clientID) || c.Request().URL.Path != oidcmodels.MCPResourcePath {
 		return false
 	}
 	return audienceEquals(claims["aud"], oidcmodels.MCPResourceURL(issuer))
