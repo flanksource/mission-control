@@ -55,9 +55,7 @@ var _ = ginkgo.Describe("Upstream Push", ginkgo.Ordered, func() {
 		})
 
 		ginkgo.It("should have transferred all the check statuses", func() {
-			ginkgo.Skip("Skipping. Check statuses are not synced to upstream yet because of foreign key issues.")
-
-			compareAgentEntities[models.CheckStatus]("check_statuses", pushUpstream.DB(), pushAgent)
+			compareAgentEntities[models.CheckStatus]("check_statuses", pushUpstream.DB(), pushAgent, cmpopts.IgnoreFields(models.CheckStatus{}, "IsPushed"))
 		})
 
 		ginkgo.It("should have transferred all the canaries", func() {
