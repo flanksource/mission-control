@@ -796,9 +796,8 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 		})
 
 		ginkgo.It("should read connection resource", func() {
-			ginkgo.Skip("TODO: Need to add connection fixtures")
-			testConnectionNamespace := "default"
-			testConnectionName := "kubernetes"
+			testConnectionNamespace := dummy.AWSConnection.Namespace
+			testConnectionName := dummy.AWSConnection.Name
 			resourceURI := fmt.Sprintf("connection://%s/%s", testConnectionNamespace, testConnectionName)
 
 			result, err := mcpClient.ReadResource(DefaultContext, mcp.ReadResourceRequest{
@@ -809,6 +808,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Contents).NotTo(BeEmpty())
+			checkResultInMCPResponse(result.Contents, []string{dummy.AWSConnection.ID.String()})
 		})
 	})
 
