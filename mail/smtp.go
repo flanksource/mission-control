@@ -8,15 +8,15 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
-	gocache "github.com/patrickmn/go-cache"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 const smtpCacheKey = "smtp"
 
 var (
-	smtpCache    = gocache.New(15*time.Minute, 10*time.Minute)
+	smtpCache    = utils.NewGenCache(15*time.Minute, 10*time.Minute)
 	fallbackSMTP v1.ConnectionSMTP
 )
 
@@ -35,21 +35,15 @@ func FlushSMTPCache() {
 // GetDefaultSMTP returns the system SMTP configuration.
 // Priority: DB connection named "smtp" > env vars > CLI flags
 func GetDefaultSMTP(ctx context.Context) (v1.ConnectionSMTP, error) {
-	if cached, found := smtpCache.Get(smtpCacheKey); found {
-		return cached.(v1.ConnectionSMTP), nil
-	}
-
-	smtp, err := loadSMTPFromDB(ctx)
-	if err != nil {
-		return v1.ConnectionSMTP{}, err
-	} else if smtp != nil {
-		smtpCache.SetDefault(smtpCacheKey, *smtp)
-		return *smtp, nil
-	}
-
-	result := buildFallbackSMTP()
-	smtpCache.SetDefault(smtpCacheKey, result)
-	return result, nil
+	return utils.GetOrLoad(smtpCache, smtpCacheKey, func() (v1.ConnectionSMTP, error) {
+		smtp, err := loadSMTPFromDB(ctx)
+		if err != nil {
+			return v1.ConnectionSMTP{}, err
+		} else if smtp != nil {
+			return *smtp, nil
+		}
+		return buildFallbackSMTP(), nil
+	})
 }
 
 func loadSMTPFromDB(ctx context.Context) (*v1.ConnectionSMTP, error) {
