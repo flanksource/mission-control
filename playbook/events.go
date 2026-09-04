@@ -14,7 +14,6 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
-	"github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
@@ -53,7 +52,7 @@ var eventToSpecEvent = map[string]PlaybookSpecEvent{
 }
 
 var (
-	eventPlaybooksCache = cache.New(5*time.Minute, 10*time.Minute)
+	eventPlaybooksCache = utils.NewGenCache(5*time.Minute, 10*time.Minute)
 
 	EventRing *events.EventRing
 )
@@ -423,17 +422,9 @@ func onPlaybookRunNewApproval(ctx context.Context, event models.Event) error {
 }
 
 func FindPlaybooksForEvent(ctx context.Context, eventClass, event string) ([]models.Playbook, error) {
-	if playbooks, found := eventPlaybooksCache.Get(eventPlaybookCacheKey(eventClass, event)); found {
-		return playbooks.([]models.Playbook), nil
-	}
-
-	playbooks, err := db.FindPlaybooksForEvent(ctx, eventClass, event)
-	if err != nil {
-		return nil, err
-	}
-
-	eventPlaybooksCache.SetDefault(eventPlaybookCacheKey(eventClass, event), playbooks)
-	return playbooks, nil
+	return utils.GetOrLoad(eventPlaybooksCache, eventPlaybookCacheKey(eventClass, event), func() ([]models.Playbook, error) {
+		return db.FindPlaybooksForEvent(ctx, eventClass, event)
+	})
 }
 
 // PurgeEventCache clears cached event-to-playbook mappings.
