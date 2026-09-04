@@ -687,17 +687,17 @@
         "contextWindow": 1050000,
         "supportsImages": true,
         "supportsPromptCache": true,
-        "inputPrice": 0.22,
-        "outputPrice": 1.32,
-        "cacheWritesPrice": 0.275,
-        "cacheReadsPrice": 0.022,
+        "inputPrice": 0.2,
+        "outputPrice": 1.2,
+        "cacheWritesPrice": 0.25,
+        "cacheReadsPrice": 0.02,
         "contextPriceTiers": [
           {
             "tokenThreshold": 272000,
-            "inputPrice": 0.44,
-            "outputPrice": 1.98,
-            "cacheWritesPrice": 0.55,
-            "cacheReadsPrice": 0.044
+            "inputPrice": 0.4,
+            "outputPrice": 1.8,
+            "cacheWritesPrice": 0.5,
+            "cacheReadsPrice": 0.04
           }
         ]
       },
@@ -708,17 +708,17 @@
         "contextWindow": 1050000,
         "supportsImages": true,
         "supportsPromptCache": true,
-        "inputPrice": 5.5,
-        "outputPrice": 33,
-        "cacheWritesPrice": 6.875,
-        "cacheReadsPrice": 0.55,
+        "inputPrice": 4,
+        "outputPrice": 20,
+        "cacheWritesPrice": 5,
+        "cacheReadsPrice": 0.4,
         "contextPriceTiers": [
           {
             "tokenThreshold": 272000,
-            "inputPrice": 11,
-            "outputPrice": 49.5,
-            "cacheWritesPrice": 13.75,
-            "cacheReadsPrice": 1.1
+            "inputPrice": 8,
+            "outputPrice": 30,
+            "cacheWritesPrice": 10,
+            "cacheReadsPrice": 0.8
           }
         ]
       },
@@ -729,17 +729,17 @@
         "contextWindow": 1050000,
         "supportsImages": true,
         "supportsPromptCache": true,
-        "inputPrice": 2.2,
-        "outputPrice": 13.2,
-        "cacheWritesPrice": 2.75,
-        "cacheReadsPrice": 0.22,
+        "inputPrice": 2,
+        "outputPrice": 12,
+        "cacheWritesPrice": 2.5,
+        "cacheReadsPrice": 0.2,
         "contextPriceTiers": [
           {
             "tokenThreshold": 272000,
-            "inputPrice": 4.4,
-            "outputPrice": 19.8,
-            "cacheWritesPrice": 5.5,
-            "cacheReadsPrice": 0.44
+            "inputPrice": 4,
+            "outputPrice": 18,
+            "cacheWritesPrice": 5,
+            "cacheReadsPrice": 0.4
           }
         ]
       },
@@ -1096,17 +1096,17 @@
         "contextWindow": 1050000,
         "supportsImages": true,
         "supportsPromptCache": true,
-        "inputPrice": 5.5,
-        "outputPrice": 33,
-        "cacheWritesPrice": 6.875,
-        "cacheReadsPrice": 0.55,
+        "inputPrice": 4.4,
+        "outputPrice": 22,
+        "cacheWritesPrice": 5.5,
+        "cacheReadsPrice": 0.44,
         "contextPriceTiers": [
           {
             "tokenThreshold": 272000,
-            "inputPrice": 11,
-            "outputPrice": 49.5,
-            "cacheWritesPrice": 13.75,
-            "cacheReadsPrice": 1.1
+            "inputPrice": 8.8,
+            "outputPrice": 33,
+            "cacheWritesPrice": 11,
+            "cacheReadsPrice": 0.88
           }
         ]
       },
@@ -2170,17 +2170,17 @@
         "contextWindow": 1050000,
         "supportsImages": true,
         "supportsPromptCache": true,
-        "inputPrice": 5,
-        "outputPrice": 30,
-        "cacheWritesPrice": 6.25,
-        "cacheReadsPrice": 0.5,
+        "inputPrice": 4,
+        "outputPrice": 20,
+        "cacheWritesPrice": 5,
+        "cacheReadsPrice": 0.4,
         "contextPriceTiers": [
           {
             "tokenThreshold": 272000,
-            "inputPrice": 10,
-            "outputPrice": 45,
-            "cacheWritesPrice": 12.5,
-            "cacheReadsPrice": 1
+            "inputPrice": 8,
+            "outputPrice": 30,
+            "cacheWritesPrice": 10,
+            "cacheReadsPrice": 0.8
           }
         ]
       },
@@ -2212,17 +2212,17 @@
         "contextWindow": 1050000,
         "supportsImages": true,
         "supportsPromptCache": true,
-        "inputPrice": 5,
-        "outputPrice": 30,
-        "cacheWritesPrice": 6.25,
-        "cacheReadsPrice": 0.5,
+        "inputPrice": 4,
+        "outputPrice": 20,
+        "cacheWritesPrice": 5,
+        "cacheReadsPrice": 0.4,
         "contextPriceTiers": [
           {
             "tokenThreshold": 272000,
-            "inputPrice": 10,
-            "outputPrice": 45,
-            "cacheWritesPrice": 12.5,
-            "cacheReadsPrice": 1
+            "inputPrice": 8,
+            "outputPrice": 30,
+            "cacheWritesPrice": 10,
+            "cacheReadsPrice": 0.8
           }
         ]
       },
