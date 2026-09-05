@@ -9,14 +9,14 @@ importers:
   .:
     dependencies:
       '@flanksource/clicky-ui':
-        specifier: ^0.2.1
-        version: 0.2.21(@shikijs/langs@1.29.2)(@shikijs/themes@1.29.2)(marked@15.0.12)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(recharts@3.10.1(react-dom@19.2.5(react@19.2.5))(react-is@19.2.8)(react@19.2.5)(redux@5.0.1))(shiki@1.29.2)(tailwindcss@4.3.3)
+        specifier: ^0.3.0
+        version: 0.3.20(@shikijs/langs@1.29.2)(@shikijs/themes@1.29.2)(marked@15.0.12)(monaco-editor@0.56.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(recharts@3.10.1(react-dom@19.2.5(react@19.2.5))(react-is@19.2.8)(react@19.2.5)(redux@5.0.1))(shiki@1.29.2)(tailwindcss@4.3.3)
       '@flanksource/facet':
         specifier: 0.1.71
         version: 0.1.71(@shikijs/langs@1.29.2)(@shikijs/themes@1.29.2)(immer@11.1.18)(monaco-editor@0.56.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(recharts@3.10.1(react-dom@19.2.5(react@19.2.5))(react-is@19.2.8)(react@19.2.5)(redux@5.0.1))(tailwindcss@4.3.3)
       '@flanksource/icons':
-        specifier: ^1.0.53
-        version: 1.0.63(react@19.2.5)
+        specifier: ^1.0.65
+        version: 1.0.65(react@19.2.5)
       '@iconify-json/carbon':
         specifier: ^1.2.0
         version: 1.2.20
@@ -343,42 +343,6 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@flanksource/clicky-ui@0.2.21':
-    resolution: {integrity: sha512-Z/XK2PwJ7VxBRhB2KPfTba1iKG3fcN4MoOZfJb7RxDY+53K9VnI47a7roygnqURb6jN6wjVEA822WrDcGnhIKA==}
-    peerDependencies:
-      '@ai-sdk/react': ^3.0.0
-      '@shikijs/langs': ^1.24.0
-      '@shikijs/themes': ^1.24.0
-      '@shikijs/transformers': ^1.24.0
-      ai: ^6.0.0
-      marked: ^15.0.0
-      react: ^18.0.0 || ^19.0.0
-      react-dom: ^18.0.0 || ^19.0.0
-      react-rnd: ^10.5.0
-      recharts: ^3.0.0
-      shiki: ^1.24.0
-      streamdown: ^2.5.0
-      tailwindcss: ^3.4.0 || ^4.0.0
-    peerDependenciesMeta:
-      '@ai-sdk/react':
-        optional: true
-      '@shikijs/langs':
-        optional: true
-      '@shikijs/themes':
-        optional: true
-      '@shikijs/transformers':
-        optional: true
-      ai:
-        optional: true
-      marked:
-        optional: true
-      react-rnd:
-        optional: true
-      shiki:
-        optional: true
-      streamdown:
-        optional: true
-
   '@flanksource/clicky-ui@0.3.20':
     resolution: {integrity: sha512-FByvZ67fymsUNVtO3HvbpUmF9XzNj1cC9rQtY2wmMmmOHaG2xLgyzmUE1zaOB2oVYUwhhbpj6XQKCeHZxZ0vsw==}
     peerDependencies:
@@ -426,13 +390,18 @@ packages:
       react: '>=18'
       react-dom: '>=18'
 
-  '@flanksource/icons@1.0.60':
-    resolution: {integrity: sha512-PH/0IFJJlyr9bNMUI2abCpiTP6pmYvwXklkw2OsoSIZHjnBvmb9ogZ0Xxd4J7QElT54T6gPZqQEQjTuAz7DISA==}
+  '@flanksource/icons@1.0.63':
+    resolution: {integrity: sha512-QJ3N49jltwT4xJVvajr/6V++LqTEYKGamjtLA+2NNECDG8I/guhgH3l984rIoE4+dkYTrUPwvoUh4SiKLic8FQ==}
     peerDependencies:
       react: '*'
 
-  '@flanksource/icons@1.0.63':
-    resolution: {integrity: sha512-QJ3N49jltwT4xJVvajr/6V++LqTEYKGamjtLA+2NNECDG8I/guhgH3l984rIoE4+dkYTrUPwvoUh4SiKLic8FQ==}
+  '@flanksource/icons@1.0.64':
+    resolution: {integrity: sha512-ul4ppVEfw8n/C3LhFMid0pv0X4Y1EXpN1bYfeYq/FsVZt4fMKPCfu40CHGN46K3zOI40HAcZpjuhIuehhoGAWA==}
+    peerDependencies:
+      react: '*'
+
+  '@flanksource/icons@1.0.65':
+    resolution: {integrity: sha512-Z8EW8V0c4YJWs529wS3RNrN/1Q65eYgxqrkln3djUzBLg3acfHLYUGmXoSBQnPXQSGO4No+2wr9uLVsnE53wlA==}
     peerDependencies:
       react: '*'
 
@@ -1581,29 +1550,6 @@ snapshots:
   '@esbuild/win32-x64@0.28.1':
     optional: true
 
-  '@flanksource/clicky-ui@0.2.21(@shikijs/langs@1.29.2)(@shikijs/themes@1.29.2)(marked@15.0.12)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(recharts@3.10.1(react-dom@19.2.5(react@19.2.5))(react-is@19.2.8)(react@19.2.5)(redux@5.0.1))(shiki@1.29.2)(tailwindcss@4.3.3)':
-    dependencies:
-      '@flanksource/icons': 1.0.60(react@19.2.5)
-      '@floating-ui/react': 0.27.20(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
-      '@radix-ui/react-compose-refs': 1.1.2(react@19.2.5)
-      '@radix-ui/react-slot': 1.2.4(react@19.2.5)
-      '@tanstack/react-query': 5.100.1(react@19.2.5)
-      class-variance-authority: 0.7.1
-      clsx: 2.1.1
-      dompurify: 3.4.13
-      react: 19.2.5
-      react-dom: 19.2.5(react@19.2.5)
-      recharts: 3.10.1(react-dom@19.2.5(react@19.2.5))(react-is@19.2.8)(react@19.2.5)(redux@5.0.1)
-      tailwind-merge: 2.6.1
-      tailwindcss: 4.3.3
-    optionalDependencies:
-      '@shikijs/langs': 1.29.2
-      '@shikijs/themes': 1.29.2
-      marked: 15.0.12
-      shiki: 1.29.2
-    transitivePeerDependencies:
-      - '@types/react'
-
   '@flanksource/clicky-ui@0.3.20(@shikijs/langs@1.29.2)(@shikijs/themes@1.29.2)(marked@15.0.12)(monaco-editor@0.56.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(recharts@3.10.1(react-dom@19.2.5(react@19.2.5))(react-is@19.2.8)(react@19.2.5)(redux@5.0.1))(shiki@1.29.2)(tailwindcss@4.3.3)':
     dependencies:
       '@codemirror/autocomplete': 6.20.3
@@ -1643,7 +1589,7 @@ snapshots:
   '@flanksource/facet@0.1.71(@shikijs/langs@1.29.2)(@shikijs/themes@1.29.2)(immer@11.1.18)(monaco-editor@0.56.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(recharts@3.10.1(react-dom@19.2.5(react@19.2.5))(react-is@19.2.8)(react@19.2.5)(redux@5.0.1))(tailwindcss@4.3.3)':
     dependencies:
       '@flanksource/clicky-ui': 0.3.20(@shikijs/langs@1.29.2)(@shikijs/themes@1.29.2)(marked@15.0.12)(monaco-editor@0.56.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(recharts@3.10.1(react-dom@19.2.5(react@19.2.5))(react-is@19.2.8)(react@19.2.5)(redux@5.0.1))(shiki@1.29.2)(tailwindcss@4.3.3)
-      '@flanksource/icons': 1.0.63(react@19.2.5)
+      '@flanksource/icons': 1.0.64(react@19.2.5)
       '@iconify/react': 5.2.1(react@19.2.5)
       '@xyflow/react': 12.11.3(immer@11.1.18)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
       clsx: 2.1.1
@@ -1683,11 +1629,15 @@ snapshots:
       - streamdown
       - tailwindcss
 
-  '@flanksource/icons@1.0.60(react@19.2.5)':
+  '@flanksource/icons@1.0.63(react@19.2.5)':
     dependencies:
       react: 19.2.5
 
-  '@flanksource/icons@1.0.63(react@19.2.5)':
+  '@flanksource/icons@1.0.64(react@19.2.5)':
+    dependencies:
+      react: 19.2.5
+
+  '@flanksource/icons@1.0.65(react@19.2.5)':
     dependencies:
       react: 19.2.5
 
