@@ -23,6 +23,7 @@ import (
 	"github.com/flanksource/incident-commander/auth/accesstoken"
 	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 func FlushTokenCache() {
@@ -33,7 +34,7 @@ func FlushTokenCache() {
 // - JWT for postgREST
 // - RLS payloads
 // - access tokens
-var tokenCache = cache.New(1*time.Hour, 1*time.Hour)
+var tokenCache = utils.NewGenCache(1*time.Hour, 1*time.Hour)
 
 // deletedTokensCache maintains a blacklist of deleted token IDs.
 // Required because tokenCache is keyed by the full token string, not the ID,
@@ -64,40 +65,37 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 	config := api.DefaultConfig
 	key := sessionId + user.ID.String()
 
-	if token, exists := tokenCache.Get(key); exists {
-		return token.(string), nil
-	}
+	return utils.GetOrLoad(tokenCache, key, func() (string, error) {
+		now := time.Now()
 
-	now := time.Now()
+		// Postgrest makes this jwt available as a session parameter inside postgres.
+		// We inject the rls payload here and then access it inside postgres using request.jwt.claims parameter.
+		claims := jwt.MapClaims{
+			"aud":  string(signing.AudiencePostgREST),
+			"iss":  signing.Issuer,
+			"exp":  float64(now.Add(time.Hour).Unix()),
+			"iat":  float64(now.Unix()),
+			"role": config.Postgrest.DBRole,
+			"id":   user.ID.String(),
+		}
 
-	// Postgrest makes this jwt available as a session parameter inside postgres.
-	// We inject the rls payload here and then access it inside postgres using request.jwt.claims parameter.
-	claims := jwt.MapClaims{
-		"aud":  string(signing.AudiencePostgREST),
-		"iss":  signing.Issuer,
-		"exp":  float64(now.Add(time.Hour).Unix()),
-		"iat":  float64(now.Unix()),
-		"role": config.Postgrest.DBRole,
-		"id":   user.ID.String(),
-	}
+		if rlsPayload, err := GetRLSPayload(ctx.WithUser(user)); err != nil {
+			return "", ctx.Oops().Wrap(err)
+		} else if jwtClaim := rlsPayload.JWTClaims(); jwtClaim != nil {
+			claims = collections.MergeMap(claims, jwtClaim)
+		}
 
-	if rlsPayload, err := GetRLSPayload(ctx.WithUser(user)); err != nil {
-		return "", ctx.Oops().Wrap(err)
-	} else if jwtClaim := rlsPayload.JWTClaims(); jwtClaim != nil {
-		claims = collections.MergeMap(claims, jwtClaim)
-	}
+		token, err := newPostgRESTJWT(config.Postgrest, claims)
+		if err != nil {
+			return "", ctx.Oops().Wrap(err)
+		}
 
-	token, err := newPostgRESTJWT(config.Postgrest, claims)
-	if err != nil {
-		return "", ctx.Oops().Wrap(err)
-	}
+		if err := db.UpdateLastLogin(ctx, user.ID.String()); err != nil {
+			ctx.Errorf("Error updating last login for user[%s]: %v", user, err)
+		}
 
-	if err := db.UpdateLastLogin(ctx, user.ID.String()); err != nil {
-		ctx.Errorf("Error updating last login for user[%s]: %v", user, err)
-	}
-
-	tokenCache.SetDefault(key, token)
-	return token, nil
+		return token, nil
+	})
 }
 
 func newPostgRESTJWT(config api.PostgrestConfig, claims jwt.MapClaims) (string, error) {
@@ -137,7 +135,8 @@ func newClerkKeyfunc(jwksURL string) (jwt.Keyfunc, error) {
 }
 
 func getAccessToken(ctx context.Context, token string) (*models.AccessToken, error) {
-	if cachedToken, ok := tokenCache.Get(token); ok {
+	gen := tokenCache.Snapshot(token)
+	if cachedToken, ok := tokenCache.GetWith(gen, token); ok {
 		accessToken := cachedToken.(*models.AccessToken)
 
 		// Check if this token has been deleted (even if still in cache)
@@ -169,7 +168,7 @@ func getAccessToken(ctx context.Context, token string) (*models.AccessToken, err
 
 	expiry := accessToken.ExpiresAt
 	if expiry == nil {
-		tokenCache.Set(token, &accessToken, -1)
+		tokenCache.SetIf(gen, token, &accessToken, -1)
 	} else {
 		if expiry.Before(time.Now()) {
 			return nil, errTokenExpired
@@ -181,7 +180,7 @@ func getAccessToken(ctx context.Context, token string) (*models.AccessToken, err
 			}
 		}
 
-		tokenCache.Set(token, &accessToken, time.Until(*expiry))
+		tokenCache.SetIf(gen, token, &accessToken, time.Until(*expiry))
 	}
 
 	return &accessToken, nil

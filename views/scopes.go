@@ -10,9 +10,9 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
-	gocache "github.com/patrickmn/go-cache"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 const (
@@ -20,7 +20,7 @@ const (
 	scopeConfigsCacheKey = "scope-configs-with-targets"
 )
 
-var scopeCache = gocache.New(defaultScopeCacheTTL, defaultScopeCacheTTL*2)
+var scopeCache = utils.NewGenCache(defaultScopeCacheTTL, defaultScopeCacheTTL*2)
 
 func FlushScopeCache() {
 	scopeCache.Flush()
@@ -33,63 +33,60 @@ type scopeConfig struct {
 
 // getScopeConfigs returns cached scope configs with config/global targets.
 func getScopeConfigs(ctx context.Context) ([]scopeConfig, error) {
-	if cached, found := scopeCache.Get(scopeConfigsCacheKey); found {
-		return cached.([]scopeConfig), nil
-	}
-
-	var scopes []models.Scope
-	if err := ctx.DB().
-		Where("deleted_at IS NULL").
-		Find(&scopes).Error; err != nil {
-		return nil, fmt.Errorf("failed to load scopes: %w", err)
-	}
-
-	var scopeConfigs []scopeConfig
-	for _, scope := range scopes {
-		if len(scope.Targets) == 0 {
-			continue
+	return utils.GetOrLoad(scopeCache, scopeConfigsCacheKey, func() ([]scopeConfig, error) {
+		var scopes []models.Scope
+		if err := ctx.DB().
+			Where("deleted_at IS NULL").
+			Find(&scopes).Error; err != nil {
+			return nil, fmt.Errorf("failed to load scopes: %w", err)
 		}
 
-		var targets []v1.ScopeTarget
-		if err := json.Unmarshal(scope.Targets, &targets); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal targets for scope %s: %w", scope.ID, err)
-		}
+		var scopeConfigs []scopeConfig
+		for _, scope := range scopes {
+			if len(scope.Targets) == 0 {
+				continue
+			}
 
-		var selectors []types.ResourceSelector
-		for _, target := range targets {
-			var selector *types.ResourceSelector
-			switch {
-			case target.Config != nil:
-				selector = &types.ResourceSelector{
-					Agent:       target.Config.Agent,
-					Name:        target.Config.Name,
-					Namespace:   target.Config.Namespace,
-					TagSelector: target.Config.TagSelector,
+			var targets []v1.ScopeTarget
+			if err := json.Unmarshal(scope.Targets, &targets); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal targets for scope %s: %w", scope.ID, err)
+			}
+
+			var selectors []types.ResourceSelector
+			for _, target := range targets {
+				var selector *types.ResourceSelector
+				switch {
+				case target.Config != nil:
+					selector = &types.ResourceSelector{
+						Agent:       target.Config.Agent,
+						Name:        target.Config.Name,
+						Namespace:   target.Config.Namespace,
+						TagSelector: target.Config.TagSelector,
+					}
+				case target.Global != nil:
+					selector = &types.ResourceSelector{
+						Agent:       target.Global.Agent,
+						Name:        target.Global.Name,
+						Namespace:   target.Global.Namespace,
+						TagSelector: target.Global.TagSelector,
+					}
 				}
-			case target.Global != nil:
-				selector = &types.ResourceSelector{
-					Agent:       target.Global.Agent,
-					Name:        target.Global.Name,
-					Namespace:   target.Global.Namespace,
-					TagSelector: target.Global.TagSelector,
+
+				if selector != nil {
+					selectors = append(selectors, *selector)
 				}
 			}
 
-			if selector != nil {
-				selectors = append(selectors, *selector)
+			if len(selectors) > 0 {
+				scopeConfigs = append(scopeConfigs, scopeConfig{
+					scopeID:   scope.ID.String(),
+					selectors: selectors,
+				})
 			}
 		}
 
-		if len(selectors) > 0 {
-			scopeConfigs = append(scopeConfigs, scopeConfig{
-				scopeID:   scope.ID.String(),
-				selectors: selectors,
-			})
-		}
-	}
-
-	scopeCache.SetDefault(scopeConfigsCacheKey, scopeConfigs)
-	return scopeConfigs, nil
+		return scopeConfigs, nil
+	})
 }
 
 // computeGrantsForConfigResults computes scope grants for each row in config query results
