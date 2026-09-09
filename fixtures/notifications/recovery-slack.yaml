@@ -1,0 +1,32 @@
+# Set the Slack channel and create recovery-slack-token with key token first.
+apiVersion: mission-control.flanksource.com/v1
+kind: Connection
+metadata:
+  name: recovery-slack
+  namespace: mission-control
+spec:
+  slack:
+    channel: C0123456789
+    token:
+      valueFrom:
+        secretKeyRef:
+          name: recovery-slack-token
+          key: token
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Notification
+metadata:
+  name: deployment-health-recovery-slack
+  namespace: mission-control
+spec:
+  events: [config.unhealthy, config.warning]
+  filter: config.type == 'Kubernetes::Deployment'
+  waitFor: 1m
+  to:
+    connection: connection://mission-control/recovery-slack
+  onResolved:
+    enabled: true
+    waitFor: 30s
+    slack:
+      reply: true
+      reaction: white_check_mark

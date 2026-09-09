@@ -34,7 +34,8 @@ func TestNotifications(t *testing.T) {
 }
 
 var (
-	DefaultContext context.Context
+	DefaultContext    context.Context
+	recoveryOnlySuite bool
 )
 
 var _ = ginkgo.BeforeSuite(func() {
@@ -45,7 +46,9 @@ var _ = ginkgo.BeforeSuite(func() {
 
 	_ = context.UpdateProperty(DefaultContext, api.PropertyIncidentsDisabled, "true")
 	_ = context.UpdateProperty(DefaultContext, "notification.send.trace", "true")
-	events.StartConsumers(DefaultContext)
+	if !recoveryOnlySuite {
+		events.StartConsumers(DefaultContext)
+	}
 	setupWebhookServer()
 	setupSMTPServer()
 	setupSystemSMTPConnection()

@@ -2,8 +2,10 @@ package mail
 
 import (
 	"bytes"
+	gocontext "context"
 	"crypto/tls"
 	"fmt"
+	"github.com/flanksource/duty/context"
 	"io"
 	"net"
 	"os"
@@ -140,6 +142,14 @@ func (m *Mail) buildMessage() ([]byte, error) {
 }
 
 func (m *Mail) Send(conn v1.ConnectionSMTP) error {
+	return m.send(gocontext.Background(), conn)
+}
+
+func (m *Mail) SendContext(ctx context.Context, conn v1.ConnectionSMTP) error {
+	return m.send(ctx, conn)
+}
+
+func (m *Mail) send(ctx gocontext.Context, conn v1.ConnectionSMTP) error {
 	m.applyDefaults(conn)
 
 	msg, err := m.buildMessage()
@@ -150,25 +160,27 @@ func (m *Mail) Send(conn v1.ConnectionSMTP) error {
 	addr := net.JoinHostPort(m.host, strconv.Itoa(m.port))
 	tlsConfig := &tls.Config{ServerName: m.host, InsecureSkipVerify: conn.InsecureTLS}
 
+	var socket net.Conn
+	dialer := &net.Dialer{Timeout: 30 * time.Second}
+	if conn.Encryption == v1.EncryptionImplicitTLS {
+		socket, err = (&tls.Dialer{NetDialer: dialer, Config: tlsConfig}).DialContext(ctx, "tcp", addr)
+	} else {
+		socket, err = dialer.DialContext(ctx, "tcp", addr)
+	}
+	if err != nil {
+		return err
+	}
+	defer socket.Close()
+	stop := gocontext.AfterFunc(ctx, func() { _ = socket.Close() })
+	defer stop()
 	var client *smtp.Client
-	switch conn.Encryption {
-	case v1.EncryptionImplicitTLS:
-		client, err = smtp.DialTLS(addr, tlsConfig)
+	if conn.Encryption == v1.EncryptionExplicitTLS || conn.Encryption == v1.EncryptionAuto {
+		client, err = smtp.NewClientStartTLS(socket, tlsConfig)
 		if err != nil {
 			return err
 		}
-
-	case v1.EncryptionExplicitTLS, v1.EncryptionAuto:
-		client, err = smtp.DialStartTLS(addr, tlsConfig)
-		if err != nil {
-			return err
-		}
-
-	default:
-		client, err = smtp.Dial(addr)
-		if err != nil {
-			return err
-		}
+	} else {
+		client = smtp.NewClient(socket)
 	}
 	defer func() {
 		if err := client.Close(); err != nil {

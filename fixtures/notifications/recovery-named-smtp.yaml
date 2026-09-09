@@ -1,0 +1,42 @@
+# Replace the host/addresses and create recovery-smtp-credentials first.
+# Grant this notification read permission only on this named Connection.
+apiVersion: mission-control.flanksource.com/v1
+kind: Connection
+metadata:
+  name: recovery-smtp
+  namespace: mission-control
+spec:
+  smtp:
+    host: smtp.example.com
+    port: 587
+    encryption: ExplicitTLS
+    auth: plain
+    username:
+      valueFrom:
+        secretKeyRef:
+          name: recovery-smtp-credentials
+          key: username
+    password:
+      valueFrom:
+        secretKeyRef:
+          name: recovery-smtp-credentials
+          key: password
+    fromAddress: alerts@example.com
+    fromName: Mission Control
+    toAddresses: [operations@example.com]
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Notification
+metadata:
+  name: deployment-health-recovery-named-email
+  namespace: mission-control
+spec:
+  events: [config.unhealthy, config.warning]
+  filter: config.type == 'Kubernetes::Deployment'
+  waitFor: 1m
+  to:
+    connection: connection://mission-control/recovery-smtp
+  onResolved:
+    enabled: true
+    waitFor: 30s
+    template: 'Recovered {{.resource.id}} at {{.recoveredAt}} (outage {{.outageDuration}}).'

@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/slack-go/slack"
 )
+
+var newSlackClient = func(token string) *slack.Client { return slack.New(token) }
 
 type SlackMsgTemplate struct {
 	Blocks slack.Blocks `json:"blocks"`
@@ -39,7 +42,21 @@ func SlackSend(ctx *Context, apiToken, channel string, msg NotificationTemplate)
 		return errors.New("slack channel cannot be empty")
 	}
 
-	api := slack.New(apiToken)
+	api := newSlackClient(apiToken)
+	receipt, err := beginDelivery(ctx, "slack", recoveryDestination{SlackChannel: channel})
+	if err != nil {
+		return err
+	}
+	if receipt != nil {
+		if receipt.SentAt != nil {
+			return nil
+		}
+		var destination recoveryDestination
+		if err := json.Unmarshal(receipt.Destination, &destination); err != nil {
+			return err
+		}
+		channel = destination.SlackChannel
+	}
 
 	var opts []slack.MsgOption
 	if msg.Title != "" {
@@ -59,7 +76,16 @@ func SlackSend(ctx *Context, apiToken, channel string, msg NotificationTemplate)
 		}
 	}
 
-	_, _, err := api.PostMessageContext(ctx, channel, opts...)
+	sendCtx := ctx.Context
+	if receipt != nil {
+		var cancel func()
+		sendCtx, cancel = sendCtx.WithTimeout(2 * time.Minute)
+		defer cancel()
+	}
+	actualChannel, timestamp, err := api.PostMessageContext(sendCtx, channel, opts...)
+	if receipt != nil {
+		return finishDelivery(ctx, receipt, actualChannel, timestamp, err)
+	}
 
 	var slackError slack.SlackErrorResponse
 	if errors.As(err, &slackError) {

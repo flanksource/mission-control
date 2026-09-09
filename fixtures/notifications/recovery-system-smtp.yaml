@@ -1,0 +1,16 @@
+# Configure the shared system SMTP Connection (or SMTP env/CLI settings) first.
+# Replace the recipient before applying. No per-notification system-connection grant is needed.
+apiVersion: mission-control.flanksource.com/v1
+kind: Notification
+metadata:
+  name: deployment-health-recovery-email
+  namespace: mission-control
+spec:
+  events: [config.unhealthy, config.warning]
+  filter: config.type == 'Kubernetes::Deployment'
+  waitFor: 1m
+  to:
+    email: operations@example.com
+  onResolved:
+    enabled: true
+    waitFor: 30s

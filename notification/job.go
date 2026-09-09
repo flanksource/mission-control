@@ -175,6 +175,9 @@ func ProcessPendingNotificationsJob(ctx context.Context) *job.Job {
 }
 
 func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
+	if handled, err := processRecoveryPending(parentCtx, false); handled || err != nil {
+		return false, err
+	}
 	var noMorePending bool
 
 	err := parentCtx.DB().Transaction(func(tx *gorm.DB) error {
@@ -185,6 +188,7 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 		SELECT *
 		FROM notification_send_history
 		WHERE status IN ?
+            AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.id = notification_id AND n.on_resolved->>'enabled' = 'true')
 			AND not_before <= NOW()
 			AND retries < ?
 		ORDER BY not_before ASC
@@ -270,6 +274,9 @@ func ProcessFallbackNotificationsJob(ctx context.Context) *job.Job {
 }
 
 func ProcessFallbackNotifications(parentCtx context.Context) (bool, error) {
+	if handled, err := processRecoveryPending(parentCtx, true); handled || err != nil {
+		return false, err
+	}
 	var noMorePending bool
 
 	err := parentCtx.DB().Transaction(func(tx *gorm.DB) error {
@@ -279,6 +286,7 @@ func ProcessFallbackNotifications(parentCtx context.Context) (bool, error) {
 		maxRetries := ctx.Properties().Int("notification.max-retries", 4) - 1
 		if err := ctx.DB().Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate, Options: clause.LockingOptionsSkipLocked}).
 			Where("status = ?", models.NotificationStatusAttemptingFallback).
+			Where("NOT EXISTS (SELECT 1 FROM notifications n WHERE n.id = notification_id AND n.on_resolved->>'enabled' = 'true')").
 			Where("not_before <= NOW()").
 			Where("retries < ?", maxRetries).
 			Order("not_before ASC").
@@ -344,9 +352,13 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 				return false, fmt.Errorf("failed to trigger incremental scrape: %w", err)
 			}
 
+			deadline := any(gorm.Expr(fmt.Sprintf("not_before + INTERVAL '%f'", lo.CoalesceOrEmpty(lo.FromPtr(notif.WaitForEvalPeriod), time.Second*30).Seconds())))
+			if notif.OnResolved != nil && notif.OnResolved.Enabled {
+				deadline = currentHistory.NotBefore.Add(lo.CoalesceOrEmpty(lo.FromPtr(notif.WaitForEvalPeriod), time.Second*30))
+			}
 			if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
 				"status":     models.NotificationStatusEvaluatingWaitFor,
-				"not_before": gorm.Expr(fmt.Sprintf("not_before + INTERVAL '%f'", lo.CoalesceOrEmpty(lo.FromPtr(notif.WaitForEvalPeriod), time.Second*30).Seconds())),
+				"not_before": deadline,
 			}).Error; dberr != nil {
 				return false, dberr
 			}
@@ -466,7 +478,7 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 
 	if err := sendPendingNotification(ctx, currentHistory, payload); err != nil {
 		return fmt.Errorf("failed to send pending notification: %w", err)
-	} else if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
+	} else if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ? AND status != ?", currentHistory.ID, models.NotificationStatusSkipped).UpdateColumns(map[string]any{
 		"status": models.NotificationStatusSent,
 	}).Error; dberr != nil {
 		return fmt.Errorf("failed to save notification status as sent: %w", dberr)

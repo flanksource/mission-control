@@ -91,6 +91,9 @@ func Start(ctx context.Context, mcpServer *server.MCPServer) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job ProcessFallbackNotificationsJob: %v", err))
 	}
 
+	if err := notification.ReconcileNotificationRecoveriesJob(ctx).AddToScheduler(FuncScheduler); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule notification recovery: %v", err))
+	}
 	if err := notification.ProcessPendingNotificationsJob(ctx).AddToScheduler(FuncScheduler); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job ProcessPendingNotificationsJob: %v", err))
 	}
