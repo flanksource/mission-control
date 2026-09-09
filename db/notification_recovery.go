@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/flanksource/duty/connection"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -13,7 +13,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
-// ValidateRecoveryRecipients validates mutable routing again at persistence; dispatch also guards it.
+// ValidateRecoveryRecipients checks routing metadata; dispatch authorizes connections and resolves credentials.
 func ValidateRecoveryRecipients(ctx context.Context, spec v1.NotificationSpec) error {
 	if spec.OnResolved == nil || !spec.OnResolved.Enabled {
 		return nil
@@ -43,9 +43,12 @@ func ValidateRecoveryRecipients(ctx context.Context, spec v1.NotificationSpec) e
 				return fmt.Errorf("onResolved does not support webhook recipients")
 			}
 			if config.Connection != "" {
-				conn, err := connection.Get(ctx, config.Connection)
+				conn, err := context.FindConnectionByURL(ctx, config.Connection)
 				if err != nil {
 					return err
+				}
+				if conn == nil {
+					return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "connection (%s) not found", config.Connection)
 				}
 				switch conn.Type {
 				case models.ConnectionTypeSlack:

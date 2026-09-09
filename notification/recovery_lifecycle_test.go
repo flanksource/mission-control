@@ -9,12 +9,17 @@ import (
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 var _ = ginkgo.Describe("Notification recovery lifecycle", func() {
@@ -157,6 +162,36 @@ var _ = ginkgo.Describe("Notification recovery lifecycle", func() {
 			Expect(otherBackend.read()).To(BeEmpty())
 		})
 	}
+	ginkgo.It("persists a new notification before its connection permission can resolve the subject", func() {
+		newRecoveryFixture()
+		ctx := setup.DefaultContext.WithSubject("")
+		id := uuid.New()
+		conn := models.Connection{ID: uuid.New(), Name: uuid.NewString(), Namespace: "default", Type: models.ConnectionTypeSlack, Source: models.SourceCRD}
+		Expect(ctx.DB().Create(&conn).Error).To(Succeed())
+		ginkgo.DeferCleanup(func() {
+			Expect(ctx.DB().Where("id = ?", id).Delete(&models.Notification{}).Error).To(Succeed())
+			Expect(ctx.DB().Delete(&conn).Error).To(Succeed())
+		})
+		obj := &v1.Notification{
+			ObjectMeta: metav1.ObjectMeta{Name: id.String(), Namespace: "default", UID: types.UID(id.String())},
+			Spec: v1.NotificationSpec{
+				Events:     []string{"config.unhealthy"},
+				To:         v1.NotificationRecipientSpec{Connection: "connection://default/" + conn.Name},
+				OnResolved: &v1.NotificationOnResolved{Enabled: true},
+			},
+		}
+		subject := v1.PermissionSubject{Notification: "default/" + obj.Name}
+		_, _, err := subject.Populate(ctx)
+		Expect(err).To(HaveOccurred())
+		attr := &models.ABACAttribute{Connection: conn}
+		Expect(rbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionRead)).To(BeFalse())
+		Expect(db.PersistNotificationFromCRD(ctx, obj)).To(Succeed())
+		subjectID, subjectType, err := subject.Populate(ctx)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(subjectID).To(Equal(id.String()))
+		Expect(subjectType).To(Equal(models.PermissionSubjectTypeNotification))
+		Expect(rbac.HasPermission(ctx, subjectID, attr, policy.ActionRead)).To(BeFalse())
+	})
 	ginkgo.It("denies an ungranted named connection and rechecks revoked permission before SMTP recovery", func() {
 		n, config, payload := newRecoveryFixture()
 		backend, conn := newRecoverySMTP(n)

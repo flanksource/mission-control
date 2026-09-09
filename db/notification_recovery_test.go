@@ -71,6 +71,9 @@ var _ = ginkgo.Describe("Notification recovery persistence", func() {
 		{"playbook", func(s *v1.NotificationSpec) { s.To = v1.NotificationRecipientSpec{Playbook: lo.ToPtr("default/run")} }},
 		{"negative stabilization", func(s *v1.NotificationSpec) { s.OnResolved.WaitFor = "-1s" }},
 		{"missing connection", func(s *v1.NotificationSpec) { s.To = v1.NotificationRecipientSpec{Connection: uuid.NewString()} }},
+		{"missing namespaced connection", func(s *v1.NotificationSpec) {
+			s.To = v1.NotificationRecipientSpec{Connection: "connection://default/" + uuid.NewString()}
+		}},
 	} {
 		ginkgo.It("rejects "+tc.name+" before persistence", func() {
 			obj := recoveryNotificationCRD()
