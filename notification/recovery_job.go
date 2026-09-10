@@ -17,11 +17,12 @@ import (
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 	"github.com/slack-go/slack"
+	"gorm.io/gorm"
 )
 
 const claimNotificationRecoverySQL = `UPDATE notification_deliveries SET lease_token = ?, lease_until = NOW() + INTERVAL '5 minutes', attempts = attempts + 1
    WHERE id = (SELECT id FROM notification_deliveries WHERE sent_at IS NOT NULL AND resolved_at IS NULL
-    AND status <> 'recovery-exhausted' AND not_before <= NOW() AND (lease_until IS NULL OR lease_until < NOW()) ORDER BY not_before
+    AND status <> 'recovery-exhausted' AND status <> 'waiting-for-healthy' AND not_before <= NOW() AND (lease_until IS NULL OR lease_until < NOW()) ORDER BY not_before
     FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`
 
 func ReconcileNotificationRecoveriesJob(ctx context.Context) *job.Job {
@@ -58,32 +59,64 @@ func ReconcileNotificationRecoveries(ctx context.Context) error {
 		if err != nil {
 			delay := min(time.Hour, time.Duration(1<<min(receipt.Attempts, 12))*time.Second)
 			if errors.Is(err, errRecoveryDeferred) {
-				delay = 15 * time.Second
 				values["status"] = "waiting-for-healthy"
-				values["attempts"] = 0
+				values["attempts"] = receipt.Attempts - 1
+				var deferred *recoveryDeferral
+				if errors.As(err, &deferred) && !deferred.deadline.IsZero() {
+					values["status"] = "stabilizing"
+					values["not_before"] = laterRecoveryDeadline(receipt.NotBefore, deferred.deadline)
+				}
 			} else {
 				values["status"] = "recovery-error"
 				failures = append(failures, fmt.Errorf("recovery %s: %w", receipt.ID, err))
 			}
 			// Transport errors can contain credential-bearing URLs; only safe classifications are persisted here.
 			values["error"] = "recovery deferred: " + recoveryErrorClass(err)
-			values["not_before"] = time.Now().Add(delay)
+			if !errors.Is(err, errRecoveryDeferred) {
+				values["not_before"] = time.Now().Add(delay)
+			}
 			if !errors.Is(err, errRecoveryDeferred) && receipt.Attempts-1 >= maxRetries {
 				values["status"] = "recovery-exhausted"
+				values["exhausted_at"] = time.Now()
 				values["error"] = "recovery retry limit exhausted: " + recoveryErrorClass(err)
 			}
 		} else {
 			values["status"] = "resolved"
 			values["resolved_at"] = time.Now()
 		}
-		result := ctx.DB().Model(&models.NotificationDelivery{}).Where("id = ? AND lease_token = ?", receipt.ID, token).Updates(values)
-		if result.Error != nil {
-			failures = append(failures, result.Error)
-		} else if result.RowsAffected != 1 {
-			failures = append(failures, fmt.Errorf("recovery %s lease lost", receipt.ID))
+		if err := finishRecoveryClaim(ctx, receipt, token, values); err != nil {
+			failures = append(failures, err)
 		}
 	}
 	return errors.Join(failures...)
+}
+
+func finishRecoveryClaim(ctx context.Context, receipt models.NotificationDelivery, token uuid.UUID, values map[string]any) error {
+	return ctx.DB().Transaction(func(tx *gorm.DB) error {
+		if values["status"] == "waiting-for-healthy" {
+			var episode models.NotificationHealthEpisode
+			if err := tx.Where("id = ?", receipt.EpisodeID).First(&episode).Error; err != nil {
+				return err
+			}
+			if _, err := lockRecoveryHealth(tx, episode.ResourceType, episode.ResourceID); err != nil {
+				return err
+			}
+		}
+		result := tx.Model(&models.NotificationDelivery{}).Where("id = ? AND lease_token = ? AND lease_until > NOW()", receipt.ID, token).Updates(values)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return fmt.Errorf("recovery %s lease lost", receipt.ID)
+		}
+		if values["status"] == "waiting-for-healthy" {
+			// The state lock also excludes marker clears until this dormant receipt is committed.
+			return tx.Exec(`UPDATE notification_health_states s SET wake_pending = true FROM notification_health_episodes e
+                WHERE e.id = ? AND s.resource_type = e.resource_type AND s.resource_id = e.resource_id
+                AND s.health = 'healthy' AND NOT s.wake_pending`, receipt.EpisodeID).Error
+		}
+		return nil
+	})
 }
 
 func recoveryErrorClass(err error) string {
@@ -102,8 +135,11 @@ func stableRecoveryHealth(ctx context.Context, episode models.NotificationHealth
 	if err != nil {
 		return nil, err
 	}
-	if state.Health != "healthy" || state.HealthySince == nil || time.Now().Before(state.HealthySince.Add(delay)) {
-		return nil, errRecoveryDeferred
+	if state.Health != "healthy" || state.HealthySince == nil {
+		return nil, &recoveryDeferral{}
+	}
+	if deadline := state.HealthySince.Add(delay); time.Now().Before(deadline) {
+		return nil, &recoveryDeferral{deadline: deadline}
 	}
 	return state, nil
 }
@@ -168,7 +204,14 @@ func resolveDelivery(ctx context.Context, receipt *models.NotificationDelivery) 
 			return err
 		}
 		if latest.Generation != state.Generation {
-			return errRecoveryDeferred
+			return &recoveryDeferral{deadline: time.Now()}
+		}
+		var active int64
+		if err := ctx.DB().Model(&models.NotificationDelivery{}).Where("id = ? AND lease_token = ? AND lease_until > NOW()", receipt.ID, receipt.LeaseToken).Count(&active).Error; err != nil {
+			return err
+		}
+		if active != 1 {
+			return fmt.Errorf("delivery lease lost before external operation")
 		}
 		return nil
 	}

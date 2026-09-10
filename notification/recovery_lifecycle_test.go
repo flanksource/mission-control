@@ -4,7 +4,6 @@ package notification
 
 import (
 	"encoding/json"
-	"github.com/flanksource/incident-commander/mail"
 	"time"
 
 	"github.com/flanksource/duty/models"
@@ -291,9 +290,8 @@ var _ = ginkgo.Describe("Notification recovery lifecycle", func() {
 		backend, conn := newRecoverySMTP(n)
 		var system models.Connection
 		Expect(setup.DefaultContext.DB().Where("name = ? AND type = ? AND deleted_at IS NULL", "system", models.ConnectionTypeEmail).First(&system).Error).To(Succeed())
-		ginkgo.DeferCleanup(func() { Expect(setup.DefaultContext.DB().Save(&system).Error).To(Succeed()); mail.FlushSMTPCache() })
+		ginkgo.DeferCleanup(func() { Expect(setup.DefaultContext.DB().Save(&system).Error).To(Succeed()) })
 		Expect(setup.DefaultContext.DB().Model(&system).Updates(map[string]any{"url": conn.URL, "properties": conn.Properties}).Error).To(Succeed())
-		mail.FlushSMTPCache()
 		_, err := rbac.Enforcer().RemoveFilteredPolicy(0, n.ID.String())
 		Expect(err).NotTo(HaveOccurred())
 		person := models.Person{ID: uuid.New(), Name: "Recovery recipient", Email: "original-person@example.com"}

@@ -230,8 +230,8 @@ func finishDelivery(ctx *Context, receipt *models.NotificationDelivery, channel,
 		return errors.Join(sendErr, fmt.Errorf("delivery %s receipt persistence failed (external success=%t): %w", receipt.ID, sendErr == nil, err))
 	}
 	if sendErr == nil {
-		if err := ReconcileNotificationRecoveries(ctx.Context); err != nil {
-			ctx.Errorf("post-send recovery reconciliation: %v", err)
+		if err := wakeNotificationDelivery(ctx.Context, receipt.ID); err != nil {
+			ctx.Errorf("post-send recovery wake-up: %v", err)
 		}
 	}
 	return sendErr

@@ -153,6 +153,9 @@ func recoveryContext(n *NotificationWithSpec, payload NotificationEventPayload) 
 	return ctx
 }
 func readyRecoveries(n NotificationWithSpec) {
+	for _, receipt := range loadRecoveryReceipts(n) {
+		Expect(wakeNotificationDelivery(setup.DefaultContext, receipt.ID)).To(Succeed())
+	}
 	Expect(setup.DefaultContext.DB().Model(&models.NotificationDelivery{}).Where("notification_id = ?", n.ID).Update("not_before", time.Now().Add(-time.Hour)).Error).To(Succeed())
 }
 func loadRecoveryReceipts(n NotificationWithSpec) []models.NotificationDelivery {
@@ -261,6 +264,8 @@ var _ = ginkgo.Describe("Notification recovery", func() {
 		Expect(ReconcileNotificationRecoveries(setup.DefaultContext)).To(Succeed())
 		Expect(backend.read()).To(BeEmpty())
 		Expect(finishDelivery(ctx, receipt, "", "", nil)).To(Succeed())
+		Expect(backend.read()).To(BeEmpty())
+		Expect(ReconcileNotificationRecoveries(setup.DefaultContext)).To(Succeed())
 		Expect(backend.read()).To(HaveLen(1))
 		Expect(setup.DefaultContext.DB().Delete(ctx.log).Error).To(Succeed())
 		Expect(loadRecoveryReceipts(n)[0].HistoryID).To(BeNil())

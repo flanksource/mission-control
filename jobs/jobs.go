@@ -94,6 +94,11 @@ func Start(ctx context.Context, mcpServer *server.MCPServer) {
 	if err := notification.ReconcileNotificationRecoveriesJob(ctx).AddToScheduler(FuncScheduler); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule notification recovery: %v", err))
 	}
+	for _, recoveryJob := range []*job.Job{notification.SweepNotificationRecoveriesJob(ctx), notification.CleanupNotificationRecoveriesJob(ctx)} {
+		if err := recoveryJob.AddToScheduler(FuncScheduler); err != nil {
+			shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule notification recovery maintenance: %v", err))
+		}
+	}
 	if err := notification.ProcessPendingNotificationsJob(ctx).AddToScheduler(FuncScheduler); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job ProcessPendingNotificationsJob: %v", err))
 	}

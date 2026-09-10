@@ -143,8 +143,8 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	// So we use the system user as the subject.
 	ctx = ctx.WithSubject(api.SystemUserID.String())
 	if event.Name == "config.healthy" || event.Name == "component.healthy" || event.Name == "check.passed" {
-		if err := ReconcileNotificationRecoveries(ctx); err != nil {
-			ctx.Errorf("notification recovery reconciliation: %v", err)
+		if err := wakeNotificationResource(ctx, strings.SplitN(event.Name, ".", 2)[0], event.EventID); err != nil {
+			ctx.Errorf("notification recovery wake-up: %v", err)
 		}
 	}
 
