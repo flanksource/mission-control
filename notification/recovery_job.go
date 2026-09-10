@@ -21,7 +21,7 @@ import (
 
 const claimNotificationRecoverySQL = `UPDATE notification_deliveries SET lease_token = ?, lease_until = NOW() + INTERVAL '5 minutes', attempts = attempts + 1
    WHERE id = (SELECT id FROM notification_deliveries WHERE sent_at IS NOT NULL AND resolved_at IS NULL
-    AND not_before <= NOW() AND (lease_until IS NULL OR lease_until < NOW()) ORDER BY not_before
+    AND status <> 'recovery-exhausted' AND not_before <= NOW() AND (lease_until IS NULL OR lease_until < NOW()) ORDER BY not_before
     FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`
 
 func ReconcileNotificationRecoveriesJob(ctx context.Context) *job.Job {
@@ -33,6 +33,7 @@ func ReconcileNotificationRecoveriesJob(ctx context.Context) *job.Job {
 func ReconcileNotificationRecoveries(ctx context.Context) error {
 	ctx, cancel := ctx.WithTimeout(2 * time.Minute)
 	defer cancel()
+	maxRetries := max(0, ctx.Properties().Int("notification.recovery.max-retries", 7))
 	var failures []error
 	for range 20 {
 		if ctx.Err() != nil {
@@ -48,10 +49,14 @@ func ReconcileNotificationRecoveries(ctx context.Context) error {
 			break
 		}
 		receipt := receipts[0]
-		err = resolveDelivery(ctx.WithSubject(receipt.NotificationID.String()), &receipt)
+		if receipt.Attempts-1 > maxRetries {
+			err = fmt.Errorf("recovery retry limit already exceeded")
+		} else {
+			err = resolveDelivery(ctx.WithSubject(receipt.NotificationID.String()), &receipt)
+		}
 		values := map[string]any{"lease_until": nil, "lease_token": nil, "error": nil}
 		if err != nil {
-			delay := min(time.Hour, time.Duration(1<<min(receipt.Attempts, 10))*time.Second)
+			delay := min(time.Hour, time.Duration(1<<min(receipt.Attempts, 12))*time.Second)
 			if errors.Is(err, errRecoveryDeferred) {
 				delay = 15 * time.Second
 				values["status"] = "waiting-for-healthy"
@@ -63,6 +68,10 @@ func ReconcileNotificationRecoveries(ctx context.Context) error {
 			// Transport errors can contain credential-bearing URLs; only safe classifications are persisted here.
 			values["error"] = "recovery deferred: " + recoveryErrorClass(err)
 			values["not_before"] = time.Now().Add(delay)
+			if !errors.Is(err, errRecoveryDeferred) && receipt.Attempts-1 >= maxRetries {
+				values["status"] = "recovery-exhausted"
+				values["error"] = "recovery retry limit exhausted: " + recoveryErrorClass(err)
+			}
 		} else {
 			values["status"] = "resolved"
 			values["resolved_at"] = time.Now()
