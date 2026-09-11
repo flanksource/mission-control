@@ -78,6 +78,8 @@ type NotificationSpec struct {
 	// Specify the recipient
 	To NotificationRecipientSpec `json:"to" yaml:"to"`
 
+	OnResolved *NotificationOnResolved `json:"onResolved,omitempty" yaml:"onResolved,omitempty"`
+
 	// In case of failure, send the notification to this recipient
 	Fallback *NotificationFallback `json:"fallback,omitempty" yaml:"fallback,omitempty"`
 
