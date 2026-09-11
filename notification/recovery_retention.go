@@ -5,39 +5,39 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	"gorm.io/gorm"
 )
 
 func recoveryPositiveInt(ctx context.Context, key string, fallback int) int {
-	raw := ctx.Properties().String("notification.recovery."+key, strconv.Itoa(fallback))
-	value, err := strconv.Atoi(raw)
-	if err != nil || value <= 0 {
-		ctx.Warnf("invalid notification.recovery.%s=%q; using %d", key, raw, fallback)
+	value := ctx.Properties().Int("notification.recovery."+key, fallback)
+	if value <= 0 {
+		ctx.Warnf("notification.recovery.%s must be positive; using %d", key, fallback)
 		return fallback
 	}
 	return value
 }
 
 func recoveryPositiveDuration(ctx context.Context, key string, fallback time.Duration) time.Duration {
-	raw := ctx.Properties().String("notification.recovery."+key, fallback.String())
-	value, err := time.ParseDuration(raw)
-	if err != nil || value <= 0 {
-		ctx.Warnf("invalid notification.recovery.%s=%q; using %s", key, raw, fallback)
+	value := ctx.Properties().Duration("notification.recovery."+key, fallback)
+	if value <= 0 {
+		ctx.Warnf("notification.recovery.%s must be positive; using %s", key, fallback)
 		return fallback
 	}
 	return value
 }
 
+// A malformed or negative retention disables its category; it never means immediate deletion.
 func recoveryRetentionDuration(ctx context.Context, key string, fallback time.Duration) time.Duration {
 	raw := ctx.Properties().String("notification.recovery.retention."+key, fallback.String())
-	value, err := time.ParseDuration(raw)
+	value, err := duration.ParseDuration(raw)
 	if err != nil || value < 0 {
 		ctx.Warnf("invalid notification.recovery.retention.%s=%q; category disabled", key, raw)
 		return 0
 	}
-	return value
+	return time.Duration(value)
 }
 
 func CleanupNotificationRecoveriesJob(ctx context.Context) *job.Job {

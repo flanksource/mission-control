@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/flanksource/commons/duration"
 )
 
 // NotificationOnResolved updates destinations that actually received an unhealthy notification.
@@ -32,11 +34,11 @@ func (r NotificationOnResolved) Delay() (time.Duration, error) {
 	if r.WaitFor == "" {
 		return 0, nil
 	}
-	d, err := time.ParseDuration(r.WaitFor)
+	d, err := duration.ParseDuration(r.WaitFor)
 	if err != nil || d < 0 {
 		return 0, fmt.Errorf("onResolved.waitFor must be a nonnegative duration")
 	}
-	return d, nil
+	return time.Duration(d), nil
 }
 func (r NotificationOnResolved) ValidateSlack() error {
 	if !r.SlackReply() && r.SlackReaction() == "" {

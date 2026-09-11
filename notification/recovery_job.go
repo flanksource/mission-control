@@ -20,10 +20,25 @@ import (
 	"gorm.io/gorm"
 )
 
-const claimNotificationRecoverySQL = `UPDATE notification_deliveries SET lease_token = ?, lease_until = NOW() + INTERVAL '5 minutes', attempts = attempts + 1
-   WHERE id = (SELECT id FROM notification_deliveries WHERE sent_at IS NOT NULL AND resolved_at IS NULL
-    AND status <> 'recovery-exhausted' AND status <> 'waiting-for-healthy' AND not_before <= NOW() AND (lease_until IS NULL OR lease_until < NOW()) ORDER BY not_before
-    FOR UPDATE SKIP LOCKED LIMIT 1) RETURNING *`
+const claimNotificationRecoverySQL = `
+UPDATE notification_deliveries
+SET lease_token = ?,
+    lease_until = NOW() + INTERVAL '5 minutes',
+    attempts = attempts + 1
+WHERE id = (
+    SELECT id
+    FROM notification_deliveries
+    WHERE sent_at IS NOT NULL
+      AND resolved_at IS NULL
+      AND status <> 'recovery-exhausted'
+      AND status <> 'waiting-for-healthy'
+      AND not_before <= NOW()
+      AND (lease_until IS NULL OR lease_until < NOW())
+    ORDER BY not_before
+    FOR UPDATE SKIP LOCKED
+    LIMIT 1
+)
+RETURNING *`
 
 func ReconcileNotificationRecoveriesJob(ctx context.Context) *job.Job {
 	return &job.Job{Name: "NotificationRecoveries", Context: ctx, Schedule: "@every 15s", RunNow: true, Singleton: false, JobHistory: true, Retention: job.RetentionFailed,
