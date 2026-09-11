@@ -13,6 +13,18 @@
         "cacheWritesPrice": 12.5,
         "cacheReadsPrice": 1
       },
+      "claude-fable-5-1": {
+        "provider": "anthropic",
+        "modelID": "claude-fable-5-1",
+        "maxTokens": 128000,
+        "contextWindow": 1000000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 10,
+        "outputPrice": 50,
+        "cacheWritesPrice": 12.5,
+        "cacheReadsPrice": 0.25
+      },
       "claude-haiku-4-5": {
         "provider": "anthropic",
         "modelID": "claude-haiku-4-5",
@@ -211,6 +223,18 @@
         "outputPrice": 50,
         "cacheWritesPrice": 12.5,
         "cacheReadsPrice": 1
+      },
+      "anthropic.claude-fable-5-1": {
+        "provider": "bedrock",
+        "modelID": "anthropic.claude-fable-5-1",
+        "maxTokens": 128000,
+        "contextWindow": 1000000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 10,
+        "outputPrice": 50,
+        "cacheWritesPrice": 12.5,
+        "cacheReadsPrice": 0.25
       },
       "anthropic.claude-haiku-4-5-20251001-v1:0": {
         "provider": "bedrock",
@@ -572,6 +596,18 @@
         "cacheWritesPrice": 12.5,
         "cacheReadsPrice": 1
       },
+      "global.anthropic.claude-fable-5-1": {
+        "provider": "bedrock",
+        "modelID": "global.anthropic.claude-fable-5-1",
+        "maxTokens": 128000,
+        "contextWindow": 1000000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 10,
+        "outputPrice": 50,
+        "cacheWritesPrice": 12.5,
+        "cacheReadsPrice": 0.25
+      },
       "global.anthropic.claude-haiku-4-5-20251001-v1:0": {
         "provider": "bedrock",
         "modelID": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
@@ -687,17 +723,17 @@
         "contextWindow": 1050000,
         "supportsImages": true,
         "supportsPromptCache": true,
-        "inputPrice": 0.22,
-        "outputPrice": 1.32,
-        "cacheWritesPrice": 0.275,
-        "cacheReadsPrice": 0.022,
+        "inputPrice": 0.2,
+        "outputPrice": 1.2,
+        "cacheWritesPrice": 0.25,
+        "cacheReadsPrice": 0.02,
         "contextPriceTiers": [
           {
             "tokenThreshold": 272000,
-            "inputPrice": 0.44,
-            "outputPrice": 1.98,
-            "cacheWritesPrice": 0.55,
-            "cacheReadsPrice": 0.044
+            "inputPrice": 0.4,
+            "outputPrice": 1.8,
+            "cacheWritesPrice": 0.5,
+            "cacheReadsPrice": 0.04
           }
         ]
       },
@@ -708,17 +744,17 @@
         "contextWindow": 1050000,
         "supportsImages": true,
         "supportsPromptCache": true,
-        "inputPrice": 5.5,
-        "outputPrice": 33,
-        "cacheWritesPrice": 6.875,
-        "cacheReadsPrice": 0.55,
+        "inputPrice": 4,
+        "outputPrice": 20,
+        "cacheWritesPrice": 5,
+        "cacheReadsPrice": 0.4,
         "contextPriceTiers": [
           {
             "tokenThreshold": 272000,
-            "inputPrice": 11,
-            "outputPrice": 49.5,
-            "cacheWritesPrice": 13.75,
-            "cacheReadsPrice": 1.1
+            "inputPrice": 8,
+            "outputPrice": 30,
+            "cacheWritesPrice": 10,
+            "cacheReadsPrice": 0.8
           }
         ]
       },
@@ -729,17 +765,17 @@
         "contextWindow": 1050000,
         "supportsImages": true,
         "supportsPromptCache": true,
-        "inputPrice": 2.2,
-        "outputPrice": 13.2,
-        "cacheWritesPrice": 2.75,
-        "cacheReadsPrice": 0.22,
+        "inputPrice": 2,
+        "outputPrice": 12,
+        "cacheWritesPrice": 2.5,
+        "cacheReadsPrice": 0.2,
         "contextPriceTiers": [
           {
             "tokenThreshold": 272000,
-            "inputPrice": 4.4,
-            "outputPrice": 19.8,
-            "cacheWritesPrice": 5.5,
-            "cacheReadsPrice": 0.44
+            "inputPrice": 4,
+            "outputPrice": 18,
+            "cacheWritesPrice": 5,
+            "cacheReadsPrice": 0.4
           }
         ]
       },
@@ -1096,17 +1132,17 @@
         "contextWindow": 1050000,
         "supportsImages": true,
         "supportsPromptCache": true,
-        "inputPrice": 5.5,
-        "outputPrice": 33,
-        "cacheWritesPrice": 6.875,
-        "cacheReadsPrice": 0.55,
+        "inputPrice": 4.4,
+        "outputPrice": 22,
+        "cacheWritesPrice": 5.5,
+        "cacheReadsPrice": 0.44,
         "contextPriceTiers": [
           {
             "tokenThreshold": 272000,
-            "inputPrice": 11,
-            "outputPrice": 49.5,
-            "cacheWritesPrice": 13.75,
-            "cacheReadsPrice": 1.1
+            "inputPrice": 8.8,
+            "outputPrice": 33,
+            "cacheWritesPrice": 11,
+            "cacheReadsPrice": 0.88
           }
         ]
       },
@@ -1247,6 +1283,18 @@
         "outputPrice": 50,
         "cacheWritesPrice": 12.5,
         "cacheReadsPrice": 1
+      },
+      "us.anthropic.claude-fable-5-1": {
+        "provider": "bedrock",
+        "modelID": "us.anthropic.claude-fable-5-1",
+        "maxTokens": 128000,
+        "contextWindow": 1000000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 11,
+        "outputPrice": 55,
+        "cacheWritesPrice": 13.75,
+        "cacheReadsPrice": 0.275
       },
       "us.anthropic.claude-haiku-4-5-20251001-v1:0": {
         "provider": "bedrock",
@@ -1765,6 +1813,17 @@
         "outputPrice": 3.75,
         "cacheReadsPrice": 0.075
       },
+      "gemini-3.8-flash": {
+        "provider": "gemini",
+        "modelID": "gemini-3.8-flash",
+        "maxTokens": 65536,
+        "contextWindow": 1048576,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 0.75,
+        "outputPrice": 3.75,
+        "cacheReadsPrice": 0.075
+      },
       "gemini-embedding-001": {
         "provider": "gemini",
         "modelID": "gemini-embedding-001",
@@ -1812,15 +1871,6 @@
         "supportsImages": true,
         "inputPrice": 1.5,
         "outputPrice": 17.5
-      },
-      "gemini-robotics-er-1.6-preview": {
-        "provider": "gemini",
-        "modelID": "gemini-robotics-er-1.6-preview",
-        "maxTokens": 65536,
-        "contextWindow": 131072,
-        "supportsImages": true,
-        "inputPrice": 1,
-        "outputPrice": 5
       },
       "lyria-3-clip-preview": {
         "provider": "gemini",
@@ -2170,17 +2220,17 @@
         "contextWindow": 1050000,
         "supportsImages": true,
         "supportsPromptCache": true,
-        "inputPrice": 5,
-        "outputPrice": 30,
-        "cacheWritesPrice": 6.25,
-        "cacheReadsPrice": 0.5,
+        "inputPrice": 4,
+        "outputPrice": 20,
+        "cacheWritesPrice": 5,
+        "cacheReadsPrice": 0.4,
         "contextPriceTiers": [
           {
             "tokenThreshold": 272000,
-            "inputPrice": 10,
-            "outputPrice": 45,
-            "cacheWritesPrice": 12.5,
-            "cacheReadsPrice": 1
+            "inputPrice": 8,
+            "outputPrice": 30,
+            "cacheWritesPrice": 10,
+            "cacheReadsPrice": 0.8
           }
         ]
       },
@@ -2212,17 +2262,17 @@
         "contextWindow": 1050000,
         "supportsImages": true,
         "supportsPromptCache": true,
-        "inputPrice": 5,
-        "outputPrice": 30,
-        "cacheWritesPrice": 6.25,
-        "cacheReadsPrice": 0.5,
+        "inputPrice": 4,
+        "outputPrice": 20,
+        "cacheWritesPrice": 5,
+        "cacheReadsPrice": 0.4,
         "contextPriceTiers": [
           {
             "tokenThreshold": 272000,
-            "inputPrice": 10,
-            "outputPrice": 45,
-            "cacheWritesPrice": 12.5,
-            "cacheReadsPrice": 1
+            "inputPrice": 8,
+            "outputPrice": 30,
+            "cacheWritesPrice": 10,
+            "cacheReadsPrice": 0.8
           }
         ]
       },
@@ -2244,6 +2294,27 @@
             "outputPrice": 18,
             "cacheWritesPrice": 5,
             "cacheReadsPrice": 0.4
+          }
+        ]
+      },
+      "gpt-6-astra": {
+        "provider": "openai",
+        "modelID": "gpt-6-astra",
+        "maxTokens": 128000,
+        "contextWindow": 1050000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 10,
+        "outputPrice": 50,
+        "cacheWritesPrice": 12.5,
+        "cacheReadsPrice": 1,
+        "contextPriceTiers": [
+          {
+            "tokenThreshold": 272000,
+            "inputPrice": 20,
+            "outputPrice": 75,
+            "cacheWritesPrice": 25,
+            "cacheReadsPrice": 2
           }
         ]
       },
