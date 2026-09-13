@@ -14,7 +14,6 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
-	"github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
@@ -52,15 +51,7 @@ var eventToSpecEvent = map[string]PlaybookSpecEvent{
 	api.EventComponentUnknown:   {"component", "unknown"},
 }
 
-var (
-	eventPlaybooksCache = cache.New(5*time.Minute, 10*time.Minute)
-
-	EventRing *events.EventRing
-)
-
-func eventPlaybookCacheKey(eventClass, event string) string {
-	return fmt.Sprintf("%s::%s", eventClass, event)
-}
+var EventRing *events.EventRing
 
 func init() {
 	events.Register(RegisterEvents)
@@ -68,6 +59,7 @@ func init() {
 
 func RegisterEvents(ctx context.Context) {
 	EventRing = events.NewEventRing(ctx.Properties().Int("events.audit.size", events.DefaultEventLogSize))
+	logs.IfError(LoadEventIndex(ctx), "error loading playbook event index")
 	ps := playbookScheduler{Ring: EventRing}
 	events.RegisterSyncHandlerNamed("playbook.Handle", ps.Handle, api.EventStatusGroup...)
 
@@ -90,11 +82,7 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 		return nil
 	}
 
-	playbooks, err := FindPlaybooksForEvent(ctx, specEvent.Class, specEvent.Event)
-	if err != nil {
-		return fmt.Errorf("error fetching playbooks: %w", err)
-	}
-
+	playbooks := FindPlaybooksForEvent(specEvent.Class, specEvent.Event)
 	if len(playbooks) == 0 {
 		return nil
 	}
@@ -420,23 +408,4 @@ func onPlaybookRunNewApproval(ctx context.Context, event models.Event) error {
 	}
 
 	return db.UpdatePlaybookRunStatusIfApproved(ctx, playbook.ID.String(), *spec.Approval)
-}
-
-func FindPlaybooksForEvent(ctx context.Context, eventClass, event string) ([]models.Playbook, error) {
-	if playbooks, found := eventPlaybooksCache.Get(eventPlaybookCacheKey(eventClass, event)); found {
-		return playbooks.([]models.Playbook), nil
-	}
-
-	playbooks, err := db.FindPlaybooksForEvent(ctx, eventClass, event)
-	if err != nil {
-		return nil, err
-	}
-
-	eventPlaybooksCache.SetDefault(eventPlaybookCacheKey(eventClass, event), playbooks)
-	return playbooks, nil
-}
-
-// PurgeEventCache clears cached event-to-playbook mappings.
-func PurgeEventCache() {
-	eventPlaybooksCache.Flush()
 }

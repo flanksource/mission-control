@@ -123,6 +123,9 @@ var _ = ginkgo.BeforeSuite(func() {
 	if err := testdata.LoadPlaybooks(DefaultContext); err != nil {
 		ginkgo.Fail(err.Error())
 	}
+	if err := LoadEventIndex(DefaultContext); err != nil {
+		ginkgo.Fail(err.Error())
+	}
 	if err := testdata.LoadPermissions(DefaultContext); err != nil {
 		ginkgo.Fail(err.Error())
 	}
