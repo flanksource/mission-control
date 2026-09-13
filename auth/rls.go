@@ -18,6 +18,7 @@ import (
 	"gorm.io/gorm"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/utils"
 	"github.com/flanksource/incident-commander/vars"
 )
 
@@ -26,8 +27,10 @@ func getRLSCacheKey(userID string) string {
 }
 
 func InvalidateRLSCacheForUser(userID string) {
-	cacheKey := getRLSCacheKey(userID)
-	tokenCache.Delete(cacheKey)
+	// RLS entries are keyed as rls-payload-<id> and rls-payload-<id>:<fingerprint>
+	// for impersonation. PostgREST JWTs also embed the RLS payload under a
+	// different key. Flush the shared token cache so none of those can linger.
+	FlushTokenCache()
 }
 
 func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
@@ -47,43 +50,28 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		cacheKey = fmt.Sprintf("%s:%s", cacheKey, impersonated.Fingerprint())
 	}
 
-	if cached, ok := tokenCache.Get(cacheKey); ok {
-		return cached.(*rls.Payload), nil
-	}
-
-	if roles, err := dutyRBAC.RolesForUser(ctx.User().ID.String()); err != nil {
-		return nil, err
-	} else if !lo.Contains(roles, policy.RoleGuest) {
-		payload := &rls.Payload{Disable: true}
-		if impersonated != nil {
-			result, err := applyImpersonation(payload, impersonated)
-			if err != nil {
-				return nil, err
-			}
-			tokenCache.SetDefault(cacheKey, result)
-			return result, nil
-		}
-		tokenCache.SetDefault(cacheKey, payload)
-		return payload, nil
-	}
-
-	// Build RLS payload from permissions and scopes
-	payload, err := buildRLSPayloadFromScopes(ctx)
-	if err != nil {
-		return nil, ctx.Oops().Wrap(err)
-	}
-
-	if impersonated != nil {
-		result, err := applyImpersonation(payload, impersonated)
-		if err != nil {
+	return utils.GetOrLoad(tokenCache, cacheKey, func() (*rls.Payload, error) {
+		if roles, err := dutyRBAC.RolesForUser(ctx.User().ID.String()); err != nil {
 			return nil, err
+		} else if !lo.Contains(roles, policy.RoleGuest) {
+			payload := &rls.Payload{Disable: true}
+			if impersonated != nil {
+				return applyImpersonation(payload, impersonated)
+			}
+			return payload, nil
 		}
-		tokenCache.SetDefault(cacheKey, result)
-		return result, nil
-	}
 
-	tokenCache.SetDefault(cacheKey, payload)
-	return payload, nil
+		payload, err := buildRLSPayloadFromScopes(ctx)
+		if err != nil {
+			return nil, ctx.Oops().Wrap(err)
+		}
+
+		if impersonated != nil {
+			return applyImpersonation(payload, impersonated)
+		}
+
+		return payload, nil
+	})
 }
 
 // WithRLS wraps a function with RLS enforcement in a transaction.
