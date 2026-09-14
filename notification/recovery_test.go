@@ -300,9 +300,10 @@ var _ = ginkgo.Describe("Notification recovery", ginkgo.Label("recovery"), func(
 			n, config, _ := newRecoveryFixture()
 			_ = n
 			id := config.ID
-			if kind == "component" {
+			switch kind {
+			case "component":
 				id = dummy.Logistics.ID
-			} else if kind == "check" {
+			case "check":
 				id = uuid.UUID(dummy.LogisticsAPIHealthHTTPCheck.ID)
 			}
 			now := time.Now()
