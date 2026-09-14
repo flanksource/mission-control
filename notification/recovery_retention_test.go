@@ -1,5 +1,3 @@
-//go:build recoverytests
-
 package notification
 
 import (
@@ -12,7 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = ginkgo.Describe("Notification recovery retention", ginkgo.Label("ignore_local"), func() {
+var _ = ginkgo.Describe("Notification recovery retention", ginkgo.Label("recovery"), func() {
 	for _, terminal := range []struct {
 		status, column string
 		age            time.Duration

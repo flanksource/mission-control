@@ -79,11 +79,6 @@ test:
 		--github-output --output-dir test-reports \
 		--succinct --label-filter='!ignore_local'
 
-.PHONY: test-recovery
-test-recovery:
-	ginkgo --tags=recoverytests --focus='Notification recovery' --fail-on-empty \
-		--junit-report recovery-junit-report.xml --output-dir test-reports ./notification
-
 .PHONY: ci-test
 ci-test: $(TAILWIND_JS) $(LOCALBIN) ui
 	go build -o ./.bin/$(NAME) main.go

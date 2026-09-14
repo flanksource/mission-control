@@ -1,5 +1,3 @@
-//go:build recoverytests
-
 package notification
 
 import (
@@ -37,7 +35,7 @@ func readPollingReceipt(id uuid.UUID) models.NotificationDelivery {
 	return receipt
 }
 
-var _ = ginkgo.Describe("Notification recovery polling", ginkgo.Label("ignore_local"), func() {
+var _ = ginkgo.Describe("Notification recovery polling", ginkgo.Label("recovery"), func() {
 	ginkgo.It("post-send wake queues only its delivery without draining unrelated ready work", func() {
 		n, config, payload := newRecoveryFixture()
 		other, _, otherPayload := newRecoveryFixture()

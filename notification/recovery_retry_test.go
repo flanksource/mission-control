@@ -1,5 +1,3 @@
-//go:build recoverytests
-
 package notification
 
 import (
@@ -14,7 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var _ = ginkgo.Describe("Notification recovery retries", ginkgo.Label("ignore_local"), func() {
+var _ = ginkgo.Describe("Notification recovery retries", ginkgo.Label("recovery"), func() {
 	for _, tc := range []struct {
 		name, property string
 		retries        int

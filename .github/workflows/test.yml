@@ -95,9 +95,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make static ci-test
 
-      - name: Notification recovery tests
-        run: make test-recovery
-
       - name: Publish Unit Test Results
         uses: EnricoMi/publish-unit-test-result-action@c950f6fb443cb5af20a377fd0dfaa78838901040 # v2.23.0
         if: always() && github.event.repository.fork == 'false'
