@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
@@ -28,6 +29,8 @@ type Context struct {
 	notificationID uuid.UUID
 	recipientType  RecipientType
 	log            *models.NotificationSendHistory
+	recovery       *recoveryDispatch
+	recoveryPolicy *v1.NotificationOnResolved
 }
 
 func NewContext(ctx context.Context, notificationID uuid.UUID) *Context {

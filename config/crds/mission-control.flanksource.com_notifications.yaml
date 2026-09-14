@@ -729,6 +729,24 @@ spec:
                   - to
                   type: object
                 type: array
+              onResolved:
+                description: NotificationOnResolved updates destinations that actually
+                  received an unhealthy notification.
+                properties:
+                  enabled:
+                    type: boolean
+                  slack:
+                    properties:
+                      reaction:
+                        type: string
+                      reply:
+                        type: boolean
+                    type: object
+                  template:
+                    type: string
+                  waitFor:
+                    type: string
+                type: object
               repeatInterval:
                 description: RepeatInterval is the waiting time to resend a notification
                   after it has been successfully sent.

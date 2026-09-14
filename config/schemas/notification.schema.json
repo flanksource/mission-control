@@ -263,6 +263,25 @@
         "to"
       ]
     },
+    "NotificationOnResolved": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "waitFor": {
+          "type": "string"
+        },
+        "template": {
+          "type": "string"
+        },
+        "slack": {
+          "$ref": "#/$defs/NotificationResolvedSlack"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "NotificationOnResolved updates destinations that actually received an unhealthy notification."
+    },
     "NotificationRecipientSpec": {
       "properties": {
         "person": {
@@ -304,6 +323,18 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "NotificationResolvedSlack": {
+      "properties": {
+        "reaction": {
+          "type": "string"
+        },
+        "reply": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "NotificationSpec": {
       "properties": {
         "events": {
@@ -336,6 +367,9 @@
         "to": {
           "$ref": "#/$defs/NotificationRecipientSpec",
           "description": "Specify the recipient"
+        },
+        "onResolved": {
+          "$ref": "#/$defs/NotificationOnResolved"
         },
         "fallback": {
           "$ref": "#/$defs/NotificationFallback",

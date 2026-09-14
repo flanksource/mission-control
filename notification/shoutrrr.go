@@ -148,6 +148,22 @@ func dispatchNotification(ctx *Context, service, shoutrrrURL string, sender *rou
 			conn.FromName = fromName
 		}
 
+		if ctx.recovery != nil {
+			if ctx.recovery.SystemSMTP {
+				conn, err = mail.GetDefaultSMTP(ctx.Context)
+				if err != nil {
+					return err
+				}
+				if from != "" {
+					conn.FromAddress = from
+				}
+				if fromName != "" {
+					conn.FromName = fromName
+				}
+			}
+			return sendRecoverableSMTP(ctx, conn, strings.Split(to, ","), data, headerString)
+		}
+
 		m := mail.New(strings.Split(to, ","), data.Title, data.Message, `text/html; charset="UTF-8"`).
 			SetFrom(conn.FromName, conn.FromAddress).
 			SetCredentials(parsedURL.Hostname(), port, parsedURL.User.Username(), password)
@@ -173,6 +189,9 @@ func dispatchNotification(ctx *Context, service, shoutrrrURL string, sender *rou
 		return nil
 	}
 
+	if ctx.recovery != nil {
+		return fmt.Errorf("onResolved does not support transport %q", service)
+	}
 	sendErrors := sender.Send(data.Message, params)
 	for _, err := range sendErrors {
 		if err != nil {

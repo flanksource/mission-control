@@ -29,6 +29,12 @@ func DeleteNotificationSilence(ctx context.Context, id string) error {
 }
 
 func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error {
+	if err := obj.Spec.ValidateOnResolved(); err != nil {
+		return err
+	}
+	if err := ValidateRecoveryRecipients(ctx, obj.Spec); err != nil {
+		return err
+	}
 	uid, err := uuid.Parse(string(obj.GetUID()))
 	if err != nil {
 		return err
@@ -50,6 +56,14 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		Source:         models.SourceCRD,
 		RepeatInterval: obj.Spec.RepeatInterval,
 		GroupBy:        obj.Spec.GroupBy,
+	}
+
+	if obj.Spec.OnResolved != nil {
+		b, err := json.Marshal(obj.Spec.OnResolved)
+		if err != nil {
+			return err
+		}
+		dbObj.OnResolved = b
 	}
 
 	if obj.Spec.GroupByInterval != "" {

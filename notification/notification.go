@@ -45,6 +45,7 @@ func GetNotificationIDsForEvent(ctx context.Context, eventName string) ([]string
 type NotificationWithSpec struct {
 	models.Notification
 
+	OnResolved                 *v1.NotificationOnResolved
 	RepeatInterval             *time.Duration
 	CustomNotifications        []api.NotificationConfig
 	FallbackCustomNotification *api.NotificationConfig
@@ -74,6 +75,12 @@ func GetNotification(ctx context.Context, id string) (*NotificationWithSpec, err
 	data := NotificationWithSpec{
 		Notification:        n,
 		CustomNotifications: customNotifications,
+	}
+
+	if len(n.OnResolved) > 0 {
+		if err := json.Unmarshal(n.OnResolved, &data.OnResolved); err != nil {
+			return nil, fmt.Errorf("invalid onResolved: %w", err)
+		}
 	}
 
 	if len(n.FallbackCustomServices) > 0 {

@@ -67,12 +67,13 @@ type NotificationEventPayload struct {
 	ResourceStatus            string        `json:"resource_status"`
 	ResourceHealthDescription string        `json:"resource_health_description"`
 
-	EventID        uuid.UUID  `json:"event_id"`                  // The id of the original event this notification is for.
-	EventName      string     `json:"event_name"`                // The name of the original event this notification is for.
-	NotificationID uuid.UUID  `json:"notification_id,omitempty"` // ID of the notification.
-	EventCreatedAt time.Time  `json:"event_created_at"`          // Timestamp at which the original event was created
-	Properties     []byte     `json:"properties,omitempty"`      // json encoded properties of the original event
-	GroupID        *uuid.UUID `json:"group_id,omitempty"`        // ID of the group that the notification belongs to
+	RecoveryEpisode string     `json:"recovery_episode,omitempty"`
+	EventID         uuid.UUID  `json:"event_id"`                  // The id of the original event this notification is for.
+	EventName       string     `json:"event_name"`                // The name of the original event this notification is for.
+	NotificationID  uuid.UUID  `json:"notification_id,omitempty"` // ID of the notification.
+	EventCreatedAt  time.Time  `json:"event_created_at"`          // Timestamp at which the original event was created
+	Properties      []byte     `json:"properties,omitempty"`      // json encoded properties of the original event
+	GroupID         *uuid.UUID `json:"group_id,omitempty"`        // ID of the group that the notification belongs to
 
 	// Recipients //
 	CustomService    *api.NotificationConfig `json:"custom_service,omitempty"`    // Send to connection or shoutrrr service
@@ -109,6 +110,7 @@ func (t NotificationEventPayload) GenerateEventID() uuid.UUID {
 	}
 
 	sig := fmt.Sprintf("%s-%s-%s-%s-group-%s-recipient-%s", t.NotificationID.String(), t.ResourceID.String(), t.EventName, t.EventID.String(), groupID, recipientSig)
+	sig += t.RecoveryEpisode
 	generated, _ := hash.DeterministicUUID(sig)
 	return generated
 }
@@ -155,6 +157,12 @@ func (t NotificationEventPayload) originalEvent() (models.Event, error) {
 		}
 	}
 
+	if t.RecoveryEpisode != "" {
+		if event.Properties == nil {
+			event.Properties = make(map[string]string)
+		}
+		event.Properties["recovery_episode"] = t.RecoveryEpisode
+	}
 	return event, nil
 }
 
@@ -179,6 +187,15 @@ func storeNotificationPayload(ctx *Context, payload NotificationMessagePayload) 
 type recipientSendFunc func(connectionName, shoutrrrURL string, properties map[string]string) error
 
 func resolveRecipientAndSend(ctx *Context, payload NotificationEventPayload, celEnv *celVariables, notification *NotificationWithSpec, sendFn recipientSendFunc) error {
+	if ctx.recovery != nil {
+		connectionName, transportURL, err := recoveryRoute(ctx, "", "")
+		if err != nil {
+			return err
+		}
+		if ctx.recovery.Delivery != nil {
+			return sendFn(connectionName, transportURL, nil)
+		}
+	}
 	if payload.PersonID != nil {
 		ctx.WithRecipient(RecipientTypePerson, payload.PersonID)
 		var emailAddress string
@@ -206,6 +223,9 @@ func resolveRecipientAndSend(ctx *Context, payload NotificationEventPayload, cel
 				continue
 			}
 
+			if cn.Webhook != nil && notification.OnResolved != nil && notification.OnResolved.Enabled {
+				return fmt.Errorf("onResolved does not support webhook recipients")
+			}
 			if cn.Webhook != nil {
 				ctx.WithRecipient(RecipientTypeWebhook, nil)
 				return sendWebhookNotification(ctx, celEnv, payload, cn.Webhook, notification)
@@ -219,6 +239,9 @@ func resolveRecipientAndSend(ctx *Context, payload NotificationEventPayload, cel
 
 	if payload.CustomService != nil {
 		cn := payload.CustomService
+		if cn.Webhook != nil && notification.OnResolved != nil && notification.OnResolved.Enabled {
+			return fmt.Errorf("onResolved does not support webhook recipients")
+		}
 		if cn.Webhook != nil {
 			ctx.WithRecipient(RecipientTypeWebhook, nil)
 			return sendWebhookNotification(ctx, celEnv, payload, cn.Webhook, notification)
@@ -377,6 +400,10 @@ func SendRawNotification(ctx *Context, connectionName, shoutrrrURL string, celEn
 
 	var connection *models.Connection
 	var err error
+	connectionName, shoutrrrURL, err = recoveryRoute(ctx, connectionName, shoutrrrURL)
+	if err != nil {
+		return "", err
+	}
 	if connectionName != "" {
 		connection, err = pkgConnection.Get(ctx.Context, connectionName)
 		if err != nil {
@@ -392,6 +419,9 @@ func SendRawNotification(ctx *Context, connectionName, shoutrrrURL string, celEn
 		data.Properties = collections.MergeMap(connection.Properties, data.Properties)
 	}
 
+	if err := setRecoveryTransport(ctx, connection, shoutrrrURL); err != nil {
+		return "", err
+	}
 	if connection != nil && connection.Type == models.ConnectionTypeSlack {
 		celEnv["channel"] = "slack"
 		templater := ctx.NewStructTemplater(celEnv, "", TemplateFuncs)
@@ -428,6 +458,10 @@ func SendRawNotification(ctx *Context, connectionName, shoutrrrURL string, celEn
 func SendNotification(ctx *Context, connectionName, shoutrrrURL string, payload NotificationMessagePayload, properties map[string]string, celEnv *celVariables) (string, error) {
 	var connection *models.Connection
 	var err error
+	connectionName, shoutrrrURL, err = recoveryRoute(ctx, connectionName, shoutrrrURL)
+	if err != nil {
+		return "", err
+	}
 	if connectionName != "" {
 		connection, err = pkgConnection.Get(ctx.Context, connectionName)
 		if err != nil {
@@ -448,6 +482,9 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, payload 
 		properties = renderTemplateProperties(ctx, properties, celEnv)
 	}
 
+	if err := setRecoveryTransport(ctx, connection, shoutrrrURL); err != nil {
+		return "", err
+	}
 	if connection != nil && connection.Type == models.ConnectionTypeSlack {
 		slackMsg, err := FormatNotificationMessage(payload, "slack")
 		if err != nil {
@@ -656,6 +693,18 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		payloads = append(payloads, payload)
 	}
 
+	if n.OnResolved != nil && n.OnResolved.Enabled && unresolvedEvent(event.Name) {
+		state, err := currentRecoveryHealth(ctx, strings.SplitN(event.Name, ".", 2)[0], resourceID)
+		if err != nil {
+			return nil, err
+		}
+		if state.EpisodeID == nil || !unresolvedHealth(state.Health) || event.Properties["recovery_episode"] != state.EpisodeID.String() {
+			return nil, nil
+		}
+		for i := range payloads {
+			payloads[i].RecoveryEpisode = event.Properties["recovery_episode"]
+		}
+	}
 	return payloads, nil
 }
 

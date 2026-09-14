@@ -111,8 +111,16 @@ func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, groupID *u
 		clauses = append(clauses, clause.Eq{Column: "resource_id", Value: resourceID})
 	}
 
+	q := ctx.DB()
+	if n.OnResolved != nil && n.OnResolved.Enabled && unresolvedEvent(sourceEvent) {
+		state, err := currentRecoveryHealth(ctx, strings.SplitN(sourceEvent, ".", 2)[0], uuid.MustParse(resourceID))
+		if err != nil {
+			return nil, err
+		}
+		q = q.Where("id IN (SELECT history_id FROM notification_deliveries WHERE episode_id = ? AND sent_at IS NOT NULL)", state.EpisodeID)
+	}
 	var sendHistory models.NotificationSendHistory
-	tx := ctx.DB().Clauses(clauses...).
+	tx := q.Clauses(clauses...).
 		Select("id", "group_id").
 		Where(fmt.Sprintf("(NOW() - created_at) <= '%d minutes'::INTERVAL", int(n.RepeatInterval.Minutes()))).
 		Order("created_at DESC").Limit(1).Find(&sendHistory)
@@ -134,6 +142,11 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	// We need an authorized RBAC subject to read connections.
 	// So we use the system user as the subject.
 	ctx = ctx.WithSubject(api.SystemUserID.String())
+	if event.Name == "config.healthy" || event.Name == "component.healthy" || event.Name == "check.passed" {
+		if err := wakeNotificationResource(ctx, strings.SplitN(event.Name, ".", 2)[0], event.EventID); err != nil {
+			ctx.Errorf("notification recovery wake-up: %v", err)
+		}
+	}
 
 	celEnv, err := GetEnvForEvent(ctx, event)
 	if err != nil {
@@ -715,6 +728,27 @@ func calculateGroupByHash(ctx context.Context, groupBy []string, resourceID, eve
 
 func sendNotification(ctx context.Context, payload NotificationEventPayload) error {
 	notificationContext := NewContext(ctx.WithSubject(payload.NotificationID.String()), payload.NotificationID)
+	n, err := GetNotification(ctx, payload.NotificationID.String())
+	if err != nil {
+		return err
+	}
+	if n.OnResolved != nil && n.OnResolved.Enabled {
+		id := uuid.NewSHA1(payload.GenerateEventID(), []byte(payload.EventCreatedAt.UTC().Format(time.RFC3339Nano)))
+		var existing models.NotificationSendHistory
+		result := ctx.DB().Where("id = ?", id).Limit(1).Find(&existing)
+		if result.Error != nil {
+			return result.Error
+		}
+		if existing.Status == models.NotificationStatusSent {
+			return nil
+		}
+		if existing.ID != uuid.Nil {
+			notificationContext = notificationContext.WithHistory(existing)
+		} else {
+			notificationContext.log.ID = id
+		}
+	}
+
 	ctx.Debugf("[notification.send] %s  ", payload.EventName)
 	notificationContext.WithSource(payload.EventName, payload.ResourceID)
 	notificationContext.WithGroupID(payload.GroupID)
@@ -723,7 +757,7 @@ func sendNotification(ctx context.Context, payload NotificationEventPayload) err
 		return fmt.Errorf("failed to create notification send history before dispatch: %w", err)
 	}
 
-	err := _sendNotification(notificationContext, payload)
+	err = _sendNotification(notificationContext, payload)
 	if err != nil {
 		if IsStaleResourceEventError(err) {
 			notificationContext.log.Status = models.NotificationStatusSkipped
@@ -738,6 +772,14 @@ func sendNotification(ctx context.Context, payload NotificationEventPayload) err
 	}
 	if IsStaleResourceEventError(err) {
 		return nil
+	}
+	if err != nil {
+		n, lookupErr := GetNotification(ctx, payload.NotificationID.String())
+		if lookupErr == nil && n.OnResolved != nil && n.OnResolved.Enabled && n.HasFallbackSet() {
+			if fallbackErr := materializeRecoveryFallback(ctx, n, *notificationContext.log); fallbackErr != nil {
+				return errors.Join(err, fallbackErr)
+			}
+		}
 	}
 	return err
 }
@@ -797,6 +839,12 @@ func _sendNotification(ctx *Context, payload NotificationEventPayload) error {
 	}
 
 	ctx.log.Payload = payload.AsMap()
+	if skip, err := prepareRecoveryDispatch(ctx, nn, payload); err != nil {
+		return err
+	} else if skip {
+		ctx.log.Status = models.NotificationStatusSkipped
+		return nil
+	}
 
 	if payload.PlaybookID != nil {
 		if err := triggerPlaybookRun(ctx, celEnv, *payload.PlaybookID); err != nil {
