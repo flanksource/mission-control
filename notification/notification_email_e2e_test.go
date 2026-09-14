@@ -31,6 +31,7 @@ func lastSMTPMessage() string {
 
 var _ = ginkgo.Describe("Notification email end-to-end", ginkgo.Ordered, func() {
 	ginkgo.BeforeEach(func() {
+		notification.PurgeCache("")
 		clearSMTPMessages()
 	})
 
@@ -89,6 +90,7 @@ var _ = ginkgo.Describe("Notification email end-to-end", ginkgo.Ordered, func() 
 			events.ConsumeAll(DefaultContext)
 
 			Eventually(func() int {
+				events.ConsumeAll(DefaultContext)
 				return len(getSMTPMessages())
 			}, "10s", "200ms").Should(Equal(1))
 
@@ -190,7 +192,7 @@ var _ = ginkgo.Describe("Notification email end-to-end", ginkgo.Ordered, func() 
 		})
 
 		ginkgo.It("sends custom team email", func() {
-			lastRuntime = time.Now().UTC().Format(time.DateTime)
+			lastRuntime = time.Now().UTC().Format(time.RFC3339)
 			checkRun = models.CheckStatus{
 				CheckID: check.ID,
 				Status:  true,
@@ -211,6 +213,7 @@ var _ = ginkgo.Describe("Notification email end-to-end", ginkgo.Ordered, func() 
 			events.ConsumeAll(DefaultContext)
 
 			Eventually(func() int {
+				events.ConsumeAll(DefaultContext)
 				return len(getSMTPMessages())
 			}, "10s", "200ms").Should(Equal(1))
 
@@ -286,7 +289,7 @@ var _ = ginkgo.Describe("Notification email end-to-end", ginkgo.Ordered, func() 
 		})
 
 		ginkgo.It("sends default person email", func() {
-			lastRuntime = time.Now().UTC().Format(time.DateTime)
+			lastRuntime = time.Now().UTC().Format(time.RFC3339)
 			checkRun = models.CheckStatus{
 				CheckID: check.ID,
 				Status:  false,
@@ -307,6 +310,7 @@ var _ = ginkgo.Describe("Notification email end-to-end", ginkgo.Ordered, func() 
 			events.ConsumeAll(DefaultContext)
 
 			Eventually(func() int {
+				events.ConsumeAll(DefaultContext)
 				return len(getSMTPMessages())
 			}, "10s", "200ms").Should(Equal(1))
 

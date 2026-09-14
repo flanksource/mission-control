@@ -102,7 +102,7 @@ Adapt the connection endpoints, secret references, resource filter and recipient
 
 Release the matching duty schema/model changes before shipping Mission Control. Local validation uses an untracked scratch `-modfile` with an absolute duty replacement, never edits tracked dependency files.
 
-**Existing integration blocker:** the baseline pins casbin/v2 v2.135.0 with gorm-adapter/v3 v3.41.0, whose adapter implements casbin/v3 persistence. Production RBAC bootstrap is incompatible; this work does not change those dependency pins. Recovery transport tests use an explicitly selected `recoverytests` build configuration with a v2-compatible test adapter and real least-privilege Casbin policies. These tests validate allow/deny/revocation behavior, **not production RBAC bootstrap**. The tagged configuration excludes legacy specs and live consumers to avoid global policy leakage; run legacy specs separately.
+**Existing integration blocker:** the baseline pins casbin/v2 v2.135.0 with gorm-adapter/v3 v3.41.0, whose adapter implements casbin/v3 persistence. Production RBAC bootstrap is incompatible; this work does not change those dependency pins. Notification tests use a v2-compatible test adapter. Recovery specs enable real least-privilege Casbin policies; legacy specs retain their previous behavior without enforcement. These tests validate allow/deny/revocation behavior, **not production RBAC bootstrap**. The suite drains events explicitly instead of starting background consumers, clears recovery-generated events after each spec, and resets enforcement between specs. Recovery and legacy specs run together under `make test` and `make ci-test`, using embedded PostgreSQL and mocked transports without a build tag. Use `--label-filter=recovery` to run only recovery specs.
 
 ```sh
 # Embedded databases only (setup may recreate its test database); all transports mocked.
@@ -111,7 +111,7 @@ scratch=$(mktemp -d)
 cp go.mod go.sum "$scratch/"
 go mod edit -modfile="$scratch/go.mod" -replace=github.com/flanksource/duty="$(cd ../duty && pwd)"
 export GOFLAGS="-modfile=$scratch/go.mod"
-env -u DUTY_DB_URL -u DB_URL go run github.com/onsi/ginkgo/v2/ginkgo --tags=recoverytests --focus='Notification recovery' ./notification
+env -u DUTY_DB_URL -u DB_URL go run github.com/onsi/ginkgo/v2/ginkgo --label-filter=recovery ./notification
 env -u DUTY_DB_URL -u DB_URL go run github.com/onsi/ginkgo/v2/ginkgo --label-filter='!ignore_local' ./notification ./db ./api/v1 ./mail
 unset GOFLAGS
 cd ../duty

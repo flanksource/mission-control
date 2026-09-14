@@ -75,6 +75,16 @@ func ConsumeAll(ctx context.Context) {
 }
 
 func StartConsumers(ctx context.Context) {
+	initConsumers(ctx, true, defaultLoggerErrorHandler)
+}
+
+// InitConsumers registers consumers for explicit draining with ConsumeAll, without background listeners.
+// errorHandler controls retries for synchronous handlers.
+func InitConsumers(ctx context.Context, errorHandler func(context.Context, error) bool) {
+	initConsumers(ctx, false, errorHandler)
+}
+
+func initConsumers(ctx context.Context, listen bool, errorHandler func(context.Context, error) bool) {
 	log := ctx.Logger.Named("events")
 	for _, fn := range registers {
 		fn(ctx)
@@ -82,7 +92,9 @@ func StartConsumers(ctx context.Context) {
 	// We listen to all PG Notifications on one channel and distribute it to other consumers
 	// based on the events.
 	notifyRouter := pg.NewNotifyRouter()
-	go notifyRouter.Run(ctx, eventQueueUpdateChannel)
+	if listen {
+		go notifyRouter.Run(ctx, eventQueueUpdateChannel)
+	}
 
 	SyncHandlers.Each(func(event string, handlers []syncHandlerData) {
 		log.Tracef("Registering %d sync event handlers for %s", len(handlers), event)
@@ -111,16 +123,18 @@ func StartConsumers(ctx context.Context) {
 			WatchEvents: []string{event},
 			Consumers:   wrappedHandlers,
 			ConsumerOption: &postq.ConsumerOption{
-				ErrorHandler: defaultLoggerErrorHandler,
+				ErrorHandler: errorHandler,
 			},
 		}
 
 		if ec, err := consumer.EventConsumer(); err != nil {
 			log.Fatalf("failed to create event consumer: %s", err)
 		} else {
-			pgsyncNotifyChannel := notifyRouter.GetOrCreateBufferedChannel(0, event)
 			consumers = append(consumers, ec)
-			go ec.Listen(ctx, pgsyncNotifyChannel)
+			if listen {
+				pgsyncNotifyChannel := notifyRouter.GetOrCreateBufferedChannel(0, event)
+				go ec.Listen(ctx, pgsyncNotifyChannel)
+			}
 		}
 	})
 
@@ -170,9 +184,11 @@ func StartConsumers(ctx context.Context) {
 			if ec, err := consumer.EventConsumer(); err != nil {
 				log.Fatalf("failed to create event consumer: %s", err)
 			} else {
-				pgasyncNotifyChannel := notifyRouter.GetOrCreateBufferedChannel(handler.numConsumers, event)
 				consumers = append(consumers, ec)
-				go ec.Listen(ctx, pgasyncNotifyChannel)
+				if listen {
+					pgasyncNotifyChannel := notifyRouter.GetOrCreateBufferedChannel(handler.numConsumers, event)
+					go ec.Listen(ctx, pgasyncNotifyChannel)
+				}
 			}
 		}
 	})

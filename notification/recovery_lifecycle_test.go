@@ -1,5 +1,3 @@
-//go:build recoverytests
-
 package notification
 
 import (
@@ -21,7 +19,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-var _ = ginkgo.Describe("Notification recovery lifecycle", ginkgo.Label("ignore_local"), func() {
+var _ = ginkgo.Describe("Notification recovery lifecycle", ginkgo.Label("recovery"), func() {
 	for _, kind := range []string{"config", "component", "check"} {
 		ginkgo.It("rejects reordered and coalesced "+kind+" source events and recovers from persisted state", func() {
 			n, config, _ := newRecoveryFixture()
@@ -294,7 +292,13 @@ var _ = ginkgo.Describe("Notification recovery lifecycle", ginkgo.Label("ignore_
 		backend, conn := newRecoverySMTP(n)
 		var system models.Connection
 		Expect(setup.DefaultContext.DB().Where("name = ? AND type = ? AND deleted_at IS NULL", "system", models.ConnectionTypeEmail).First(&system).Error).To(Succeed())
-		ginkgo.DeferCleanup(func() { Expect(setup.DefaultContext.DB().Save(&system).Error).To(Succeed()) })
+		originalURL, originalProperties := system.URL, system.Properties
+		restoreSystem := func() {
+			Expect(setup.DefaultContext.DB().Model(&models.Connection{}).Where("id = ?", system.ID).Updates(map[string]any{
+				"url": originalURL, "properties": originalProperties,
+			}).Error).To(Succeed())
+		}
+		ginkgo.DeferCleanup(restoreSystem)
 		Expect(setup.DefaultContext.DB().Model(&system).Updates(map[string]any{"url": conn.URL, "properties": conn.Properties}).Error).To(Succeed())
 		_, err := rbac.Enforcer().RemoveFilteredPolicy(0, n.ID.String())
 		Expect(err).NotTo(HaveOccurred())
@@ -329,6 +333,7 @@ var _ = ginkgo.Describe("Notification recovery lifecycle", ginkgo.Label("ignore_
 		Expect(backend.read()).To(HaveLen(2))
 		Expect(backend.read()[1].To).To(Equal(backend.read()[0].To))
 		Expect(loadRecoveryReceipts(n)[0].ResolvedAt).NotTo(BeNil())
+		restoreSystem()
 	})
 	ginkgo.It("does not relabel a delayed warning source event as a later unhealthy episode", func() {
 		n, config, _ := newRecoveryFixture()

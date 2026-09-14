@@ -302,6 +302,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 			}, "10s", "200ms").Should(Equal(int64(0)), "must have consumed the config.updated event")
 
 			Eventually(func() bool {
+				events.ConsumeAll(DefaultContext)
 				DefaultContext.DB().Where("source_event = ?", api.EventConfigUpdated).
 					Where("resource_id = ?", config.ID.String()).
 					Where("notification_id = ?", myNotification.ID.String()).

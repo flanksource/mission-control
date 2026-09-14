@@ -1,5 +1,3 @@
-//go:build recoverytests
-
 package notification
 
 import (
@@ -16,11 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/casbin/casbin/v2/persist"
-	stringadapter "github.com/casbin/casbin/v2/persist/string-adapter"
-	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/emersion/go-smtp"
-	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
@@ -101,29 +95,12 @@ func newRecoverySMTP(n NotificationWithSpec) (*recoverySMTP, models.Connection) 
 	return backend, conn
 }
 
-type recoveryPolicyAdapter struct{ *stringadapter.Adapter }
-
-func (*recoveryPolicyAdapter) AddPolicy(string, string, []string) error                  { return nil }
-func (*recoveryPolicyAdapter) RemovePolicy(string, string, []string) error               { return nil }
-func (*recoveryPolicyAdapter) RemoveFilteredPolicy(string, string, int, ...string) error { return nil }
-
-func (*recoveryPolicyAdapter) AddPolicies(string, string, [][]string) error    { return nil }
-func (*recoveryPolicyAdapter) RemovePolicies(string, string, [][]string) error { return nil }
-
 func grantRecoveryConnection(n NotificationWithSpec, conn models.Connection) {
 	_, err := rbac.Enforcer().AddPolicy(n.ID.String(), "*", policy.ActionRead, "allow", fmt.Sprintf("r.obj.Connection.Name == %q", conn.Name), conn.ID.String())
 	Expect(err).NotTo(HaveOccurred())
 }
 
-var recoveryRBAC sync.Once
-
 func newRecoveryFixture() (NotificationWithSpec, models.ConfigItem, NotificationEventPayload) {
-	recoveryRBAC.Do(func() {
-		Expect(rbac.Init(setup.DefaultContext, []string{dummy.JohnDoe.ID.String()}, func(context.Context, *gormadapter.Adapter) persist.Adapter {
-			return &recoveryPolicyAdapter{stringadapter.NewAdapter("# isolated notification recovery test policies")}
-		})).To(Succeed())
-		rbac.Stop()
-	})
 	n := NotificationWithSpec{Notification: models.Notification{ID: uuid.New(), Name: uuid.NewString(), Events: []string{}, Source: models.SourceCRD, OnResolved: types.JSON(`{"enabled":true}`)}, OnResolved: &v1.NotificationOnResolved{Enabled: true}}
 	Expect(setup.DefaultContext.DB().Create(&n.Notification).Error).To(Succeed())
 
@@ -164,7 +141,7 @@ func loadRecoveryReceipts(n NotificationWithSpec) []models.NotificationDelivery 
 	return rows
 }
 
-var _ = ginkgo.Describe("Notification recovery", ginkgo.Label("ignore_local"), func() {
+var _ = ginkgo.Describe("Notification recovery", ginkgo.Label("recovery"), func() {
 	for _, healthy := range []bool{false, true} {
 		name := "stale episode"
 		if healthy {
