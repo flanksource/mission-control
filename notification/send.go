@@ -193,6 +193,11 @@ func resolveRecipientAndSend(ctx *Context, payload NotificationEventPayload, cel
 			return err
 		}
 		if ctx.recovery.Delivery != nil {
+			if connectionName != "" {
+				ctx.WithRecipient(RecipientTypeConnection, ctx.recovery.Delivery.ConnectionID)
+			} else {
+				ctx.WithRecipient(RecipientTypeURL, nil)
+			}
 			return sendFn(connectionName, transportURL, nil)
 		}
 	}
@@ -699,6 +704,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			return nil, err
 		}
 		if state.EpisodeID == nil || !unresolvedHealth(state.Health) || event.Properties["recovery_episode"] != state.EpisodeID.String() {
+			ctx.Logger.V(6).Infof("skipping notification[%s]: source recovery episode %q is no longer unresolved/current for resource %s (health=%s, current_episode=%v)", n.ID, event.Properties["recovery_episode"], resourceID, state.Health, state.EpisodeID)
 			return nil, nil
 		}
 		for i := range payloads {

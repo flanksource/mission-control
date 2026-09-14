@@ -14,7 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var _ = ginkgo.Describe("Notification recovery retries", func() {
+var _ = ginkgo.Describe("Notification recovery retries", ginkgo.Label("ignore_local"), func() {
 	for _, tc := range []struct {
 		name, property string
 		retries        int
@@ -60,6 +60,8 @@ var _ = ginkgo.Describe("Notification recovery retries", func() {
 				Expect(receipt.LeaseUntil).To(BeNil())
 				if attempt <= tc.retries {
 					Expect(receipt.Status).To(Equal("recovery-error"))
+					Expect(receipt.Error).NotTo(BeNil())
+					Expect(*receipt.Error).To(HavePrefix("recovery failed: "))
 					delay := min(time.Hour, time.Duration(1<<min(attempt, 12))*time.Second)
 					Expect(receipt.NotBefore).To(BeTemporally(">=", before.Add(delay).Add(-time.Millisecond)))
 					Expect(receipt.NotBefore).To(BeTemporally("<=", after.Add(delay).Add(time.Millisecond)))

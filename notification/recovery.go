@@ -80,9 +80,13 @@ func prepareRecoveryDispatch(ctx *Context, n *NotificationWithSpec, payload Noti
 		return false, err
 	}
 	if !unresolvedHealth(state.Health) || state.EpisodeID == nil {
+		reason := "resource is no longer in an unresolved recovery episode"
+		ctx.log.Error = &reason
 		return true, nil
 	}
 	if payload.RecoveryEpisode != state.EpisodeID.String() {
+		reason := "recovery episode no longer current for this resource"
+		ctx.log.Error = &reason
 		return true, nil
 	}
 	ctx.recovery = &recoveryDispatch{EpisodeID: *state.EpisodeID, Policy: *n.OnResolved}

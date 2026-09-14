@@ -3,6 +3,7 @@ package db
 import (
 	"encoding/json"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/incident-commander/api"
@@ -64,21 +65,46 @@ var _ = ginkgo.Describe("Notification recovery persistence", func() {
 	for _, tc := range []struct {
 		name   string
 		change func(*v1.NotificationSpec)
+		expect string
 	}{
-		{"grouped", func(s *v1.NotificationSpec) { s.GroupBy = []string{"type"} }},
-		{"unsupported event", func(s *v1.NotificationSpec) { s.Events = []string{"incident.created"} }},
-		{"generic Slack", func(s *v1.NotificationSpec) { s.To = v1.NotificationRecipientSpec{URL: "slack://token/channel"} }},
-		{"playbook", func(s *v1.NotificationSpec) { s.To = v1.NotificationRecipientSpec{Playbook: lo.ToPtr("default/run")} }},
-		{"negative stabilization", func(s *v1.NotificationSpec) { s.OnResolved.WaitFor = "-1s" }},
-		{"missing connection", func(s *v1.NotificationSpec) { s.To = v1.NotificationRecipientSpec{Connection: uuid.NewString()} }},
+		{"grouped", func(s *v1.NotificationSpec) { s.GroupBy = []string{"type"} }, "does not support grouped notifications"},
+		{"unsupported event", func(s *v1.NotificationSpec) { s.Events = []string{"incident.created"} }, "does not support event"},
+		{"generic Slack", func(s *v1.NotificationSpec) { s.To = v1.NotificationRecipientSpec{URL: "slack://token/channel"} }, "requires native Slack, named SMTP or system SMTP"},
+		{"playbook", func(s *v1.NotificationSpec) { s.To = v1.NotificationRecipientSpec{Playbook: lo.ToPtr("default/run")} }, "does not support playbook or webhook recipients"},
+		{"negative stabilization", func(s *v1.NotificationSpec) { s.OnResolved.WaitFor = "-1s" }, "waitFor must be a nonnegative duration"},
+		{"missing connection", func(s *v1.NotificationSpec) { s.To = v1.NotificationRecipientSpec{Connection: uuid.NewString()} }, "not found"},
 		{"missing namespaced connection", func(s *v1.NotificationSpec) {
 			s.To = v1.NotificationRecipientSpec{Connection: "connection://default/" + uuid.NewString()}
-		}},
+		}, "not found"},
 	} {
 		ginkgo.It("rejects "+tc.name+" before persistence", func() {
 			obj := recoveryNotificationCRD()
 			tc.change(&obj.Spec)
-			Expect(PersistNotificationFromCRD(DefaultContext, obj)).To(HaveOccurred())
+			Expect(PersistNotificationFromCRD(DefaultContext, obj)).To(MatchError(ContainSubstring(tc.expect)))
+			var count int64
+			Expect(DefaultContext.DB().Model(&models.Notification{}).Where("id = ?", obj.UID).Count(&count).Error).To(Succeed())
+			Expect(count).To(BeZero())
+		})
+	}
+	for _, fallback := range []bool{false, true} {
+		name := "primary"
+		if fallback {
+			name = "fallback"
+		}
+		ginkgo.It("rejects an empty "+name+" team before persistence", func() {
+			obj := recoveryNotificationCRD()
+			team := models.Team{ID: uuid.New(), Name: uuid.NewString(), CreatedBy: dummy.JohnDoe.ID, Spec: []byte(`{"notifications":[]}`)}
+			Expect(DefaultContext.DB().Create(&team).Error).To(Succeed())
+			ginkgo.DeferCleanup(func() { Expect(DefaultContext.DB().Delete(&team).Error).To(Succeed()) })
+			recipient := v1.NotificationRecipientSpec{Team: team.ID.String()}
+			if fallback {
+				obj.Spec.Fallback = &v1.NotificationFallback{NotificationRecipientSpec: recipient}
+			} else {
+				obj.Spec.To = recipient
+			}
+			err := PersistNotificationFromCRD(DefaultContext, obj)
+			Expect(err).To(MatchError(ContainSubstring("has no notification recipients")))
+			Expect(dutyAPI.ErrorCode(err)).To(Equal(dutyAPI.EINVALID))
 			var count int64
 			Expect(DefaultContext.DB().Model(&models.Notification{}).Where("id = ?", obj.UID).Count(&count).Error).To(Succeed())
 			Expect(count).To(BeZero())

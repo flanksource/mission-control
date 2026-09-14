@@ -19,6 +19,7 @@ func validateFixtureDirWithSchema(schemaPath, dir, kind string) {
 	schema, err := jsonschema.NewCompiler().Compile(schemaPath)
 	gomega.Expect(err).To(gomega.BeNil())
 
+	matched := 0
 	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -50,6 +51,7 @@ func validateFixtureDirWithSchema(schemaPath, dir, kind string) {
 				continue
 			}
 
+			matched++
 			if err := schema.Validate(doc); err != nil {
 				return fmt.Errorf("schema validation failed for %s: %w", path, err)
 			}
@@ -57,9 +59,33 @@ func validateFixtureDirWithSchema(schemaPath, dir, kind string) {
 	})
 
 	gomega.Expect(err).To(gomega.BeNil())
+	gomega.Expect(matched).To(gomega.BeNumerically(">", 0), "no %s documents found in %s", kind, dir)
 }
 
 var _ = ginkgo.Describe("Fixture schema validation", func() {
+	for _, tc := range []struct {
+		name, document string
+	}{
+		{"empty directory", ""},
+		{"missing kind", "metadata:\n  name: test\n"},
+		{"wrong kind", "kind: WrongKind\n"},
+	} {
+		ginkgo.It("rejects fixtures with "+tc.name+" and no matching documents", func() {
+			dir, err := os.MkdirTemp("", "fixture-schema-*")
+			gomega.Expect(err).To(gomega.Succeed())
+			ginkgo.DeferCleanup(func() { gomega.Expect(os.RemoveAll(dir)).To(gomega.Succeed()) })
+			schemaPath := filepath.Join(dir, "schema.json")
+			gomega.Expect(os.WriteFile(schemaPath, []byte(`{"type":"object"}`), 0600)).To(gomega.Succeed())
+			if tc.document != "" {
+				gomega.Expect(os.WriteFile(filepath.Join(dir, "fixture.yaml"), []byte(tc.document), 0600)).To(gomega.Succeed())
+			}
+			failures := gomega.InterceptGomegaFailures(func() {
+				validateFixtureDirWithSchema(schemaPath, dir, "Notification")
+			})
+			gomega.Expect(failures).To(gomega.HaveLen(1))
+			gomega.Expect(failures[0]).To(gomega.ContainSubstring("no Notification documents found"))
+		})
+	}
 	ginkgo.It("Notifications", func() {
 		schemaPath := "../config/schemas/notification.schema.json"
 		validateFixtureDirWithSchema(schemaPath, "../fixtures/notifications/", "Notification")
