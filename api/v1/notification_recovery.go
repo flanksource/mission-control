@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/duration"
+	"github.com/flanksource/incident-commander/api"
 )
 
 // NotificationOnResolved updates destinations that actually received an unhealthy notification.
@@ -75,7 +76,7 @@ func (s NotificationSpec) ValidateOnResolved() error {
 		if recipient.Playbook != nil || recipient.Webhook != nil {
 			return fmt.Errorf("onResolved does not support playbook or webhook recipients")
 		}
-		if recipient.URL != "" && !strings.HasPrefix(recipient.URL, "smtp://system/") {
+		if recipient.URL != "" && !strings.HasPrefix(recipient.URL, api.SystemSMTP) {
 			return fmt.Errorf("onResolved requires native Slack, named SMTP or system SMTP")
 		}
 	}

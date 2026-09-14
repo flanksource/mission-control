@@ -32,9 +32,6 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 	if err := obj.Spec.ValidateOnResolved(); err != nil {
 		return err
 	}
-	if err := ValidateRecoveryRecipients(ctx, obj.Spec); err != nil {
-		return err
-	}
 	uid, err := uuid.Parse(string(obj.GetUID()))
 	if err != nil {
 		return err
@@ -42,6 +39,9 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 
 	if obj.Spec.To.Empty() {
 		return fmt.Errorf("notification %s has no recipient", obj.Name)
+	}
+	if err := ValidateRecoveryRecipients(ctx, obj.Spec); err != nil {
+		return err
 	}
 
 	dbObj := models.Notification{

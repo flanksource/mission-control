@@ -188,7 +188,7 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 		SELECT *
 		FROM notification_send_history
 		WHERE status IN ?
-            AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.id = notification_id AND n.on_resolved->>'enabled' = 'true')
+            AND NOT EXISTS (SELECT 1 FROM notifications n WHERE n.id = notification_send_history.notification_id AND n.on_resolved->>'enabled' = 'true')
 			AND not_before <= NOW()
 			AND retries < ?
 		ORDER BY not_before ASC
@@ -286,7 +286,7 @@ func ProcessFallbackNotifications(parentCtx context.Context) (bool, error) {
 		maxRetries := ctx.Properties().Int("notification.max-retries", 4) - 1
 		if err := ctx.DB().Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate, Options: clause.LockingOptionsSkipLocked}).
 			Where("status = ?", models.NotificationStatusAttemptingFallback).
-			Where("NOT EXISTS (SELECT 1 FROM notifications n WHERE n.id = notification_id AND n.on_resolved->>'enabled' = 'true')").
+			Where("NOT EXISTS (SELECT 1 FROM notifications n WHERE n.id = notification_send_history.notification_id AND n.on_resolved->>'enabled' = 'true')").
 			Where("not_before <= NOW()").
 			Where("retries < ?", maxRetries).
 			Order("not_before ASC").
@@ -354,7 +354,7 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 
 			deadline := any(gorm.Expr(fmt.Sprintf("not_before + INTERVAL '%f'", lo.CoalesceOrEmpty(lo.FromPtr(notif.WaitForEvalPeriod), time.Second*30).Seconds())))
 			if notif.OnResolved != nil && notif.OnResolved.Enabled {
-				deadline = currentHistory.NotBefore.Add(lo.CoalesceOrEmpty(lo.FromPtr(notif.WaitForEvalPeriod), time.Second*30))
+				deadline = time.Now().Add(lo.CoalesceOrEmpty(lo.FromPtr(notif.WaitForEvalPeriod), time.Second*30))
 			}
 			if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
 				"status":     models.NotificationStatusEvaluatingWaitFor,

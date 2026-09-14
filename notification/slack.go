@@ -83,17 +83,14 @@ func SlackSend(ctx *Context, apiToken, channel string, msg NotificationTemplate)
 		defer cancel()
 	}
 	actualChannel, timestamp, err := api.PostMessageContext(sendCtx, channel, opts...)
+	var slackError slack.SlackErrorResponse
+	if errors.As(err, &slackError) && slackError.Err == "channel_not_found" {
+		err = fmt.Errorf("slack channel %q not found. ensure the channel exists & the bot has permission on that channel", channel)
+	} else {
+		err = ctx.Oops().Hint(msg.Message).Wrap(err)
+	}
 	if receipt != nil {
 		return finishDelivery(ctx, receipt, actualChannel, timestamp, err)
 	}
-
-	var slackError slack.SlackErrorResponse
-	if errors.As(err, &slackError) {
-		switch slackError.Err {
-		case "channel_not_found":
-			return fmt.Errorf("slack channel %q not found. ensure the channel exists & the bot has permission on that channel", channel)
-		}
-	}
-
-	return ctx.Oops().Hint(msg.Message).Wrap(err)
+	return err
 }

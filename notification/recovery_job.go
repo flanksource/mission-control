@@ -73,7 +73,10 @@ func ReconcileNotificationRecoveries(ctx context.Context) error {
 		values := map[string]any{"lease_until": nil, "lease_token": nil, "error": nil}
 		if err != nil {
 			delay := min(time.Hour, time.Duration(1<<min(receipt.Attempts, 12))*time.Second)
+			// Transport errors can contain credential-bearing URLs; persist only safe classifications.
+			values["error"] = "recovery failed: " + recoveryErrorClass(err)
 			if errors.Is(err, errRecoveryDeferred) {
+				values["error"] = "recovery deferred: " + recoveryErrorClass(err)
 				values["status"] = "waiting-for-healthy"
 				values["attempts"] = receipt.Attempts - 1
 				var deferred *recoveryDeferral
@@ -85,8 +88,6 @@ func ReconcileNotificationRecoveries(ctx context.Context) error {
 				values["status"] = "recovery-error"
 				failures = append(failures, fmt.Errorf("recovery %s: %w", receipt.ID, err))
 			}
-			// Transport errors can contain credential-bearing URLs; only safe classifications are persisted here.
-			values["error"] = "recovery deferred: " + recoveryErrorClass(err)
 			if !errors.Is(err, errRecoveryDeferred) {
 				values["not_before"] = time.Now().Add(delay)
 			}

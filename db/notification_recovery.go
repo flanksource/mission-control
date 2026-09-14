@@ -2,7 +2,6 @@ package db
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	dutyAPI "github.com/flanksource/duty/api"
@@ -30,17 +29,20 @@ func ValidateRecoveryRecipients(ctx context.Context, spec v1.NotificationSpec) e
 				return err
 			}
 			if team == nil {
-				return fmt.Errorf("team %q not found", recipient.Team)
+				return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "team %q not found", recipient.Team)
 			}
 			var teamSpec api.TeamSpec
 			if err := json.Unmarshal(team.Spec, &teamSpec); err != nil {
 				return err
 			}
+			if len(teamSpec.Notifications) == 0 {
+				return dutyAPI.Errorf(dutyAPI.EINVALID, "team %q has no notification recipients", recipient.Team)
+			}
 			configs = teamSpec.Notifications
 		}
 		for _, config := range configs {
 			if config.Webhook != nil {
-				return fmt.Errorf("onResolved does not support webhook recipients")
+				return dutyAPI.Errorf(dutyAPI.EINVALID, "onResolved does not support webhook recipients")
 			}
 			if config.Connection != "" {
 				conn, err := context.FindConnectionByURL(ctx, config.Connection)
@@ -53,14 +55,14 @@ func ValidateRecoveryRecipients(ctx context.Context, spec v1.NotificationSpec) e
 				switch conn.Type {
 				case models.ConnectionTypeSlack:
 					if err := spec.OnResolved.ValidateSlack(); err != nil {
-						return err
+						return dutyAPI.Errorf(dutyAPI.EINVALID, "%s", err)
 					}
 				case models.ConnectionTypeEmail:
 				default:
-					return fmt.Errorf("onResolved does not support connection type %q", conn.Type)
+					return dutyAPI.Errorf(dutyAPI.EINVALID, "onResolved does not support connection type %q", conn.Type)
 				}
 			} else if config.URL != "" && !strings.HasPrefix(config.URL, api.SystemSMTP) {
-				return fmt.Errorf("onResolved requires native Slack, named SMTP or system SMTP")
+				return dutyAPI.Errorf(dutyAPI.EINVALID, "onResolved requires native Slack, named SMTP or system SMTP")
 			}
 		}
 	}

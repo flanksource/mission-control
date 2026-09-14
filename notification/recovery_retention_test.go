@@ -12,7 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = ginkgo.Describe("Notification recovery retention", func() {
+var _ = ginkgo.Describe("Notification recovery retention", ginkgo.Label("ignore_local"), func() {
 	for _, terminal := range []struct {
 		status, column string
 		age            time.Duration

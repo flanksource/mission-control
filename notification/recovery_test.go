@@ -164,7 +164,29 @@ func loadRecoveryReceipts(n NotificationWithSpec) []models.NotificationDelivery 
 	return rows
 }
 
-var _ = ginkgo.Describe("Notification recovery", func() {
+var _ = ginkgo.Describe("Notification recovery", ginkgo.Label("ignore_local"), func() {
+	for _, healthy := range []bool{false, true} {
+		name := "stale episode"
+		if healthy {
+			name = "resolved health"
+		}
+		ginkgo.It("records a skip reason for "+name, func() {
+			n, config, payload := newRecoveryFixture()
+			expected := "recovery episode no longer current for this resource"
+			if healthy {
+				Expect(setup.DefaultContext.DB().Model(&config).Update("health", "healthy").Error).To(Succeed())
+				expected = "resource is no longer in an unresolved recovery episode"
+			} else {
+				payload.RecoveryEpisode = uuid.NewString()
+			}
+			ctx := NewContext(setup.DefaultContext, n.ID)
+			skip, err := prepareRecoveryDispatch(ctx, &n, payload)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(skip).To(BeTrue())
+			Expect(ctx.log.Error).NotTo(BeNil())
+			Expect(*ctx.log.Error).To(Equal(expected))
+		})
+	}
 	for _, raw := range []bool{true, false} {
 		ginkgo.It(fmt.Sprintf("threads SMTP raw=%t with original envelope, headers, From and subject after connection changes", raw), func() {
 			n, config, payload := newRecoveryFixture()
@@ -402,6 +424,23 @@ var _ = ginkgo.Describe("Notification recovery", func() {
 		Expect(setup.DefaultContext.DB().Where("id = ?", history.ID).First(&actual).Error).To(Succeed())
 		Expect(actual.Status).To(Equal(models.NotificationStatusSkipped))
 		Expect(loadRecoveryReceipts(n)).To(BeEmpty())
+	})
+	ginkgo.It("preserves Slack channel diagnostics when recording a failed delivery", func() {
+		n, _, payload := newRecoveryFixture()
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = io.WriteString(w, `{"ok":false,"error":"channel_not_found"}`)
+		}))
+		ginkgo.DeferCleanup(server.Close)
+		old := newSlackClient
+		newSlackClient = func(token string) *slack.Client { return slack.New(token, slack.OptionAPIURL(server.URL+"/")) }
+		ginkgo.DeferCleanup(func() { newSlackClient = old })
+		err := SlackSend(recoveryContext(&n, payload), "mock-token", "Cmissing", NotificationTemplate{Message: "unhealthy"})
+		Expect(err).To(MatchError(ContainSubstring(`slack channel "Cmissing" not found`)))
+		receipts := loadRecoveryReceipts(n)
+		Expect(receipts).To(HaveLen(1))
+		Expect(receipts[0].Status).To(Equal("error"))
+		Expect(receipts[0].SentAt).To(BeNil())
 	})
 	ginkgo.It("records exact Slack reply/reaction targets and retries only a failed reaction", func() {
 		n, config, payload := newRecoveryFixture()

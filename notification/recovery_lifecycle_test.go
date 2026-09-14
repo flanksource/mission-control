@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-var _ = ginkgo.Describe("Notification recovery lifecycle", func() {
+var _ = ginkgo.Describe("Notification recovery lifecycle", ginkgo.Label("ignore_local"), func() {
 	for _, kind := range []string{"config", "component", "check"} {
 		ginkgo.It("rejects reordered and coalesced "+kind+" source events and recovers from persisted state", func() {
 			n, config, _ := newRecoveryFixture()
@@ -216,7 +216,7 @@ var _ = ginkgo.Describe("Notification recovery lifecycle", func() {
 		Expect(ReconcileNotificationRecoveries(setup.DefaultContext)).To(Succeed())
 		Expect(backend.read()).To(HaveLen(2))
 	})
-	ginkgo.It("keeps Kubernetes waitFor reevaluation at the exact original due time plus evaluation period", func() {
+	ginkgo.It("waits a full evaluation period after claiming an overdue Kubernetes notification", func() {
 		n, config, payload := newRecoveryFixture()
 		scraper := models.ConfigScraper{ID: uuid.New(), Name: uuid.NewString(), Spec: `{"kubernetes":[{}]}`, Source: models.SourceCRD}
 		Expect(setup.DefaultContext.DB().Create(&scraper).Error).To(Succeed())
@@ -225,16 +225,20 @@ var _ = ginkgo.Describe("Notification recovery lifecycle", func() {
 			Expect(setup.DefaultContext.DB().Delete(&scraper).Error).To(Succeed())
 		})
 		Expect(setup.DefaultContext.DB().Model(&config).Update("scraper_id", scraper.ID).Error).To(Succeed())
-		due := time.Now().Add(-time.Second).Truncate(time.Microsecond)
+		due := time.Now().Add(-time.Hour).Truncate(time.Microsecond)
 		history := models.NotificationSendHistory{ID: uuid.New(), NotificationID: n.ID, ResourceID: config.ID, SourceEvent: payload.EventName, Payload: payload.AsMap(), Status: models.NotificationStatusPending, NotBefore: &due}
 		Expect(setup.DefaultContext.DB().Create(&history).Error).To(Succeed())
+		before := time.Now()
 		handled, err := processRecoveryPending(setup.DefaultContext, false)
+		after := time.Now()
 		Expect(err).NotTo(HaveOccurred())
 		Expect(handled).To(BeTrue())
 		var actual models.NotificationSendHistory
 		Expect(setup.DefaultContext.DB().Where("id = ?", history.ID).First(&actual).Error).To(Succeed())
 		Expect(actual.Status).To(Equal(models.NotificationStatusEvaluatingWaitFor))
-		Expect(*actual.NotBefore).To(BeTemporally("==", due.Add(30*time.Second)))
+		Expect(actual.NotBefore).NotTo(BeNil())
+		Expect(*actual.NotBefore).To(BeTemporally(">=", before.Add(30*time.Second).Add(-time.Microsecond)))
+		Expect(*actual.NotBefore).To(BeTemporally("<=", after.Add(30*time.Second)))
 		handled, err = processRecoveryPending(setup.DefaultContext, false)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(handled).To(BeFalse())

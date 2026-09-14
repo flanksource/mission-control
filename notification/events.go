@@ -774,8 +774,7 @@ func sendNotification(ctx context.Context, payload NotificationEventPayload) err
 		return nil
 	}
 	if err != nil {
-		n, lookupErr := GetNotification(ctx, payload.NotificationID.String())
-		if lookupErr == nil && n.OnResolved != nil && n.OnResolved.Enabled && n.HasFallbackSet() {
+		if n.OnResolved != nil && n.OnResolved.Enabled && n.HasFallbackSet() {
 			if fallbackErr := materializeRecoveryFallback(ctx, n, *notificationContext.log); fallbackErr != nil {
 				return errors.Join(err, fallbackErr)
 			}
