@@ -341,7 +341,6 @@ func tableUpdatesHandler(ctx context.Context) {
 		case v := <-playbooksUpdateChan:
 			tgOperation, id := tableActivityPayload(v)
 			query.InvalidateCacheByID[models.Playbook](id)
-			playbook.PurgeEventCache()
 
 			if tgOperation == TGOPUpdate {
 				if err := rbac.ReloadPolicy(); err != nil {
