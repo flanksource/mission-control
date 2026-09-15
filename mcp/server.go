@@ -89,6 +89,7 @@ func RegisterStaticTools(s *server.MCPServer) {
 	registerTemplates(s)
 	registerAccess(s)
 	registerResolve(s)
+	registerJobs(s)
 }
 
 func Server(ctx context.Context, serverOpts ...server.StreamableHTTPOption) *MCPServer {
