@@ -22,7 +22,7 @@ func init() {
 // Both the full mission-control binary and the slim faro binary call this.
 func RegisterClientCommands(root *cobra.Command) {
 	root.PersistentFlags().StringVar(&mccontext.ContextFlag, "context", "", "Mission Control context to use")
-	root.AddCommand(AuthCmd, ContextCmd, WhoamiCmd, Playbook, Connection, PluginCmd)
+	root.AddCommand(AuthCmd, ContextCmd, WhoamiCmd, Playbook, Connection, PluginCmd, Job)
 	pluginHostRoot = root
 	registerPluginHARFlag(root)
 	registerRetryFlags(root)
