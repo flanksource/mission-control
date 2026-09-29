@@ -23,11 +23,11 @@ import (
 
 func RegisterRoutes(e *echo.Echo) {
 	// Cannot register this routes in auth/rbac package as it would create a cyclic import
-	e.POST("/auth/:id/update_state", UpdateAccountState)
-	e.POST("/auth/:id/properties", UpdateAccountProperties)
+	e.POST("/auth/:id/update_state", UpdateAccountState, icrbac.Authorization(policy.ObjectAuth, policy.ActionUpdate))
+	e.POST("/auth/:id/properties", UpdateAccountProperties, icrbac.Authorization(policy.ObjectAuth, policy.ActionUpdate))
 	e.GET("/auth/whoami", WhoAmI)
 	e.POST("/auth/create_token", CreateToken)
-	e.GET("/auth/tokens", ListTokens)
+	e.GET("/auth/tokens", ListTokens, icrbac.Authorization(policy.ObjectAuth, policy.ActionRead))
 	e.DELETE("/auth/token/:id", DeleteToken)
 }
 
