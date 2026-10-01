@@ -41,6 +41,39 @@ A Scope is a named set of resources (see `scopes.md`). A rule references exactly
 
 A Role can't be named after a built-in role: `admin`, `everyone`, `guest`, `viewer`, `editor`, `commander`, `responder` or `agent`. Such a Role is rejected (`overview.md`, "Rejected or not in effect"). The built-in roles are described in Section 7. In a RoleBinding, `role` always names a Role and `subjects.roles` always names a built-in role (`rolebindings.md`, Section 2.3), so `role: viewer` must never read as the built-in `viewer`.
 
+### 1.1 Why one Scope per input
+
+Each input takes a single Scope. To cover more resources, add targets to the Scope, or create a new Scope that selects all of them. A list of Scopes would add nothing a Scope can't already do.
+
+A single Scope also prevents accidental grants. Suppose a rule could list several Scopes:
+
+```yaml
+# Not supported
+- name: run-playbooks
+  action: playbook:run
+  resource:
+    scopeRefs: [echo-playbook, restart-playbook]
+  target:
+    scopeRefs: [staging-configs, production-configs]
+```
+
+The intent might be "`echo` on staging, `restart-pod` on production". But the rule allows both playbooks on both sets of configs, so it also allows `echo` on production and `restart-pod` on staging. With a single Scope per input, each pairing is its own rule (Section 4.2):
+
+```yaml
+- name: run-echo-on-staging
+  action: playbook:run
+  resource:
+    scopeRef: echo-playbook
+  target:
+    scopeRef: staging-configs
+- name: run-restart-on-production
+  action: playbook:run
+  resource:
+    scopeRef: restart-playbook
+  target:
+    scopeRef: production-configs
+```
+
 ## 2. Actions
 
 Every action has a contract, defined in code: the resource types it accepts, and whether it takes a target and of which types. An action without a contract can't be used in a rule. The contracts are:
@@ -63,6 +96,10 @@ For `playbook:run`, `target` is optional. A rule without it matches only runs wi
 - Deny rules on `read` are rejected for now, because they couldn't be enforced on listings: Mission Control's own users' database listings aren't filtered by row unless they're guests (`overview.md`, "Default access"). A deny on reading production configs would still let an editor list them.
 
 An operation may make more than one check. For example, running a playbook on a config also checks `read` on that config. Section 4.3 lists every check each operation makes; a rule never grants the other checks implicitly.
+
+### 2.1 Why one action per rule
+
+A rule has exactly one action, because the action decides what the rest of the rule means. Its contract fixes the resource types the `resource` Scope may select, whether the rule takes a `target` and of which types, what its Scopes must meet (Section 3), whether it can be a deny, and how it's enforced. A rule with several actions would need one Scope to meet several contracts at once. One action per rule also lets a RoleBinding constraint narrow exactly one action (`rolebindings.md`, Section 3), and lets an invalid rule name the action that's wrong. To grant several actions on the same Scope, write a rule for each.
 
 ## 3. Which Scopes a rule accepts
 
