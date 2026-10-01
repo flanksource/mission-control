@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/samber/lo"
 )
 
 const configAccessSourceRBAC = "missioncontrol::rbac"
@@ -120,9 +121,20 @@ func syncPlaybookConfigAccess(ctx context.Context) (configAccessSyncResult, erro
 
 	desired := make(map[accessKey]struct{})
 
+	// Grants can select playbooks by name, namespace or category, so the check needs the whole playbook
+	var playbooks []models.Playbook
+	if err := ctx.DB().Where("id IN ?", playbookIDs).Find(&playbooks).Error; err != nil {
+		return result, fmt.Errorf("failed to query playbooks: %w", err)
+	}
+	playbooksByID := lo.KeyBy(playbooks, func(p models.Playbook) uuid.UUID { return p.ID })
+
 	for _, person := range people {
 		for _, playbookID := range playbookIDs {
-			attr := &models.ABACAttribute{Playbook: models.Playbook{ID: playbookID}}
+			playbook, ok := playbooksByID[playbookID]
+			if !ok {
+				playbook = models.Playbook{ID: playbookID}
+			}
+			attr := &models.ABACAttribute{Playbook: playbook}
 
 			if hasRunRole && rbac.HasPermission(ctx, person.PersonID.String(), attr, policy.ActionPlaybookRun) {
 				desired[accessKey{ConfigID: playbookID, ExternalUserID: person.ExternalUserID, ExternalRoleID: runRoleID}] = struct{}{}

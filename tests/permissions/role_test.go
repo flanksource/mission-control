@@ -1,0 +1,594 @@
+package permissions_test
+
+import (
+	"encoding/json"
+
+	"github.com/flanksource/commons/properties"
+	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/duty/tests/fixtures/dummy"
+	"github.com/flanksource/duty/tests/setup"
+	"github.com/flanksource/duty/types"
+	"github.com/google/uuid"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sTypes "k8s.io/apimachinery/pkg/types"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac/adapter"
+	"github.com/flanksource/incident-commander/vars"
+)
+
+var _ = Describe("Role and RoleBinding", Ordered, func() {
+	const (
+		namespace      = "role-test"
+		otherNamespace = "role-other"
+	)
+
+	var (
+		alice, bob, carol, dave, erin, builtinAgent, rlsGuest, rlsTenantGuest *models.Person
+		teamA, teamB                                                          *models.Team
+		roles                                                                 = map[string]*v1.Role{}
+	)
+
+	newScope := func(name, ns string, targets ...v1.ScopeTarget) *v1.Scope {
+		return &v1.Scope{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, UID: k8sTypes.UID(uuid.NewString())},
+			Spec:       v1.ScopeSpec{Targets: targets},
+		}
+	}
+
+	allow := func(name, action, resource string) v1.RoleRule {
+		return v1.RoleRule{Name: name, Action: action, Resource: v1.ScopeReference{ScopeRef: resource}}
+	}
+
+	on := func(rule v1.RoleRule, target string) v1.RoleRule {
+		rule.Target = &v1.ScopeReference{ScopeRef: target}
+		return rule
+	}
+
+	deny := func(rule v1.RoleRule) v1.RoleRule {
+		rule.Deny = true
+		return rule
+	}
+
+	newRole := func(name, ns string, rules ...v1.RoleRule) *v1.Role {
+		return &v1.Role{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: ns, UID: k8sTypes.UID(uuid.NewString())},
+			Spec:       v1.RoleSpec{Rules: rules},
+		}
+	}
+
+	constraint := func(rule, resource, target string) v1.RoleBindingConstraint {
+		c := v1.RoleBindingConstraint{Rule: rule}
+		if resource != "" {
+			c.Resource = &v1.ScopeReference{ScopeRef: resource}
+		}
+		if target != "" {
+			c.Target = &v1.ScopeReference{ScopeRef: target}
+		}
+		return c
+	}
+
+	newBinding := func(name, role string, subjects v1.RoleBindingSubjects, constraints ...v1.RoleBindingConstraint) *v1.RoleBinding {
+		return &v1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
+			Spec:       v1.RoleBindingSpec{Role: role, Subjects: subjects, Constraints: constraints},
+		}
+	}
+
+	people := func(p ...*models.Person) v1.RoleBindingSubjects {
+		return v1.RoleBindingSubjects{PermissionGroupSubjects: v1.PermissionGroupSubjects{
+			People: lo.Map(p, func(person *models.Person, _ int) string { return person.Email }),
+		}}
+	}
+
+	configTagged := func(tags map[string]string) models.ConfigItem {
+		return models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr("config"), Tags: tags}
+	}
+
+	var (
+		tenantA = configTagged(map[string]string{"tenant": "a", "env": "role-test"})
+		tenantB = configTagged(map[string]string{"tenant": "b", "env": "role-test"})
+	)
+
+	canRunOn := func(subject string, playbook models.Playbook, config *models.ConfigItem) bool {
+		attr := &models.ABACAttribute{Playbook: playbook}
+		if config != nil {
+			attr.Config = *config
+		}
+		return rbac.HasPermission(DefaultContext, subject, attr, policy.ActionPlaybookRun)
+	}
+
+	canRead := func(subject string, config models.ConfigItem) bool {
+		return rbac.HasPermission(DefaultContext, subject, &models.ABACAttribute{Config: config}, policy.ActionRead)
+	}
+
+	persistRole := func(role *v1.Role) {
+		GinkgoHelper()
+		Expect(db.PersistRoleFromCRD(DefaultContext, role)).To(Succeed())
+		roles[role.Namespace+"/"+role.Name] = role
+	}
+
+	BeforeAll(func() {
+		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+
+		alice = setup.CreateUserWithRole(DefaultContext, "Role Alice", "role-alice@test.com", policy.RoleGuest)
+		bob = setup.CreateUserWithRole(DefaultContext, "Role Bob", "role-bob@test.com", policy.RoleGuest)
+		carol = setup.CreateUserWithRole(DefaultContext, "Role Carol", "role-carol@test.com", policy.RoleGuest)
+		dave = setup.CreateUserWithRole(DefaultContext, "Role Dave", "role-dave@test.com", policy.RoleGuest)
+		erin = setup.CreateUserWithRole(DefaultContext, "Role Erin", "role-erin@test.com", policy.RoleGuest)
+		builtinAgent = setup.CreateUserWithRole(DefaultContext, "Role Agent", "role-agent@test.com", policy.RoleAgent)
+		rlsGuest = setup.CreateUserWithRole(DefaultContext, "Role RLS Guest", "role-rls@test.com", policy.RoleGuest)
+		rlsTenantGuest = setup.CreateUserWithRole(DefaultContext, "Role RLS Tenant Guest", "role-rls-tenant@test.com", policy.RoleGuest)
+
+		teamA = &models.Team{Name: "role-team-a", CreatedBy: alice.ID}
+		teamB = &models.Team{Name: "role-team-b", CreatedBy: alice.ID}
+		Expect(DefaultContext.DB().Create(teamA).Error).To(Succeed())
+		Expect(DefaultContext.DB().Create(teamB).Error).To(Succeed())
+
+		for _, scope := range []*v1.Scope{
+			newScope("all-playbooks", namespace, v1.ScopeTarget{Playbook: &types.ResourceSelector{Name: "*"}}),
+			newScope("all-playbooks", otherNamespace, v1.ScopeTarget{Playbook: &types.ResourceSelector{Name: "*"}}),
+			newScope("kubernetes-playbooks", namespace, v1.ScopeTarget{Playbook: &types.ResourceSelector{FieldSelector: "category=Kubernetes"}}),
+			newScope("all-configs", namespace, v1.ScopeTarget{Config: &types.ResourceSelector{Name: "*"}}),
+			newScope("tenant-a", namespace, v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "tenant=a"}}),
+			newScope("tenant-b", namespace, v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "tenant=b"}}),
+			newScope("role-configs", namespace, v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "env=role-test"}}),
+			newScope("staging-views", namespace, v1.ScopeTarget{View: &types.ResourceSelector{Namespace: "staging"}}),
+			newScope("configs-and-playbooks", namespace,
+				v1.ScopeTarget{Config: &types.ResourceSelector{Name: "*"}},
+				v1.ScopeTarget{Playbook: &types.ResourceSelector{Name: "*"}}),
+			newScope("staging-components", namespace, v1.ScopeTarget{Component: &types.ResourceSelector{Namespace: "staging"}}),
+			newScope("http-checks", namespace, v1.ScopeTarget{Check: &types.ResourceSelector{Name: "http"}}),
+			newScope("everything-global", namespace, v1.ScopeTarget{Global: &types.ResourceSelector{Name: "*"}}),
+		} {
+			Expect(db.PersistScopeFromCRD(DefaultContext, scope)).To(Succeed())
+		}
+
+		for _, role := range []*v1.Role{
+			newRole("run-playbooks", namespace, allow("run-without-target", policy.ActionPlaybookRun, "all-playbooks")),
+			newRole("run-anywhere", namespace, on(allow("run", policy.ActionPlaybookRun, "all-playbooks"), "all-configs")),
+			newRole("run-kubernetes", namespace, on(allow("run", policy.ActionPlaybookRun, "kubernetes-playbooks"), "all-configs")),
+			newRole("read-configs", namespace,
+				allow("read", policy.ActionRead, "role-configs"),
+				on(allow("run", policy.ActionPlaybookRun, "kubernetes-playbooks"), "all-configs")),
+			newRole("tenant-a-runner", namespace, on(allow("run", policy.ActionPlaybookRun, "kubernetes-playbooks"), "tenant-a")),
+			newRole("tenant-b-runner", namespace, on(allow("run", policy.ActionPlaybookRun, "all-playbooks"), "tenant-b")),
+			newRole("no-tenant-b", namespace, deny(on(allow("no-runs", policy.ActionPlaybookRun, "all-playbooks"), "tenant-b"))),
+			newRole("only-in-other-namespace", otherNamespace, allow("run", policy.ActionPlaybookRun, "all-playbooks")),
+		} {
+			persistRole(role)
+		}
+
+		for _, b := range []*v1.RoleBinding{
+			newBinding("people-and-teams", "run-playbooks", v1.RoleBindingSubjects{
+				PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{alice.Email}, Teams: []string{teamA.Name, teamB.Name}},
+			}),
+			newBinding("built-in-roles", "run-playbooks", v1.RoleBindingSubjects{Roles: []string{policy.RoleAgent}}),
+			newBinding("pairings-a", "tenant-a-runner", people(bob)),
+			newBinding("pairings-b", "tenant-b-runner", people(bob)),
+			newBinding("run-anywhere", "run-anywhere", people(carol)),
+			newBinding("no-tenant-b", "no-tenant-b", people(carol)),
+			newBinding("tenant-a-operators", "read-configs", people(dave, rlsTenantGuest),
+				constraint("read", "tenant-a", ""),
+				constraint("run", "", "tenant-a")),
+			newBinding("rls", "read-configs", people(rlsGuest)),
+		} {
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, b)).To(Succeed())
+		}
+
+		Expect(rbac.ReloadPolicy()).To(Succeed())
+	})
+
+	AfterAll(func() {
+		namespaces := []string{namespace, otherNamespace}
+		Expect(DefaultContext.DB().Where("namespace IN ?", namespaces).Delete(&models.RoleBinding{}).Error).To(Succeed())
+		Expect(DefaultContext.DB().Where("namespace IN ?", namespaces).Delete(&models.Role{}).Error).To(Succeed())
+		Expect(DefaultContext.DB().Where("namespace IN ?", namespaces).Delete(&models.Scope{}).Error).To(Succeed())
+		Expect(DefaultContext.DB().Delete(teamA).Error).To(Succeed())
+		Expect(DefaultContext.DB().Delete(teamB).Error).To(Succeed())
+		for _, p := range []*models.Person{alice, bob, carol, dave, erin, builtinAgent, rlsGuest, rlsTenantGuest} {
+			Expect(DefaultContext.DB().Delete(p).Error).To(Succeed())
+		}
+		Expect(rbac.ReloadPolicy()).To(Succeed())
+	})
+
+	It("doesn't store its rules as permissions", func() {
+		var count int64
+		Expect(DefaultContext.DB().Model(&models.Permission{}).Where("subject LIKE ? OR subject LIKE ?", "role:%", "binding:%").Count(&count).Error).To(Succeed())
+		Expect(count).To(BeZero())
+	})
+
+	Describe("subjects", func() {
+		It("grants the role to people", func() {
+			Expect(canRunOn(alice.ID.String(), dummy.EchoConfig, nil)).To(BeTrue())
+		})
+
+		It("grants the role to every listed team", func() {
+			for _, team := range []*models.Team{teamA, teamB} {
+				hasRole, err := rbac.Enforcer().HasRoleForUser(team.ID.String(), models.BindingPrincipal(namespace, "people-and-teams"))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(hasRole).To(BeTrue(), team.Name)
+			}
+		})
+
+		It("grants the role to built-in roles", func() {
+			Expect(canRunOn(builtinAgent.ID.String(), dummy.EchoConfig, nil)).To(BeTrue())
+		})
+
+		It("grants nothing to subjects without a binding", func() {
+			Expect(canRunOn(uuid.NewString(), dummy.EchoConfig, nil)).To(BeFalse())
+		})
+
+		It("keeps bindings out of everyone", func() {
+			principal := models.BindingPrincipal(namespace, "people-and-teams")
+			Expect(rbac.Check(DefaultContext, principal, policy.ObjectCatalog, policy.ActionRead)).To(BeFalse())
+
+			hasEveryone, err := rbac.Enforcer().HasRoleForUser(principal, policy.RoleEveryone)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(hasEveryone).To(BeFalse())
+		})
+	})
+
+	Describe("targets", func() {
+		It("matches a rule without a target only for operations without a target", func() {
+			Expect(canRunOn(alice.ID.String(), dummy.EchoConfig, nil)).To(BeTrue())
+			Expect(canRunOn(alice.ID.String(), dummy.EchoConfig, &tenantA)).To(BeFalse())
+		})
+
+		It("matches a rule with a target only for operations on a target in its scope", func() {
+			subject := carol.ID.String()
+			Expect(canRunOn(subject, dummy.EchoConfig, &tenantA)).To(BeTrue())
+			Expect(canRunOn(subject, dummy.EchoConfig, nil)).To(BeFalse())
+		})
+
+		It("doesn't grant the whole object type", func() {
+			Expect(rbac.Check(DefaultContext, carol.ID.String(), policy.ObjectPlaybooks, policy.ActionPlaybookRun)).To(BeFalse())
+		})
+
+		It("keeps each rule's playbooks paired with its targets", func() {
+			subject := bob.ID.String()
+			Expect(canRunOn(subject, dummy.RestartPod, &tenantA)).To(BeTrue())
+			Expect(canRunOn(subject, dummy.EchoConfig, &tenantB)).To(BeTrue())
+			Expect(canRunOn(subject, dummy.EchoConfig, &tenantA)).To(BeFalse(), "echo-config is only granted on tenant b")
+		})
+	})
+
+	Describe("deny rules", func() {
+		It("override allow rules of other roles", func() {
+			subject := carol.ID.String()
+			Expect(canRunOn(subject, dummy.EchoConfig, &tenantA)).To(BeTrue())
+			Expect(canRunOn(subject, dummy.EchoConfig, &tenantB)).To(BeFalse())
+		})
+	})
+
+	Describe("constraints", func() {
+		It("narrow the target of a rule", func() {
+			subject := dave.ID.String()
+			Expect(canRunOn(subject, dummy.RestartPod, &tenantA)).To(BeTrue())
+			Expect(canRunOn(subject, dummy.RestartPod, &tenantB)).To(BeFalse())
+			Expect(canRunOn(subject, dummy.EchoConfig, &tenantA)).To(BeFalse(), "the role's resource still applies")
+		})
+
+		It("narrow the resource of a rule", func() {
+			subject := dave.ID.String()
+			Expect(canRead(subject, tenantA)).To(BeTrue())
+			Expect(canRead(subject, tenantB)).To(BeFalse())
+		})
+
+		It("leave the role as defined for bindings without constraints", func() {
+			subject := rlsGuest.ID.String()
+			Expect(canRead(subject, tenantA)).To(BeTrue())
+			Expect(canRead(subject, tenantB)).To(BeTrue())
+		})
+
+		It("grant only the allow rules they list, and every deny rule", func() {
+			role := newRole("listed-rules", namespace,
+				allow("read", policy.ActionRead, "role-configs"),
+				on(allow("run", policy.ActionPlaybookRun, "all-playbooks"), "all-configs"),
+				deny(on(allow("no-tenant-b", policy.ActionPlaybookRun, "all-playbooks"), "tenant-b")))
+			persistRole(role)
+
+			binding := newBinding("listed-rules", role.Name, people(erin), v1.RoleBindingConstraint{Rule: "run"})
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).To(Succeed())
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			subject := erin.ID.String()
+			Expect(canRunOn(subject, dummy.EchoConfig, &tenantA)).To(BeTrue(), "listed without scopes: granted as defined")
+			Expect(canRunOn(subject, dummy.EchoConfig, &tenantB)).To(BeFalse(), "deny rules apply unlisted")
+			Expect(canRead(subject, tenantA)).To(BeFalse(), "unlisted allow rules aren't granted")
+		})
+	})
+
+	Describe("whole object types", func() {
+		It("grants update on every config as the catalog object", func() {
+			role := newRole("update-configs", namespace, allow("update", policy.ActionUpdate, "all-configs"))
+			persistRole(role)
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, newBinding("update-configs", role.Name, people(erin)))).To(Succeed())
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			Expect(rbac.Check(DefaultContext, erin.ID.String(), policy.ObjectCatalog, policy.ActionUpdate)).To(BeTrue())
+			Expect(rbac.Check(DefaultContext, erin.ID.String(), policy.ObjectTopology, policy.ActionUpdate)).To(BeFalse())
+		})
+	})
+
+	storedRole := func(uid k8sTypes.UID) models.Role {
+		GinkgoHelper()
+		var role models.Role
+		Expect(DefaultContext.DB().Where("id = ?", uid).First(&role).Error).To(Succeed())
+		return role
+	}
+
+	storedBinding := func(ns, name string) models.RoleBinding {
+		GinkgoHelper()
+		var binding models.RoleBinding
+		Expect(DefaultContext.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", ns, name).First(&binding).Error).To(Succeed())
+		return binding
+	}
+
+	Describe("validation", func() {
+		// rejectRole stores the role as written, and expects it to be invalid: Ready=False, with the reason recorded.
+		rejectRole := func(rules ...v1.RoleRule) {
+			GinkgoHelper()
+			role := newRole("rejected", namespace, rules...)
+			Expect(db.PersistRoleFromCRD(DefaultContext, role)).ToNot(Succeed())
+			stored := storedRole(role.UID)
+			Expect(stored.Error).ToNot(BeNil())
+			Expect(stored.ErrorReason).ToNot(BeNil())
+			Expect(DefaultContext.DB().Delete(&stored).Error).To(Succeed())
+		}
+
+		It("rejects actions without a contract", func() {
+			rejectRole(allow("unknown", "playbook:read", "all-playbooks"))
+			rejectRole(allow("pattern", "playbook:*", "all-playbooks"))
+			rejectRole(allow("all", "*", "all-playbooks"))
+			rejectRole(allow("no-resource", policy.ActionMCPUse, "all-playbooks"))
+			rejectRole(allow("plugin-role", "plugin-role:kubernetes:admin", "all-configs"))
+		})
+
+		It("rejects scopes the action doesn't accept", func() {
+			rejectRole(allow("views", policy.ActionPlaybookRun, "staging-views"))
+			rejectRole(allow("mixed", policy.ActionPlaybookRun, "configs-and-playbooks"))
+			rejectRole(on(allow("target-playbooks", policy.ActionPlaybookRun, "all-playbooks"), "all-playbooks"))
+			rejectRole(allow("read-views", policy.ActionRead, "staging-views"))
+			rejectRole(allow("global", policy.ActionRead, "everything-global"))
+		})
+
+		It("accepts reading checks by name", func() {
+			persistRole(newRole("read-http-checks", namespace, allow("read", policy.ActionRead, "http-checks")))
+		})
+
+		It("accepts a target scope with several accepted types", func() {
+			Expect(db.PersistScopeFromCRD(DefaultContext, newScope("staging-targets", namespace,
+				v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "namespace=staging"}},
+				v1.ScopeTarget{Component: &types.ResourceSelector{Namespace: "staging"}},
+				v1.ScopeTarget{Check: &types.ResourceSelector{Namespace: "staging"}}))).To(Succeed())
+			persistRole(newRole("run-on-staging", namespace, on(allow("run", policy.ActionPlaybookRun, "all-playbooks"), "staging-targets")))
+		})
+
+		It("rejects targets on actions without one", func() {
+			rejectRole(on(allow("read", policy.ActionRead, "role-configs"), "all-configs"))
+		})
+
+		It("rejects read rules row filters can't enforce", func() {
+			rejectRole(allow("components-by-namespace", policy.ActionRead, "staging-components"))
+			rejectRole(allow("playbooks-by-category", policy.ActionRead, "kubernetes-playbooks"))
+		})
+
+		It("rejects denying reads", func() {
+			rejectRole(deny(allow("no-read", policy.ActionRead, "role-configs")))
+		})
+
+		It("rejects create, update and delete on anything but whole types", func() {
+			rejectRole(allow("update-tenant", policy.ActionUpdate, "tenant-a"))
+		})
+
+		It("rejects missing scopes and duplicate rule names", func() {
+			rejectRole(allow("missing", policy.ActionPlaybookRun, "does-not-exist"))
+			rejectRole(allow("same", policy.ActionPlaybookRun, "all-playbooks"), allow("same", policy.ActionRead, "role-configs"))
+		})
+
+		It("rejects roles named after a built-in role", func() {
+			role := newRole(policy.RoleViewer, namespace, allow("run", policy.ActionPlaybookRun, "all-playbooks"))
+			Expect(db.PersistRoleFromCRD(DefaultContext, role)).ToNot(Succeed())
+			stored := storedRole(role.UID)
+			Expect(stored.Error).ToNot(BeNil())
+			Expect(DefaultContext.DB().Delete(&stored).Error).To(Succeed())
+		})
+
+		It("stores a role with one invalid rule, and applies none of its rules", func() {
+			role := newRole("partly-invalid", namespace,
+				allow("valid", policy.ActionPlaybookRun, "all-playbooks"),
+				allow("invalid", policy.ActionPlaybookRun, "staging-views"))
+			Expect(db.PersistRoleFromCRD(DefaultContext, role)).ToNot(Succeed())
+
+			binding := newBinding("partly-invalid", role.Name, people(erin))
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).ToNot(Succeed())
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Where("id = ?", binding.UID).Delete(&models.RoleBinding{}).Error).To(Succeed())
+				Expect(DefaultContext.DB().Where("id = ?", role.UID).Delete(&models.Role{}).Error).To(Succeed())
+				Expect(rbac.ReloadPolicy()).To(Succeed())
+			})
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			Expect(canRunOn(erin.ID.String(), dummy.EchoConfig, nil)).To(BeFalse())
+			Expect(*storedBinding(namespace, binding.Name).ErrorReason).To(Equal(adapter.ReasonRoleInvalid))
+		})
+
+		// rejectBinding stores the binding as written, and expects it to be invalid.
+		rejectBinding := func(role string, constraints ...v1.RoleBindingConstraint) {
+			GinkgoHelper()
+			binding := newBinding("rejected", role, people(erin), constraints...)
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).ToNot(Succeed())
+			stored := storedBinding(namespace, binding.Name)
+			Expect(stored.Error).ToNot(BeNil())
+			Expect(DefaultContext.DB().Delete(&stored).Error).To(Succeed())
+		}
+
+		It("rejects invalid constraints", func() {
+			rejectBinding("read-configs", constraint("no-such-rule", "tenant-a", ""))
+			rejectBinding("read-configs", constraint("read", "tenant-a", ""), constraint("read", "tenant-b", ""))
+			rejectBinding("no-tenant-b", constraint("no-runs", "", "tenant-a"))
+			rejectBinding("run-playbooks", constraint("run-without-target", "", "tenant-a"))
+			rejectBinding("read-configs", constraint("run", "tenant-a", ""))
+			rejectBinding("read-configs", constraint("run", "", "staging-views"))
+		})
+
+		It("rejects constraints whose scope shares no type with the rule's", func() {
+			Expect(db.PersistScopeFromCRD(DefaultContext, newScope("staging-component-targets", namespace,
+				v1.ScopeTarget{Component: &types.ResourceSelector{Name: "*"}}))).To(Succeed())
+			rejectBinding("read-configs", constraint("run", "", "staging-component-targets"))
+		})
+
+		It("rejects a binding until its role exists", func() {
+			rejectBinding("does-not-exist")
+		})
+
+		It("rejects people by name, and resource subjects with patterns", func() {
+			for _, subjects := range []v1.RoleBindingSubjects{
+				{PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{"Role Erin"}}},
+				{PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{"*"}}},
+				{PermissionGroupSubjects: v1.PermissionGroupSubjects{Playbooks: []v1.PermissionGroupSelector{{}}}},
+				{PermissionGroupSubjects: v1.PermissionGroupSubjects{Playbooks: []v1.PermissionGroupSelector{{Namespace: "*"}}}},
+				{PermissionGroupSubjects: v1.PermissionGroupSubjects{Scrapers: []v1.PermissionGroupSelector{{Name: "prod-*"}}}},
+			} {
+				binding := newBinding("rejected-subjects", "run-playbooks", subjects)
+				Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).ToNot(Succeed(), "%+v", subjects)
+				stored := storedBinding(namespace, binding.Name)
+				Expect(stored.Error).ToNot(BeNil())
+				Expect(DefaultContext.DB().Delete(&stored).Error).To(Succeed())
+			}
+		})
+	})
+
+	Describe("lifecycle", func() {
+		It("lets a role change that breaks a binding's constraints through, and the binding stops granting until it fits again", func() {
+			role := roles[namespace+"/read-configs"]
+			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue())
+
+			changed := newRole(role.Name, namespace, allow("read", policy.ActionRead, "role-configs"))
+			changed.UID = role.UID
+			Expect(db.PersistRoleFromCRD(DefaultContext, changed)).To(Succeed(), "a role is never validated against its bindings")
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			binding := storedBinding(namespace, "tenant-a-operators")
+			Expect(binding.Error).ToNot(BeNil())
+			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeFalse())
+			Expect(canRead(dave.ID.String(), tenantA)).To(BeFalse(), "an invalid binding grants none of its rules")
+
+			persistRole(role)
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+			Expect(storedBinding(namespace, "tenant-a-operators").Error).To(BeNil())
+			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue(), "effective again without being re-applied")
+		})
+
+		It("lets a scope change that breaks a rule through, and the role stops applying until it's fixed", func() {
+			var stored models.Scope
+			Expect(DefaultContext.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", namespace, "kubernetes-playbooks").First(&stored).Error).To(Succeed())
+			Expect(canRunOn(bob.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue())
+
+			changed := newScope("kubernetes-playbooks", namespace, v1.ScopeTarget{Config: &types.ResourceSelector{Name: "*"}})
+			changed.UID = k8sTypes.UID(stored.ID.String())
+			Expect(db.PersistScopeFromCRD(DefaultContext, changed)).To(Succeed(), "a scope is never validated against what references it")
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			Expect(*storedRole(roles[namespace+"/tenant-a-runner"].UID).ErrorReason).To(Equal(adapter.ReasonInvalid))
+			Expect(canRunOn(bob.ID.String(), dummy.RestartPod, &tenantA)).To(BeFalse())
+
+			restored := newScope("kubernetes-playbooks", namespace, v1.ScopeTarget{Playbook: &types.ResourceSelector{FieldSelector: "category=Kubernetes"}})
+			restored.UID = changed.UID
+			Expect(db.PersistScopeFromCRD(DefaultContext, restored)).To(Succeed())
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			Expect(storedRole(roles[namespace+"/tenant-a-runner"].UID).Error).To(BeNil())
+			Expect(canRunOn(bob.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue())
+		})
+
+		It("deletes a scope rules reference, and they stop granting until it's back", func() {
+			var stored models.Scope
+			Expect(DefaultContext.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", namespace, "tenant-a").First(&stored).Error).To(Succeed())
+			changed := map[string]bool{}
+			adapter.ValidityChanged = func(table, ns, name, source string) { changed[table+"/"+ns+"/"+name] = true }
+			DeferCleanup(func() { adapter.ValidityChanged = nil })
+
+			Expect(db.DeleteScope(DefaultContext, stored.ID.String())).To(Succeed())
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			Expect(changed).To(HaveKey("roles/"+namespace+"/tenant-a-runner"), "the role's CRD is reconciled again, so its Ready condition follows")
+			Expect(changed).To(HaveKey("role_bindings/" + namespace + "/tenant-a-operators"))
+			Expect(*storedRole(roles[namespace+"/tenant-a-runner"].UID).ErrorReason).To(Equal(adapter.ReasonScopeNotFound))
+			Expect(*storedBinding(namespace, "tenant-a-operators").ErrorReason).To(Equal(adapter.ReasonScopeNotFound))
+			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeFalse())
+
+			Expect(db.PersistScopeFromCRD(DefaultContext, newScope("tenant-a", namespace,
+				v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "tenant=a"}}))).To(Succeed())
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue())
+		})
+
+		It("invalidates a read rule that needs row-level security while it's off", func() {
+			properties.Set(vars.FlagRLSEnable, "false")
+			DefaultContext.ClearCache()
+			DeferCleanup(func() {
+				properties.Set(vars.FlagRLSEnable, "true")
+				DefaultContext.ClearCache()
+				Expect(rbac.ReloadPolicy()).To(Succeed())
+			})
+			Expect(DefaultContext.Properties().On(false, vars.FlagRLSEnable)).To(BeFalse())
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			Expect(*storedRole(roles[namespace+"/read-configs"].UID).ErrorReason).To(Equal(adapter.ReasonRowLevelSecurityRequired))
+			Expect(canRead(rlsGuest.ID.String(), tenantA)).To(BeFalse())
+		})
+
+		It("applies none of an invalid role's rules, deny rules included", func() {
+			broken := models.Role{
+				ID:        uuid.New(),
+				Name:      "broken",
+				Namespace: namespace,
+				Source:    models.SourceCRD,
+				Rules:     []byte(`[{"name":"no-runs","action":"playbook:run","resource":{"scopeRef":"does-not-exist"},"deny":true}]`),
+			}
+			Expect(DefaultContext.DB().Create(&broken).Error).To(Succeed())
+
+			subjects, err := json.Marshal(people(alice))
+			Expect(err).ToNot(HaveOccurred())
+			binding := models.RoleBinding{
+				ID: uuid.New(), Name: "broken", Namespace: namespace, Source: models.SourceCRD,
+				Role: broken.Name, Constraints: []byte(`[]`), Subjects: subjects,
+			}
+			Expect(DefaultContext.DB().Create(&binding).Error).To(Succeed())
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Delete(&binding).Error).To(Succeed())
+				Expect(DefaultContext.DB().Delete(&broken).Error).To(Succeed())
+				Expect(rbac.ReloadPolicy()).To(Succeed())
+			})
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			Expect(canRunOn(alice.ID.String(), dummy.EchoConfig, nil)).To(BeTrue(), "the invalid role's deny rule doesn't apply")
+			Expect(*storedRole(k8sTypes.UID(broken.ID.String())).ErrorReason).To(Equal(adapter.ReasonScopeNotFound))
+			Expect(*storedBinding(namespace, "broken").ErrorReason).To(Equal(adapter.ReasonRoleInvalid))
+		})
+
+		It("revokes access when the binding is deleted", func() {
+			var binding models.RoleBinding
+			Expect(DefaultContext.DB().Where("namespace = ? AND name = ?", namespace, "people-and-teams").First(&binding).Error).To(Succeed())
+			Expect(db.DeleteRoleBinding(DefaultContext, binding.ID.String())).To(Succeed())
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			Expect(canRunOn(alice.ID.String(), dummy.EchoConfig, nil)).To(BeFalse())
+		})
+
+		It("revokes the role's rules when the role is deleted", func() {
+			Expect(db.DeleteRole(DefaultContext, string(roles[namespace+"/run-playbooks"].UID))).To(Succeed())
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			Expect(canRunOn(builtinAgent.ID.String(), dummy.EchoConfig, nil)).To(BeFalse())
+		})
+	})
+})

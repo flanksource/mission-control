@@ -54,9 +54,13 @@ func requiresApproval(spec v1.PlaybookSpec) bool {
 
 func approveRun(ctx context.Context, run *models.PlaybookRun) error {
 	approver := ctx.User()
+	if approver == nil {
+		return api.Errorf(api.EUNAUTHORIZED, "Not logged in")
+	}
+
 	if objects, err := run.GetABACAttributes(ctx.DB()); err != nil {
 		return ctx.Oops().Wrap(err)
-	} else if !rbac.HasPermission(ctx, approver.ID.String(), objects, policy.ActionPlaybookApprove) {
+	} else if !rbac.HasPermission(ctx, ctx.Subject(), objects, policy.ActionPlaybookApprove) {
 		return ctx.Oops().With("permission", policy.ActionPlaybookApprove, "objects", objects).Code(api.EFORBIDDEN).Wrap(errors.New("access denied: approval permission required"))
 	}
 
@@ -67,10 +71,6 @@ func approveRun(ctx context.Context, run *models.PlaybookRun) error {
 
 	if spec.Approval == nil || spec.Approval.Approvers.Empty() {
 		return api.Errorf(api.EINVALID, "this playbook does not require approval")
-	}
-
-	if approver == nil {
-		return api.Errorf(api.EUNAUTHORIZED, "Not logged in")
 	}
 
 	approval := models.PlaybookApproval{

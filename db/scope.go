@@ -10,23 +10,23 @@ import (
 	"github.com/google/uuid"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
-// PersistScopeFromCRD saves a Scope CRD to the database
+// PersistScopeFromCRD stores a Scope CRD. See PersistScope.
 func PersistScopeFromCRD(ctx context.Context, obj *v1.Scope) error {
+	return PersistScope(ctx, obj, models.SourceCRD, nil)
+}
+
+// PersistScope stores the Scope as written, with why it isn't in effect when it's invalid.
+// Agents are stored as written, and resolved every time the Scope is validated.
+// A Scope is never validated against the Roles and RoleBindings that reference it.
+func PersistScope(ctx context.Context, obj *v1.Scope, source string, createdBy *uuid.UUID) error {
 	uid, err := uuid.Parse(string(obj.GetUID()))
 	if err != nil {
 		return ctx.Oops().Wrapf(err, "failed to parse UID")
 	}
 
-	// Resolve agent names to IDs in targets before saving
-	for i := range obj.Spec.Targets {
-		if err := resolveAgentInTarget(ctx, &obj.Spec.Targets[i]); err != nil {
-			return err
-		}
-	}
-
-	// Marshal targets to JSON for storage
 	targetsJSON, err := json.Marshal(obj.Spec.Targets)
 	if err != nil {
 		return ctx.Oops().Wrapf(err, "failed to marshal targets")
@@ -38,53 +38,37 @@ func PersistScopeFromCRD(ctx context.Context, obj *v1.Scope) error {
 		Namespace:   obj.GetNamespace(),
 		Description: obj.Spec.Description,
 		Targets:     types.JSON(targetsJSON),
-		Source:      models.SourceCRD,
+		Source:      source,
+		CreatedBy:   createdBy,
 	}
 
-	return ctx.DB().Save(&scope).Error
+	_, validationErr := adapter.ValidateScope(ctx, nil, obj.Spec.Targets)
+	if scope.Error, scope.ErrorReason, err = validity(validationErr); err != nil {
+		return err
+	}
+
+	// Returned unwrapped so kopper can detect unique constraint violations and delete the stale scope
+	if err := ctx.DB().Save(&scope).Error; err != nil {
+		return err
+	}
+
+	return notReady(scope.ErrorReason, scope.Error)
 }
 
-// resolveAgentInTarget resolves agent names to agent IDs in a scope target
-func resolveAgentInTarget(ctx context.Context, target *v1.ScopeTarget) error {
-	selectors := []*types.ResourceSelector{
-		target.Config,
-		target.Component,
-		target.Playbook,
-		target.Canary,
-		target.View,
-	}
-
-	for _, selector := range selectors {
-		if selector != nil && selector.Agent != "" {
-			if _, err := uuid.Parse(selector.Agent); err == nil {
-				// Already a UUID, no need to resolve
-				continue
-			}
-
-			var agent models.Agent
-			if err := ctx.DB().Where("deleted_at IS NULL").Where("name = ?", selector.Agent).First(&agent).Error; err != nil {
-				return ctx.Oops().Wrapf(err, "failed to resolve agent name %q", selector.Agent)
-			}
-
-			selector.Agent = agent.ID.String()
-		}
-	}
-
-	return nil
-}
-
-// DeleteScope soft deletes a Scope by ID
+// DeleteScope soft deletes a Scope by ID. Roles and RoleBindings that reference it stop granting until they're updated.
 func DeleteScope(ctx context.Context, id string) error {
-	return ctx.DB().Model(&models.Scope{}).
-		Where("id = ?", id).
-		Update("deleted_at", duty.Now()).Error
+	return ctx.DB().Model(&models.Scope{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error
 }
 
-// DeleteStaleScope soft deletes old Scope resources with the same name/namespace
+// DeleteStaleScope replaces an older Scope of the same name with the newer one.
 func DeleteStaleScope(ctx context.Context, newer *v1.Scope) error {
-	return ctx.DB().Model(&models.Scope{}).
+	if err := ctx.DB().Model(&models.Scope{}).
 		Where("name = ? AND namespace = ?", newer.Name, newer.Namespace).
 		Where("id != ?", newer.UID).
 		Where("deleted_at IS NULL").
-		Update("deleted_at", duty.Now()).Error
+		Update("deleted_at", duty.Now()).Error; err != nil {
+		return err
+	}
+
+	return PersistScopeFromCRD(ctx, newer)
 }

@@ -15,9 +15,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/google/uuid"
+
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/plugin/api"
-	"github.com/google/uuid"
 )
 
 var ErrAmbiguousPlugin = errors.New("ambiguous plugin reference")

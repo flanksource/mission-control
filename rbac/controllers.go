@@ -18,6 +18,7 @@ func RegisterRoutes(e *echo.Echo) {
 	e.GET("/rbac/token/:id/permissions", GetPermissionsForToken, Authorization(policy.ObjectRBAC, policy.ActionRead))
 	e.POST("/rbac/subject-access-reviews", SubjectAccessReviews, Authorization(policy.ObjectRBAC, policy.ActionRead))
 	e.POST("/rbac/subject-access-search", SubjectAccessSearch, Authorization(policy.ObjectRBAC, policy.ActionRead))
+	registerManagedKinds(e)
 }
 
 func UpdateRoleForUser(c echo.Context) error {

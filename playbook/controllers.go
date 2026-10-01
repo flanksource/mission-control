@@ -53,7 +53,7 @@ func RegisterRoutes(e *echo.Echo) {
 	runGroup.GET("/:id/status", HandleGetPlaybookRunStatus, rbac.Playbook(policy.ActionRead))
 	runGroup.GET("/:id", HandleGetPlaybookRun, rbac.Playbook(policy.ActionRead))
 	runGroup.POST("/approve/:run_id", HandlePlaybookRunApproval)
-	runGroup.POST("/cancel/:run_id", HandlePlaybookRunCancel, rbac.Playbook(policy.ActionUpdate))
+	runGroup.POST("/cancel/:run_id", HandlePlaybookRunCancel)
 }
 
 type RunResponse struct {
@@ -137,7 +137,7 @@ func HandleGetPlaybookParams(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
-	if !dutyRBAC.HasPermission(ctx, ctx.Subject(), env.ABACAttributes(), policy.ActionRead) {
+	if env.SelectableResource() != nil && !dutyRBAC.HasPermission(ctx, ctx.Subject(), env.ABACAttributes(), policy.ActionRead) {
 		return dutyAPI.WriteError(c, ctx.Oops().
 			Code(dutyAPI.EFORBIDDEN).
 			With("permission", policy.ActionRead, "objects", env.ABACAttributes()).

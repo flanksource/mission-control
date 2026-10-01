@@ -2,6 +2,7 @@ package db
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/flanksource/duty"
@@ -48,18 +49,27 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 		Deny:        obj.Spec.Deny,
 	}
 
-	// Check if the object selectors semantically match a global object.
-	if globalObject, ok := obj.Spec.Object.GlobalObject(); ok {
-		p.Object = globalObject
-	} else {
-		selectors, err := json.Marshal(obj.Spec.Object)
-		if err != nil {
-			return ctx.Oops(api.EINTERNAL).Wrapf(err, "failed to marshal object")
-		}
-		p.ObjectSelector = selectors
+	if err := setPermissionObject(&p, obj.Spec.Object); err != nil {
+		return ctx.Oops(api.EINTERNAL).Wrap(err)
 	}
 
 	return ctx.DB().Save(&p).Error
+}
+
+// setPermissionObject sets the object of a permission, using the global object
+// when the selectors semantically match one.
+func setPermissionObject(p *models.Permission, object v1.PermissionObject) error {
+	if globalObject, ok := object.GlobalObject(); ok {
+		p.Object = globalObject
+		return nil
+	}
+
+	selectors, err := json.Marshal(object)
+	if err != nil {
+		return fmt.Errorf("failed to marshal object: %w", err)
+	}
+	p.ObjectSelector = selectors
+	return nil
 }
 
 func PersistPermissionGroupFromCRD(ctx context.Context, obj *v1.PermissionGroup) error {
@@ -67,6 +77,9 @@ func PersistPermissionGroupFromCRD(ctx context.Context, obj *v1.PermissionGroup)
 	if err != nil {
 		return err
 	}
+
+	ctx.Warnf("PermissionGroup %s/%s is deprecated. Use Role and RoleBinding instead",
+		obj.Namespace, obj.Name)
 
 	selectors, err := json.Marshal(obj.Spec.PermissionGroupSubjects)
 	if err != nil {

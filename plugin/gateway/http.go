@@ -256,7 +256,7 @@ func invokeLocalOperation(ctx dutyContext.Context, req *http.Request, entry *plu
 		if ctx.User() == nil {
 			return nil, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("cannot invoke local operation")
 		}
-		subject = ctx.User().ID.String()
+		subject = ctx.Subject()
 	}
 	return invokeLocalOperationWithRoles(ctx, req, entry, pluginRef, op, configID, configUUID, roles, subject, invocationToken)
 }

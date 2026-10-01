@@ -2,7 +2,6 @@ package auth
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 
 	"github.com/flanksource/commons/collections"
@@ -15,9 +14,9 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
-	"gorm.io/gorm"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/vars"
 )
 
@@ -235,27 +234,21 @@ func addViewScope(payload *rls.Payload, scope rls.Scope, deny bool) {
 // processScopeRefs fetches scopes from database and adds their targets to the payload
 func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSelector, payload *rls.Payload, deny bool) error {
 	for _, ref := range scopeRefs {
-		var scope models.Scope
-		err := ctx.DB().
-			Where("name = ? AND namespace = ? AND deleted_at IS NULL", ref.Name, ref.Namespace).
-			First(&scope).Error
+		scopeID, targets, err := adapter.LoadScope(ctx, nil, ref.Namespace, ref.Name)
 		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				ctx.Warnf("scope %s/%s not found", ref.Namespace, ref.Name)
+			if adapter.IsValidationError(err) {
+				ctx.Warnf("scope %s/%s selects nothing: %v", ref.Namespace, ref.Name, err)
 				continue
 			}
-			return fmt.Errorf("failed to query scope %s/%s: %w", ref.Namespace, ref.Name, err)
+			return fmt.Errorf("failed to load scope %s/%s: %w", ref.Namespace, ref.Name, err)
+		} else if targets == nil {
+			ctx.Warnf("scope %s/%s not found", ref.Namespace, ref.Name)
+			continue
 		}
 
 		// Add scope UUID for view row-level grants
 		if !deny {
-			payload.Scopes = append(payload.Scopes, scope.ID.String())
-		}
-
-		var targets []v1.ScopeTarget
-		if err := json.Unmarshal([]byte(scope.Targets), &targets); err != nil {
-			ctx.Warnf("failed to unmarshal targets for scope %s: %v", scope.ID, err)
-			continue
+			payload.Scopes = append(payload.Scopes, scopeID)
 		}
 
 		for _, target := range targets {
