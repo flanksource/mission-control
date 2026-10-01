@@ -1,6 +1,8 @@
 package auth
 
 import (
+	gocontext "context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,10 +15,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MicahParks/keyfunc"
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
+	dutyRLS "github.com/flanksource/duty/rls"
 	"github.com/flanksource/kopper"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/cel-go/cel"
@@ -26,11 +31,15 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/vars"
 )
 
 // federatedClockSkew is tolerated when checking a token's exp, iat and nbf claims.
 const federatedClockSkew = 30 * time.Second
+
+// federatedKeyRetryBackoff limits outbound retries while a provider's keys are unavailable.
+const federatedKeyRetryBackoff = 30 * time.Second
 
 // federatedAuthError is a token that claims a registered issuer but fails verification.
 type federatedAuthError struct {
@@ -65,36 +74,116 @@ type federatedProvider struct {
 type federatedKeys struct {
 	issuer, jwksURL string
 
-	mu   sync.Mutex
-	jwks *jwksCache
+	mu         sync.Mutex
+	jwks       *keyfunc.JWKS
+	loading    chan struct{}
+	loadCancel gocontext.CancelFunc
+	closed     bool
+	lastErr    error
+	retryAfter time.Time
 }
 
 func (k *federatedKeys) keyfunc(ctx context.Context) (jwt.Keyfunc, error) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-
-	if k.jwks == nil {
-		jwksURL := k.jwksURL
-		if jwksURL == "" {
-			discovered, err := discoverJWKSURL(ctx, k.issuer)
-			if err != nil {
-				return nil, err
-			}
-			jwksURL = discovered
+	for {
+		k.mu.Lock()
+		if k.closed {
+			k.mu.Unlock()
+			return nil, federatedAuthErrorf("external identity provider was removed or changed")
 		}
-		k.jwks = &jwksCache{url: jwksURL}
+		if k.jwks != nil {
+			keyfunc := k.jwks.Keyfunc
+			k.mu.Unlock()
+			return keyfunc, nil
+		}
+		if k.lastErr != nil && time.Now().Before(k.retryAfter) {
+			err := k.lastErr
+			k.mu.Unlock()
+			return nil, err
+		}
+		if k.loading != nil {
+			loading := k.loading
+			k.mu.Unlock()
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-loading:
+				continue
+			}
+		}
+
+		loading := make(chan struct{})
+		loadCtx, cancel := gocontext.WithCancel(gocontext.Background())
+		k.loading = loading
+		k.loadCancel = cancel
+		k.mu.Unlock()
+
+		go k.load(loadCtx, loading)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-loading:
+			continue
+		}
+	}
+}
+
+// load performs one shared signing-key initialization and publishes its result.
+func (k *federatedKeys) load(ctx gocontext.Context, loading chan struct{}) {
+	defer func() {
+		k.mu.Lock()
+		k.loading = nil
+		k.loadCancel = nil
+		close(loading)
+		k.mu.Unlock()
+	}()
+
+	jwksURL := k.jwksURL
+	var err error
+	if jwksURL == "" {
+		jwksURL, err = discoverJWKSURL(ctx, k.issuer)
 	}
 
-	return k.jwks.keyfunc()
+	var jwks *keyfunc.JWKS
+	if err == nil {
+		jwks, err = newClerkJWKSWithContext(ctx, jwksURL)
+	}
+
+	k.mu.Lock()
+	defer k.mu.Unlock()
+	if k.closed {
+		if jwks != nil {
+			jwks.EndBackground()
+		}
+		return
+	}
+	if err != nil {
+		k.lastErr = err
+		k.retryAfter = time.Now().Add(federatedKeyRetryBackoff)
+		return
+	}
+
+	k.jwks = jwks
+	k.lastErr = nil
+	k.retryAfter = time.Time{}
 }
 
 // close stops refreshing the keys in the background.
 func (k *federatedKeys) close() {
 	k.mu.Lock()
-	defer k.mu.Unlock()
+	if k.closed {
+		k.mu.Unlock()
+		return
+	}
+	k.closed = true
+	if k.loadCancel != nil {
+		k.loadCancel()
+	}
+	jwks := k.jwks
+	k.jwks = nil
+	k.mu.Unlock()
 
-	if k.jwks != nil {
-		k.jwks.close()
+	if jwks != nil {
+		jwks.EndBackground()
 	}
 }
 
@@ -129,7 +218,7 @@ func isLoopback(u *url.URL) bool {
 }
 
 // discoverJWKSURL returns the jwks_uri from the issuer's OpenID configuration.
-func discoverJWKSURL(ctx context.Context, issuer string) (string, error) {
+func discoverJWKSURL(ctx gocontext.Context, issuer string) (string, error) {
 	configURL := strings.TrimRight(issuer, "/") + "/.well-known/openid-configuration"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, configURL, nil)
 	if err != nil {
@@ -423,28 +512,85 @@ type oidcBinding struct {
 	match     cel.Program
 }
 
+type federatedAuthorization struct {
+	bindings   []string
+	rlsPayload *dutyRLS.Payload
+}
+
+type federatedAuthorizationContextKey struct{}
+
 // oidcBindings indexes the compiled match expressions of role bindings with oidc subjects by provider name.
-// Mission Control runs as a single replica, so the index is kept in memory and rebuilt when role bindings change.
+// Mission Control runs as a single replica, so the index is kept in memory and rebuilt when authorization objects change.
 var oidcBindings = struct {
 	sync.RWMutex
-	loaded     bool
-	byProvider map[string][]oidcBinding
+	rebuild             sync.Mutex
+	loaded              bool
+	byProvider          map[string][]oidcBinding
+	rowFiltersByBinding map[string]map[string][]dutyRLS.Scope
 }{}
 
-// RebuildOIDCBindings recompiles the match expressions of every role binding with oidc subjects.
+// RebuildOIDCBindings reloads Casbin before publishing matching expressions and row filters.
 func RebuildOIDCBindings(ctx context.Context) error {
+	return rebuildOIDCBindings(ctx, false)
+}
+
+func rebuildOIDCBindings(ctx context.Context, onlyIfStale bool) error {
+	oidcBindings.rebuild.Lock()
+	defer oidcBindings.rebuild.Unlock()
+
+	oidcBindings.Lock()
+	if onlyIfStale && oidcBindings.loaded {
+		oidcBindings.Unlock()
+		return nil
+	}
+	// Authentication must not use an old snapshot if this rebuild fails.
+	oidcBindings.loaded = false
+	oidcBindings.Unlock()
+
+	if err := dutyRBAC.ReloadPolicy(); err != nil {
+		return fmt.Errorf("failed to reload rbac policy: %w", err)
+	}
+
 	var bindings []models.RoleBinding
 	if err := ctx.DB().Where("deleted_at IS NULL").Where("subjects->'oidc' IS NOT NULL").Find(&bindings).Error; err != nil {
 		return fmt.Errorf("failed to load role bindings: %w", err)
 	}
 
 	byProvider := map[string][]oidcBinding{}
+	rowFiltersByBinding := map[string]map[string][]dutyRLS.Scope{}
 	for _, binding := range bindings {
 		var subjects v1.RoleBindingSubjects
 		if err := json.Unmarshal(binding.Subjects, &subjects); err != nil {
 			ctx.Warnf("skipping oidc subjects of role binding %s/%s: invalid subjects: %v", binding.Namespace, binding.Name, err)
 			continue
 		}
+
+		rules, err := adapter.LoadBindingRules(ctx, binding.ID)
+		if err != nil {
+			if adapter.IsValidationError(err) {
+				ctx.Warnf("skipping invalid oidc role binding %s/%s: %v", binding.Namespace, binding.Name, err)
+				continue
+			}
+			return fmt.Errorf("failed to compile oidc role binding %s/%s: %w", binding.Namespace, binding.Name, err)
+		}
+
+		rowFilters := map[string][]dutyRLS.Scope{}
+		for _, rule := range rules {
+			if rule.Contract.Action != policy.ActionRead {
+				continue
+			}
+			filters, err := rule.RowFilters()
+			if err != nil {
+				return fmt.Errorf("failed to compile row filters of oidc role binding %s/%s: %w", binding.Namespace, binding.Name, err)
+			}
+			for kind, scopes := range filters {
+				for i := range scopes {
+					scopes[i].Deny = rule.Deny
+				}
+				rowFilters[kind] = append(rowFilters[kind], scopes...)
+			}
+		}
+		rowFiltersByBinding[binding.Principal()] = rowFilters
 
 		for _, subject := range subjects.OIDC {
 			program, err := v1.CompileClaimsMatch(subject.Match)
@@ -458,22 +604,23 @@ func RebuildOIDCBindings(ctx context.Context) error {
 	}
 
 	oidcBindings.Lock()
-	defer oidcBindings.Unlock()
 	oidcBindings.byProvider = byProvider
+	oidcBindings.rowFiltersByBinding = rowFiltersByBinding
 	oidcBindings.loaded = true
+	oidcBindings.Unlock()
 
 	return nil
 }
 
-// matchingBindings returns the principals of the role bindings whose oidc subjects for the provider match the claims.
-func matchingBindings(ctx context.Context, provider string, claims jwt.MapClaims) ([]string, error) {
+// matchingBindings returns token-bound authorization for the provider subjects that match the claims.
+func matchingBindings(ctx context.Context, provider string, claims jwt.MapClaims) (federatedAuthorization, error) {
 	oidcBindings.RLock()
 	loaded := oidcBindings.loaded
 	oidcBindings.RUnlock()
 
 	if !loaded {
-		if err := RebuildOIDCBindings(ctx); err != nil {
-			return nil, err
+		if err := rebuildOIDCBindings(ctx, true); err != nil {
+			return federatedAuthorization{}, err
 		}
 	}
 
@@ -488,12 +635,26 @@ func matchingBindings(ctx context.Context, provider string, claims jwt.MapClaims
 	}
 
 	slices.Sort(principals)
-	return slices.Compact(principals), nil
+	principals = slices.Compact(principals)
+	payload := &dutyRLS.Payload{}
+	for _, principal := range principals {
+		for kind, scopes := range oidcBindings.rowFiltersByBinding[principal] {
+			addRLSScopes(payload, kind, scopes)
+		}
+	}
+
+	return federatedAuthorization{bindings: principals, rlsPayload: payload}, nil
+}
+
+// federatedSubject identifies one person's immutable set of token-derived bindings.
+func federatedSubject(personID string, bindings []string) string {
+	fingerprint := sha256.Sum256([]byte(strings.Join(bindings, "\x00")))
+	return fmt.Sprintf("%s:%x", models.FederatedPrincipal(personID), fingerprint[:20])
 }
 
 // syncFederatedBindings makes the subject a member of exactly the given role bindings.
-// Memberships are persisted like any other role assignment and updated on every request,
-// so a change in the token's claims takes effect on the user's next request.
+// The subject includes a fingerprint of bindings, so concurrent tokens with different
+// claims never share authorization state; unexpected memberships fail authentication.
 func syncFederatedBindings(ctx context.Context, subject string, bindings []string) error {
 	enforcer := dutyRBAC.Enforcer()
 	if enforcer == nil {
@@ -506,19 +667,16 @@ func syncFederatedBindings(ctx context.Context, subject string, bindings []strin
 	}
 
 	added, removed := lo.Difference(bindings, current)
+	if len(removed) > 0 {
+		return fmt.Errorf("federated subject has unexpected role bindings %v", removed)
+	}
 	if len(added) > 0 {
 		if err := dutyRBAC.AddRoleForUser(subject, added...); err != nil {
 			return fmt.Errorf("failed to add role bindings %v: %w", added, err)
 		}
 	}
 
-	for _, binding := range removed {
-		if err := dutyRBAC.DeleteRoleForUser(subject, binding); err != nil {
-			return fmt.Errorf("failed to remove role binding %s: %w", binding, err)
-		}
-	}
-
-	if len(added) > 0 || len(removed) > 0 {
+	if len(added) > 0 {
 		// Cached decisions don't account for grouping changes
 		if err := enforcer.InvalidateCache(); err != nil {
 			return fmt.Errorf("failed to invalidate rbac cache: %w", err)
@@ -566,20 +724,21 @@ func authenticateFederatedToken(c echo.Context, token string) (matched bool, err
 		return true, err
 	}
 
-	subject := models.FederatedPrincipal(person.ID.String())
-	bindings, err := matchingBindings(ctx, provider.name, claims)
+	authorization, err := matchingBindings(ctx, provider.name, claims)
 	if err != nil {
 		return true, ctx.Oops().Wrapf(err, "failed to match role bindings of %s", person.ExternalID)
 	}
+	bindings := authorization.bindings
+	subject := federatedSubject(person.ID.String(), bindings)
+	ctx = ctx.WithUser(person).WithSubject(subject).WithValue(federatedAuthorizationContextKey{}, authorization)
 
 	if err := syncFederatedBindings(ctx, subject, bindings); err != nil {
 		return true, ctx.Oops().Wrapf(err, "failed to sync role bindings of %s", person.ExternalID)
 	}
 
-	ctx = ctx.WithUser(person).WithSubject(subject)
-
 	// The session includes the bindings so a change in bindings gets a new PostgREST token (and RLS payload)
-	postgrestToken, err := GetOrCreateJWTToken(ctx, person, "federated:"+strings.Join(bindings, ","))
+	sessionID := "federated:" + strings.Join(bindings, ",")
+	postgrestToken, err := GetOrCreateJWTToken(ctx, person, sessionID)
 	if err != nil {
 		return true, ctx.Oops().Wrapf(err, "failed to create token for %s", person.ExternalID)
 	}

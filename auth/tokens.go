@@ -1,6 +1,9 @@
 package auth
 
 import (
+	gocontext "context"
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -62,10 +65,16 @@ func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessI
 
 func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId string) (string, error) {
 	config := api.DefaultConfig
-	key := sessionId + user.ID.String()
-	if subject := ctx.Subject(); !rbac.HasImplicitGrants(subject) {
-		key += subject
+	rlsPayload, err := GetRLSPayload(ctx.WithUser(user))
+	if err != nil {
+		return "", ctx.Oops().Wrap(err)
 	}
+	rlsClaims := rlsPayload.JWTClaims()
+	rlsClaimsJSON, err := json.Marshal(rlsClaims)
+	if err != nil {
+		return "", ctx.Oops().Wrap(err)
+	}
+	key := jwtTokenCacheKey(ctx, user, sessionId, fmt.Sprintf("%x", sha256.Sum256(rlsClaimsJSON)))
 
 	if token, exists := tokenCache.Get(key); exists {
 		return token.(string), nil
@@ -84,10 +93,8 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		"id":   user.ID.String(),
 	}
 
-	if rlsPayload, err := GetRLSPayload(ctx.WithUser(user)); err != nil {
-		return "", ctx.Oops().Wrap(err)
-	} else if jwtClaim := rlsPayload.JWTClaims(); jwtClaim != nil {
-		claims = collections.MergeMap(claims, jwtClaim)
+	if rlsClaims != nil {
+		claims = collections.MergeMap(claims, rlsClaims)
 	}
 
 	token, err := newPostgRESTJWT(config.Postgrest, claims)
@@ -101,6 +108,14 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 
 	tokenCache.SetDefault(key, token)
 	return token, nil
+}
+
+func jwtTokenCacheKey(ctx context.Context, user *models.Person, sessionID, rlsFingerprint string) string {
+	key := sessionID + user.ID.String() + rlsFingerprint
+	if subject := ctx.Subject(); !rbac.HasImplicitGrants(subject) {
+		key += subject
+	}
+	return key
 }
 
 func newPostgRESTJWT(config api.PostgrestConfig, claims jwt.MapClaims) (string, error) {
@@ -118,10 +133,15 @@ func newPostgRESTJWT(config api.PostgrestConfig, claims jwt.MapClaims) (string, 
 // result must be created once and reused rather than rebuilt per request, and
 // ended with EndBackground when it's no longer used.
 func newClerkJWKS(jwksURL string) (*keyfunc.JWKS, error) {
+	return newClerkJWKSWithContext(gocontext.Background(), jwksURL)
+}
+
+func newClerkJWKSWithContext(ctx gocontext.Context, jwksURL string) (*keyfunc.JWKS, error) {
 	// Create the keyfunc options. Use an error handler that logs. Refresh the JWKS when a JWT signed by an unknown KID
 	// is found or at the specified interval. Rate limit these refreshes. Timeout the initial JWKS refresh request after
 	// 10 seconds. This timeout is also used to create the initial context.Context for keyfunc.Get.
 	options := keyfunc.Options{
+		Ctx: ctx,
 		RefreshErrorHandler: func(err error) {
 			logger.Errorf("There was an error with the jwt.Keyfunc\nError: %s", err.Error())
 		},

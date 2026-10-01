@@ -16,16 +16,28 @@ import (
 	"go.opentelemetry.io/otel/trace"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	icrbac "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/vars"
 )
 
-func getRLSCacheKey(userID string) string {
-	return fmt.Sprintf("rls-payload-%s", userID)
+func init() {
+	icrbac.ReadGrantsCover = func(ctx context.Context, resourceType string) bool {
+		payload, err := GetRLSPayload(ctx)
+		if err != nil {
+			ctx.Errorf("failed to build RLS payload: %v", err)
+			return false
+		}
+		return len(rlsScopes(payload, resourceType)) > 0
+	}
 }
 
-func InvalidateRLSCacheForUser(userID string) {
-	cacheKey := getRLSCacheKey(userID)
+func getRLSCacheKey(subject string) string {
+	return fmt.Sprintf("rls-payload-%s", subject)
+}
+
+func InvalidateRLSCacheForUser(subject string) {
+	cacheKey := getRLSCacheKey(subject)
 	tokenCache.Delete(cacheKey)
 }
 
@@ -40,8 +52,13 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 	}
 
 	impersonated := getImpersonatedPayload(ctx)
+	subject := ctx.Subject()
 
-	cacheKey := getRLSCacheKey(user.ID.String())
+	if authorization, ok := ctx.Value(federatedAuthorizationContextKey{}).(federatedAuthorization); ok {
+		return applyImpersonation(authorization.rlsPayload, impersonated)
+	}
+
+	cacheKey := getRLSCacheKey(subject)
 	if impersonated != nil {
 		cacheKey = fmt.Sprintf("%s:%s", cacheKey, impersonated.Fingerprint())
 	}
@@ -50,9 +67,9 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		return cached.(*rls.Payload), nil
 	}
 
-	if roles, err := dutyRBAC.RolesForUser(ctx.User().ID.String()); err != nil {
+	if roles, err := dutyRBAC.RolesForUser(subject); err != nil {
 		return nil, err
-	} else if !lo.Contains(roles, policy.RoleGuest) {
+	} else if dutyRBAC.HasImplicitGrants(subject) && !lo.Contains(roles, policy.RoleGuest) {
 		payload := &rls.Payload{Disable: true}
 		if impersonated != nil {
 			result, err := applyImpersonation(payload, impersonated)
@@ -85,6 +102,38 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 	return payload, nil
 }
 
+func addRLSScopes(payload *rls.Payload, resourceType string, scopes []rls.Scope) {
+	switch resourceType {
+	case policy.ResourceConfig:
+		payload.Config = append(payload.Config, scopes...)
+	case policy.ResourceComponent:
+		payload.Component = append(payload.Component, scopes...)
+	case policy.ResourceCheck:
+		payload.Check = append(payload.Check, scopes...)
+	case policy.ResourceCanary:
+		payload.Canary = append(payload.Canary, scopes...)
+	case policy.ResourcePlaybook:
+		payload.Playbook = append(payload.Playbook, scopes...)
+	}
+}
+
+func rlsScopes(payload *rls.Payload, resourceType string) []rls.Scope {
+	switch resourceType {
+	case policy.ResourceConfig:
+		return payload.Config
+	case policy.ResourceComponent:
+		return payload.Component
+	case policy.ResourceCheck:
+		return payload.Check
+	case policy.ResourceCanary:
+		return payload.Canary
+	case policy.ResourcePlaybook:
+		return payload.Playbook
+	default:
+		return nil
+	}
+}
+
 // WithRLS wraps a function with RLS enforcement in a transaction.
 // This ensures that Row Level Security is applied to all database queries
 // within the function for guest users.
@@ -114,13 +163,13 @@ func WithRLS(ctx context.Context, fn func(context.Context) error) error {
 
 func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {
 	// Get all roles/groups for the user
-	roles, err := dutyRBAC.RolesForUser(ctx.User().ID.String())
+	roles, err := dutyRBAC.RolesForUser(ctx.Subject())
 	if err != nil {
 		return nil, fmt.Errorf("failed to get roles for user: %w", err)
 	}
 
 	// Build list of subjects (user ID + roles)
-	subjects := append([]string{ctx.User().ID.String()}, roles...)
+	subjects := append([]string{ctx.Subject()}, roles...)
 
 	var permissions []models.Permission
 	err = ctx.DB().

@@ -172,8 +172,15 @@ var _ = ginkgo.Describe("External identity providers", ginkgo.Ordered, func() {
 		var people []models.Person
 		Expect(DefaultContext.DB().Where("external_id LIKE ?", "appx:%").Find(&people).Error).To(Succeed())
 		for _, person := range people {
-			_, err := dutyRBAC.Enforcer().DeleteRolesForUser(models.FederatedPrincipal(person.ID.String()))
+			prefix := models.FederatedPrincipal(person.ID.String()) + ":"
+			policies, err := dutyRBAC.Enforcer().GetGroupingPolicy()
 			Expect(err).ToNot(HaveOccurred())
+			for _, policy := range policies {
+				if len(policy) > 0 && strings.HasPrefix(policy[0], prefix) {
+					_, err = dutyRBAC.Enforcer().DeleteRolesForUser(policy[0])
+					Expect(err).ToNot(HaveOccurred())
+				}
+			}
 		}
 		Expect(DefaultContext.DB().Exec("DELETE FROM people WHERE external_id LIKE ?", "appx:%").Error).To(Succeed())
 
@@ -195,7 +202,7 @@ var _ = ginkgo.Describe("External identity providers", ginkgo.Ordered, func() {
 		Expect(person.Email).To(BeEmpty())
 		Expect(person.Properties).To(Equal(models.PersonProperties{Provider: "appx", Email: "tina@client.com"}))
 
-		Expect(ctx.Subject()).To(Equal(models.FederatedPrincipal(person.ID.String())))
+		Expect(ctx.Subject()).To(HavePrefix(models.FederatedPrincipal(person.ID.String()) + ":"))
 	})
 
 	bindingsOf := func(ctx context.Context) []string {

@@ -387,7 +387,6 @@ func tableUpdatesHandler(ctx context.Context) {
 			policyReloadTimer.Reset(policyReloadWindow)
 		}
 	}
-
 	for {
 		select {
 		case v := <-notificationUpdateCh:
@@ -484,9 +483,6 @@ func tableUpdatesHandler(ctx context.Context) {
 
 		case <-roleBindingUpdateChan:
 			schedulePolicyReload("role binding")
-			if err := auth.RebuildOIDCBindings(ctx); err != nil {
-				ctx.Logger.Errorf("error rebuilding oidc subjects of role bindings: %v", err)
-			}
 
 		case <-scopeUpdateChan:
 			schedulePolicyReload("scope")
@@ -494,8 +490,8 @@ func tableUpdatesHandler(ctx context.Context) {
 
 		case <-policyReloadTimer.C:
 			policyReloadPending = false
-			if err := rbac.ReloadPolicy(); err != nil {
-				ctx.Logger.Errorf("error reloading rbac policy: %v", err)
+			if err := auth.RebuildOIDCBindings(ctx); err != nil {
+				ctx.Logger.Errorf("error rebuilding authorization policy: %v", err)
 			}
 
 			// permissions and scopes affect RLS so we need to invalidate the postgrest JWT
