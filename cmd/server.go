@@ -34,6 +34,7 @@ import (
 	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/plugin/machinery"
 	pluginReconciler "github.com/flanksource/incident-commander/plugin/reconciler"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/upstream/tunnel"
 	echov4 "github.com/labstack/echo/v4"
 
@@ -125,6 +126,26 @@ func launchKopper(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for PermissionGroup: %v", err))
 	}
 
+	roleReconciler, err := kopper.SetupReconciler(ctx, mgr,
+		db.PersistRoleFromCRD,
+		db.DeleteRole,
+		db.DeleteStaleRole,
+		"role.mission-control.flanksource.com",
+	)
+	if err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Role: %v", err))
+	}
+
+	rolebindingReconciler, err := kopper.SetupReconciler(ctx, mgr,
+		db.PersistRoleBindingFromCRD,
+		db.DeleteRoleBinding,
+		db.DeleteStaleRoleBinding,
+		"rolebinding.mission-control.flanksource.com",
+	)
+	if err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for RoleBinding: %v", err))
+	}
+
 	if _, err := kopper.SetupReconciler(ctx, mgr,
 		application.PersistApplication,
 		db.DeleteApplication,
@@ -143,13 +164,30 @@ func launchKopper(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for View: %v", err))
 	}
 
-	if _, err := kopper.SetupReconciler(ctx, mgr,
+	scopeReconciler, err := kopper.SetupReconciler(ctx, mgr,
 		db.PersistScopeFromCRD,
 		db.DeleteScope,
 		db.DeleteStaleScope,
 		"scope.mission-control.flanksource.com",
-	); err != nil {
+	)
+	if err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Scope: %v", err))
+	}
+
+	// Keep the Ready condition of Scopes, Roles and RoleBindings in step with their validity,
+	// which changes when what they reference changes.
+	adapter.ValidityChanged = func(table, namespace, name, source string) {
+		if source != models.SourceCRD {
+			return
+		}
+		switch table {
+		case "scopes":
+			scopeReconciler.Enqueue(namespace, name)
+		case "roles":
+			roleReconciler.Enqueue(namespace, name)
+		case "role_bindings":
+			rolebindingReconciler.Enqueue(namespace, name)
+		}
 	}
 
 	if _, err := kopper.SetupReconciler(ctx, mgr,
@@ -313,6 +351,8 @@ func tableUpdatesHandler(ctx context.Context) {
 	playbooksActionUpdateChan := notifyRouter.GetOrCreateChannel("playbook_run_actions")
 	permissionUpdateChan := notifyRouter.GetOrCreateChannel("permissions")
 	permissionGroupUpdateChan := notifyRouter.GetOrCreateChannel("permission_groups")
+	roleUpdateChan := notifyRouter.GetOrCreateChannel("roles")
+	roleBindingUpdateChan := notifyRouter.GetOrCreateChannel("role_bindings")
 	scopeUpdateChan := notifyRouter.GetOrCreateChannel("scopes")
 	teamMembersUpdateChan := notifyRouter.GetOrCreateChannel("team_members")
 
@@ -427,11 +467,33 @@ func tableUpdatesHandler(ctx context.Context) {
 			// TODO: only invalidate tokens for the affect users
 			auth.FlushTokenCache()
 
+		case <-roleUpdateChan:
+			if err := rbac.ReloadPolicy(); err != nil {
+				ctx.Logger.Errorf("error reloading rbac policy due to role updates: %v", err)
+			} else {
+				ctx.Logger.Debugf("reloading rbac policy due to role updates")
+			}
+
+			// permissions affect RLS so we need to invalidate the postgrest JWT
+			// TODO: only invalidate tokens for the affect users
+			auth.FlushTokenCache()
+
+		case <-roleBindingUpdateChan:
+			if err := rbac.ReloadPolicy(); err != nil {
+				ctx.Logger.Errorf("error reloading rbac policy due to role binding updates: %v", err)
+			} else {
+				ctx.Logger.Debugf("reloading rbac policy due to role binding updates")
+			}
+
+			// permissions affect RLS so we need to invalidate the postgrest JWT
+			// TODO: only invalidate tokens for the affect users
+			auth.FlushTokenCache()
+
 		case <-scopeUpdateChan:
 			if err := rbac.ReloadPolicy(); err != nil {
-				ctx.Logger.Errorf("error reloading rbac policy due to permission group updates: %v", err)
+				ctx.Logger.Errorf("error reloading rbac policy due to scope updates: %v", err)
 			} else {
-				ctx.Logger.Debugf("reloading rbac policy due to permission group updates")
+				ctx.Logger.Debugf("reloading rbac policy due to scope updates")
 			}
 
 			// Scope changes affect RLS payload (tags/agents in JWT)
