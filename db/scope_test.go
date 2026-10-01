@@ -32,7 +32,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 					Description: "Test scope",
 					Targets: []v1.ScopeTarget{
 						{
-							Config: &v1.ScopeResourceSelector{
+							Config: &types.ResourceSelector{
 								Name:        "prod-*",
 								Agent:       "homelab",
 								TagSelector: "env=prod",
@@ -74,7 +74,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 				Spec: v1.ScopeSpec{
 					Targets: []v1.ScopeTarget{
 						{
-							Config: &v1.ScopeResourceSelector{Name: "test"},
+							Config: &types.ResourceSelector{Name: "test"},
 						},
 					},
 				},
@@ -91,7 +91,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			scopeID := uuid.New()
 			targetsJSON, _ := json.Marshal([]v1.ScopeTarget{
 				{
-					Config: &v1.ScopeResourceSelector{Name: "test"},
+					Config: &types.ResourceSelector{Name: "test"},
 				},
 			})
 			scope := models.Scope{
@@ -124,7 +124,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			// Create old scope
 			targetsJSON, _ := json.Marshal([]v1.ScopeTarget{
 				{
-					Config: &v1.ScopeResourceSelector{Name: "old"},
+					Config: &types.ResourceSelector{Name: "old"},
 				},
 			})
 			oldScope := models.Scope{

@@ -128,8 +128,8 @@ func ExpandPermissionScopes(ctx context.Context, cache *gocache.Cache, perm mode
 	return output, nil
 }
 
-// convertScopeResourceSelectorToResourceSelector converts a v1.ScopeResourceSelector to types.ResourceSelector
-func convertScopeResourceSelectorToResourceSelector(scopeSel *v1.ScopeResourceSelector) types.ResourceSelector {
+// convertScopeResourceSelectorToResourceSelector preserves the fields supported by legacy scope expansion.
+func convertScopeResourceSelectorToResourceSelector(scopeSel *types.ResourceSelector) types.ResourceSelector {
 	return types.ResourceSelector{
 		Agent:       scopeSel.Agent,
 		Name:        scopeSel.Name,
