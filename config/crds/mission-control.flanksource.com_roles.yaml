@@ -4,22 +4,23 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: permissiongroups.mission-control.flanksource.com
+  name: roles.mission-control.flanksource.com
 spec:
   group: mission-control.flanksource.com
   names:
-    kind: PermissionGroup
-    listKind: PermissionGroupList
-    plural: permissiongroups
-    singular: permissiongroup
+    kind: Role
+    listKind: RoleList
+    plural: roles
+    singular: role
   scope: Namespaced
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
         description: |-
-          PermissionGroup is the Schema for the Mission Control Permission Groups.
-          DEPRECATED: Use Role and RoleBinding instead.
+          Role is a named set of rules, each allowing or denying an action on the resources selected by a Scope,
+          optionally on the targets selected by another Scope.
+          A role grants nothing on its own: a RoleBinding grants it to subjects.
         properties:
           apiVersion:
             description: |-
@@ -40,68 +41,83 @@ spec:
             type: object
           spec:
             properties:
-              canaries:
-                items:
-                  properties:
-                    name:
-                      type: string
-                    namespace:
-                      type: string
-                  type: object
-                type: array
-              name:
-                description: |-
-                  Name for the group
-                  Deprecated: Use metadata.name instead
+              description:
+                description: Description provides a brief explanation of the role.
                 type: string
-              notifications:
+              rules:
+                description: Rules of the role. A matching deny rule overrides every
+                  allow rule.
                 items:
                   properties:
+                    action:
+                      description: Action is the action the rule allows or denies,
+                        e.g. read or playbook:run.
+                      maxLength: 253
+                      minLength: 1
+                      type: string
+                    deny:
+                      description: Deny makes the rule deny the action instead of
+                        allowing it.
+                      type: boolean
+                    description:
+                      description: Description provides a brief explanation of the
+                        rule.
+                      type: string
                     name:
+                      description: Name identifies the rule within the role. RoleBinding
+                        constraints reference rules by name.
+                      maxLength: 63
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                       type: string
-                    namespace:
-                      type: string
+                    resource:
+                      description: Resource is the Scope selecting the resources the
+                        action is performed on.
+                      properties:
+                        scopeRef:
+                          description: ScopeRef is the name of the Scope.
+                          maxLength: 253
+                          minLength: 1
+                          type: string
+                      required:
+                      - scopeRef
+                      type: object
+                    target:
+                      description: |-
+                        Target is the Scope selecting what the action is performed on the resource with,
+                        e.g. the configs a playbook runs on. Only actions that take a target accept it.
+                        Without a target, the rule only matches operations without one.
+                      properties:
+                        scopeRef:
+                          description: ScopeRef is the name of the Scope.
+                          maxLength: 253
+                          minLength: 1
+                          type: string
+                      required:
+                      - scopeRef
+                      type: object
+                  required:
+                  - action
+                  - name
+                  - resource
                   type: object
+                  x-kubernetes-validations:
+                  - message: action must be a known action or invoke:<plugin>:<operation>,
+                      without patterns
+                    rule: self.action in ['read','create','update','delete','playbook:run','playbook:approve','playbook:cancel','mcp:run']
+                      || self.action.matches('^invoke:[^:*!, ]+:[^:*!, ]+$')
+                  - message: deny rules on read aren't supported
+                    rule: '!(has(self.deny) && self.deny && self.action == ''read'')'
+                  - message: only playbook:run, playbook:approve and playbook:cancel
+                      take a target
+                    rule: '!has(self.target) || self.action in [''playbook:run'',''playbook:approve'',''playbook:cancel'']'
+                maxItems: 50
+                minItems: 1
                 type: array
-              people:
-                description: |-
-                  List of ids and email of people.
-                  To select all users, use the wildcard selector: ["*"]
-                items:
-                  type: string
-                type: array
-              playbooks:
-                items:
-                  properties:
-                    name:
-                      type: string
-                    namespace:
-                      type: string
-                  type: object
-                type: array
-              scrapers:
-                items:
-                  properties:
-                    name:
-                      type: string
-                    namespace:
-                      type: string
-                  type: object
-                type: array
-              teams:
-                description: Teams is a list of team names
-                items:
-                  type: string
-                type: array
-              topologies:
-                items:
-                  properties:
-                    name:
-                      type: string
-                    namespace:
-                      type: string
-                  type: object
-                type: array
+                x-kubernetes-list-map-keys:
+                - name
+                x-kubernetes-list-type: map
+            required:
+            - rules
             type: object
           status:
             properties:
@@ -166,6 +182,9 @@ spec:
                 type: integer
             type: object
         type: object
+        x-kubernetes-validations:
+        - message: a Role can't be named after a built-in role
+          rule: '!(self.metadata.name in [''admin'',''everyone'',''guest'',''viewer'',''editor'',''commander'',''responder'',''agent''])'
     served: true
     storage: true
     subresources:

@@ -11,7 +11,8 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 //
-// PermissionGroup is the Schema for the Mission Control Permission Groups
+// PermissionGroup is the Schema for the Mission Control Permission Groups.
+// DEPRECATED: Use Role and RoleBinding instead.
 type PermissionGroup struct {
 	metav1.TypeMeta   `json:",inline" yaml:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty"`

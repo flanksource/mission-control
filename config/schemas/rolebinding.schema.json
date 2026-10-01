@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/flanksource/incident-commander/api/v1/permission-group",
-  "$ref": "#/$defs/PermissionGroup",
+  "$id": "https://github.com/flanksource/incident-commander/api/v1/role-binding",
+  "$ref": "#/$defs/RoleBinding",
   "$defs": {
     "Condition": {
       "properties": {
@@ -65,6 +65,24 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "OIDCSubject": {
+      "properties": {
+        "provider": {
+          "type": "string",
+          "description": "Provider is the name of an ExternalIdentityProvider."
+        },
+        "match": {
+          "type": "string",
+          "description": "Match is a CEL expression over claims, the verified token's claims, that returns a bool.\ne.g. 'operators' in claims.groups \u0026\u0026 claims.tenant == 'a'\nAn error, such as a missing claim, is no match."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "provider",
+        "match"
+      ]
     },
     "ObjectMeta": {
       "properties": {
@@ -162,28 +180,6 @@
         "uid"
       ]
     },
-    "PermissionGroup": {
-      "properties": {
-        "kind": {
-          "type": "string"
-        },
-        "apiVersion": {
-          "type": "string"
-        },
-        "metadata": {
-          "$ref": "#/$defs/ObjectMeta"
-        },
-        "spec": {
-          "$ref": "#/$defs/PermissionGroupSpec"
-        },
-        "status": {
-          "$ref": "#/$defs/PermissionGroupStatus"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "description": "PermissionGroup is the Schema for the Mission Control Permission Groups.\nDEPRECATED: Use Role and RoleBinding instead."
-    },
     "PermissionGroupSelector": {
       "properties": {
         "namespace": {
@@ -196,7 +192,95 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "PermissionGroupSpec": {
+    "RoleBinding": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/$defs/ObjectMeta"
+        },
+        "spec": {
+          "$ref": "#/$defs/RoleBindingSpec"
+        },
+        "status": {
+          "$ref": "#/$defs/RoleBindingStatus"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "RoleBinding grants a Role (in the same namespace) to many subjects,\noptionally narrowing the role's allow rules with constraints."
+    },
+    "RoleBindingConstraint": {
+      "properties": {
+        "rule": {
+          "type": "string",
+          "description": "Rule is the name of a rule of the role."
+        },
+        "resource": {
+          "$ref": "#/$defs/ScopeReference",
+          "description": "Resource is a Scope, in the binding's namespace, the rule's resource must also belong to."
+        },
+        "target": {
+          "$ref": "#/$defs/ScopeReference",
+          "description": "Target is a Scope, in the binding's namespace, the rule's target must also belong to.\nOnly for rules that have a target."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "rule"
+      ],
+      "description": "RoleBindingConstraint narrows one allow rule of the bound role.\nA constraint can only narrow: the rule's resource, and its target, must also belong to the constraint's Scopes."
+    },
+    "RoleBindingSpec": {
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Description provides a brief explanation of the binding."
+        },
+        "role": {
+          "type": "string",
+          "description": "Role is the name of the Role to grant, in the same namespace as the binding."
+        },
+        "subjects": {
+          "$ref": "#/$defs/RoleBindingSubjects",
+          "description": "Subjects the role is granted to. At least one is required."
+        },
+        "constraints": {
+          "items": {
+            "$ref": "#/$defs/RoleBindingConstraint"
+          },
+          "type": "array",
+          "description": "Constraints narrow rules of the role for this binding's subjects.\nWithout constraints (empty, null or missing), the binding grants every rule of the role as defined.\nWith constraints, it grants only the allow rules they name. Deny rules always apply as written."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "role",
+        "subjects"
+      ]
+    },
+    "RoleBindingStatus": {
+      "properties": {
+        "observedGeneration": {
+          "type": "integer"
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/Condition"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "RoleBindingSubjects": {
       "properties": {
         "notifications": {
           "items": {
@@ -242,28 +326,37 @@
           "type": "array",
           "description": "Teams is a list of team names"
         },
-        "name": {
-          "type": "string",
-          "description": "Name for the group\nDeprecated: Use metadata.name instead"
+        "roles": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Roles selects subjects by built-in role: everyone, guest or agent."
+        },
+        "oidc": {
+          "items": {
+            "$ref": "#/$defs/OIDCSubject"
+          },
+          "type": "array",
+          "description": "OIDC selects users of external identity providers by the claims of their tokens."
         }
       },
       "additionalProperties": false,
       "type": "object"
     },
-    "PermissionGroupStatus": {
+    "ScopeReference": {
       "properties": {
-        "observedGeneration": {
-          "type": "integer"
-        },
-        "conditions": {
-          "items": {
-            "$ref": "#/$defs/Condition"
-          },
-          "type": "array"
+        "scopeRef": {
+          "type": "string",
+          "description": "ScopeRef is the name of the Scope."
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "required": [
+        "scopeRef"
+      ],
+      "description": "ScopeReference references a Scope in the namespace of the Role or RoleBinding."
     },
     "Time": {
       "properties": {},

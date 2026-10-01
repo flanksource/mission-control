@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/kopper"
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -8,47 +9,38 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// ScopeResourceSelector is a subset of ResourceSelector used for defining scope targets
+// ScopeTarget selects resources of exactly one type.
+//
+// A selector only accepts the fields its resource type supports, and rejects the rest.
+// name matches exactly, or matches any name when set to "*". namespace and id only match exactly.
+// tagSelector, labelSelector and fieldSelector use Kubernetes label selector syntax.
 // +kubebuilder:object:generate=true
-type ScopeResourceSelector struct {
-	// Agent can be the agent id or the name of the agent.
-	Agent string `yaml:"agent,omitempty" json:"agent,omitempty"`
-
-	// Namespace is the namespace of the resource.
-	Namespace string `yaml:"namespace,omitempty" json:"namespace,omitempty"`
-
-	// Name is the name of the resource.
-	// Supports special wildcard directive '*' which matches any resource.
-	// NOTE: Prefix and suffix wildcards (e.g. 'nginx-*') are NOT supported.
-	Name string `yaml:"name,omitempty" json:"name,omitempty"`
-
-	// TagSelector selects resources by tags using label selector syntax
-	// Example: "env=prod,region=us-west"
-	TagSelector string `yaml:"tagSelector,omitempty" json:"tagSelector,omitempty"`
-}
-
-// ScopeTarget defines a single target in a Scope
-// Each target should contain exactly ONE resource type
-// +kubebuilder:object:generate=true
-// +kubebuilder:validation:XValidation:rule="[has(self.config), has(self.component), has(self.playbook), has(self.canary), has(self.view), has(self.global)].filter(x, x).size() == 1",message="exactly one of config, component, playbook, canary, view, or global must be specified"
+// +kubebuilder:validation:XValidation:rule="[has(self.config), has(self.component), has(self.check), has(self.playbook), has(self.canary), has(self.view), has(self.connection), has(self.global)].filter(x, x).size() == 1",message="exactly one of config, component, check, playbook, canary, view, connection, or global must be specified"
 type ScopeTarget struct {
-	// Config selector (mutually exclusive with other resource types in practice)
-	Config *ScopeResourceSelector `json:"config,omitempty"`
+	// Config selector
+	Config *types.ResourceSelector `json:"config,omitempty"`
 
 	// Component selector
-	Component *ScopeResourceSelector `json:"component,omitempty"`
+	Component *types.ResourceSelector `json:"component,omitempty"`
+
+	// Check selector
+	Check *types.ResourceSelector `json:"check,omitempty"`
 
 	// Playbook selector
-	Playbook *ScopeResourceSelector `json:"playbook,omitempty"`
+	Playbook *types.ResourceSelector `json:"playbook,omitempty"`
 
 	// Canary selector
-	Canary *ScopeResourceSelector `json:"canary,omitempty"`
+	Canary *types.ResourceSelector `json:"canary,omitempty"`
 
 	// View selector
-	View *ScopeResourceSelector `json:"view,omitempty"`
+	View *types.ResourceSelector `json:"view,omitempty"`
 
-	// Global selector - applies to all resource types (wildcard)
-	Global *ScopeResourceSelector `json:"global,omitempty"`
+	// Connection selector
+	Connection *types.ResourceSelector `json:"connection,omitempty"`
+
+	// Global selector - applies to all resource types (wildcard).
+	// Only Permissions use it. Roles and RoleBindings can't reference a Scope with a global target.
+	Global *types.ResourceSelector `json:"global,omitempty"`
 }
 
 // +kubebuilder:object:generate=true
@@ -56,9 +48,9 @@ type ScopeSpec struct {
 	// Description provides a brief explanation of what this scope covers
 	Description string `json:"description,omitempty"`
 
-	// Targets defines the resource selectors for this scope
-	// Each target should contain exactly one resource type
-	// Multiple targets are combined with OR logic
+	// Targets select the resources of the Scope.
+	// A Scope is the union of what its targets select: a resource belongs to the Scope
+	// when a target of the resource's type matches it.
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=10
@@ -77,7 +69,7 @@ type ScopeStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Namespaced
 //
-// Scope defines a collection of resources of a single type for access control
+// Scope selects resources, of one or more types, for access control
 type Scope struct {
 	metav1.TypeMeta   `json:",inline" yaml:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty"`
