@@ -28,6 +28,7 @@ var _ = ginkgo.Describe("Plugins E2E", ginkgo.Ordered, func() {
 		applyHasherPlugin()
 		applyUserPermissions(config.ID.String())
 		waitForHasherPlugin(config.ID.String())
+		waitForUserPermissions(config.ID.String())
 	})
 
 	ginkgo.It("authorizes /invoke and /proxy plugin operations", func() {
