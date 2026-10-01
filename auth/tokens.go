@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/sha256"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -62,7 +64,16 @@ func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessI
 
 func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId string) (string, error) {
 	config := api.DefaultConfig
-	key := sessionId + user.ID.String()
+	rlsPayload, err := GetRLSPayload(ctx.WithUser(user))
+	if err != nil {
+		return "", ctx.Oops().Wrap(err)
+	}
+	rlsClaims := rlsPayload.JWTClaims()
+	rlsClaimsJSON, err := json.Marshal(rlsClaims)
+	if err != nil {
+		return "", ctx.Oops().Wrap(err)
+	}
+	key := jwtTokenCacheKey(ctx, user, sessionId, fmt.Sprintf("%x", sha256.Sum256(rlsClaimsJSON)))
 
 	if token, exists := tokenCache.Get(key); exists {
 		return token.(string), nil
@@ -81,10 +92,8 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		"id":   user.ID.String(),
 	}
 
-	if rlsPayload, err := GetRLSPayload(ctx.WithUser(user)); err != nil {
-		return "", ctx.Oops().Wrap(err)
-	} else if jwtClaim := rlsPayload.JWTClaims(); jwtClaim != nil {
-		claims = collections.MergeMap(claims, jwtClaim)
+	if rlsClaims != nil {
+		claims = collections.MergeMap(claims, rlsClaims)
 	}
 
 	token, err := newPostgRESTJWT(config.Postgrest, claims)
@@ -98,6 +107,14 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 
 	tokenCache.SetDefault(key, token)
 	return token, nil
+}
+
+func jwtTokenCacheKey(ctx context.Context, user *models.Person, sessionID, rlsFingerprint string) string {
+	key := sessionID + user.ID.String() + rlsFingerprint
+	if subject := ctx.Subject(); !rbac.HasImplicitGrants(subject) {
+		key += subject
+	}
+	return key
 }
 
 func newPostgRESTJWT(config api.PostgrestConfig, claims jwt.MapClaims) (string, error) {
