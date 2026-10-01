@@ -43,7 +43,8 @@ shell-tmp
 .todos/
 hack/
 .htpasswd
-specs/
+specs/*
+!specs/authorization/
 .db/
 .facet/
 **/*.pem
