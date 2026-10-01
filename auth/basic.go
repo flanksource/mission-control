@@ -228,7 +228,19 @@ func setWWWAuthenticate(c echo.Context) {
 
 func basicAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		if canSkipAuth(c) || authenticateFromCookie(c) {
+		if canSkipAuth(c) {
+			return next(c)
+		}
+
+		// A token from an external identity provider's issuer must pass that provider's verification,
+		// even when the request also carries a session cookie
+		if !localhostOnly || isLocalhostRequest(c) {
+			if handled, err := federatedSession(c, next); handled {
+				return err
+			}
+		}
+
+		if authenticateFromCookie(c) {
 			return next(c)
 		}
 

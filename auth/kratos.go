@@ -159,6 +159,10 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return next(c)
 		}
 
+		if handled, err := federatedSession(c, next); handled {
+			return err
+		}
+
 		// Try OIDC Bearer token first when enabled
 		if OIDCEnabled {
 			if token, ok := extractBearerAuthToken(c.Request().Header); ok {

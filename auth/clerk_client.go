@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/MicahParks/keyfunc"
 	"github.com/flanksource/commons/logger"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
@@ -52,24 +53,35 @@ type ClerkHandler struct {
 // is held behind a pointer so copies of ClerkHandler (value receivers) share the
 // same instance and lock. A failed fetch is not cached, so the next request retries.
 type jwksCache struct {
-	url string
-	mu  sync.Mutex
-	fn  jwt.Keyfunc
+	url  string
+	mu   sync.Mutex
+	jwks *keyfunc.JWKS
 }
 
 func (c *jwksCache) keyfunc() (jwt.Keyfunc, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.fn == nil {
-		fn, err := newClerkKeyfunc(c.url)
+	if c.jwks == nil {
+		jwks, err := newClerkJWKS(c.url)
 		if err != nil {
 			return nil, err
 		}
-		c.fn = fn
+		c.jwks = jwks
 	}
 
-	return c.fn, nil
+	return c.jwks.Keyfunc, nil
+}
+
+// close stops refreshing the keys in the background.
+func (c *jwksCache) close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.jwks != nil {
+		c.jwks.EndBackground()
+		c.jwks = nil
+	}
 }
 
 func NewClerkHandler() (*ClerkHandler, error) {
@@ -120,6 +132,10 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		ctx := c.Request().Context().(context.Context)
+
+		if handled, err := federatedSession(c, next); handled {
+			return err
+		}
 
 		if OIDCEnabled {
 			if token, ok := extractBearerAuthToken(c.Request().Header); ok {

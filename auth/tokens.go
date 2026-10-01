@@ -63,6 +63,9 @@ func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessI
 func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId string) (string, error) {
 	config := api.DefaultConfig
 	key := sessionId + user.ID.String()
+	if subject := ctx.Subject(); !rbac.HasImplicitGrants(subject) {
+		key += subject
+	}
 
 	if token, exists := tokenCache.Get(key); exists {
 		return token.(string), nil
@@ -110,11 +113,11 @@ func newPostgRESTJWT(config api.PostgrestConfig, claims jwt.MapClaims) (string, 
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(config.JWTSecret))
 }
 
-// newClerkKeyfunc fetches the JWKS from the given URL and returns a jwt.Keyfunc
-// backed by it. keyfunc.Get performs a synchronous network fetch and spawns a
-// background-refresh goroutine, so the result must be created once and reused
-// rather than rebuilt per request.
-func newClerkKeyfunc(jwksURL string) (jwt.Keyfunc, error) {
+// newClerkJWKS fetches the JWKS from the given URL. keyfunc.Get performs a
+// synchronous network fetch and spawns a background-refresh goroutine, so the
+// result must be created once and reused rather than rebuilt per request, and
+// ended with EndBackground when it's no longer used.
+func newClerkJWKS(jwksURL string) (*keyfunc.JWKS, error) {
 	// Create the keyfunc options. Use an error handler that logs. Refresh the JWKS when a JWT signed by an unknown KID
 	// is found or at the specified interval. Rate limit these refreshes. Timeout the initial JWKS refresh request after
 	// 10 seconds. This timeout is also used to create the initial context.Context for keyfunc.Get.
@@ -126,6 +129,7 @@ func newClerkKeyfunc(jwksURL string) (jwt.Keyfunc, error) {
 		RefreshRateLimit:  time.Minute * 5,
 		RefreshTimeout:    time.Second * 10,
 		RefreshUnknownKID: true,
+		Client:            keyFetchClient,
 	}
 
 	// Create the JWKS from the resource at the given URL.
@@ -133,7 +137,7 @@ func newClerkKeyfunc(jwksURL string) (jwt.Keyfunc, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch JWKS from %q: %w", jwksURL, err)
 	}
-	return jwks.Keyfunc, nil
+	return jwks, nil
 }
 
 func getAccessToken(ctx context.Context, token string) (*models.AccessToken, error) {

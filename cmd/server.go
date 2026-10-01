@@ -147,6 +147,17 @@ func launchKopper(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for RoleBinding: %v", err))
 	}
 
+	providerReconciler, err := kopper.SetupReconciler(ctx, mgr,
+		auth.PersistExternalIdentityProvider,
+		auth.DeleteExternalIdentityProvider,
+		auth.DeleteStaleExternalIdentityProvider,
+		"externalidentityprovider.mission-control.flanksource.com",
+	)
+	if err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for ExternalIdentityProvider: %v", err))
+	}
+	auth.ProviderValidityChanged = providerReconciler.Enqueue
+
 	if _, err := kopper.SetupReconciler(ctx, mgr,
 		application.PersistApplication,
 		db.DeleteApplication,
@@ -473,6 +484,9 @@ func tableUpdatesHandler(ctx context.Context) {
 
 		case <-roleBindingUpdateChan:
 			schedulePolicyReload("role binding")
+			if err := auth.RebuildOIDCBindings(ctx); err != nil {
+				ctx.Logger.Errorf("error rebuilding oidc subjects of role bindings: %v", err)
+			}
 
 		case <-scopeUpdateChan:
 			schedulePolicyReload("scope")
