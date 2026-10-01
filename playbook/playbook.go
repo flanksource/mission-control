@@ -192,8 +192,8 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 	}
 
 	if opts.CheckPermissions {
-		// Must have read access on the resource (required to prevent guests from accessing unauthorized resources)
-		if !rbac.HasPermission(ctx, ctx.Subject(), templateEnv.ABACAttributes(), policy.ActionRead) {
+		// Must have read access on the target, if any (required to prevent guests from accessing unauthorized resources)
+		if templateEnv.SelectableResource() != nil && !rbac.HasPermission(ctx, ctx.Subject(), templateEnv.ABACAttributes(), policy.ActionRead) {
 			return nil, ctx.Oops().
 				Code(dutyAPI.EFORBIDDEN).
 				With("permission", policy.ActionRead, "objects", templateEnv.ABACAttributes()).

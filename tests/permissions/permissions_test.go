@@ -298,8 +298,10 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				ObjectSelector: []byte(`{"playbooks":[{"name":"echo-config","namespace":"mc"}]}`),
 			}
 			Expect(DefaultContext.DB().Create(denyPermission).Error).ToNot(HaveOccurred())
+			Expect(rbac.ReloadPolicy()).To(Succeed())
 			DeferCleanup(func() {
 				Expect(DefaultContext.DB().Delete(denyPermission).Error).ToNot(HaveOccurred())
+				Expect(rbac.ReloadPolicy()).To(Succeed())
 			})
 
 			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(denyOnlyUser))
@@ -1008,8 +1010,10 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				ObjectSelector: []byte(`{"playbooks":[{"name":"echo-config","namespace":"mc"}]}`),
 			}
 			Expect(DefaultContext.DB().Create([]*models.Permission{allowAll, denyEcho}).Error).ToNot(HaveOccurred())
+			Expect(rbac.ReloadPolicy()).To(Succeed())
 			DeferCleanup(func() {
 				Expect(DefaultContext.DB().Delete([]*models.Permission{allowAll, denyEcho}).Error).ToNot(HaveOccurred())
+				Expect(rbac.ReloadPolicy()).To(Succeed())
 			})
 
 			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(user))

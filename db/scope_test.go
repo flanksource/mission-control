@@ -2,6 +2,7 @@ package db
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
@@ -33,7 +34,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 					Targets: []v1.ScopeTarget{
 						{
 							Config: &types.ResourceSelector{
-								Name:        "prod-*",
+								Name:        "prod",
 								Agent:       "homelab",
 								TagSelector: "env=prod",
 							},
@@ -45,13 +46,15 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			err := PersistScopeFromCRD(DefaultContext, scopeObj)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Verify it was saved
+			// Verify it was saved as written, without an error
 			var saved models.Scope
 			err = DefaultContext.DB().Where("id = ?", scopeObj.UID).First(&saved).Error
 			Expect(err).ToNot(HaveOccurred())
 			Expect(saved.Name).To(Equal("test-scope"))
 			Expect(saved.Namespace).To(Equal("default"))
 			Expect(saved.Description).To(Equal("Test scope"))
+			Expect(saved.Error).To(BeNil())
+			Expect(saved.ErrorReason).To(BeNil())
 
 			// Verify targets JSON
 			var targets []v1.ScopeTarget
@@ -59,9 +62,58 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(targets).To(HaveLen(1))
 			Expect(targets[0].Config).ToNot(BeNil())
-			Expect(targets[0].Config.Name).To(Equal("prod-*"))
-			Expect(targets[0].Config.Agent).To(Equal(dummy.HomelabAgent.ID.String()))
+			Expect(targets[0].Config.Name).To(Equal("prod"))
+			Expect(targets[0].Config.Agent).To(Equal("homelab"), "the agent is stored as written, and resolved on every validation")
 			Expect(targets[0].Config.TagSelector).To(Equal("env=prod"))
+		})
+
+		for i, tt := range []struct {
+			name   string
+			target v1.ScopeTarget
+		}{
+			{"an empty selector", v1.ScopeTarget{Config: &types.ResourceSelector{}}},
+			{"a name pattern", v1.ScopeTarget{Config: &types.ResourceSelector{Name: "prod-*"}}},
+			{"a field the type doesn't have", v1.ScopeTarget{Playbook: &types.ResourceSelector{TagSelector: "purpose=remediation"}}},
+			{"a query option", v1.ScopeTarget{Config: &types.ResourceSelector{Name: "api", Search: "type=Pod"}}},
+			{"a playbook field other than category", v1.ScopeTarget{Playbook: &types.ResourceSelector{FieldSelector: "title=Restart"}}},
+			{"a malformed tagSelector", v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "env in (prod"}}},
+			{"two resource types in one target", v1.ScopeTarget{Config: &types.ResourceSelector{Name: "*"}, Playbook: &types.ResourceSelector{Name: "*"}}},
+			{"a wildcard namespace", v1.ScopeTarget{Config: &types.ResourceSelector{Namespace: "*"}}},
+			{"an agent that doesn't exist", v1.ScopeTarget{Config: &types.ResourceSelector{Agent: "no-such-agent"}}},
+		} {
+			ginkgo.It("stores a scope with "+tt.name+" as invalid", func() {
+				scopeObj := &v1.Scope{
+					ObjectMeta: metav1.ObjectMeta{Name: fmt.Sprintf("invalid-scope-%d", i), Namespace: "default", UID: k8sTypes.UID(uuid.New().String())},
+					Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{tt.target}},
+				}
+				Expect(PersistScopeFromCRD(DefaultContext, scopeObj)).ToNot(Succeed())
+
+				var saved models.Scope
+				Expect(DefaultContext.DB().Where("id = ?", scopeObj.UID).First(&saved).Error).To(Succeed())
+				Expect(saved.Error).ToNot(BeNil())
+				Expect(saved.ErrorReason).ToNot(BeNil())
+			})
+		}
+
+		ginkgo.It("records why a scope is invalid", func() {
+			scopeObj := &v1.Scope{
+				ObjectMeta: metav1.ObjectMeta{Name: "missing-agent", Namespace: "default", UID: k8sTypes.UID(uuid.New().String())},
+				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &types.ResourceSelector{Agent: "no-such-agent"}}}},
+			}
+			Expect(PersistScopeFromCRD(DefaultContext, scopeObj)).ToNot(Succeed())
+
+			var saved models.Scope
+			Expect(DefaultContext.DB().Where("id = ?", scopeObj.UID).First(&saved).Error).To(Succeed())
+			Expect(*saved.ErrorReason).To(Equal("AgentNotFound"))
+			Expect(*saved.Error).To(ContainSubstring("no-such-agent"))
+		})
+
+		ginkgo.It("resolves an agent id as well as a name", func() {
+			scopeObj := &v1.Scope{
+				ObjectMeta: metav1.ObjectMeta{Name: "agent-by-id", Namespace: "default", UID: k8sTypes.UID(uuid.New().String())},
+				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &types.ResourceSelector{Agent: dummy.HomelabAgent.ID.String()}}}},
+			}
+			Expect(PersistScopeFromCRD(DefaultContext, scopeObj)).To(Succeed())
 		})
 
 		ginkgo.It("should fail with invalid UID", func() {
@@ -144,6 +196,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 					Namespace: "default",
 					UID:       k8sTypes.UID(newID.String()),
 				},
+				Spec: v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &types.ResourceSelector{Name: "new"}}}},
 			}
 
 			// Delete stale
@@ -155,6 +208,36 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			err = DefaultContext.DB().Unscoped().Where("id = ?", oldID).First(&deleted).Error
 			Expect(err).ToNot(HaveOccurred())
 			Expect(deleted.DeletedAt).ToNot(BeNil())
+
+			// and replaced by the new one
+			var replacement models.Scope
+			Expect(DefaultContext.DB().Where("id = ? AND deleted_at IS NULL", newID).First(&replacement).Error).To(Succeed())
+		})
+
+		ginkgo.It("replaces the old scope even when the new one is invalid", func() {
+			oldID := uuid.New()
+			targetsJSON, _ := json.Marshal([]v1.ScopeTarget{{Config: &types.ResourceSelector{Name: "old"}}})
+			Expect(DefaultContext.DB().Create(&models.Scope{
+				ID:        oldID,
+				Name:      "replaced-scope",
+				Namespace: "default",
+				Targets:   types.JSON(targetsJSON),
+				Source:    models.SourceCRD,
+			}).Error).To(Succeed())
+
+			newScopeCRD := &v1.Scope{
+				ObjectMeta: metav1.ObjectMeta{Name: "replaced-scope", Namespace: "default", UID: k8sTypes.UID(uuid.New().String())},
+				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &types.ResourceSelector{}}}},
+			}
+			Expect(DeleteStaleScope(DefaultContext, newScopeCRD)).ToNot(Succeed())
+
+			var old models.Scope
+			Expect(DefaultContext.DB().Unscoped().Where("id = ?", oldID).First(&old).Error).To(Succeed())
+			Expect(old.DeletedAt).ToNot(BeNil(), "there's no previous version to fall back to")
+
+			var replacement models.Scope
+			Expect(DefaultContext.DB().Where("id = ? AND deleted_at IS NULL", newScopeCRD.UID).First(&replacement).Error).To(Succeed())
+			Expect(replacement.Error).ToNot(BeNil())
 		})
 	})
 })

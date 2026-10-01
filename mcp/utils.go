@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
 	gocache "github.com/patrickmn/go-cache"
@@ -31,6 +32,11 @@ func resolveOwner(ctx context.Context) (string, error) {
 	}
 
 	owner := subject
+
+	// Only people can own access tokens. Other subjects, e.g. users of external identity providers, aren't person ids.
+	if uuid.Validate(subject) != nil {
+		return owner, nil
+	}
 
 	var accessToken models.AccessToken
 	if err := ctx.DB().Where("person_id = ?", subject).Find(&accessToken).Error; err != nil {

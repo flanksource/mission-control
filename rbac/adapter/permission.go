@@ -14,7 +14,9 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	pkgPolicy "github.com/flanksource/duty/rbac/policy"
+	"github.com/google/uuid"
 	gocache "github.com/patrickmn/go-cache"
+	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -42,6 +44,9 @@ func NewPermissionAdapter(ctx context.Context, main *gormadapter.Adapter) persis
 }
 
 func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
+	// The cache only spares lookups of the same scope within a load, so scope changes apply on the next load
+	a.cache.Flush()
+
 	if err := a.loadBasePolicy(model); err != nil {
 		return err
 	}
@@ -123,6 +128,93 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 				return err
 			}
 		}
+	}
+
+	return a.loadRoleBindings(model)
+}
+
+// loadRoleBindings validates every Scope, Role and RoleBinding, records why each invalid one isn't in effect,
+// and loads the policies of the valid bindings. An invalid object grants nothing, deny rules included.
+func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
+	var scopes []models.Scope
+	if err := a.ctx.DB().Where("deleted_at IS NULL").Find(&scopes).Error; err != nil {
+		return fmt.Errorf("failed to load scopes: %w", err)
+	}
+
+	for _, scope := range scopes {
+		err := ValidateStoredScope(a.ctx, a.cache, scope)
+		if err := recordValidity(a.ctx, scope.TableName(), scope.ID, scope.Namespace, scope.Name, scope.Source, scope.Error, scope.ErrorReason, err); err != nil {
+			return err
+		}
+	}
+
+	var roles []models.Role
+	if err := a.ctx.DB().Where("deleted_at IS NULL").Find(&roles).Error; err != nil {
+		return fmt.Errorf("failed to load roles: %w", err)
+	}
+
+	for _, role := range roles {
+		_, err := ValidateRole(a.ctx, a.cache, role)
+		if err := recordValidity(a.ctx, role.TableName(), role.ID, role.Namespace, role.Name, role.Source, role.Error, role.ErrorReason, err); err != nil {
+			return err
+		}
+	}
+	rolesByName := lo.KeyBy(roles, func(r models.Role) string { return r.Namespace + "/" + r.Name })
+
+	var bindings []models.RoleBinding
+	if err := a.ctx.DB().Where("deleted_at IS NULL").Find(&bindings).Error; err != nil {
+		return fmt.Errorf("failed to load role bindings: %w", err)
+	}
+
+	for _, binding := range bindings {
+		var role *models.Role
+		if r, ok := rolesByName[binding.Namespace+"/"+binding.Role]; ok {
+			role = &r
+		}
+
+		policies, err := a.roleBindingToCasbinRules(binding, role)
+		if err := recordValidity(a.ctx, binding.TableName(), binding.ID, binding.Namespace, binding.Name, binding.Source, binding.Error, binding.ErrorReason, err); err != nil {
+			return err
+		}
+
+		for _, policy := range policies {
+			if err := persist.LoadPolicyArray(policy, m); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
+// ValidityChanged is called when a Scope, Role or RoleBinding (by table) becomes valid or invalid, or why it's invalid
+// changes, e.g. because a Scope it references was deleted. The server sets it to reconcile the object's CRD again,
+// so its Ready condition follows.
+var ValidityChanged func(table, namespace, name, source string)
+
+// recordValidity stores why a Scope, Role or RoleBinding isn't in effect, or clears it when it's valid.
+// It only writes when that changed, since every write reloads the policy. Errors other than validation errors are returned.
+func recordValidity(ctx context.Context, table string, id uuid.UUID, namespace, name, source string, currentError, currentReason *string, err error) error {
+	if err != nil && !IsValidationError(err) {
+		return err
+	}
+
+	var message, reason *string
+	if err != nil {
+		message, reason = lo.ToPtr(err.Error()), lo.ToPtr(InvalidReason(err))
+	}
+
+	if lo.FromPtr(message) == lo.FromPtr(currentError) && lo.FromPtr(reason) == lo.FromPtr(currentReason) {
+		return nil
+	}
+
+	if err := ctx.DB().Table(table).Where("id = ?", id).
+		UpdateColumns(map[string]any{"error": message, "error_reason": reason}).Error; err != nil {
+		ctx.Errorf("failed to record the validity of %s %s: %v", table, id, err)
+	}
+
+	if ValidityChanged != nil {
+		ValidityChanged(table, namespace, name, source)
 	}
 
 	return nil
@@ -211,18 +303,7 @@ func casbinRuleFromPolicy(ptype string, rule []string) gormadapter.CasbinRule {
 
 func PermissionToCasbinRule(permission models.Permission) [][]string {
 	var policies [][]string
-	patterns := strings.Split(permission.Action, ",")
-	seen := map[string]struct{}{}
-
-	addPolicy := func(action string) {
-		if action == "" {
-			return
-		}
-		if _, ok := seen[action]; ok {
-			return
-		}
-		seen[action] = struct{}{}
-
+	for _, action := range expandActions(strings.Split(permission.Action, ",")) {
 		policies = append(policies, createPolicy(permission, action))
 
 		if objectSelector := rbacToABACObjectSelector(permission, action); objectSelector != nil {
@@ -233,9 +314,29 @@ func PermissionToCasbinRule(permission models.Permission) [][]string {
 		}
 	}
 
+	return policies
+}
+
+// expandActions returns the actions matched by the given patterns: every built-in action a
+// pattern matches (e.g. "*" or "playbook:*"), plus any non built-in action named literally.
+func expandActions(patterns []string) []string {
+	var actions []string
+	seen := map[string]struct{}{}
+
+	add := func(action string) {
+		if action == "" {
+			return
+		}
+		if _, ok := seen[action]; ok {
+			return
+		}
+		seen[action] = struct{}{}
+		actions = append(actions, action)
+	}
+
 	for _, action := range pkgPolicy.AllActions {
 		if collections.MatchItems(action, patterns...) {
-			addPolicy(action)
+			add(action)
 		}
 	}
 
@@ -247,10 +348,10 @@ func PermissionToCasbinRule(permission models.Permission) [][]string {
 		if strings.HasPrefix(pattern, "!") {
 			continue
 		}
-		addPolicy(pattern)
+		add(pattern)
 	}
 
-	return policies
+	return actions
 }
 
 // createPolicy generates a Casbin policy rule from a permission.
@@ -289,7 +390,7 @@ func (a *PermissionAdapter) findNamespacedResources(tableName string, selectors 
 			if selector.Namespace != "" {
 				conditions = append(conditions, clause.Eq{Column: "namespace", Value: selector.Namespace})
 			}
-			if selector.Name != "" {
+			if selector.Name != "" && selector.Name != "*" {
 				conditions = append(conditions, clause.Eq{Column: "name", Value: selector.Name})
 			}
 		}
@@ -328,8 +429,118 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 	return policies, nil
 }
 
-// resolveSubjects resolves subject selectors to casbin subjects (ids or roles)
-func (a *PermissionAdapter) resolveSubjects(subject v1.PermissionGroupSubjects) ([]string, error) {
+// roleBindingToCasbinRules compiles a valid binding into:
+//
+//   - the rules it grants, filed under binding:<ns>/<name> (see compiledRuleToCasbinRules)
+//   - an assignment of the binding to each of its static subjects: g, <subject>, binding:<ns>/<name>
+//
+// Users of external identity providers are assigned to the binding when their token's claims match (see auth/federation.go).
+// An invalid binding, or a binding of a missing or invalid role, returns a validation error and no policies.
+func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding, role *models.Role) ([][]string, error) {
+	spec, err := RoleBindingSpec(binding)
+	if err != nil {
+		return nil, err
+	}
+
+	if role == nil {
+		return nil, NewInvalid(ReasonRoleNotFound, "role %s/%s not found", binding.Namespace, binding.Role)
+	}
+
+	rules, err := CompileBinding(a.ctx, a.cache, binding, *role)
+	if err != nil {
+		return nil, err
+	}
+
+	principal := binding.Principal()
+	var policies [][]string
+	for _, rule := range rules {
+		rulePolicies, err := compiledRuleToCasbinRules(principal, rule)
+		if err != nil {
+			return nil, err
+		}
+		policies = append(policies, rulePolicies...)
+	}
+
+	subjects := spec.Subjects
+	allSubjects, err := a.resolveNamespacedSubjects(subjects.PermissionGroupSubjects)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve subjects for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
+	}
+
+	people, err := a.resolvePeopleByEmail(subjects.People)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve people for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
+	}
+
+	teams, err := a.resolveTeams(subjects.Teams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve teams for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
+	}
+
+	allSubjects = append(allSubjects, people...)
+	allSubjects = append(allSubjects, teams...)
+	allSubjects = append(allSubjects, subjects.Roles...)
+
+	for _, subject := range lo.Uniq(allSubjects) {
+		policies = append(policies, []string{"g", subject, principal, "", "", ""})
+	}
+
+	return policies, nil
+}
+
+// RoleBindingSpec returns the spec of a stored binding, validated on its own.
+func RoleBindingSpec(binding models.RoleBinding) (v1.RoleBindingSpec, error) {
+	spec := v1.RoleBindingSpec{Role: binding.Role}
+	if len(binding.Subjects) > 0 {
+		if err := json.Unmarshal(binding.Subjects, &spec.Subjects); err != nil {
+			return spec, NewValidationError("role binding %s/%s: invalid subjects: %v", binding.Namespace, binding.Name, err)
+		}
+	}
+
+	if len(binding.Constraints) > 0 {
+		if err := json.Unmarshal(binding.Constraints, &spec.Constraints); err != nil {
+			return spec, NewValidationError("role binding %s/%s: invalid constraints: %v", binding.Namespace, binding.Name, err)
+		}
+	}
+
+	if err := spec.Validate(); err != nil {
+		return spec, NewValidationError("role binding %s/%s: %v", binding.Namespace, binding.Name, err)
+	}
+
+	return spec, nil
+}
+
+// resolvePeopleByEmail returns the ids of the Mission Control users with the given emails.
+// Agents and users of external identity providers aren't people.
+func (a *PermissionAdapter) resolvePeopleByEmail(emails []string) ([]string, error) {
+	if len(emails) == 0 {
+		return nil, nil
+	}
+
+	var ids []string
+	err := a.ctx.DB().Select("id").Model(&models.Person{}).
+		Where("deleted_at IS NULL").
+		Where("(type IS NULL OR type NOT IN ?)", []string{"agent", "federated"}).
+		Where("email IN ?", emails).
+		Find(&ids).Error
+	return ids, err
+}
+
+func (a *PermissionAdapter) resolveTeams(names []string) ([]string, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+
+	var ids []string
+	err := a.ctx.DB().Select("id").Model(&models.Team{}).
+		Where("deleted_at IS NULL").
+		Where("name IN ?", names).
+		Find(&ids).Error
+	return ids, err
+}
+
+// resolveNamespacedSubjects resolves the resource subjects: playbooks, notifications, topologies, scrapers and canaries.
+func (a *PermissionAdapter) resolveNamespacedSubjects(subject v1.PermissionGroupSubjects) ([]string, error) {
 	var allSubjects []string
 
 	namespacedSubjects := map[string][]v1.PermissionGroupSelector{
@@ -351,6 +562,17 @@ func (a *PermissionAdapter) resolveSubjects(subject v1.PermissionGroupSubjects) 
 		}
 
 		allSubjects = append(allSubjects, ids...)
+	}
+
+	return allSubjects, nil
+}
+
+// resolveSubjects resolves the subjects of a PermissionGroup to casbin subjects (ids or roles).
+// People are matched by email or name, and ["*"] selects everyone.
+func (a *PermissionAdapter) resolveSubjects(subject v1.PermissionGroupSubjects) ([]string, error) {
+	allSubjects, err := a.resolveNamespacedSubjects(subject)
+	if err != nil {
+		return nil, err
 	}
 
 	if len(subject.People) > 0 {
@@ -411,8 +633,7 @@ func generateABACCompanions(m model.Model) error {
 
 		obj, act := pol[1], pol[2]
 		if selector := pkgPolicy.ABACObjectSelector(obj, act); selector != nil {
-			condition := fmt.Sprintf(`matchResourceSelector(r.obj, %q)`, string(selector))
-			companions = append(companions, []string{"p", pol[0], "*", act, pol[3], condition, pol[5]})
+			companions = append(companions, []string{"p", pol[0], "*", act, pol[3], selectorCondition(selector), pol[5]})
 		}
 	}
 
@@ -423,4 +644,8 @@ func generateABACCompanions(m model.Model) error {
 	}
 
 	return nil
+}
+
+func selectorCondition(selector []byte) string {
+	return fmt.Sprintf(`matchResourceSelector(r.obj, %q)`, string(selector))
 }

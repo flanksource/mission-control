@@ -13,6 +13,7 @@ import (
 	gocache "github.com/patrickmn/go-cache"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 const (
@@ -55,24 +56,23 @@ func getScopeConfigs(ctx context.Context) ([]scopeConfig, error) {
 			return nil, fmt.Errorf("failed to unmarshal targets for scope %s: %w", scope.ID, err)
 		}
 
+		// An invalid Scope selects nothing. Agents are matched by id.
+		targets, err := adapter.ValidateScope(ctx, nil, targets)
+		if err != nil {
+			if adapter.IsValidationError(err) {
+				continue
+			}
+			return nil, fmt.Errorf("failed to validate scope %s: %w", scope.ID, err)
+		}
+
 		var selectors []types.ResourceSelector
 		for _, target := range targets {
 			var selector *types.ResourceSelector
 			switch {
 			case target.Config != nil:
-				selector = &types.ResourceSelector{
-					Agent:       target.Config.Agent,
-					Name:        target.Config.Name,
-					Namespace:   target.Config.Namespace,
-					TagSelector: target.Config.TagSelector,
-				}
+				selector = target.Config
 			case target.Global != nil:
-				selector = &types.ResourceSelector{
-					Agent:       target.Global.Agent,
-					Name:        target.Global.Name,
-					Namespace:   target.Global.Namespace,
-					TagSelector: target.Global.TagSelector,
-				}
+				selector = target.Global
 			}
 
 			if selector != nil {

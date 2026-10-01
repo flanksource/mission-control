@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
@@ -9,6 +10,8 @@ import (
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
+
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 var (
@@ -54,11 +57,20 @@ func DbMiddleware() MiddlewareFunc {
 				return c.String(http.StatusNotFound, "")
 			}
 
-			ctx := c.Request().Context().(context.Context)
-			user := ctx.User()
+			// Scopes, Roles and RoleBindings are validated when they're written, so they're only written through their API
+			if route, ok := managedTables[resource]; ok && action != policy.ActionRead {
+				return c.String(http.StatusMethodNotAllowed, fmt.Sprintf("%s can't be written through /db; use %s", resource, route))
+			}
 
-			if !rbac.CheckContext(ctx, object, action) {
-				c.Response().Header().Add("X-Rbac-Subject", user.ID.String())
+			ctx := c.Request().Context().(context.Context)
+
+			// Subjects without built-in access are only granted checks through their own object
+			if resource == "checks" && !rbac.HasImplicitGrants(ctx.Subject()) {
+				object = adapter.ObjectChecks
+			}
+
+			if !rbac.CheckContext(ctx, object, action) && !canListFilteredRows(ctx, resource, action) {
+				c.Response().Header().Add("X-Rbac-Subject", ctx.Subject())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)
 
@@ -68,6 +80,31 @@ func DbMiddleware() MiddlewareFunc {
 			return next(c)
 		}
 	}
+}
+
+// rowFilteredTables are the tables whose rows are filtered by a subject's read grants of their resource type.
+var rowFilteredTables = map[string]string{
+	"config_items": policy.ResourceConfig,
+	"components":   policy.ResourceComponent,
+	"checks":       policy.ResourceCheck,
+	"canaries":     policy.ResourceCanary,
+	"playbooks":    policy.ResourcePlaybook,
+}
+
+// ReadGrantsCover reports whether the subject's read grants filter rows of the resource type.
+// The auth package sets it, since it builds the row filters.
+var ReadGrantsCover func(ctx context.Context, resourceType string) bool
+
+// canListFilteredRows reports whether a subject without built-in access, e.g. a user of an external identity provider,
+// can list a table because its read grants cover some rows of it. Postgres then filters the rows.
+// Its read grants on whole types pass the object check instead.
+func canListFilteredRows(ctx context.Context, table, action string) bool {
+	if action != policy.ActionRead || rbac.HasImplicitGrants(ctx.Subject()) || ReadGrantsCover == nil {
+		return false
+	}
+
+	resourceType, ok := rowFilteredTables[table]
+	return ok && ReadGrantsCover(ctx, resourceType)
 }
 
 func Authorization(object, action string) MiddlewareFunc {
@@ -94,7 +131,7 @@ func Authorization(object, action string) MiddlewareFunc {
 			}
 
 			if !rbac.CheckContext(ctx, object, action) {
-				c.Response().Header().Add("X-Rbac-Subject", u.ID.String())
+				c.Response().Header().Add("X-Rbac-Subject", ctx.Subject())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)
 
