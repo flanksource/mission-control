@@ -315,9 +315,23 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 		return nil, err
 	}
 
+	allSubjects, err := a.resolveSubjects(subject)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve subjects for permission group %s: %w", permission.Name, err)
+	}
+
+	var policies [][]string
+	for _, subject := range allSubjects {
+		policies = append(policies, []string{"g", subject, permission.Name, "", "", ""})
+	}
+
+	return policies, nil
+}
+
+// resolveSubjects resolves subject selectors to casbin subjects (ids or roles)
+func (a *PermissionAdapter) resolveSubjects(subject v1.PermissionGroupSubjects) ([]string, error) {
 	var allSubjects []string
 
-	// Process namespaced resources
 	namespacedSubjects := map[string][]v1.PermissionGroupSelector{
 		"notifications":   subject.Notifications,
 		"playbooks":       subject.Playbooks,
@@ -333,7 +347,7 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 
 		ids, err := a.findNamespacedResources(modelName, selectors)
 		if err != nil {
-			return nil, fmt.Errorf("failed to find %s subjects for permission group %s: %w", modelName, permission.Name, err)
+			return nil, fmt.Errorf("failed to find %s subjects: %w", modelName, err)
 		}
 
 		allSubjects = append(allSubjects, ids...)
@@ -342,7 +356,7 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 	if len(subject.People) > 0 {
 		wildcard := len(subject.People) == 1 && subject.People[0] == "*"
 		if wildcard {
-			allSubjects = append(allSubjects, "everyone")
+			allSubjects = append(allSubjects, pkgPolicy.RoleEveryone)
 		} else {
 			var personIDs []string
 			query := a.ctx.DB().Select("id").Model(&models.Person{}).
@@ -360,28 +374,17 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 
 	if len(subject.Teams) > 0 {
 		var teamIDs []string
-		if err := a.ctx.DB().Select("id").Model(&models.Team{}).Where("name = ?", subject.Teams).Find(&teamIDs).Error; err != nil {
+		if err := a.ctx.DB().Select("id").Model(&models.Team{}).
+			Where("deleted_at IS NULL").
+			Where("name IN ?", subject.Teams).
+			Find(&teamIDs).Error; err != nil {
 			return nil, err
 		}
 
 		allSubjects = append(allSubjects, teamIDs...)
 	}
 
-	var policies [][]string
-	for _, subject := range allSubjects {
-		policy := []string{
-			"g",
-			subject,
-			permission.Name,
-			"",
-			"",
-			"",
-		}
-
-		policies = append(policies, policy)
-	}
-
-	return policies, nil
+	return allSubjects, nil
 }
 
 // generateABACCompanions scans policies already loaded into the model (from casbin_rules)
