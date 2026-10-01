@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
@@ -340,6 +341,9 @@ func init() {
 	ServerFlags(Serve.Flags())
 }
 
+// policyReloadWindow is how long a change to permissions, roles or scopes waits for others before the policy is reloaded.
+const policyReloadWindow = time.Second
+
 // tableUpdatesHandler handles all "table_activity" pg notifications.
 func tableUpdatesHandler(ctx context.Context) {
 	notifyRouter := pg.NewNotifyRouter()
@@ -359,6 +363,19 @@ func tableUpdatesHandler(ctx context.Context) {
 	// use a single job instance to maintain retention
 	pushPlaybookActionsJob := jobs.PushPlaybookActions(ctx)
 	pushPlaybookActionsJob.Schedule = "" // to disable jitter
+
+	// A change to one authorization object can change the validity of many others, each with its own notification,
+	// so the policy is reloaded once per window, not once per notification.
+	policyReloadTimer := time.NewTimer(policyReloadWindow)
+	policyReloadTimer.Stop()
+	policyReloadPending := false
+	schedulePolicyReload := func(table string) {
+		ctx.Logger.Debugf("reloading rbac policy due to %s updates", table)
+		if !policyReloadPending {
+			policyReloadPending = true
+			policyReloadTimer.Reset(policyReloadWindow)
+		}
+	}
 
 	for {
 		select {
@@ -446,64 +463,30 @@ func tableUpdatesHandler(ctx context.Context) {
 			}
 
 		case <-permissionUpdateChan:
-			if err := rbac.ReloadPolicy(); err != nil {
-				ctx.Logger.Errorf("error reloading rbac policy due to permission updates: %v", err)
-			} else {
-				ctx.Logger.Debugf("reloading rbac policy due to permission updates")
-			}
-
-			// permissions affect RLS so we need to invalidate the postgrest JWT
-			// TODO: only invalidate tokens for the affect users
-			auth.FlushTokenCache()
+			schedulePolicyReload("permission")
 
 		case <-permissionGroupUpdateChan:
-			if err := rbac.ReloadPolicy(); err != nil {
-				ctx.Logger.Errorf("error reloading rbac policy due to permission group updates: %v", err)
-			} else {
-				ctx.Logger.Debugf("reloading rbac policy due to permission group updates")
-			}
-
-			// permissions affect RLS so we need to invalidate the postgrest JWT
-			// TODO: only invalidate tokens for the affect users
-			auth.FlushTokenCache()
+			schedulePolicyReload("permission group")
 
 		case <-roleUpdateChan:
-			if err := rbac.ReloadPolicy(); err != nil {
-				ctx.Logger.Errorf("error reloading rbac policy due to role updates: %v", err)
-			} else {
-				ctx.Logger.Debugf("reloading rbac policy due to role updates")
-			}
-
-			// permissions affect RLS so we need to invalidate the postgrest JWT
-			// TODO: only invalidate tokens for the affect users
-			auth.FlushTokenCache()
+			schedulePolicyReload("role")
 
 		case <-roleBindingUpdateChan:
-			if err := rbac.ReloadPolicy(); err != nil {
-				ctx.Logger.Errorf("error reloading rbac policy due to role binding updates: %v", err)
-			} else {
-				ctx.Logger.Debugf("reloading rbac policy due to role binding updates")
-			}
-
-			// permissions affect RLS so we need to invalidate the postgrest JWT
-			// TODO: only invalidate tokens for the affect users
-			auth.FlushTokenCache()
+			schedulePolicyReload("role binding")
 
 		case <-scopeUpdateChan:
+			schedulePolicyReload("scope")
+			views.FlushScopeCache()
+
+		case <-policyReloadTimer.C:
+			policyReloadPending = false
 			if err := rbac.ReloadPolicy(); err != nil {
-				ctx.Logger.Errorf("error reloading rbac policy due to scope updates: %v", err)
-			} else {
-				ctx.Logger.Debugf("reloading rbac policy due to scope updates")
+				ctx.Logger.Errorf("error reloading rbac policy: %v", err)
 			}
 
-			// Scope changes affect RLS payload (tags/agents in JWT)
-			// We need to invalidate the cache so users get updated visibility immediately
-			ctx.Logger.Debugf("flushing RLS token cache due to scopes updates")
+			// permissions and scopes affect RLS so we need to invalidate the postgrest JWT
 			// TODO: only invalidate tokens for the affected users
 			auth.FlushTokenCache()
-
-			// Invalidate view scope cache
-			views.FlushScopeCache()
 		}
 	}
 }
