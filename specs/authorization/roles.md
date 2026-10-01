@@ -279,6 +279,35 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Invoke a plugin operation on config C | `invoke:<plugin>:<operation>`, then `read`  | C, then C       | None                              |
 | Open resource X                       | `read`                                      | X               | None                              |
 
+### 4.4 Open question: deny rules without a target
+
+**TODO:** This Role looks like it stops everyone from running `restart-pod`, but it doesn't:
+
+```yaml
+apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: no-restart
+  namespace: default
+spec:
+  description: Only on-call may restart pods
+  rules:
+    - name: deny-restart
+      action: playbook:run
+      deny: true
+      resource:
+        scopeRef: restart-pod-playbook
+```
+
+The rule has no target, so it only covers runs of `restart-pod` without a resource (Section 4.1). Anyone otherwise allowed to run `restart-pod` on a pod config can still do it. Once a run must fit its playbook (`specs/playbooks.md`), `restart-pod` can't run without a resource at all, and this rule blocks nothing. Nothing tells the author.
+
+Find a design that removes this trap. What's been considered so far:
+
+- **Make a deny rule without a target cover every target.** Rejected: allow and deny rules would read the same field differently, which users would have to know in advance.
+- **Add `none` and `any` values to `target`.** Rejected: `target: {none: true}` is confusing to read.
+- **Make `target` mandatory on `playbook:run`.** A ban then names every target, e.g. a Scope selecting every config, component and check. But a rule can no longer cover a playbook that runs on its own, like `create-namespace`. A separate action for those playbooks, e.g. `playbook:run-standalone`, would fill that gap; `playbook:approve` and `playbook:cancel` would need the same split.
+- **Ask two questions per run**, "may this person run the playbook?" and "may they run it on this resource?". Rejected: a deny rule without a target would ban the playbook everywhere, which is again something users would have to know in advance.
+
 ## 5. Allow and deny
 
 Across all the rules that apply to a subject, from every Role and every Permission (`overview.md`, "Not covered yet"), the same rule decides:
