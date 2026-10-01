@@ -210,6 +210,9 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 		}
 	}
 
+	// Auto approval must be checked against the caller, not the playbook.
+	callerCtx := ctx
+
 	// Rest of the playbook must run using the playbook's permission.
 	ctx = ctx.WithSubject(playbook.ID.String())
 
@@ -276,7 +279,7 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 		return nil, ctx.Oops().Wrap(err)
 	}
 
-	if err := savePlaybookRun(ctx, &run); err != nil {
+	if err := savePlaybookRun(callerCtx, &run); err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to create playbook run")
 	}
 
