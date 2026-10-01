@@ -11,16 +11,19 @@ import (
 )
 
 var schemas = map[string]any{
-	"connection":          &v1.Connection{},
-	"permission":          &v1.Permission{},
-	"permissiongroup":     &v1.PermissionGroup{},
-	"notification":        &v1.Notification{},
-	"notificationsilence": &v1.NotificationSilence{},
-	"playbook":            &v1.Playbook{},
-	"playbook-spec":       &v1.PlaybookSpec{}, // for go-side validation
-	"incident-rules":      &v1.IncidentRule{},
-	"application":         &v1.Application{},
-	"view":                &v1.View{},
+	"connection":               &v1.Connection{},
+	"permission":               &v1.Permission{},
+	"permissiongroup":          &v1.PermissionGroup{},
+	"role":                     &v1.Role{},
+	"rolebinding":              &v1.RoleBinding{},
+	"externalidentityprovider": &v1.ExternalIdentityProvider{},
+	"notification":             &v1.Notification{},
+	"notificationsilence":      &v1.NotificationSilence{},
+	"playbook":                 &v1.Playbook{},
+	"playbook-spec":            &v1.PlaybookSpec{}, // for go-side validation
+	"incident-rules":           &v1.IncidentRule{},
+	"application":              &v1.Application{},
+	"view":                     &v1.View{},
 }
 
 var generateSchema = &cobra.Command{

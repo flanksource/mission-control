@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/flanksource/incident-commander/api/v1/permission-group",
-  "$ref": "#/$defs/PermissionGroup",
+  "$id": "https://github.com/flanksource/incident-commander/api/v1/role",
+  "$ref": "#/$defs/Role",
   "$defs": {
     "Condition": {
       "properties": {
@@ -162,7 +162,7 @@
         "uid"
       ]
     },
-    "PermissionGroup": {
+    "Role": {
       "properties": {
         "kind": {
           "type": "string"
@@ -174,83 +174,72 @@
           "$ref": "#/$defs/ObjectMeta"
         },
         "spec": {
-          "$ref": "#/$defs/PermissionGroupSpec"
+          "$ref": "#/$defs/RoleSpec"
         },
         "status": {
-          "$ref": "#/$defs/PermissionGroupStatus"
+          "$ref": "#/$defs/RoleStatus"
         }
       },
       "additionalProperties": false,
       "type": "object",
-      "description": "PermissionGroup is the Schema for the Mission Control Permission Groups.\nDEPRECATED: Use Role and RoleBinding instead."
+      "description": "Role is a named set of rules, each allowing or denying an action on the resources selected by a Scope,\noptionally on the targets selected by another Scope.\nA role grants nothing on its own: a RoleBinding grants it to subjects."
     },
-    "PermissionGroupSelector": {
+    "RoleRule": {
       "properties": {
-        "namespace": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "PermissionGroupSpec": {
-      "properties": {
-        "notifications": {
-          "items": {
-            "$ref": "#/$defs/PermissionGroupSelector"
-          },
-          "type": "array"
-        },
-        "playbooks": {
-          "items": {
-            "$ref": "#/$defs/PermissionGroupSelector"
-          },
-          "type": "array"
-        },
-        "topologies": {
-          "items": {
-            "$ref": "#/$defs/PermissionGroupSelector"
-          },
-          "type": "array"
-        },
-        "scrapers": {
-          "items": {
-            "$ref": "#/$defs/PermissionGroupSelector"
-          },
-          "type": "array"
-        },
-        "canaries": {
-          "items": {
-            "$ref": "#/$defs/PermissionGroupSelector"
-          },
-          "type": "array"
-        },
-        "people": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array",
-          "description": "List of ids and email of people.\nTo select all users, use the wildcard selector: [\"*\"]"
-        },
-        "teams": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array",
-          "description": "Teams is a list of team names"
-        },
         "name": {
           "type": "string",
-          "description": "Name for the group\nDeprecated: Use metadata.name instead"
+          "description": "Name identifies the rule within the role. RoleBinding constraints reference rules by name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description provides a brief explanation of the rule."
+        },
+        "action": {
+          "type": "string",
+          "description": "Action is the action the rule allows or denies, e.g. read or playbook:run."
+        },
+        "resource": {
+          "$ref": "#/$defs/ScopeReference",
+          "description": "Resource is the Scope selecting the resources the action is performed on."
+        },
+        "target": {
+          "$ref": "#/$defs/ScopeReference",
+          "description": "Target is the Scope selecting what the action is performed on the resource with,\ne.g. the configs a playbook runs on. Only actions that take a target accept it.\nWithout a target, the rule only matches operations without one."
+        },
+        "deny": {
+          "type": "boolean",
+          "description": "Deny makes the rule deny the action instead of allowing it."
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "required": [
+        "name",
+        "action",
+        "resource"
+      ]
     },
-    "PermissionGroupStatus": {
+    "RoleSpec": {
+      "properties": {
+        "description": {
+          "type": "string",
+          "description": "Description provides a brief explanation of the role."
+        },
+        "rules": {
+          "items": {
+            "$ref": "#/$defs/RoleRule"
+          },
+          "type": "array",
+          "description": "Rules of the role. A matching deny rule overrides every allow rule."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "rules"
+      ]
+    },
+    "RoleStatus": {
       "properties": {
         "observedGeneration": {
           "type": "integer"
@@ -264,6 +253,20 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "ScopeReference": {
+      "properties": {
+        "scopeRef": {
+          "type": "string",
+          "description": "ScopeRef is the name of the Scope."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "scopeRef"
+      ],
+      "description": "ScopeReference references a Scope in the namespace of the Role or RoleBinding."
     },
     "Time": {
       "properties": {},

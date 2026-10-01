@@ -46,7 +46,7 @@ func PersistScopeFromCRD(ctx context.Context, obj *v1.Scope) error {
 
 // resolveAgentInTarget resolves agent names to agent IDs in a scope target
 func resolveAgentInTarget(ctx context.Context, target *v1.ScopeTarget) error {
-	selectors := []*v1.ScopeResourceSelector{
+	selectors := []*types.ResourceSelector{
 		target.Config,
 		target.Component,
 		target.Playbook,

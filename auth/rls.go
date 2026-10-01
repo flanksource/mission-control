@@ -288,7 +288,7 @@ func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameID
 	return nil
 }
 
-func convertToRLSScope(selector *v1.ScopeResourceSelector) rls.Scope {
+func convertToRLSScope(selector *types.ResourceSelector) rls.Scope {
 	rlsScope := rls.Scope{}
 
 	if selector.Agent != "" {

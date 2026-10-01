@@ -4,22 +4,25 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: permissiongroups.mission-control.flanksource.com
+  name: externalidentityproviders.mission-control.flanksource.com
 spec:
   group: mission-control.flanksource.com
   names:
-    kind: PermissionGroup
-    listKind: PermissionGroupList
-    plural: permissiongroups
-    singular: permissiongroup
+    kind: ExternalIdentityProvider
+    listKind: ExternalIdentityProviderList
+    plural: externalidentityproviders
+    singular: externalidentityprovider
   scope: Namespaced
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
         description: |-
-          PermissionGroup is the Schema for the Mission Control Permission Groups.
-          DEPRECATED: Use Role and RoleBinding instead.
+          ExternalIdentityProvider lets an external application authenticate its users to Mission Control
+          with JWTs signed by its own issuer.
+
+          A user is represented by a federated person (keyed by <provider>:<username>), and their access
+          comes only from RoleBindings whose oidc subjects match the claims of their token.
         properties:
           apiVersion:
             description: |-
@@ -40,68 +43,71 @@ spec:
             type: object
           spec:
             properties:
-              canaries:
+              algorithms:
+                description: Algorithms accepted for token signatures. Defaults to
+                  RS256 and ES256.
                 items:
-                  properties:
-                    name:
-                      type: string
-                    namespace:
-                      type: string
-                  type: object
+                  enum:
+                  - RS256
+                  - RS384
+                  - RS512
+                  - PS256
+                  - PS384
+                  - PS512
+                  - ES256
+                  - ES384
+                  - ES512
+                  - EdDSA
+                  type: string
                 type: array
-              name:
-                description: |-
-                  Name for the group
-                  Deprecated: Use metadata.name instead
+              audience:
+                description: Audience must be one of the aud claims of accepted tokens,
+                  usually the Mission Control URL.
+                minLength: 1
                 type: string
-              notifications:
-                items:
-                  properties:
-                    name:
-                      type: string
-                    namespace:
-                      type: string
-                  type: object
-                type: array
-              people:
+              claims:
                 description: |-
-                  List of ids and email of people.
-                  To select all users, use the wildcard selector: ["*"]
-                items:
-                  type: string
-                type: array
-              playbooks:
-                items:
-                  properties:
-                    name:
-                      type: string
-                    namespace:
-                      type: string
-                  type: object
-                type: array
-              scrapers:
-                items:
-                  properties:
-                    name:
-                      type: string
-                    namespace:
-                      type: string
-                  type: object
-                type: array
-              teams:
-                description: Teams is a list of team names
-                items:
-                  type: string
-                type: array
-              topologies:
-                items:
-                  properties:
-                    name:
-                      type: string
-                    namespace:
-                      type: string
-                  type: object
-                type: array
+                  Claims maps token claims to the federated person.
+                  RoleBindings can match any claim of the token.
+                properties:
+                  email:
+                    description: |-
+                      Email is the claim with the user's email.
+                      It's only displayed and never used to match Mission Control users.
+                    type: string
+                  name:
+                    description: Name is the claim with the user's display name.
+                    type: string
+                  username:
+                    description: |-
+                      Username is the claim that uniquely and stably identifies the user in the external application.
+                      Defaults to sub.
+                    type: string
+                type: object
+              disabled:
+                description: Disabled rejects every token from this provider.
+                type: boolean
+              issuer:
+                description: Issuer must exactly match the iss claim of accepted tokens.
+                minLength: 1
+                pattern: ^(https://.+|http://(localhost|127(\.[0-9]{1,3}){3}|\[::1\])(:[0-9]+)?([/?#].*)?)$
+                type: string
+              jwksURL:
+                description: |-
+                  JWKSURL is where the issuer's signing keys are fetched from.
+                  Defaults to the jwks_uri in the issuer's OpenID configuration.
+                pattern: ^(https://.+|http://(localhost|127(\.[0-9]{1,3}){3}|\[::1\])(:[0-9]+)?([/?#].*)?)$
+                type: string
+              maxTokenAge:
+                description: MaxTokenAge rejects tokens whose lifetime (exp - iat)
+                  is longer. Defaults to 5m.
+                type: string
+                x-kubernetes-validations:
+                - message: maxTokenAge must be a positive duration
+                  rule: duration(self) > duration('0s')
+            required:
+            - audience
+            - issuer
             type: object
           status:
             properties:
