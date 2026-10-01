@@ -75,6 +75,15 @@ func waitForHasherPlugin(configID string) {
 	}).WithTimeout(90 * time.Second).WithPolling(time.Second).Should(Succeed())
 }
 
+// waitForUserPermissions waits for the permissions to take effect: they're reconciled, then the policy is reloaded.
+func waitForUserPermissions(configID string) {
+	path := fmt.Sprintf("/api/plugins/%s/invoke/%s?config_id=%s", pluginName, pluginOperation, configID)
+	Eventually(func(g Gomega) {
+		resp := doPluginRequest(http.MethodPost, path, []byte(`{}`), goodUser.Email, "test-password")
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), resp.Body)
+	}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
+}
+
 type pluginHTTPResponse struct {
 	StatusCode int
 	Body       string
