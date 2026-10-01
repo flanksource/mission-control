@@ -242,12 +242,15 @@ var Serve = &cobra.Command{
 
 		{
 			// Create a dummy context to access the properties
-			if context.NewContext(cmd.Context()).Properties().On(false, vars.FlagRLSEnable) {
+			rlsEnabled := context.NewContext(cmd.Context()).Properties().On(false, vars.FlagRLSEnable)
+			if rlsEnabled {
 				dutyArgs = append(dutyArgs, duty.EnableRLS)
 			}
-			if context.NewContext(cmd.Context()).Properties().On(false, vars.FlagRLSDisable) {
+			rlsDisabled := context.NewContext(cmd.Context()).Properties().On(false, vars.FlagRLSDisable)
+			if rlsDisabled {
 				dutyArgs = append(dutyArgs, duty.DisableRLS)
 			}
+			vars.SetRLSEnabledAtStart(rlsEnabled && !rlsDisabled)
 		}
 
 		ctx, stop, err := duty.Start("mission-control", dutyArgs...)

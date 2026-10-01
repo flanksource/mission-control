@@ -2,15 +2,19 @@ package permissions_test
 
 import (
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/duty/rls"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
@@ -18,7 +22,9 @@ import (
 	k8sTypes "k8s.io/apimachinery/pkg/types"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
+	mcRBAC "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/vars"
 )
@@ -589,6 +595,139 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(rbac.ReloadPolicy()).To(Succeed())
 
 			Expect(canRunOn(builtinAgent.ID.String(), dummy.EchoConfig, nil)).To(BeFalse())
+		})
+	})
+
+	Describe("row filters", func() {
+		It("filters rows by the role's read rules", func() {
+			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(rlsGuest))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload.Disable).To(BeFalse())
+			Expect(payload.Config).To(ConsistOf(rls.Scope{Tags: map[string]string{"env": "role-test"}}))
+		})
+
+		It("filters rows by the intersection of the rule's scope and the constraint's", func() {
+			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(rlsTenantGuest))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload.Config).To(ConsistOf(rls.Scope{Tags: map[string]string{"env": "role-test", "tenant": "a"}}))
+		})
+
+		It("grants no rows of generated view tables", func() {
+			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(rlsGuest))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload.Scopes).To(BeEmpty())
+		})
+
+		It("filters rows for federated users by their bindings only", func() {
+			federatedUser := func(username string, bindings ...string) (*models.Person, string) {
+				person, err := db.GetOrCreateFederatedPerson(DefaultContext, "appx", username, username, "")
+				Expect(err).ToNot(HaveOccurred())
+
+				subject := models.FederatedPrincipal(person.ID.String())
+				if len(bindings) > 0 {
+					Expect(rbac.AddRoleForUser(subject, bindings...)).To(Succeed())
+				}
+
+				DeferCleanup(func() {
+					Expect(rbac.DeleteAllRolesForUser(subject)).To(Succeed())
+					Expect(DefaultContext.DB().Delete(person).Error).To(Succeed())
+				})
+				return person, subject
+			}
+
+			reader, readerSubject := federatedUser("rls-reader", models.BindingPrincipal(namespace, "tenant-a-operators"))
+			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(reader).WithSubject(readerSubject))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload.Disable).To(BeFalse())
+			Expect(payload.Config).To(ConsistOf(rls.Scope{Tags: map[string]string{"env": "role-test", "tenant": "a"}}))
+
+			listStatus := func(person *models.Person, subject, table string) int {
+				GinkgoHelper()
+				e := echo.New()
+				req := httptest.NewRequest(http.MethodGet, "/db/"+table, nil)
+				req = req.WithContext(DefaultContext.WithUser(person).WithSubject(subject))
+				rec := httptest.NewRecorder()
+				handler := mcRBAC.DbMiddleware()(func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+				Expect(handler(e.NewContext(req, rec))).To(Succeed())
+				return rec.Code
+			}
+			Expect(listStatus(reader, readerSubject, "config_items")).To(Equal(http.StatusOK), "its read grants cover some configs, filtered by row")
+			Expect(listStatus(reader, readerSubject, "components")).To(Equal(http.StatusForbidden), "no read grant covers components")
+
+			nobody, nobodySubject := federatedUser("rls-nobody")
+			Expect(listStatus(nobody, nobodySubject, "config_items")).To(Equal(http.StatusForbidden))
+			payload, err = auth.GetRLSPayload(DefaultContext.WithUser(nobody).WithSubject(nobodySubject))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload.Disable).To(BeFalse())
+			Expect(payload.Config).To(BeEmpty())
+			Expect(payload.Component).To(BeEmpty())
+			Expect(payload.Playbook).To(BeEmpty())
+			Expect(payload.Canary).To(BeEmpty())
+			Expect(payload.View).To(BeEmpty())
+			Expect(payload.Scopes).To(BeEmpty())
+		})
+
+		It("lists checks only through a read of checks, not of canaries", func() {
+			for _, scope := range []*v1.Scope{
+				newScope("every-canary", namespace, v1.ScopeTarget{Canary: &types.ResourceSelector{Name: "*"}}),
+				newScope("every-check", namespace, v1.ScopeTarget{Check: &types.ResourceSelector{Name: "*"}}),
+			} {
+				Expect(db.PersistScopeFromCRD(DefaultContext, scope)).To(Succeed())
+			}
+			persistRole(newRole("read-every-canary", namespace, allow("read", policy.ActionRead, "every-canary")))
+			persistRole(newRole("read-every-check", namespace, allow("read", policy.ActionRead, "every-check")))
+			for _, b := range []*v1.RoleBinding{
+				newBinding("read-every-canary", "read-every-canary", people(alice)),
+				newBinding("read-every-check", "read-every-check", people(alice)),
+			} {
+				Expect(db.PersistRoleBindingFromCRD(DefaultContext, b)).To(Succeed())
+			}
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			listStatus := func(bindingName, table string) int {
+				GinkgoHelper()
+				person, err := db.GetOrCreateFederatedPerson(DefaultContext, "appx", "lister-"+bindingName, "lister", "")
+				Expect(err).ToNot(HaveOccurred())
+				subject := models.FederatedPrincipal(person.ID.String())
+				Expect(rbac.AddRoleForUser(subject, models.BindingPrincipal(namespace, bindingName))).To(Succeed())
+				DeferCleanup(func() {
+					Expect(rbac.DeleteAllRolesForUser(subject)).To(Succeed())
+					Expect(DefaultContext.DB().Delete(person).Error).To(Succeed())
+				})
+
+				e := echo.New()
+				req := httptest.NewRequest(http.MethodGet, "/db/"+table, nil)
+				req = req.WithContext(DefaultContext.WithUser(person).WithSubject(subject))
+				rec := httptest.NewRecorder()
+				handler := mcRBAC.DbMiddleware()(func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+				Expect(handler(e.NewContext(req, rec))).To(Succeed())
+				return rec.Code
+			}
+
+			Expect(listStatus("read-every-canary", "canaries")).To(Equal(http.StatusOK))
+			Expect(listStatus("read-every-canary", "checks")).To(Equal(http.StatusForbidden), "a read of canaries doesn't cover checks")
+			Expect(listStatus("read-every-check", "checks")).To(Equal(http.StatusOK))
+		})
+
+		It("filters rows of canaries, which casbin requests never carry", func() {
+			Expect(db.PersistScopeFromCRD(DefaultContext, newScope("canaries", namespace,
+				v1.ScopeTarget{Canary: &types.ResourceSelector{Name: "http-check"}}))).To(Succeed())
+			role := newRole("read-canaries", namespace, allow("read", policy.ActionRead, "canaries"))
+			persistRole(role)
+			guest := setup.CreateUserWithRole(DefaultContext, "Role Canary Guest", "role-canary@test.com", policy.RoleGuest)
+			binding := newBinding("read-canaries", role.Name, people(guest))
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).To(Succeed())
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Where("id = ?", binding.UID).Delete(&models.RoleBinding{}).Error).To(Succeed())
+				Expect(DefaultContext.DB().Delete(guest).Error).To(Succeed())
+				Expect(rbac.ReloadPolicy()).To(Succeed())
+			})
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(guest))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload.Canary).To(ConsistOf(rls.Scope{Names: []string{"http-check"}}))
+			Expect(canRead(guest.ID.String(), configTagged(nil))).To(BeFalse())
 		})
 	})
 })
