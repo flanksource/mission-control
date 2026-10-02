@@ -170,6 +170,7 @@ Constraints let one Role serve many groups, each limited to its own resources. G
 kind: Role
 metadata:
   name: production-operator
+  namespace: default
 spec:
   rules:
     - name: read-production
@@ -190,6 +191,7 @@ this binding limits both rules to tenant A's configs:
 kind: RoleBinding
 metadata:
   name: tenant-a-operators
+  namespace: default
 spec:
   role: production-operator
   subjects:

@@ -69,7 +69,7 @@ The `platform` team can read staging configs, and run monitoring playbooks on th
 
 ## Namespaces
 
-Every Scope, Role and RoleBinding has a namespace. It's required however the object is created, through Kubernetes or through Mission Control's API; an object without one is rejected. An object is identified by its namespace and name.
+Every Scope, Role and RoleBinding has a namespace, and it's required however the object is created. Through Mission Control's API, an object without one is rejected. Through Kubernetes, an object always has one: `kubectl apply` uses the current namespace when a manifest leaves it out. An object is identified by its namespace and name.
 
 References between them only resolve within one namespace:
 
