@@ -67,6 +67,19 @@ spec:
 
 The `platform` team can read staging configs, and run monitoring playbooks on them.
 
+## Namespaces
+
+Every Scope, Role and RoleBinding has a namespace. It's required however the object is created, through Kubernetes or through Mission Control's API; an object without one is rejected. An object is identified by its namespace and name.
+
+References between them only resolve within one namespace:
+
+- A Role's rules reference Scopes in the Role's namespace (`roles.md`, Section 1).
+- A RoleBinding's `role` names a Role in the binding's namespace, and its constraints reference Scopes in the binding's namespace (`rolebindings.md`, Sections 1 and 3).
+
+`scopeRef` and `role` name an object, never a namespace, so they can't reach another namespace. A Role, the Scopes its rules use and the RoleBindings that grant it are always in the same namespace. To use the same Scope in two namespaces, create it in each.
+
+The namespace only identifies the object. It doesn't limit the resources a Scope selects or the subjects a RoleBinding names ("Who may manage these resources").
+
 ## A note on "target"
 
 The word appears twice, with different meanings:
