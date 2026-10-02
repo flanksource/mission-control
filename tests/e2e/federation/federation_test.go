@@ -178,7 +178,10 @@ var _ = ginkgo.Describe("Federated requests through the server", ginkgo.Ordered,
 			},
 			{
 				ObjectMeta: metav1.ObjectMeta{Name: "tenant-a", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
-				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &types.ResourceSelector{TagSelector: "tenant=a"}}}},
+				Spec: v1.ScopeSpec{Targets: []v1.ScopeTarget{
+					{Config: &types.ResourceSelector{TagSelector: "tenant=a"}},
+					{Playbook: &types.ResourceSelector{Name: "*"}},
+				}},
 			},
 		} {
 			Expect(db.PersistScopeFromCRD(ctx, scope)).To(Succeed())
@@ -212,9 +215,9 @@ var _ = ginkgo.Describe("Federated requests through the server", ginkgo.Ordered,
 					Provider: "appx",
 					Match:    "'operators' in claims.groups && claims.tenant == 'a'",
 				}}},
-				Constraints: []v1.RoleBindingConstraint{
-					{Rule: "read-configs", Resource: &v1.ScopeReference{ScopeRef: "tenant-a"}},
-					{Rule: "run-kubernetes", Target: &v1.ScopeReference{ScopeRef: "tenant-a"}},
+				Constraint: &v1.RoleBindingConstraint{
+					Resource: &v1.ScopeReference{ScopeRef: "tenant-a"},
+					Target:   &v1.ScopeReference{ScopeRef: "tenant-a"},
 				},
 			},
 		})).To(Succeed())

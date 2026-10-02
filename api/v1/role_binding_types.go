@@ -30,7 +30,7 @@ var BindableRoles = []string{
 // +kubebuilder:subresource:status
 //
 // RoleBinding grants a Role (in the same namespace) to many subjects,
-// optionally narrowing the role's allow rules with constraints.
+// optionally narrowing the role's allow rules with a constraint.
 type RoleBinding struct {
 	metav1.TypeMeta   `json:",inline" yaml:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty"`
@@ -52,28 +52,21 @@ type RoleBindingSpec struct {
 	// +kubebuilder:validation:XValidation:rule="[has(self.people) && size(self.people) > 0, has(self.teams) && size(self.teams) > 0, has(self.roles) && size(self.roles) > 0, has(self.oidc) && size(self.oidc) > 0, has(self.notifications) && size(self.notifications) > 0, has(self.playbooks) && size(self.playbooks) > 0, has(self.topologies) && size(self.topologies) > 0, has(self.scrapers) && size(self.scrapers) > 0, has(self.canaries) && size(self.canaries) > 0].exists(x, x)",message="at least one subject is required"
 	Subjects RoleBindingSubjects `json:"subjects" yaml:"subjects"`
 
-	// +listType=map
-	// +listMapKey=rule
-
-	// Constraints narrow rules of the role for this binding's subjects.
-	// Without constraints (empty, null or missing), the binding grants every rule of the role as defined.
-	// With constraints, it grants only the allow rules they name. Deny rules always apply as written.
-	Constraints []RoleBindingConstraint `json:"constraints,omitempty" yaml:"constraints,omitempty"`
+	// Constraint narrows every allow rule of the role for this binding's subjects.
+	// Without one, the binding grants the role's rules as written. Deny rules are never narrowed.
+	Constraint *RoleBindingConstraint `json:"constraint,omitempty" yaml:"constraint,omitempty"`
 }
 
-// RoleBindingConstraint narrows one allow rule of the bound role.
-// A constraint can only narrow: the rule's resource, and its target, must also belong to the constraint's Scopes.
+// RoleBindingConstraint narrows every allow rule of the bound role, one side at a time:
+// an operation's resource, and its target, must also belong to the constraint's Scopes.
+// A rule the constraint can't narrow doesn't apply through the binding, and is reported by its AllRulesApply condition.
 // +kubebuilder:object:generate=true
+// +kubebuilder:validation:XValidation:rule="has(self.resource) || has(self.target)",message="a constraint must set resource or target"
 type RoleBindingConstraint struct {
-	// Rule is the name of a rule of the role.
-	// +kubebuilder:validation:MinLength=1
-	Rule string `json:"rule" yaml:"rule"`
-
-	// Resource is a Scope, in the binding's namespace, the rule's resource must also belong to.
+	// Resource is a Scope, in the binding's namespace, the resource of every operation must also belong to.
 	Resource *ScopeReference `json:"resource,omitempty" yaml:"resource,omitempty"`
 
-	// Target is a Scope, in the binding's namespace, the rule's target must also belong to.
-	// Only for rules that have a target.
+	// Target is a Scope, in the binding's namespace, the target of every operation must also belong to.
 	Target *ScopeReference `json:"target,omitempty" yaml:"target,omitempty"`
 }
 
@@ -149,23 +142,17 @@ func (t RoleBindingSpec) Validate() error {
 		return fmt.Errorf("role is required")
 	}
 
-	constrained := map[string]struct{}{}
-	for i, constraint := range t.Constraints {
-		if constraint.Rule == "" {
-			return fmt.Errorf("constraint %d: rule is required", i)
+	if c := t.Constraint; c != nil {
+		if c.Resource == nil && c.Target == nil {
+			return fmt.Errorf("constraint must set resource or target")
 		}
 
-		if _, ok := constrained[constraint.Rule]; ok {
-			return fmt.Errorf("constraint %d: rule %q is constrained more than once", i, constraint.Rule)
-		}
-		constrained[constraint.Rule] = struct{}{}
-
-		if constraint.Resource != nil && constraint.Resource.ScopeRef == "" {
-			return fmt.Errorf("constraint %d: resource.scopeRef is required when resource is set", i)
+		if c.Resource != nil && c.Resource.ScopeRef == "" {
+			return fmt.Errorf("constraint: resource.scopeRef is required when resource is set")
 		}
 
-		if constraint.Target != nil && constraint.Target.ScopeRef == "" {
-			return fmt.Errorf("constraint %d: target.scopeRef is required when target is set", i)
+		if c.Target != nil && c.Target.ScopeRef == "" {
+			return fmt.Errorf("constraint: target.scopeRef is required when target is set")
 		}
 	}
 
@@ -229,6 +216,10 @@ func validateResourceSubject(selector PermissionGroupSelector) error {
 
 	return nil
 }
+
+// ConditionAllRulesApply is the condition of a RoleBinding that reports whether every allow rule of its role
+// applies through it. It's False, naming each rule that doesn't and why, when the constraint can't narrow a rule.
+const ConditionAllRulesApply = "AllRulesApply"
 
 type RoleBindingStatus struct {
 	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`

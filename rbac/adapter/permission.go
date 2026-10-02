@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/casbin/casbin/v2/model"
@@ -166,16 +167,23 @@ func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
 		return fmt.Errorf("failed to load role bindings: %w", err)
 	}
 
+	reports := map[uuid.UUID]unappliedReport{}
 	for _, binding := range bindings {
 		var role *models.Role
 		if r, ok := rolesByName[binding.Namespace+"/"+binding.Role]; ok {
 			role = &r
 		}
 
-		policies, err := a.roleBindingToCasbinRules(binding, role)
+		policies, unapplied, err := a.roleBindingToCasbinRules(binding, role)
 		if err := recordValidity(a.ctx, binding.TableName(), binding.ID, binding.Namespace, binding.Name, binding.Source, binding.Error, binding.ErrorReason, err); err != nil {
 			return err
 		}
+
+		report := unappliedReport{binding: binding, report: strings.Join(lo.Map(unapplied, func(u UnappliedRule, _ int) string { return u.String() }), "; ")}
+		if role != nil {
+			report.roleSource = role.Source
+		}
+		reports[binding.ID] = report
 
 		for _, policy := range policies {
 			if err := persist.LoadPolicyArray(policy, m); err != nil {
@@ -184,7 +192,54 @@ func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
 		}
 	}
 
+	recordUnappliedReports(reports)
 	return nil
+}
+
+// unappliedReport is what a binding reports about the allow rules that don't apply through it.
+type unappliedReport struct {
+	binding    models.RoleBinding
+	roleSource string
+	report     string
+}
+
+// unappliedReports are the reports of every binding as of the last policy load, by binding id.
+var unappliedReports = struct {
+	sync.Mutex
+	byBinding map[uuid.UUID]unappliedReport
+}{byBinding: map[uuid.UUID]unappliedReport{}}
+
+// recordUnappliedReports notifies ValidityChanged of every binding whose report changed since the last load,
+// and of its role, whose status lists the bindings reporting one of its rules. A Role change can change what its
+// bindings report without changing whether they're valid.
+func recordUnappliedReports(reports map[uuid.UUID]unappliedReport) {
+	unappliedReports.Lock()
+	previous := unappliedReports.byBinding
+	unappliedReports.byBinding = reports
+	unappliedReports.Unlock()
+
+	if ValidityChanged == nil {
+		return
+	}
+
+	notifyRole := func(r unappliedReport) {
+		if r.roleSource != "" {
+			ValidityChanged("roles", r.binding.Namespace, r.binding.Role, r.roleSource)
+		}
+	}
+
+	for id, current := range reports {
+		if old := previous[id]; old.report != current.report {
+			ValidityChanged("role_bindings", current.binding.Namespace, current.binding.Name, current.binding.Source)
+			notifyRole(current)
+		}
+	}
+
+	for id, old := range previous {
+		if _, ok := reports[id]; !ok && old.report != "" {
+			notifyRole(old)
+		}
+	}
 }
 
 // ValidityChanged is called when a Scope, Role or RoleBinding (by table) becomes valid or invalid, or why it's invalid
@@ -429,52 +484,59 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 	return policies, nil
 }
 
-// roleBindingToCasbinRules compiles a valid binding into:
+// roleBindingToCasbinRules compiles a binding into:
 //
-//   - the rules it grants, filed under binding:<ns>/<name> (see compiledRuleToCasbinRules)
+//   - the rules that apply through it, filed under binding:<ns>/<name> (see compiledRuleToCasbinRules)
 //   - an assignment of the binding to each of its static subjects: g, <subject>, binding:<ns>/<name>
 //
 // Users of external identity providers are assigned to the binding when their token's claims match (see auth/federation.go).
-// An invalid binding, or a binding of a missing or invalid role, returns a validation error and no policies.
-func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding, role *models.Role) ([][]string, error) {
+//
+// It also returns the allow rules that don't apply through the binding, and a validation error when the binding
+// isn't Ready. A binding that's invalid on its own, or whose role is missing or invalid, has no policies.
+// One whose constraint applies no allow rule still has the policies of its role's deny rules.
+func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding, role *models.Role) ([][]string, []UnappliedRule, error) {
 	spec, err := RoleBindingSpec(binding)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if role == nil {
-		return nil, NewInvalid(ReasonRoleNotFound, "role %s/%s not found", binding.Namespace, binding.Role)
+		return nil, nil, NewInvalid(ReasonRoleNotFound, "role %s/%s not found", binding.Namespace, binding.Role)
 	}
 
-	rules, err := CompileBinding(a.ctx, a.cache, binding, *role)
-	if err != nil {
-		return nil, err
+	compiled, compileErr := CompileBinding(a.ctx, a.cache, binding, *role)
+	if compileErr != nil && !IsValidationError(compileErr) {
+		return nil, nil, compileErr
 	}
 
 	principal := binding.Principal()
 	var policies [][]string
-	for _, rule := range rules {
+	for _, rule := range compiled.Rules {
 		rulePolicies, err := compiledRuleToCasbinRules(principal, rule)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		policies = append(policies, rulePolicies...)
+	}
+
+	if len(policies) == 0 {
+		return nil, compiled.Unapplied, compileErr
 	}
 
 	subjects := spec.Subjects
 	allSubjects, err := a.resolveNamespacedSubjects(subjects.PermissionGroupSubjects)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve subjects for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
+		return nil, nil, fmt.Errorf("failed to resolve subjects for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
 	}
 
 	people, err := a.resolvePeopleByEmail(subjects.People)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve people for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
+		return nil, nil, fmt.Errorf("failed to resolve people for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
 	}
 
 	teams, err := a.resolveTeams(subjects.Teams)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve teams for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
+		return nil, nil, fmt.Errorf("failed to resolve teams for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
 	}
 
 	allSubjects = append(allSubjects, people...)
@@ -485,7 +547,7 @@ func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding,
 		policies = append(policies, []string{"g", subject, principal, "", "", ""})
 	}
 
-	return policies, nil
+	return policies, compiled.Unapplied, compileErr
 }
 
 // RoleBindingSpec returns the spec of a stored binding, validated on its own.
@@ -497,11 +559,11 @@ func RoleBindingSpec(binding models.RoleBinding) (v1.RoleBindingSpec, error) {
 		}
 	}
 
-	if len(binding.Constraints) > 0 {
-		if err := json.Unmarshal(binding.Constraints, &spec.Constraints); err != nil {
-			return spec, NewValidationError("role binding %s/%s: invalid constraints: %v", binding.Namespace, binding.Name, err)
-		}
+	constraint, err := bindingConstraint(binding)
+	if err != nil {
+		return spec, err
 	}
+	spec.Constraint = constraint
 
 	if err := spec.Validate(); err != nil {
 		return spec, NewValidationError("role binding %s/%s: %v", binding.Namespace, binding.Name, err)

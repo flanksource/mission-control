@@ -173,83 +173,6 @@ func resolveInput(ctx context.Context, cache *gocache.Cache, namespace string, c
 	return scope, nil
 }
 
-// resolvedConstraint is a validated constraint of a binding, with its Scopes resolved.
-type resolvedConstraint struct {
-	resource *ScopeSelection
-	target   *ScopeSelection
-}
-
-// ResolveConstraints validates the constraints of a binding against the rules of its role,
-// and resolves their Scopes in the binding's namespace.
-//
-// A constraint can only narrow an allow rule: it can't name a deny rule, since narrowing a deny loosens the role,
-// and it can't give a target to a rule without one, since that would widen the rule.
-// Its Scopes must meet everything the rule's own Scopes must meet for the action.
-func ResolveConstraints(ctx context.Context, cache *gocache.Cache, namespace string, constraints []v1.RoleBindingConstraint, rules []ResolvedRule) (map[string]resolvedConstraint, error) {
-	resolved := map[string]resolvedConstraint{}
-	for _, constraint := range constraints {
-		c, err := resolveConstraint(ctx, cache, namespace, constraint, rules, resolved)
-		if err != nil {
-			return nil, withContext(err, "constraint on rule %s", constraint.Rule)
-		}
-		resolved[constraint.Rule] = c
-	}
-
-	return resolved, nil
-}
-
-func resolveConstraint(ctx context.Context, cache *gocache.Cache, namespace string, constraint v1.RoleBindingConstraint, rules []ResolvedRule, resolved map[string]resolvedConstraint) (resolvedConstraint, error) {
-	if _, ok := resolved[constraint.Rule]; ok {
-		return resolvedConstraint{}, NewValidationError("the rule is constrained more than once")
-	}
-
-	rule, found := lo.Find(rules, func(r ResolvedRule) bool { return r.Name == constraint.Rule })
-	if !found {
-		return resolvedConstraint{}, NewValidationError("the role has no such rule")
-	} else if rule.Deny {
-		return resolvedConstraint{}, NewValidationError("deny rules can't be constrained: narrowing a deny loosens the role")
-	}
-
-	var c resolvedConstraint
-	if constraint.Resource != nil {
-		scope, err := resolveConstraintInput(ctx, cache, namespace, rule, "resource", rule.Resource, constraint.Resource.ScopeRef)
-		if err != nil {
-			return resolvedConstraint{}, err
-		}
-		c.resource = &scope
-	}
-
-	if constraint.Target != nil {
-		if rule.Target == nil {
-			return resolvedConstraint{}, NewValidationError("the rule has no target, and a constraint can't add one")
-		}
-
-		scope, err := resolveConstraintInput(ctx, cache, namespace, rule, "target", *rule.Target, constraint.Target.ScopeRef)
-		if err != nil {
-			return resolvedConstraint{}, err
-		}
-		c.target = &scope
-	}
-
-	return c, nil
-}
-
-// resolveConstraintInput resolves the Scope a constraint narrows an input of the rule with.
-// At least one type it selects must also be selected by the rule's Scope, or nothing would be in both.
-func resolveConstraintInput(ctx context.Context, cache *gocache.Cache, namespace string, rule ResolvedRule, input string, ruleScope ScopeSelection, scopeRef string) (ScopeSelection, error) {
-	scope, err := resolveInput(ctx, cache, namespace, rule.Contract, input, scopeRef)
-	if err != nil {
-		return ScopeSelection{}, err
-	}
-
-	if !lo.Some(scope.DeclaredTypes(), ruleScope.DeclaredTypes()) {
-		return ScopeSelection{}, NewValidationError("scope %s selects %s and the rule's %s scope %s selects %s: no resource can be in both",
-			scope.Name, strings.Join(scope.DeclaredTypes(), ", "), input, ruleScope.Name, strings.Join(ruleScope.DeclaredTypes(), ", "))
-	}
-
-	return scope, nil
-}
-
 // withContext prefixes a validation error, keeping its reason. Other errors are returned as they are.
 func withContext(err error, format string, args ...any) error {
 	if IsValidationError(err) {
@@ -265,7 +188,8 @@ type CompiledRule struct {
 	Deny     bool
 	Contract ActionContract
 
-	// Resource are the Scopes the primary resource must belong to: the rule's, then the constraint's.
+	// Resource are the Scopes the primary resource must belong to: the rule's, then the constraint's narrowed to the
+	// types both select.
 	Resource []ScopeSelection
 
 	// Target are the Scopes the target must belong to. Empty when the rule has no target.
@@ -297,80 +221,256 @@ func ValidateStoredScope(ctx context.Context, cache *gocache.Cache, scope models
 	return err
 }
 
-// CompileBinding returns the rules a binding grants.
+// UnappliedRule is an allow rule of a role that doesn't apply through a binding, because its constraint can't narrow it.
+type UnappliedRule struct {
+	Rule    string `json:"rule"`
+	Reason  string `json:"reason"`
+	Message string `json:"message"`
+}
+
+func (u UnappliedRule) String() string {
+	return fmt.Sprintf("rule %s: %s", u.Rule, u.Message)
+}
+
+// CompiledBinding is what a binding grants: the rules that apply through it, and the allow rules that don't.
+type CompiledBinding struct {
+	Rules     []CompiledRule
+	Unapplied []UnappliedRule
+}
+
+// constraintScopes are the Scopes of a binding's constraint, resolved in the binding's namespace.
+type constraintScopes struct {
+	resource *ScopeSelection
+	target   *ScopeSelection
+}
+
+// CompileBinding returns what a binding grants.
 //
-// Without constraints, those are all the rules of its role. With constraints, they're the role's deny rules,
-// as written, and the allow rules the constraints name, narrowed by them.
-// A binding of an invalid role, or with an invalid constraint, grants nothing.
-func CompileBinding(ctx context.Context, cache *gocache.Cache, binding models.RoleBinding, role models.Role) ([]CompiledRule, error) {
-	var constraints []v1.RoleBindingConstraint
-	if len(binding.Constraints) > 0 {
-		if err := json.Unmarshal(binding.Constraints, &constraints); err != nil {
-			return nil, NewValidationError("role binding %s/%s: invalid constraints: %v", binding.Namespace, binding.Name, err)
-		}
+// A binding grants its whole role. Without a constraint, its rules apply as written. With one, every allow rule is
+// narrowed by it, one side at a time, and an allow rule it can't narrow doesn't apply (see narrowRule).
+// Deny rules are never narrowed: they apply whenever the role is valid, whatever happens to the constraint.
+//
+// The error says why the binding isn't Ready: its role is invalid, a Scope of its constraint is missing or invalid,
+// or none of the role's allow rules applies through it. The rules returned still apply.
+func CompileBinding(ctx context.Context, cache *gocache.Cache, binding models.RoleBinding, role models.Role) (CompiledBinding, error) {
+	constraint, err := bindingConstraint(binding)
+	if err != nil {
+		return CompiledBinding{}, err
 	}
 
 	resolvedRules, err := ValidateRole(ctx, cache, role)
 	if err != nil {
-		return nil, withContext(withReason(err, ReasonRoleInvalid), "role %s/%s is invalid", role.Namespace, role.Name)
+		return CompiledBinding{}, withContext(withReason(err, ReasonRoleInvalid), "role %s/%s is invalid", role.Namespace, role.Name)
 	}
 
-	resolvedConstraints, err := ResolveConstraints(ctx, cache, binding.Namespace, constraints, resolvedRules)
-	if err != nil {
-		return nil, err
-	}
-
-	var compiled []CompiledRule
+	var compiled CompiledBinding
+	var allows []ResolvedRule
 	for _, rule := range resolvedRules {
-		constraint, constrained := resolvedConstraints[rule.Name]
-		if len(constraints) > 0 && !rule.Deny && !constrained {
+		if rule.Deny || constraint == nil {
+			compiled.Rules = append(compiled.Rules, compileRule(binding, rule))
+		} else {
+			allows = append(allows, rule)
+		}
+	}
+
+	if constraint == nil {
+		return compiled, nil
+	}
+
+	scopes, err := resolveConstraintScopes(ctx, cache, binding.Namespace, *constraint)
+	if err != nil {
+		return compiled, withContext(err, "constraint")
+	} else if len(allows) == 0 {
+		return compiled, nil
+	}
+
+	for _, rule := range allows {
+		c, err := narrowRule(ctx, compileRule(binding, rule), rule, scopes)
+		if err != nil {
+			if !IsValidationError(err) {
+				return CompiledBinding{}, err
+			}
+			compiled.Unapplied = append(compiled.Unapplied, UnappliedRule{Rule: rule.Name, Reason: InvalidReason(err), Message: err.Error()})
 			continue
 		}
 
-		c := CompiledRule{
-			ID:       BindingRuleID(binding.ID, rule.Name),
-			Name:     rule.Name,
-			Deny:     rule.Deny,
-			Contract: rule.Contract,
-			Resource: []ScopeSelection{rule.Resource},
-		}
+		compiled.Rules = append(compiled.Rules, c)
+	}
 
-		if constraint.resource != nil {
-			c.Resource = append(c.Resource, *constraint.resource)
-		}
-
-		if rule.Target != nil {
-			c.Target = []ScopeSelection{*rule.Target}
-			if constraint.target != nil {
-				c.Target = append(c.Target, *constraint.target)
-			}
-		}
-
-		compiled = append(compiled, c)
+	if len(compiled.Unapplied) == len(allows) {
+		return compiled, NewInvalid(ReasonNoRulesApply, "none of the role's allow rules applies through the binding: %s",
+			strings.Join(lo.Map(compiled.Unapplied, func(u UnappliedRule, _ int) string { return u.String() }), "; "))
 	}
 
 	return compiled, nil
 }
 
-// ValidateBinding validates a stored binding against its role and the Scopes its constraints name.
-func ValidateBinding(ctx context.Context, cache *gocache.Cache, binding models.RoleBinding) error {
+// bindingConstraint returns the constraint of a stored binding, or nil when it has none.
+func bindingConstraint(binding models.RoleBinding) (*v1.RoleBindingConstraint, error) {
+	if binding.Constraint == nil {
+		return nil, nil
+	}
+
+	var constraint *v1.RoleBindingConstraint
+	if err := json.Unmarshal(*binding.Constraint, &constraint); err != nil {
+		return nil, NewValidationError("role binding %s/%s: invalid constraint: %v", binding.Namespace, binding.Name, err)
+	}
+	return constraint, nil
+}
+
+// compileRule returns the rule as written, granted through the binding.
+func compileRule(binding models.RoleBinding, rule ResolvedRule) CompiledRule {
+	c := CompiledRule{
+		ID:       BindingRuleID(binding.ID, rule.Name),
+		Name:     rule.Name,
+		Deny:     rule.Deny,
+		Contract: rule.Contract,
+		Resource: []ScopeSelection{rule.Resource},
+	}
+	if rule.Target != nil {
+		c.Target = []ScopeSelection{*rule.Target}
+	}
+	return c
+}
+
+// resolveConstraintScopes resolves the Scopes a constraint names. A missing or invalid Scope is a validation error.
+func resolveConstraintScopes(ctx context.Context, cache *gocache.Cache, namespace string, constraint v1.RoleBindingConstraint) (constraintScopes, error) {
+	var scopes constraintScopes
+	if constraint.Resource != nil {
+		scope, err := ResolveScope(ctx, cache, namespace, constraint.Resource.ScopeRef)
+		if err != nil {
+			return constraintScopes{}, err
+		}
+		scopes.resource = &scope
+	}
+
+	if constraint.Target != nil {
+		scope, err := ResolveScope(ctx, cache, namespace, constraint.Target.ScopeRef)
+		if err != nil {
+			return constraintScopes{}, err
+		}
+		scopes.target = &scope
+	}
+
+	return scopes, nil
+}
+
+// narrowRule narrows an allow rule by the constraint's Scopes, one side at a time.
+// A side the rule's action can't take is skipped. A validation error means the rule doesn't apply through the binding:
+//
+//   - the action takes a target, the constraint sets one, and the rule has none: the rule allows only operations
+//     without a target, so its set of targets is empty and stays empty when narrowed
+//   - no side narrows the rule, so leaving it would grant it as written
+//   - an input can't be narrowed (see narrowInput)
+func narrowRule(ctx context.Context, compiled CompiledRule, rule ResolvedRule, scopes constraintScopes) (CompiledRule, error) {
+	narrowed := false
+	if scopes.resource != nil {
+		scope, err := narrowInput(ctx, rule.Contract, "resource", rule.Resource, *scopes.resource)
+		if err != nil {
+			return CompiledRule{}, err
+		}
+		compiled.Resource = append(compiled.Resource, scope)
+		narrowed = true
+	}
+
+	if scopes.target != nil && len(rule.Contract.Targets) > 0 {
+		if rule.Target == nil {
+			return CompiledRule{}, NewInvalid(ReasonConstraintDoesNotFit,
+				"%s takes a target and the rule has none, so it only allows operations without a target, which the constraint's target can't narrow", rule.Action)
+		}
+
+		scope, err := narrowInput(ctx, rule.Contract, "target", *rule.Target, *scopes.target)
+		if err != nil {
+			return CompiledRule{}, err
+		}
+		compiled.Target = append(compiled.Target, scope)
+		narrowed = true
+	}
+
+	if !narrowed {
+		return CompiledRule{}, NewInvalid(ReasonConstraintDoesNotFit,
+			"%s takes no target and the constraint sets no resource, so the constraint can't narrow the rule", rule.Action)
+	}
+
+	return compiled, nil
+}
+
+// narrowInput returns the part of the constraint's Scope that narrows an input of the rule: its targets of the types
+// both Scopes select. Types the input can't carry are ignored, so one Scope can narrow every input of every rule.
+//
+// The input can't be narrowed when the Scopes share no type, or when those targets can't be enforced for the action
+// as the rule's own Scope must be: whole-type targets for create, update and delete, and row filters for read,
+// which need row-level security unless every target is a whole-type target.
+func narrowInput(ctx context.Context, contract ActionContract, input string, ruleScope, constraintScope ScopeSelection) (ScopeSelection, error) {
+	common := lo.Intersect(ruleScope.DeclaredTypes(), constraintScope.DeclaredTypes())
+	if len(common) == 0 {
+		return ScopeSelection{}, NewInvalid(ReasonConstraintDoesNotFit, "the rule's %s scope %s selects %s and the constraint's scope %s selects %s: they share no type",
+			input, ruleScope.Name, strings.Join(ruleScope.DeclaredTypes(), ", "), constraintScope.Name, strings.Join(constraintScope.DeclaredTypes(), ", "))
+	}
+
+	narrowed := ScopeSelection{ID: constraintScope.ID, Name: constraintScope.Name, Selectors: map[string][]types.ResourceSelector{}}
+	for _, kind := range common {
+		for _, selector := range constraintScope.Selectors[kind] {
+			if err := contract.enforceable(kind, selector); err != nil {
+				return ScopeSelection{}, NewInvalid(ReasonConstraintDoesNotFit, "constraint scope %s: %v", constraintScope.Name, err)
+			}
+		}
+		narrowed.Selectors[kind] = constraintScope.Selectors[kind]
+	}
+
+	if contract.requiresRowLevelSecurity(narrowed) && !rowLevelSecurityEnabled(ctx) {
+		return ScopeSelection{}, NewInvalid(ReasonRowLevelSecurityRequired,
+			"constraint scope %s doesn't select whole types, so %s needs row-level security (%s) to filter listings", constraintScope.Name, contract.Action, vars.FlagRLSEnable)
+	}
+
+	return narrowed, nil
+}
+
+// ValidateBinding validates a stored binding against its role and the Scopes its constraint names,
+// and returns what it grants.
+func ValidateBinding(ctx context.Context, cache *gocache.Cache, binding models.RoleBinding) (CompiledBinding, error) {
 	if _, err := RoleBindingSpec(binding); err != nil {
-		return err
+		return CompiledBinding{}, err
 	}
 
 	var role models.Role
 	if err := ctx.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", binding.Namespace, binding.Role).Find(&role).Error; err != nil {
-		return err
+		return CompiledBinding{}, err
 	} else if role.ID == uuid.Nil {
-		return NewInvalid(ReasonRoleNotFound, "role %s/%s not found", binding.Namespace, binding.Role)
+		return CompiledBinding{}, NewInvalid(ReasonRoleNotFound, "role %s/%s not found", binding.Namespace, binding.Role)
 	}
 
-	_, err := CompileBinding(ctx, cache, binding, role)
-	return err
+	return CompileBinding(ctx, cache, binding, role)
 }
 
-// LoadBindingRules returns the rules granted by the binding with the given id.
-// A binding that doesn't exist, or whose role doesn't exist, grants nothing.
+// BindingsWithUnappliedRules returns the bindings of the role that some of its allow rules don't apply through.
+func BindingsWithUnappliedRules(ctx context.Context, role models.Role) ([]v1.BindingUnappliedRules, error) {
+	var bindings []models.RoleBinding
+	if err := ctx.DB().Where("namespace = ? AND role = ? AND deleted_at IS NULL", role.Namespace, role.Name).
+		Order("name").Find(&bindings).Error; err != nil {
+		return nil, err
+	}
+
+	var result []v1.BindingUnappliedRules
+	for _, binding := range bindings {
+		compiled, err := CompileBinding(ctx, nil, binding, role)
+		if err != nil && !IsValidationError(err) {
+			return nil, err
+		} else if len(compiled.Unapplied) == 0 {
+			continue
+		}
+
+		result = append(result, v1.BindingUnappliedRules{
+			Name:  binding.Name,
+			Rules: lo.Map(compiled.Unapplied, func(u UnappliedRule, _ int) string { return u.Rule }),
+		})
+	}
+
+	return result, nil
+}
+
+// LoadBindingRules returns the rules that apply through the binding with the given id.
+// A binding that doesn't exist, or whose role doesn't exist or is invalid, grants nothing.
 func LoadBindingRules(ctx context.Context, bindingID uuid.UUID) ([]CompiledRule, error) {
 	var binding models.RoleBinding
 	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", bindingID).Find(&binding).Error; err != nil {
@@ -390,7 +490,11 @@ func LoadBindingRules(ctx context.Context, bindingID uuid.UUID) ([]CompiledRule,
 		return nil, nil
 	}
 
-	return CompileBinding(ctx, nil, binding, role)
+	compiled, err := CompileBinding(ctx, nil, binding, role)
+	if err != nil && !IsValidationError(err) {
+		return nil, err
+	}
+	return compiled.Rules, nil
 }
 
 // RowFilters returns the row filters of a read rule, by resource type: the rows that belong to every Scope of the rule.

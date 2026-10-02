@@ -2,14 +2,19 @@ package db
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/kopper"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/rbac/adapter"
@@ -45,6 +50,7 @@ func PersistRoleFromCRD(ctx context.Context, obj *v1.Role) error {
 
 // PersistRole stores the role as written, with why it isn't in effect when it's invalid.
 // An invalid role is stored too: it applies none of its rules until it becomes valid.
+// Its status lists the bindings that some of its allow rules don't apply through.
 func PersistRole(ctx context.Context, obj *v1.Role, source string, createdBy *uuid.UUID) error {
 	uid, err := uuid.Parse(string(obj.GetUID()))
 	if err != nil {
@@ -76,6 +82,10 @@ func PersistRole(ctx context.Context, obj *v1.Role, source string, createdBy *uu
 		return err
 	}
 
+	if obj.Status.BindingsWithUnappliedRules, err = adapter.BindingsWithUnappliedRules(ctx, role); err != nil {
+		return err
+	}
+
 	return notReady(role.ErrorReason, role.Error)
 }
 
@@ -101,8 +111,9 @@ func PersistRoleBindingFromCRD(ctx context.Context, obj *v1.RoleBinding) error {
 	return PersistRoleBinding(ctx, obj, models.SourceCRD, nil)
 }
 
-// PersistRoleBinding stores the binding as written, with why it isn't in effect when it's invalid:
-// its role doesn't exist or is invalid, or a constraint doesn't fit the role.
+// PersistRoleBinding stores the binding as written, with why it isn't Ready: its role doesn't exist or is invalid,
+// a Scope of its constraint doesn't exist or is invalid, or none of the role's allow rules applies through it.
+// Its AllRulesApply condition reports the allow rules its constraint can't narrow.
 func PersistRoleBinding(ctx context.Context, obj *v1.RoleBinding, source string, createdBy *uuid.UUID) error {
 	uid, err := uuid.Parse(string(obj.GetUID()))
 	if err != nil {
@@ -114,9 +125,18 @@ func PersistRoleBinding(ctx context.Context, obj *v1.RoleBinding, source string,
 		return err
 	}
 
-	constraints, err := json.Marshal(lo.CoalesceSliceOrEmpty(obj.Spec.Constraints))
-	if err != nil {
-		return err
+	var constraint *types.JSON
+	if c := obj.Spec.Constraint; c != nil {
+		// An empty constraint would be stored as NULL, i.e. no constraint, and grant the role un-narrowed.
+		if c.Resource == nil && c.Target == nil {
+			return fmt.Errorf("role binding %s/%s: constraint must set resource or target", obj.GetNamespace(), obj.GetName())
+		}
+
+		raw, err := json.Marshal(c)
+		if err != nil {
+			return err
+		}
+		constraint = lo.ToPtr(types.JSON(raw))
 	}
 
 	binding := models.RoleBinding{
@@ -126,12 +146,12 @@ func PersistRoleBinding(ctx context.Context, obj *v1.RoleBinding, source string,
 		Description: obj.Spec.Description,
 		Source:      source,
 		Role:        obj.Spec.Role,
-		Constraints: constraints,
+		Constraint:  constraint,
 		Subjects:    subjects,
 		CreatedBy:   createdBy,
 	}
 
-	validationErr := adapter.ValidateBinding(ctx, nil, binding)
+	compiled, validationErr := adapter.ValidateBinding(ctx, nil, binding)
 	if binding.Error, binding.ErrorReason, err = validity(validationErr); err != nil {
 		return err
 	}
@@ -140,7 +160,31 @@ func PersistRoleBinding(ctx context.Context, obj *v1.RoleBinding, source string,
 		return err
 	}
 
+	setAllRulesApply(obj, compiled.Unapplied, binding.ErrorReason)
 	return notReady(binding.ErrorReason, binding.Error)
+}
+
+// setAllRulesApply sets the AllRulesApply condition of a binding: whether every allow rule of its role applies
+// through it. It's Unknown when that can't be told, because the role or a Scope of the constraint is missing or invalid.
+func setAllRulesApply(obj *v1.RoleBinding, unapplied []adapter.UnappliedRule, notReadyReason *string) {
+	condition := metav1.Condition{
+		Type:               v1.ConditionAllRulesApply,
+		Status:             metav1.ConditionTrue,
+		Reason:             "AllRulesApply",
+		ObservedGeneration: obj.GetGeneration(),
+	}
+
+	if len(unapplied) > 0 {
+		reasons := lo.Uniq(lo.Map(unapplied, func(u adapter.UnappliedRule, _ int) string { return u.Reason }))
+		condition.Status = metav1.ConditionFalse
+		condition.Reason = lo.Ternary(len(reasons) == 1, reasons[0], adapter.ReasonConstraintDoesNotFit)
+		condition.Message = strings.Join(lo.Map(unapplied, func(u adapter.UnappliedRule, _ int) string { return u.String() }), "; ")
+	} else if notReadyReason != nil {
+		condition.Status = metav1.ConditionUnknown
+		condition.Reason = *notReadyReason
+	}
+
+	meta.SetStatusCondition(&obj.Status.Conditions, condition)
 }
 
 func DeleteRoleBinding(ctx context.Context, id string) error {

@@ -46,7 +46,7 @@ type RoleSpec struct {
 // +kubebuilder:validation:XValidation:rule="!(has(self.deny) && self.deny && self.action == 'read')",message="deny rules on read aren't supported"
 // +kubebuilder:validation:XValidation:rule="!has(self.target) || self.action in ['playbook:run','playbook:approve','playbook:cancel']",message="only playbook:run, playbook:approve and playbook:cancel take a target"
 type RoleRule struct {
-	// Name identifies the rule within the role. RoleBinding constraints reference rules by name.
+	// Name identifies the rule within the role.
 	// +kubebuilder:validation:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
 	// +kubebuilder:validation:MaxLength=63
 	Name string `json:"name" yaml:"name"`
@@ -117,6 +117,20 @@ func (t RoleSpec) Validate() error {
 type RoleStatus struct {
 	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
 	Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+
+	// BindingsWithUnappliedRules lists the RoleBindings of the role that some of its allow rules don't apply through,
+	// because their constraint can't narrow them. It's information, not validation: it doesn't affect whether the role is valid.
+	BindingsWithUnappliedRules []BindingUnappliedRules `json:"bindingsWithUnappliedRules,omitempty" yaml:"bindingsWithUnappliedRules,omitempty"`
+}
+
+// BindingUnappliedRules is a RoleBinding whose AllRulesApply condition is False.
+// +kubebuilder:object:generate=true
+type BindingUnappliedRules struct {
+	// Name of the RoleBinding, in the role's namespace.
+	Name string `json:"name" yaml:"name"`
+
+	// Rules of the role that don't apply through the binding.
+	Rules []string `json:"rules" yaml:"rules"`
 }
 
 var _ kopper.StatusPatchGenerator = (*Role)(nil)

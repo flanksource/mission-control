@@ -19,7 +19,7 @@ spec:
       openAPIV3Schema:
         description: |-
           RoleBinding grants a Role (in the same namespace) to many subjects,
-          optionally narrowing the role's allow rules with constraints.
+          optionally narrowing the role's allow rules with a constraint.
         properties:
           apiVersion:
             description: |-
@@ -40,52 +40,39 @@ spec:
             type: object
           spec:
             properties:
-              constraints:
+              constraint:
                 description: |-
-                  Constraints narrow rules of the role for this binding's subjects.
-                  Without constraints (empty, null or missing), the binding grants every rule of the role as defined.
-                  With constraints, it grants only the allow rules they name. Deny rules always apply as written.
-                items:
-                  description: |-
-                    RoleBindingConstraint narrows one allow rule of the bound role.
-                    A constraint can only narrow: the rule's resource, and its target, must also belong to the constraint's Scopes.
-                  properties:
-                    resource:
-                      description: Resource is a Scope, in the binding's namespace,
-                        the rule's resource must also belong to.
-                      properties:
-                        scopeRef:
-                          description: ScopeRef is the name of the Scope.
-                          maxLength: 253
-                          minLength: 1
-                          type: string
-                      required:
-                      - scopeRef
-                      type: object
-                    rule:
-                      description: Rule is the name of a rule of the role.
-                      minLength: 1
-                      type: string
-                    target:
-                      description: |-
-                        Target is a Scope, in the binding's namespace, the rule's target must also belong to.
-                        Only for rules that have a target.
-                      properties:
-                        scopeRef:
-                          description: ScopeRef is the name of the Scope.
-                          maxLength: 253
-                          minLength: 1
-                          type: string
-                      required:
-                      - scopeRef
-                      type: object
-                  required:
-                  - rule
-                  type: object
-                type: array
-                x-kubernetes-list-map-keys:
-                - rule
-                x-kubernetes-list-type: map
+                  Constraint narrows every allow rule of the role for this binding's subjects.
+                  Without one, the binding grants the role's rules as written. Deny rules are never narrowed.
+                properties:
+                  resource:
+                    description: Resource is a Scope, in the binding's namespace,
+                      the resource of every operation must also belong to.
+                    properties:
+                      scopeRef:
+                        description: ScopeRef is the name of the Scope.
+                        maxLength: 253
+                        minLength: 1
+                        type: string
+                    required:
+                    - scopeRef
+                    type: object
+                  target:
+                    description: Target is a Scope, in the binding's namespace, the
+                      target of every operation must also belong to.
+                    properties:
+                      scopeRef:
+                        description: ScopeRef is the name of the Scope.
+                        maxLength: 253
+                        minLength: 1
+                        type: string
+                    required:
+                    - scopeRef
+                    type: object
+                type: object
+                x-kubernetes-validations:
+                - message: a constraint must set resource or target
+                  rule: has(self.resource) || has(self.target)
               description:
                 description: Description provides a brief explanation of the binding.
                 type: string

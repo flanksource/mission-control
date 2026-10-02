@@ -212,29 +212,22 @@
       },
       "additionalProperties": false,
       "type": "object",
-      "description": "RoleBinding grants a Role (in the same namespace) to many subjects,\noptionally narrowing the role's allow rules with constraints."
+      "description": "RoleBinding grants a Role (in the same namespace) to many subjects,\noptionally narrowing the role's allow rules with a constraint."
     },
     "RoleBindingConstraint": {
       "properties": {
-        "rule": {
-          "type": "string",
-          "description": "Rule is the name of a rule of the role."
-        },
         "resource": {
           "$ref": "#/$defs/ScopeReference",
-          "description": "Resource is a Scope, in the binding's namespace, the rule's resource must also belong to."
+          "description": "Resource is a Scope, in the binding's namespace, the resource of every operation must also belong to."
         },
         "target": {
           "$ref": "#/$defs/ScopeReference",
-          "description": "Target is a Scope, in the binding's namespace, the rule's target must also belong to.\nOnly for rules that have a target."
+          "description": "Target is a Scope, in the binding's namespace, the target of every operation must also belong to."
         }
       },
       "additionalProperties": false,
       "type": "object",
-      "required": [
-        "rule"
-      ],
-      "description": "RoleBindingConstraint narrows one allow rule of the bound role.\nA constraint can only narrow: the rule's resource, and its target, must also belong to the constraint's Scopes."
+      "description": "RoleBindingConstraint narrows every allow rule of the bound role, one side at a time:\nan operation's resource, and its target, must also belong to the constraint's Scopes.\nA rule the constraint can't narrow doesn't apply through the binding, and is reported by its AllRulesApply condition."
     },
     "RoleBindingSpec": {
       "properties": {
@@ -250,12 +243,9 @@
           "$ref": "#/$defs/RoleBindingSubjects",
           "description": "Subjects the role is granted to. At least one is required."
         },
-        "constraints": {
-          "items": {
-            "$ref": "#/$defs/RoleBindingConstraint"
-          },
-          "type": "array",
-          "description": "Constraints narrow rules of the role for this binding's subjects.\nWithout constraints (empty, null or missing), the binding grants every rule of the role as defined.\nWith constraints, it grants only the allow rules they name. Deny rules always apply as written."
+        "constraint": {
+          "$ref": "#/$defs/RoleBindingConstraint",
+          "description": "Constraint narrows every allow rule of the role for this binding's subjects.\nWithout one, the binding grants the role's rules as written. Deny rules are never narrowed."
         }
       },
       "additionalProperties": false,
