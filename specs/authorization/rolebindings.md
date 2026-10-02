@@ -29,6 +29,8 @@ spec:
 
 `role` never names a built-in role, since no Role can be named after one (`roles.md`, Section 1).
 
+A RoleBinding MUST have a namespace, and its Role and constraint Scopes must be in it (`overview.md`, "Namespaces"). Subjects can match resources in any namespace (Section 2.5).
+
 ## 2. Subjects
 
 `subjects` is an object. Every field is optional, but at least one subject MUST be given. A subject matched by several fields gets the Role once.
@@ -168,6 +170,7 @@ Constraints let one Role serve many groups, each limited to its own resources. G
 kind: Role
 metadata:
   name: production-operator
+  namespace: default
 spec:
   rules:
     - name: read-production
@@ -188,6 +191,7 @@ this binding limits both rules to tenant A's configs:
 kind: RoleBinding
 metadata:
   name: tenant-a-operators
+  namespace: default
 spec:
   role: production-operator
   subjects:

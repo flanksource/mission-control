@@ -111,7 +111,7 @@ A Scope whose `agent` no longer exists isn't an empty set. It's invalid (Section
 
 ### 4.2 Namespace
 
-`metadata.namespace` identifies the Scope object. It does **not** restrict the resources the Scope selects. Only selectors do.
+`metadata.namespace` identifies the Scope object and is required however it's created. Roles and RoleBindings can only reference the Scope from the same namespace (`overview.md`, "Namespaces"). It does **not** restrict the resources the Scope selects. Only selectors do.
 
 ## 5. Selector language
 

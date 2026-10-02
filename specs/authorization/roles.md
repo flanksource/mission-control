@@ -37,7 +37,7 @@ spec:
 | `target.scopeRef`   | Depends on the action | The Scope of resources the action is performed against, e.g. the configs a playbook runs on. |
 | `deny`              | No                    | Deny the action instead of allowing it.                                                      |
 
-A Scope is a named set of resources (see `scopes.md`). A rule references exactly one Scope per input, by name. `scopeRef` only refers to Scopes in the Role's own namespace, so a namespace's Roles don't depend on Scopes someone else controls. The resources a Scope selects can be in any namespace.
+A Scope is a named set of resources (see `scopes.md`). A rule references exactly one Scope per input, by name. A Role MUST have a namespace, and `scopeRef` only names Scopes in it (`overview.md`, "Namespaces"). The resources a Scope selects can be in any namespace.
 
 A Role can't be named after a built-in role: `admin`, `everyone`, `guest`, `viewer`, `editor`, `commander`, `responder` or `agent`. Such a Role is rejected (`overview.md`, "Rejected or not in effect"). The built-in roles are described in Section 7. In a RoleBinding, `role` always names a Role and `subjects.roles` always names a built-in role (`rolebindings.md`, Section 2.3), so `role: viewer` must never read as the built-in `viewer`.
 
