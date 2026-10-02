@@ -181,26 +181,46 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 
 		Expect(db.PersistPlaybookFromCRD(DefaultContext, &pb)).To(Succeed())
 
-		// Grant artifact access for the scheduled playbook
 		playbookRef := fmt.Sprintf("%s/%s", pb.Namespace, pb.Name)
-		perm := &v1.Permission{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("allow-%s-artifacts", pb.Name),
-				Namespace: pb.Namespace,
-				UID:       types.UID(uuid.NewString()),
+		permissions := []*v1.Permission{
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("allow-%s-artifacts", pb.Name),
+					Namespace: pb.Namespace,
+					UID:       types.UID(uuid.NewString()),
+				},
+				Spec: v1.PermissionSpec{
+					Description: fmt.Sprintf("allow %s to read artifacts connection", playbookRef),
+					Subject:     v1.PermissionSubject{Playbook: playbookRef},
+					Actions:     []string{"read"},
+					Object: v1.PermissionObject{
+						Selectors: dutyRBAC.Selectors{
+							Connections: []dutyTypes.ResourceSelector{{Name: "artifacts", Namespace: "default"}},
+						},
+					},
+				},
 			},
-			Spec: v1.PermissionSpec{
-				Description: fmt.Sprintf("allow %s to read artifacts connection", playbookRef),
-				Subject:     v1.PermissionSubject{Playbook: playbookRef},
-				Actions:     []string{"read"},
-				Object: v1.PermissionObject{
-					Selectors: dutyRBAC.Selectors{
-						Connections: []dutyTypes.ResourceSelector{{Name: "artifacts", Namespace: "default"}},
+			{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("allow-%s-scheduled-run", pb.Name),
+					Namespace: pb.Namespace,
+					UID:       types.UID(uuid.NewString()),
+				},
+				Spec: v1.PermissionSpec{
+					Description: fmt.Sprintf("allow %s to run itself on schedule", playbookRef),
+					Subject:     v1.PermissionSubject{Playbook: playbookRef},
+					Actions:     []string{"playbook:run"},
+					Object: v1.PermissionObject{
+						Selectors: dutyRBAC.Selectors{
+							Playbooks: []dutyTypes.ResourceSelector{{Name: pb.Name, Namespace: pb.Namespace}},
+						},
 					},
 				},
 			},
 		}
-		Expect(db.PersistPermissionFromCRD(DefaultContext, perm)).To(Succeed())
+		for _, permission := range permissions {
+			Expect(db.PersistPermissionFromCRD(DefaultContext, permission)).To(Succeed())
+		}
 		Expect(dutyRBAC.ReloadPolicy()).To(Succeed())
 
 		playbookModel, err := pb.ToModel()

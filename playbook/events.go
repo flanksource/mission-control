@@ -106,47 +106,37 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 			continue
 		}
 
-		run := models.PlaybookRun{
-			PlaybookID: p.ID,
-			Status:     models.PlaybookRunStatusScheduled,
-			Spec:       p.Spec,
-		}
-
-		if playbook.Spec.Approval != nil && !playbook.Spec.Approval.Approvers.Empty() {
-			run.Status = models.PlaybookRunStatusPendingApproval
-		}
+		req := RunParams{ID: p.ID}
+		var matched bool
 
 		switch specEvent.Class {
 		case "canary":
-			run.CheckID = &eventResource.Check.ID
-			if ok, err := matchResource(ctx, eventResource.Check.Labels, celEnv, playbook.Spec.On.Canary); err != nil {
-				logToJobHistory(ctx, p.ID.String(), err.Error())
-				continue
-			} else if ok {
-				if err := ctx.DB().Create(&run).Error; err != nil {
-					return err
-				}
-			}
+			req.CheckID = &eventResource.Check.ID
+			matched, err = matchResource(ctx, eventResource.Check.Labels, celEnv, playbook.Spec.On.Canary)
 		case "component":
-			run.ComponentID = &eventResource.Component.ID
-			if ok, err := matchResource(ctx, eventResource.Component.Labels, celEnv, playbook.Spec.On.Component); err != nil {
-				logToJobHistory(ctx, p.ID.String(), err.Error())
-				continue
-			} else if ok {
-				if err := ctx.DB().Create(&run).Error; err != nil {
-					return err
-				}
-			}
+			req.ComponentID = &eventResource.Component.ID
+			matched, err = matchResource(ctx, eventResource.Component.Labels, celEnv, playbook.Spec.On.Component)
 		case "config":
-			run.ConfigID = &eventResource.Config.ID
-			if ok, err := matchResource(ctx, eventResource.Config.Tags, celEnv, playbook.Spec.On.Config); err != nil {
-				logToJobHistory(ctx, p.ID.String(), err.Error())
-				continue
-			} else if ok {
-				if err := ctx.DB().Create(&run).Error; err != nil {
-					return err
-				}
-			}
+			req.ConfigID = &eventResource.Config.ID
+			matched, err = matchResource(ctx, eventResource.Config.Tags, celEnv, playbook.Spec.On.Config)
+		}
+
+		if err != nil {
+			logToJobHistory(ctx, p.ID.String(), err.Error())
+			continue
+		}
+		if !matched {
+			continue
+		}
+
+		// Avoid Run here because recording the run as a config change would emit
+		// another config.changed event and retrigger matching playbooks.
+		//
+		// Failures are per playbook (denied access, false filters, missing params, ...)
+		// and must not fail the event: that would retry runs already created for
+		// other playbooks in this loop and skip the ones after this.
+		if _, err := createPlaybookRun(ctx.WithSubject(p.ID.String()), &p, req); err != nil {
+			logToJobHistory(ctx, p.ID.String(), err.Error())
 		}
 	}
 
