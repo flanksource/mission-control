@@ -107,7 +107,21 @@ func canListFilteredRows(ctx context.Context, table, action string) bool {
 	return ok && ReadGrantsCover(ctx, resourceType)
 }
 
+// PlaybookList authorizes listing playbooks through a read of the whole type,
+// or through read grants that cover some playbooks.
+// Its handler must query under row-level security, so that Postgres filters the rows.
+func PlaybookList() MiddlewareFunc {
+	return authorize(policy.ObjectPlaybooks, policy.ActionRead, func(ctx context.Context) bool {
+		return canListFilteredRows(ctx, "playbooks", policy.ActionRead)
+	})
+}
+
 func Authorization(object, action string) MiddlewareFunc {
+	return authorize(object, action, nil)
+}
+
+// authorize checks the action on the whole object type. A subject that fails the check still passes when orElse allows it.
+func authorize(object, action string, orElse func(ctx context.Context) bool) MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Skip auth if Enforcer is not initialized
@@ -130,7 +144,7 @@ func Authorization(object, action string) MiddlewareFunc {
 				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
 			}
 
-			if !rbac.CheckContext(ctx, object, action) {
+			if !rbac.CheckContext(ctx, object, action) && (orElse == nil || !orElse(ctx)) {
 				c.Response().Header().Add("X-Rbac-Subject", ctx.Subject())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)
