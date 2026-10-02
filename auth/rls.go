@@ -38,6 +38,9 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 	if user == nil {
 		return nil, fmt.Errorf("user is required for RLS payload")
 	}
+	if !dutyRBAC.HasImplicitGrants(ctx.Subject()) {
+		return &rls.Payload{}, nil
+	}
 
 	impersonated := getImpersonatedPayload(ctx)
 

@@ -123,14 +123,14 @@ func WhoAmI(c echo.Context) error {
 
 	hostname, _ := os.Hostname()
 
-	roles, err := rbac.RolesForUser(user.ID.String())
+	roles, err := rbac.RolesForUser(ctx.Subject())
 	if err != nil {
 		ctx.Warnf("Error getting roles: %v", err)
 	}
 	if roles == nil {
 		roles = []string{}
 	}
-	permissions, err := rbac.PermsForUser(user.ID.String())
+	permissions, err := rbac.PermsForUser(ctx.Subject())
 	if err != nil {
 		ctx.Warnf("Error getting permissions: %v", err)
 	}
@@ -163,6 +163,11 @@ func CreateToken(c echo.Context) error {
 	user := ctx.User()
 	if user == nil {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "error fetching user"))
+	}
+
+	// An access token authenticates as the person, without the grants the subject is limited to
+	if !rbac.HasImplicitGrants(ctx.Subject()) {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "access tokens can't be created by users of external identity providers"))
 	}
 
 	var err error

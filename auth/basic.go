@@ -32,7 +32,7 @@ var (
 
 const basicAuthCookieName = "authorization"
 
-func UseBasic(e *echo.Echo) {
+func UseBasic(e *echo.Echo) echo.MiddlewareFunc {
 	logger.Infof("Using basic authentication with htpasswd file: %s", HtpasswdFile)
 	checker = nil
 	localhostOnly = false
@@ -57,7 +57,7 @@ func UseBasic(e *echo.Echo) {
 	// assets here too so they're reachable on a plain basic-auth deployment.
 	oidc.RegisterStaticAssets(e)
 
-	e.Use(basicAuthMiddleware)
+	return basicAuthMiddleware
 }
 
 // ShowBasicLoginForm renders the HTML sign-in page. Safe to call without
