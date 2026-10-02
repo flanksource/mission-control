@@ -147,6 +147,17 @@ func launchKopper(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for RoleBinding: %v", err))
 	}
 
+	providerReconciler, err := kopper.SetupReconciler(ctx, mgr,
+		auth.PersistExternalIdentityProvider,
+		auth.DeleteExternalIdentityProvider,
+		auth.DeleteStaleExternalIdentityProvider,
+		"externalidentityprovider.mission-control.flanksource.com",
+	)
+	if err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for ExternalIdentityProvider: %v", err))
+	}
+	auth.ProviderValidityChanged = providerReconciler.Enqueue
+
 	if _, err := kopper.SetupReconciler(ctx, mgr,
 		application.PersistApplication,
 		db.DeleteApplication,
