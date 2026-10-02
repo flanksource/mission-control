@@ -2,12 +2,14 @@ package db
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/kopper"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
@@ -123,9 +125,18 @@ func PersistRoleBinding(ctx context.Context, obj *v1.RoleBinding, source string,
 		return err
 	}
 
-	constraint, err := json.Marshal(obj.Spec.Constraint)
-	if err != nil {
-		return err
+	var constraint *types.JSON
+	if c := obj.Spec.Constraint; c != nil {
+		// An empty constraint would be stored as NULL, i.e. no constraint, and grant the role un-narrowed.
+		if c.Resource == nil && c.Target == nil {
+			return fmt.Errorf("role binding %s/%s: constraint must set resource or target", obj.GetNamespace(), obj.GetName())
+		}
+
+		raw, err := json.Marshal(c)
+		if err != nil {
+			return err
+		}
+		constraint = lo.ToPtr(types.JSON(raw))
 	}
 
 	binding := models.RoleBinding{
@@ -135,7 +146,7 @@ func PersistRoleBinding(ctx context.Context, obj *v1.RoleBinding, source string,
 		Description: obj.Spec.Description,
 		Source:      source,
 		Role:        obj.Spec.Role,
-		Constraints: constraint,
+		Constraint:  constraint,
 		Subjects:    subjects,
 		CreatedBy:   createdBy,
 	}

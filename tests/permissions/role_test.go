@@ -13,6 +13,7 @@ import (
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/kopper"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	. "github.com/onsi/ginkgo/v2"
@@ -497,6 +498,16 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		It("rejects a constraint that sets neither resource nor target", func() {
 			spec := v1.RoleBindingSpec{Role: "read-configs", Subjects: people(erin), Constraint: &v1.RoleBindingConstraint{}}
 			Expect(spec.Validate()).To(MatchError(ContainSubstring("constraint must set resource or target")))
+
+			binding := newBinding("empty-constraint", "read-configs", people(erin))
+			binding.Spec.Constraint = &v1.RoleBindingConstraint{}
+			err := db.PersistRoleBindingFromCRD(DefaultContext, binding)
+			Expect(err).To(MatchError(ContainSubstring("constraint must set resource or target")))
+			Expect(err).ToNot(BeAssignableToTypeOf(&kopper.NotReadyError{}), "never stored, so never granted without its constraint")
+
+			var count int64
+			Expect(DefaultContext.DB().Model(&models.RoleBinding{}).Where("id = ?", binding.UID).Count(&count).Error).To(Succeed())
+			Expect(count).To(BeZero())
 		})
 
 		It("rejects a binding until its role exists", func() {
@@ -644,7 +655,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(err).ToNot(HaveOccurred())
 			binding := models.RoleBinding{
 				ID: uuid.New(), Name: "broken", Namespace: namespace, Source: models.SourceCRD,
-				Role: broken.Name, Constraints: []byte(`null`), Subjects: subjects,
+				Role: broken.Name, Subjects: subjects,
 			}
 			Expect(DefaultContext.DB().Create(&binding).Error).To(Succeed())
 			DeferCleanup(func() {

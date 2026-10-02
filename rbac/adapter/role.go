@@ -307,12 +307,12 @@ func CompileBinding(ctx context.Context, cache *gocache.Cache, binding models.Ro
 
 // bindingConstraint returns the constraint of a stored binding, or nil when it has none.
 func bindingConstraint(binding models.RoleBinding) (*v1.RoleBindingConstraint, error) {
-	if len(binding.Constraints) == 0 {
+	if binding.Constraint == nil {
 		return nil, nil
 	}
 
 	var constraint *v1.RoleBindingConstraint
-	if err := json.Unmarshal(binding.Constraints, &constraint); err != nil {
+	if err := json.Unmarshal(*binding.Constraint, &constraint); err != nil {
 		return nil, NewValidationError("role binding %s/%s: invalid constraint: %v", binding.Namespace, binding.Name, err)
 	}
 	return constraint, nil
