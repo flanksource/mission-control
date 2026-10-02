@@ -18,6 +18,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
 
@@ -69,22 +70,23 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		}
 	}
 
-	constraint := func(rule, resource, target string) v1.RoleBindingConstraint {
-		c := v1.RoleBindingConstraint{Rule: rule}
+	newBinding := func(name, role string, subjects v1.RoleBindingSubjects) *v1.RoleBinding {
+		return &v1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
+			Spec:       v1.RoleBindingSpec{Role: role, Subjects: subjects},
+		}
+	}
+
+	constrained := func(binding *v1.RoleBinding, resource, target string) *v1.RoleBinding {
+		c := &v1.RoleBindingConstraint{}
 		if resource != "" {
 			c.Resource = &v1.ScopeReference{ScopeRef: resource}
 		}
 		if target != "" {
 			c.Target = &v1.ScopeReference{ScopeRef: target}
 		}
-		return c
-	}
-
-	newBinding := func(name, role string, subjects v1.RoleBindingSubjects, constraints ...v1.RoleBindingConstraint) *v1.RoleBinding {
-		return &v1.RoleBinding{
-			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
-			Spec:       v1.RoleBindingSpec{Role: role, Subjects: subjects, Constraints: constraints},
-		}
+		binding.Spec.Constraint = c
+		return binding
 	}
 
 	people := func(p ...*models.Person) v1.RoleBindingSubjects {
@@ -144,6 +146,9 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			newScope("all-configs", namespace, v1.ScopeTarget{Config: &types.ResourceSelector{Name: "*"}}),
 			newScope("tenant-a", namespace, v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "tenant=a"}}),
 			newScope("tenant-b", namespace, v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "tenant=b"}}),
+			newScope("tenant-a-boundary", namespace,
+				v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "tenant=a"}},
+				v1.ScopeTarget{Playbook: &types.ResourceSelector{Name: "*"}}),
 			newScope("role-configs", namespace, v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "env=role-test"}}),
 			newScope("staging-views", namespace, v1.ScopeTarget{View: &types.ResourceSelector{Namespace: "staging"}}),
 			newScope("configs-and-playbooks", namespace,
@@ -180,9 +185,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			newBinding("pairings-b", "tenant-b-runner", people(bob)),
 			newBinding("run-anywhere", "run-anywhere", people(carol)),
 			newBinding("no-tenant-b", "no-tenant-b", people(carol)),
-			newBinding("tenant-a-operators", "read-configs", people(dave, rlsTenantGuest),
-				constraint("read", "tenant-a", ""),
-				constraint("run", "", "tenant-a")),
+			constrained(newBinding("tenant-a-operators", "read-configs", people(dave, rlsTenantGuest)), "tenant-a-boundary", "tenant-a-boundary"),
 			newBinding("rls", "read-configs", people(rlsGuest)),
 		} {
 			Expect(db.PersistRoleBindingFromCRD(DefaultContext, b)).To(Succeed())
@@ -203,6 +206,20 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		}
 		Expect(rbac.ReloadPolicy()).To(Succeed())
 	})
+
+	storedRole := func(uid k8sTypes.UID) models.Role {
+		GinkgoHelper()
+		var role models.Role
+		Expect(DefaultContext.DB().Where("id = ?", uid).First(&role).Error).To(Succeed())
+		return role
+	}
+
+	storedBinding := func(ns, name string) models.RoleBinding {
+		GinkgoHelper()
+		var binding models.RoleBinding
+		Expect(DefaultContext.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", ns, name).First(&binding).Error).To(Succeed())
+		return binding
+	}
 
 	It("doesn't store its rules as permissions", func() {
 		var count int64
@@ -293,21 +310,76 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(canRead(subject, tenantB)).To(BeTrue())
 		})
 
-		It("grant only the allow rules they list, and every deny rule", func() {
-			role := newRole("listed-rules", namespace,
+		It("grant the whole role, and don't apply an allow rule they can't narrow", func() {
+			role := newRole("whole-role", namespace,
 				allow("read", policy.ActionRead, "role-configs"),
 				on(allow("run", policy.ActionPlaybookRun, "all-playbooks"), "all-configs"),
 				deny(on(allow("no-tenant-b", policy.ActionPlaybookRun, "all-playbooks"), "tenant-b")))
 			persistRole(role)
 
-			binding := newBinding("listed-rules", role.Name, people(erin), v1.RoleBindingConstraint{Rule: "run"})
-			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).To(Succeed())
+			binding := constrained(newBinding("whole-role", role.Name, people(erin)), "", "tenant-a")
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).To(Succeed(), "ready while an allow rule applies")
 			Expect(rbac.ReloadPolicy()).To(Succeed())
 
 			subject := erin.ID.String()
-			Expect(canRunOn(subject, dummy.EchoConfig, &tenantA)).To(BeTrue(), "listed without scopes: granted as defined")
-			Expect(canRunOn(subject, dummy.EchoConfig, &tenantB)).To(BeFalse(), "deny rules apply unlisted")
-			Expect(canRead(subject, tenantA)).To(BeFalse(), "unlisted allow rules aren't granted")
+			Expect(canRunOn(subject, dummy.EchoConfig, &tenantA)).To(BeTrue(), "narrowed to the constraint's target")
+			Expect(canRunOn(subject, dummy.EchoConfig, &tenantB)).To(BeFalse())
+			Expect(canRead(subject, tenantA)).To(BeFalse(), "read takes no target, so a target constraint can't narrow it")
+
+			condition := meta.FindStatusCondition(binding.Status.Conditions, v1.ConditionAllRulesApply)
+			Expect(condition).ToNot(BeNil())
+			Expect(condition.Status).To(Equal(metav1.ConditionFalse))
+			Expect(condition.Reason).To(Equal(adapter.ReasonConstraintDoesNotFit))
+			Expect(condition.Message).To(ContainSubstring("rule read:"))
+
+			Expect(db.PersistRoleFromCRD(DefaultContext, role)).To(Succeed())
+			Expect(role.Status.BindingsWithUnappliedRules).To(ConsistOf(v1.BindingUnappliedRules{Name: "whole-role", Rules: []string{"read"}}))
+		})
+
+		It("report every allow rule as applying when the constraint narrows them all", func() {
+			binding := constrained(newBinding("tenant-a-operators", "read-configs", people(dave, rlsTenantGuest)), "tenant-a-boundary", "tenant-a-boundary")
+			binding.UID = k8sTypes.UID(storedBinding(namespace, "tenant-a-operators").ID.String())
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).To(Succeed())
+			Expect(meta.IsStatusConditionTrue(binding.Status.Conditions, v1.ConditionAllRulesApply)).To(BeTrue())
+		})
+
+		It("narrow a rule without a target to nothing under a target constraint", func() {
+			binding := constrained(newBinding("targetless", "run-playbooks", people(erin)), "all-playbooks", "tenant-a")
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).ToNot(Succeed())
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Where("id = ?", binding.UID).Delete(&models.RoleBinding{}).Error).To(Succeed())
+				Expect(rbac.ReloadPolicy()).To(Succeed())
+			})
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			Expect(*storedBinding(namespace, binding.Name).ErrorReason).To(Equal(adapter.ReasonNoRulesApply))
+			Expect(meta.IsStatusConditionFalse(binding.Status.Conditions, v1.ConditionAllRulesApply)).To(BeTrue())
+			Expect(canRunOn(erin.ID.String(), dummy.EchoConfig, nil)).To(BeFalse())
+		})
+
+		It("ignore types of the constraint's scope an input can't carry", func() {
+			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue(), "tenant-a-boundary's playbooks are ignored on the target side")
+		})
+
+		It("keep deny rules in effect when a scope of the constraint is missing", func() {
+			role := newRole("guarded", namespace,
+				on(allow("run", policy.ActionPlaybookRun, "all-playbooks"), "all-configs"),
+				deny(on(allow("no-tenant-b", policy.ActionPlaybookRun, "all-playbooks"), "tenant-b")))
+			persistRole(role)
+
+			anywhere := newBinding("erin-run-anywhere", "run-anywhere", people(erin))
+			guarded := constrained(newBinding("guarded", role.Name, people(erin)), "", "does-not-exist")
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, anywhere)).To(Succeed())
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, guarded)).ToNot(Succeed())
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Where("id IN ?", []k8sTypes.UID{anywhere.UID, guarded.UID}).Delete(&models.RoleBinding{}).Error).To(Succeed())
+				Expect(rbac.ReloadPolicy()).To(Succeed())
+			})
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			Expect(*storedBinding(namespace, guarded.Name).ErrorReason).To(Equal(adapter.ReasonScopeNotFound))
+			Expect(canRunOn(erin.ID.String(), dummy.EchoConfig, &tenantA)).To(BeTrue())
+			Expect(canRunOn(erin.ID.String(), dummy.EchoConfig, &tenantB)).To(BeFalse(), "a constraint failure never lowers a guardrail")
 		})
 	})
 
@@ -322,20 +394,6 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(rbac.Check(DefaultContext, erin.ID.String(), policy.ObjectTopology, policy.ActionUpdate)).To(BeFalse())
 		})
 	})
-
-	storedRole := func(uid k8sTypes.UID) models.Role {
-		GinkgoHelper()
-		var role models.Role
-		Expect(DefaultContext.DB().Where("id = ?", uid).First(&role).Error).To(Succeed())
-		return role
-	}
-
-	storedBinding := func(ns, name string) models.RoleBinding {
-		GinkgoHelper()
-		var binding models.RoleBinding
-		Expect(DefaultContext.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", ns, name).First(&binding).Error).To(Succeed())
-		return binding
-	}
 
 	Describe("validation", func() {
 		// rejectRole stores the role as written, and expects it to be invalid: Ready=False, with the reason recorded.
@@ -427,28 +485,18 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		})
 
 		// rejectBinding stores the binding as written, and expects it to be invalid.
-		rejectBinding := func(role string, constraints ...v1.RoleBindingConstraint) {
+		rejectBinding := func(role string) {
 			GinkgoHelper()
-			binding := newBinding("rejected", role, people(erin), constraints...)
+			binding := newBinding("rejected", role, people(erin))
 			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).ToNot(Succeed())
 			stored := storedBinding(namespace, binding.Name)
 			Expect(stored.Error).ToNot(BeNil())
 			Expect(DefaultContext.DB().Delete(&stored).Error).To(Succeed())
 		}
 
-		It("rejects invalid constraints", func() {
-			rejectBinding("read-configs", constraint("no-such-rule", "tenant-a", ""))
-			rejectBinding("read-configs", constraint("read", "tenant-a", ""), constraint("read", "tenant-b", ""))
-			rejectBinding("no-tenant-b", constraint("no-runs", "", "tenant-a"))
-			rejectBinding("run-playbooks", constraint("run-without-target", "", "tenant-a"))
-			rejectBinding("read-configs", constraint("run", "tenant-a", ""))
-			rejectBinding("read-configs", constraint("run", "", "staging-views"))
-		})
-
-		It("rejects constraints whose scope shares no type with the rule's", func() {
-			Expect(db.PersistScopeFromCRD(DefaultContext, newScope("staging-component-targets", namespace,
-				v1.ScopeTarget{Component: &types.ResourceSelector{Name: "*"}}))).To(Succeed())
-			rejectBinding("read-configs", constraint("run", "", "staging-component-targets"))
+		It("rejects a constraint that sets neither resource nor target", func() {
+			spec := v1.RoleBindingSpec{Role: "read-configs", Subjects: people(erin), Constraint: &v1.RoleBindingConstraint{}}
+			Expect(spec.Validate()).To(MatchError(ContainSubstring("constraint must set resource or target")))
 		})
 
 		It("rejects a binding until its role exists", func() {
@@ -473,24 +521,33 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 	})
 
 	Describe("lifecycle", func() {
-		It("lets a role change that breaks a binding's constraints through, and the binding stops granting until it fits again", func() {
+		It("narrows a rule added to a role, or reports it when the constraint can't narrow it", func() {
 			role := roles[namespace+"/read-configs"]
-			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue())
+			changed := map[string]bool{}
+			adapter.ValidityChanged = func(table, ns, name, source string) { changed[table+"/"+ns+"/"+name] = true }
+			DeferCleanup(func() { adapter.ValidityChanged = nil })
 
-			changed := newRole(role.Name, namespace, allow("read", policy.ActionRead, "role-configs"))
-			changed.UID = role.UID
-			Expect(db.PersistRoleFromCRD(DefaultContext, changed)).To(Succeed(), "a role is never validated against its bindings")
+			added := newRole(role.Name, namespace, append(role.Spec.Rules, allow("update", policy.ActionUpdate, "all-configs"))...)
+			added.UID = role.UID
+			Expect(db.PersistRoleFromCRD(DefaultContext, added)).To(Succeed(), "a role is never validated against its bindings")
+			Expect(added.Status.BindingsWithUnappliedRules).To(ContainElement(v1.BindingUnappliedRules{Name: "tenant-a-operators", Rules: []string{"update"}}))
 			Expect(rbac.ReloadPolicy()).To(Succeed())
 
-			binding := storedBinding(namespace, "tenant-a-operators")
-			Expect(binding.Error).ToNot(BeNil())
-			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeFalse())
-			Expect(canRead(dave.ID.String(), tenantA)).To(BeFalse(), "an invalid binding grants none of its rules")
+			Expect(changed).To(HaveKey("role_bindings/"+namespace+"/tenant-a-operators"), "the binding's CRD is reconciled again, so its AllRulesApply condition follows")
+			Expect(changed).To(HaveKey("roles/" + namespace + "/read-configs"))
+			Expect(storedBinding(namespace, "tenant-a-operators").Error).To(BeNil(), "the binding stays ready")
+			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue(), "the other rules keep applying")
+			Expect(canRead(dave.ID.String(), tenantA)).To(BeTrue())
+			Expect(rbac.Check(DefaultContext, dave.ID.String(), policy.ObjectCatalog, policy.ActionUpdate)).To(BeFalse(), "never granted as written")
+
+			compiled, err := adapter.ValidateBinding(DefaultContext, nil, storedBinding(namespace, "tenant-a-operators"))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(compiled.Unapplied).To(HaveLen(1))
+			Expect(compiled.Unapplied[0].Rule).To(Equal("update"))
 
 			persistRole(role)
+			Expect(role.Status.BindingsWithUnappliedRules).ToNot(ContainElement(HaveField("Name", "tenant-a-operators")))
 			Expect(rbac.ReloadPolicy()).To(Succeed())
-			Expect(storedBinding(namespace, "tenant-a-operators").Error).To(BeNil())
-			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue(), "effective again without being re-applied")
 		})
 
 		It("lets a scope change that breaks a rule through, and the role stops applying until it's fixed", func() {
@@ -526,14 +583,35 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(rbac.ReloadPolicy()).To(Succeed())
 
 			Expect(changed).To(HaveKey("roles/"+namespace+"/tenant-a-runner"), "the role's CRD is reconciled again, so its Ready condition follows")
-			Expect(changed).To(HaveKey("role_bindings/" + namespace + "/tenant-a-operators"))
 			Expect(*storedRole(roles[namespace+"/tenant-a-runner"].UID).ErrorReason).To(Equal(adapter.ReasonScopeNotFound))
-			Expect(*storedBinding(namespace, "tenant-a-operators").ErrorReason).To(Equal(adapter.ReasonScopeNotFound))
-			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeFalse())
+			Expect(canRunOn(bob.ID.String(), dummy.RestartPod, &tenantA)).To(BeFalse())
 
 			Expect(db.PersistScopeFromCRD(DefaultContext, newScope("tenant-a", namespace,
 				v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "tenant=a"}}))).To(Succeed())
 			Expect(rbac.ReloadPolicy()).To(Succeed())
+			Expect(canRunOn(bob.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue())
+		})
+
+		It("deletes a scope a constraint references, and the binding applies no allow rule until it's back", func() {
+			var stored models.Scope
+			Expect(DefaultContext.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", namespace, "tenant-a-boundary").First(&stored).Error).To(Succeed())
+			changed := map[string]bool{}
+			adapter.ValidityChanged = func(table, ns, name, source string) { changed[table+"/"+ns+"/"+name] = true }
+			DeferCleanup(func() { adapter.ValidityChanged = nil })
+
+			Expect(db.DeleteScope(DefaultContext, stored.ID.String())).To(Succeed())
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			Expect(changed).To(HaveKey("role_bindings/" + namespace + "/tenant-a-operators"))
+			Expect(*storedBinding(namespace, "tenant-a-operators").ErrorReason).To(Equal(adapter.ReasonScopeNotFound))
+			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeFalse())
+			Expect(canRead(dave.ID.String(), tenantA)).To(BeFalse(), "never granted as written")
+
+			Expect(db.PersistScopeFromCRD(DefaultContext, newScope("tenant-a-boundary", namespace,
+				v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "tenant=a"}},
+				v1.ScopeTarget{Playbook: &types.ResourceSelector{Name: "*"}}))).To(Succeed())
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+			Expect(storedBinding(namespace, "tenant-a-operators").Error).To(BeNil())
 			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue())
 		})
 
@@ -566,7 +644,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(err).ToNot(HaveOccurred())
 			binding := models.RoleBinding{
 				ID: uuid.New(), Name: "broken", Namespace: namespace, Source: models.SourceCRD,
-				Role: broken.Name, Constraints: []byte(`[]`), Subjects: subjects,
+				Role: broken.Name, Constraints: []byte(`null`), Subjects: subjects,
 			}
 			Expect(DefaultContext.DB().Create(&binding).Error).To(Succeed())
 			DeferCleanup(func() {

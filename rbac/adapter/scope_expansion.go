@@ -31,6 +31,12 @@ const (
 	ReasonRoleNotFound             = "RoleNotFound"
 	ReasonRoleInvalid              = "RoleInvalid"
 	ReasonRowLevelSecurityRequired = "RowLevelSecurityRequired"
+
+	// ReasonNoRulesApply is a binding with a constraint that none of its role's allow rules applies through.
+	ReasonNoRulesApply = "NoRulesApply"
+
+	// ReasonConstraintDoesNotFit is an allow rule a binding's constraint can't narrow.
+	ReasonConstraintDoesNotFit = "ConstraintDoesNotFit"
 )
 
 // scopeExpansionValidationError represents a validation failure that should be persisted

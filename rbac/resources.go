@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"net/http"
 
 	dutyAPI "github.com/flanksource/duty/api"
@@ -13,6 +14,7 @@ import (
 	"github.com/flanksource/kopper"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -45,6 +47,9 @@ type managedKind struct {
 
 	persist func(ctx context.Context, obj client.Object, source string, createdBy *uuid.UUID) error
 	delete  func(ctx context.Context, id string) error
+
+	// report returns fields added to the response about a stored object, beyond its model. Optional.
+	report func(ctx context.Context, model any) (map[string]any, error)
 }
 
 var managedKinds = []managedKind{
@@ -76,6 +81,13 @@ var managedKinds = []managedKind{
 			return db.PersistRole(ctx, obj.(*v1.Role), source, createdBy)
 		},
 		delete: db.DeleteRole,
+		report: func(ctx context.Context, model any) (map[string]any, error) {
+			bindings, err := adapter.BindingsWithUnappliedRules(ctx, *model.(*models.Role))
+			if err != nil {
+				return nil, err
+			}
+			return map[string]any{"bindings_with_unapplied_rules": lo.CoalesceSliceOrEmpty(bindings)}, nil
+		},
 	},
 	{
 		path:      "role-bindings",
@@ -90,6 +102,13 @@ var managedKinds = []managedKind{
 			return db.PersistRoleBinding(ctx, obj.(*v1.RoleBinding), source, createdBy)
 		},
 		delete: db.DeleteRoleBinding,
+		report: func(ctx context.Context, model any) (map[string]any, error) {
+			compiled, err := adapter.ValidateBinding(ctx, nil, *model.(*models.RoleBinding))
+			if err != nil && !adapter.IsValidationError(err) {
+				return nil, err
+			}
+			return map[string]any{"unapplied_rules": lo.CoalesceSliceOrEmpty(compiled.Unapplied)}, nil
+		},
 	},
 }
 
@@ -294,6 +313,23 @@ func (k managedKind) respond(c echo.Context, ctx context.Context, status int, id
 	model, err := k.load(ctx, id)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
+	} else if k.report == nil {
+		return c.JSON(status, model)
 	}
-	return c.JSON(status, model)
+
+	report, err := k.report(ctx, model)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	}
+
+	raw, err := json.Marshal(model)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	}
+	var body map[string]any
+	if err := json.Unmarshal(raw, &body); err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	}
+	maps.Copy(body, report)
+	return c.JSON(status, body)
 }

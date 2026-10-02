@@ -64,8 +64,7 @@ spec:
                         rule.
                       type: string
                     name:
-                      description: Name identifies the rule within the role. RoleBinding
-                        constraints reference rules by name.
+                      description: Name identifies the rule within the role.
                       maxLength: 63
                       pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
                       type: string
@@ -121,6 +120,28 @@ spec:
             type: object
           status:
             properties:
+              bindingsWithUnappliedRules:
+                description: |-
+                  BindingsWithUnappliedRules lists the RoleBindings of the role that some of its allow rules don't apply through,
+                  because their constraint can't narrow them. It's information, not validation: it doesn't affect whether the role is valid.
+                items:
+                  description: BindingUnappliedRules is a RoleBinding whose AllRulesApply
+                    condition is False.
+                  properties:
+                    name:
+                      description: Name of the RoleBinding, in the role's namespace.
+                      type: string
+                    rules:
+                      description: Rules of the role that don't apply through the
+                        binding.
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - name
+                  - rules
+                  type: object
+                type: array
               conditions:
                 items:
                   description: Condition contains details for one aspect of the current

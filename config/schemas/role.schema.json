@@ -3,6 +3,28 @@
   "$id": "https://github.com/flanksource/incident-commander/api/v1/role",
   "$ref": "#/$defs/Role",
   "$defs": {
+    "BindingUnappliedRules": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the RoleBinding, in the role's namespace."
+        },
+        "rules": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Rules of the role that don't apply through the binding."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "rules"
+      ],
+      "description": "BindingUnappliedRules is a RoleBinding whose AllRulesApply condition is False."
+    },
     "Condition": {
       "properties": {
         "type": {
@@ -188,7 +210,7 @@
       "properties": {
         "name": {
           "type": "string",
-          "description": "Name identifies the rule within the role. RoleBinding constraints reference rules by name."
+          "description": "Name identifies the rule within the role."
         },
         "description": {
           "type": "string",
@@ -249,6 +271,13 @@
             "$ref": "#/$defs/Condition"
           },
           "type": "array"
+        },
+        "bindingsWithUnappliedRules": {
+          "items": {
+            "$ref": "#/$defs/BindingUnappliedRules"
+          },
+          "type": "array",
+          "description": "BindingsWithUnappliedRules lists the RoleBindings of the role that some of its allow rules don't apply through,\nbecause their constraint can't narrow them. It's information, not validation: it doesn't affect whether the role is valid."
         }
       },
       "additionalProperties": false,
