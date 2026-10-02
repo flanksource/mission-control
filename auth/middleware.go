@@ -92,7 +92,6 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 		logger.Errorf("authentication is disabled")
 		return nil
 	}
-	e.Use(federatedAuthMiddleware)
 
 	var (
 		adminUserID string
@@ -101,7 +100,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 
 	switch vars.AuthMode {
 	case Basic:
-		UseBasic(e)
+		e.Use(withFederatedAuth(UseBasic(e)))
 		if admin, err := GetOrCreateAdminUser(ctx); err != nil {
 			return fmt.Errorf("failed to created admin user: %v", err)
 		} else if admin != nil {
@@ -132,7 +131,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 		if err != nil {
 			return fmt.Errorf("failed to initialize kratos middleware: %v", err)
 		}
-		e.Use(kratosMiddleware.Session)
+		e.Use(withFederatedAuth(kratosMiddleware.Session))
 		e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(policy.ObjectAuth, policy.ActionUpdate))
 		e.GET("/auth/kratos/error", KratosErrorRedirect)
 		e.POST("/auth/kratos/hooks/registration/before", kratosHandler.BeforeRegistrationWebhook)
@@ -151,7 +150,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 		if err != nil {
 			logger.Fatalf("failed to initialize clerk client: %v", err)
 		}
-		e.Use(clerkHandler.Session)
+		e.Use(withFederatedAuth(clerkHandler.Session))
 
 		if OIDCEnabled {
 			clerkChecker := NewClerkCredentialChecker(clerkHandler)

@@ -760,14 +760,17 @@ func federatedSession(c echo.Context, next echo.HandlerFunc) (handled bool, err 
 	return true, next(c)
 }
 
-func federatedAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		if canSkipAuth(c) || (vars.AuthMode == Basic && localhostOnly && !isLocalhostRequest(c)) {
-			return next(c)
+func withFederatedAuth(fallback echo.MiddlewareFunc) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		fallbackHandler := fallback(next)
+		return func(c echo.Context) error {
+			if canSkipAuth(c) || (vars.AuthMode == Basic && localhostOnly && !isLocalhostRequest(c)) {
+				return fallbackHandler(c)
+			}
+			if handled, err := federatedSession(c, next); handled {
+				return err
+			}
+			return fallbackHandler(c)
 		}
-		if handled, err := federatedSession(c, next); handled {
-			return err
-		}
-		return next(c)
 	}
 }
