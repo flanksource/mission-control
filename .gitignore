@@ -43,9 +43,6 @@ shell-tmp
 .todos/
 hack/
 .htpasswd
-specs/*
-!specs/authorization/
-!specs/playbooks.md
 .db/
 .facet/
 **/*.pem

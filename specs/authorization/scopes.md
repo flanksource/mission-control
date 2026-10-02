@@ -13,7 +13,7 @@ A Scope is a named, reusable **set of resources**. It says _which_ resources, ne
 Other objects reference a Scope by name to say which resources they apply to:
 
 - **Role rules**, to select the resources an action is performed on, or with.
-- **RoleBinding constraints**, to narrow a rule of a Role.
+- **RoleBinding constraints**, to narrow the rules of a Role.
 - **Permissions**, through `object.scopes` (legacy).
 
 Each of those decides which resource types and selector fields it accepts from a Scope, and rejects a reference to a Scope it can't use. Those rules are specified with the objects themselves, in `roles.md` and `rolebindings.md`. This document only covers the Scope.
@@ -237,7 +237,7 @@ targets:
       search: type=Pod
 ```
 
-## 7. Changes
+## 7. How changes take effect
 
 A Scope that's wrong on its own, i.e. any rule of Section 6 other than its `agent` resolving, is rejected (`overview.md`, "Rejected or not in effect"). A Scope whose `agent` doesn't resolve is stored `Ready=False`, since the agent may be registered later.
 
@@ -245,6 +245,6 @@ A Scope is validated (Section 6) when it's applied, and again whenever an agent 
 
 A stored Scope that becomes invalid, because its `agent` no longer resolves (Section 5.5), is `Ready=False` with the reason and selects nothing. It becomes valid again, and selects again, as soon as its `agent` resolves, without being re-applied. Roles and RoleBindings that reference it follow it (`roles.md`, Section 6; `rolebindings.md`, Section 4).
 
-A Scope is never validated against the Roles and RoleBindings that reference it: a change that makes it unusable to a rule or constraint goes through, and the referencing object stops granting until it's updated (`roles.md`, Section 6; `rolebindings.md`, Section 4). Deleting a Scope has the same effect as changing it into one nothing accepts.
+A Scope is never validated against the Roles and RoleBindings that reference it: a change that makes it unusable to a rule or constraint goes through, and the referencing object stops granting, in whole or in part, until it's updated (`roles.md`, Section 6; `rolebindings.md`, Section 4). Deleting a Scope has the same effect as changing it into one nothing accepts.
 
 An invalid Scope that's stored, because its `agent` doesn't resolve or because Kubernetes couldn't reject it (`overview.md`, "Rejected or not in effect"), is `Ready=False` with the reason and selects nothing. There is no previous version to fall back to; the Scope is whatever was last written.

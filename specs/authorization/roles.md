@@ -99,7 +99,7 @@ An operation may make more than one check. For example, running a playbook on a 
 
 ### 2.1 Why one action per rule
 
-A rule has exactly one action, because the action decides what the rest of the rule means. Its contract fixes the resource types the `resource` Scope may select, whether the rule takes a `target` and of which types, what its Scopes must meet (Section 3), whether it can be a deny, and how it's enforced. A rule with several actions would need one Scope to meet several contracts at once. One action per rule also lets a RoleBinding constraint narrow exactly one action (`rolebindings.md`, Section 3), and lets an invalid rule name the action that's wrong. To grant several actions on the same Scope, write a rule for each.
+A rule has exactly one action, because the action decides what the rest of the rule means. Its contract fixes the resource types the `resource` Scope may select, whether the rule takes a `target` and of which types, what its Scopes must meet (Section 3), whether it can be a deny, and how it's enforced. A rule with several actions would need one Scope to meet several contracts at once. One action per rule also lets an invalid rule name the action that's wrong. To grant several actions on the same Scope, write a rule for each.
 
 ## 3. Which Scopes a rule accepts
 
@@ -320,9 +320,9 @@ Across all the rules that apply to a subject, from every Role and every Permissi
 
 None of this applies to admins: no rule, allow or deny, applies to them (`overview.md`, "Default access").
 
-## 6. Changes
+## 6. How changes take effect
 
-A Role is validated against what it references: its rules, and the Scopes they name. It's never validated against the bindings that reference it. A Role change that breaks a binding's constraints goes through, and that binding stops granting until it's updated (`rolebindings.md`, Section 4).
+A Role is validated against what it references: its rules, and the Scopes they name. It's never validated against the bindings that reference it. A Role change goes through even when a binding's constraint can't narrow the new rule: that rule doesn't apply through the binding, the rest of the Role does, and the binding reports it (`rolebindings.md`, Sections 3.2 and 4). The Role's status lists the bindings reporting one of its rules. That's information, not validation: it doesn't affect whether the Role is valid.
 
 A Role that's wrong on its own is rejected (Section 3). Otherwise it's stored, and takes effect only when all its rules are valid. One invalid rule makes the whole Role invalid: it's `Ready=False` with the reason, and none of its rules apply, allow or deny. There is no previous version to fall back to; the Role is whatever was last written.
 
@@ -334,6 +334,7 @@ Because one broken rule silences the whole Role, a rule is only as reliable as t
 
 - Put a deny rule in its own Role, with Scopes nothing else edits. A deny that shares a Role with an allow rule stops denying whenever that allow rule breaks.
 - Group rules by the Scopes they share, so a Scope change invalidates one Role, not every Role.
+- After adding a rule to a Role that's bound with a constraint, check the Role's status for bindings the rule doesn't apply through (Section 6).
 
 A subject bound to several Roles holds the union of the valid ones (Section 5), so splitting a Role changes nothing while all of them are valid.
 
