@@ -395,7 +395,7 @@ func removeFederatedProvider(id string) {
 	delete(federation.providers, id)
 }
 
-// findFederatedProvider returns the provider with the issuer, preferring a valid one to an invalid one.
+// findFederatedProvider returns a snapshot of the provider with the issuer, preferring a valid one to an invalid one.
 func findFederatedProvider(issuer string) *federatedProvider {
 	federation.RLock()
 	defer federation.RUnlock()
@@ -405,10 +405,11 @@ func findFederatedProvider(issuer string) *federatedProvider {
 		if provider.spec.Issuer != issuer {
 			continue
 		}
+		snapshot := *provider
 		if provider.invalid == nil {
-			return provider
+			return &snapshot
 		}
-		found = provider
+		found = &snapshot
 	}
 	return found
 }

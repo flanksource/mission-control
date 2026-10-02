@@ -73,17 +73,6 @@ func (c *jwksCache) keyfunc() (jwt.Keyfunc, error) {
 	return c.jwks.Keyfunc, nil
 }
 
-// close stops refreshing the keys in the background.
-func (c *jwksCache) close() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	if c.jwks != nil {
-		c.jwks.EndBackground()
-		c.jwks = nil
-	}
-}
-
 func NewClerkHandler() (*ClerkHandler, error) {
 	if ClerkJwksUrl == "" {
 		return nil, fmt.Errorf("failed to start server: clerk-jwks-url is required")

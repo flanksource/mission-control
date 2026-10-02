@@ -297,15 +297,18 @@ var _ = ginkgo.Describe("Federated requests through the server", ginkgo.Ordered,
 		Expect(code).To(Equal(http.StatusForbidden), string(body))
 	})
 
-	ginkgo.It("keeps /db closed to Tina, even for rows her bindings cover", func() {
+	ginkgo.It("filters /db reads to the rows Tina's bindings cover", func() {
 		code, body := request(http.MethodGet, "/db/config_items?select=id", "admin", nil)
 		Expect(code).To(Equal(http.StatusOK), string(body))
 		Expect(configIDs(body)).To(ContainElements(allowed.ID.String(), denied.ID.String()))
 
-		for _, path := range []string{"/db/config_items?select=id", "/db/people?select=id"} {
-			code, body = request(http.MethodGet, path, operator(), nil)
-			Expect(code).To(Equal(http.StatusForbidden), path+": "+string(body))
-		}
+		code, body = request(http.MethodGet, "/db/config_items?select=id", operator(), nil)
+		Expect(code).To(Equal(http.StatusOK), string(body))
+		Expect(configIDs(body)).To(ContainElement(allowed.ID.String()))
+		Expect(configIDs(body)).ToNot(ContainElement(denied.ID.String()))
+
+		code, body = request(http.MethodGet, "/db/people?select=id", operator(), nil)
+		Expect(code).To(Equal(http.StatusForbidden), string(body))
 	})
 
 	ginkgo.It("doesn't let Tina create an access token", func() {
