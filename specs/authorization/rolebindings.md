@@ -29,7 +29,7 @@ spec:
 
 `role` never names a built-in role, since no Role can be named after one (`roles.md`, Section 1).
 
-A RoleBinding MUST have a namespace. `role` names a Role in that namespace, and constraints name Scopes in that namespace (Section 3): a binding can't grant a Role, or narrow it with a Scope, from another namespace (`overview.md`, "Namespaces"). Subjects aren't references, and can match resources in any namespace (Section 2.5).
+A RoleBinding MUST have a namespace, and its Role and constraint Scopes must be in it (`overview.md`, "Namespaces"). Subjects can match resources in any namespace (Section 2.5).
 
 ## 2. Subjects
 

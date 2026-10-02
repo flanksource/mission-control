@@ -39,12 +39,12 @@ spec:
         namespace: staging
 ```
 
-| Field                | Requirement               | Meaning                                                                                                     |
-| -------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `metadata.name`      | Required                  | Name other objects reference the Scope by.                                                                  |
-| `metadata.namespace` | Required                  | Namespace of the Scope object. Roles and RoleBindings can only reference the Scope from the same namespace. |
-| `spec.description`   | Optional                  | Explanatory text; no effect.                                                                                |
-| `spec.targets`       | Required; 1 to 10 entries | The selectors. Each entry selects resources of exactly one type.                                            |
+| Field                | Requirement               | Meaning                                                                             |
+| -------------------- | ------------------------- | ----------------------------------------------------------------------------------- |
+| `metadata.name`      | Required                  | Name other objects reference the Scope by.                                          |
+| `metadata.namespace` | Required                  | Namespace of the Scope object. It is referenced from objects in the same namespace. |
+| `spec.description`   | Optional                  | Explanatory text; no effect.                                                        |
+| `spec.targets`       | Required; 1 to 10 entries | The selectors. Each entry selects resources of exactly one type.                    |
 
 ### 3.1 Resource types
 
@@ -111,9 +111,7 @@ A Scope whose `agent` no longer exists isn't an empty set. It's invalid (Section
 
 ### 4.2 Namespace
 
-`metadata.namespace` identifies the Scope object. It does **not** restrict the resources the Scope selects. Only selectors do.
-
-The namespace is required however the Scope is created, and Roles and RoleBindings can only reference the Scope from the same namespace (`overview.md`, "Namespaces").
+`metadata.namespace` identifies the Scope object and is required however it's created. Roles and RoleBindings can only reference the Scope from the same namespace (`overview.md`, "Namespaces"). It does **not** restrict the resources the Scope selects. Only selectors do.
 
 ## 5. Selector language
 

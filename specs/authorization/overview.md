@@ -69,18 +69,15 @@ The `platform` team can read staging configs, and run monitoring playbooks on th
 
 ## Namespaces
 
-Every Scope, Role and RoleBinding has a namespace, and it's required however the object is created. Through Mission Control's API, an object without one is rejected. Through Kubernetes, an object always has one: `kubectl apply` uses the current namespace when a manifest leaves it out. An object is identified by its namespace and name.
+Every Scope, Role and RoleBinding has a namespace, however it's created, and is identified by its namespace and name. The API rejects an object without one; `kubectl apply` fills in the current namespace when a manifest leaves it out.
 
-References between them only resolve within one namespace:
+References only resolve within the referencing object's namespace: a Role's `scopeRef`s name Scopes in its namespace, and a RoleBinding's `role` and constraint `scopeRef`s name a Role and Scopes in its namespace. A reference can't name another namespace, so to use a Scope in two namespaces, create it in each. The namespace doesn't limit which resources a Scope selects or which subjects a RoleBinding names.
 
-- A Role's rules reference Scopes in the Role's namespace (`roles.md`, Section 1).
-- A RoleBinding's `role` names a Role in the binding's namespace, and its constraints reference Scopes in the binding's namespace (`rolebindings.md`, Sections 1 and 3).
+**Why references stay in one namespace.** This is a convention borrowed from Kubernetes RBAC, where a RoleBinding can't reference a Role in another namespace. There's no technical reason for it. It keeps a RoleBinding's Role and the Scopes they use in the binding's namespace, though the resources it grants can be in any namespace. It isn't a security boundary today, since anyone who can write these objects can grant anything ("Who may manage these resources"). So references across namespaces can be allowed later without breaking existing objects. It would only become a security boundary if teams are allowed to manage their own namespaces ("Not covered yet").
 
-`scopeRef` and `role` name an object, never a namespace, so they can't reach another namespace. A Role, the Scopes its rules use and the RoleBindings that grant it are always in the same namespace. To use the same Scope in two namespaces, create it in each.
+**Why objects created in the UI need a namespace too.** Since references stay in one namespace, a UI object has to be in the same namespace as the objects it's used with, e.g. a binding of a Role kept in Git. An empty namespace for UI objects would avoid name conflicts with Kubernetes objects, but would cut them off from those objects, and people would only find out when they tried to combine the two. The UI can pick the namespace instead of asking.
 
-The namespace only identifies the object. It doesn't limit the resources a Scope selects or the subjects a RoleBinding names ("Who may manage these resources").
-
-Why: references only resolve within a namespace, so objects created through the API get a namespace like any other and can be combined with objects managed through Kubernetes; an empty or separate namespace for them would avoid name conflicts but cut them off. Keeping references within a namespace lets each one be reviewed on its own; it isn't a security boundary, so references across namespaces can be added later if needed ([#3507](https://github.com/flanksource/mission-control/pull/3507)).
+Full discussion: [#3507](https://github.com/flanksource/mission-control/pull/3507)
 
 ## A note on "target"
 
