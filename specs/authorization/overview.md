@@ -80,6 +80,43 @@ References between them only resolve within one namespace:
 
 The namespace only identifies the object. It doesn't limit the resources a Scope selects or the subjects a RoleBinding names ("Who may manage these resources").
 
+### Why every object has a namespace
+
+References only resolve within one namespace, so an object can only be used with objects in its own namespace. Where an object lives decides what it can be combined with, however it was created. A RoleBinding created in the UI for a Role managed through Kubernetes, e.g. kept in Git or shipped in a Helm chart, has to be in that Role's namespace. A Scope created in the UI can only be used by Roles in its namespace. Giving objects created through the API a namespace like any other keeps one way of naming objects, `namespace/name`, and lets objects from either source be combined.
+
+The cost is that someone creating an object in the UI needs a namespace, which means little to them. The UI can choose it for them from what the object will be used with, e.g. the namespace of the Role being bound, instead of asking.
+
+An object's namespace can't be changed once it exists, through Kubernetes or the API. An object created in the wrong namespace has to be created again in the right one, along with everything that references it.
+
+Objects created through the API share namespaces with objects managed through Kubernetes, so both can claim the same namespace and name. That's accepted as a conflict to resolve, rather than avoided by keeping the two apart.
+
+What's been considered instead:
+
+- **An empty namespace for objects created through the API.** These kinds are namespaced in Kubernetes, so a Kubernetes object of them never has an empty namespace. Objects created through the API could then never conflict with Kubernetes ones, and the UI would never show a namespace. Rejected: an object without a namespace could only be used with other objects without one, so anything created in the UI would be cut off from policy managed through Kubernetes. A Scope created in the UI couldn't be used by a Role from Git, and a binding created in the UI couldn't grant one. People would find out after building on those objects, and the fix is to create them again in a namespace.
+- **An empty namespace alongside real ones**: the UI would use the empty namespace for objects that stand alone, and a real one to combine with policy managed through Kubernetes. Rejected for now: an object created to stand alone may need combining later, so the problem above remains. What it adds, UI objects that can never conflict with Kubernetes ones, isn't worth a second kind of namespace with its own rules without a product need for it.
+- **A reserved namespace for objects created through the API**, e.g. `mission-control-ui`. Rejected: it cuts UI objects off the same way an empty namespace does, and a namespace of that name can still exist in the cluster, so it doesn't rule out conflicts either.
+- **Cluster-scoped Scopes, Roles and RoleBindings**, with no namespace at all. Rejected: every object would share one set of names, so conflicts remain. Kubernetes also can't switch an existing kind from namespaced to cluster-scoped without deleting it and every object of it.
+
+### Why references stay in one namespace
+
+A reference is only a name. Keeping it within one namespace means:
+
+- A namespace is self-contained. Its Roles, the Scopes they use and the RoleBindings that grant them can be read and reviewed together, and what a binding grants can be worked out without looking at other namespaces.
+- Editing or deleting a Scope only changes what Roles and RoleBindings in its own namespace grant.
+
+This isn't a security boundary today: write access to these kinds in any namespace is equivalent to Mission Control admin ("Who may manage these resources"), so references across namespaces wouldn't weaken any isolation that exists now. It would become one if teams are allowed to manage the objects of their own namespace ("Not covered yet"). A reference into another namespace would then let whoever manages that namespace change what the team's bindings grant.
+
+What's been considered instead:
+
+- **References that can name another namespace**, e.g. a `scopeRef` with a `namespace` as well as a name. Not done: it gives up the properties above, and nothing needs it yet. It can be added later as an optional field without changing existing objects.
+
+### When to revisit
+
+- If objects created in the UI are meant to be independent of policy managed through Kubernetes, so that an object created in the UI can never get in the way of one applied through Kubernetes, an empty namespace for them becomes the better choice.
+- If keeping a Role with its Scopes means many namespaces carry copies of the same Scope, allow references to name another namespace. If teams manage their own namespaces by then, such a reference must not let another namespace widen what a team grants.
+
+These decisions were discussed in [#3507](https://github.com/flanksource/mission-control/pull/3507).
+
 ## A note on "target"
 
 The word appears twice, with different meanings:
