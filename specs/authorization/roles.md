@@ -184,6 +184,8 @@ Both must allow the same resources. So the Scope of a `read` rule MUST only use 
 | Playbook                 | `id`, `name`                                               |
 | Connection               | `name: "*"` only                                           |
 
+Where `name` is accepted, so are its patterns (`scopes.md`, Section 5.2).
+
 Good: configs selected by tag. Opening one and listing them allow the same configs.
 
 ```yaml

@@ -121,7 +121,7 @@ Every target is a selector over the fields its resource type has. A selector MUS
 
 | Field           | Matches                               | Values                                                                              |
 | --------------- | ------------------------------------- | ----------------------------------------------------------------------------------- |
-| `name`          | Resource name                         | One exact value, or `*`                                                             |
+| `name`          | Resource name                         | One exact value, `*`, or a pattern (Section 5.2)                                    |
 | `namespace`     | Resource namespace                    | One exact value                                                                     |
 | `id`            | Resource id                           | A lowercase UUID                                                                    |
 | `agent`         | Agent the resource belongs to         | An agent's name or id. MUST resolve to an existing agent (Section 5.5).            |
@@ -134,22 +134,56 @@ Every target is a selector over the fields its resource type has. A selector MUS
 
 Kubernetes label selector syntax: `key=value`, `key!=value`, `key in (a,b)`, `key notin (a,b)`, `key`, `!key`, joined by commas (AND).
 
-### 5.2 Wildcards
+### 5.2 Wildcards and patterns
 
-`*` is the only wildcard. It is only accepted as the **whole** value of `name`, and it matches any name, including an empty one. `namespace` and `id` take exact values only; to match any namespace, omit `namespace`.
+`*` is the only wildcard, and `name` is the only field that takes it. `namespace` and `id` take exact values only; to match any namespace, omit `namespace`.
+
+`name` is one of:
+
+| Form          | Matches                          | Example                                                        |
+| ------------- | -------------------------------- | -------------------------------------------------------------- |
+| `*`           | Any name, including an empty one | `name: "*"`                                                    |
+| `prefix*`     | Names that start with `prefix`   | `name: "prod-*"` matches `prod-db` and `prod-`, not `prod`     |
+| `*suffix`     | Names that end with `suffix`     | `name: "*-db"` matches `prod-db` and `-db`, not `db`           |
+| anything else | Exactly that name                | `name: "prod-db"`                                              |
+
+A pattern has exactly one `*`, at the start or at the end, and at least one other character. Everything else is rejected:
+
+- `*` in the middle (`prod-*-db`), at both ends (`*db*`), or more than once (`prod-*-*`).
+- Lists (`a,b`) and exclusions (`!a`). To select several names, use one target per name; targets combine with OR (Section 4).
+- `*` in `namespace` or `id`.
+
+Matching is case-sensitive: `prod-*` doesn't match `Prod-db`. Every character other than a leading or trailing `*` is literal, including `,`, `!`, `%` and `_`. A resource whose name contains `*` can only be selected by `id`.
 
 - `name: "*"` selects every resource of the target's type, not of every type.
-- Prefixes and suffixes (`nginx-*`), lists (`a,b`) and exclusions (`!a`) are not supported in `name`, `namespace` or `id`, and are rejected.
 - `types`, `statuses` and `health` values are exact: `*` and `!` are rejected.
 - Label selector values can't contain `*`, so no wildcard is inferred in `tagSelector`, `labelSelector` or `fieldSelector`.
 
-A **whole-type target** is `name: "*"` and nothing else. It selects every resource of its type, and it's the only target that counts as selecting a whole type where that matters (`roles.md`, Sections 2 and 3.1):
+A **whole-type target** is `name: "*"` and nothing else. It selects every resource of its type, and it's the only target that counts as selecting a whole type where that matters (`roles.md`, Sections 2 and 3.1). A pattern target isn't a whole-type target, however many resources it matches:
 
 ```yaml
 targets:
   - config:
       name: "*"
 ```
+
+#### Why these patterns and no others
+
+A Scope is matched in three different places, by three different matchers:
+
+1. When one operation is checked against one resource, e.g. opening a config or running a playbook on it. The resource is in hand, and the selector is evaluated against it.
+2. When Mission Control searches for the resources a Scope selects, e.g. to compute what a view or a playbook may show. The selector becomes a database query.
+3. When a listing is filtered row by row (`roles.md`, Section 3.1). The selector becomes a row filter that runs against every row of the table.
+
+Every form a `name` can take has to mean exactly the same set in all three, or opening a resource and listing it would disagree. And it has to be cheap in the third, which runs once per row. Those two constraints rule the language down to what's above:
+
+- **A prefix or a suffix** is one comparison against the start or the end of a name. It costs the same as an exact match, and there's only one way to read it.
+- **`*` in the middle or at both ends** (`*db*`) means searching inside every name, and a pattern with several wildcards has more than one reading. Neither is worth the cost for selecting resources by name, which is what prefixes and suffixes already do.
+- **Lists** add nothing: targets already combine with OR (Section 4), so one target per name says the same thing without a second syntax.
+- **Exclusions** (`!a`) make a selector match everything it doesn't name, including resources created later. A Scope grants access, so it names what's in, never what's out.
+- **Case-sensitive** matching selects what was typed and nothing wider. Resource names from cloud providers can differ only by case, and a Scope must not quietly include both.
+- **Literal `,`, `!`, `%` and `_`** keep a name that contains them selectable exactly. Only `*` has a meaning.
+- **A pattern is not a whole type**, even one that happens to match every resource today, because what it matches changes as resources come and go. A whole-type grant must be decidable from the Scope alone.
 
 ### 5.3 Fields each type supports
 
@@ -219,6 +253,16 @@ targets:
 targets:
   - config:
       namespace: "*"
+---
+# Wildcard in the middle of a name
+targets:
+  - config:
+      name: "prod-*-db"
+---
+# List of names: use one target per name instead
+targets:
+  - config:
+      name: "prod-db,prod-api"
 ---
 # Playbooks have no tags
 targets:
