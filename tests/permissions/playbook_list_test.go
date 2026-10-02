@@ -120,8 +120,9 @@ var _ = ginkgo.Describe("Playbook list", ginkgo.Ordered, func() {
 		})
 
 		ginkgo.It("isn't granted the other reads of playbooks", func() {
+			readGrantsCover := mcRBAC.ReadGrantsCover
 			mcRBAC.ReadGrantsCover = func(context.Context, string) bool { return true }
-			ginkgo.DeferCleanup(func() { mcRBAC.ReadGrantsCover = nil })
+			ginkgo.DeferCleanup(func() { mcRBAC.ReadGrantsCover = readGrantsCover })
 
 			subject := models.FederatedPrincipal(admin.ID.String())
 			req := httptest.NewRequest(http.MethodGet, "/playbook/run/"+uuid.NewString(), nil)
