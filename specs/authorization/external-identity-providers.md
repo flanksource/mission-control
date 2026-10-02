@@ -161,7 +161,7 @@ A provider that loses doesn't claim the issuer the winner holds: tokens from tha
 
 A provider that's wrong on its own, like the examples in Section 9, is rejected (`overview.md`, "Rejected or not in effect").
 
-## 8. Changes
+## 8. How changes take effect
 
 - A provider takes effect as soon as it's valid. An invalid provider is `Ready=False` with the reason and its tokens are rejected with `401`, as if it were `disabled`. There is no previous version to fall back to; the provider is whatever was last written.
 - `disabled: true` rejects its tokens with `401`, keeping everything else.
