@@ -92,6 +92,8 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 		logger.Errorf("authentication is disabled")
 		return nil
 	}
+	e.Use(federatedAuthMiddleware)
+
 	var (
 		adminUserID string
 		err         error

@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -17,7 +19,55 @@ import (
 	dbModels "github.com/flanksource/incident-commander/db/models"
 )
 
-const PersonTypeAccessToken = "access_token"
+const (
+	PersonTypeAccessToken = "access_token"
+
+	// PersonTypeFederated is a user of an external application, authenticated by an ExternalIdentityProvider
+	PersonTypeFederated = "federated"
+)
+
+// GetOrCreateFederatedPerson returns the person representing a user of an external identity provider,
+// creating it on first sight. The person is keyed by <provider>:<username>.
+//
+// The claimed email is kept in the person's properties, never in people.email: it isn't verified
+// by Mission Control, so it must not collide with or be matched against Mission Control users.
+func GetOrCreateFederatedPerson(ctx context.Context, provider, username, name, email string) (*models.Person, error) {
+	externalID := provider + ":" + username
+	if name == "" {
+		name = username
+	}
+	properties := models.PersonProperties{Provider: provider, Email: email}
+
+	var person models.Person
+	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
+		// Serializes concurrent first requests for the same user so only one person is created
+		if err := ctx.DB().Exec("SELECT pg_advisory_xact_lock(hashtext(?))", externalID).Error; err != nil {
+			return err
+		}
+
+		err := ctx.DB().Where("external_id = ? AND type = ? AND deleted_at IS NULL", externalID, PersonTypeFederated).First(&person).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			person = models.Person{Name: name, Type: PersonTypeFederated, ExternalID: externalID, Properties: properties}
+			return ctx.DB().Create(&person).Error
+		} else if err != nil {
+			return err
+		}
+
+		if person.Name == name && person.Properties == properties {
+			return nil
+		}
+
+		person.Name = name
+		person.Properties = properties
+		return ctx.DB().Model(&models.Person{}).Where("id = ?", person.ID).
+			Updates(map[string]any{"name": name, "properties": properties}).Error
+	})
+	if err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to get or create federated person %s", externalID)
+	}
+
+	return &person, nil
+}
 
 func UpdateUserProperties(ctx context.Context, userID string, newProps api.PersonProperties) error {
 	var current api.Person

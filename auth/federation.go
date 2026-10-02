@@ -2,11 +2,15 @@ package auth
 
 import (
 	gocontext "context"
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -15,10 +19,17 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
+	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/kopper"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/google/cel-go/cel"
+	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
+	slogecho "github.com/samber/slog-echo"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/vars"
 )
 
@@ -513,4 +524,250 @@ func stringClaim(claims jwt.MapClaims, name string) string {
 	}
 	value, _ := claims[name].(string)
 	return value
+}
+
+type oidcBinding struct {
+	principal string
+	match     cel.Program
+}
+
+// oidcBindings indexes the compiled match expressions of role bindings with oidc subjects by provider name.
+// Mission Control runs as a single replica, so the index is kept in memory and rebuilt when authorization objects change.
+var oidcBindings = struct {
+	sync.RWMutex
+	rebuild    sync.Mutex
+	loaded     bool
+	byProvider map[string][]oidcBinding
+}{}
+
+// RebuildOIDCBindings reloads Casbin before publishing matching expressions.
+func RebuildOIDCBindings(ctx context.Context) error {
+	return rebuildOIDCBindings(ctx, false)
+}
+
+func rebuildOIDCBindings(ctx context.Context, onlyIfStale bool) error {
+	oidcBindings.rebuild.Lock()
+	defer oidcBindings.rebuild.Unlock()
+
+	oidcBindings.Lock()
+	if onlyIfStale && oidcBindings.loaded {
+		oidcBindings.Unlock()
+		return nil
+	}
+	// Authentication must not use an old snapshot if this rebuild fails.
+	oidcBindings.loaded = false
+	oidcBindings.Unlock()
+
+	if err := dutyRBAC.ReloadPolicy(); err != nil {
+		return fmt.Errorf("failed to reload rbac policy: %w", err)
+	}
+
+	var bindings []models.RoleBinding
+	if err := ctx.DB().Where("deleted_at IS NULL").Where("subjects->'oidc' IS NOT NULL").Find(&bindings).Error; err != nil {
+		return fmt.Errorf("failed to load role bindings: %w", err)
+	}
+
+	byProvider := map[string][]oidcBinding{}
+	for _, binding := range bindings {
+		var subjects v1.RoleBindingSubjects
+		if err := json.Unmarshal(binding.Subjects, &subjects); err != nil {
+			ctx.Warnf("skipping oidc subjects of role binding %s/%s: invalid subjects: %v", binding.Namespace, binding.Name, err)
+			continue
+		}
+
+		for _, subject := range subjects.OIDC {
+			program, err := v1.CompileClaimsMatch(subject.Match)
+			if err != nil {
+				ctx.Warnf("skipping oidc subject of role binding %s/%s: invalid match %q: %v", binding.Namespace, binding.Name, subject.Match, err)
+				continue
+			}
+
+			byProvider[subject.Provider] = append(byProvider[subject.Provider], oidcBinding{principal: binding.Principal(), match: program})
+		}
+	}
+
+	oidcBindings.Lock()
+	oidcBindings.byProvider = byProvider
+	oidcBindings.loaded = true
+	oidcBindings.Unlock()
+
+	return nil
+}
+
+// matchingBindings returns the provider subjects that match the claims.
+func matchingBindings(ctx context.Context, provider string, claims jwt.MapClaims) ([]string, error) {
+	oidcBindings.RLock()
+	loaded := oidcBindings.loaded
+	oidcBindings.RUnlock()
+
+	if !loaded {
+		if err := rebuildOIDCBindings(ctx, true); err != nil {
+			return nil, err
+		}
+	}
+
+	oidcBindings.RLock()
+	defer oidcBindings.RUnlock()
+
+	var principals []string
+	for _, binding := range oidcBindings.byProvider[provider] {
+		if v1.EvalClaimsMatch(binding.match, claims) {
+			principals = append(principals, binding.principal)
+		}
+	}
+
+	slices.Sort(principals)
+	principals = slices.Compact(principals)
+	return principals, nil
+}
+
+// federatedSubject identifies one person's immutable set of token-derived bindings.
+func federatedSubject(personID string, bindings []string) string {
+	fingerprint := sha256.Sum256([]byte(strings.Join(bindings, "\x00")))
+	return fmt.Sprintf("%s:%x", models.FederatedPrincipal(personID), fingerprint[:20])
+}
+
+// syncFederatedBindings makes the subject a member of exactly the given role bindings.
+// The subject includes a fingerprint of bindings, so concurrent tokens with different
+// claims never share authorization state; unexpected memberships fail authentication.
+func syncFederatedBindings(ctx context.Context, subject string, bindings []string) error {
+	enforcer := dutyRBAC.Enforcer()
+	if enforcer == nil {
+		return fmt.Errorf("rbac is not initialized")
+	}
+
+	current, err := enforcer.GetRolesForUser(subject)
+	if err != nil {
+		return err
+	}
+
+	added, removed := lo.Difference(bindings, current)
+	if len(removed) > 0 {
+		return fmt.Errorf("federated subject has unexpected role bindings %v", removed)
+	}
+	if len(added) > 0 {
+		if err := dutyRBAC.AddRoleForUser(subject, added...); err != nil {
+			return fmt.Errorf("failed to add role bindings %v: %w", added, err)
+		}
+	}
+
+	if len(added) > 0 {
+		// Cached decisions don't account for grouping changes
+		if err := enforcer.InvalidateCache(); err != nil {
+			return fmt.Errorf("failed to invalidate rbac cache: %w", err)
+		}
+		InvalidateRLSCacheForUser(subject)
+	}
+
+	return nil
+}
+
+// authenticateFederatedToken authenticates a bearer JWT issued by a registered external identity provider.
+//
+// matched is false when the token isn't from a registered provider, so other authenticators can try it.
+// A token from a registered provider that fails verification returns a federatedAuthError.
+func authenticateFederatedToken(c echo.Context, token string) (matched bool, err error) {
+	if strings.Count(token, ".") != 2 {
+		return false, nil
+	}
+
+	unverified, _, err := jwt.NewParser().ParseUnverified(token, jwt.MapClaims{})
+	if err != nil {
+		return false, nil
+	}
+
+	issuer, _ := unverified.Claims.(jwt.MapClaims)["iss"].(string)
+	provider := findFederatedProvider(issuer)
+	if provider == nil {
+		return false, nil
+	}
+
+	ctx := c.Request().Context().(context.Context)
+	claims, err := provider.verify(ctx, token)
+	if err != nil {
+		return true, err
+	}
+
+	username := stringClaim(claims, provider.spec.Claims.GetUsername())
+	if username == "" {
+		return true, federatedAuthErrorf("token has no %s claim", provider.spec.Claims.GetUsername())
+	}
+
+	person, err := db.GetOrCreateFederatedPerson(ctx, provider.name, username,
+		stringClaim(claims, provider.spec.Claims.Name), stringClaim(claims, provider.spec.Claims.Email))
+	if err != nil {
+		return true, err
+	}
+
+	bindings, err := matchingBindings(ctx, provider.name, claims)
+	if err != nil {
+		return true, ctx.Oops().Wrapf(err, "failed to match role bindings of %s", person.ExternalID)
+	}
+	subject := federatedSubject(person.ID.String(), bindings)
+	ctx = ctx.WithUser(person).WithSubject(subject)
+
+	if err := syncFederatedBindings(ctx, subject, bindings); err != nil {
+		return true, ctx.Oops().Wrapf(err, "failed to sync role bindings of %s", person.ExternalID)
+	}
+
+	// The session includes the bindings so a change in bindings gets a new PostgREST token (and RLS payload)
+	sessionID := "federated:" + strings.Join(bindings, ",")
+	postgrestToken, err := GetOrCreateJWTToken(ctx, person, sessionID)
+	if err != nil {
+		return true, ctx.Oops().Wrapf(err, "failed to create token for %s", person.ExternalID)
+	}
+	c.Request().Header.Set(echo.HeaderAuthorization, "Bearer "+postgrestToken)
+
+	AddLoginContext(c, person)
+	slogecho.AddCustomAttributes(c, slog.String("auth.provider", provider.name))
+	slogecho.AddCustomAttributes(c, slog.String("auth.bindings", strings.Join(bindings, ",")))
+
+	c.SetRequest(c.Request().WithContext(ctx))
+	return true, nil
+}
+
+// federatedSession serves the request when it carries a bearer token from a registered external identity provider.
+// handled is false when it doesn't, and the request must be authenticated by other means.
+func federatedSession(c echo.Context, next echo.HandlerFunc) (handled bool, err error) {
+	token, ok := extractBearerAuthToken(c.Request().Header)
+	if !ok {
+		return false, nil
+	}
+
+	matched, err := authenticateFederatedToken(c, token)
+	if !matched {
+		return false, nil
+	}
+
+	if err != nil {
+		ctx := c.Request().Context().(context.Context)
+		ctx.GetSpan().RecordError(err)
+
+		var authErr federatedAuthError
+		if errors.As(err, &authErr) {
+			ctx.Logger.V(3).Infof("rejected federated token: %v", err)
+			setWWWAuthenticate(c)
+			if c.Response().Header().Get("WWW-Authenticate") == "" {
+				c.Response().Header().Set("WWW-Authenticate", `Bearer error="invalid_token"`)
+			}
+			return true, c.String(http.StatusUnauthorized, "Unauthorized: "+authErr.Error())
+		}
+
+		ctx.Errorf("failed to authenticate federated token: %v", err)
+		return true, c.String(http.StatusInternalServerError, "internal error")
+	}
+
+	return true, next(c)
+}
+
+func federatedAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		if canSkipAuth(c) || (vars.AuthMode == Basic && localhostOnly && !isLocalhostRequest(c)) {
+			return next(c)
+		}
+		if handled, err := federatedSession(c, next); handled {
+			return err
+		}
+		return next(c)
+	}
 }

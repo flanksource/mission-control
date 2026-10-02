@@ -48,6 +48,11 @@ type kubeConfigData struct {
 func DownloadKubeConfig(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
+	// The kubeconfig embeds an access token, which authenticates as the person without the grants the subject is limited to
+	if !rbac.HasImplicitGrants(ctx.Subject()) {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "kubeconfigs can't be downloaded by users of external identity providers"))
+	}
+
 	parsed, err := url.Parse(api.PublicURL)
 	if err != nil {
 		return fmt.Errorf("failed to parse public web url")
