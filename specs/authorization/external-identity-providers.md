@@ -148,7 +148,7 @@ An external user gets exactly what the RoleBindings matching their token grant, 
   With the token in Section 1, Alice gets `production-operator`.
 
 - Bindings are matched on every request, so the user's access follows their latest token. If the next token has `"tenant": "b"`, Alice loses `tenant-a-operators` on that request.
-- Their reads come only from `read` rules, and they list only what those rules allow (`roles.md`, Section 3.1). They have no built-in access that lists anything unfiltered.
+- They're row-filtered subjects (`row-filtered-subjects.md`): their reads come only from `read` rules, and they list only what those rules select. They have no built-in access to any resource type.
 
 ## 7. Uniqueness
 
