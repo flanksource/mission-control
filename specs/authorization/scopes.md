@@ -124,7 +124,7 @@ The grant defines the resources a person is responsible for. Listing filters nar
 
 An `agent` written by name is resolved when the Scope is validated (Section 5.4). The id it resolves to is part of the Scope, not of the resource: when it resolves differently, the Scope has changed (Section 7).
 
-**Why.** Mission Control may evaluate a Scope once, when a resource or the Scope changes, and store which Scopes each resource belongs to, rather than evaluating it on every read (`design/scope-membership.md`). That's only correct if nothing but a change to the resource or to the Scope can change the resource's membership. Every field in Section 5.1 meets this. A selector that wouldn't is rejected when it's proposed for the language, never evaluated differently.
+**Why.** Mission Control may evaluate a Scope once, when a resource or the Scope changes, and store which Scopes each resource belongs to, rather than evaluating it on every read (`design/materialised-membership.md`). That's only correct if nothing but a change to the resource or to the Scope can change the resource's membership. Every field in Section 5.1 meets this. A selector that wouldn't is rejected when it's proposed for the language, never evaluated differently.
 
 ## 5. Selector language
 
@@ -293,18 +293,14 @@ An invalid Scope that's stored, because its `agent` doesn't resolve or because K
 
 ### 7.1 Membership changes
 
-Membership MAY be evaluated when a Scope or a resource changes, rather than on every check (Section 4.3), so a change can take effect after a delay. Each kind of change takes effect as follows:
+Membership MAY be evaluated when a Scope or a resource changes, rather than on every check (Section 4.3), so a change can lag:
 
-| Change                                                    | Takes effect                                                                                          | Until then                                                                                                    |
-| --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| A valid Scope's targets change, or its `agent` resolves to another id | Once the new membership is complete, all at once                                         | The Scope selects exactly what its previous version selected, never a mixture of the two                       |
-| A new Scope is created                                    | Once its membership is complete                                                                       | It selects nothing                                                                                            |
-| A Scope becomes invalid or is deleted                     | Immediately                                                                                           |                                                                                                               |
-| A resource is created, changed or deleted                 | Once its membership is re-evaluated                                                                   | For a `read` check, the resource is in no Scope other than through a whole-type target: it's left out of filtered listings and refused when opened as one that doesn't exist |
-| A Role or RoleBinding changes                             | Immediately: it changes which Scopes a subject's grants name, not what the Scopes select              |                                                                                                               |
+| Change                                | Takes effect                        | Until then                                                      |
+| ------------------------------------- | ----------------------------------- | --------------------------------------------------------------- |
+| A Scope's targets change              | When the new membership is complete | Exactly the previous membership, never a mix                    |
+| A Scope is created                    | When its membership is complete     | Selects nothing                                                 |
+| A Scope becomes invalid or is deleted | Immediately                         |                                                                 |
+| A resource is created, changed or deleted | When it's re-evaluated          | In no Scope for `read`, except through a whole-type target      |
+| A Role or RoleBinding changes         | Immediately                         |                                                                 |
 
-A delay MUST NOT grant what neither the old nor the new state grants. A narrowing edit to a Scope still grants the previous set until the new one is complete; to revoke at once, change the Role or RoleBinding instead.
-
-The delays are stated with the design (`design/scope-membership.md`). A Scope's status says which version of it is in effect, and when its membership was completed. Readiness doesn't wait for membership: a valid Scope is `Ready=True` while its membership is being completed.
-
-A `read` check uses this membership. Other actions MAY evaluate the Scope against the resource directly instead, so for the duration of a delay, two checks on the same resource can disagree. An operation that makes several checks (`roles.md`, Section 4.3) is allowed only when all of them pass, so a disagreement can only refuse the operation, never allow it.
+A delay MUST only ever refuse: it never grants what neither the old nor the new state grants, including when checks of different actions disagree during it.
