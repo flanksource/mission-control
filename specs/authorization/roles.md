@@ -172,37 +172,10 @@ Bad: a playbook can't run on a view.
 
 A rule with `action: read` is checked in two places:
 
-1. **On one resource**, e.g. opening a config. The full selector is checked.
-2. **On listings**, e.g. listing configs through the database API. Postgres row-level security filters the rows, and it can only match a few fields.
+1. **On one resource**, e.g. opening a config.
+2. **On listings**, e.g. listing configs through the database API, where the rows are filtered to the ones the subject may read.
 
-Both must allow the same resources. So the Scope of a `read` rule MUST only use fields row-level security can match:
-
-| Type                     | Fields                                                     |
-| ------------------------ | ---------------------------------------------------------- |
-| Config                   | `id`, `name`, `agent`, `namespace`, `tagSelector` with `=` |
-| Component, Check, Canary | `id`, `name`, `agent`                                      |
-| Playbook                 | `id`, `name`                                               |
-| Connection               | `name: "*"` only                                           |
-
-Where `name` is accepted, so are its patterns (`scopes.md`, Section 5.2).
-
-Good: configs selected by tag. Opening one and listing them allow the same configs.
-
-```yaml
-- name: read-staging-configs
-  action: read
-  resource:
-    scopeRef: staging-configs   # config: tagSelector: env=staging
-```
-
-Bad: `staging` selects components by namespace, which row-level security can't match. Opening a production component would be denied, but listing components would show them all, or none.
-
-```yaml
-- name: read-staging
-  action: read
-  resource:
-    scopeRef: staging
-```
+Both MUST allow the same resources: a resource a subject can open appears in their listings, and a resource in their listings can be opened. How Mission Control keeps the two in step is the design's business (`design/scope-membership.md`). A `read` rule accepts any Scope whose membership is decided by the resource alone (`scopes.md`, Section 4.3), which every Scope is, with one exception: connections can't be filtered by row, so a `read` rule's Scope MUST select connections with a whole-type target only.
 
 Listings are only filtered while row-level security is enabled. It's turned on or off when Mission Control starts, from the `rls.enable` property, so changing the property takes effect on restart. So a `read` rule whose Scope has a target that isn't a whole-type target (`scopes.md`, Section 5.2) needs it: while row-level security is off, a Role with such a rule is `Ready=False` with reason `RowLevelSecurityRequired`, and none of its rules apply, like any invalid Role (Section 6). It becomes valid when row-level security is enabled, without being re-applied. A rule whose Scope consists of whole-type targets only doesn't need it: opening any resource and listing all of them allow the same resources.
 
