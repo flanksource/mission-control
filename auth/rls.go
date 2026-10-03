@@ -386,38 +386,27 @@ func addScopeCRDFilters(ctx context.Context, scopeRefs []dutyRBAC.NamespacedName
 		}
 
 		for _, target := range targets {
+			_, selector := target.Selector()
+			filter := resourceSelectorToFilter(selector)
 			if target.Config != nil {
-				addConfigFilter(payload, scopeTargetToFilter(target.Config), deny)
+				addConfigFilter(payload, filter, deny)
 			}
 			if target.Component != nil {
-				addComponentFilter(payload, scopeTargetToFilter(target.Component), deny)
+				addComponentFilter(payload, filter, deny)
 			}
 			if target.Playbook != nil {
-				addPlaybookFilter(payload, scopeTargetToFilter(target.Playbook), deny)
+				addPlaybookFilter(payload, filter, deny)
 			}
 			if target.Canary != nil {
-				addCanaryFilter(payload, scopeTargetToFilter(target.Canary), deny)
+				addCanaryFilter(payload, filter, deny)
 			}
 			if target.View != nil {
-				addViewFilter(payload, scopeTargetToFilter(target.View), deny)
-			}
-			if target.Global != nil {
-				rlsScope := scopeTargetToFilter(target.Global)
-				addConfigFilter(payload, rlsScope, deny)
-				addComponentFilter(payload, rlsScope, deny)
-				addPlaybookFilter(payload, rlsScope, deny)
-				addCanaryFilter(payload, rlsScope, deny)
-				addViewFilter(payload, rlsScope, deny)
+				addViewFilter(payload, filter, deny)
 			}
 		}
 	}
 
 	return nil
-}
-
-// scopeTargetToFilter converts a Scope CRD target selector to a row filter
-func scopeTargetToFilter(selector *types.ResourceSelector) rls.Scope {
-	return resourceSelectorToFilter(*selector)
 }
 
 // resourceSelectorToFilter converts a types.ResourceSelector to a row filter

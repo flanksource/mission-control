@@ -15,7 +15,6 @@ import (
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
-	"github.com/flanksource/duty/types"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -133,7 +132,7 @@ var _ = ginkgo.Describe("External identity providers", ginkgo.Ordered, func() {
 
 		scope := &v1.Scope{
 			ObjectMeta: metav1.ObjectMeta{Name: "all-playbooks", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
-			Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Playbook: &types.ResourceSelector{Name: "*"}}}},
+			Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Playbook: &v1.ScopeResourceRef{Name: "*"}}}},
 		}
 		Expect(db.PersistScopeFromCRD(DefaultContext, scope)).To(Succeed())
 

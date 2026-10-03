@@ -33,10 +33,10 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 					Description: "Test scope",
 					Targets: []v1.ScopeTarget{
 						{
-							Config: &types.ResourceSelector{
-								Name:        "prod",
-								Agent:       "homelab",
-								TagSelector: "env=prod",
+							Config: &v1.ScopeConfigSelector{
+								ScopeResourceRef: v1.ScopeResourceRef{Name: "prod"},
+								Agent:            "homelab",
+								TagSelector:      "env=prod",
 							},
 						},
 					},
@@ -71,15 +71,12 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			name   string
 			target v1.ScopeTarget
 		}{
-			{"an empty selector", v1.ScopeTarget{Config: &types.ResourceSelector{}}},
-			{"a name pattern", v1.ScopeTarget{Config: &types.ResourceSelector{Name: "prod-*"}}},
-			{"a field the type doesn't have", v1.ScopeTarget{Playbook: &types.ResourceSelector{TagSelector: "purpose=remediation"}}},
-			{"a query option", v1.ScopeTarget{Config: &types.ResourceSelector{Name: "api", Search: "type=Pod"}}},
-			{"a playbook field other than category", v1.ScopeTarget{Playbook: &types.ResourceSelector{FieldSelector: "title=Restart"}}},
-			{"a malformed tagSelector", v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "env in (prod"}}},
-			{"two resource types in one target", v1.ScopeTarget{Config: &types.ResourceSelector{Name: "*"}, Playbook: &types.ResourceSelector{Name: "*"}}},
-			{"a wildcard namespace", v1.ScopeTarget{Config: &types.ResourceSelector{Namespace: "*"}}},
-			{"an agent that doesn't exist", v1.ScopeTarget{Config: &types.ResourceSelector{Agent: "no-such-agent"}}},
+			{"an empty selector", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{}}},
+			{"a name pattern", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "prod-*"}}}},
+			{"a malformed tagSelector", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "env in (prod"}}},
+			{"two resource types in one target", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}, Playbook: &v1.ScopeResourceRef{Name: "*"}}},
+			{"a wildcard namespace", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Namespace: "*"}}}},
+			{"an agent that doesn't exist", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{Agent: "no-such-agent"}}},
 		} {
 			ginkgo.It("stores a scope with "+tt.name+" as invalid", func() {
 				scopeObj := &v1.Scope{
@@ -98,7 +95,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 		ginkgo.It("records why a scope is invalid", func() {
 			scopeObj := &v1.Scope{
 				ObjectMeta: metav1.ObjectMeta{Name: "missing-agent", Namespace: "default", UID: k8sTypes.UID(uuid.New().String())},
-				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &types.ResourceSelector{Agent: "no-such-agent"}}}},
+				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{Agent: "no-such-agent"}}}},
 			}
 			Expect(PersistScopeFromCRD(DefaultContext, scopeObj)).ToNot(Succeed())
 
@@ -111,7 +108,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 		ginkgo.It("resolves an agent id as well as a name", func() {
 			scopeObj := &v1.Scope{
 				ObjectMeta: metav1.ObjectMeta{Name: "agent-by-id", Namespace: "default", UID: k8sTypes.UID(uuid.New().String())},
-				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &types.ResourceSelector{Agent: dummy.HomelabAgent.ID.String()}}}},
+				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{Agent: dummy.HomelabAgent.ID.String()}}}},
 			}
 			Expect(PersistScopeFromCRD(DefaultContext, scopeObj)).To(Succeed())
 		})
@@ -126,7 +123,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 				Spec: v1.ScopeSpec{
 					Targets: []v1.ScopeTarget{
 						{
-							Config: &types.ResourceSelector{Name: "test"},
+							Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "test"}},
 						},
 					},
 				},
@@ -143,7 +140,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			scopeID := uuid.New()
 			targetsJSON, _ := json.Marshal([]v1.ScopeTarget{
 				{
-					Config: &types.ResourceSelector{Name: "test"},
+					Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "test"}},
 				},
 			})
 			scope := models.Scope{
@@ -176,7 +173,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			// Create old scope
 			targetsJSON, _ := json.Marshal([]v1.ScopeTarget{
 				{
-					Config: &types.ResourceSelector{Name: "old"},
+					Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "old"}},
 				},
 			})
 			oldScope := models.Scope{
@@ -196,7 +193,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 					Namespace: "default",
 					UID:       k8sTypes.UID(newID.String()),
 				},
-				Spec: v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &types.ResourceSelector{Name: "new"}}}},
+				Spec: v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "new"}}}}},
 			}
 
 			// Delete stale
@@ -216,7 +213,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 
 		ginkgo.It("replaces the old scope even when the new one is invalid", func() {
 			oldID := uuid.New()
-			targetsJSON, _ := json.Marshal([]v1.ScopeTarget{{Config: &types.ResourceSelector{Name: "old"}}})
+			targetsJSON, _ := json.Marshal([]v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "old"}}}})
 			Expect(DefaultContext.DB().Create(&models.Scope{
 				ID:        oldID,
 				Name:      "replaced-scope",
@@ -227,7 +224,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 
 			newScopeCRD := &v1.Scope{
 				ObjectMeta: metav1.ObjectMeta{Name: "replaced-scope", Namespace: "default", UID: k8sTypes.UID(uuid.New().String())},
-				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &types.ResourceSelector{}}}},
+				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{}}}},
 			}
 			Expect(DeleteStaleScope(DefaultContext, newScopeCRD)).ToNot(Succeed())
 

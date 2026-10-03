@@ -43,8 +43,12 @@ func RowFilter(kind string, selector types.ResourceSelector) (*rls.Scope, error)
 		return nil, fmt.Errorf("%s can't be filtered by row", kind)
 	}
 
-	for _, field := range selectorFields(selector) {
-		if !slices.Contains(supported, field) {
+	for field, set := range map[string]bool{
+		"id": selector.ID != "", "name": selector.Name != "", "namespace": selector.Namespace != "",
+		"agent": selector.Agent != "", "types": len(selector.Types) > 0,
+		"tagSelector": selector.TagSelector != "", "labelSelector": selector.LabelSelector != "",
+	} {
+		if set && !slices.Contains(supported, field) {
 			return nil, fmt.Errorf("row filters can't match a %s's %s", kind, field)
 		}
 	}

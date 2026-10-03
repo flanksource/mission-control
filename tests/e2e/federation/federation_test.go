@@ -170,17 +170,17 @@ var _ = ginkgo.Describe("Federated requests through the server", ginkgo.Ordered,
 		for _, scope := range []*v1.Scope{
 			{
 				ObjectMeta: metav1.ObjectMeta{Name: "kubernetes-playbooks", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
-				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Playbook: &types.ResourceSelector{FieldSelector: "category=Kubernetes"}}}},
+				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Playbook: &v1.ScopeResourceRef{Name: "fed-e2e-echo"}}}},
 			},
 			{
 				ObjectMeta: metav1.ObjectMeta{Name: "all-configs", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
-				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &types.ResourceSelector{Name: "*"}}}},
+				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}}},
 			},
 			{
 				ObjectMeta: metav1.ObjectMeta{Name: "tenant-a", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
 				Spec: v1.ScopeSpec{Targets: []v1.ScopeTarget{
-					{Config: &types.ResourceSelector{TagSelector: "tenant=a"}},
-					{Playbook: &types.ResourceSelector{Name: "*"}},
+					{Config: &v1.ScopeConfigSelector{TagSelector: "tenant=a"}},
+					{Playbook: &v1.ScopeResourceRef{Name: "*"}},
 				}},
 			},
 		} {
