@@ -206,7 +206,7 @@ Bad: `staging` selects components by namespace, which row-level security can't m
 
 Listings are only filtered while row-level security is enabled. It's turned on or off when Mission Control starts, from the `rls.enable` property, so changing the property takes effect on restart. So a `read` rule whose Scope has a target that isn't a whole-type target (`scopes.md`, Section 5.2) needs it: while row-level security is off, a Role with such a rule is `Ready=False` with reason `RowLevelSecurityRequired`, and none of its rules apply, like any invalid Role (Section 6). It becomes valid when row-level security is enabled, without being re-applied. A rule whose Scope consists of whole-type targets only doesn't need it: opening any resource and listing all of them allow the same resources.
 
-Subjects without built-in access (`overview.md`, "Default access") are users of an external identity provider and resources acting on their own (`rolebindings.md`, Section 2.5). They list only what their `read` grants allow. A listing of a type none of their grants covers is refused with `403 Forbidden`, whether or not row-level security is on. While it's off, their only valid grants are whole-type ones, so they list every row of those types and nothing else.
+Whether a subject may list a type at all, and what a listing returns for a subject whose grants cover only part of it, is specified in `collection-access.md`. Subjects without built-in access (`overview.md`, "Default access") list only what their `read` grants select, and a listing of a type none of their grants covers is refused with `403 Forbidden`, whether or not row-level security is on.
 
 ## 4. Matching
 

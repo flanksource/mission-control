@@ -259,6 +259,8 @@ A constraint can't widen a rule: it narrows each input to the resources in both 
 
 "Types both Scopes select" are the types the input accepts (`roles.md`, Section 2) that a target of the rule's Scope and a target of the constraint's Scope both select. Two Scopes with a type in common can still select no resource in common, e.g. configs in two different namespaces. That's an empty set like any other (`scopes.md`, Section 4.1), and isn't reported.
 
+For `read`, a constraint's Scope narrows a type to all of it when it has a whole-type target of the type, whatever its other targets, since targets combine with OR (`scopes.md`, Section 4). Such a rule doesn't need row-level security for that type, and `collection-access.md`, Section 2.4 counts it as whole-type by the same test.
+
 Two rules close the gaps:
 
 - **A rule that no side narrows doesn't apply through the binding.** That's a `read` rule under a constraint that only sets `target`. Leaving it as written would grant the subjects every resource of the rule, the leak Section 3.1 rules out. So a constraint never leaves an allow rule un-narrowed: either it narrows the rule, or the rule doesn't apply.
