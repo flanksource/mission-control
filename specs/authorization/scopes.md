@@ -181,10 +181,10 @@ targets:
 
 A Scope is used in two different ways:
 
-1. To decide whether one resource belongs to it, when an operation is checked against the resource or a listing is filtered (`roles.md`, Section 3.1). Mission Control may evaluate this once per resource and Scope, when either changes, and store the result (Section 4.3).
-2. When Mission Control searches for the resources a Scope selects, e.g. to compute what a view or a playbook may show. The selector becomes a database query.
+1. To decide whether one resource belongs to it, when that resource changes (Section 4.3).
+2. To find every resource it selects, when the Scope changes. The selector becomes a database query.
 
-Every form a `name` can take has to mean exactly the same set in both, or deciding membership and searching would disagree. And each form has to have one reading. Those two constraints rule the language down to what's above:
+Every form a `name` can take has to mean exactly the same set in both, or a resource's membership would depend on which of the two last evaluated it. And each form has to have one reading. Those two constraints rule the language down to what's above:
 
 - **A prefix or a suffix** is one comparison against the start or the end of a name. It costs the same as an exact match, and there's only one way to read it.
 - **`*` in the middle or at both ends** (`*db*`) means searching inside every name, and a pattern with several wildcards has more than one reading. Neither is needed to select resources by name, which prefixes and suffixes already do. A wider grammar would have to satisfy Section 4.3 and give each form one reading; it isn't ruled out.
@@ -293,14 +293,14 @@ An invalid Scope that's stored, because its `agent` doesn't resolve or because K
 
 ### 7.1 Membership changes
 
-Membership MAY be evaluated when a Scope or a resource changes, rather than on every check (Section 4.3), so a change can lag:
+Membership MAY be evaluated when a Scope or a resource changes, rather than on every check (Section 4.3), so a change can lag. Every check, of every action, MUST use the same membership: a check never evaluates a selector itself while another reads the stored result.
 
 | Change                                | Takes effect                        | Until then                                                      |
 | ------------------------------------- | ----------------------------------- | --------------------------------------------------------------- |
 | A Scope's targets change              | When the new membership is complete | Exactly the previous membership, never a mix                    |
 | A Scope is created                    | When its membership is complete     | Selects nothing                                                 |
 | A Scope becomes invalid or is deleted | Immediately                         |                                                                 |
-| A resource is created, changed or deleted | When it's re-evaluated          | In no Scope for `read`, except through a whole-type target      |
+| A resource is created, changed or deleted | When it's re-evaluated          | In no Scope, except through a whole-type target                 |
 | A Role or RoleBinding changes         | Immediately                         |                                                                 |
 
-A delay MUST only ever refuse: it never grants what neither the old nor the new state grants, including when checks of different actions disagree during it.
+A delay MUST only ever refuse: it never grants what neither the old nor the new state grants. E.g. a Playbook applied and run straight away may be refused until it's in its Scopes.

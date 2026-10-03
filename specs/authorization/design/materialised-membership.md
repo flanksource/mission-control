@@ -11,6 +11,8 @@ A `read` rule is checked in two places: on one resource when it's opened, and on
 
 This design materialises. Query time needs the selector grammar implemented twice, in Go and in SQL, and any difference between the two makes opening and listing disagree. It also caps what a `read` Scope can select at what SQL can match, and makes every filtered listing evaluate every row of the table, so its cost grows with the table rather than the result. Materialising keeps one evaluator, turns the listing filter into an index lookup, and answers "what does this Scope select" and "who can read this resource" without evaluating anything.
 
+Only the materializer evaluates selectors. Every check, of every action (`read`, `playbook:run`, `invoke:<plugin>:<operation>`, …), reads the stored result, and a whole-type target is matched by type alone. _Why:_ a second evaluator would disagree with the stored result while it lags.
+
 The price is lag: a change to a Scope or a resource takes effect once it's re-evaluated. `scopes.md` §7.1 bounds what a lag may do: it may refuse, never grant.
 
 ## Storage
@@ -24,7 +26,7 @@ scope_pending     (resource_type, resource_id, seq)        -- filled by triggers
 ## Keeping it current
 
 - **Scope edited:** a new generation is built beside the active one, then switched in atomically. Invalid or deleted: every generation is retired at once. _Why:_ an edit never grants a mix of old and new, and revocation doesn't wait for a build.
-- **Resource changed:** a trigger queues it, and a worker re-evaluates it every 5 s. Until then the policy hides it. _Why:_ a lag must refuse, never grant (`scopes.md` §7.1).
+- **Resource changed:** a trigger queues it, and a worker re-evaluates it every 5 s. Until then it's in no Scope, for every check. _Why:_ a lag must refuse, never grant (`scopes.md` §7.1).
 - **Ordering:** the build, the worker and the switch take a per-type advisory lock. _Why:_ they read and write in separate transactions, and a stale read must not overwrite a newer decision.
 - **Whole-type targets** aren't stored. They grant `all`, and drop out of a constrained grant. _Why:_ every resource is a member, so storing them adds rows and no information.
 
