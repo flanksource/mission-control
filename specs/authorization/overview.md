@@ -92,10 +92,9 @@ Nothing is allowed unless a rule allows it, apart from the built-in access every
 
 No rule applies to an admin, deny rules included, however a RoleBinding or Permission names them: as a person, through a team or through a built-in role. A deny rule is a guardrail for everyone else. To restrict someone, don't make them an admin.
 
-Built-in access is defined in code, not in these resources. The built-in roles are described in `roles.md`, Section 7. Today it's what the built-in `viewer` role can do: `read` on the catalog, topology, canaries, playbooks, views, people, applications and the public database tables, as whole types. Two things follow from it:
+Built-in access is defined in code, not in these resources. The built-in roles are described in `roles.md`, Section 7. It reaches members only (`row-filtered-subjects.md`, Section 1): a member's `viewer` role grants `read` on the catalog, topology, canaries, playbooks, views, people and applications, as whole types, and members' listings aren't filtered by row. That's why deny rules on `read` aren't supported yet (`roles.md`, Section 2): a deny couldn't be enforced on those listings.
 
-- It's granted on whole types, and its database listings aren't filtered by row for anyone but guests. That's why deny rules on `read` aren't supported yet (`roles.md`, Section 2): a deny couldn't be enforced on those listings.
-- It only applies to Mission Control's own users. Users of an external identity provider have no built-in access, and list only what their `read` rules allow (`roles.md`, Section 3.1).
+Row-filtered subjects, i.e. guests, users of an external identity provider and resources acting on their own, have no built-in access to any resource type. They read what their `read` rules select and nothing else, plus the reference data `row-filtered-subjects.md`, Section 2.1 allows. Whether a subject may read a type at all, as opposed to one resource, is derived from their grants as `collection-access.md` specifies.
 
 ## Who may manage these resources
 

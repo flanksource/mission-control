@@ -93,7 +93,7 @@ For `playbook:run`, `target` is optional. A rule without it matches only runs wi
   - A pattern grants actions added later. If the `kubernetes-logs` plugin ships a new `exec-shell` operation, `invoke:kubernetes-logs:*` would grant it without anyone reviewing the Role.
 - A plugin action isn't checked against the installed plugins: plugins are installed and upgraded often, and a Role mustn't break when one is. A rule on an operation no plugin declares matches nothing until one does.
 - `create`, `update` and `delete` are only checked on all resources of a type, so their Scope MUST consist of whole-type targets only (`scopes.md`, Section 5.2).
-- Deny rules on `read` are rejected for now, because they couldn't be enforced on listings: Mission Control's own users' database listings aren't filtered by row unless they're guests (`overview.md`, "Default access"). A deny on reading production configs would still let an editor list them.
+- Deny rules on `read` are rejected for now, because they couldn't be enforced on listings: members' listings aren't filtered by row (`row-filtered-subjects.md`, Section 4). A deny on reading production configs would still let an editor list them.
 
 An operation may make more than one check. For example, running a playbook on a config also checks `read` on that config. Section 4.3 lists every check each operation makes; a rule never grants the other checks implicitly.
 
@@ -355,7 +355,7 @@ The built-in roles answer two separate questions:
 | `admin`     | Members who administer Mission Control                              | Everything. No rule applies to them, deny rules included (`overview.md`, "Default access")                                                                                                                                 |
 | `viewer`    | Members who only read                                               | `read` on the catalog, topology, canaries, playbooks, views, people, applications and the public database tables, as whole types, with listings unfiltered                                                                 |
 | `editor`    | Members who also change things                                      | What a viewer can, plus `create`, `read`, `update` and `delete` on canaries, the catalog, topology, playbooks, the Kubernetes proxy, notifications, applications and connections, and `read` on connection details         |
-| `guest`     | Outsiders, e.g. contractors, customers or another team's users      | The built-in read access every user has, but their listings are always filtered by row, to what Permissions and RoleBindings grant them (Section 7.3)                                                                      |
+| `guest`     | Outsiders, e.g. contractors, customers or another team's users      | Nothing built in, apart from reference data. They read what Permissions and RoleBindings grant them, filtered by row (Section 7.3)                                                                                          |
 | `agent`     | Mission Control agents pushing data from other clusters             | `read` on playbooks and the public database tables; `create`, `read` and `update` on agent pushes; `create` and `update` on topology                                                                                       |
 | `commander` | **TODO:** not defined yet                                           | **TODO**                                                                                                                                                                                                                   |
 | `responder` | **TODO:** not defined yet                                           | **TODO**                                                                                                                                                                                                                   |
@@ -366,16 +366,15 @@ The built-in roles answer two separate questions:
 
 ### 7.2 Members
 
-`viewer` is the base member role. `editor`, `commander` and `responder` inherit it, so they see everything a viewer sees, and anything granted to `viewer` reaches them too. Members' listings are never filtered by row: a member sees every resource of a type they can read.
+`viewer` is the base member role. `editor`, `commander` and `responder` inherit it, so they see everything a viewer sees, and anything granted to `viewer` reaches them too. Members' listings are never filtered by row: a member sees every resource of a type they can read. Reads granted to `viewer` reach members only (`row-filtered-subjects.md`, Section 2).
 
 ### 7.3 Guests
 
-A guest is the restricted role. Guests get past the same whole-type checks as viewers for `read`, the built-in access every user has (`overview.md`, "Default access"). But their listings are always filtered by row, to the resources their Permissions and RoleBindings grant (Section 3.1). So a guest sees only what's been shared with them.
+A guest is the restricted role. Guests are row-filtered subjects (`row-filtered-subjects.md`): they have no built-in access to any resource type, and read exactly what their Permissions and RoleBindings grant, filtered by row (Section 3.1), plus reference data. So a guest sees only what's been shared with them, and a guest with no grants sees nothing.
 
 `guest` doesn't inherit `viewer`. A guest isn't reached by what's granted to `viewer` or to any other member role.
 
 ### 7.4 Open questions
 
 - **TODO:** A person with no built-in role. Today they get the built-in access every user has, unfiltered, so in practice they're a viewer. Decide whether that's intended, or whether they should get nothing until they're given a role.
-- **TODO:** Reads granted to `viewer`. Section 7.3 says they don't reach guests, but the code currently lets them reach every user, guests and agents included, on whole-type checks. Confirm guests are excluded, and fix the code.
-- **TODO:** Guest visibility is only defined for listings with row-level security on. Decide (1) whether a guest opening one resource directly, e.g. a config by id, is covered by the built-in whole-type `read` or checked against their grants only, and (2) what a guest's listing returns while row-level security is off: Section 3.1 says listings are only filtered while it's on, Section 7.3 says guests' listings are always filtered.
+- Resolved by `row-filtered-subjects.md`: reads granted to `viewer` don't reach guests or agents; a guest opening one resource is checked against their grants only; and while row-level security is off, a guest's listing is either a whole type they hold or refused.
