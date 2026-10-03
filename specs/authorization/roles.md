@@ -177,7 +177,7 @@ A rule with `action: read` is checked in two places:
 
 Both MUST allow the same resources, including while a change to a Scope or a resource is taking effect (`scopes.md`, Section 7.1): a resource a subject can open appears in their listings, and a resource in their listings can be opened. How Mission Control keeps the two in step is the design's business (`design/materialised-membership.md`).
 
-A `read` rule accepts any Scope whose membership is decided by the resource alone (`scopes.md`, Section 4.3), which every Scope is, with one exception: connections aren't filtered by row yet, so a `read` rule's Scope MUST select connections with a whole-type target only. Nothing in a connection's fields prevents filtering them later; it's left out of this change.
+A `read` rule accepts any Scope whose membership is decided by the resource alone (`scopes.md`, Section 4.3), which every Scope is, with one exception: connections aren't filtered by row, so a `read` rule's Scope MUST select connections with a whole-type target only.
 
 Listings are only filtered while row-level security is enabled. It's turned on or off when Mission Control starts, from the `rls.enable` property, so changing the property takes effect on restart. So a `read` rule whose Scope has a target that isn't a whole-type target (`scopes.md`, Section 5.2) needs it: while row-level security is off, a Role with such a rule is `Ready=False` with reason `RowLevelSecurityRequired`, and none of its rules apply, like any invalid Role (Section 6). It becomes valid when row-level security is enabled, without being re-applied. A rule whose Scope consists of whole-type targets only doesn't need it: opening any resource and listing all of them allow the same resources.
 
