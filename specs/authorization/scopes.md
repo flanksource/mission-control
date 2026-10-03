@@ -59,7 +59,6 @@ Each entry under `targets` MUST set exactly one of these keys:
 | `playbook`   | Playbooks                                                 |
 | `view`       | Views                                                     |
 | `connection` | Connections                                               |
-| `global`     | Legacy: resources of every type. Only Permissions use it. |
 
 Keys are exact. `playbooks`, `configs` or any other spelling is not a resource type. An entry with two keys, or none, is invalid.
 
@@ -113,6 +112,16 @@ A Scope whose `agent` no longer exists isn't an empty set. It's invalid (Section
 
 `metadata.namespace` identifies the Scope object and is required however it's created. Roles and RoleBindings can only reference the Scope from the same namespace (`overview.md`, "Namespaces"). It does **not** restrict the resources the Scope selects. Only selectors do.
 
+### 4.3 Identity and ownership, not state
+
+A Scope MUST select resources by what they are or who owns them, never by their current state.
+
+Membership MUST be decidable from the Scope and the resource's own identity and ownership fields, and MUST NOT change unless the Scope or those fields change.
+
+**Why:** Health and status change without anyone deciding to change access. State-based grants make access disappear when a fix succeeds, flicker when a resource flaps, and grow during an outage. They can also change a playbook permission between run and approval, and prevent a stable access review.
+
+The grant defines the resources a person is responsible for. Listing filters narrow that set to, for example, unhealthy resources. A playbook's own configs filter decides whether it should run on a resource; a Scope decides whether the person may run it. An open-ended field selector would bypass this rule and silently expose new fields as the resource record grows.
+
 ## 5. Selector language
 
 Every target is a selector over the fields its resource type has. A selector MUST have at least one condition: an empty selector is rejected rather than meaning "everything".
@@ -124,13 +133,10 @@ Every target is a selector over the fields its resource type has. A selector MUS
 | `name`          | Resource name                         | One exact value, `*`, or a pattern (Section 5.2)                                    |
 | `namespace`     | Resource namespace                    | One exact value                                                                     |
 | `id`            | Resource id                           | A lowercase UUID                                                                    |
-| `agent`         | Agent the resource belongs to         | An agent's name or id. MUST resolve to an existing agent (Section 5.5).            |
+| `agent`         | Agent the resource belongs to         | An agent's name or id. MUST resolve to an existing agent (Section 5.4).            |
 | `types`         | Resource type, e.g. `Kubernetes::Pod` | A list of exact values; any of them matches                                         |
-| `statuses`      | Resource status                       | A list of exact values; any of them matches                                         |
-| `health`        | Resource health                       | Comma-separated exact values; any of them matches                                   |
 | `tagSelector`   | Tags                                  | Kubernetes label selector syntax                                                    |
 | `labelSelector` | Labels                                | Kubernetes label selector syntax                                                    |
-| `fieldSelector` | Other fields of the resource          | Kubernetes label selector syntax                                                    |
 
 Kubernetes label selector syntax: `key=value`, `key!=value`, `key in (a,b)`, `key notin (a,b)`, `key`, `!key`, joined by commas (AND).
 
@@ -156,8 +162,8 @@ A pattern has exactly one `*`, at the start or at the end, and at least one othe
 Matching is case-sensitive: `prod-*` doesn't match `Prod-db`. Every character other than a leading or trailing `*` is literal, including `,`, `!`, `%` and `_`. A resource whose name contains `*` can only be selected by `id`.
 
 - `name: "*"` selects every resource of the target's type, not of every type.
-- `types`, `statuses` and `health` values are exact: `*` and `!` are rejected.
-- Label selector values can't contain `*`, so no wildcard is inferred in `tagSelector`, `labelSelector` or `fieldSelector`.
+- `types` values are exact: `*` and `!` are rejected.
+- Label selector values can't contain `*`, so no wildcard is inferred in `tagSelector` or `labelSelector`.
 
 A **whole-type target** is `name: "*"` and nothing else. It selects every resource of its type, and it's the only target that counts as selecting a whole type where that matters (`roles.md`, Sections 2 and 3.1). A pattern target isn't a whole-type target, however many resources it matches:
 
@@ -189,16 +195,15 @@ Every form a `name` can take has to mean exactly the same set in all three, or o
 
 A selector MUST only use fields its type has. Anything else is rejected, never ignored.
 
-| Type         | Supported fields                                                                                                   |
-| ------------ | ------------------------------------------------------------------------------------------------------------------ |
-| `config`     | `id`, `name`, `namespace`, `agent`, `types`, `statuses`, `health`, `tagSelector`, `labelSelector`, `fieldSelector` |
-| `component`  | `id`, `name`, `namespace`, `agent`, `types`, `statuses`, `health`, `labelSelector`, `fieldSelector`                |
-| `check`      | `id`, `name`, `namespace`, `agent`, `types`, `statuses`, `health`, `labelSelector`, `fieldSelector`                |
-| `canary`     | `id`, `name`, `namespace`, `agent`, `labelSelector`                                                                |
-| `playbook`   | `id`, `name`, `namespace`, `fieldSelector` on `category` only                                                      |
-| `view`       | `id`, `name`, `namespace`                                                                                          |
-| `connection` | `id`, `name`, `namespace`, `types`                                                                                 |
-| `global`     | `id`, `name`, `namespace`, `agent`, `tagSelector`                                                                  |
+| Type         | Supported fields                                                               |
+| ------------ | ------------------------------------------------------------------------------ |
+| `config`     | `id`, `name`, `namespace`, `agent`, `types`, `tagSelector`, `labelSelector`        |
+| `component`  | `id`, `name`, `namespace`, `agent`, `types`, `labelSelector`                       |
+| `check`      | `id`, `name`, `namespace`, `agent`, `types`, `labelSelector`                       |
+| `canary`     | `id`, `name`, `namespace`, `agent`, `labelSelector`                                |
+| `playbook`   | `id`, `name`, `namespace`                                                        |
+| `view`       | `id`, `name`, `namespace`                                                        |
+| `connection` | `id`, `name`, `namespace`, `types`                                               |
 
 Notes:
 
@@ -206,11 +211,7 @@ Notes:
 - Only Configs have tags. Components, checks and canaries have labels.
 - Playbooks have neither tags nor labels.
 
-### 5.4 Query options
-
-Resource selectors elsewhere in Mission Control also carry query options. They aren't conditions on a resource, so a Scope MUST reject them: `scope`, `search`, `cache`, `limit`, `includeDeleted`.
-
-### 5.5 Agents
+### 5.4 Agents
 
 `agent` is stored as written, and resolved to an agent's id every time the Scope is validated (Section 7). The id MAY be cached between validations, but the value in the Scope is what's checked.
 
@@ -273,12 +274,6 @@ targets:
 targets:
   - component:
       tagSelector: team=payments
----
-# Query option
-targets:
-  - config:
-      name: api
-      search: type=Pod
 ```
 
 ## 7. How changes take effect
@@ -287,7 +282,7 @@ A Scope that's wrong on its own, i.e. any rule of Section 6 other than its `agen
 
 A Scope is validated (Section 6) when it's applied, and again whenever an agent it references is deleted or registered. Re-validation MAY be delayed, e.g. run periodically, but a stored Scope MUST be re-validated; validation on apply alone isn't enough.
 
-A stored Scope that becomes invalid, because its `agent` no longer resolves (Section 5.5), is `Ready=False` with the reason and selects nothing. It becomes valid again, and selects again, as soon as its `agent` resolves, without being re-applied. Roles and RoleBindings that reference it follow it (`roles.md`, Section 6; `rolebindings.md`, Section 4).
+A stored Scope that becomes invalid, because its `agent` no longer resolves (Section 5.4), is `Ready=False` with the reason and selects nothing. It becomes valid again, and selects again, as soon as its `agent` resolves, without being re-applied. Roles and RoleBindings that reference it follow it (`roles.md`, Section 6; `rolebindings.md`, Section 4).
 
 A Scope is never validated against the Roles and RoleBindings that reference it: a change that makes it unusable to a rule or constraint goes through, and the referencing object stops granting, in whole or in part, until it's updated (`roles.md`, Section 6; `rolebindings.md`, Section 4). Deleting a Scope has the same effect as changing it into one nothing accepts.
 

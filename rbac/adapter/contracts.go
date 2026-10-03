@@ -123,10 +123,6 @@ func (c ActionContract) validateInput(input string, scope ScopeSelection) error 
 		accepted = c.Targets
 	}
 
-	if scope.Global {
-		return fmt.Errorf("scope %s has a global target, which only Permissions can use", scope.Name)
-	}
-
 	for _, kind := range scope.DeclaredTypes() {
 		if !slices.Contains(accepted, kind) {
 			if len(accepted) == 0 {
