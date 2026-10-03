@@ -16,7 +16,7 @@ Other objects reference a Scope by name to say which resources they apply to:
 - **RoleBinding constraints**, to narrow the rules of a Role.
 - **Permissions**, through `object.scopes` (legacy).
 
-Each of those decides which resource types and selector fields it accepts from a Scope, and rejects a reference to a Scope it can't use. Those rules are specified with the objects themselves, in `roles.md` and `rolebindings.md`. This document only covers the Scope.
+Each of those decides which resource types, and which forms of target (e.g. whole-type only), it accepts from a Scope, and rejects a reference to a Scope it can't use. Those rules are specified with the objects themselves, in `roles.md` and `rolebindings.md`. This document only covers the Scope.
 
 Because other objects grant access through it, editing a Scope changes what they grant. Scope administration is permission administration.
 
@@ -116,11 +116,15 @@ A Scope whose `agent` no longer exists isn't an empty set. It's invalid (Section
 
 A Scope MUST select resources by what they are or who owns them, never by their current state.
 
-Membership MUST be decidable from the Scope and the resource's own identity and ownership fields, and MUST NOT change unless the Scope or those fields change.
+Membership MUST be decidable from the Scope and the resource's own identity and ownership fields, and MUST NOT change unless the Scope or those fields change. A selector MUST NOT depend on another resource, e.g. a parent, a related resource or the members of another Scope, nor on anything outside the resource, e.g. the current time.
 
 **Why:** Health and status change without anyone deciding to change access. State-based grants make access disappear when a fix succeeds, flicker when a resource flaps, and grow during an outage. They can also change a playbook permission between run and approval, and prevent a stable access review.
 
 The grant defines the resources a person is responsible for. Listing filters narrow that set to, for example, unhealthy resources. A playbook's own configs filter decides whether it should run on a resource; a Scope decides whether the person may run it. An open-ended field selector would bypass this rule and silently expose new fields as the resource record grows.
+
+An `agent` written by name is resolved when the Scope is validated (Section 5.4). The id it resolves to is part of the Scope, not of the resource: when it resolves differently, the Scope has changed (Section 7).
+
+**Why.** Mission Control may evaluate a Scope once, when a resource or the Scope changes, and store which Scopes each resource belongs to, rather than evaluating it on every read (`design/materialised-membership.md`). That's only correct if nothing but a change to the resource or to the Scope can change the resource's membership. Every field in Section 5.1 meets this. A selector that wouldn't is rejected when it's proposed for the language, never evaluated differently.
 
 ## 5. Selector language
 
@@ -175,16 +179,15 @@ targets:
 
 #### Why these patterns and no others
 
-A Scope is matched in three different places, by three different matchers:
+A Scope is used in two different ways:
 
-1. When one operation is checked against one resource, e.g. opening a config or running a playbook on it. The resource is in hand, and the selector is evaluated against it.
-2. When Mission Control searches for the resources a Scope selects, e.g. to compute what a view or a playbook may show. The selector becomes a database query.
-3. When a listing is filtered row by row (`roles.md`, Section 3.1). The selector becomes a row filter that runs against every row of the table.
+1. To decide whether one resource belongs to it, when that resource changes (Section 4.3).
+2. To find every resource it selects, when the Scope changes. The selector becomes a database query.
 
-Every form a `name` can take has to mean exactly the same set in all three, or opening a resource and listing it would disagree. And it has to be cheap in the third, which runs once per row. Those two constraints rule the language down to what's above:
+Every form a `name` can take has to mean exactly the same set in both, or a resource's membership would depend on which of the two last evaluated it. And each form has to have one reading. Those two constraints rule the language down to what's above:
 
 - **A prefix or a suffix** is one comparison against the start or the end of a name. It costs the same as an exact match, and there's only one way to read it.
-- **`*` in the middle or at both ends** (`*db*`) means searching inside every name, and a pattern with several wildcards has more than one reading. Neither is worth the cost for selecting resources by name, which is what prefixes and suffixes already do.
+- **`*` in the middle or at both ends** (`*db*`) means searching inside every name, and a pattern with several wildcards has more than one reading. Neither is needed to select resources by name, which prefixes and suffixes already do. A wider grammar would have to satisfy Section 4.3 and give each form one reading; it isn't ruled out.
 - **Lists** add nothing: targets already combine with OR (Section 4), so one target per name says the same thing without a second syntax.
 - **Exclusions** (`!a`) make a selector match everything it doesn't name, including resources created later. A Scope grants access, so it names what's in, never what's out.
 - **Case-sensitive** matching selects what was typed and nothing wider. Resource names from cloud providers can differ only by case, and a Scope must not quietly include both.
@@ -287,3 +290,17 @@ A stored Scope that becomes invalid, because its `agent` no longer resolves (Sec
 A Scope is never validated against the Roles and RoleBindings that reference it: a change that makes it unusable to a rule or constraint goes through, and the referencing object stops granting, in whole or in part, until it's updated (`roles.md`, Section 6; `rolebindings.md`, Section 4). Deleting a Scope has the same effect as changing it into one nothing accepts.
 
 An invalid Scope that's stored, because its `agent` doesn't resolve or because Kubernetes couldn't reject it (`overview.md`, "Rejected or not in effect"), is `Ready=False` with the reason and selects nothing. There is no previous version to fall back to; the Scope is whatever was last written.
+
+### 7.1 Membership changes
+
+Membership MAY be evaluated when a Scope or a resource changes, rather than on every check (Section 4.3), so a change can lag. Every check, of every action, MUST use the same membership: a check never evaluates a selector itself while another reads the stored result.
+
+| Change                                | Takes effect                        | Until then                                                      |
+| ------------------------------------- | ----------------------------------- | --------------------------------------------------------------- |
+| A Scope's targets change              | When the new membership is complete | Exactly the previous membership, never a mix                    |
+| A Scope is created                    | When its membership is complete     | Selects nothing                                                 |
+| A Scope becomes invalid or is deleted | Immediately                         |                                                                 |
+| A resource is created, changed or deleted | When it's re-evaluated          | In no Scope, except through a whole-type target                 |
+| A Role or RoleBinding changes         | Immediately                         |                                                                 |
+
+A delay MUST only ever refuse: it never grants what neither the old nor the new state grants. E.g. a Playbook applied and run straight away may be refused until it's in its Scopes.
