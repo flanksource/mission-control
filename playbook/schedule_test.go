@@ -6,7 +6,10 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
+	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -31,12 +34,14 @@ var _ = ginkgo.Describe("scheduled playbook runs", func() {
 			},
 		})
 
+		grantPlaybookRunForTest(playbook.ID, nil, nil)
+
 		agent := saveScheduledRunAgentForTest()
 		req := RunParams{
 			ID:      playbook.ID,
 			AgentID: &agent.ID,
 		}
-		run, err := createPlaybookRun(DefaultContext.WithObject(&playbook, req), &playbook, req, playbookRunOptions{})
+		run, err := createPlaybookRun(DefaultContext.WithSubject(playbook.ID.String()), &playbook, req)
 		Expect(err).To(Succeed())
 
 		Expect(run.Parameters["message"]).To(Equal(playbook.Name))
@@ -55,8 +60,10 @@ var _ = ginkgo.Describe("scheduled playbook runs", func() {
 			},
 		})
 
+		grantPlaybookRunForTest(playbook.ID, nil, nil)
+
 		req := RunParams{ID: playbook.ID}
-		run, err := createPlaybookRun(DefaultContext.WithUser(&dummy.JohnDoe).WithObject(&playbook, req), &playbook, req, playbookRunOptions{})
+		run, err := createPlaybookRun(DefaultContext.WithUser(&dummy.JohnDoe).WithSubject(playbook.ID.String()), &playbook, req)
 		Expect(err).To(Succeed())
 		Expect(run.Status).To(Equal(models.PlaybookRunStatusPendingApproval))
 	})
@@ -86,13 +93,15 @@ var _ = ginkgo.Describe("scheduled playbook runs", func() {
 		})
 		Expect(err).To(Succeed())
 
+		grantPlaybookRunForTest(playbook.ID, nil, nil)
+
 		agent := saveScheduledRunAgentForTest()
 		req := RunParams{
 			ID:      playbook.ID,
 			AgentID: &agent.ID,
 			Params:  templatedParams,
 		}
-		run, err := createPlaybookRun(DefaultContext.WithObject(&playbook, req), &playbook, req, playbookRunOptions{})
+		run, err := createPlaybookRun(DefaultContext.WithSubject(playbook.ID.String()), &playbook, req)
 		Expect(err).To(Succeed())
 		Expect(run.Parameters["message"]).To(Equal(playbook.Name))
 	})
@@ -119,6 +128,7 @@ var _ = ginkgo.Describe("scheduled playbook runs", func() {
 			},
 		}
 		playbook := saveScheduledPlaybookForTest("scheduled-updated-params", spec)
+		grantPlaybookRunForTest(playbook.ID, nil, nil)
 
 		spec.On.Schedule[0].Parameters["message"] = "updated {{.playbook.name}}"
 		specJSON, err := json.Marshal(spec)
@@ -181,6 +191,7 @@ var _ = ginkgo.Describe("scheduled playbook runs", func() {
 				{Name: "echo", Exec: &v1.ExecAction{Script: "echo {{.params.message}}"}},
 			},
 		})
+		grantPlaybookRunForTest(playbook.ID, nil, nil)
 
 		triggerScheduledRun(DefaultContext, playbook.ID, 0, "@every 1h")
 
@@ -189,6 +200,26 @@ var _ = ginkgo.Describe("scheduled playbook runs", func() {
 		Expect(runCount).To(BeZero())
 
 		expectScheduledRunJobHistory(playbook.ID, "missing required parameter")
+	})
+
+	ginkgo.It("denies scheduled runs for playbooks without a run grant", func() {
+		playbook := saveScheduledPlaybookForTest("scheduled-no-grant", v1.PlaybookSpec{
+			On: &v1.PlaybookTrigger{
+				Schedule: []v1.PlaybookTriggerSchedule{
+					{Schedule: "@every 1h"},
+				},
+			},
+			Actions: []v1.PlaybookAction{
+				{Name: "echo", Exec: &v1.ExecAction{Script: "echo hi"}},
+			},
+		})
+
+		triggerScheduledRun(DefaultContext, playbook.ID, 0, "@every 1h")
+
+		var runCount int64
+		Expect(DefaultContext.DB().Model(&models.PlaybookRun{}).Where("playbook_id = ?", playbook.ID).Count(&runCount).Error).To(Succeed())
+		Expect(runCount).To(BeZero())
+		expectScheduledRunJobHistory(playbook.ID, "access denied")
 	})
 
 	ginkgo.It("records unknown parameter failures in job history", func() {
@@ -207,6 +238,7 @@ var _ = ginkgo.Describe("scheduled playbook runs", func() {
 				{Name: "echo", Exec: &v1.ExecAction{Script: "echo hi"}},
 			},
 		})
+		grantPlaybookRunForTest(playbook.ID, nil, nil)
 
 		triggerScheduledRun(DefaultContext, playbook.ID, 0, "@every 1h")
 
@@ -250,4 +282,54 @@ func saveScheduledRunAgentForTest() models.Agent {
 	agent := models.Agent{Name: fmt.Sprintf("scheduled-run-test-%s", uuid.NewString())}
 	Expect(agent.Save(DefaultContext.DB())).To(Succeed())
 	return agent
+}
+
+func grantPlaybookRunForTest(playbookID uuid.UUID, configID, componentID *uuid.UUID) {
+	readPermission := models.Permission{
+		ID:          uuid.New(),
+		Name:        fmt.Sprintf("playbook-read-%s", uuid.NewString()),
+		Namespace:   "default",
+		Action:      policy.ActionRead,
+		Subject:     playbookID.String(),
+		SubjectType: models.PermissionSubjectTypePlaybook,
+	}
+	if configID == nil && componentID == nil {
+		readPermission.Object = "*"
+	}
+
+	selectors := rbac.Selectors{
+		Playbooks: []types.ResourceSelector{{ID: playbookID.String()}},
+	}
+	if configID != nil {
+		selector := types.ResourceSelector{ID: configID.String()}
+		if *configID == uuid.Nil {
+			selector = types.ResourceSelector{Name: "*"}
+		}
+		selectors.Configs = []types.ResourceSelector{selector}
+	}
+	if componentID != nil {
+		selectors.Components = []types.ResourceSelector{{ID: componentID.String()}}
+	}
+	if configID != nil || componentID != nil {
+		readSelectors := selectors
+		readSelectors.Playbooks = nil
+		readSelectorJSON, err := json.Marshal(readSelectors)
+		Expect(err).To(Succeed())
+		readPermission.ObjectSelector = types.JSON(readSelectorJSON)
+	}
+	selectorJSON, err := json.Marshal(selectors)
+	Expect(err).To(Succeed())
+
+	runPermission := models.Permission{
+		ID:             uuid.New(),
+		Name:           fmt.Sprintf("playbook-run-%s", uuid.NewString()),
+		Namespace:      "default",
+		Action:         policy.ActionPlaybookRun,
+		Subject:        playbookID.String(),
+		SubjectType:    models.PermissionSubjectTypePlaybook,
+		ObjectSelector: types.JSON(selectorJSON),
+	}
+
+	Expect(DefaultContext.DB().Create(&[]models.Permission{readPermission, runPermission}).Error).To(Succeed())
+	Expect(rbac.ReloadPolicy()).To(Succeed())
 }
