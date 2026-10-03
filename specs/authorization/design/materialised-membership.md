@@ -25,6 +25,14 @@ scope_pending     (resource_type, resource_id, seq)        -- filled by triggers
 
 Per type: `all`, or grants, each a set of `{scope, generation}` the row must be in all of. A grant is never empty and never repeats a Scope. A grant naming a Scope with no active generation is dropped whole. _Why:_ dropping only that Scope would widen the grant.
 
+## Alternatives
+
+- **Evaluate selectors per row in SQL at read time.** Needs a second evaluator in SQL that can drift from the Go one, caps the selector grammar at what SQL can match, and makes every filtered listing a scan.
+- **A `scope_ids` array column on each resource table.** Faster to read, but a Scope edit rewrites rows of the busiest tables while scrapers write to them, and there's no room for a second generation.
+- **Per-subject cached resource sets.** Grows with users × resources, and every scrape invalidates it.
+- **A relationship store (SpiceDB, OpenFGA).** The right shape, but a second datastore to run, and row-level security already does the lookup once the facts are rows.
+- **During a build, grant old and new together, or grant nothing.** The first grants what neither version selects; the second is an outage on every edit.
+
 ## Open questions
 
 - Dense grants: is `id IN (members)` or a per-row `EXISTS` faster? Measure.
