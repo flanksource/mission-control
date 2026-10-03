@@ -132,7 +132,7 @@ var _ = ginkgo.Describe("External identity providers", ginkgo.Ordered, func() {
 
 		scope := &v1.Scope{
 			ObjectMeta: metav1.ObjectMeta{Name: "all-playbooks", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
-			Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Playbook: &v1.ScopeResourceRef{Name: "*"}}}},
+			Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Playbook: &v1.ScopePlaybookRef{Name: "*"}}}},
 		}
 		Expect(db.PersistScopeFromCRD(DefaultContext, scope)).To(Succeed())
 

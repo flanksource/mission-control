@@ -74,7 +74,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			{"an empty selector", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{}}},
 			{"a name pattern", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "prod-*"}}}},
 			{"a malformed tagSelector", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "env in (prod"}}},
-			{"two resource types in one target", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}, Playbook: &v1.ScopeResourceRef{Name: "*"}}},
+			{"two resource types in one target", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}, Playbook: &v1.ScopePlaybookRef{Name: "*"}}},
 			{"a wildcard namespace", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Namespace: "*"}}}},
 			{"an agent that doesn't exist", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{Agent: "no-such-agent"}}},
 		} {

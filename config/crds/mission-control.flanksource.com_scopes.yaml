@@ -177,7 +177,7 @@ spec:
                           type: array
                       type: object
                     playbook:
-                      description: ScopeResourceRef selects resources by id, name
+                      description: ScopePlaybookRef selects playbooks by id, name
                         or namespace.
                       minProperties: 1
                       properties:
@@ -192,8 +192,7 @@ spec:
                           type: string
                       type: object
                     view:
-                      description: ScopeResourceRef selects resources by id, name
-                        or namespace.
+                      description: ScopeViewRef selects views by id, name or namespace.
                       minProperties: 1
                       properties:
                         id:

@@ -140,20 +140,20 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		Expect(DefaultContext.DB().Create(teamB).Error).To(Succeed())
 
 		for _, scope := range []*v1.Scope{
-			newScope("all-playbooks", namespace, v1.ScopeTarget{Playbook: &v1.ScopeResourceRef{Name: "*"}}),
-			newScope("all-playbooks", otherNamespace, v1.ScopeTarget{Playbook: &v1.ScopeResourceRef{Name: "*"}}),
-			newScope("kubernetes-playbooks", namespace, v1.ScopeTarget{Playbook: &v1.ScopeResourceRef{Name: dummy.RestartPod.Name}}),
+			newScope("all-playbooks", namespace, v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "*"}}),
+			newScope("all-playbooks", otherNamespace, v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "*"}}),
+			newScope("kubernetes-playbooks", namespace, v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: dummy.RestartPod.Name}}),
 			newScope("all-configs", namespace, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}),
 			newScope("tenant-a", namespace, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "tenant=a"}}),
 			newScope("tenant-b", namespace, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "tenant=b"}}),
 			newScope("tenant-a-boundary", namespace,
 				v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "tenant=a"}},
-				v1.ScopeTarget{Playbook: &v1.ScopeResourceRef{Name: "*"}}),
+				v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "*"}}),
 			newScope("role-configs", namespace, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "env=role-test"}}),
-			newScope("staging-views", namespace, v1.ScopeTarget{View: &v1.ScopeResourceRef{Namespace: "staging"}}),
+			newScope("staging-views", namespace, v1.ScopeTarget{View: &v1.ScopeViewRef{Namespace: "staging"}}),
 			newScope("configs-and-playbooks", namespace,
 				v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}},
-				v1.ScopeTarget{Playbook: &v1.ScopeResourceRef{Name: "*"}}),
+				v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "*"}}),
 			newScope("staging-components", namespace, v1.ScopeTarget{Component: &v1.ScopeLabelledSelector{ScopeResourceRef: v1.ScopeResourceRef{Namespace: "staging"}}}),
 			newScope("http-checks", namespace, v1.ScopeTarget{Check: &v1.ScopeLabelledSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "http"}}}),
 		} {
@@ -570,7 +570,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(*storedRole(roles[namespace+"/tenant-a-runner"].UID).ErrorReason).To(Equal(adapter.ReasonInvalid))
 			Expect(canRunOn(bob.ID.String(), dummy.RestartPod, &tenantA)).To(BeFalse())
 
-			restored := newScope("kubernetes-playbooks", namespace, v1.ScopeTarget{Playbook: &v1.ScopeResourceRef{Name: dummy.RestartPod.Name}})
+			restored := newScope("kubernetes-playbooks", namespace, v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: dummy.RestartPod.Name}})
 			restored.UID = changed.UID
 			Expect(db.PersistScopeFromCRD(DefaultContext, restored)).To(Succeed())
 			Expect(rbac.ReloadPolicy()).To(Succeed())
@@ -616,7 +616,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 
 			Expect(db.PersistScopeFromCRD(DefaultContext, newScope("tenant-a-boundary", namespace,
 				v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "tenant=a"}},
-				v1.ScopeTarget{Playbook: &v1.ScopeResourceRef{Name: "*"}}))).To(Succeed())
+				v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "*"}}))).To(Succeed())
 			Expect(rbac.ReloadPolicy()).To(Succeed())
 			Expect(storedBinding(namespace, "tenant-a-operators").Error).To(BeNil())
 			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue())

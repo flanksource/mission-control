@@ -170,7 +170,7 @@ var _ = ginkgo.Describe("Federated requests through the server", ginkgo.Ordered,
 		for _, scope := range []*v1.Scope{
 			{
 				ObjectMeta: metav1.ObjectMeta{Name: "kubernetes-playbooks", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
-				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Playbook: &v1.ScopeResourceRef{Name: "fed-e2e-echo"}}}},
+				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Playbook: &v1.ScopePlaybookRef{Name: "fed-e2e-echo"}}}},
 			},
 			{
 				ObjectMeta: metav1.ObjectMeta{Name: "all-configs", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
@@ -180,7 +180,7 @@ var _ = ginkgo.Describe("Federated requests through the server", ginkgo.Ordered,
 				ObjectMeta: metav1.ObjectMeta{Name: "tenant-a", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
 				Spec: v1.ScopeSpec{Targets: []v1.ScopeTarget{
 					{Config: &v1.ScopeConfigSelector{TagSelector: "tenant=a"}},
-					{Playbook: &v1.ScopeResourceRef{Name: "*"}},
+					{Playbook: &v1.ScopePlaybookRef{Name: "*"}},
 				}},
 			},
 		} {

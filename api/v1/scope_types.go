@@ -20,6 +20,16 @@ type ScopeResourceRef struct {
 	Namespace string `json:"namespace,omitempty"`
 }
 
+// ScopePlaybookRef selects playbooks by id, name or namespace.
+// +kubebuilder:validation:Type=object
+// +kubebuilder:validation:MinProperties=1
+type ScopePlaybookRef ScopeResourceRef
+
+// ScopeViewRef selects views by id, name or namespace.
+// +kubebuilder:validation:Type=object
+// +kubebuilder:validation:MinProperties=1
+type ScopeViewRef ScopeResourceRef
+
 // ScopeConfigSelector selects configs by identity and ownership, never by current state.
 // +kubebuilder:validation:MinProperties=1
 type ScopeConfigSelector struct {
@@ -72,16 +82,12 @@ type ScopeConnectionSelector struct {
 // +kubebuilder:object:generate=true
 // +kubebuilder:validation:XValidation:rule="[has(self.config), has(self.component), has(self.check), has(self.playbook), has(self.canary), has(self.view), has(self.connection)].filter(x, x).size() == 1",message="exactly one of config, component, check, playbook, canary, view, or connection must be specified"
 type ScopeTarget struct {
-	Config    *ScopeConfigSelector   `json:"config,omitempty"`
-	Component *ScopeLabelledSelector `json:"component,omitempty"`
-	Check     *ScopeLabelledSelector `json:"check,omitempty"`
-	// +kubebuilder:validation:Type=object
-	// +kubebuilder:validation:MinProperties=1
-	Playbook *ScopeResourceRef    `json:"playbook,omitempty"`
-	Canary   *ScopeCanarySelector `json:"canary,omitempty"`
-	// +kubebuilder:validation:Type=object
-	// +kubebuilder:validation:MinProperties=1
-	View       *ScopeResourceRef        `json:"view,omitempty"`
+	Config     *ScopeConfigSelector     `json:"config,omitempty"`
+	Component  *ScopeLabelledSelector   `json:"component,omitempty"`
+	Check      *ScopeLabelledSelector   `json:"check,omitempty"`
+	Playbook   *ScopePlaybookRef        `json:"playbook,omitempty"`
+	Canary     *ScopeCanarySelector     `json:"canary,omitempty"`
+	View       *ScopeViewRef            `json:"view,omitempty"`
 	Connection *ScopeConnectionSelector `json:"connection,omitempty"`
 }
 
@@ -94,19 +100,25 @@ func (t ScopeTarget) Selector() (string, types.ResourceSelector) {
 			ID: s.ID, Name: s.Name, Namespace: s.Namespace,
 			Agent: s.Agent, Types: s.Types, TagSelector: s.TagSelector, LabelSelector: s.LabelSelector,
 		}
+
 	case t.Component != nil:
 		return policy.ResourceComponent, t.Component.selector()
+
 	case t.Check != nil:
 		return policy.ResourceCheck, t.Check.selector()
+
 	case t.Playbook != nil:
-		return policy.ResourcePlaybook, t.Playbook.selector()
+		return policy.ResourcePlaybook, ScopeResourceRef(*t.Playbook).selector()
+
 	case t.Canary != nil:
 		s := t.Canary
 		return policy.ResourceCanary, types.ResourceSelector{
 			ID: s.ID, Name: s.Name, Namespace: s.Namespace, Agent: s.Agent, LabelSelector: s.LabelSelector,
 		}
+
 	case t.View != nil:
-		return policy.ResourceView, t.View.selector()
+		return policy.ResourceView, ScopeResourceRef(*t.View).selector()
+
 	case t.Connection != nil:
 		s := t.Connection
 		return policy.ResourceConnection, types.ResourceSelector{
