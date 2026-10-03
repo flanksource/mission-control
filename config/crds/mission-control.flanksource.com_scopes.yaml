@@ -53,11 +53,9 @@ spec:
                     duty's query options and state filters must not enter the authorization language.
                   properties:
                     canary:
-                      allOf:
-                      - minProperties: 1
-                      - minProperties: 1
                       description: ScopeCanarySelector selects canaries by identity
                         and ownership.
+                      minProperties: 1
                       properties:
                         agent:
                           minLength: 1
@@ -76,10 +74,8 @@ spec:
                           type: string
                       type: object
                     check:
-                      allOf:
-                      - minProperties: 1
-                      - minProperties: 1
                       description: ScopeLabelledSelector selects components and checks.
+                      minProperties: 1
                       properties:
                         agent:
                           minLength: 1
@@ -104,10 +100,8 @@ spec:
                           type: array
                       type: object
                     component:
-                      allOf:
-                      - minProperties: 1
-                      - minProperties: 1
                       description: ScopeLabelledSelector selects components and checks.
+                      minProperties: 1
                       properties:
                         agent:
                           minLength: 1
@@ -132,11 +126,9 @@ spec:
                           type: array
                       type: object
                     config:
-                      allOf:
-                      - minProperties: 1
-                      - minProperties: 1
                       description: ScopeConfigSelector selects configs by identity
                         and ownership, never by current state.
+                      minProperties: 1
                       properties:
                         agent:
                           minLength: 1
@@ -164,11 +156,9 @@ spec:
                           type: array
                       type: object
                     connection:
-                      allOf:
-                      - minProperties: 1
-                      - minProperties: 1
                       description: ScopeConnectionSelector selects connections by
                         identity and type.
+                      minProperties: 1
                       properties:
                         id:
                           pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
@@ -187,8 +177,8 @@ spec:
                           type: array
                       type: object
                     playbook:
-                      description: ScopeResourceRef selects playbooks and views by
-                        identity, and supplies the identity fields of other selectors.
+                      description: ScopeResourceRef selects resources by id, name
+                        or namespace.
                       minProperties: 1
                       properties:
                         id:
@@ -202,8 +192,8 @@ spec:
                           type: string
                       type: object
                     view:
-                      description: ScopeResourceRef selects playbooks and views by
-                        identity, and supplies the identity fields of other selectors.
+                      description: ScopeResourceRef selects resources by id, name
+                        or namespace.
                       minProperties: 1
                       properties:
                         id:

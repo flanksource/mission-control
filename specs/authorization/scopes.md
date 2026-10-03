@@ -133,7 +133,7 @@ Every target is a selector over the fields its resource type has. A selector MUS
 | `name`          | Resource name                         | One exact value, `*`, or a pattern (Section 5.2)                                    |
 | `namespace`     | Resource namespace                    | One exact value                                                                     |
 | `id`            | Resource id                           | A lowercase UUID                                                                    |
-| `agent`         | Agent the resource belongs to         | An agent's name or id. MUST resolve to an existing agent (Section 5.5).            |
+| `agent`         | Agent the resource belongs to         | An agent's name or id. MUST resolve to an existing agent (Section 5.4).            |
 | `types`         | Resource type, e.g. `Kubernetes::Pod` | A list of exact values; any of them matches                                         |
 | `tagSelector`   | Tags                                  | Kubernetes label selector syntax                                                    |
 | `labelSelector` | Labels                                | Kubernetes label selector syntax                                                    |
@@ -211,7 +211,7 @@ Notes:
 - Only Configs have tags. Components, checks and canaries have labels.
 - Playbooks have neither tags nor labels.
 
-### 5.5 Agents
+### 5.4 Agents
 
 `agent` is stored as written, and resolved to an agent's id every time the Scope is validated (Section 7). The id MAY be cached between validations, but the value in the Scope is what's checked.
 
@@ -282,7 +282,7 @@ A Scope that's wrong on its own, i.e. any rule of Section 6 other than its `agen
 
 A Scope is validated (Section 6) when it's applied, and again whenever an agent it references is deleted or registered. Re-validation MAY be delayed, e.g. run periodically, but a stored Scope MUST be re-validated; validation on apply alone isn't enough.
 
-A stored Scope that becomes invalid, because its `agent` no longer resolves (Section 5.5), is `Ready=False` with the reason and selects nothing. It becomes valid again, and selects again, as soon as its `agent` resolves, without being re-applied. Roles and RoleBindings that reference it follow it (`roles.md`, Section 6; `rolebindings.md`, Section 4).
+A stored Scope that becomes invalid, because its `agent` no longer resolves (Section 5.4), is `Ready=False` with the reason and selects nothing. It becomes valid again, and selects again, as soon as its `agent` resolves, without being re-applied. Roles and RoleBindings that reference it follow it (`roles.md`, Section 6; `rolebindings.md`, Section 4).
 
 A Scope is never validated against the Roles and RoleBindings that reference it: a change that makes it unusable to a rule or constraint goes through, and the referencing object stops granting, in whole or in part, until it's updated (`roles.md`, Section 6; `rolebindings.md`, Section 4). Deleting a Scope has the same effect as changing it into one nothing accepts.
 

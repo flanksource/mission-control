@@ -10,8 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// ScopeResourceRef selects playbooks and views by identity, and supplies the identity fields of other selectors.
-// +kubebuilder:validation:MinProperties=1
+// ScopeResourceRef selects resources by id, name or namespace.
 type ScopeResourceRef struct {
 	// +kubebuilder:validation:Pattern=`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
 	ID string `json:"id,omitempty"`
@@ -73,11 +72,15 @@ type ScopeConnectionSelector struct {
 // +kubebuilder:object:generate=true
 // +kubebuilder:validation:XValidation:rule="[has(self.config), has(self.component), has(self.check), has(self.playbook), has(self.canary), has(self.view), has(self.connection)].filter(x, x).size() == 1",message="exactly one of config, component, check, playbook, canary, view, or connection must be specified"
 type ScopeTarget struct {
-	Config     *ScopeConfigSelector     `json:"config,omitempty"`
-	Component  *ScopeLabelledSelector   `json:"component,omitempty"`
-	Check      *ScopeLabelledSelector   `json:"check,omitempty"`
-	Playbook   *ScopeResourceRef        `json:"playbook,omitempty"`
-	Canary     *ScopeCanarySelector     `json:"canary,omitempty"`
+	Config    *ScopeConfigSelector   `json:"config,omitempty"`
+	Component *ScopeLabelledSelector `json:"component,omitempty"`
+	Check     *ScopeLabelledSelector `json:"check,omitempty"`
+	// +kubebuilder:validation:Type=object
+	// +kubebuilder:validation:MinProperties=1
+	Playbook *ScopeResourceRef    `json:"playbook,omitempty"`
+	Canary   *ScopeCanarySelector `json:"canary,omitempty"`
+	// +kubebuilder:validation:Type=object
+	// +kubebuilder:validation:MinProperties=1
 	View       *ScopeResourceRef        `json:"view,omitempty"`
 	Connection *ScopeConnectionSelector `json:"connection,omitempty"`
 }
