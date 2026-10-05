@@ -287,13 +287,13 @@ Find a design that removes this trap. What's been considered so far:
 
 ## 5. Allow and deny
 
-Across all the rules that apply to a subject, from every Role and every Permission (`overview.md`, "Not covered yet"), the same rule decides:
+Across all the rules that apply to a subject, from every Role they're bound to, the same rule decides:
 
 - An operation is allowed when an allow rule matches and no deny rule does.
 - A deny always wins, over built-in access too: a deny on `delete` stops an editor even though the built-in `editor` role allows it. Only admins are exempt.
-- Order doesn't matter, and it doesn't matter whether a rule comes from a Role or a Permission.
-- Roles only add access. A Role can't remove access another Role or a Permission grants, except with a deny.
-- Row filters follow the same rule: a subject's rows are the ones any `read` grant, from a Role or a Permission, allows and no deny Permission denies (Section 3.1).
+- Order doesn't matter, and it doesn't matter which Role a rule comes from.
+- Roles only add access. A Role can't remove access another Role grants, except with a deny.
+- Row filters follow the same rule: a subject's rows are the ones any of their `read` rules allows (Section 3.1).
 
 None of this applies to admins: no rule, allow or deny, applies to them (`overview.md`, "Default access").
 

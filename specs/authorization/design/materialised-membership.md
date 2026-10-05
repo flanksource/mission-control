@@ -11,7 +11,7 @@ A `read` rule is checked in two places: on one resource when it's opened, and on
 
 This design materialises. Query time needs the selector grammar implemented twice, in Go and in SQL, and any difference between the two makes opening and listing disagree. It also caps what a `read` Scope can select at what SQL can match, and makes every filtered listing evaluate every row of the table, so its cost grows with the table rather than the result. Materialising keeps one evaluator, turns the listing filter into an index lookup, and answers "what does this Scope select" and "who can read this resource" without evaluating anything.
 
-Only the materializer evaluates selectors. Every check, of every action (`read`, `playbook:run`, `invoke:<plugin>:<operation>`, …), reads the stored result, and a whole-type target is matched by type alone. _Why:_ a second evaluator would disagree with the stored result while it lags.
+Only the materializer evaluates a Scope's selectors. Every check, of every action (`read`, `playbook:run`, `invoke:<plugin>:<operation>`, …), reads the stored result, and a whole-type target is matched by type alone. _Why:_ a second evaluator would disagree with the stored result while it lags.
 
 The price is lag: a change to a Scope or a resource takes effect once it's re-evaluated. `scopes.md` §7.1 bounds what a lag may do: keep the old state or refuse, never grant what neither state grants.
 
@@ -62,6 +62,14 @@ Example: Alice's binding narrows `read` on `staging-configs` (`s-111`) with a co
 
 Opening `cfg-X`, a member of both, puts `[type:config, scope:s-111, scope:s-222]` in `Resource`, and is allowed. Opening `cfg-Y`, a member of `tenant-a` only, puts `[type:config, scope:s-222]`, and is refused.
 
+## Permissions
+
+Permissions are kept working only where that costs Role rules nothing (`permissions.md`).
+
+- **Naming Scopes** (`object.scopes`): checked through the Scopes' membership, like a rule, on single resources and on listings.
+- **Inline selectors:** not materialised. A single-resource check evaluates them, and a listing grants no rows through them. _Why:_ materialising them needs a second kind of Scope to build and store, for a feature on its way out.
+- **Deny on `read`:** not enforced on listings. A subject it applies to is refused the listing of every type it covers. _Why:_ Role rules can't deny `read` (`roles.md` §2), so the claim has no deny, and an unenforced deny must refuse rather than allow (`permissions.md`).
+
 ## Other choices
 
 - **A `scope_ids` array column on each resource table.** Faster to read, but a Scope edit rewrites rows of the busiest tables while scrapers write to them, and there's no room for a second generation.
@@ -75,7 +83,6 @@ Opening `cfg-X`, a member of both, puts `[type:config, scope:s-111, scope:s-222]
 ## Open questions
 
 - Dense grants: is `id IN (members)` or a per-row `EXISTS` faster? Measure.
-- How Permissions' inline selectors are enforced on listings.
 - Drain interval and batch size: measure at the largest tenant.
 - Casbin evaluates every policy on every check, about 1–3 µs each. Measure at the largest tenant's number of bindings.
 - Startup build time with every Scope unbuilt: measure at the largest tenant.
