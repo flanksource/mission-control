@@ -74,7 +74,7 @@ Permissions are kept working only where that costs Role rules nothing (`permissi
 
 - **Naming Scopes** (`object.scopes`): checked through the Scopes' membership, like a rule, on single resources and on listings.
 - **Inline selectors:** not materialised. A single-resource check evaluates them, and a listing grants no rows through them. _Why:_ materialising them needs a second kind of Scope to build and store, for a feature on its way out.
-- **Deny on `read`:** not enforced on listings. A subject it applies to is refused the listing of every type it covers. _Why:_ Role rules can't deny `read` (`roles.md` §2), so the claim has no deny, and an unenforced deny must refuse rather than allow (`permissions.md`).
+- **Deny on `read`:** not enforced row by row. A subject it applies to lists no rows of any type it covers: an empty result, not `403`. _Why:_ Role rules can't deny `read` (`roles.md` §2), so the claim has no deny, and a deny that can't be enforced must refuse rather than allow (`permissions.md`).
 
 ## Not covered
 
@@ -96,3 +96,41 @@ Permissions are kept working only where that costs Role rules nothing (`permissi
 - Drain interval and batch size: measure at the largest tenant.
 - Casbin evaluates every policy on every check, about 1–3 µs each. Measure at the largest tenant's number of bindings.
 - Startup build time with every Scope unbuilt: measure at the largest tenant.
+
+## FAQ
+
+**Which child tables does row-level security filter, and how?**
+The same tables as today, with the same rules: `config_changes`, `config_analysis`, `config_costs`, `config_cost_compact` and `config_component_relationships` show a row when its config is readable; `config_relationships` when both of its configs are; `playbook_runs` when its playbook is, and its config and check when it has them; `checks` when its canary is, or through its own membership. Each of these tests its parent with `EXISTS` on the parent's table, which applies the parent's policy, so only the parents' policies change. `views` and `view_panels` keep today's policies (Not covered).
+
+**Does deleting a resource remove its membership?**
+Soft deletion doesn't. `deleted_at` is state, not identity or ownership (`scopes.md` §4.3), so setting it isn't queued, and audit and history listings keep showing a deleted resource to whoever could read it. A resource whose row is deleted outright is queued like any change, and the worker, finding no row, removes its membership.
+
+**What does a deny Permission on `read` do to a listing?**
+It empties it: the claim grants no rows of the types the deny covers, so every path that applies the claim enforces it the same way, through PostgREST and through Go alike. It's never `403` (see Permissions).
+
+**Do guests who rely on Permissions with inline selectors lose their listings?**
+Yes, and that's accepted (`permissions.md`). Their single-resource checks keep working. It's called out in the release notes. Permissions get no new status condition, since they get no new features.
+
+**What happens to a stored Scope that uses `!=`, `in`, `notin` or a bare key?**
+It's `Ready=False` with a reason naming the operator, selects nothing, and the rules that use it stop granting until it's rewritten (`scopes.md` §7). Nothing converts it. _Why:_ an exclusion has no equivalent, rewriting `in` into several targets would change an object its owner manages, e.g. through GitOps, which would revert it, and an authorization object fails closed.
+
+**Does the `X-Flanksource-Scope` header keep working?**
+Yes, but it names Scopes instead of carrying selectors. Each Scope it names is added to every grant of the request's claim, so it can only narrow; for a subject whose listings aren't filtered, its Scopes are the claim's only grant. _Why:_ the claim names Scopes only, and a header of selectors would need the per-row evaluator this design removes.
+
+**What if Mission Control runs more than one replica?**
+It doesn't: Mission Control runs as a single replica (`AGENTS.md`). The worker, builds and switches run in that one process, and the per-type advisory lock only orders them within it.
+
+**How is a Scope rebuilt when its `agent` name resolves to a different id?**
+A periodic job re-validates every Scope (`scopes.md` §7), and registering or deleting an agent triggers it too. A Scope whose `agent` resolves to a different id has changed, and gets a new generation (`scopes.md` §4.3). An invalid Scope takes effect "immediately" (`scopes.md` §7.1) from when re-validation marks it invalid.
+
+**When are a retired generation's rows deleted?**
+Right after the switch commits, in batches. _Why:_ claims and policies never name a generation, and a statement already running keeps its snapshot, so nothing reads them once the switch is visible.
+
+**Where is `Membership` built, given `Fits` depends on the check?**
+Memberships are read once per operation, and `Membership`, `Fits` included, is built from that snapshot for each check, since the primary resource changes between checks: in "run playbook P on config X", P is the primary of `playbook:run` and X of the `read` that follows. Approving a run later is an operation of its own, with its own snapshot.
+
+**How do tests avoid waiting for the worker?**
+A test hook runs the worker until the queue is empty. Tests never sleep through the drain interval.
+
+**Where does the work land?**
+In duty first: the tables, triggers, the Scope-to-SQL compiler, the row-level security policies, the claim, and `Membership` on the request. Then in Mission Control: the worker and builds, compiling conditions, building the claim, and the per-operation snapshot. `matchRule` goes; the Go selector evaluator stays only for Permissions' inline selectors.
