@@ -305,6 +305,8 @@ Membership MAY be evaluated when a Scope or a resource changes, rather than on e
 
 A delay MUST only ever refuse: it never grants what neither the old nor the new state grants. E.g. a Playbook applied and run straight away may be refused until it's in its Scopes.
 
+### 7.2 Operations with several checks
+
 An operation that makes several checks (`roles.md`, Section 4.3) MUST make all of them against the membership of one moment, for every resource the operation involves. It MUST NOT see a Scope's previous membership in one check and its new membership in another.
 
 **Why.** Each check alone sees a real state, but two checks on either side of a change can together allow what neither state allows. E.g. a subject reads configs through Scope S, may run playbook P on any config, and is denied running P on configs in S. S is changed to drop config C. Before, C is readable and running P on it is denied; after, C isn't readable. If the `read` check sees S before the change and the `playbook:run` check sees it after, both pass, and P runs on C.
