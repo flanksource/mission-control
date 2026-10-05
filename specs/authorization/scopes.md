@@ -328,3 +328,20 @@ A grant through a Scope whose membership is still being built is still a grant. 
 An operation that makes several checks (`roles.md`, Section 4.3) MUST make all of them against the membership of one moment, for every resource the operation involves. It MUST NOT see a Scope's previous membership in one check and its new membership in another.
 
 **Why.** Each check alone sees a real state, but two checks on either side of a change can together allow what neither state allows. E.g. a subject reads configs through Scope S, may run playbook P on any config, and is denied running P on configs in S. S is changed to drop config C. Before, C is readable and running P on it is denied; after, C isn't readable. If the `read` check sees S before the change and the `playbook:run` check sees it after, both pass, and P runs on C.
+
+## 8. Operations
+
+A Scope never references another Scope, so two Scopes are only ever combined by an object that references them both.
+
+### 8.1 Within a Scope
+
+| Operation    | How                      | Example                                                             |
+| ------------ | ------------------------ | ------------------------------------------------------------------- |
+| Intersection | Conditions in one target | `tagSelector: team=payments` and `namespace: staging` in one target |
+| Union        | Separate targets         | One target for `namespace: staging`, another for `development`      |
+
+A Scope can't intersect two targets, exclude resources, or list names (Sections 5.1, 5.2). Targets of different types never interact.
+
+### 8.2 Across Scopes
+
+Two Scopes are combined in one place only: a RoleBinding constraint, which narrows a rule's Scope to the resources in both (`rolebindings.md`, Section 3). Combining grants (allow rules adding up, deny rules refusing) is specified in `roles.md`, Section 5.
