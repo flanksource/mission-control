@@ -11,7 +11,7 @@ A `read` rule is checked in two places: on one resource when it's opened, and on
 
 This design materialises. Query time needs the selector grammar implemented twice, in Go and in SQL, and any difference between the two makes opening and listing disagree. It also caps what a `read` Scope can select at what SQL can match, and makes every filtered listing evaluate every row of the table, so its cost grows with the table rather than the result. Materialising keeps one evaluator, turns the listing filter into an index lookup, and answers "what does this Scope select" and "who can read this resource" without evaluating anything.
 
-Only the materializer evaluates a Scope's selectors. Every check, of every action (`read`, `playbook:run`, `invoke:<plugin>:<operation>`, …), reads the stored result, and a whole-type target is matched by type alone. _Why:_ a second evaluator would disagree with the stored result while it lags.
+Only the materializer evaluates a Scope's selectors, Views aside (see Not covered). Every check, of every action (`read`, `playbook:run`, `invoke:<plugin>:<operation>`, …), reads the stored result, and a whole-type target is matched by type alone. _Why:_ a second evaluator would disagree with the stored result while it lags.
 
 The price is lag: a change to a Scope or a resource takes effect once it's re-evaluated. `scopes.md` §7.1 bounds what a lag may do: keep the old state or refuse, never grant what neither state grants.
 
@@ -74,6 +74,10 @@ Permissions are kept working only where that costs Role rules nothing (`permissi
 - **Naming Scopes** (`object.scopes`): checked through the Scopes' membership, like a rule, on single resources and on listings.
 - **Inline selectors:** not materialised. A single-resource check evaluates them, and a listing grants no rows through them. _Why:_ materialising them needs a second kind of Scope to build and store, for a feature on its way out.
 - **Deny on `read`:** not enforced on listings. A subject it applies to is refused the listing of every type it covers. _Why:_ Role rules can't deny `read` (`roles.md` §2), so the claim has no deny, and an unenforced deny must refuse rather than allow (`permissions.md`).
+
+## Not covered
+
+- **Views.** No rule can select Views, and Roles grant no rows of the tables Views generate (`overview.md`, "Not covered yet"). Views keep computing which Scopes each of their rows matches, into their `grants` column, as they do today, and don't read `scope_members`. _Why:_ Views are outside Roles and RoleBindings for now; moving them onto stored membership waits until they're brought in.
 
 ## Other choices
 
