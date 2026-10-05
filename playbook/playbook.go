@@ -29,6 +29,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/runner"
+	mcRBAC "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/vars"
 )
 
@@ -193,7 +194,7 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 
 	if opts.CheckPermissions {
 		// Must have read access on the target, if any (required to prevent guests from accessing unauthorized resources)
-		if templateEnv.SelectableResource() != nil && !rbac.HasPermission(ctx, ctx.Subject(), templateEnv.ABACAttributes(), policy.ActionRead) {
+		if templateEnv.SelectableResource() != nil && !mcRBAC.CanRead(ctx, ctx.Subject(), templateEnv.ABACAttributes()) {
 			return nil, ctx.Oops().
 				Code(dutyAPI.EFORBIDDEN).
 				With("permission", policy.ActionRead, "objects", templateEnv.ABACAttributes()).

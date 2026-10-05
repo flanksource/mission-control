@@ -137,7 +137,7 @@ func HandleGetPlaybookParams(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
-	if env.SelectableResource() != nil && !dutyRBAC.HasPermission(ctx, ctx.Subject(), env.ABACAttributes(), policy.ActionRead) {
+	if env.SelectableResource() != nil && !rbac.CanRead(ctx, ctx.Subject(), env.ABACAttributes()) {
 		return dutyAPI.WriteError(c, ctx.Oops().
 			Code(dutyAPI.EFORBIDDEN).
 			With("permission", policy.ActionRead, "objects", env.ABACAttributes()).
