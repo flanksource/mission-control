@@ -300,10 +300,13 @@ Membership MAY be evaluated when a Scope or a resource changes, rather than on e
 | A Scope's targets change              | When the new membership is complete | Exactly the previous membership, never a mix                    |
 | A Scope is created                    | When its membership is complete     | Selects nothing                                                 |
 | A Scope becomes invalid or is deleted | Immediately                         |                                                                 |
-| A resource is created, changed or deleted | When it's re-evaluated          | In no Scope, except through a whole-type target                 |
+| A resource is created                 | When it's evaluated                 | In no Scope, except through a whole-type target                 |
+| A resource is changed or deleted      | When it's re-evaluated              | Exactly its previous membership, never a mix                    |
 | A Role or RoleBinding changes         | Immediately                         |                                                                 |
 
-A delay MUST only ever refuse: it never grants what neither the old nor the new state grants. E.g. a Playbook applied and run straight away may be refused until it's in its Scopes.
+A delay MUST NOT grant what neither the old nor the new state grants. E.g. a Playbook applied and run straight away may be refused until it's in its Scopes.
+
+**Why previous membership.** A changed resource's previous membership is its old state, so keeping it grants nothing neither state grants, and access to the resource doesn't drop out each time it changes. Switching it all at once matters: a resource moving from Scope A to Scope B is never in both, before or after, but would be for a moment if it joined B before leaving A, and a grant that needs both would allow it.
 
 ### 7.2 Operations with several checks
 

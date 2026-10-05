@@ -13,7 +13,7 @@ This design materialises. Query time needs the selector grammar implemented twic
 
 Only the materializer evaluates selectors. Every check, of every action (`read`, `playbook:run`, `invoke:<plugin>:<operation>`, …), reads the stored result, and a whole-type target is matched by type alone. _Why:_ a second evaluator would disagree with the stored result while it lags.
 
-The price is lag: a change to a Scope or a resource takes effect once it's re-evaluated. `scopes.md` §7.1 bounds what a lag may do: it may refuse, never grant.
+The price is lag: a change to a Scope or a resource takes effect once it's re-evaluated. `scopes.md` §7.1 bounds what a lag may do: keep the old state or refuse, never grant what neither state grants.
 
 ## Storage
 
@@ -26,7 +26,7 @@ scope_pending     (resource_type, resource_id, seq)        -- filled by triggers
 ## Keeping it current
 
 - **Scope edited:** a new generation is built beside the active one, then switched in atomically. Invalid or deleted: every generation is retired at once. _Why:_ an edit never grants a mix of old and new, and revocation doesn't wait for a build.
-- **Resource changed:** a trigger queues it, and a worker re-evaluates it every 5 s. Until then it's in no Scope, for every check. _Why:_ a lag must refuse, never grant (`scopes.md` §7.1).
+- **Resource changed:** a trigger queues it when a field a Scope can select changes (`scopes.md` §5.1), and a worker re-evaluates it every 5 s, replacing all its rows in one transaction. Until then it keeps its previous membership; a new resource has none. _Why:_ the previous membership is the old state, which a lag may keep (`scopes.md` §7.1), so a change costs the scraper's write nothing but the queue entry. Other fields can't change membership (`scopes.md` §4.3), so queueing them is wasted work.
 - **Ordering:** the build, the worker and the switch take a per-type advisory lock. _Why:_ they read and write in separate transactions, and a stale read must not overwrite a newer decision.
 - **Whole-type targets** aren't stored. They grant `all`, and drop out of a constrained grant. _Why:_ every resource is a member, so storing them adds rows and no information.
 - **Startup:** every valid Scope without an active generation is built before Mission Control accepts requests. _Why:_ a grant through a Scope with no active generation is refused, so serving earlier would refuse grants that are in effect.
