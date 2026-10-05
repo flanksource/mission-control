@@ -175,7 +175,7 @@ A rule with `action: read` is checked in two places:
 1. **On one resource**, e.g. opening a config.
 2. **On listings**, e.g. listing configs through the database API, where the rows are filtered to the ones the subject may read.
 
-Both MUST allow the same resources, including while a change to a Scope or a resource is taking effect (`scopes.md`, Section 7.1): a resource a subject can open appears in their listings, and a resource in their listings can be opened. How Mission Control keeps the two in step is the design's business (`design/materialised-membership.md`).
+Both MUST allow the same resources at every moment (`scopes.md`, Section 7.1): a resource a subject can open appears in their listings, and a resource in their listings can be opened. How Mission Control keeps the two in step is the design's business (`design/materialised-membership.md`).
 
 A `read` rule accepts any Scope whose membership is decided by the resource alone (`scopes.md`, Section 4.3), which every Scope is, with one exception: connections aren't filtered by row, so a `read` rule's Scope MUST select connections with a whole-type target only.
 

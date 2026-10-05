@@ -2,6 +2,17 @@
 
 Implements `scopes.md` §4.3 and §7.1, `roles.md` §3.1 and §4.3.
 
+> [!WARNING]
+> **This is not the most performant design.** Membership is written in the same transaction that saves a Scope or a resource. That's the simplest thing to build and run: no jobs, queues, retries or recovery after a restart. It's chosen on the assumption that **Scopes are created and changed rarely**.
+>
+> Measured with 1M configs and 200 Scope targets, each config in about 6–7 Scopes:
+>
+> - Saving a new config takes about **70 µs** longer. Health and status updates cost nothing.
+> - Saving a Scope that selects 500k configs takes **5.4 s**, and **7.3 s** when its targets change. Resources of every type wait to be saved meanwhile.
+> - Membership takes about 190 bytes a row: 400 MB for these 1M configs.
+>
+> If Scopes come to be saved often, or broad Scopes make saving them too slow, move Scope saves to an asynchronous job (Other choices).
+
 ## Background
 
 A `read` rule is checked in two places: on one resource when it's opened, and on listings, where row-level security filters the rows (`roles.md` §3.1). Both must allow the same resources. There are two ways to decide whether a resource is in a Scope:
@@ -27,9 +38,9 @@ scope_members (scope_id, resource_type, resource_id)   -- no resource_id: every 
 
 ## Keeping it current
 
-- **One predicate:** each resource type has one SQL predicate deciding whether a resource matches a target row. It's used both ways: a written resource against every target of its type, and a Scope's targets against every resource. _Why:_ the two can't disagree, and there's no compiler to keep in step with the Scope language beyond writing targets as rows.
+- **One predicate:** each resource type has one SQL predicate deciding whether a resource matches a target row. It's used both ways: a written resource against every target of its type, and a Scope's targets against every resource. A Scope's rebuild runs it with each target's values as constants, so the tag and label indexes apply. The trigger first finds the targets sharing one `key=value` or namespace with a resource, through an index on `scope_targets`, and runs the predicate on those only. _Why:_ the two can't disagree, and there's no compiler to keep in step with the Scope language beyond writing targets as rows. Measured, constants took a 20k-config rebuild from 3.7 s to 0.2 s, and the keyed lookup made matching negligible next to writing the rows.
 - **Resource written:** in the writing transaction, a database trigger replaces the resource's membership rows with the targets it matches. Inserts are matched once per statement, not once per row. Updates are matched only when a field a Scope can select changes (`scopes.md` §5.1), decided before any function runs. A row deleted outright loses its membership; setting `deleted_at` changes nothing. _Why:_ membership then commits with the write. Resources are also written by other processes, such as config-db and canary-checker, so only a trigger sees every write. Health and status change constantly and can't change membership (`scopes.md` §4.3), so they cost nothing.
-- **Scope saved:** created, its targets changed, or its `agent` resolving to a different id, from a CRD or through the UI alike. Saving it replaces the Scope's targets and members in the same transaction, and the save returns once that commits. If the rebuild fails, the save fails and rolls back: the old Scope and its membership stay in force, a CRD's reconcile retries, and the UI gets the error. `Ready` only says whether the Scope is valid; no status reports a rebuild. _Why:_ Postgres shows readers the old rows until the commit and the new ones after, so membership switches at once with no generations to track (`scopes.md` §7.1), and a new Scope has no rows until then, so it selects nothing. `Ready=False` during a rebuild would stop every Role that references the Scope from applying, deny rules included.
+- **Scope saved:** created or its targets changed, from a CRD or through the UI alike, or re-validated with its `agent` resolving to a different id. Saving it rewrites the Scope's targets and members in the same transaction, and the save returns once that commits. A save whose targets haven't changed rebuilds nothing, and a rebuild writes only the members that change. If the rebuild fails, the save fails and rolls back: the old Scope and its membership stay in force, a CRD's reconcile retries, and the UI gets the error. `Ready` only says whether the Scope is valid; no status reports a rebuild. _Why:_ Postgres shows readers the old rows until the commit and the new ones after, so membership switches at once with no generations to track (`scopes.md` §7.1). A reconcile saves every Scope again on restart, and rewriting a broad Scope's 500k rows each time would take 7 s per Scope. `Ready=False` during a rebuild would stop every Role that references the Scope from applying, deny rules included.
 - **Scope invalid or deleted:** its targets and members are deleted in one transaction.
 - **Lock:** every write to `scope_targets` takes one advisory lock exclusively, and the trigger takes it shared. _Why:_ a resource written during a rebuild would otherwise be matched against the old targets while the rebuild's snapshot misses it, leaving a row from neither version. One lock for all types, since a rebuild covers every type its Scope selects at once, and locks per type could deadlock against a transaction writing several types. Resource writes wait while a Scope is rebuilt, which takes seconds and only happens when a Scope is saved.
 - **Startup:** every valid Scope with neither targets nor members is built before Mission Control accepts requests. _Why:_ a grant through a Scope with no rows is refused, so serving earlier would refuse grants that are in effect.
@@ -81,7 +92,8 @@ Permissions are kept working only where that costs Role rules nothing (`permissi
 
 ## Other choices
 
-- **A worker that re-evaluates changed resources asynchronously.** Keeps matching out of scraper writes, but needs a queue, an acknowledgement protocol that doesn't lose a change made while a resource is being evaluated, and a lag during which a changed resource keeps its previous membership. Matching takes microseconds, so the worker costs more than it saves.
+- **An asynchronous job for Scope saves.** The way to go if Scopes come to be saved often or broad Scopes make saving them too slow (see the notice): a Scope's membership is built in the background, with its previous membership in force until then. Not taken now because it needs a queue, retries, recovery after restarts, a status to show a build in progress, and lag rules for every check, for Scopes that rarely change.
+- **An asynchronous job for resource writes.** Keeps matching out of scraper writes, but needs the same machinery, and a resource's own matching takes microseconds.
 - **Generations, built beside the active membership and switched in.** Needed only when a rebuild spans several transactions. In one transaction, Postgres already shows readers the old rows until the commit.
 - **Compiling each Scope to its own query.** Two code paths, one per direction, that have to agree. Target rows and one predicate serve both.
 - **Re-evaluating on every update.** Health and status writes are most writes, and never change membership.
@@ -94,8 +106,7 @@ Permissions are kept working only where that costs Role rules nothing (`permissi
 
 ## Open questions
 
-- Rebuild time at the largest tenant, since resource writes wait for it. The rebuild runs the predicate with each target's values as parameters; check that it uses the tag and label indexes.
-- The trigger's cost on the largest scrape.
+- Repeat the measurements in the notice on the largest real tenant.
 - Dense grants: is `id IN (members)` or a per-row `EXISTS` faster? Measure.
 - Casbin evaluates every policy on every check, about 1–3 µs each. Measure at the largest tenant's number of bindings.
 
@@ -126,7 +137,7 @@ Yes, but it names Scopes instead of carrying selectors. Each Scope it names is a
 It doesn't: Mission Control runs as a single replica (`AGENTS.md`). The lock is a database lock anyway, so it orders rebuilds against resource writes from every process, config-db and canary-checker included.
 
 **How is a Scope rebuilt when its `agent` name resolves to a different id?**
-A periodic job re-validates every Scope (`scopes.md` §7), and registering or deleting an agent triggers it too. A Scope whose `agent` resolves to a different id has changed, and is rebuilt (`scopes.md` §4.3). An invalid Scope takes effect "immediately" (`scopes.md` §7.1) from when re-validation marks it invalid.
+Every policy reload re-validates every Scope (`scopes.md` §7), and registering or deleting an agent triggers a reload, through the same database notifications as Scopes, Roles and RoleBindings. A Scope whose `agent` resolves to a different id has changed (`scopes.md` §4.3), and is rebuilt in that reload. There's no periodic job.
 
 **Where is `Membership` built, given `Fits` depends on the check?**
 Memberships are read once per operation, and `Membership`, `Fits` included, is built from that snapshot for each check, since the primary resource changes between checks: in "run playbook P on config X", P is the primary of `playbook:run` and X of the `read` that follows. Approving a run later is an operation of its own, with its own snapshot.
