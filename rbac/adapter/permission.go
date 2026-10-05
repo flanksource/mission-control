@@ -136,6 +136,8 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 
 // loadRoleBindings validates every Scope, Role and RoleBinding, records why each invalid one isn't in effect,
 // and loads the policies of the valid bindings. An invalid object grants nothing, deny rules included.
+// Each Scope's membership is rebuilt when it changed, e.g. because an agent it names was re-registered,
+// and cleared when it's invalid.
 func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
 	var scopes []models.Scope
 	if err := a.ctx.DB().Where("deleted_at IS NULL").Find(&scopes).Error; err != nil {
@@ -143,7 +145,12 @@ func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
 	}
 
 	for _, scope := range scopes {
-		err := ValidateStoredScope(a.ctx, a.cache, scope)
+		err := SyncScopeMembership(a.ctx, a.cache, scope)
+		if err != nil && !IsValidationError(err) {
+			// Nothing reads membership yet, so failing to store it mustn't change what the Scope grants
+			a.ctx.Logger.Errorf("failed to sync the membership of scope %s/%s: %v", scope.Namespace, scope.Name, err)
+			err = ValidateStoredScope(a.ctx, a.cache, scope)
+		}
 		if err := recordValidity(a.ctx, scope.TableName(), scope.ID, scope.Namespace, scope.Name, scope.Source, scope.Error, scope.ErrorReason, err); err != nil {
 			return err
 		}
