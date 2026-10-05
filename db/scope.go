@@ -46,7 +46,7 @@ func PersistScope(ctx context.Context, obj *v1.Scope, source string, createdBy *
 		CreatedBy:   createdBy,
 	}
 
-	resolved, validationErr := adapter.ValidateScope(ctx, nil, obj.Spec.Targets)
+	resolved, validationErr := adapter.ValidateScope(ctx, obj.Spec.Targets)
 	if scope.Error, scope.ErrorReason, err = validity(validationErr); err != nil {
 		return err
 	}

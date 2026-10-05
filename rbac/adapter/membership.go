@@ -8,7 +8,6 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac/membership"
-	gocache "github.com/patrickmn/go-cache"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
@@ -43,7 +42,7 @@ func SaveScopeMembership(ctx context.Context, scope models.Scope, resolved []v1.
 // and members are rebuilt when its targets, or the agents they resolve to, changed; an invalid or deleted one's are
 // cleared. An invalid Scope's validation error is returned once its membership is cleared (see IsValidationError).
 // A Scope saved again since it was loaded is left to that save.
-func SyncScopeMembership(ctx context.Context, cache *gocache.Cache, scope models.Scope) error {
+func SyncScopeMembership(ctx context.Context, scope models.Scope) error {
 	if scope.DeletedAt != nil {
 		return membership.Clear(ctx, scope.ID)
 	}
@@ -57,7 +56,7 @@ func SyncScopeMembership(ctx context.Context, cache *gocache.Cache, scope models
 		return validationErr
 	}
 
-	resolved, validationErr := ValidateScope(ctx, cache, targets)
+	resolved, validationErr := ValidateScope(ctx, targets)
 	if validationErr != nil && !IsValidationError(validationErr) {
 		return validationErr
 	}
@@ -81,9 +80,8 @@ func BuildScopeMemberships(ctx context.Context) error {
 		return fmt.Errorf("failed to load scopes without membership: %w", err)
 	}
 
-	cache := gocache.New(gocache.NoExpiration, gocache.NoExpiration)
 	for _, scope := range scopes {
-		if err := SyncScopeMembership(ctx, cache, scope); err != nil && !IsValidationError(err) {
+		if err := SyncScopeMembership(ctx, scope); err != nil && !IsValidationError(err) {
 			return err
 		}
 	}

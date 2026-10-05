@@ -61,7 +61,7 @@ func NewScopeSelection(id, name string, targets []v1.ScopeTarget) ScopeSelection
 // ValidateScope validates the targets of a Scope, and returns them with every agent resolved to its id.
 // Agents are resolved on every validation: a name follows the agent registered under it,
 // an id only matches that one registration.
-func ValidateScope(ctx context.Context, cache *gocache.Cache, targets []v1.ScopeTarget) ([]v1.ScopeTarget, error) {
+func ValidateScope(ctx context.Context, targets []v1.ScopeTarget) ([]v1.ScopeTarget, error) {
 	if err := ValidateScopeTargets(targets); err != nil {
 		return nil, NewValidationError("%v", err)
 	}
@@ -71,7 +71,7 @@ func ValidateScope(ctx context.Context, cache *gocache.Cache, targets []v1.Scope
 		target = *target.DeepCopy()
 		kind, selector := target.Selector()
 		if selector.Agent != "" {
-			id, err := resolveAgent(ctx, cache, selector.Agent)
+			id, err := resolveAgent(ctx, selector.Agent)
 			if err != nil {
 				return nil, withContext(err, "target %d (%s)", i, kind)
 			}
@@ -93,14 +93,7 @@ func ValidateScope(ctx context.Context, cache *gocache.Cache, targets []v1.Scope
 }
 
 // resolveAgent returns the id of the agent with the given name or id.
-func resolveAgent(ctx context.Context, cache *gocache.Cache, agent string) (string, error) {
-	cacheKey := "agent:" + agent
-	if cache != nil {
-		if cached, found := cache.Get(cacheKey); found {
-			return cached.(string), nil
-		}
-	}
-
+func resolveAgent(ctx context.Context, agent string) (string, error) {
 	query := ctx.DB().Model(&models.Agent{}).Select("id").Where("deleted_at IS NULL")
 	if uuid.Validate(agent) == nil {
 		query = query.Where("id = ?", agent)
@@ -115,11 +108,7 @@ func resolveAgent(ctx context.Context, cache *gocache.Cache, agent string) (stri
 		return "", NewInvalid(ReasonAgentNotFound, "agent %q not found", agent)
 	}
 
-	id := ids[0].String()
-	if cache != nil {
-		cache.Set(cacheKey, id, gocache.DefaultExpiration)
-	}
-	return id, nil
+	return ids[0].String(), nil
 }
 
 // maxScopeTargets is the most targets a Scope can have.

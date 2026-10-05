@@ -243,6 +243,27 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 		})
 	})
 
+	ginkgo.Context("ValidateScope", func() {
+		ginkgo.It("resolves agents on every supported target without changing the authored scope", func() {
+			agents := []models.Agent{dummy.GCPAgent, dummy.HomelabAgent, dummy.GCPAgent, dummy.HomelabAgent}
+			var targets []v1.ScopeTarget
+			for i, kind := range []string{"config", "component", "check", "canary"} {
+				var target v1.ScopeTarget
+				Expect(json.Unmarshal([]byte(fmt.Sprintf(`{"%s":{"agent":%q}}`, kind, agents[i].Name)), &target)).To(Succeed())
+				targets = append(targets, target)
+			}
+
+			resolved, err := adapter.ValidateScope(DefaultContext, targets)
+			Expect(err).ToNot(HaveOccurred())
+			for i, target := range resolved {
+				_, selector := target.Selector()
+				Expect(selector.Agent).To(Equal(agents[i].ID.String()))
+				_, original := targets[i].Selector()
+				Expect(original.Agent).To(Equal(agents[i].Name))
+			}
+		})
+	})
+
 	ginkgo.Context("DeleteStaleScope", func() {
 		ginkgo.It("should delete old scopes with same name/namespace", func() {
 			oldID := uuid.New()

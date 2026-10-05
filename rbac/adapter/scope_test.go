@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/types"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	gocache "github.com/patrickmn/go-cache"
 )
 
 var _ = ginkgo.Describe("Scope selectors", func() {
@@ -73,23 +71,4 @@ var _ = ginkgo.Describe("Scope selectors", func() {
 			Expect(selector).To(Equal(expected))
 		})
 	}
-
-	ginkgo.It("resolves agents on every supported target without changing the authored scope", func() {
-		cache := gocache.New(gocache.NoExpiration, 0)
-		var targets []v1.ScopeTarget
-		for i, kind := range []string{"config", "component", "check", "canary"} {
-			var target v1.ScopeTarget
-			Expect(json.Unmarshal([]byte(fmt.Sprintf(`{"%s":{"agent":"cluster-%d"}}`, kind, i)), &target)).To(Succeed())
-			targets = append(targets, target)
-			cache.SetDefault(fmt.Sprintf("agent:cluster-%d", i), fmt.Sprintf("a1000000-0000-0000-0000-%012d", i+1))
-		}
-		resolved, err := ValidateScope(context.Context{}, cache, targets)
-		Expect(err).ToNot(HaveOccurred())
-		for i, target := range resolved {
-			_, selector := target.Selector()
-			Expect(selector.Agent).To(Equal(fmt.Sprintf("a1000000-0000-0000-0000-%012d", i+1)))
-			_, original := targets[i].Selector()
-			Expect(original.Agent).To(Equal(fmt.Sprintf("cluster-%d", i)))
-		}
-	})
 })

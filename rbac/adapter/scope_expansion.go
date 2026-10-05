@@ -112,7 +112,7 @@ func getScope(ctx context.Context, cache *gocache.Cache, namespace, name string)
 		return nil, NewInvalid(ReasonScopeInvalid, "%s:%s/%s", ErrScopeExpansionInvalidScopeTargets, namespace, name)
 	}
 
-	resolved, err := ValidateScope(ctx, cache, targets)
+	resolved, err := ValidateScope(ctx, targets)
 	if err != nil {
 		return nil, withContext(withReason(err, ReasonScopeInvalid), "scope %s/%s is invalid", namespace, name)
 	}

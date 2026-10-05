@@ -145,11 +145,11 @@ func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
 	}
 
 	for _, scope := range scopes {
-		err := SyncScopeMembership(a.ctx, a.cache, scope)
+		err := SyncScopeMembership(a.ctx, scope)
 		if err != nil && !IsValidationError(err) {
 			// Nothing reads membership yet, so failing to store it mustn't change what the Scope grants
 			a.ctx.Logger.Errorf("failed to sync the membership of scope %s/%s: %v", scope.Namespace, scope.Name, err)
-			err = ValidateStoredScope(a.ctx, a.cache, scope)
+			err = ValidateStoredScope(a.ctx, scope)
 		}
 		if err := recordValidity(a.ctx, scope.TableName(), scope.ID, scope.Namespace, scope.Name, scope.Source, scope.Error, scope.ErrorReason, err); err != nil {
 			return err
