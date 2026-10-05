@@ -139,10 +139,10 @@ Every target is a selector over the fields its resource type has. A selector MUS
 | `id`            | Resource id                           | A lowercase UUID                                                                    |
 | `agent`         | Agent the resource belongs to         | An agent's name or id. MUST resolve to an existing agent (Section 5.4).            |
 | `types`         | Resource type, e.g. `Kubernetes::Pod` | A list of exact values; any of them matches                                         |
-| `tagSelector`   | Tags                                  | Kubernetes label selector syntax                                                    |
-| `labelSelector` | Labels                                | Kubernetes label selector syntax                                                    |
+| `tagSelector`   | Tags                                  | `key=value` pairs (see below)                                                       |
+| `labelSelector` | Labels                                | `key=value` pairs (see below)                                                       |
 
-Kubernetes label selector syntax: `key=value`, `key!=value`, `key in (a,b)`, `key notin (a,b)`, `key`, `!key`, joined by commas (AND).
+`tagSelector` and `labelSelector` take one or more `key=value` pairs joined by commas, all of which must match: `cluster=homelab,namespace=monitoring`. Every other operator of the Kubernetes label selector syntax (`==`, `!=`, `in`, `notin`, `key`, `!key`) is rejected.
 
 ### 5.2 Wildcards and patterns
 
@@ -189,6 +189,7 @@ Every form a `name` can take has to mean exactly the same set in both, or a reso
 - **A prefix or a suffix** is one comparison against the start or the end of a name. It costs the same as an exact match, and there's only one way to read it.
 - **`*` in the middle or at both ends** (`*db*`) means searching inside every name, and a pattern with several wildcards has more than one reading. Neither is needed to select resources by name, which prefixes and suffixes already do. A wider grammar would have to satisfy Section 4.3 and give each form one reading; it isn't ruled out.
 - **Lists** add nothing: targets already combine with OR (Section 4), so one target per name says the same thing without a second syntax.
+- **Tags and labels take `key=value` only.** `!=`, `notin` and `!key` are exclusions, ruled out below. `in` is a list, which one target per value already says. A bare `key` matches any value, a wildcard this language doesn't infer. What's left is an exact match, which has one reading and is one indexed lookup.
 - **Exclusions** (`!a`) make a selector match everything it doesn't name, including resources created later. A Scope grants access, so it names what's in, never what's out.
 - **Case-sensitive** matching selects what was typed and nothing wider. Resource names from cloud providers can differ only by case, and a Scope must not quietly include both.
 - **Literal `,`, `!`, `%` and `_`** keep a name that contains them selectable exactly. Only `*` has a meaning.
@@ -262,6 +263,11 @@ targets:
 targets:
   - config:
       name: "prod-*-db"
+---
+# Operator other than key=value in a tag selector
+targets:
+  - config:
+      tagSelector: "env!=prod"
 ---
 # List of names: use one target per name instead
 targets:
