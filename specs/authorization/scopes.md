@@ -304,7 +304,7 @@ An invalid Scope that's stored, because its `agent` doesn't resolve or because K
 
 ### 7.1 Membership changes
 
-Membership MAY be stored when a Scope or a resource changes, rather than evaluated on every check (Section 4.3), so a change to a Scope can lag. Every check, of every action, MUST use the same membership: a check never evaluates a selector itself while another reads the stored result.
+Membership MUST be decided when a Scope or a resource changes, never when a check is made (Section 4.3). A change to a resource takes effect when it commits. A change to a Scope takes effect when its new membership is complete, and can lag. Every check, of every action, MUST use the same membership.
 
 | Change                                    | Takes effect                        | Until then                                   |
 | ----------------------------------------- | ----------------------------------- | -------------------------------------------- |
