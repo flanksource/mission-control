@@ -294,7 +294,7 @@ targets:
 
 A Scope that's wrong on its own, i.e. any rule of Section 6 other than its `agent` resolving, is rejected (`overview.md`, "Rejected or not in effect"). A Scope whose `agent` doesn't resolve is stored `Ready=False`, since the agent may be registered later.
 
-A Scope is validated (Section 6) when it's applied, and again whenever an agent it references is deleted or registered. Re-validation MAY be delayed, e.g. run periodically, but a stored Scope MUST be re-validated; validation on apply alone isn't enough.
+A Scope is validated (Section 6) when it's saved, and again whenever an agent is registered or deleted. Validation on save alone isn't enough: an agent can be deleted or re-registered without any Scope being saved.
 
 A stored Scope that becomes invalid, because its `agent` no longer resolves (Section 5.4), is `Ready=False` with the reason and selects nothing. It becomes valid again, and selects again, as soon as its `agent` resolves, without being re-applied. Roles and RoleBindings that reference it follow it (`roles.md`, Section 6; `rolebindings.md`, Section 4).
 
@@ -304,24 +304,19 @@ An invalid Scope that's stored, because its `agent` doesn't resolve or because K
 
 ### 7.1 Membership changes
 
-Membership MAY be evaluated when a Scope or a resource changes, rather than on every check (Section 4.3), so a change can lag. Every check, of every action, MUST use the same membership: a check never evaluates a selector itself while another reads the stored result.
+Membership MUST be decided when a Scope or a resource changes, never when a check is made (Section 4.3). A change takes effect when it's saved: the Scope or the resource commits together with its membership. Until then, the previous membership holds in full, and no check sees part of a change. Every check, of every action, MUST use the same membership.
 
-| Change                                | Takes effect                        | Until then                                                      |
-| ------------------------------------- | ----------------------------------- | --------------------------------------------------------------- |
-| A Scope's targets change              | When the new membership is complete | Exactly the previous membership, never a mix                    |
-| A Scope is created                    | When its membership is complete     | Selects nothing                                                 |
-| A Scope becomes invalid or is deleted | Immediately                         |                                                                 |
-| A resource is created                 | When it's evaluated                 | In no Scope, except through a whole-type target                 |
-| A resource is changed or deleted      | When it's re-evaluated              | Exactly its previous membership, never a mix                    |
-| A Role or RoleBinding changes         | Immediately                         |                                                                 |
+| Change                                       | Takes effect                       |
+| -------------------------------------------- | ---------------------------------- |
+| A Scope is created or its targets change     | When it's saved                    |
+| A Scope's `agent` resolves to a different id | When it's re-validated (Section 7) |
+| A Scope becomes invalid or is deleted        | When it's saved or re-validated    |
+| A resource is created, changed or deleted    | When it's saved                    |
+| A Role or RoleBinding changes                | Immediately                        |
 
-A delay MUST NOT grant what neither the old nor the new state grants. E.g. a Playbook applied and run straight away may be refused until it's in its Scopes.
+**Why.** A resource's membership depends only on the Scope and the resource's own fields (Section 4.3), so the write that changes either can decide it. A resource is never selected by a Scope that no longer matches it, and a playbook or a Scope applied and used straight away is never refused for being new.
 
-A grant through a Scope whose membership is still being built is still a grant. A listing of a type it covers MUST return no rows through it, not refuse the listing: a subject whose only grant on configs names a new Scope sees an empty list until the build completes, never `403 Forbidden` (`roles.md`, Section 3.1).
-
-**Why.** The grant is in effect the moment the RoleBinding applies. Refusing the listing would look as if nothing had been granted, then start working on its own when the build finishes.
-
-**Why previous membership.** A changed resource's previous membership is its old state, so keeping it grants nothing neither state grants, and access to the resource doesn't drop out each time it changes. Switching it all at once matters: a resource moving from Scope A to Scope B is never in both, before or after, but would be for a moment if it joined B before leaving A, and a grant that needs both would allow it.
+Saving a Scope therefore takes as long as finding every resource it selects: seconds for a broad Scope on a large tenant, while resources wait to be saved (`design/materialised-membership.md`, notice at the top).
 
 ### 7.2 Operations with several checks
 
