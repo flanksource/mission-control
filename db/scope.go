@@ -87,19 +87,24 @@ func DeleteScope(ctx context.Context, id string) error {
 
 // DeleteStaleScope replaces an older Scope of the same name with the newer one.
 func DeleteStaleScope(ctx context.Context, newer *v1.Scope) error {
-	var stale []uuid.UUID
-	if err := ctx.DB().Model(&models.Scope{}).Select("id").
-		Where("name = ? AND namespace = ?", newer.Name, newer.Namespace).
-		Where("id != ?", newer.UID).
-		Where("deleted_at IS NULL").
-		Find(&stale).Error; err != nil {
-		return err
-	}
-
-	for _, id := range stale {
-		if err := DeleteScope(ctx, id.String()); err != nil {
+	err := ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
+		var stale []uuid.UUID
+		if err := txCtx.DB().Raw(`UPDATE scopes SET deleted_at = NOW()
+			WHERE name = ? AND namespace = ? AND id != ? AND deleted_at IS NULL
+			RETURNING id`, newer.Name, newer.Namespace, newer.UID).Scan(&stale).Error; err != nil {
 			return err
 		}
+
+		// At most one: a namespace and name are unique among Scopes that aren't deleted
+		for _, id := range stale {
+			if err := membership.Clear(txCtx, id); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
 	return PersistScopeFromCRD(ctx, newer)

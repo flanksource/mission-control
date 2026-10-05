@@ -289,6 +289,30 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			Expect(DefaultContext.DB().Where("id = ? AND deleted_at IS NULL", newID).First(&replacement).Error).To(Succeed())
 		})
 
+		ginkgo.It("clears the old scope's membership and builds the new one's", func() {
+			byName := func(uid uuid.UUID, name string) *v1.Scope {
+				return &v1.Scope{
+					ObjectMeta: metav1.ObjectMeta{Name: "rebuilt-scope", Namespace: "default", UID: k8sTypes.UID(uid.String())},
+					Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: name}}}}},
+				}
+			}
+			members := func(id uuid.UUID) []uuid.UUID {
+				var ids []uuid.UUID
+				Expect(DefaultContext.DB().Raw("SELECT resource_id FROM scope_members WHERE scope_id = ?", id).Scan(&ids).Error).To(Succeed())
+				return ids
+			}
+
+			oldID, newID := uuid.New(), uuid.New()
+			Expect(PersistScopeFromCRD(DefaultContext, byName(oldID, *dummy.EKSCluster.Name))).To(Succeed())
+			Expect(members(oldID)).To(ContainElement(dummy.EKSCluster.ID))
+
+			Expect(DeleteStaleScope(DefaultContext, byName(newID, *dummy.KubernetesCluster.Name))).To(Succeed())
+			ginkgo.DeferCleanup(func() { Expect(DeleteScope(DefaultContext, newID.String())).To(Succeed()) })
+
+			Expect(members(oldID)).To(BeEmpty())
+			Expect(members(newID)).To(ContainElement(dummy.KubernetesCluster.ID))
+		})
+
 		ginkgo.It("replaces the old scope even when the new one is invalid", func() {
 			oldID := uuid.New()
 			targetsJSON, _ := json.Marshal([]v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "old"}}}})
