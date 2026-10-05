@@ -154,16 +154,15 @@ Every target is a selector over the fields its resource type has. A selector MUS
 | ------------- | -------------------------------- | -------------------------------------------------------------- |
 | `*`           | Any name, including an empty one | `name: "*"`                                                    |
 | `prefix*`     | Names that start with `prefix`   | `name: "prod-*"` matches `prod-db` and `prod-`, not `prod`     |
-| `*suffix`     | Names that end with `suffix`     | `name: "*-db"` matches `prod-db` and `-db`, not `db`           |
 | anything else | Exactly that name                | `name: "prod-db"`                                              |
 
-A pattern has exactly one `*`, at the start or at the end, and at least one other character. Everything else is rejected:
+A pattern has exactly one `*`, at the end, and at least one character before it. Everything else is rejected:
 
-- `*` in the middle (`prod-*-db`), at both ends (`*db*`), or more than once (`prod-*-*`).
+- `*` at the start (`*-db`), in the middle (`prod-*-db`), at both ends (`*db*`), or more than once (`prod-*-*`).
 - Lists (`a,b`) and exclusions (`!a`). To select several names, use one target per name; targets combine with OR (Section 4).
 - `*` in `namespace` or `id`.
 
-Matching is case-sensitive: `prod-*` doesn't match `Prod-db`. Every character other than a leading or trailing `*` is literal, including `,`, `!`, `%` and `_`. A resource whose name contains `*` can only be selected by `id`.
+Matching is case-sensitive: `prod-*` doesn't match `Prod-db`. Every character other than a trailing `*` is literal, including `,`, `!`, `%` and `_`. A resource whose name contains `*` can only be selected by `id`.
 
 - `name: "*"` selects every resource of the target's type, not of every type.
 - `types` values are exact: `*` and `!` are rejected.
@@ -186,8 +185,9 @@ A Scope is used in two different ways:
 
 Every form a `name` can take has to mean exactly the same set in both, or a resource's membership would depend on which of the two last evaluated it. And each form has to have one reading. Those two constraints rule the language down to what's above:
 
-- **A prefix or a suffix** is one comparison against the start or the end of a name. It costs the same as an exact match, and there's only one way to read it.
-- **`*` in the middle or at both ends** (`*db*`) means searching inside every name, and a pattern with several wildcards has more than one reading. Neither is needed to select resources by name, which prefixes and suffixes already do. A wider grammar would have to satisfy Section 4.3 and give each form one reading; it isn't ruled out.
+- **A prefix** is one comparison against the start of a name. It has one reading, and an index on the name can serve it.
+- **A suffix** (`*-db`) is one comparison too, but only an index on the reversed name can serve it, so building a Scope would scan every name of its type. Select by a tag instead, e.g. `tagSelector: role=db`.
+- **`*` in the middle or at both ends** (`*db*`) means searching inside every name, and a pattern with several wildcards has more than one reading. Neither is needed to select resources by name, which prefixes already do. A wider grammar would have to satisfy Section 4.3 and give each form one reading; it isn't ruled out.
 - **Lists** add nothing: targets already combine with OR (Section 4), so one target per name says the same thing without a second syntax.
 - **Tags and labels take `key=value` only.** `!=`, `notin` and `!key` are exclusions, ruled out below. `in` is a list, which one target per value already says. A bare `key` matches any value, a wildcard this language doesn't infer. What's left is an exact match, which has one reading and is one indexed lookup.
 - **Exclusions** (`!a`) make a selector match everything it doesn't name, including resources created later. A Scope grants access, so it names what's in, never what's out.
@@ -258,6 +258,11 @@ targets:
 targets:
   - config:
       namespace: "*"
+---
+# Wildcard at the start of a name: suffixes aren't supported
+targets:
+  - config:
+      name: "*-db"
 ---
 # Wildcard in the middle of a name
 targets:
