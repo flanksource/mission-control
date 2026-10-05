@@ -306,6 +306,10 @@ Membership MAY be evaluated when a Scope or a resource changes, rather than on e
 
 A delay MUST NOT grant what neither the old nor the new state grants. E.g. a Playbook applied and run straight away may be refused until it's in its Scopes.
 
+A grant through a Scope whose membership is still being built is still a grant. A listing of a type it covers MUST return no rows through it, not refuse the listing: a subject whose only grant on configs names a new Scope sees an empty list until the build completes, never `403 Forbidden` (`roles.md`, Section 3.1).
+
+**Why.** The grant is in effect the moment the RoleBinding applies. Refusing the listing would look as if nothing had been granted, then start working on its own when the build finishes.
+
 **Why previous membership.** A changed resource's previous membership is its old state, so keeping it grants nothing neither state grants, and access to the resource doesn't drop out each time it changes. Switching it all at once matters: a resource moving from Scope A to Scope B is never in both, before or after, but would be for a moment if it joined B before leaving A, and a grant that needs both would allow it.
 
 ### 7.2 Operations with several checks
