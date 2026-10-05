@@ -125,5 +125,5 @@ Where the specs say an object "is rejected", this is what they mean.
 ## Not covered yet
 
 - **Views.** No rule can select Views, and Roles grant no rows of the tables Views generate.
-- **Permissions and PermissionGroups** are the older way of granting access. They keep working as before, and can reference Scopes.
+- **Permissions and PermissionGroups** are deprecated, and not specified here (`permissions.md`).
 - **Delegated administration.** Letting a team manage the Roles and RoleBindings of its own namespace isn't supported. It needs an escalation check, so that a binding can't grant more than its author holds.

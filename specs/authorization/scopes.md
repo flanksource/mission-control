@@ -16,7 +16,7 @@ Other objects reference a Scope by name to say which resources they apply to:
 - **RoleBinding constraints**, to narrow the rules of a Role.
 - **Permissions**, through `object.scopes` (legacy).
 
-Each of those decides which resource types and selector fields it accepts from a Scope, and rejects a reference to a Scope it can't use. Those rules are specified with the objects themselves, in `roles.md` and `rolebindings.md`. This document only covers the Scope.
+Each of those decides which resource types, and which forms of target (e.g. whole-type only), it accepts from a Scope, and rejects a reference to a Scope it can't use. Those rules are specified with the objects themselves, in `roles.md` and `rolebindings.md`. This document only covers the Scope.
 
 Because other objects grant access through it, editing a Scope changes what they grant. Scope administration is permission administration.
 
@@ -116,11 +116,15 @@ A Scope whose `agent` no longer exists isn't an empty set. It's invalid (Section
 
 A Scope MUST select resources by what they are or who owns them, never by their current state.
 
-Membership MUST be decidable from the Scope and the resource's own identity and ownership fields, and MUST NOT change unless the Scope or those fields change.
+Membership MUST be decidable from the Scope and the resource's own identity and ownership fields, and MUST NOT change unless the Scope or those fields change. A selector MUST NOT depend on another resource, e.g. a parent, a related resource or the members of another Scope, nor on anything outside the resource, e.g. the current time.
 
 **Why:** Health and status change without anyone deciding to change access. State-based grants make access disappear when a fix succeeds, flicker when a resource flaps, and grow during an outage. They can also change a playbook permission between run and approval, and prevent a stable access review.
 
 The grant defines the resources a person is responsible for. Listing filters narrow that set to, for example, unhealthy resources. A playbook's own configs filter decides whether it should run on a resource; a Scope decides whether the person may run it. An open-ended field selector would bypass this rule and silently expose new fields as the resource record grows.
+
+An `agent` written by name is resolved when the Scope is validated (Section 5.4). The id it resolves to is part of the Scope, not of the resource: when it resolves differently, the Scope has changed (Section 7).
+
+**Why.** Mission Control may evaluate a Scope once, when a resource or the Scope changes, and store which Scopes each resource belongs to, rather than evaluating it on every read (`design/materialised-membership.md`). That's only correct if nothing but a change to the resource or to the Scope can change the resource's membership. Every field in Section 5.1 meets this. A selector that wouldn't is rejected when it's proposed for the language, never evaluated differently.
 
 ## 5. Selector language
 
@@ -135,10 +139,10 @@ Every target is a selector over the fields its resource type has. A selector MUS
 | `id`            | Resource id                           | A lowercase UUID                                                                    |
 | `agent`         | Agent the resource belongs to         | An agent's name or id. MUST resolve to an existing agent (Section 5.4).            |
 | `types`         | Resource type, e.g. `Kubernetes::Pod` | A list of exact values; any of them matches                                         |
-| `tagSelector`   | Tags                                  | Kubernetes label selector syntax                                                    |
-| `labelSelector` | Labels                                | Kubernetes label selector syntax                                                    |
+| `tagSelector`   | Tags                                  | `key=value` pairs (see below)                                                       |
+| `labelSelector` | Labels                                | `key=value` pairs (see below)                                                       |
 
-Kubernetes label selector syntax: `key=value`, `key!=value`, `key in (a,b)`, `key notin (a,b)`, `key`, `!key`, joined by commas (AND).
+`tagSelector` and `labelSelector` take one or more `key=value` pairs joined by commas, all of which must match: `cluster=homelab,namespace=monitoring`. Every other operator of the Kubernetes label selector syntax (`==`, `!=`, `in`, `notin`, `key`, `!key`) is rejected.
 
 ### 5.2 Wildcards and patterns
 
@@ -150,16 +154,15 @@ Kubernetes label selector syntax: `key=value`, `key!=value`, `key in (a,b)`, `ke
 | ------------- | -------------------------------- | -------------------------------------------------------------- |
 | `*`           | Any name, including an empty one | `name: "*"`                                                    |
 | `prefix*`     | Names that start with `prefix`   | `name: "prod-*"` matches `prod-db` and `prod-`, not `prod`     |
-| `*suffix`     | Names that end with `suffix`     | `name: "*-db"` matches `prod-db` and `-db`, not `db`           |
 | anything else | Exactly that name                | `name: "prod-db"`                                              |
 
-A pattern has exactly one `*`, at the start or at the end, and at least one other character. Everything else is rejected:
+A pattern has exactly one `*`, at the end, and at least one character before it. Everything else is rejected:
 
-- `*` in the middle (`prod-*-db`), at both ends (`*db*`), or more than once (`prod-*-*`).
+- `*` at the start (`*-db`), in the middle (`prod-*-db`), at both ends (`*db*`), or more than once (`prod-*-*`).
 - Lists (`a,b`) and exclusions (`!a`). To select several names, use one target per name; targets combine with OR (Section 4).
 - `*` in `namespace` or `id`.
 
-Matching is case-sensitive: `prod-*` doesn't match `Prod-db`. Every character other than a leading or trailing `*` is literal, including `,`, `!`, `%` and `_`. A resource whose name contains `*` can only be selected by `id`.
+Matching is case-sensitive: `prod-*` doesn't match `Prod-db`. Every character other than a trailing `*` is literal, including `,`, `!`, `%` and `_`. A resource whose name contains `*` can only be selected by `id`.
 
 - `name: "*"` selects every resource of the target's type, not of every type.
 - `types` values are exact: `*` and `!` are rejected.
@@ -175,17 +178,18 @@ targets:
 
 #### Why these patterns and no others
 
-A Scope is matched in three different places, by three different matchers:
+A Scope is used in two different ways:
 
-1. When one operation is checked against one resource, e.g. opening a config or running a playbook on it. The resource is in hand, and the selector is evaluated against it.
-2. When Mission Control searches for the resources a Scope selects, e.g. to compute what a view or a playbook may show. The selector becomes a database query.
-3. When a listing is filtered row by row (`roles.md`, Section 3.1). The selector becomes a row filter that runs against every row of the table.
+1. To decide whether one resource belongs to it, when that resource changes (Section 4.3).
+2. To find every resource it selects, when the Scope changes. The selector becomes a database query.
 
-Every form a `name` can take has to mean exactly the same set in all three, or opening a resource and listing it would disagree. And it has to be cheap in the third, which runs once per row. Those two constraints rule the language down to what's above:
+Every form a `name` can take has to mean exactly the same set in both, or a resource's membership would depend on which of the two last evaluated it. And each form has to have one reading. Those two constraints rule the language down to what's above:
 
-- **A prefix or a suffix** is one comparison against the start or the end of a name. It costs the same as an exact match, and there's only one way to read it.
-- **`*` in the middle or at both ends** (`*db*`) means searching inside every name, and a pattern with several wildcards has more than one reading. Neither is worth the cost for selecting resources by name, which is what prefixes and suffixes already do.
+- **A prefix** is one comparison against the start of a name. It has one reading, and an index on the name can serve it.
+- **A suffix** (`*-db`) is one comparison too, but only an index on the reversed name can serve it, so building a Scope would scan every name of its type. Select by a tag instead, e.g. `tagSelector: role=db`.
+- **`*` in the middle or at both ends** (`*db*`) means searching inside every name, and a pattern with several wildcards has more than one reading. Neither is needed to select resources by name, which prefixes already do. A wider grammar would have to satisfy Section 4.3 and give each form one reading; it isn't ruled out.
 - **Lists** add nothing: targets already combine with OR (Section 4), so one target per name says the same thing without a second syntax.
+- **Tags and labels take `key=value` only.** `!=`, `notin` and `!key` are exclusions, ruled out below. `in` is a list, which one target per value already says. A bare `key` matches any value, a wildcard this language doesn't infer. What's left is an exact match, which has one reading and is one indexed lookup.
 - **Exclusions** (`!a`) make a selector match everything it doesn't name, including resources created later. A Scope grants access, so it names what's in, never what's out.
 - **Case-sensitive** matching selects what was typed and nothing wider. Resource names from cloud providers can differ only by case, and a Scope must not quietly include both.
 - **Literal `,`, `!`, `%` and `_`** keep a name that contains them selectable exactly. Only `*` has a meaning.
@@ -255,10 +259,20 @@ targets:
   - config:
       namespace: "*"
 ---
+# Wildcard at the start of a name: suffixes aren't supported
+targets:
+  - config:
+      name: "*-db"
+---
 # Wildcard in the middle of a name
 targets:
   - config:
       name: "prod-*-db"
+---
+# Operator other than key=value in a tag selector
+targets:
+  - config:
+      tagSelector: "env!=prod"
 ---
 # List of names: use one target per name instead
 targets:
@@ -287,3 +301,30 @@ A stored Scope that becomes invalid, because its `agent` no longer resolves (Sec
 A Scope is never validated against the Roles and RoleBindings that reference it: a change that makes it unusable to a rule or constraint goes through, and the referencing object stops granting, in whole or in part, until it's updated (`roles.md`, Section 6; `rolebindings.md`, Section 4). Deleting a Scope has the same effect as changing it into one nothing accepts.
 
 An invalid Scope that's stored, because its `agent` doesn't resolve or because Kubernetes couldn't reject it (`overview.md`, "Rejected or not in effect"), is `Ready=False` with the reason and selects nothing. There is no previous version to fall back to; the Scope is whatever was last written.
+
+### 7.1 Membership changes
+
+Membership MAY be evaluated when a Scope or a resource changes, rather than on every check (Section 4.3), so a change can lag. Every check, of every action, MUST use the same membership: a check never evaluates a selector itself while another reads the stored result.
+
+| Change                                | Takes effect                        | Until then                                                      |
+| ------------------------------------- | ----------------------------------- | --------------------------------------------------------------- |
+| A Scope's targets change              | When the new membership is complete | Exactly the previous membership, never a mix                    |
+| A Scope is created                    | When its membership is complete     | Selects nothing                                                 |
+| A Scope becomes invalid or is deleted | Immediately                         |                                                                 |
+| A resource is created                 | When it's evaluated                 | In no Scope, except through a whole-type target                 |
+| A resource is changed or deleted      | When it's re-evaluated              | Exactly its previous membership, never a mix                    |
+| A Role or RoleBinding changes         | Immediately                         |                                                                 |
+
+A delay MUST NOT grant what neither the old nor the new state grants. E.g. a Playbook applied and run straight away may be refused until it's in its Scopes.
+
+A grant through a Scope whose membership is still being built is still a grant. A listing of a type it covers MUST return no rows through it, not refuse the listing: a subject whose only grant on configs names a new Scope sees an empty list until the build completes, never `403 Forbidden` (`roles.md`, Section 3.1).
+
+**Why.** The grant is in effect the moment the RoleBinding applies. Refusing the listing would look as if nothing had been granted, then start working on its own when the build finishes.
+
+**Why previous membership.** A changed resource's previous membership is its old state, so keeping it grants nothing neither state grants, and access to the resource doesn't drop out each time it changes. Switching it all at once matters: a resource moving from Scope A to Scope B is never in both, before or after, but would be for a moment if it joined B before leaving A, and a grant that needs both would allow it.
+
+### 7.2 Operations with several checks
+
+An operation that makes several checks (`roles.md`, Section 4.3) MUST make all of them against the membership of one moment, for every resource the operation involves. It MUST NOT see a Scope's previous membership in one check and its new membership in another.
+
+**Why.** Each check alone sees a real state, but two checks on either side of a change can together allow what neither state allows. E.g. a subject reads configs through Scope S, may run playbook P on any config, and is denied running P on configs in S. S is changed to drop config C. Before, C is readable and running P on it is denied; after, C isn't readable. If the `read` check sees S before the change and the `playbook:run` check sees it after, both pass, and P runs on C.

@@ -4,6 +4,12 @@
 - Core database models come from `github.com/flanksource/duty/models`.
 - The local `api/` directory contains API-specific request/response types and CRD specs (`api/v1/`).
 
+## Deployment Model
+
+- Mission Control runs as a **single replica**. Leader election ensures only one instance is active at a time.
+- Design for one process: background jobs, workers, caches and in-memory state need no coordination across replicas. Don't add any unless a spec asks for it.
+- Running several replicas at once isn't supported. It may be later, but it isn't a requirement.
+
 ## Key Libraries & Imports
 
 | Import                                | Purpose                                      |

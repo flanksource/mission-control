@@ -172,37 +172,12 @@ Bad: a playbook can't run on a view.
 
 A rule with `action: read` is checked in two places:
 
-1. **On one resource**, e.g. opening a config. The full selector is checked.
-2. **On listings**, e.g. listing configs through the database API. Postgres row-level security filters the rows, and it can only match a few fields.
+1. **On one resource**, e.g. opening a config.
+2. **On listings**, e.g. listing configs through the database API, where the rows are filtered to the ones the subject may read.
 
-Both must allow the same resources. So the Scope of a `read` rule MUST only use fields row-level security can match:
+Both MUST allow the same resources, including while a change to a Scope or a resource is taking effect (`scopes.md`, Section 7.1): a resource a subject can open appears in their listings, and a resource in their listings can be opened. How Mission Control keeps the two in step is the design's business (`design/materialised-membership.md`).
 
-| Type                     | Fields                                                     |
-| ------------------------ | ---------------------------------------------------------- |
-| Config                   | `id`, `name`, `agent`, `namespace`, `tagSelector` with `=` |
-| Component, Check, Canary | `id`, `name`, `agent`                                      |
-| Playbook                 | `id`, `name`                                               |
-| Connection               | `name: "*"` only                                           |
-
-Where `name` is accepted, so are its patterns (`scopes.md`, Section 5.2).
-
-Good: configs selected by tag. Opening one and listing them allow the same configs.
-
-```yaml
-- name: read-staging-configs
-  action: read
-  resource:
-    scopeRef: staging-configs   # config: tagSelector: env=staging
-```
-
-Bad: `staging` selects components by namespace, which row-level security can't match. Opening a production component would be denied, but listing components would show them all, or none.
-
-```yaml
-- name: read-staging
-  action: read
-  resource:
-    scopeRef: staging
-```
+A `read` rule accepts any Scope whose membership is decided by the resource alone (`scopes.md`, Section 4.3), which every Scope is, with one exception: connections aren't filtered by row, so a `read` rule's Scope MUST select connections with a whole-type target only.
 
 Listings are only filtered while row-level security is enabled. It's turned on or off when Mission Control starts, from the `rls.enable` property, so changing the property takes effect on restart. So a `read` rule whose Scope has a target that isn't a whole-type target (`scopes.md`, Section 5.2) needs it: while row-level security is off, a Role with such a rule is `Ready=False` with reason `RowLevelSecurityRequired`, and none of its rules apply, like any invalid Role (Section 6). It becomes valid when row-level security is enabled, without being re-applied. A rule whose Scope consists of whole-type targets only doesn't need it: opening any resource and listing all of them allow the same resources.
 
@@ -312,13 +287,13 @@ Find a design that removes this trap. What's been considered so far:
 
 ## 5. Allow and deny
 
-Across all the rules that apply to a subject, from every Role and every Permission (`overview.md`, "Not covered yet"), the same rule decides:
+Across all the rules that apply to a subject, from every Role they're bound to, the same rule decides:
 
 - An operation is allowed when an allow rule matches and no deny rule does.
 - A deny always wins, over built-in access too: a deny on `delete` stops an editor even though the built-in `editor` role allows it. Only admins are exempt.
-- Order doesn't matter, and it doesn't matter whether a rule comes from a Role or a Permission.
-- Roles only add access. A Role can't remove access another Role or a Permission grants, except with a deny.
-- Row filters follow the same rule: a subject's rows are the ones any `read` grant, from a Role or a Permission, allows and no deny Permission denies (Section 3.1).
+- Order doesn't matter, and it doesn't matter which Role a rule comes from.
+- Roles only add access. A Role can't remove access another Role grants, except with a deny.
+- Row filters follow the same rule: a subject's rows are the ones any of their `read` rules allows (Section 3.1).
 
 None of this applies to admins: no rule, allow or deny, applies to them (`overview.md`, "Default access").
 
