@@ -12,6 +12,7 @@ import (
 	gocache "github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
@@ -182,9 +183,36 @@ func ValidateSelector(kind string, selector types.ResourceSelector) error {
 		if value == "" {
 			continue
 		}
-		if _, err := labels.Parse(value); err != nil {
-			return fmt.Errorf("invalid %s %q: %w", field, value, err)
+		if err := validateEqualities(field, value); err != nil {
+			return err
 		}
+	}
+
+	return nil
+}
+
+// validateEqualities checks a tag or label selector: one or more key=value pairs joined by commas.
+// Every other operator of the label selector syntax is rejected.
+func validateEqualities(field, value string) error {
+	parsed, err := labels.Parse(value)
+	if err != nil {
+		return fmt.Errorf("invalid %s %q: %w", field, value, err)
+	}
+
+	requirements, _ := parsed.Requirements()
+	for _, r := range requirements {
+		var operator string
+		switch r.Operator() {
+		case selection.Equals:
+			continue
+		case selection.Exists:
+			operator = "a bare key"
+		case selection.DoesNotExist:
+			operator = "!key"
+		default:
+			operator = fmt.Sprintf("%q", string(r.Operator()))
+		}
+		return fmt.Errorf("%s %q uses %s: only key=value pairs are supported", field, value, operator)
 	}
 
 	return nil

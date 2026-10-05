@@ -55,6 +55,15 @@ var _ = ginkgo.Describe("ValidateSelector", func() {
 		{"namespace prefix", policy.ResourceConfig, types.ResourceSelector{Namespace: "prod-*"}, false},
 		{"wildcard id", policy.ResourceConfig, types.ResourceSelector{ID: "*"}, false},
 		{"type pattern", policy.ResourceConfig, types.ResourceSelector{Types: []string{"Kubernetes::*"}}, false},
+		{"several tags", policy.ResourceConfig, types.ResourceSelector{TagSelector: "cluster=homelab,namespace=monitoring"}, true},
+		{"tag inequality", policy.ResourceConfig, types.ResourceSelector{TagSelector: "env!=prod"}, false},
+		{"tag double equals", policy.ResourceConfig, types.ResourceSelector{TagSelector: "env==prod"}, false},
+		{"tag in", policy.ResourceConfig, types.ResourceSelector{TagSelector: "env in (prod,staging)"}, false},
+		{"tag notin", policy.ResourceConfig, types.ResourceSelector{TagSelector: "env notin (prod)"}, false},
+		{"bare tag key", policy.ResourceConfig, types.ResourceSelector{TagSelector: "env"}, false},
+		{"tag exclusion", policy.ResourceConfig, types.ResourceSelector{TagSelector: "!env"}, false},
+		{"label inequality", policy.ResourceComponent, types.ResourceSelector{LabelSelector: "team=payments,env!=prod"}, false},
+		{"bare label key", policy.ResourceCanary, types.ResourceSelector{LabelSelector: "team"}, false},
 	} {
 		ginkgo.It(tt.name, func() {
 			err := ValidateSelector(tt.kind, tt.selector)

@@ -73,6 +73,8 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 		}{
 			{"an empty selector", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{}}},
 			{"a name pattern", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "prod-*"}}}},
+			{"a tag exclusion", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "env!=prod"}}},
+			{"a bare label key", v1.ScopeTarget{Component: &v1.ScopeLabelledSelector{LabelSelector: "team"}}},
 			{"a malformed tagSelector", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "env in (prod"}}},
 			{"two resource types in one target", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}, Playbook: &v1.ScopePlaybookRef{Name: "*"}}},
 			{"a wildcard namespace", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Namespace: "*"}}}},
