@@ -74,18 +74,15 @@ func SyncScopeMembership(ctx context.Context, cache *gocache.Cache, scope models
 // ones. Mission Control runs it at startup, so Scopes saved before membership was stored get theirs.
 func BuildScopeMemberships(ctx context.Context) error {
 	var scopes []models.Scope
-	if err := ctx.DB().Where("deleted_at IS NULL").Find(&scopes).Error; err != nil {
-		return fmt.Errorf("failed to load scopes: %w", err)
+	if err := ctx.DB().Raw(`SELECT * FROM scopes s
+		WHERE s.deleted_at IS NULL
+			AND NOT EXISTS (SELECT 1 FROM scope_targets t WHERE t.scope_id = s.id)
+			AND NOT EXISTS (SELECT 1 FROM scope_members m WHERE m.scope_id = s.id)`).Scan(&scopes).Error; err != nil {
+		return fmt.Errorf("failed to load scopes without membership: %w", err)
 	}
 
 	cache := gocache.New(gocache.NoExpiration, gocache.NoExpiration)
 	for _, scope := range scopes {
-		if built, err := membership.IsBuilt(ctx, scope.ID); err != nil {
-			return err
-		} else if built {
-			continue
-		}
-
 		if err := SyncScopeMembership(ctx, cache, scope); err != nil && !IsValidationError(err) {
 			return err
 		}
