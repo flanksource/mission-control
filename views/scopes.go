@@ -57,7 +57,7 @@ func getScopeConfigs(ctx context.Context) ([]scopeConfig, error) {
 		}
 
 		// An invalid Scope selects nothing. Agents are matched by id.
-		targets, err := adapter.ValidateScope(ctx, nil, targets)
+		targets, err := adapter.ValidateScope(ctx, targets)
 		if err != nil {
 			if adapter.IsValidationError(err) {
 				continue

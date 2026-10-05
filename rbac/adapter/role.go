@@ -211,13 +211,13 @@ func ValidateRole(ctx context.Context, cache *gocache.Cache, role models.Role) (
 }
 
 // ValidateStoredScope validates a stored Scope on its own.
-func ValidateStoredScope(ctx context.Context, cache *gocache.Cache, scope models.Scope) error {
+func ValidateStoredScope(ctx context.Context, scope models.Scope) error {
 	var targets []v1.ScopeTarget
 	if err := json.Unmarshal(scope.Targets, &targets); err != nil {
 		return NewValidationError("invalid targets: %v", err)
 	}
 
-	_, err := ValidateScope(ctx, cache, targets)
+	_, err := ValidateScope(ctx, targets)
 	return err
 }
 
