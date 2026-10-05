@@ -304,24 +304,23 @@ An invalid Scope that's stored, because its `agent` doesn't resolve or because K
 
 ### 7.1 Membership changes
 
-Membership MAY be evaluated when a Scope or a resource changes, rather than on every check (Section 4.3), so a change can lag. Every check, of every action, MUST use the same membership: a check never evaluates a selector itself while another reads the stored result.
+Membership MAY be stored when a Scope or a resource changes, rather than evaluated on every check (Section 4.3), so a change to a Scope can lag. Every check, of every action, MUST use the same membership: a check never evaluates a selector itself while another reads the stored result.
 
-| Change                                | Takes effect                        | Until then                                                      |
-| ------------------------------------- | ----------------------------------- | --------------------------------------------------------------- |
-| A Scope's targets change              | When the new membership is complete | Exactly the previous membership, never a mix                    |
-| A Scope is created                    | When its membership is complete     | Selects nothing                                                 |
-| A Scope becomes invalid or is deleted | Immediately                         |                                                                 |
-| A resource is created                 | When it's evaluated                 | In no Scope, except through a whole-type target                 |
-| A resource is changed or deleted      | When it's re-evaluated              | Exactly its previous membership, never a mix                    |
-| A Role or RoleBinding changes         | Immediately                         |                                                                 |
+| Change                                    | Takes effect                        | Until then                                   |
+| ----------------------------------------- | ----------------------------------- | -------------------------------------------- |
+| A Scope's targets change                  | When the new membership is complete | Exactly the previous membership, never a mix |
+| A Scope is created                        | When its membership is complete     | Selects nothing                              |
+| A Scope becomes invalid or is deleted     | Immediately                         |                                              |
+| A resource is created, changed or deleted | When the change commits             |                                              |
+| A Role or RoleBinding changes             | Immediately                         |                                              |
 
-A delay MUST NOT grant what neither the old nor the new state grants. E.g. a Playbook applied and run straight away may be refused until it's in its Scopes.
+A delay MUST NOT grant what neither the old nor the new state grants. E.g. a playbook run straight after a Scope is applied may be refused until the Scope's membership is complete.
 
 A grant through a Scope whose membership is still being built is still a grant. A listing of a type it covers MUST return no rows through it, not refuse the listing: a subject whose only grant on configs names a new Scope sees an empty list until the build completes, never `403 Forbidden` (`roles.md`, Section 3.1).
 
 **Why.** The grant is in effect the moment the RoleBinding applies. Refusing the listing would look as if nothing had been granted, then start working on its own when the build finishes.
 
-**Why previous membership.** A changed resource's previous membership is its old state, so keeping it grants nothing neither state grants, and access to the resource doesn't drop out each time it changes. Switching it all at once matters: a resource moving from Scope A to Scope B is never in both, before or after, but would be for a moment if it joined B before leaving A, and a grant that needs both would allow it.
+**Why resource changes don't lag.** A resource's membership depends on its own fields alone (Section 4.3), so it can be decided by the write that changes them. A resource is then never selected by a Scope that no longer matches it, and a playbook applied and run straight away isn't refused.
 
 ### 7.2 Operations with several checks
 
