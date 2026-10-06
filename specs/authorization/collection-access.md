@@ -33,7 +33,7 @@ The answer is derived from the subject's grants alone, in this order:
 
 For admins the answer is `all` on every type ([overview.md, "Default access"](overview.md#default-access)).
 
-A guest's built-in `read` doesn't count towards `all`. It lets a guest past whole-type checks only for their listings to be filtered to their grants ([roles.md, Section 7.3](roles.md#73-guests)), so for the answer it's as if they had none: a guest with no grants is `none`, and their listing is refused rather than empty. Where that differs from [roles.md, Section 7.3](roles.md#73-guests), this document applies. A person with no built-in role is treated as a viewer, as [roles.md, Section 7.4](roles.md#74-open-questions) leaves it.
+A guest's built-in `read` doesn't count towards `all`. It lets a guest past whole-type checks only for their listings to be filtered to their grants ([roles.md, Section 7.3](roles.md#73-guests)), so for the answer it's as if they had none: a guest with no grants is `none`, and their listing is refused rather than empty. The same holds when a guest opens one resource: it's checked against their grants only, never passed by the built-in `read`. Where that differs from [roles.md, Section 7.3](roles.md#73-guests), this document applies. A person with no built-in role is treated as a viewer, as [roles.md, Section 7.4](roles.md#74-open-questions) leaves it.
 
 Permissions ([overview.md, "Not covered yet"](overview.md#not-covered-yet)) count too. A Permission that allows `read` counts like a rule, with its selectors in place of a Scope, type by type. For connections, which can't be filtered by row ([roles.md, Section 3.1](roles.md#31-the-read-action)), a Permission that isn't whole-type gives nothing.
 
