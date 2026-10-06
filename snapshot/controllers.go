@@ -37,9 +37,9 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /snapshot routes")
 
-	e.GET("/snapshot/topology/:id", Topology, rbac.Topology(policy.ActionRead))
-	e.GET("/snapshot/incident/:id", Incident, rbac.Topology(policy.ActionRead))
-	e.GET("/snapshot/config/:id", Config, rbac.Catalog(policy.ActionRead))
+	e.GET("/snapshot/topology/:id", Topology, rbac.Topology(policy.ActionRead), echoSrv.RLSMiddleware)
+	e.GET("/snapshot/incident/:id", Incident, rbac.Topology(policy.ActionRead), echoSrv.RLSMiddleware)
+	e.GET("/snapshot/config/:id", Config, rbac.Catalog(policy.ActionRead), echoSrv.RLSMiddleware)
 }
 
 func NewSnapshotContext(c echo.Context) SnapshotContext {

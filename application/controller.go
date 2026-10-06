@@ -24,7 +24,7 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /application routes")
 
-	g := e.Group(fmt.Sprintf("/%s", "application"), rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
+	g := e.Group(fmt.Sprintf("/%s", "application"), rbac.Authorization(policy.ObjectCatalog, policy.ActionRead), echoSrv.RLSMiddleware)
 	g.GET("/:namespace/:name", ApplicationSpec)
 	g.GET("/:namespace/:name/export", ExportApplication)
 }
