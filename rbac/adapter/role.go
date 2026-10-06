@@ -210,17 +210,6 @@ func ValidateRole(ctx context.Context, cache *gocache.Cache, role models.Role) (
 	return ResolveRoleRules(ctx, cache, role.Namespace, rules)
 }
 
-// ValidateStoredScope validates a stored Scope on its own.
-func ValidateStoredScope(ctx context.Context, scope models.Scope) error {
-	var targets []v1.ScopeTarget
-	if err := json.Unmarshal(scope.Targets, &targets); err != nil {
-		return NewValidationError("invalid targets: %v", err)
-	}
-
-	_, err := ValidateScope(ctx, targets)
-	return err
-}
-
 // UnappliedRule is an allow rule of a role that doesn't apply through a binding, because its constraint can't narrow it.
 type UnappliedRule struct {
 	Rule    string `json:"rule"`
@@ -497,65 +486,40 @@ func LoadBindingRules(ctx context.Context, bindingID uuid.UUID) ([]CompiledRule,
 	return compiled.Rules, nil
 }
 
-// RowFilters returns the row filters of a read rule, by resource type: the rows that belong to every Scope of the rule.
-func (r CompiledRule) RowFilters() (map[string][]rls.Scope, error) {
-	filters := map[string][]rls.Scope{}
-	for _, kind := range rowFilterKinds {
-		var current []rls.Scope
-		for i, scope := range r.Resource {
-			var scopeFilters []rls.Scope
-			for _, selector := range scope.Selectors[kind] {
-				filter, err := RowFilter(kind, selector)
-				if err != nil {
-					return nil, fmt.Errorf("rule %s: %w", r.Name, err)
-				} else if filter != nil {
-					scopeFilters = append(scopeFilters, *filter)
-				}
-			}
-
-			if i == 0 {
-				current = scopeFilters
-				continue
-			}
-
-			var narrowed []rls.Scope
-			for _, a := range current {
-				for _, b := range scopeFilters {
-					if filter, ok := IntersectRowFilters(a, b); ok {
-						narrowed = append(narrowed, filter)
-					}
-				}
-			}
-			current = narrowed
-		}
-
-		if len(current) > 0 {
-			filters[kind] = current
-		}
+// ReadGrants returns, by resource type, the grant a read rule lists rows through: the rule's Scope, narrowed by the
+// constraint's when it has one, for each type they all select.
+func (r CompiledRule) ReadGrants() map[string]rls.Grant {
+	grants := map[string]rls.Grant{}
+	if r.Deny || r.Contract.Action != policy.ActionRead || len(r.Resource) == 0 {
+		return grants
 	}
 
-	return filters, nil
+	grant := rls.Grant{Scope: r.Resource[0].ID}
+	if len(r.Resource) > 1 {
+		grant.Constraint = r.Resource[1].ID
+	}
+
+	for _, kind := range r.Resource[0].DeclaredTypes() {
+		if !lo.EveryBy(r.Resource, func(scope ScopeSelection) bool { return len(scope.Selectors[kind]) > 0 }) {
+			continue
+		}
+		grants[kind] = grant
+	}
+
+	return grants
 }
 
-// condition returns the casbin condition that matches the rule against a request.
+// condition returns the casbin condition that matches the rule against a request's Scope membership.
 func (r CompiledRule) condition() (string, error) {
-	condition := dutyRBAC.RuleCondition{
-		ResourceTypes: r.Contract.Resources,
-		TargetTypes:   r.Contract.Targets,
-		Deny:          r.Deny,
-	}
-	for _, scope := range r.Resource {
-		condition.Resource = append(condition.Resource, scope.Selectors)
-	}
-	for _, scope := range r.Target {
-		condition.Target = append(condition.Target, scope.Selectors)
+	ids := func(scopes []ScopeSelection) []string {
+		return lo.Map(scopes, func(scope ScopeSelection, _ int) string { return scope.ID })
 	}
 
-	raw, err := json.Marshal(condition)
+	condition, err := dutyRBAC.RuleCondition(ids(r.Resource), ids(r.Target), r.Deny)
 	if err != nil {
-		return "", fmt.Errorf("failed to marshal the condition of rule %s: %w", r.Name, err)
+		return "", fmt.Errorf("rule %s: %w", r.Name, err)
 	}
-	return fmt.Sprintf(`matchRule(r.obj, %q)`, string(raw)), nil
+	return condition, nil
 }
 
 // wholeTypeObjects returns the RBAC objects of the resource types that every Scope of the rule's resource
@@ -581,9 +545,9 @@ func (r CompiledRule) wholeTypeObjects() []string {
 
 // compiledRuleToCasbinRules compiles a rule granted by a binding into casbin policies filed under the binding's principal.
 //
-// A rule checked on the resources of each request is matched by matchRule:
+// A rule checked on the resources of each request is matched by the Scopes the request's resources are in:
 //
-//	p, binding:<ns>/<name>, *, <action>, <allow|deny>, matchRule(r.obj, <condition>), binding:<binding id>/<rule>
+//	p, binding:<ns>/<name>, *, <action>, <allow|deny>, <condition over r.obj.Membership>, binding:<binding id>/<rule>
 //
 // A rule checked on whole object types is granted on the object of each type it selects entirely, e.g. catalog.
 // So is a read rule, for endpoints that check reads on whole object types.

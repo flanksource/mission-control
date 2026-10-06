@@ -16,7 +16,7 @@ const (
 	// enforcedPerRequest actions are checked by casbin on the resources of each request.
 	enforcedPerRequest enforcement = "request"
 
-	// enforcedWithRows actions are also enforced by row filters in Postgres, which support fewer selectors.
+	// enforcedWithRows actions are also enforced on listings, by row-level security over stored Scope membership.
 	enforcedWithRows enforcement = "rows"
 
 	// enforcedOnObjects actions are only checked on whole object types (e.g. catalog), never on individual resources.
@@ -150,8 +150,10 @@ func (c ActionContract) enforceable(kind string, selector types.ResourceSelector
 			return fmt.Errorf(`%s is only checked on whole types, so its %s selectors must be exactly name: "*"`, c.Action, kind)
 		}
 	case enforcedWithRows:
-		if _, err := RowFilter(kind, selector); err != nil {
-			return fmt.Errorf("%s selector can't be enforced by row filters: %w", kind, err)
+		// Membership is decided by the resource alone, so listings can filter by any Scope.
+		// Connections aren't filtered by row.
+		if kind == policy.ResourceConnection && !selector.Wildcard() {
+			return fmt.Errorf(`connections aren't filtered by row, so %s can only select them with name: "*"`, c.Action)
 		}
 	}
 

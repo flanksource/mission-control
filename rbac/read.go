@@ -4,6 +4,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/membership"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
 )
@@ -29,4 +30,18 @@ func CanRead(ctx context.Context, subject string, attr *models.ABACAttribute) bo
 	}
 
 	return rbac.HasPermission(ctx, subject, &models.ABACAttribute{Canary: canaries[0]}, policy.ActionRead)
+}
+
+// ForOperation reads the Scope memberships of every resource an operation involves, a check's canary included,
+// and returns a context whose checks all use them, so they see the membership of one moment.
+// Call it once, before the operation's checks.
+func ForOperation(ctx context.Context, attrs ...*models.ABACAttribute) (context.Context, error) {
+	refs := rbac.MembershipRefs(attrs...)
+	for _, attr := range attrs {
+		if attr != nil && attr.Check.ID != uuid.Nil && attr.Check.CanaryID != uuid.Nil {
+			refs = append(refs, membership.Ref{Type: policy.ResourceCanary, ID: attr.Check.CanaryID})
+		}
+	}
+
+	return membership.ForOperation(ctx, refs...)
 }

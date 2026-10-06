@@ -3,6 +3,7 @@
 package permissions_test
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 
@@ -14,11 +15,16 @@ import (
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/rls"
 	"github.com/flanksource/duty/tests/setup"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sTypes "k8s.io/apimachinery/pkg/types"
 
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/vars"
@@ -40,6 +46,7 @@ var _ = Describe("Scope Impersonation E2E", Ordered, func() {
 		adminUser   *models.Person
 		guestUser   *models.Person
 		oldAuthMode string
+		scopeIDs    = map[string]string{}
 	)
 
 	BeforeAll(func() {
@@ -50,14 +57,23 @@ var _ = Describe("Scope Impersonation E2E", Ordered, func() {
 		adminUser = setup.CreateUserWithRole(DefaultContext, "Impersonation Admin", "impersonation-admin@test.com", policy.RoleAdmin)
 		guestUser = setup.CreateUserWithRole(DefaultContext, "Impersonation Guest", "impersonation-guest@test.com", policy.RoleGuest)
 
-		// Give the guest user config scope permissions for backend and frontend namespaces
+		// Give the guest user read on the backend and frontend Scopes
+		for _, ns := range []string{"backend", "frontend"} {
+			scope := &v1.Scope{
+				ObjectMeta: metav1.ObjectMeta{Name: "impersonation-" + ns, Namespace: "default", UID: k8sTypes.UID(uuid.NewString())},
+				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{TagSelector: "namespace=" + ns}}}},
+			}
+			Expect(db.PersistScopeFromCRD(DefaultContext, scope)).To(Succeed())
+			scopeIDs[ns] = string(scope.UID)
+		}
+
 		guestPerm := &models.Permission{
 			Name:           "impersonation-test-perm",
 			Namespace:      "default",
 			Action:         policy.ActionRead,
 			Subject:        guestUser.ID.String(),
 			SubjectType:    models.PermissionSubjectTypePerson,
-			ObjectSelector: []byte(`{"configs":[{"tagSelector":"namespace=backend"},{"tagSelector":"namespace=frontend"}]}`),
+			ObjectSelector: []byte(`{"scopes":[{"namespace":"default","name":"impersonation-backend"},{"namespace":"default","name":"impersonation-frontend"}]}`),
 		}
 		err = DefaultContext.DB().Create(guestPerm).Error
 		Expect(err).ToNot(HaveOccurred())
@@ -82,6 +98,7 @@ var _ = Describe("Scope Impersonation E2E", Ordered, func() {
 
 		// Clean up
 		DefaultContext.DB().Where("name = ?", "impersonation-test-perm").Delete(&models.Permission{})
+		DefaultContext.DB().Where("name LIKE ?", "impersonation-%").Delete(&models.Scope{})
 		DefaultContext.DB().Delete(adminUser)
 		DefaultContext.DB().Delete(guestUser)
 	})
@@ -119,57 +136,43 @@ var _ = Describe("Scope Impersonation E2E", Ordered, func() {
 			payload, status := getRLSPayload(guestUser.Email)
 			Expect(status).To(Equal(http.StatusOK))
 			Expect(payload.Disable).To(BeFalse())
-			Expect(payload.Config).To(HaveLen(2))
+			Expect(payload.Config.Any).To(ConsistOf(rls.Grant{Scope: scopeIDs["backend"]}, rls.Grant{Scope: scopeIDs["frontend"]}))
 		})
 	})
 
+	header := func(ids ...string) string {
+		raw, err := json.Marshal(ids)
+		Expect(err).ToNot(HaveOccurred())
+		return string(raw)
+	}
+
 	Context("admin with impersonation header", func() {
-		It("should use the impersonated payload directly", func() {
-			scope := `{"config":[{"tags":{"team":"platform"}}]}`
-			payload, status := getRLSPayload(adminUser.Email, scope)
+		It("should only grant the named Scopes", func() {
+			payload, status := getRLSPayload(adminUser.Email, header(scopeIDs["backend"]))
 			Expect(status).To(Equal(http.StatusOK))
 			Expect(payload.Disable).To(BeFalse())
-			Expect(payload.Config).To(HaveLen(1))
-			Expect(payload.Config[0].Tags).To(Equal(map[string]string{"team": "platform"}))
+			Expect(payload.Config.Any).To(Equal([]rls.Grant{{Impersonated: []string{scopeIDs["backend"]}}}))
+			Expect(payload.Component.Any).To(Equal([]rls.Grant{{Impersonated: []string{scopeIDs["backend"]}}}))
 		})
 
-		It("should restrict admin to nothing with empty payload", func() {
-			scope := `{}`
-			payload, status := getRLSPayload(adminUser.Email, scope)
+		It("should restrict admin to nothing with an empty list", func() {
+			payload, status := getRLSPayload(adminUser.Email, `[]`)
 			Expect(status).To(Equal(http.StatusOK))
 			Expect(payload.Disable).To(BeFalse())
-			Expect(payload.Config).To(BeEmpty())
-			Expect(payload.Component).To(BeEmpty())
+			Expect(payload.Config).To(BeNil())
+			Expect(payload.Component).To(BeNil())
 		})
 	})
 
 	Context("guest with impersonation header", func() {
-		It("should intersect with real payload — matching scope kept", func() {
-			// Guest has backend + frontend. Impersonate only backend.
-			scope := `{"config":[{"tags":{"namespace":"backend"}}]}`
-			payload, status := getRLSPayload(guestUser.Email, scope)
+		It("should narrow every grant of the real payload", func() {
+			payload, status := getRLSPayload(guestUser.Email, header(scopeIDs["backend"]))
 			Expect(status).To(Equal(http.StatusOK))
 			Expect(payload.Disable).To(BeFalse())
-			Expect(payload.Config).To(HaveLen(1))
-			Expect(payload.Config[0].Tags).To(Equal(map[string]string{"namespace": "backend"}))
-		})
-
-		It("should intersect with real payload — no overlap produces empty", func() {
-			// Guest has backend + frontend. Impersonate kube-system (not in real).
-			scope := `{"config":[{"tags":{"namespace":"kube-system"}}]}`
-			payload, status := getRLSPayload(guestUser.Email, scope)
-			Expect(status).To(Equal(http.StatusOK))
-			Expect(payload.Config).To(BeEmpty())
-		})
-
-		It("should intersect with real payload — narrowing with extra tags", func() {
-			// Guest has namespace=backend. Impersonate namespace=backend + env=prod.
-			// Intersection: both tag sets merge (no conflict).
-			scope := `{"config":[{"tags":{"namespace":"backend","env":"prod"}}]}`
-			payload, status := getRLSPayload(guestUser.Email, scope)
-			Expect(status).To(Equal(http.StatusOK))
-			Expect(payload.Config).To(HaveLen(1))
-			Expect(payload.Config[0].Tags).To(Equal(map[string]string{"namespace": "backend", "env": "prod"}))
+			Expect(payload.Config.Any).To(ConsistOf(
+				rls.Grant{Scope: scopeIDs["backend"]},
+				rls.Grant{Scope: scopeIDs["frontend"], Impersonated: []string{scopeIDs["backend"]}},
+			))
 		})
 	})
 
@@ -178,8 +181,7 @@ var _ = Describe("Scope Impersonation E2E", Ordered, func() {
 			properties.Set("auth.impersonation", "false")
 			defer properties.Set("auth.impersonation", "")
 
-			scope := `{"config":[{"tags":{"team":"platform"}}]}`
-			payload, status := getRLSPayload(adminUser.Email, scope)
+			payload, status := getRLSPayload(adminUser.Email, header(scopeIDs["backend"]))
 			Expect(status).To(Equal(http.StatusOK))
 			// Should return the real payload (admin = disabled), not the impersonated one
 			Expect(payload.Disable).To(BeTrue())
@@ -189,6 +191,11 @@ var _ = Describe("Scope Impersonation E2E", Ordered, func() {
 	Context("invalid header", func() {
 		It("should return 400 for malformed JSON", func() {
 			_, status := getRLSPayload(adminUser.Email, `{not json}`)
+			Expect(status).To(Equal(http.StatusBadRequest))
+		})
+
+		It("should return 400 for the former payload format", func() {
+			_, status := getRLSPayload(adminUser.Email, `{"config":[{"tags":{"team":"platform"}}]}`)
 			Expect(status).To(Equal(http.StatusBadRequest))
 		})
 	})

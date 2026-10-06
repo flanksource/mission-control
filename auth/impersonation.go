@@ -2,159 +2,81 @@ package auth
 
 import (
 	"encoding/json"
+	"fmt"
+	"slices"
+	"strings"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rls"
+	"github.com/google/uuid"
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 )
 
 const (
 	HeaderFlanksourceScope = "X-Flanksource-Scope"
-	impersonatedRLSCtxKey  = "impersonated-rls-payload"
+	impersonatedRLSCtxKey  = "impersonated-rls-scopes"
 )
 
-// intersectScope computes the intersection of two scopes. Returns the
-// intersected scope and true if the result is valid, or false if the two
-// scopes are incompatible (e.g. conflicting tags or disjoint ID lists).
-//
-// Empty fields are treated as unrestricted: if one side has Agents=[] and the
-// other has Agents=[a], the result is Agents=[a].
-func intersectScope(a, b rls.Scope) (rls.Scope, bool) {
-	var result rls.Scope
-
-	// IDs: if both set, must match
-	switch {
-	case a.ID != "" && b.ID != "":
-		if a.ID != b.ID {
-			return rls.Scope{}, false
-		}
-		result.ID = a.ID
-	case a.ID != "":
-		result.ID = a.ID
-	case b.ID != "":
-		result.ID = b.ID
+// parseImpersonatedScopes parses the X-Flanksource-Scope header: a JSON array of Scope ids.
+func parseImpersonatedScopes(header string) ([]string, error) {
+	var ids []string
+	if err := json.Unmarshal([]byte(header), &ids); err != nil {
+		return nil, fmt.Errorf("must be a JSON array of scope ids: %w", err)
 	}
 
-	// Tags: merge maps; conflicting values make the intersection empty
-	if len(a.Tags) > 0 || len(b.Tags) > 0 {
-		merged := make(map[string]string)
-		for k, v := range a.Tags {
-			merged[k] = v
+	for i, id := range ids {
+		parsed, err := uuid.Parse(strings.TrimSpace(id))
+		if err != nil {
+			return nil, fmt.Errorf("scope id %q isn't a uuid", id)
 		}
-		for k, v := range b.Tags {
-			if existing, ok := merged[k]; ok && existing != v {
-				return rls.Scope{}, false
-			}
-			merged[k] = v
-		}
-		result.Tags = merged
+		ids[i] = parsed.String()
 	}
 
-	// Agents: empty = unrestricted; both non-empty = intersect
-	switch {
-	case len(a.Agents) == 0:
-		result.Agents = b.Agents
-	case len(b.Agents) == 0:
-		result.Agents = a.Agents
-	default:
-		result.Agents = lo.Intersect(a.Agents, b.Agents)
-		if len(result.Agents) == 0 {
-			return rls.Scope{}, false
-		}
-	}
-
-	// Names: empty = unrestricted; both non-empty = intersect
-	switch {
-	case len(a.Names) == 0:
-		result.Names = b.Names
-	case len(b.Names) == 0:
-		result.Names = a.Names
-	default:
-		result.Names = lo.Intersect(a.Names, b.Names)
-		if len(result.Names) == 0 {
-			return rls.Scope{}, false
-		}
-	}
-
-	result.Deny = a.Deny || b.Deny
-	return result, true
+	slices.Sort(ids)
+	return slices.Compact(ids), nil
 }
 
-// intersectScopeList computes the cartesian-product intersection of two scope
-// lists. Each scope in the real list is intersected with each scope in the
-// impersonated list; only compatible pairs survive.
-func intersectScopeList(real, impersonated []rls.Scope) []rls.Scope {
-	if len(real) == 0 || len(impersonated) == 0 {
-		return nil
+// applyImpersonation narrows the effective RLS payload to the Scopes the X-Flanksource-Scope header names:
+// each of them is added to every grant, so it can only narrow. For a subject whose listings aren't filtered,
+// the Scopes are the only grant of every type. Rows of views are narrowed to the Scopes' view grants.
+// A header naming no Scope lists nothing.
+func applyImpersonation(real *rls.Payload, scopeIDs []string) *rls.Payload {
+	if scopeIDs == nil {
+		return real
 	}
 
-	var result []rls.Scope
-	for _, r := range real {
-		for _, i := range impersonated {
-			if s, ok := intersectScope(r, i); ok {
-				result = append(result, s)
-			}
-		}
-	}
-	return result
-}
-
-func splitScopeList(scopes []rls.Scope) (allow, deny []rls.Scope) {
-	for _, scope := range scopes {
-		if scope.Deny {
-			deny = append(deny, scope)
-		} else {
-			allow = append(allow, scope)
-		}
-	}
-	return allow, deny
-}
-
-func intersectPermissionedScopeList(real, impersonated []rls.Scope) []rls.Scope {
-	realAllow, realDeny := splitScopeList(real)
-	impersonatedAllow, impersonatedDeny := splitScopeList(impersonated)
-
-	result := intersectScopeList(realAllow, impersonatedAllow)
-	result = append(result, realDeny...)
-	result = append(result, impersonatedDeny...)
-	return result
-}
-
-// intersectPayload computes the intersection of two RLS payloads across all
-// resource types.
-func intersectPayload(real, impersonated *rls.Payload) *rls.Payload {
-	result := &rls.Payload{
-		Config:    intersectPermissionedScopeList(real.Config, impersonated.Config),
-		Component: intersectPermissionedScopeList(real.Component, impersonated.Component),
-		Playbook:  intersectPermissionedScopeList(real.Playbook, impersonated.Playbook),
-		Canary:    intersectPermissionedScopeList(real.Canary, impersonated.Canary),
-		View:      intersectPermissionedScopeList(real.View, impersonated.View),
-		Scopes:    lo.Intersect(real.Scopes, impersonated.Scopes),
-	}
-	return result
-}
-
-// applyImpersonation decides the effective RLS payload when impersonation is
-// requested. For users with full access (Disable: true) the impersonated
-// payload is used directly. For users with existing restrictions the result
-// is the intersection of both payloads, ensuring no privilege escalation.
-func applyImpersonation(real *rls.Payload, impersonated *rls.Payload) (*rls.Payload, error) {
-	if impersonated == nil {
-		return real, nil
+	result := &rls.Payload{}
+	if len(scopeIDs) == 0 {
+		return result
 	}
 
 	if real.Disable {
-		return impersonated, nil
+		for _, kind := range rls.GrantTypes {
+			grants := rls.AllRows()
+			grants.Impersonate(scopeIDs...)
+			result.SetGrants(kind, grants)
+		}
+		result.View = []rls.Scope{{ID: "*"}}
+		result.Scopes = slices.Clone(scopeIDs)
+		return result
 	}
 
-	return intersectPayload(real, impersonated), nil
+	for _, kind := range rls.GrantTypes {
+		if grants := real.GrantsFor(kind); grants != nil {
+			narrowed := &rls.Grants{All: grants.All, Any: slices.Clone(grants.Any)}
+			narrowed.Impersonate(scopeIDs...)
+			result.SetGrants(kind, narrowed)
+		}
+	}
+	result.View = real.View
+	result.Scopes = lo.Intersect(real.Scopes, scopeIDs)
+	return result
 }
 
-// ScopeImpersonation is an echo middleware that reads the X-Flanksource-Scope
-// header and stores the parsed RLS payload in the request context. The payload
-// is later picked up by GetRLSPayload to override the user's real permissions.
+// ScopeImpersonation is an echo middleware that reads the X-Flanksource-Scope header, a JSON array of Scope ids,
+// and stores them in the request context. GetRLSPayload then narrows the subject's grants to them.
 func ScopeImpersonation(next echov4.HandlerFunc) echov4.HandlerFunc {
 	return func(c echov4.Context) error {
 		ctx := c.Request().Context().(context.Context)
@@ -168,22 +90,21 @@ func ScopeImpersonation(next echov4.HandlerFunc) echov4.HandlerFunc {
 			return next(c)
 		}
 
-		var payload rls.Payload
-		if err := json.Unmarshal([]byte(header), &payload); err != nil {
+		ids, err := parseImpersonatedScopes(header)
+		if err != nil {
 			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid %s header: %v", HeaderFlanksourceScope, err))
 		}
 
-		ctx = ctx.WithValue(impersonatedRLSCtxKey, &payload)
+		ctx = ctx.WithValue(impersonatedRLSCtxKey, ids)
 		c.SetRequest(c.Request().WithContext(ctx))
 		return next(c)
 	}
 }
 
-// getImpersonatedPayload retrieves the impersonated RLS payload from context,
-// if one was set by the ScopeImpersonation middleware.
-func getImpersonatedPayload(ctx context.Context) *rls.Payload {
-	if v := ctx.Value(impersonatedRLSCtxKey); v != nil {
-		return v.(*rls.Payload)
+// getImpersonatedScopes returns the Scope ids set by the ScopeImpersonation middleware, or nil.
+func getImpersonatedScopes(ctx context.Context) []string {
+	if v, ok := ctx.Value(impersonatedRLSCtxKey).([]string); ok {
+		return v
 	}
 	return nil
 }

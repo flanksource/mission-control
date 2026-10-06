@@ -7,10 +7,21 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/membership"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
+
+func init() {
+	dutyRBAC.ActionContract = func(action string) ([]string, []string, bool) {
+		contract, err := ContractFor(action)
+		if err != nil {
+			return nil, nil, false
+		}
+		return contract.Resources, contract.Targets, true
+	}
+}
 
 // MembershipTargets converts a valid Scope's targets, with agents resolved, to the targets its membership is built from.
 // Targets of types whose membership isn't stored, i.e. views, are left out.
@@ -70,7 +81,8 @@ func SyncScopeMembership(ctx context.Context, scope models.Scope) error {
 }
 
 // BuildScopeMemberships builds every Scope that has neither targets nor members, and clears the membership of invalid
-// ones. Mission Control runs it at startup, so Scopes saved before membership was stored get theirs.
+// ones. Mission Control runs it before accepting requests: a grant through a Scope with no membership rows is refused,
+// so serving earlier would refuse grants that are in effect.
 func BuildScopeMemberships(ctx context.Context) error {
 	var scopes []models.Scope
 	if err := ctx.DB().Raw(`SELECT * FROM scopes s

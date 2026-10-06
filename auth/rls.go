@@ -5,14 +5,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/rls"
-	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
@@ -27,7 +25,8 @@ func init() {
 	rbac.ReadGrantsCover = readGrantsCover
 }
 
-// readGrantsCover reports whether the row filters of the subject's read grants allow rows of the resource type.
+// readGrantsCover reports whether the subject's claim filters the rows of the resource type.
+// A deny Permission on read leaves a type with no grants, which still filters it: its listing is empty, not refused.
 // While row-level security is off, nothing is filtered by row, so they cover nothing.
 func readGrantsCover(ctx context.Context, resourceType string) bool {
 	payload, err := GetRLSPayload(ctx)
@@ -38,24 +37,7 @@ func readGrantsCover(ctx context.Context, resourceType string) bool {
 		return false
 	}
 
-	switch resourceType {
-	case policy.ResourceConfig:
-		return hasAllowFilter(payload.Config)
-	case policy.ResourceComponent:
-		return hasAllowFilter(payload.Component)
-	case policy.ResourceCheck:
-		return hasAllowFilter(payload.Check)
-	case policy.ResourceCanary:
-		return hasAllowFilter(payload.Canary)
-	case policy.ResourcePlaybook:
-		return hasAllowFilter(payload.Playbook)
-	}
-	return false
-}
-
-// hasAllowFilter reports whether any filter allows rows. Deny filters alone allow none.
-func hasAllowFilter(filters []rls.Scope) bool {
-	return lo.SomeBy(filters, func(f rls.Scope) bool { return !f.Deny })
+	return payload.GrantsFor(resourceType) != nil
 }
 
 func getRLSCacheKey(userID string) string {
@@ -83,7 +65,7 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		return nil, fmt.Errorf("user is required for RLS payload")
 	}
 
-	impersonated := getImpersonatedPayload(ctx)
+	impersonated := getImpersonatedScopes(ctx)
 
 	// Federated identities have no implicit grants: their row filters come from their own grants
 	subject := user.ID.String()
@@ -93,7 +75,7 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 
 	cacheKey := getRLSCacheKey(subject)
 	if impersonated != nil {
-		cacheKey = fmt.Sprintf("%s:%s", cacheKey, impersonated.Fingerprint())
+		cacheKey = fmt.Sprintf("%s:scopes=%s", cacheKey, strings.Join(impersonated, ","))
 	}
 
 	if cached, ok := tokenCache.Get(cacheKey); ok {
@@ -105,15 +87,7 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		if roles, err := dutyRBAC.RolesForUser(user.ID.String()); err != nil {
 			return nil, err
 		} else if !lo.Contains(roles, policy.RoleGuest) {
-			payload := &rls.Payload{Disable: true}
-			if impersonated != nil {
-				result, err := applyImpersonation(payload, impersonated)
-				if err != nil {
-					return nil, err
-				}
-				tokenCache.SetDefault(cacheKey, result)
-				return result, nil
-			}
+			payload := applyImpersonation(&rls.Payload{Disable: true}, impersonated)
 			tokenCache.SetDefault(cacheKey, payload)
 			return payload, nil
 		}
@@ -125,15 +99,7 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		return nil, ctx.Oops().Wrap(err)
 	}
 
-	if impersonated != nil {
-		result, err := applyImpersonation(payload, impersonated)
-		if err != nil {
-			return nil, err
-		}
-		tokenCache.SetDefault(cacheKey, result)
-		return result, nil
-	}
-
+	payload = applyImpersonation(payload, impersonated)
 	tokenCache.SetDefault(cacheKey, payload)
 	return payload, nil
 }
@@ -165,12 +131,17 @@ func WithRLS(ctx context.Context, fn func(context.Context) error) error {
 	})
 }
 
-// buildRLSPayload converts the subject's read grants into row filters (rls.Scope) that Postgres
-// applies to every query, since casbin can't filter rows returned by /db.
+// buildRLSPayload converts the subject's read grants into the claim Postgres filters listings by,
+// since casbin can't filter rows returned by /db.
+//
+// Each type's grants name Scopes only: a row is listed when it's in every Scope of one of them,
+// which Postgres reads from stored membership. Role rules grant rows through their Scopes, narrowed by their
+// binding's constraint. Permissions grant rows only through the Scopes they name: inline selectors grant none.
+// A deny Permission on read can't be enforced row by row, so the types it covers list no rows.
 //
 // Casbin knows every grant that applies to the subject, directly or through roles, teams and bindings,
 // and has already split each grant into one policy per action. Each policy carries the id of the
-// Permission or the binding and role rule it came from, which hold the selectors the row filters are built from.
+// Permission or the binding and role rule it came from.
 func buildRLSPayload(ctx context.Context, subject string) (*rls.Payload, error) {
 	rules, err := dutyRBAC.PermsForUser(subject)
 	if err != nil {
@@ -193,18 +164,71 @@ func buildRLSPayload(ctx context.Context, subject string) (*rls.Payload, error) 
 		}
 	}
 
-	payload := &rls.Payload{}
-	if err := addPermissionFilters(ctx, payload, lo.Uniq(permissionIDs)); err != nil {
+	claim := newClaim()
+	if err := addPermissionGrants(ctx, claim, lo.Uniq(permissionIDs)); err != nil {
 		return nil, err
 	}
-	if err := addBindingRuleFilters(ctx, payload, bindingRules); err != nil {
+	if err := addBindingRuleGrants(ctx, claim, bindingRules); err != nil {
 		return nil, err
 	}
 
-	return payload, nil
+	return claim.payload(), nil
 }
 
-func addPermissionFilters(ctx context.Context, payload *rls.Payload, ids []string) error {
+// claim accumulates a subject's grants by resource type.
+type claim struct {
+	grants map[string]*rls.Grants
+	denied map[string]bool
+	view   []rls.Scope
+	scopes []string
+}
+
+func newClaim() *claim {
+	return &claim{grants: map[string]*rls.Grants{}, denied: map[string]bool{}}
+}
+
+// grant lists the rows of the type that the grant admits.
+func (c *claim) grant(kind string, grant rls.Grant) {
+	if !lo.Contains(rls.GrantTypes, kind) {
+		return
+	}
+	if c.grants[kind] == nil {
+		c.grants[kind] = rls.NoRows()
+	}
+	c.grants[kind].Add(grant)
+}
+
+// deny lists no rows of the type, whatever else grants them.
+func (c *claim) deny(kind string) {
+	if lo.Contains(rls.GrantTypes, kind) {
+		c.denied[kind] = true
+	}
+}
+
+func (c *claim) payload() *rls.Payload {
+	payload := &rls.Payload{View: c.view}
+	if len(c.scopes) > 0 {
+		payload.Scopes = lo.Uniq(c.scopes)
+	}
+	for _, kind := range rls.GrantTypes {
+		if c.denied[kind] {
+			payload.SetGrants(kind, rls.NoRows())
+		} else if grants := c.grants[kind]; grants != nil {
+			payload.SetGrants(kind, grants)
+		}
+	}
+	return payload
+}
+
+// typesOfObject are the resource types a Permission on a global object covers.
+var typesOfObject = map[string][]string{
+	policy.ObjectCatalog:   {policy.ResourceConfig},
+	policy.ObjectTopology:  {policy.ResourceComponent},
+	policy.ObjectCanary:    {policy.ResourceCanary, policy.ResourceCheck},
+	policy.ObjectPlaybooks: {policy.ResourcePlaybook},
+}
+
+func addPermissionGrants(ctx context.Context, claim *claim, ids []string) error {
 	if len(ids) == 0 {
 		return nil
 	}
@@ -213,27 +237,28 @@ func addPermissionFilters(ctx context.Context, payload *rls.Payload, ids []strin
 	err := ctx.DB().
 		Where("id IN ?", ids).
 		Where("deleted_at IS NULL").
-		Where("(object_selector IS NOT NULL) OR playbook_id IS NOT NULL OR canary_id IS NOT NULL OR component_id IS NOT NULL OR config_id IS NOT NULL OR connection_id IS NOT NULL").
 		Find(&permissions).Error
 	if err != nil {
 		return fmt.Errorf("failed to query permissions: %w", err)
 	}
 
 	for _, perm := range permissions {
-		if perm.ConfigID != nil {
-			addConfigFilter(payload, rls.Scope{ID: perm.ConfigID.String()}, perm.Deny)
-		}
-
-		if perm.ComponentID != nil {
-			addComponentFilter(payload, rls.Scope{ID: perm.ComponentID.String()}, perm.Deny)
-		}
-
-		if perm.PlaybookID != nil {
-			addPlaybookFilter(payload, rls.Scope{ID: perm.PlaybookID.String()}, perm.Deny)
-		}
-
-		if perm.CanaryID != nil {
-			addCanaryFilter(payload, rls.Scope{ID: perm.CanaryID.String()}, perm.Deny)
+		if perm.Deny {
+			for _, kind := range typesOfObject[perm.Object] {
+				claim.deny(kind)
+			}
+			if perm.ConfigID != nil {
+				claim.deny(policy.ResourceConfig)
+			}
+			if perm.ComponentID != nil {
+				claim.deny(policy.ResourceComponent)
+			}
+			if perm.PlaybookID != nil {
+				claim.deny(policy.ResourcePlaybook)
+			}
+			if perm.CanaryID != nil {
+				claim.deny(policy.ResourceCanary)
+			}
 		}
 
 		if len(perm.ObjectSelector) == 0 {
@@ -246,7 +271,7 @@ func addPermissionFilters(ctx context.Context, payload *rls.Payload, ids []strin
 			continue
 		}
 
-		if err := addObjectFilters(ctx, payload, selectors, perm.Deny); err != nil {
+		if err := addObjectGrants(ctx, claim, selectors, perm.Deny); err != nil {
 			return err
 		}
 	}
@@ -254,12 +279,12 @@ func addPermissionFilters(ctx context.Context, payload *rls.Payload, ids []strin
 	return nil
 }
 
-// addBindingRuleFilters adds the row filters of the given read rules (by id) of each binding.
-// A rule narrowed by a constraint filters the rows that match both Scopes.
+// addBindingRuleGrants adds the grants of the given read rules (by id) of each binding.
+// A rule narrowed by a constraint lists the rows in both Scopes.
 //
 // Role rules grant no rows of generated view tables: Views are outside the Role model.
 // A binding that can't be compiled grants no rows.
-func addBindingRuleFilters(ctx context.Context, payload *rls.Payload, bindingRules map[uuid.UUID][]string) error {
+func addBindingRuleGrants(ctx context.Context, claim *claim, bindingRules map[uuid.UUID][]string) error {
 	for bindingID, ids := range bindingRules {
 		rules, err := adapter.LoadBindingRules(ctx, bindingID)
 		if err != nil {
@@ -271,30 +296,12 @@ func addBindingRuleFilters(ctx context.Context, payload *rls.Payload, bindingRul
 		}
 
 		for _, rule := range rules {
-			if !lo.Contains(ids, rule.ID) || rule.Deny || rule.Contract.Action != policy.ActionRead {
+			if !lo.Contains(ids, rule.ID) {
 				continue
 			}
 
-			filters, err := rule.RowFilters()
-			if err != nil {
-				return fmt.Errorf("failed to build row filters of role binding %s: %w", bindingID, err)
-			}
-
-			for kind, kindFilters := range filters {
-				for _, filter := range kindFilters {
-					switch kind {
-					case policy.ResourceConfig:
-						addConfigFilter(payload, filter, false)
-					case policy.ResourceComponent:
-						addComponentFilter(payload, filter, false)
-					case policy.ResourceCheck:
-						addCheckFilter(payload, filter, false)
-					case policy.ResourcePlaybook:
-						addPlaybookFilter(payload, filter, false)
-					case policy.ResourceCanary:
-						addCanaryFilter(payload, filter, false)
-					}
-				}
+			for kind, grant := range rule.ReadGrants() {
+				claim.grant(kind, grant)
 			}
 		}
 	}
@@ -302,76 +309,43 @@ func addBindingRuleFilters(ctx context.Context, payload *rls.Payload, bindingRul
 	return nil
 }
 
-// addObjectFilters adds a row filter for each selector of the object
-func addObjectFilters(ctx context.Context, payload *rls.Payload, selectors v1.PermissionObject, deny bool) error {
-	// Permissions that reference Scope CRDs
+// addObjectGrants adds what a Permission's object grants on listings: the rows of the Scopes it names.
+// Its inline selectors grant no rows, except of views, which are still filtered by their selectors.
+// A deny covers every type its selectors or Scopes select.
+func addObjectGrants(ctx context.Context, claim *claim, selectors v1.PermissionObject, deny bool) error {
 	if len(selectors.Scopes) > 0 {
-		if err := addScopeCRDFilters(ctx, selectors.Scopes, payload, deny); err != nil {
+		if err := addScopeGrants(ctx, selectors.Scopes, claim, deny); err != nil {
 			return err
 		}
 	}
 
-	// Direct resource selectors (configs, components, playbooks, etc.)
-	// Only use tags, name, and agent_id as per requirements
-	for _, selector := range selectors.Configs {
-		addConfigFilter(payload, resourceSelectorToFilter(selector), deny)
-	}
-
-	for _, selector := range selectors.Components {
-		addComponentFilter(payload, resourceSelectorToFilter(selector), deny)
-	}
-
-	for _, selector := range selectors.Playbooks {
-		addPlaybookFilter(payload, resourceSelectorToFilter(selector), deny)
+	if deny {
+		if len(selectors.Configs) > 0 {
+			claim.deny(policy.ResourceConfig)
+		}
+		if len(selectors.Components) > 0 {
+			claim.deny(policy.ResourceComponent)
+		}
+		if len(selectors.Playbooks) > 0 {
+			claim.deny(policy.ResourcePlaybook)
+		}
 	}
 
 	for _, viewRef := range selectors.Views {
-		addViewFilter(payload, viewRefToFilter(viewRef), deny)
+		addViewFilter(claim, viewRefToFilter(viewRef), deny)
 	}
-
-	// TODO: No RLS support for connections yet!
-	// if len(selectors.Connections) > 0 {
-	// 	for _, selector := range selectors.Connections {
-	// 		payload.Connections = append(payload.Connections, resourceSelectorToFilter(selector))
-	// 	}
-	// }
 
 	return nil
 }
 
-func addConfigFilter(payload *rls.Payload, filter rls.Scope, deny bool) {
+func addViewFilter(claim *claim, filter rls.Scope, deny bool) {
 	filter.Deny = deny
-	payload.Config = append(payload.Config, filter)
+	claim.view = append(claim.view, filter)
 }
 
-func addComponentFilter(payload *rls.Payload, filter rls.Scope, deny bool) {
-	filter.Deny = deny
-	payload.Component = append(payload.Component, filter)
-}
-
-func addPlaybookFilter(payload *rls.Payload, filter rls.Scope, deny bool) {
-	filter.Deny = deny
-	payload.Playbook = append(payload.Playbook, filter)
-}
-
-func addCanaryFilter(payload *rls.Payload, filter rls.Scope, deny bool) {
-	filter.Deny = deny
-	payload.Canary = append(payload.Canary, filter)
-}
-
-func addCheckFilter(payload *rls.Payload, filter rls.Scope, deny bool) {
-	filter.Deny = deny
-	payload.Check = append(payload.Check, filter)
-}
-
-func addViewFilter(payload *rls.Payload, filter rls.Scope, deny bool) {
-	filter.Deny = deny
-	payload.View = append(payload.View, filter)
-}
-
-// addScopeCRDFilters fetches the referenced Scope CRDs and adds their targets as row filters.
+// addScopeGrants grants the rows of the referenced Scopes, of each type they select.
 // A missing or invalid Scope selects nothing.
-func addScopeCRDFilters(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSelector, payload *rls.Payload, deny bool) error {
+func addScopeGrants(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSelector, claim *claim, deny bool) error {
 	for _, ref := range scopeRefs {
 		scopeID, targets, err := adapter.LoadScope(ctx, nil, ref.Namespace, ref.Name)
 		if err != nil {
@@ -387,51 +361,22 @@ func addScopeCRDFilters(ctx context.Context, scopeRefs []dutyRBAC.NamespacedName
 
 		// Add scope UUID for view row-level grants
 		if !deny {
-			payload.Scopes = append(payload.Scopes, scopeID)
+			claim.scopes = append(claim.scopes, scopeID)
 		}
 
 		for _, target := range targets {
-			_, selector := target.Selector()
-			filter := resourceSelectorToFilter(selector)
-			if target.Config != nil {
-				addConfigFilter(payload, filter, deny)
-			}
-			if target.Component != nil {
-				addComponentFilter(payload, filter, deny)
-			}
-			if target.Playbook != nil {
-				addPlaybookFilter(payload, filter, deny)
-			}
-			if target.Canary != nil {
-				addCanaryFilter(payload, filter, deny)
-			}
+			kind, selector := target.Selector()
 			if target.View != nil {
-				addViewFilter(payload, filter, deny)
+				addViewFilter(claim, viewRefToFilter(dutyRBAC.ViewRef{ID: selector.ID, Name: selector.Name, Namespace: selector.Namespace}), deny)
+			} else if deny {
+				claim.deny(kind)
+			} else {
+				claim.grant(kind, rls.Grant{Scope: scopeID})
 			}
 		}
 	}
 
 	return nil
-}
-
-// resourceSelectorToFilter converts a types.ResourceSelector to a row filter
-// Only uses tags, name, and agent_id.
-func resourceSelectorToFilter(selector types.ResourceSelector) rls.Scope {
-	rlsScope := rls.Scope{}
-
-	if selector.Agent != "" {
-		rlsScope.Agents = []string{selector.Agent}
-	}
-
-	if selector.Name != "" {
-		rlsScope.Names = []string{selector.Name}
-	}
-
-	if selector.TagSelector != "" {
-		rlsScope.Tags = collections.SelectorToMap(selector.TagSelector)
-	}
-
-	return rlsScope
 }
 
 // viewRefToFilter converts a view ViewRef (namespace/name) to a row filter
@@ -446,9 +391,6 @@ func viewRefToFilter(viewRef dutyRBAC.ViewRef) rls.Scope {
 	if viewRef.ID != "" {
 		rlsScope.ID = viewRef.ID
 	}
-
-	// Note: namespace is not supported by match_scope for views
-	// ID would be set if we have a direct ID reference, but ViewRef doesn't have ID field
 
 	return rlsScope
 }

@@ -96,7 +96,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 	}
 
 	configTagged := func(tags map[string]string) models.ConfigItem {
-		return models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr("config"), Tags: tags}
+		return models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr("config"), Type: lo.ToPtr("Role::Test"), ConfigClass: "Test", Tags: tags}
 	}
 
 	var (
@@ -138,6 +138,11 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		teamB = &models.Team{Name: "role-team-b", CreatedBy: alice.ID}
 		Expect(DefaultContext.DB().Create(teamA).Error).To(Succeed())
 		Expect(DefaultContext.DB().Create(teamB).Error).To(Succeed())
+
+		// Checks read stored membership, so the configs they're made on must exist before the Scopes are built
+		for _, config := range []models.ConfigItem{tenantA, tenantB} {
+			Expect(DefaultContext.DB().Create(&config).Error).To(Succeed())
+		}
 
 		for _, scope := range []*v1.Scope{
 			newScope("all-playbooks", namespace, v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "*"}}),
@@ -198,6 +203,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		Expect(DefaultContext.DB().Where("namespace IN ?", namespaces).Delete(&models.RoleBinding{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace IN ?", namespaces).Delete(&models.Role{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace IN ?", namespaces).Delete(&models.Scope{}).Error).To(Succeed())
+		Expect(DefaultContext.DB().Where("id IN ?", []uuid.UUID{tenantA.ID, tenantB.ID}).Delete(&models.ConfigItem{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Delete(teamA).Error).To(Succeed())
 		Expect(DefaultContext.DB().Delete(teamB).Error).To(Succeed())
 		for _, p := range []*models.Person{alice, bob, carol, dave, erin, builtinAgent, rlsGuest, rlsTenantGuest} {
@@ -437,8 +443,22 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			rejectRole(on(allow("read", policy.ActionRead, "role-configs"), "all-configs"))
 		})
 
-		It("rejects read rules row filters can't enforce", func() {
-			rejectRole(allow("components-by-namespace", policy.ActionRead, "staging-components"))
+		It("accepts read rules over any scope: membership is decided by the resource alone", func() {
+			role := newRole("components-by-namespace", namespace, allow("components-by-namespace", policy.ActionRead, "staging-components"))
+			Expect(db.PersistRoleFromCRD(DefaultContext, role)).To(Succeed())
+			stored := storedRole(role.UID)
+			Expect(stored.Error).To(BeNil())
+			Expect(DefaultContext.DB().Delete(&stored).Error).To(Succeed())
+		})
+
+		It("rejects read rules over connections that aren't whole types", func() {
+			scope := newScope("aws-connections", namespace, v1.ScopeTarget{Connection: &v1.ScopeConnectionSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "aws"}}})
+			Expect(db.PersistScopeFromCRD(DefaultContext, scope)).To(Succeed())
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Delete(&models.Scope{}, "id = ?", scope.UID).Error).To(Succeed())
+			})
+
+			rejectRole(allow("aws-connections", policy.ActionRead, "aws-connections"))
 		})
 
 		It("rejects denying reads", func() {
@@ -684,17 +704,34 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 	})
 
 	Describe("row filters", func() {
+		// grant lists the rows in the named Scope, narrowed by the constraint's Scope when one is named.
+		grant := func(scopes ...string) *rls.Grants {
+			GinkgoHelper()
+			g := rls.NoRows()
+			ids := lo.Map(scopes, func(name string, _ int) string {
+				var scope models.Scope
+				Expect(DefaultContext.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", namespace, name).First(&scope).Error).To(Succeed())
+				return scope.ID.String()
+			})
+			grant := rls.Grant{Scope: ids[0]}
+			if len(ids) > 1 {
+				grant.Constraint = ids[1]
+			}
+			g.Add(grant)
+			return g
+		}
+
 		It("filters rows by the role's read rules", func() {
 			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(rlsGuest))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(payload.Disable).To(BeFalse())
-			Expect(payload.Config).To(ConsistOf(rls.Scope{Tags: map[string]string{"env": "role-test"}}))
+			Expect(payload.Config).To(Equal(grant("role-configs")))
 		})
 
-		It("filters rows by the intersection of the rule's scope and the constraint's", func() {
+		It("filters rows by the rule's scope and the constraint's", func() {
 			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(rlsTenantGuest))
 			Expect(err).ToNot(HaveOccurred())
-			Expect(payload.Config).To(ConsistOf(rls.Scope{Tags: map[string]string{"env": "role-test", "tenant": "a"}}))
+			Expect(payload.Config).To(Equal(grant("role-configs", "tenant-a-boundary")))
 		})
 
 		It("grants no rows of generated view tables", func() {
@@ -724,7 +761,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(reader).WithSubject(readerSubject))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(payload.Disable).To(BeFalse())
-			Expect(payload.Config).To(ConsistOf(rls.Scope{Tags: map[string]string{"env": "role-test", "tenant": "a"}}))
+			Expect(payload.Config).To(Equal(grant("role-configs", "tenant-a-boundary")))
 
 			listStatus := func(person *models.Person, subject, table string) int {
 				GinkgoHelper()
@@ -744,12 +781,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			payload, err = auth.GetRLSPayload(DefaultContext.WithUser(nobody).WithSubject(nobodySubject))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(payload.Disable).To(BeFalse())
-			Expect(payload.Config).To(BeEmpty())
-			Expect(payload.Component).To(BeEmpty())
-			Expect(payload.Playbook).To(BeEmpty())
-			Expect(payload.Canary).To(BeEmpty())
-			Expect(payload.View).To(BeEmpty())
-			Expect(payload.Scopes).To(BeEmpty())
+			Expect(payload).To(Equal(&rls.Payload{}))
 		})
 
 		It("lists checks only through a read of checks, not of canaries", func() {
@@ -795,8 +827,9 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		})
 
 		It("filters rows of canaries, which casbin requests never carry", func() {
-			Expect(db.PersistScopeFromCRD(DefaultContext, newScope("canaries", namespace,
-				v1.ScopeTarget{Canary: &v1.ScopeCanarySelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "http-check"}}}))).To(Succeed())
+			canaries := newScope("canaries", namespace,
+				v1.ScopeTarget{Canary: &v1.ScopeCanarySelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "http-check"}}})
+			Expect(db.PersistScopeFromCRD(DefaultContext, canaries)).To(Succeed())
 			role := newRole("read-canaries", namespace, allow("read", policy.ActionRead, "canaries"))
 			persistRole(role)
 			guest := setup.CreateUserWithRole(DefaultContext, "Role Canary Guest", "role-canary@test.com", policy.RoleGuest)
@@ -811,7 +844,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 
 			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(guest))
 			Expect(err).ToNot(HaveOccurred())
-			Expect(payload.Canary).To(ConsistOf(rls.Scope{Names: []string{"http-check"}}))
+			Expect(payload.Canary).To(Equal(grant("canaries")))
 			Expect(canRead(guest.ID.String(), configTagged(nil))).To(BeFalse())
 		})
 	})

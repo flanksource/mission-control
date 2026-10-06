@@ -45,7 +45,9 @@ var _ = ginkgo.Describe("ValidateSelector", func() {
 		{"playbook namespace", policy.ResourcePlaybook, types.ResourceSelector{Namespace: "operations"}, true},
 		{"wildcard", policy.ResourceView, types.ResourceSelector{Name: "*"}, true},
 		{"empty", policy.ResourceConfig, types.ResourceSelector{}, false},
-		{"name prefix", policy.ResourceConfig, types.ResourceSelector{Name: "nginx-*"}, false},
+		{"name prefix", policy.ResourceConfig, types.ResourceSelector{Name: "nginx-*"}, true},
+		{"name prefix with a second wildcard", policy.ResourceConfig, types.ResourceSelector{Name: "nginx-*-*"}, false},
+		{"lone wildcard prefix", policy.ResourceConfig, types.ResourceSelector{Name: "**"}, false},
 		{"name list", policy.ResourceConfig, types.ResourceSelector{Name: "a,b"}, false},
 		{"uppercase id", policy.ResourceConfig, types.ResourceSelector{ID: "3C3E0B2A-9F1E-4D2B-8C5A-1E2F3A4B5C6D"}, false},
 		{"agent name, resolved when the scope is validated", policy.ResourceConfig, types.ResourceSelector{Agent: "homelab"}, true},
@@ -112,55 +114,19 @@ var _ = ginkgo.Describe("validateInput", func() {
 		Expect(read.validateInput("resource", views)).ToNot(Succeed())
 	})
 
-	ginkgo.It("rejects read selectors row filters can't enforce", func() {
+	ginkgo.It("accepts any read scope: membership is decided by the resource alone", func() {
 		Expect(read.validateInput("resource", tenantA)).To(Succeed())
-		Expect(read.validateInput("resource", targets)).ToNot(Succeed())
+		Expect(read.validateInput("resource", targets)).To(Succeed())
+	})
+
+	ginkgo.It("only accepts whole-type connections for read, since connections aren't filtered by row", func() {
+		Expect(read.validateInput("resource", scope("all-connections", map[string][]types.ResourceSelector{policy.ResourceConnection: {{Name: "*"}}}))).To(Succeed())
+		Expect(read.validateInput("resource", scope("aws", map[string][]types.ResourceSelector{policy.ResourceConnection: {{Name: "aws"}}}))).ToNot(Succeed())
 	})
 
 	ginkgo.It("only accepts whole types for actions checked on object types", func() {
 		Expect(update.validateInput("resource", allConfigs)).To(Succeed())
 		Expect(update.validateInput("resource", tenantA)).ToNot(Succeed())
-	})
-})
-
-var _ = ginkgo.Describe("RowFilter", func() {
-	ginkgo.It("matches a config's namespace as its namespace tag", func() {
-		filter, err := RowFilter(policy.ResourceConfig, types.ResourceSelector{Namespace: "staging", TagSelector: "team=payments"})
-		Expect(err).ToNot(HaveOccurred())
-		Expect(*filter).To(Equal(rls.Scope{Tags: map[string]string{"namespace": "staging", "team": "payments"}}))
-	})
-
-	ginkgo.It("matches every row for a wildcard", func() {
-		filter, err := RowFilter(policy.ResourceConfig, types.ResourceSelector{Name: "*"})
-		Expect(err).ToNot(HaveOccurred())
-		Expect(*filter).To(Equal(rls.Scope{ID: "*"}))
-	})
-
-	ginkgo.It("matches no row when the namespace contradicts the namespace tag", func() {
-		filter, err := RowFilter(policy.ResourceConfig, types.ResourceSelector{Namespace: "staging", TagSelector: "namespace=production"})
-		Expect(err).ToNot(HaveOccurred())
-		Expect(filter).To(BeNil())
-	})
-
-	ginkgo.It("filters checks by name", func() {
-		filter, err := RowFilter(policy.ResourceCheck, types.ResourceSelector{Name: "http"})
-		Expect(err).ToNot(HaveOccurred())
-		Expect(*filter).To(Equal(rls.Scope{Names: []string{"http"}}))
-	})
-
-	ginkgo.It("rejects what row filters can't match", func() {
-		for kind, selector := range map[string]types.ResourceSelector{
-			policy.ResourceComponent:  {Namespace: "staging"},
-			policy.ResourcePlaybook:   {Namespace: "operations"},
-			policy.ResourceCheck:      {Namespace: "staging"},
-			policy.ResourceConnection: {Name: "aws"},
-		} {
-			_, err := RowFilter(kind, selector)
-			Expect(err).To(HaveOccurred(), kind)
-		}
-
-		_, err := RowFilter(policy.ResourceConfig, types.ResourceSelector{TagSelector: "env!=prod"})
-		Expect(err).To(HaveOccurred())
 	})
 })
 
@@ -188,25 +154,45 @@ var _ = ginkgo.Describe("row-level security requirement", func() {
 	})
 })
 
-var _ = ginkgo.Describe("CompiledRule.RowFilters", func() {
-	ginkgo.It("filters by the intersection of every scope of the rule", func() {
-		rule := CompiledRule{Resource: []ScopeSelection{
-			{Name: "production", Selectors: map[string][]types.ResourceSelector{
-				policy.ResourceConfig:    {{TagSelector: "env=production"}},
-				policy.ResourceComponent: {{Name: "api"}},
-			}},
-			{Name: "tenant-a", Selectors: map[string][]types.ResourceSelector{
-				policy.ResourceConfig: {{TagSelector: "tenant=a"}, {TagSelector: "tenant=shared"}},
-			}},
-		}}
+var _ = ginkgo.Describe("CompiledRule", func() {
+	read, _ := ContractFor(policy.ActionRead)
+	run, _ := ContractFor(policy.ActionPlaybookRun)
 
-		filters, err := rule.RowFilters()
+	production := ScopeSelection{ID: "00000000-0000-4000-8000-000000000001", Name: "production", Selectors: map[string][]types.ResourceSelector{
+		policy.ResourceConfig:    {{TagSelector: "env=production"}},
+		policy.ResourceComponent: {{Name: "api"}},
+	}}
+	tenantA := ScopeSelection{ID: "00000000-0000-4000-8000-000000000002", Name: "tenant-a", Selectors: map[string][]types.ResourceSelector{
+		policy.ResourceConfig: {{TagSelector: "tenant=a"}},
+	}}
+
+	ginkgo.It("lists, by type, the rows in every scope of a read rule", func() {
+		rule := CompiledRule{Contract: read, Resource: []ScopeSelection{production, tenantA}}
+		Expect(rule.ReadGrants()).To(Equal(map[string]rls.Grant{
+			policy.ResourceConfig: {Scope: production.ID, Constraint: tenantA.ID},
+		}), "tenant-a selects no components, so no component rows are listed")
+
+		Expect(CompiledRule{Contract: read, Resource: []ScopeSelection{production}}.ReadGrants()).To(Equal(map[string]rls.Grant{
+			policy.ResourceConfig:    {Scope: production.ID},
+			policy.ResourceComponent: {Scope: production.ID},
+		}))
+	})
+
+	ginkgo.It("lists no rows through rules of other actions", func() {
+		Expect(CompiledRule{Contract: run, Resource: []ScopeSelection{production}}.ReadGrants()).To(BeEmpty())
+	})
+
+	ginkgo.It("matches requests by the scopes of their resources", func() {
+		rule := CompiledRule{Name: "read", Contract: read, Resource: []ScopeSelection{production, tenantA}}
+		condition, err := rule.condition()
 		Expect(err).ToNot(HaveOccurred())
-		Expect(filters).To(Equal(map[string][]rls.Scope{
-			policy.ResourceConfig: {
-				{Tags: map[string]string{"env": "production", "tenant": "a"}},
-				{Tags: map[string]string{"env": "production", "tenant": "shared"}},
-			},
-		}), "tenant-a selects no components, so no component rows are left")
+		Expect(condition).To(Equal("r.obj.Membership.Fits && !r.obj.Membership.HasTarget && " +
+			"'scope:" + production.ID + "' in r.obj.Membership.Resource && 'scope:" + tenantA.ID + "' in r.obj.Membership.Resource"))
+
+		deny := CompiledRule{Name: "deny", Contract: run, Deny: true, Resource: []ScopeSelection{production}, Target: []ScopeSelection{tenantA}}
+		condition, err = deny.condition()
+		Expect(err).ToNot(HaveOccurred())
+		Expect(condition).To(Equal("!r.obj.Membership.Fits || (r.obj.Membership.HasTarget && " +
+			"'scope:" + production.ID + "' in r.obj.Membership.Resource && 'scope:" + tenantA.ID + "' in r.obj.Membership.Target)"))
 	})
 })
