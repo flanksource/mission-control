@@ -2,14 +2,22 @@ package rbac
 
 import (
 	"encoding/json"
-	"strconv"
+	"fmt"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
+	"github.com/google/uuid"
+	gocache "github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 // Access is how much of a resource type a subject may act on.
@@ -33,20 +41,41 @@ var summaryObjects = map[string]string{
 // summaryActions are the actions the access summary reports for each resource type.
 var summaryActions = []string{policy.ActionRead, policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete}
 
+// summaryCache holds summaries by subject and built-in roles. It's flushed whenever grants change.
+var summaryCache = gocache.New(10*time.Minute, 10*time.Minute)
+
+// FlushAccessSummaries drops every cached access summary. Call it whenever grants change.
+func FlushAccessSummaries() {
+	summaryCache.Flush()
+}
+
 // AccessSummary reports, for each resource type and action, whether the subject may act on all, some or none of it.
 //
 // A grant on the whole type gives all, and a deny on part of it lowers that to some.
 // Otherwise, grants that select only some resources of the type give some, even when they currently match no resource.
 // A deny on the whole type gives none.
-//
-// Deny rules never apply to admins, so an admin may act on all of every type.
 func AccessSummary(ctx context.Context) map[string]map[string]Access {
-	roles := builtInRoles(ctx)
-	guest := lo.Contains(roles, policy.RoleGuest)
+	user := ctx.User()
+	if user == nil {
+		return noAccess()
+	}
 
-	var grants []selectorGrant
-	if !lo.Contains(roles, policy.RoleAdmin) {
-		grants = selectorGrantsOf(ctx)
+	roles := builtInRoles(ctx)
+	cacheKey := fmt.Sprintf("%s:%s", ctx.Subject(), strings.Join(roles, ","))
+	if cached, ok := summaryCache.Get(cacheKey); ok {
+		return cached.(map[string]map[string]Access)
+	}
+
+	guest := lo.Contains(roles, policy.RoleGuest)
+	grants, err := selectorGrantsOf(ctx)
+	if err != nil {
+		ctx.Warnf("failed to load the grants of %s: %v", ctx.Subject(), err)
+		return noAccess()
+	}
+
+	// Deny rules from Permissions and RoleBindings never apply to admins, built-in ones do
+	if lo.Contains(roles, policy.RoleAdmin) {
+		grants = lo.Filter(grants, func(g selectorGrant, _ int) bool { return !g.deny || g.builtIn })
 	}
 
 	summary := make(map[string]map[string]Access, len(summaryObjects))
@@ -57,20 +86,35 @@ func AccessSummary(ctx context.Context) map[string]map[string]Access {
 		}
 	}
 
+	summaryCache.SetDefault(cacheKey, summary)
+	return summary
+}
+
+func noAccess() map[string]map[string]Access {
+	summary := make(map[string]map[string]Access, len(summaryObjects))
+	for resourceType := range summaryObjects {
+		summary[resourceType] = make(map[string]Access, len(summaryActions))
+		for _, action := range summaryActions {
+			summary[resourceType][action] = AccessNone
+		}
+	}
 	return summary
 }
 
 func accessTo(ctx context.Context, grants []selectorGrant, resourceType, object, action string, guest bool) Access {
-	if deniesWhole(grants, resourceType, object, action) {
+	applicable := lo.Filter(grants, func(g selectorGrant, _ int) bool { return g.action == action || g.action == "*" })
+	denies := lo.Filter(applicable, func(g selectorGrant, _ int) bool { return g.deny })
+
+	if lo.SomeBy(denies, func(g selectorGrant) bool { return g.deniesWhole(resourceType, object) }) {
 		return AccessNone
 	}
 
-	partlyDenied := lo.SomeBy(grants, func(g selectorGrant) bool { return g.deny && g.selects(resourceType, action) })
+	partlyDenied := lo.SomeBy(denies, func(g selectorGrant) bool { return g.selects(resourceType) })
 	if wholeType(ctx, object, action, guest) {
 		return lo.Ternary(partlyDenied, AccessSome, AccessAll)
 	}
 
-	if hasSomeGrant(ctx, grants, resourceType, action) {
+	if hasSomeGrant(ctx, applicable, resourceType, action) {
 		return AccessSome
 	}
 	return AccessNone
@@ -87,149 +131,236 @@ func wholeType(ctx context.Context, object, action string, guest bool) bool {
 }
 
 // hasSomeGrant reports whether the subject has a grant that selects some resources of the type.
-// Reads are granted by the row filters of read grants, which only exist while row-level security is on.
+//
+// Reads are granted by the row filters of read grants, the same ones its listings use. They only exist while
+// row-level security is on, and never for connections, which can't be filtered by row.
 func hasSomeGrant(ctx context.Context, grants []selectorGrant, resourceType, action string) bool {
 	if action == policy.ActionRead {
 		return ReadGrantsCover != nil && ReadGrantsCover(ctx, resourceType)
 	}
-	return lo.SomeBy(grants, func(g selectorGrant) bool { return !g.deny && g.selects(resourceType, action) })
+	return lo.SomeBy(grants, func(g selectorGrant) bool { return !g.deny && g.selects(resourceType) })
 }
 
-// deniesWhole reports whether a deny covers every resource of the type: one on the object itself,
-// or one whose selector matches every resource of the type.
-func deniesWhole(grants []selectorGrant, resourceType, object, action string) bool {
-	return lo.SomeBy(grants, func(g selectorGrant) bool {
-		if !g.deny || !actionMatches(action, g.action) {
-			return false
-		}
-		if g.types == nil {
-			return g.object == object || g.object == "*"
-		}
-		return g.types[resourceType]
-	})
-}
-
-// selectorGrant is a casbin policy of the subject, with the resource types its condition selects.
+// selectorGrant is an allow or deny of one action that the enforcer checks against the resources of each request,
+// or a deny of a whole object.
 type selectorGrant struct {
-	object string
 	action string
 	deny   bool
 
-	// types maps each resource type the condition selects to whether it selects every resource of the type.
-	// Nil for a policy without a condition, which applies to its object as a whole.
+	// object is set for a deny of a whole object, e.g. catalog, or of every object ("*").
+	object string
+
+	// builtIn is set for a policy that doesn't come from a Permission or a RoleBinding.
+	builtIn bool
+
+	// types maps each resource type the grant selects to whether it selects every resource of the type.
 	types map[string]bool
+
+	// outsideContract is set for a deny rule of a Role, which also denies the requests on types its action doesn't accept.
+	outsideContract []string
 }
 
-func (g selectorGrant) selects(resourceType, action string) bool {
-	if g.types == nil || !actionMatches(action, g.action) {
-		return false
-	}
+func (g selectorGrant) selects(resourceType string) bool {
 	_, ok := g.types[resourceType]
 	return ok
 }
 
-func actionMatches(action, policyAction string) bool {
-	return policyAction == "*" || policyAction == action
+func (g selectorGrant) deniesWhole(resourceType, object string) bool {
+	if !g.deny {
+		return false
+	} else if g.object != "" {
+		return g.object == object || g.object == "*"
+	}
+	return g.types[resourceType] || (len(g.outsideContract) > 0 && !slices.Contains(g.outsideContract, resourceType))
 }
 
-// selectorGrantsOf returns the subject's policies, with the resource types each condition selects.
-func selectorGrantsOf(ctx context.Context) []selectorGrant {
-	user := ctx.User()
-	if user == nil {
-		return nil
-	}
-
-	subject := user.ID.String()
+// selectorGrantsOf returns the grants of the subject that the enforcer checks against the resources of each request,
+// and its denies of whole objects. Allows of whole objects aren't included: the enforcer answers for them directly.
+func selectorGrantsOf(ctx context.Context) ([]selectorGrant, error) {
+	subject := ctx.User().ID.String()
 	if s := ctx.Subject(); !rbac.HasImplicitGrants(s) {
 		subject = s
 	}
 
 	perms, err := rbac.PermsForUser(subject)
 	if err != nil {
-		ctx.Warnf("failed to get permissions of %s: %v", subject, err)
-		return nil
+		return nil, err
 	}
 
-	grants := make([]selectorGrant, 0, len(perms))
+	// A person joins everyone on their first check, which may not have happened yet
+	if rbac.HasImplicitGrants(subject) {
+		everyone, err := rbac.PermsForUser(policy.RoleEveryone)
+		if err != nil {
+			return nil, err
+		}
+		perms = append(perms, everyone...)
+	}
+
+	permissionActions := map[uuid.UUID][]policy.Permission{}
+	bindingRules := map[uuid.UUID][]string{}
+	var grants []selectorGrant
 	for _, perm := range perms {
-		grant := selectorGrant{object: perm.Object, action: perm.Action, deny: perm.Deny}
-		if perm.Condition != "" {
-			grant.types = conditionTypes(perm.Condition)
-		}
-		grants = append(grants, grant)
-	}
-	return grants
-}
-
-var idConditionTypes = map[string]string{
-	"str(r.obj.Config.ID)":     policy.ResourceConfig,
-	"str(r.obj.Component.ID)":  policy.ResourceComponent,
-	"str(r.obj.Canary.ID)":     policy.ResourceCanary,
-	"str(r.obj.Playbook.ID)":   policy.ResourcePlaybook,
-	"str(r.obj.Connection.ID)": policy.ResourceConnection,
-}
-
-// conditionTypes returns the resource types a policy condition selects, and whether it selects every resource of each.
-// The conditions are the ones Permissions and RoleBindings compile to.
-func conditionTypes(condition string) map[string]bool {
-	selected := map[string]bool{}
-	for _, clause := range strings.Split(condition, " && ") {
-		if arg, ok := conditionArg(clause, "matchRule(r.obj, "); ok {
-			var rule rbac.RuleCondition
-			if json.Unmarshal([]byte(arg), &rule) == nil {
-				addRuleTypes(selected, rule)
+		if perm.Condition == "" {
+			if perm.Deny {
+				grants = append(grants, selectorGrant{action: perm.Action, deny: true, object: perm.Object, builtIn: perm.ID == "" || perm.ID == "na"})
 			}
-		} else if arg, ok := conditionArg(clause, "matchResourceSelector(r.obj, "); ok {
-			var selectors rbac.Selectors
-			if json.Unmarshal([]byte(arg), &selectors) == nil {
-				addSelectorTypes(selected, policy.ResourceConfig, selectors.Configs)
-				addSelectorTypes(selected, policy.ResourceComponent, selectors.Components)
-				addSelectorTypes(selected, policy.ResourcePlaybook, selectors.Playbooks)
-				addSelectorTypes(selected, policy.ResourceConnection, selectors.Connections)
-			}
-		} else if field, _, ok := strings.Cut(clause, " == "); ok {
-			if resourceType, ok := idConditionTypes[field]; ok {
-				if _, ok := selected[resourceType]; !ok {
-					selected[resourceType] = false
-				}
-			}
-		}
-	}
-	return selected
-}
-
-// conditionArg returns the unquoted argument of a call to a condition function.
-func conditionArg(clause, prefix string) (string, bool) {
-	quoted, ok := strings.CutPrefix(clause, prefix)
-	if !ok {
-		return "", false
-	}
-	arg, err := strconv.Unquote(strings.TrimSuffix(quoted, ")"))
-	return arg, err == nil
-}
-
-// addRuleTypes adds the resource types a compiled Role rule selects: those every Scope it must belong to selects.
-func addRuleTypes(selected map[string]bool, rule rbac.RuleCondition) {
-	if len(rule.Resource) == 0 {
-		return
-	}
-	for _, resourceType := range rule.ResourceTypes {
-		if !lo.EveryBy(rule.Resource, func(r rbac.RuleResources) bool { return len(r[resourceType]) > 0 }) {
 			continue
 		}
-		whole := lo.EveryBy(rule.Resource, func(r rbac.RuleResources) bool { return lo.SomeBy(r[resourceType], types.ResourceSelector.Wildcard) })
-		selected[resourceType] = selected[resourceType] || whole
+
+		// A policy with a condition only matches requests on resources, and those only match the object "*"
+		if perm.Object != "*" {
+			continue
+		}
+
+		if bindingID, _, ok := adapter.ParseBindingRuleID(perm.ID); ok {
+			bindingRules[bindingID] = append(bindingRules[bindingID], perm.ID)
+		} else if id, err := uuid.Parse(perm.ID); err == nil {
+			permissionActions[id] = append(permissionActions[id], perm)
+		}
 	}
+
+	permissionGrants, err := permissionSelectorGrants(ctx, permissionActions)
+	if err != nil {
+		return nil, err
+	}
+
+	ruleGrants, err := bindingSelectorGrants(ctx, bindingRules)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(append(grants, permissionGrants...), ruleGrants...), nil
 }
 
-func addSelectorTypes(selected map[string]bool, resourceType string, selectors []types.ResourceSelector) {
-	if len(selectors) == 0 {
-		return
+// permissionSelectorGrants returns the grants of the given Permissions, for the actions their policies carry.
+func permissionSelectorGrants(ctx context.Context, policies map[uuid.UUID][]policy.Permission) ([]selectorGrant, error) {
+	if len(policies) == 0 {
+		return nil, nil
 	}
-	selected[resourceType] = selected[resourceType] || lo.SomeBy(selectors, types.ResourceSelector.Wildcard)
+
+	var permissions []models.Permission
+	if err := ctx.DB().Where("id IN ? AND deleted_at IS NULL", lo.Keys(policies)).Find(&permissions).Error; err != nil {
+		return nil, fmt.Errorf("failed to load permissions: %w", err)
+	}
+
+	var grants []selectorGrant
+	for _, permission := range permissions {
+		selections, err := permissionSelections(ctx, permission)
+		if err != nil {
+			ctx.Warnf("permission %s selects nothing: %v", permission.ID, err)
+			continue
+		}
+
+		actions := lo.Uniq(lo.Map(policies[permission.ID], func(p policy.Permission, _ int) string { return p.Action }))
+		for _, selected := range selections {
+			for _, action := range actions {
+				grants = append(grants, selectorGrant{action: action, deny: permission.Deny, types: selected})
+			}
+		}
+	}
+	return grants, nil
 }
 
-// builtInRoles returns the roles of the subject when it's a person.
+// permissionSelections returns what each policy of the Permission selects: one per target of the Scopes it references,
+// or one for its own selectors.
+//
+// A policy only matches requests that carry every type it names, so a policy naming several types selects none of them
+// on its own and isn't returned.
+func permissionSelections(ctx context.Context, permission models.Permission) ([]map[string]bool, error) {
+	objects, err := adapter.ExpandPermissionScopes(ctx, nil, permission)
+	if err != nil {
+		return nil, err
+	} else if objects == nil {
+		var object v1.PermissionObject
+		if len(permission.ObjectSelector) > 0 {
+			if err := json.Unmarshal(permission.ObjectSelector, &object); err != nil {
+				return nil, err
+			}
+		}
+		objects = []v1.PermissionObject{object}
+	}
+
+	ids := map[string]bool{
+		policy.ResourceConfig:     permission.ConfigID != nil,
+		policy.ResourceComponent:  permission.ComponentID != nil,
+		policy.ResourceCanary:     permission.CanaryID != nil,
+		policy.ResourcePlaybook:   permission.PlaybookID != nil,
+		policy.ResourceConnection: permission.ConnectionID != nil,
+	}
+
+	var selections []map[string]bool
+	for _, object := range objects {
+		named := map[string][]types.ResourceSelector{
+			policy.ResourceConfig:     object.Configs,
+			policy.ResourceComponent:  object.Components,
+			policy.ResourcePlaybook:   object.Playbooks,
+			policy.ResourceConnection: object.Connections,
+		}
+
+		selected := map[string]bool{}
+		for resourceType, selectors := range named {
+			if len(selectors) > 0 {
+				selected[resourceType] = !ids[resourceType] && lo.SomeBy(selectors, selectsAll)
+			}
+		}
+		for resourceType, byID := range ids {
+			if byID {
+				selected[resourceType] = false
+			}
+		}
+		if len(object.Views) > 0 {
+			selected[policy.ResourceView] = false
+		}
+
+		if len(selected) == 1 {
+			selections = append(selections, selected)
+		}
+	}
+	return selections, nil
+}
+
+// bindingSelectorGrants returns the grants of the given rules (by id) of each binding.
+func bindingSelectorGrants(ctx context.Context, bindingRules map[uuid.UUID][]string) ([]selectorGrant, error) {
+	var grants []selectorGrant
+	for bindingID, ids := range bindingRules {
+		rules, err := adapter.LoadBindingRules(ctx, bindingID)
+		if err != nil {
+			if adapter.IsValidationError(err) {
+				continue
+			}
+			return nil, fmt.Errorf("failed to load rules of role binding %s: %w", bindingID, err)
+		}
+
+		for _, rule := range rules {
+			if !slices.Contains(ids, rule.ID) || len(rule.Resource) == 0 {
+				continue
+			}
+
+			grant := selectorGrant{action: rule.Contract.Action, deny: rule.Deny, types: map[string]bool{}}
+			if rule.Deny {
+				grant.outsideContract = rule.Contract.Resources
+			}
+
+			for _, resourceType := range rule.Contract.Resources {
+				if !lo.EveryBy(rule.Resource, func(s adapter.ScopeSelection) bool { return len(s.Selectors[resourceType]) > 0 }) {
+					continue
+				}
+				grant.types[resourceType] = lo.EveryBy(rule.Resource, func(s adapter.ScopeSelection) bool {
+					return lo.SomeBy(s.Selectors[resourceType], selectsAll)
+				})
+			}
+			grants = append(grants, grant)
+		}
+	}
+	return grants, nil
+}
+
+// selectsAll reports whether the selector matches every resource of its type.
+func selectsAll(selector types.ResourceSelector) bool {
+	return selector.Wildcard() || selector.IsEmpty()
+}
+
+// builtInRoles returns the sorted roles of the subject when it's a person.
 // When the roles can't be read, it reports guest, so that only the subject's own grants count.
 func builtInRoles(ctx context.Context) []string {
 	user := ctx.User()
@@ -242,5 +373,7 @@ func builtInRoles(ctx context.Context) []string {
 		ctx.Warnf("failed to get roles of %s: %v", user.ID, err)
 		return []string{policy.RoleGuest}
 	}
+	roles = lo.Uniq(roles)
+	slices.Sort(roles)
 	return roles
 }

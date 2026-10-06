@@ -819,6 +819,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 	Describe("access summary", func() {
 		summaryOf := func(person *models.Person, action string) map[string]mcRBAC.Access {
 			GinkgoHelper()
+			mcRBAC.FlushAccessSummaries()
 			summary := map[string]mcRBAC.Access{}
 			for resourceType, actions := range mcRBAC.AccessSummary(DefaultContext.WithUser(person)) {
 				summary[resourceType] = actions[action]
@@ -921,6 +922,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			}))
 			Expect(summaryOf(viewer, policy.ActionUpdate)).To(HaveEach(mcRBAC.AccessNone))
 
+			mcRBAC.FlushAccessSummaries()
 			for _, actions := range mcRBAC.AccessSummary(DefaultContext.WithUser(admin)) {
 				Expect(actions).To(HaveEach(mcRBAC.AccessAll))
 			}
@@ -963,6 +965,52 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 
 			Expect(readSummaryOf(viewer)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessSome))
 			Expect(readSummaryOf(viewer)[policy.ResourceComponent]).To(Equal(mcRBAC.AccessAll))
+		})
+
+		It("doesn't count a Permission that names several types towards any of them", func() {
+			viewer := createUser("multi-type", policy.RoleViewer)
+			createPermission(&models.Permission{
+				Name:           "summary-update-configs-with-playbook",
+				Action:         policy.ActionUpdate,
+				Subject:        viewer.ID.String(),
+				ObjectSelector: []byte(`{"configs":[{"name":"*"}],"playbooks":[{"name":"echo-config"}]}`),
+			})
+			createPermission(&models.Permission{
+				Name:           "summary-deny-configs-with-playbook",
+				Action:         policy.ActionRead,
+				Subject:        viewer.ID.String(),
+				Deny:           true,
+				ObjectSelector: []byte(`{"configs":[{"name":"*"}],"playbooks":[{"name":"echo-config"}]}`),
+			})
+
+			Expect(summaryOf(viewer, policy.ActionUpdate)).To(HaveEach(mcRBAC.AccessNone))
+			Expect(readSummaryOf(viewer)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessAll))
+		})
+
+		It("reads a selector whatever its text contains", func() {
+			viewer := createUser("search-deny", policy.RoleViewer)
+			createPermission(&models.Permission{
+				Name:           "summary-deny-search",
+				Action:         policy.ActionRead,
+				Subject:        viewer.ID.String(),
+				Deny:           true,
+				ObjectSelector: []byte(`{"configs":[{"search":"a && b"}]}`),
+			})
+
+			Expect(readSummaryOf(viewer)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessSome))
+		})
+
+		It("gives none under a deny whose selector matches every resource", func() {
+			viewer := createUser("empty-selector-deny", policy.RoleViewer)
+			createPermission(&models.Permission{
+				Name:           "summary-deny-empty-selector",
+				Action:         policy.ActionRead,
+				Subject:        viewer.ID.String(),
+				Deny:           true,
+				ObjectSelector: []byte(`{"configs":[{}]}`),
+			})
+
+			Expect(readSummaryOf(viewer)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessNone))
 		})
 
 		It("gives none under a deny on the whole type", func() {

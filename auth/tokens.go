@@ -25,10 +25,12 @@ import (
 	"github.com/flanksource/incident-commander/auth/accesstoken"
 	"github.com/flanksource/incident-commander/auth/signing"
 	"github.com/flanksource/incident-commander/db"
+	icrbac "github.com/flanksource/incident-commander/rbac"
 )
 
 func FlushTokenCache() {
 	tokenCache.Flush()
+	icrbac.FlushAccessSummaries()
 }
 
 // tokenCache caches
