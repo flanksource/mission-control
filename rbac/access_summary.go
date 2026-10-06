@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/flanksource/duty/context"
@@ -44,8 +46,18 @@ var summaryActions = []string{policy.ActionRead, policy.ActionCreate, policy.Act
 // summaryCache holds summaries by subject and built-in roles. It's flushed whenever grants change.
 var summaryCache = gocache.New(10*time.Minute, 10*time.Minute)
 
+// summaryGeneration counts flushes, so a summary computed across a flush isn't cached.
+// summaryFlush keeps a flush from landing between that check and the write.
+var (
+	summaryGeneration atomic.Uint64
+	summaryFlush      sync.RWMutex
+)
+
 // FlushAccessSummaries drops every cached access summary. Call it whenever grants change.
 func FlushAccessSummaries() {
+	summaryFlush.Lock()
+	defer summaryFlush.Unlock()
+	summaryGeneration.Add(1)
 	summaryCache.Flush()
 }
 
@@ -65,6 +77,7 @@ func AccessSummary(ctx context.Context) map[string]map[string]Access {
 	if cached, ok := summaryCache.Get(cacheKey); ok {
 		return cached.(map[string]map[string]Access)
 	}
+	generation := summaryGeneration.Load()
 
 	guest := lo.Contains(roles, policy.RoleGuest)
 	grants, err := selectorGrantsOf(ctx)
@@ -86,7 +99,11 @@ func AccessSummary(ctx context.Context) map[string]map[string]Access {
 		}
 	}
 
-	summaryCache.SetDefault(cacheKey, summary)
+	summaryFlush.RLock()
+	if summaryGeneration.Load() == generation {
+		summaryCache.SetDefault(cacheKey, summary)
+	}
+	summaryFlush.RUnlock()
 	return summary
 }
 
