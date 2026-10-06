@@ -155,9 +155,6 @@ type selectorGrant struct {
 
 	// types maps each resource type the grant selects to whether it selects every resource of the type.
 	types map[string]bool
-
-	// outsideContract is set for a deny rule of a Role, which also denies the requests on types its action doesn't accept.
-	outsideContract []string
 }
 
 func (g selectorGrant) selects(resourceType string) bool {
@@ -171,7 +168,7 @@ func (g selectorGrant) deniesWhole(resourceType, object string) bool {
 	} else if g.object != "" {
 		return g.object == object || g.object == "*"
 	}
-	return g.types[resourceType] || (len(g.outsideContract) > 0 && !slices.Contains(g.outsideContract, resourceType))
+	return g.types[resourceType]
 }
 
 // selectorGrantsOf returns the grants of the subject that the enforcer checks against the resources of each request,
@@ -197,7 +194,6 @@ func selectorGrantsOf(ctx context.Context) ([]selectorGrant, error) {
 	}
 
 	permissionActions := map[uuid.UUID][]policy.Permission{}
-	bindingRules := map[uuid.UUID][]string{}
 	var grants []selectorGrant
 	for _, perm := range perms {
 		if perm.Condition == "" {
@@ -212,9 +208,9 @@ func selectorGrantsOf(ctx context.Context) ([]selectorGrant, error) {
 			continue
 		}
 
-		if bindingID, _, ok := adapter.ParseBindingRuleID(perm.ID); ok {
-			bindingRules[bindingID] = append(bindingRules[bindingID], perm.ID)
-		} else if id, err := uuid.Parse(perm.ID); err == nil {
+		// RoleBinding rules for the summarized actions only compile to conditions for read allows,
+		// which the row filters already account for
+		if id, err := uuid.Parse(perm.ID); err == nil {
 			permissionActions[id] = append(permissionActions[id], perm)
 		}
 	}
@@ -224,12 +220,7 @@ func selectorGrantsOf(ctx context.Context) ([]selectorGrant, error) {
 		return nil, err
 	}
 
-	ruleGrants, err := bindingSelectorGrants(ctx, bindingRules)
-	if err != nil {
-		return nil, err
-	}
-
-	return append(append(grants, permissionGrants...), ruleGrants...), nil
+	return append(grants, permissionGrants...), nil
 }
 
 // permissionSelectorGrants returns the grants of the given Permissions, for the actions their policies carry.
@@ -246,9 +237,10 @@ func permissionSelectorGrants(ctx context.Context, policies map[uuid.UUID][]poli
 	var grants []selectorGrant
 	for _, permission := range permissions {
 		selections, err := permissionSelections(ctx, permission)
-		if err != nil {
-			ctx.Warnf("permission %s selects nothing: %v", permission.ID, err)
+		if adapter.IsValidationError(err) {
 			continue
+		} else if err != nil {
+			return nil, fmt.Errorf("failed to resolve permission %s: %w", permission.ID, err)
 		}
 
 		actions := lo.Uniq(lo.Map(policies[permission.ID], func(p policy.Permission, _ int) string { return p.Action }))
@@ -274,7 +266,7 @@ func permissionSelections(ctx context.Context, permission models.Permission) ([]
 		var object v1.PermissionObject
 		if len(permission.ObjectSelector) > 0 {
 			if err := json.Unmarshal(permission.ObjectSelector, &object); err != nil {
-				return nil, err
+				return nil, adapter.NewValidationError("invalid object selector: %v", err)
 			}
 		}
 		objects = []v1.PermissionObject{object}
@@ -317,42 +309,6 @@ func permissionSelections(ctx context.Context, permission models.Permission) ([]
 		}
 	}
 	return selections, nil
-}
-
-// bindingSelectorGrants returns the grants of the given rules (by id) of each binding.
-func bindingSelectorGrants(ctx context.Context, bindingRules map[uuid.UUID][]string) ([]selectorGrant, error) {
-	var grants []selectorGrant
-	for bindingID, ids := range bindingRules {
-		rules, err := adapter.LoadBindingRules(ctx, bindingID)
-		if err != nil {
-			if adapter.IsValidationError(err) {
-				continue
-			}
-			return nil, fmt.Errorf("failed to load rules of role binding %s: %w", bindingID, err)
-		}
-
-		for _, rule := range rules {
-			if !slices.Contains(ids, rule.ID) || len(rule.Resource) == 0 {
-				continue
-			}
-
-			grant := selectorGrant{action: rule.Contract.Action, deny: rule.Deny, types: map[string]bool{}}
-			if rule.Deny {
-				grant.outsideContract = rule.Contract.Resources
-			}
-
-			for _, resourceType := range rule.Contract.Resources {
-				if !lo.EveryBy(rule.Resource, func(s adapter.ScopeSelection) bool { return len(s.Selectors[resourceType]) > 0 }) {
-					continue
-				}
-				grant.types[resourceType] = lo.EveryBy(rule.Resource, func(s adapter.ScopeSelection) bool {
-					return lo.SomeBy(s.Selectors[resourceType], selectsAll)
-				})
-			}
-			grants = append(grants, grant)
-		}
-	}
-	return grants, nil
 }
 
 // selectsAll reports whether the selector matches every resource of its type.
