@@ -95,5 +95,6 @@ jobs:
           path: |
             .bin/incident-commander_*
             .bin/faro_*
+          include-hidden-files: true
           if-no-files-found: error
           retention-days: 1
