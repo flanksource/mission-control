@@ -92,6 +92,37 @@ var _ = ginkgo.Describe("Playbook list", ginkgo.Ordered, func() {
 		Expect(status).To(Equal(http.StatusNotFound))
 	})
 
+	ginkgo.Describe("opening a run", func() {
+		var run models.PlaybookRun
+
+		ginkgo.BeforeAll(func() {
+			run = models.PlaybookRun{ID: uuid.New(), PlaybookID: other.ID, Status: models.PlaybookRunStatusCompleted, Spec: other.Spec}
+			Expect(DefaultContext.DB().Create(&run).Error).To(Succeed())
+			ginkgo.DeferCleanup(func() { Expect(DefaultContext.DB().Delete(&run).Error).To(Succeed()) })
+		})
+
+		get := func(path, rowFilters string) int {
+			ginkgo.GinkgoHelper()
+			req := httptest.NewRequest(http.MethodGet, path, nil)
+			req = req.WithContext(DefaultContext.WithUser(admin))
+			if rowFilters != "" {
+				req.Header.Set(auth.HeaderFlanksourceScope, rowFilters)
+			}
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			return rec.Code
+		}
+
+		ginkgo.It("returns a run of a playbook the caller may read", func() {
+			Expect(get("/playbook/run/"+run.ID.String(), "")).To(Equal(http.StatusOK))
+		})
+
+		ginkgo.It("doesn't find a run of a playbook outside the caller's row filters", func() {
+			rowFilters := `{"playbook":[{"names":["` + dummy.EchoConfig.Name + `"]}]}`
+			Expect(get("/playbook/run/"+run.ID.String(), rowFilters)).To(Equal(http.StatusNotFound))
+		})
+	})
+
 	ginkgo.Describe("a subject without built-in access", func() {
 		listStatus := func(readGrantsCoverPlaybooks bool) int {
 			ginkgo.GinkgoHelper()
