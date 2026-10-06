@@ -1,0 +1,99 @@
+name: Build Binaries
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version stamped into the binaries, e.g. v1.2.3
+        type: string
+        required: false
+  pull_request:
+    paths:
+      - Makefile
+      - .github/workflows/build-binaries.yml
+      - .github/workflows/release.yml
+
+permissions:
+  contents: read
+
+jobs:
+  ui:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version: v1.26.x
+          cache: false
+      - name: Build UI
+        run: make ui
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ui-dist
+          path: ui/frontend/dist
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    needs: ui
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - { goos: linux, goarch: amd64 }
+          - { goos: linux, goarch: arm64 }
+          - { goos: darwin, goarch: amd64 }
+          - { goos: darwin, goarch: arm64 }
+          - { goos: windows, goarch: amd64 }
+          - { goos: windows, goarch: arm64, faro_only: true }
+    name: build (${{ matrix.goos }}/${{ matrix.goarch }})
+    env:
+      GOOS: ${{ matrix.goos }}
+      GOARCH: ${{ matrix.goarch }}
+      VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - name: Install Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version: v1.26.x
+          cache: false
+      - name: Restore Go module cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
+        with:
+          path: ~/go/pkg/mod
+          key: go-mod-1.26.x-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-mod-1.26.x-
+      - name: Restore Go build cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
+        with:
+          path: ~/.cache/go-build
+          key: go-build-1.26.x-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-build-1.26.x-${{ matrix.goos }}-${{ matrix.goarch }}-
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ui-dist
+          path: ui/frontend/dist
+      - name: Build incident-commander
+        if: ${{ !matrix.faro_only }}
+        run: make incident-commander-binary
+      - name: Build faro
+        run: make faro-binary
+      - name: Compress
+        if: matrix.goos == 'linux'
+        run: |
+          make .bin/upx
+          ./.bin/upx -1 ./.bin/*_linux_*
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: binaries-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            .bin/incident-commander_*
+            .bin/faro_*
+          if-no-files-found: error
+          retention-days: 1

@@ -145,39 +145,50 @@ tidy:
 compress: .bin/upx linux faro
 	upx -1 ./.bin/$(NAME)_linux_amd64 ./.bin/$(NAME)_linux_arm64 ./.bin/faro_linux_amd64 ./.bin/faro_linux_arm64
 
+EXE = $(if $(filter windows,$(GOOS)),.exe)
+
+# incident-commander-binary builds incident-commander for $GOOS/$GOARCH.
+.PHONY: incident-commander-binary
+incident-commander-binary: $(TAILWIND_JS)
+	go build -o ./.bin/$(NAME)_$(GOOS)_$(GOARCH)$(EXE) -ldflags "-X \"main.version=$(VERSION_TAG)\"" main.go
+
+# faro-binary builds faro, a slim Mission Control client (remote-only surfaces), for $GOOS/$GOARCH.
+.PHONY: faro-binary
+faro-binary: $(TAILWIND_JS)
+	go build -trimpath -o ./.bin/faro_$(GOOS)_$(GOARCH)$(EXE) -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
+
 .PHONY: linux
-linux: $(TAILWIND_JS)
-	GOOS=linux GOARCH=amd64 go build  -o ./.bin/$(NAME)_linux_amd64 -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
-	GOOS=linux GOARCH=arm64 go build  -o ./.bin/$(NAME)_linux_arm64 -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
+linux:
+	GOOS=linux GOARCH=amd64 $(MAKE) incident-commander-binary
+	GOOS=linux GOARCH=arm64 $(MAKE) incident-commander-binary
 
 .PHONY: darwin
 darwin:
-	GOOS=darwin GOARCH=amd64 go build -o ./.bin/$(NAME)_darwin_amd64 -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
-	GOOS=darwin GOARCH=arm64 go build -o ./.bin/$(NAME)_darwin_arm64 -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
+	GOOS=darwin GOARCH=amd64 $(MAKE) incident-commander-binary
+	GOOS=darwin GOARCH=arm64 $(MAKE) incident-commander-binary
 
 .PHONY: windows
 windows:
-	GOOS=windows GOARCH=amd64 go build -o ./.bin/$(NAME)_windows_amd64.exe -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
+	GOOS=windows GOARCH=amd64 $(MAKE) incident-commander-binary
 
-# faro is a slim Mission Control client (remote-only surfaces). Built for the
-# requested matrix: linux amd64/arm64, darwin amd64/arm64, windows amd64/arm64.
+# faro is built for linux amd64/arm64, darwin amd64/arm64, windows amd64/arm64.
 # `faro version` falls back to the VCS stamps Go embeds when these are unset.
 FARO_LDFLAGS = -X "main.version=$(VERSION_TAG)" -X "main.commit=$(GIT_COMMIT)" -X "main.date=$(BUILD_DATE)"
 
 .PHONY: faro-linux
-faro-linux: $(TAILWIND_JS)
-	GOOS=linux GOARCH=amd64 go build -trimpath -o ./.bin/faro_linux_amd64 -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
-	GOOS=linux GOARCH=arm64 go build -trimpath -o ./.bin/faro_linux_arm64 -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
+faro-linux:
+	GOOS=linux GOARCH=amd64 $(MAKE) faro-binary
+	GOOS=linux GOARCH=arm64 $(MAKE) faro-binary
 
 .PHONY: faro-darwin
-faro-darwin: $(TAILWIND_JS)
-	GOOS=darwin GOARCH=amd64 go build -trimpath -o ./.bin/faro_darwin_amd64 -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
-	GOOS=darwin GOARCH=arm64 go build -trimpath -o ./.bin/faro_darwin_arm64 -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
+faro-darwin:
+	GOOS=darwin GOARCH=amd64 $(MAKE) faro-binary
+	GOOS=darwin GOARCH=arm64 $(MAKE) faro-binary
 
 .PHONY: faro-windows
-faro-windows: $(TAILWIND_JS)
-	GOOS=windows GOARCH=amd64 go build -trimpath -o ./.bin/faro_windows_amd64.exe -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
-	GOOS=windows GOARCH=arm64 go build -trimpath -o ./.bin/faro_windows_arm64.exe -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
+faro-windows:
+	GOOS=windows GOARCH=amd64 $(MAKE) faro-binary
+	GOOS=windows GOARCH=arm64 $(MAKE) faro-binary
 
 .PHONY: faro
 faro: faro-linux faro-darwin faro-windows
