@@ -96,7 +96,7 @@ var _ = ginkgo.Describe("Playbook list", ginkgo.Ordered, func() {
 		var run models.PlaybookRun
 
 		ginkgo.BeforeAll(func() {
-			run = models.PlaybookRun{ID: uuid.New(), PlaybookID: other.ID, Status: models.PlaybookRunStatusCompleted}
+			run = models.PlaybookRun{ID: uuid.New(), PlaybookID: other.ID, Status: models.PlaybookRunStatusCompleted, Spec: other.Spec}
 			Expect(DefaultContext.DB().Create(&run).Error).To(Succeed())
 			ginkgo.DeferCleanup(func() { Expect(DefaultContext.DB().Delete(&run).Error).To(Succeed()) })
 		})
