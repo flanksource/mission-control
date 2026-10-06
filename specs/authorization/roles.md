@@ -181,7 +181,7 @@ A `read` rule accepts any Scope whose membership is decided by the resource alon
 
 Listings are only filtered while row-level security is enabled. It's turned on or off when Mission Control starts, from the `rls.enable` property, so changing the property takes effect on restart. So a `read` rule whose Scope has a target that isn't a whole-type target (`scopes.md`, Section 5.2) needs it: while row-level security is off, a Role with such a rule is `Ready=False` with reason `RowLevelSecurityRequired`, and none of its rules apply, like any invalid Role (Section 6). It becomes valid when row-level security is enabled, without being re-applied. A rule whose Scope consists of whole-type targets only doesn't need it: opening any resource and listing all of them allow the same resources.
 
-Subjects without built-in access (`overview.md`, "Default access") are users of an external identity provider and resources acting on their own (`rolebindings.md`, Section 2.5). They list only what their `read` grants allow. A listing of a type none of their grants covers is refused with `403 Forbidden`, whether or not row-level security is on. While it's off, their only valid grants are whole-type ones, so they list every row of those types and nothing else.
+Whether a subject may list a type at all, and what a listing returns for a subject whose grants cover only part of it, is specified in `collection-access.md`. Subjects without built-in access (`overview.md`, "Default access") list only what their `read` grants select, and a listing of a type none of their grants covers is refused with `403 Forbidden`, whether or not row-level security is on.
 
 ## 4. Matching
 
@@ -353,4 +353,4 @@ A guest is the restricted role. Guests get past the same whole-type checks as vi
 
 - **TODO:** A person with no built-in role. Today they get the built-in access every user has, unfiltered, so in practice they're a viewer. Decide whether that's intended, or whether they should get nothing until they're given a role.
 - **TODO:** Reads granted to `viewer`. Section 7.3 says they don't reach guests, but the code currently lets them reach every user, guests and agents included, on whole-type checks. Confirm guests are excluded, and fix the code.
-- **TODO:** Guest visibility is only defined for listings with row-level security on. Decide (1) whether a guest opening one resource directly, e.g. a config by id, is covered by the built-in whole-type `read` or checked against their grants only, and (2) what a guest's listing returns while row-level security is off: Section 3.1 says listings are only filtered while it's on, Section 7.3 says guests' listings are always filtered.
+- Guest visibility is settled by `collection-access.md`: a guest's built-in `read` doesn't count, so a guest opening one resource is checked against their grants only, and while row-level security is off a guest lists only types their grants cover whole (Sections 2 and 2.3).
