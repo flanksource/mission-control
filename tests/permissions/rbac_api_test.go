@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
@@ -121,6 +122,12 @@ var _ = Describe("Scope, Role and RoleBinding API", Ordered, func() {
 		{"a scope with an unknown selector field", "/rbac/scopes", object("unknown-field", map[string]any{
 			"targets": []any{map[string]any{"playbook": map[string]any{"name": "*", "owner": "me"}}},
 		})},
+		{"a scope with an empty selector", "/rbac/scopes", object("empty-selector", map[string]any{
+			"targets": []any{map[string]any{"config": map[string]any{}}},
+		})},
+		{"a scope with a global target", "/rbac/scopes", object("global-target", map[string]any{
+			"targets": []any{map[string]any{"global": map[string]any{"name": "*"}}},
+		})},
 		{"a role named after a built-in role", "/rbac/roles", object(policy.RoleViewer, map[string]any{
 			"rules": []any{map[string]any{"name": "run", "action": policy.ActionPlaybookRun, "resource": map[string]any{"scopeRef": "all-playbooks"}}},
 		})},
@@ -145,6 +152,18 @@ var _ = Describe("Scope, Role and RoleBinding API", Ordered, func() {
 		{"a binding with a match that doesn't compile", "/rbac/role-bindings", object("bad-match", map[string]any{
 			"role": "runner", "subjects": map[string]any{"oidc": []any{map[string]any{"provider": "oipa", "match": "claims.tenant =="}}},
 		})},
+	}
+
+	for field, value := range map[string]any{
+		"health": "unhealthy", "statuses": []string{"failed"}, "fieldSelector": "health=unhealthy",
+		"scope": "all", "search": "type=Pod", "cache": "1m", "limit": 10, "includeDeleted": true,
+	} {
+		rejected = append(rejected, struct {
+			name, path string
+			body       map[string]any
+		}{"a scope with " + field, "/rbac/scopes", object("removed-"+strings.ToLower(field), map[string]any{
+			"targets": []any{map[string]any{"config": map[string]any{"name": "*", field: value}}},
+		})})
 	}
 
 	for _, tt := range rejected {

@@ -12,7 +12,6 @@ import (
 	"github.com/flanksource/duty/rls"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
-	"github.com/flanksource/duty/types"
 	"github.com/flanksource/kopper"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -141,23 +140,22 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		Expect(DefaultContext.DB().Create(teamB).Error).To(Succeed())
 
 		for _, scope := range []*v1.Scope{
-			newScope("all-playbooks", namespace, v1.ScopeTarget{Playbook: &types.ResourceSelector{Name: "*"}}),
-			newScope("all-playbooks", otherNamespace, v1.ScopeTarget{Playbook: &types.ResourceSelector{Name: "*"}}),
-			newScope("kubernetes-playbooks", namespace, v1.ScopeTarget{Playbook: &types.ResourceSelector{FieldSelector: "category=Kubernetes"}}),
-			newScope("all-configs", namespace, v1.ScopeTarget{Config: &types.ResourceSelector{Name: "*"}}),
-			newScope("tenant-a", namespace, v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "tenant=a"}}),
-			newScope("tenant-b", namespace, v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "tenant=b"}}),
+			newScope("all-playbooks", namespace, v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "*"}}),
+			newScope("all-playbooks", otherNamespace, v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "*"}}),
+			newScope("kubernetes-playbooks", namespace, v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: dummy.RestartPod.Name}}),
+			newScope("all-configs", namespace, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}),
+			newScope("tenant-a", namespace, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "tenant=a"}}),
+			newScope("tenant-b", namespace, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "tenant=b"}}),
 			newScope("tenant-a-boundary", namespace,
-				v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "tenant=a"}},
-				v1.ScopeTarget{Playbook: &types.ResourceSelector{Name: "*"}}),
-			newScope("role-configs", namespace, v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "env=role-test"}}),
-			newScope("staging-views", namespace, v1.ScopeTarget{View: &types.ResourceSelector{Namespace: "staging"}}),
+				v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "tenant=a"}},
+				v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "*"}}),
+			newScope("role-configs", namespace, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "env=role-test"}}),
+			newScope("staging-views", namespace, v1.ScopeTarget{View: &v1.ScopeViewRef{Namespace: "staging"}}),
 			newScope("configs-and-playbooks", namespace,
-				v1.ScopeTarget{Config: &types.ResourceSelector{Name: "*"}},
-				v1.ScopeTarget{Playbook: &types.ResourceSelector{Name: "*"}}),
-			newScope("staging-components", namespace, v1.ScopeTarget{Component: &types.ResourceSelector{Namespace: "staging"}}),
-			newScope("http-checks", namespace, v1.ScopeTarget{Check: &types.ResourceSelector{Name: "http"}}),
-			newScope("everything-global", namespace, v1.ScopeTarget{Global: &types.ResourceSelector{Name: "*"}}),
+				v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}},
+				v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "*"}}),
+			newScope("staging-components", namespace, v1.ScopeTarget{Component: &v1.ScopeLabelledSelector{ScopeResourceRef: v1.ScopeResourceRef{Namespace: "staging"}}}),
+			newScope("http-checks", namespace, v1.ScopeTarget{Check: &v1.ScopeLabelledSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "http"}}}),
 		} {
 			Expect(db.PersistScopeFromCRD(DefaultContext, scope)).To(Succeed())
 		}
@@ -421,7 +419,6 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			rejectRole(allow("mixed", policy.ActionPlaybookRun, "configs-and-playbooks"))
 			rejectRole(on(allow("target-playbooks", policy.ActionPlaybookRun, "all-playbooks"), "all-playbooks"))
 			rejectRole(allow("read-views", policy.ActionRead, "staging-views"))
-			rejectRole(allow("global", policy.ActionRead, "everything-global"))
 		})
 
 		It("accepts reading checks by name", func() {
@@ -430,9 +427,9 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 
 		It("accepts a target scope with several accepted types", func() {
 			Expect(db.PersistScopeFromCRD(DefaultContext, newScope("staging-targets", namespace,
-				v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "namespace=staging"}},
-				v1.ScopeTarget{Component: &types.ResourceSelector{Namespace: "staging"}},
-				v1.ScopeTarget{Check: &types.ResourceSelector{Namespace: "staging"}}))).To(Succeed())
+				v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "namespace=staging"}},
+				v1.ScopeTarget{Component: &v1.ScopeLabelledSelector{ScopeResourceRef: v1.ScopeResourceRef{Namespace: "staging"}}},
+				v1.ScopeTarget{Check: &v1.ScopeLabelledSelector{ScopeResourceRef: v1.ScopeResourceRef{Namespace: "staging"}}}))).To(Succeed())
 			persistRole(newRole("run-on-staging", namespace, on(allow("run", policy.ActionPlaybookRun, "all-playbooks"), "staging-targets")))
 		})
 
@@ -442,7 +439,6 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 
 		It("rejects read rules row filters can't enforce", func() {
 			rejectRole(allow("components-by-namespace", policy.ActionRead, "staging-components"))
-			rejectRole(allow("playbooks-by-category", policy.ActionRead, "kubernetes-playbooks"))
 		})
 
 		It("rejects denying reads", func() {
@@ -566,7 +562,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(DefaultContext.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", namespace, "kubernetes-playbooks").First(&stored).Error).To(Succeed())
 			Expect(canRunOn(bob.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue())
 
-			changed := newScope("kubernetes-playbooks", namespace, v1.ScopeTarget{Config: &types.ResourceSelector{Name: "*"}})
+			changed := newScope("kubernetes-playbooks", namespace, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}})
 			changed.UID = k8sTypes.UID(stored.ID.String())
 			Expect(db.PersistScopeFromCRD(DefaultContext, changed)).To(Succeed(), "a scope is never validated against what references it")
 			Expect(rbac.ReloadPolicy()).To(Succeed())
@@ -574,7 +570,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(*storedRole(roles[namespace+"/tenant-a-runner"].UID).ErrorReason).To(Equal(adapter.ReasonInvalid))
 			Expect(canRunOn(bob.ID.String(), dummy.RestartPod, &tenantA)).To(BeFalse())
 
-			restored := newScope("kubernetes-playbooks", namespace, v1.ScopeTarget{Playbook: &types.ResourceSelector{FieldSelector: "category=Kubernetes"}})
+			restored := newScope("kubernetes-playbooks", namespace, v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: dummy.RestartPod.Name}})
 			restored.UID = changed.UID
 			Expect(db.PersistScopeFromCRD(DefaultContext, restored)).To(Succeed())
 			Expect(rbac.ReloadPolicy()).To(Succeed())
@@ -598,7 +594,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(canRunOn(bob.ID.String(), dummy.RestartPod, &tenantA)).To(BeFalse())
 
 			Expect(db.PersistScopeFromCRD(DefaultContext, newScope("tenant-a", namespace,
-				v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "tenant=a"}}))).To(Succeed())
+				v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "tenant=a"}}))).To(Succeed())
 			Expect(rbac.ReloadPolicy()).To(Succeed())
 			Expect(canRunOn(bob.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue())
 		})
@@ -619,8 +615,8 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(canRead(dave.ID.String(), tenantA)).To(BeFalse(), "never granted as written")
 
 			Expect(db.PersistScopeFromCRD(DefaultContext, newScope("tenant-a-boundary", namespace,
-				v1.ScopeTarget{Config: &types.ResourceSelector{TagSelector: "tenant=a"}},
-				v1.ScopeTarget{Playbook: &types.ResourceSelector{Name: "*"}}))).To(Succeed())
+				v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "tenant=a"}},
+				v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "*"}}))).To(Succeed())
 			Expect(rbac.ReloadPolicy()).To(Succeed())
 			Expect(storedBinding(namespace, "tenant-a-operators").Error).To(BeNil())
 			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue())
@@ -758,8 +754,8 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 
 		It("lists checks only through a read of checks, not of canaries", func() {
 			for _, scope := range []*v1.Scope{
-				newScope("every-canary", namespace, v1.ScopeTarget{Canary: &types.ResourceSelector{Name: "*"}}),
-				newScope("every-check", namespace, v1.ScopeTarget{Check: &types.ResourceSelector{Name: "*"}}),
+				newScope("every-canary", namespace, v1.ScopeTarget{Canary: &v1.ScopeCanarySelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}),
+				newScope("every-check", namespace, v1.ScopeTarget{Check: &v1.ScopeLabelledSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}),
 			} {
 				Expect(db.PersistScopeFromCRD(DefaultContext, scope)).To(Succeed())
 			}
@@ -800,7 +796,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 
 		It("filters rows of canaries, which casbin requests never carry", func() {
 			Expect(db.PersistScopeFromCRD(DefaultContext, newScope("canaries", namespace,
-				v1.ScopeTarget{Canary: &types.ResourceSelector{Name: "http-check"}}))).To(Succeed())
+				v1.ScopeTarget{Canary: &v1.ScopeCanarySelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "http-check"}}}))).To(Succeed())
 			role := newRole("read-canaries", namespace, allow("read", policy.ActionRead, "canaries"))
 			persistRole(role)
 			guest := setup.CreateUserWithRole(DefaultContext, "Role Canary Guest", "role-canary@test.com", policy.RoleGuest)
@@ -817,6 +813,88 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(payload.Canary).To(ConsistOf(rls.Scope{Names: []string{"http-check"}}))
 			Expect(canRead(guest.ID.String(), configTagged(nil))).To(BeFalse())
+		})
+	})
+
+	Describe("access summary", func() {
+		summaryOf := func(person *models.Person) map[string]mcRBAC.ReadAccess {
+			GinkgoHelper()
+			return mcRBAC.ReadAccessSummary(DefaultContext.WithUser(person))
+		}
+
+		only := func(resourceType string, access mcRBAC.ReadAccess) map[string]mcRBAC.ReadAccess {
+			summary := map[string]mcRBAC.ReadAccess{
+				policy.ResourceConfig:     mcRBAC.ReadNone,
+				policy.ResourceComponent:  mcRBAC.ReadNone,
+				policy.ResourceCanary:     mcRBAC.ReadNone,
+				policy.ResourcePlaybook:   mcRBAC.ReadNone,
+				policy.ResourceConnection: mcRBAC.ReadNone,
+			}
+			summary[resourceType] = access
+			return summary
+		}
+
+		bindGuest := func(name, role string, constraint string) *models.Person {
+			GinkgoHelper()
+			guest := setup.CreateUserWithRole(DefaultContext, "Role Summary "+name, "role-summary-"+name+"@test.com", policy.RoleGuest)
+			binding := newBinding("summary-"+name, role, people(guest))
+			if constraint != "" {
+				binding = constrained(binding, constraint, "")
+			}
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).To(Succeed())
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Where("id = ?", binding.UID).Delete(&models.RoleBinding{}).Error).To(Succeed())
+				Expect(DefaultContext.DB().Delete(guest).Error).To(Succeed())
+				Expect(rbac.ReloadPolicy()).To(Succeed())
+			})
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+			return guest
+		}
+
+		It("gives a guest some of a type its read grants filter by row", func() {
+			Expect(summaryOf(rlsGuest)).To(Equal(only(policy.ResourceConfig, mcRBAC.ReadSome)))
+		})
+
+		It("gives some for grants on a Scope that matches nothing", func() {
+			Expect(db.PersistScopeFromCRD(DefaultContext, newScope("no-configs", namespace,
+				v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "summary=nothing"}}))).To(Succeed())
+			persistRole(newRole("read-no-configs", namespace, allow("read", policy.ActionRead, "no-configs")))
+			guest := bindGuest("empty", "read-no-configs", "")
+			Expect(summaryOf(guest)).To(Equal(only(policy.ResourceConfig, mcRBAC.ReadSome)))
+		})
+
+		It("gives a guest without grants none of every type", func() {
+			Expect(summaryOf(erin)).To(Equal(only(policy.ResourceConfig, mcRBAC.ReadNone)))
+		})
+
+		It("gives a guest all of a type it's granted whole", func() {
+			persistRole(newRole("read-all-configs", namespace, allow("read", policy.ActionRead, "all-configs")))
+			guest := bindGuest("whole", "read-all-configs", "")
+			Expect(summaryOf(guest)).To(Equal(only(policy.ResourceConfig, mcRBAC.ReadAll)))
+		})
+
+		It("gives some of a whole-type grant a constraint narrows", func() {
+			persistRole(newRole("read-all-configs-narrowed", namespace, allow("read", policy.ActionRead, "all-configs")))
+			guest := bindGuest("narrowed", "read-all-configs-narrowed", "tenant-a-boundary")
+			Expect(summaryOf(guest)).To(Equal(only(policy.ResourceConfig, mcRBAC.ReadSome)))
+		})
+
+		It("gives viewers and admins all of the types their built-in role grants", func() {
+			viewer := setup.CreateUserWithRole(DefaultContext, "Role Summary Viewer", "role-summary-viewer@test.com", policy.RoleViewer)
+			admin := setup.CreateUserWithRole(DefaultContext, "Role Summary Admin", "role-summary-admin@test.com", policy.RoleAdmin)
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Delete(viewer).Error).To(Succeed())
+				Expect(DefaultContext.DB().Delete(admin).Error).To(Succeed())
+			})
+
+			Expect(summaryOf(viewer)).To(Equal(map[string]mcRBAC.ReadAccess{
+				policy.ResourceConfig:     mcRBAC.ReadAll,
+				policy.ResourceComponent:  mcRBAC.ReadAll,
+				policy.ResourceCanary:     mcRBAC.ReadAll,
+				policy.ResourcePlaybook:   mcRBAC.ReadAll,
+				policy.ResourceConnection: mcRBAC.ReadNone,
+			}))
+			Expect(summaryOf(admin)).To(HaveEach(mcRBAC.ReadAll))
 		})
 	})
 })

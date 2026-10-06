@@ -115,6 +115,8 @@ An invalid object is either rejected or stored `Ready=False`. Which one depends 
 
 An object stored `Ready=False` takes effect, without being re-applied, as soon as what it references fits it. That's what lets related objects be applied in any order: a RoleBinding can be applied before its Role, and a Role before its Scopes.
 
+`Ready=False` with reason `PersistFailed` is different: the object may be valid, but saving its latest version failed, e.g. a Scope's membership couldn't be rebuilt. The previous version stays in effect, and Kubernetes retries the save until it succeeds.
+
 How an object is rejected depends on how it's managed:
 
 - **Through Mission Control's API**, a create or update of an object that's wrong on its own fails with `400 Bad Request`, and nothing is stored. Unknown fields are rejected too, rather than ignored. An object that's only invalid because of what it references is stored, and the response carries why it isn't in effect.
@@ -127,5 +129,5 @@ Where the specs say an object "is rejected", this is what they mean.
 ## Not covered yet
 
 - **Views.** No rule can select Views, and Roles grant no rows of the tables Views generate.
-- **Permissions and PermissionGroups** are the older way of granting access. They keep working as before, and can reference Scopes.
+- **Permissions and PermissionGroups** are deprecated, and not specified here (`permissions.md`).
 - **Delegated administration.** Letting a team manage the Roles and RoleBindings of its own namespace isn't supported. It needs an escalation check, so that a binding can't grant more than its author holds.

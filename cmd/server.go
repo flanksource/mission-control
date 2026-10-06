@@ -265,6 +265,10 @@ var Serve = &cobra.Command{
 
 		metrics.RegisterDBStats(ctx)
 
+		if err := adapter.BuildScopeMemberships(ctx); err != nil {
+			logger.Errorf("error building scope membership: %v", err)
+		}
+
 		if echo.UIEnabled && dev {
 			devServer, err := ui.StartDevServer(cmd.Context(), ui.DevServerOptions{
 				Port:       devGuiPort,
@@ -372,6 +376,7 @@ func tableUpdatesHandler(ctx context.Context) {
 	roleUpdateChan := notifyRouter.GetOrCreateChannel("roles")
 	roleBindingUpdateChan := notifyRouter.GetOrCreateChannel("role_bindings")
 	scopeUpdateChan := notifyRouter.GetOrCreateChannel("scopes")
+	agentUpdateChan := notifyRouter.GetOrCreateChannel("agents")
 	teamMembersUpdateChan := notifyRouter.GetOrCreateChannel("team_members")
 
 	// use a single job instance to maintain retention
@@ -491,6 +496,11 @@ func tableUpdatesHandler(ctx context.Context) {
 		case <-scopeUpdateChan:
 			schedulePolicyReload("scope")
 			views.FlushScopeCache()
+
+		// A registered, renamed or deleted agent can change what a Scope's agent resolves to:
+		// the reload re-validates every Scope and rebuilds the ones that changed.
+		case <-agentUpdateChan:
+			schedulePolicyReload("agent")
 
 		case <-policyReloadTimer.C:
 			policyReloadPending = false

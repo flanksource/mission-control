@@ -32,7 +32,7 @@ type scopeConfig struct {
 	selectors []types.ResourceSelector
 }
 
-// getScopeConfigs returns cached scope configs with config/global targets.
+// getScopeConfigs returns cached scope configs with config targets.
 func getScopeConfigs(ctx context.Context) ([]scopeConfig, error) {
 	if cached, found := scopeCache.Get(scopeConfigsCacheKey); found {
 		return cached.([]scopeConfig), nil
@@ -57,7 +57,7 @@ func getScopeConfigs(ctx context.Context) ([]scopeConfig, error) {
 		}
 
 		// An invalid Scope selects nothing. Agents are matched by id.
-		targets, err := adapter.ValidateScope(ctx, nil, targets)
+		targets, err := adapter.ValidateScope(ctx, targets)
 		if err != nil {
 			if adapter.IsValidationError(err) {
 				continue
@@ -67,16 +67,9 @@ func getScopeConfigs(ctx context.Context) ([]scopeConfig, error) {
 
 		var selectors []types.ResourceSelector
 		for _, target := range targets {
-			var selector *types.ResourceSelector
-			switch {
-			case target.Config != nil:
-				selector = target.Config
-			case target.Global != nil:
-				selector = target.Global
-			}
-
-			if selector != nil {
-				selectors = append(selectors, *selector)
+			if target.Config != nil {
+				_, selector := target.Selector()
+				selectors = append(selectors, selector)
 			}
 		}
 

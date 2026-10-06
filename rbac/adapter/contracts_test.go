@@ -42,12 +42,9 @@ var _ = ginkgo.Describe("ValidateSelector", func() {
 	}{
 		{"config tags", policy.ResourceConfig, types.ResourceSelector{TagSelector: "env=prod", Namespace: "default"}, true},
 		{"component labels", policy.ResourceComponent, types.ResourceSelector{LabelSelector: "team=payments"}, true},
-		{"playbook category", policy.ResourcePlaybook, types.ResourceSelector{FieldSelector: "category=Kubernetes", Namespace: "operations"}, true},
+		{"playbook namespace", policy.ResourcePlaybook, types.ResourceSelector{Namespace: "operations"}, true},
 		{"wildcard", policy.ResourceView, types.ResourceSelector{Name: "*"}, true},
 		{"empty", policy.ResourceConfig, types.ResourceSelector{}, false},
-		{"component tags", policy.ResourceComponent, types.ResourceSelector{TagSelector: "team=payments"}, false},
-		{"playbook tags", policy.ResourcePlaybook, types.ResourceSelector{TagSelector: "purpose=remediation"}, false},
-		{"playbook title", policy.ResourcePlaybook, types.ResourceSelector{FieldSelector: "title=Restart"}, false},
 		{"name prefix", policy.ResourceConfig, types.ResourceSelector{Name: "nginx-*"}, false},
 		{"name list", policy.ResourceConfig, types.ResourceSelector{Name: "a,b"}, false},
 		{"uppercase id", policy.ResourceConfig, types.ResourceSelector{ID: "3C3E0B2A-9F1E-4D2B-8C5A-1E2F3A4B5C6D"}, false},
@@ -57,8 +54,16 @@ var _ = ginkgo.Describe("ValidateSelector", func() {
 		{"wildcard namespace", policy.ResourceConfig, types.ResourceSelector{Namespace: "*"}, false},
 		{"namespace prefix", policy.ResourceConfig, types.ResourceSelector{Namespace: "prod-*"}, false},
 		{"wildcard id", policy.ResourceConfig, types.ResourceSelector{ID: "*"}, false},
-		{"query option", policy.ResourceConfig, types.ResourceSelector{Name: "api", Limit: 10}, false},
 		{"type pattern", policy.ResourceConfig, types.ResourceSelector{Types: []string{"Kubernetes::*"}}, false},
+		{"several tags", policy.ResourceConfig, types.ResourceSelector{TagSelector: "cluster=homelab,namespace=monitoring"}, true},
+		{"tag inequality", policy.ResourceConfig, types.ResourceSelector{TagSelector: "env!=prod"}, false},
+		{"tag double equals", policy.ResourceConfig, types.ResourceSelector{TagSelector: "env==prod"}, false},
+		{"tag in", policy.ResourceConfig, types.ResourceSelector{TagSelector: "env in (prod,staging)"}, false},
+		{"tag notin", policy.ResourceConfig, types.ResourceSelector{TagSelector: "env notin (prod)"}, false},
+		{"bare tag key", policy.ResourceConfig, types.ResourceSelector{TagSelector: "env"}, false},
+		{"tag exclusion", policy.ResourceConfig, types.ResourceSelector{TagSelector: "!env"}, false},
+		{"label inequality", policy.ResourceComponent, types.ResourceSelector{LabelSelector: "team=payments,env!=prod"}, false},
+		{"bare label key", policy.ResourceCanary, types.ResourceSelector{LabelSelector: "team"}, false},
 	} {
 		ginkgo.It(tt.name, func() {
 			err := ValidateSelector(tt.kind, tt.selector)
@@ -107,10 +112,6 @@ var _ = ginkgo.Describe("validateInput", func() {
 		Expect(read.validateInput("resource", views)).ToNot(Succeed())
 	})
 
-	ginkgo.It("rejects scopes with global targets", func() {
-		Expect(read.validateInput("resource", ScopeSelection{Name: "global", Global: true})).ToNot(Succeed())
-	})
-
 	ginkgo.It("rejects read selectors row filters can't enforce", func() {
 		Expect(read.validateInput("resource", tenantA)).To(Succeed())
 		Expect(read.validateInput("resource", targets)).ToNot(Succeed())
@@ -150,7 +151,7 @@ var _ = ginkgo.Describe("RowFilter", func() {
 	ginkgo.It("rejects what row filters can't match", func() {
 		for kind, selector := range map[string]types.ResourceSelector{
 			policy.ResourceComponent:  {Namespace: "staging"},
-			policy.ResourcePlaybook:   {FieldSelector: "category=Kubernetes"},
+			policy.ResourcePlaybook:   {Namespace: "operations"},
 			policy.ResourceCheck:      {Namespace: "staging"},
 			policy.ResourceConnection: {Name: "aws"},
 		} {

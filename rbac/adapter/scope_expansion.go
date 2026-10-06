@@ -112,7 +112,7 @@ func getScope(ctx context.Context, cache *gocache.Cache, namespace, name string)
 		return nil, NewInvalid(ReasonScopeInvalid, "%s:%s/%s", ErrScopeExpansionInvalidScopeTargets, namespace, name)
 	}
 
-	resolved, err := ValidateScope(ctx, cache, targets)
+	resolved, err := ValidateScope(ctx, targets)
 	if err != nil {
 		return nil, withContext(withReason(err, ReasonScopeInvalid), "scope %s/%s is invalid", namespace, name)
 	}
@@ -177,17 +177,18 @@ func expandObjectScopes(ctx context.Context, cache *gocache.Cache, selectors v1.
 		// Merge targets into selectors (union approach)
 		for _, target := range scope.targets {
 			var selectors v1.PermissionObject
+			_, selector := target.Selector()
 			if target.Config != nil {
-				selectors.Configs = append(selectors.Configs, *target.Config)
+				selectors.Configs = append(selectors.Configs, selector)
 			}
 			if target.Component != nil {
-				selectors.Components = append(selectors.Components, *target.Component)
+				selectors.Components = append(selectors.Components, selector)
 			}
 			if target.Playbook != nil {
-				selectors.Playbooks = append(selectors.Playbooks, *target.Playbook)
+				selectors.Playbooks = append(selectors.Playbooks, selector)
 			}
 			if target.Connection != nil {
-				selectors.Connections = append(selectors.Connections, *target.Connection)
+				selectors.Connections = append(selectors.Connections, selector)
 			}
 			if target.View != nil {
 				selectors.Views = append(selectors.Views, dutyRBAC.ViewRef{
@@ -197,7 +198,7 @@ func expandObjectScopes(ctx context.Context, cache *gocache.Cache, selectors v1.
 				})
 			}
 
-			// Canary, check and global targets have no selectors here, and an object without selectors would match everything
+			// Canary and check targets have no selectors here, and an object without selectors would match everything
 			if selectors.HasSelectors() {
 				output = append(output, selectors)
 			}
