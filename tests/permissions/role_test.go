@@ -815,4 +815,86 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(canRead(guest.ID.String(), configTagged(nil))).To(BeFalse())
 		})
 	})
+
+	Describe("access summary", func() {
+		summaryOf := func(person *models.Person) map[string]mcRBAC.ReadAccess {
+			GinkgoHelper()
+			return mcRBAC.ReadAccessSummary(DefaultContext.WithUser(person))
+		}
+
+		only := func(resourceType string, access mcRBAC.ReadAccess) map[string]mcRBAC.ReadAccess {
+			summary := map[string]mcRBAC.ReadAccess{
+				policy.ResourceConfig:     mcRBAC.ReadNone,
+				policy.ResourceComponent:  mcRBAC.ReadNone,
+				policy.ResourceCanary:     mcRBAC.ReadNone,
+				policy.ResourcePlaybook:   mcRBAC.ReadNone,
+				policy.ResourceConnection: mcRBAC.ReadNone,
+			}
+			summary[resourceType] = access
+			return summary
+		}
+
+		bindGuest := func(name, role string, constraint string) *models.Person {
+			GinkgoHelper()
+			guest := setup.CreateUserWithRole(DefaultContext, "Role Summary "+name, "role-summary-"+name+"@test.com", policy.RoleGuest)
+			binding := newBinding("summary-"+name, role, people(guest))
+			if constraint != "" {
+				binding = constrained(binding, constraint, "")
+			}
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).To(Succeed())
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Where("id = ?", binding.UID).Delete(&models.RoleBinding{}).Error).To(Succeed())
+				Expect(DefaultContext.DB().Delete(guest).Error).To(Succeed())
+				Expect(rbac.ReloadPolicy()).To(Succeed())
+			})
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+			return guest
+		}
+
+		It("gives a guest some of a type its read grants filter by row", func() {
+			Expect(summaryOf(rlsGuest)).To(Equal(only(policy.ResourceConfig, mcRBAC.ReadSome)))
+		})
+
+		It("gives some for grants on a Scope that matches nothing", func() {
+			Expect(db.PersistScopeFromCRD(DefaultContext, newScope("no-configs", namespace,
+				v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "summary=nothing"}}))).To(Succeed())
+			persistRole(newRole("read-no-configs", namespace, allow("read", policy.ActionRead, "no-configs")))
+			guest := bindGuest("empty", "read-no-configs", "")
+			Expect(summaryOf(guest)).To(Equal(only(policy.ResourceConfig, mcRBAC.ReadSome)))
+		})
+
+		It("gives a guest without grants none of every type", func() {
+			Expect(summaryOf(erin)).To(Equal(only(policy.ResourceConfig, mcRBAC.ReadNone)))
+		})
+
+		It("gives a guest all of a type it's granted whole", func() {
+			persistRole(newRole("read-all-configs", namespace, allow("read", policy.ActionRead, "all-configs")))
+			guest := bindGuest("whole", "read-all-configs", "")
+			Expect(summaryOf(guest)).To(Equal(only(policy.ResourceConfig, mcRBAC.ReadAll)))
+		})
+
+		It("gives some of a whole-type grant a constraint narrows", func() {
+			persistRole(newRole("read-all-configs-narrowed", namespace, allow("read", policy.ActionRead, "all-configs")))
+			guest := bindGuest("narrowed", "read-all-configs-narrowed", "tenant-a-boundary")
+			Expect(summaryOf(guest)).To(Equal(only(policy.ResourceConfig, mcRBAC.ReadSome)))
+		})
+
+		It("gives viewers and admins all of the types their built-in role grants", func() {
+			viewer := setup.CreateUserWithRole(DefaultContext, "Role Summary Viewer", "role-summary-viewer@test.com", policy.RoleViewer)
+			admin := setup.CreateUserWithRole(DefaultContext, "Role Summary Admin", "role-summary-admin@test.com", policy.RoleAdmin)
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Delete(viewer).Error).To(Succeed())
+				Expect(DefaultContext.DB().Delete(admin).Error).To(Succeed())
+			})
+
+			Expect(summaryOf(viewer)).To(Equal(map[string]mcRBAC.ReadAccess{
+				policy.ResourceConfig:     mcRBAC.ReadAll,
+				policy.ResourceComponent:  mcRBAC.ReadAll,
+				policy.ResourceCanary:     mcRBAC.ReadAll,
+				policy.ResourcePlaybook:   mcRBAC.ReadAll,
+				policy.ResourceConnection: mcRBAC.ReadNone,
+			}))
+			Expect(summaryOf(admin)).To(HaveEach(mcRBAC.ReadAll))
+		})
+	})
 })

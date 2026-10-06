@@ -27,7 +27,7 @@ func init() {
 	rbac.ReadGrantsCover = readGrantsCover
 }
 
-// readGrantsCover reports whether the row filters of the subject's read grants cover the resource type.
+// readGrantsCover reports whether the row filters of the subject's read grants allow rows of the resource type.
 // While row-level security is off, nothing is filtered by row, so they cover nothing.
 func readGrantsCover(ctx context.Context, resourceType string) bool {
 	payload, err := GetRLSPayload(ctx)
@@ -40,17 +40,22 @@ func readGrantsCover(ctx context.Context, resourceType string) bool {
 
 	switch resourceType {
 	case policy.ResourceConfig:
-		return len(payload.Config) > 0
+		return hasAllowFilter(payload.Config)
 	case policy.ResourceComponent:
-		return len(payload.Component) > 0
+		return hasAllowFilter(payload.Component)
 	case policy.ResourceCheck:
-		return len(payload.Check) > 0
+		return hasAllowFilter(payload.Check)
 	case policy.ResourceCanary:
-		return len(payload.Canary) > 0
+		return hasAllowFilter(payload.Canary)
 	case policy.ResourcePlaybook:
-		return len(payload.Playbook) > 0
+		return hasAllowFilter(payload.Playbook)
 	}
 	return false
+}
+
+// hasAllowFilter reports whether any filter allows rows. Deny filters alone allow none.
+func hasAllowFilter(filters []rls.Scope) bool {
+	return lo.SomeBy(filters, func(f rls.Scope) bool { return !f.Deny })
 }
 
 func getRLSCacheKey(userID string) string {
