@@ -69,7 +69,15 @@ func DbMiddleware() MiddlewareFunc {
 				object = adapter.ObjectChecks
 			}
 
-			if !rbac.CheckContext(ctx, object, action) && !canListFilteredRows(ctx, resource, action) {
+			allowed := rbac.CheckContext(ctx, object, action)
+			if action == policy.ActionRead {
+				switch resource {
+				case "people", "identities", "agents":
+					allowed = readsWholeType(ctx, object, isGuest(ctx))
+				}
+			}
+
+			if !allowed && !canListFilteredRows(ctx, resource, action) {
 				c.Response().Header().Add("X-Rbac-Subject", ctx.Subject())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)
