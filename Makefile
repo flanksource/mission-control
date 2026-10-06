@@ -158,17 +158,17 @@ faro-binary: $(TAILWIND_JS)
 	go build -trimpath -o ./.bin/faro_$(GOOS)_$(GOARCH)$(EXE) -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
 
 .PHONY: linux
-linux:
+linux: $(TAILWIND_JS)
 	GOOS=linux GOARCH=amd64 $(MAKE) incident-commander-binary
 	GOOS=linux GOARCH=arm64 $(MAKE) incident-commander-binary
 
 .PHONY: darwin
-darwin:
+darwin: $(TAILWIND_JS)
 	GOOS=darwin GOARCH=amd64 $(MAKE) incident-commander-binary
 	GOOS=darwin GOARCH=arm64 $(MAKE) incident-commander-binary
 
 .PHONY: windows
-windows:
+windows: $(TAILWIND_JS)
 	GOOS=windows GOARCH=amd64 $(MAKE) incident-commander-binary
 
 # faro is built for linux amd64/arm64, darwin amd64/arm64, windows amd64/arm64.
@@ -176,17 +176,17 @@ windows:
 FARO_LDFLAGS = -X "main.version=$(VERSION_TAG)" -X "main.commit=$(GIT_COMMIT)" -X "main.date=$(BUILD_DATE)"
 
 .PHONY: faro-linux
-faro-linux:
+faro-linux: $(TAILWIND_JS)
 	GOOS=linux GOARCH=amd64 $(MAKE) faro-binary
 	GOOS=linux GOARCH=arm64 $(MAKE) faro-binary
 
 .PHONY: faro-darwin
-faro-darwin:
+faro-darwin: $(TAILWIND_JS)
 	GOOS=darwin GOARCH=amd64 $(MAKE) faro-binary
 	GOOS=darwin GOARCH=arm64 $(MAKE) faro-binary
 
 .PHONY: faro-windows
-faro-windows:
+faro-windows: $(TAILWIND_JS)
 	GOOS=windows GOARCH=amd64 $(MAKE) faro-binary
 	GOOS=windows GOARCH=arm64 $(MAKE) faro-binary
 
