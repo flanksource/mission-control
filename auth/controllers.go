@@ -144,7 +144,7 @@ func WhoAmI(c echo.Context) error {
 			"user":        user,
 			"roles":       roles,
 			"permissions": permissions,
-			"access":      icrbac.ReadAccessSummary(ctx),
+			"access":      icrbac.AccessSummary(ctx),
 			"hostname":    hostname,
 		},
 	})

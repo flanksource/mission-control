@@ -817,21 +817,51 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 	})
 
 	Describe("access summary", func() {
-		summaryOf := func(person *models.Person) map[string]mcRBAC.ReadAccess {
+		summaryOf := func(person *models.Person, action string) map[string]mcRBAC.Access {
 			GinkgoHelper()
-			return mcRBAC.ReadAccessSummary(DefaultContext.WithUser(person))
+			mcRBAC.FlushAccessSummaries()
+			summary := map[string]mcRBAC.Access{}
+			for resourceType, actions := range mcRBAC.AccessSummary(DefaultContext.WithUser(person)) {
+				summary[resourceType] = actions[action]
+			}
+			return summary
 		}
 
-		only := func(resourceType string, access mcRBAC.ReadAccess) map[string]mcRBAC.ReadAccess {
-			summary := map[string]mcRBAC.ReadAccess{
-				policy.ResourceConfig:     mcRBAC.ReadNone,
-				policy.ResourceComponent:  mcRBAC.ReadNone,
-				policy.ResourceCanary:     mcRBAC.ReadNone,
-				policy.ResourcePlaybook:   mcRBAC.ReadNone,
-				policy.ResourceConnection: mcRBAC.ReadNone,
+		readSummaryOf := func(person *models.Person) map[string]mcRBAC.Access {
+			GinkgoHelper()
+			return summaryOf(person, policy.ActionRead)
+		}
+
+		only := func(resourceType string, access mcRBAC.Access) map[string]mcRBAC.Access {
+			summary := map[string]mcRBAC.Access{
+				policy.ResourceConfig:     mcRBAC.AccessNone,
+				policy.ResourceComponent:  mcRBAC.AccessNone,
+				policy.ResourceCanary:     mcRBAC.AccessNone,
+				policy.ResourcePlaybook:   mcRBAC.AccessNone,
+				policy.ResourceConnection: mcRBAC.AccessNone,
 			}
 			summary[resourceType] = access
 			return summary
+		}
+
+		createPermission := func(permission *models.Permission) {
+			GinkgoHelper()
+			permission.ID = uuid.New()
+			permission.Namespace = "default"
+			permission.SubjectType = models.PermissionSubjectTypePerson
+			Expect(DefaultContext.DB().Create(permission).Error).To(Succeed())
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Delete(permission).Error).To(Succeed())
+				Expect(rbac.ReloadPolicy()).To(Succeed())
+			})
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+		}
+
+		createUser := func(name, role string) *models.Person {
+			GinkgoHelper()
+			person := setup.CreateUserWithRole(DefaultContext, "Role Summary "+name, "role-summary-"+name+"@test.com", role)
+			DeferCleanup(func() { Expect(DefaultContext.DB().Delete(person).Error).To(Succeed()) })
+			return person
 		}
 
 		bindGuest := func(name, role string, constraint string) *models.Person {
@@ -852,7 +882,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		}
 
 		It("gives a guest some of a type its read grants filter by row", func() {
-			Expect(summaryOf(rlsGuest)).To(Equal(only(policy.ResourceConfig, mcRBAC.ReadSome)))
+			Expect(readSummaryOf(rlsGuest)).To(Equal(only(policy.ResourceConfig, mcRBAC.AccessSome)))
 		})
 
 		It("gives some for grants on a Scope that matches nothing", func() {
@@ -860,41 +890,141 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 				v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "summary=nothing"}}))).To(Succeed())
 			persistRole(newRole("read-no-configs", namespace, allow("read", policy.ActionRead, "no-configs")))
 			guest := bindGuest("empty", "read-no-configs", "")
-			Expect(summaryOf(guest)).To(Equal(only(policy.ResourceConfig, mcRBAC.ReadSome)))
+			Expect(readSummaryOf(guest)).To(Equal(only(policy.ResourceConfig, mcRBAC.AccessSome)))
 		})
 
 		It("gives a guest without grants none of every type", func() {
-			Expect(summaryOf(erin)).To(Equal(only(policy.ResourceConfig, mcRBAC.ReadNone)))
+			Expect(readSummaryOf(erin)).To(Equal(only(policy.ResourceConfig, mcRBAC.AccessNone)))
 		})
 
 		It("gives a guest all of a type it's granted whole", func() {
 			persistRole(newRole("read-all-configs", namespace, allow("read", policy.ActionRead, "all-configs")))
 			guest := bindGuest("whole", "read-all-configs", "")
-			Expect(summaryOf(guest)).To(Equal(only(policy.ResourceConfig, mcRBAC.ReadAll)))
+			Expect(readSummaryOf(guest)).To(Equal(only(policy.ResourceConfig, mcRBAC.AccessAll)))
 		})
 
 		It("gives some of a whole-type grant a constraint narrows", func() {
 			persistRole(newRole("read-all-configs-narrowed", namespace, allow("read", policy.ActionRead, "all-configs")))
 			guest := bindGuest("narrowed", "read-all-configs-narrowed", "tenant-a-boundary")
-			Expect(summaryOf(guest)).To(Equal(only(policy.ResourceConfig, mcRBAC.ReadSome)))
+			Expect(readSummaryOf(guest)).To(Equal(only(policy.ResourceConfig, mcRBAC.AccessSome)))
 		})
 
 		It("gives viewers and admins all of the types their built-in role grants", func() {
-			viewer := setup.CreateUserWithRole(DefaultContext, "Role Summary Viewer", "role-summary-viewer@test.com", policy.RoleViewer)
-			admin := setup.CreateUserWithRole(DefaultContext, "Role Summary Admin", "role-summary-admin@test.com", policy.RoleAdmin)
-			DeferCleanup(func() {
-				Expect(DefaultContext.DB().Delete(viewer).Error).To(Succeed())
-				Expect(DefaultContext.DB().Delete(admin).Error).To(Succeed())
+			viewer := createUser("viewer", policy.RoleViewer)
+			admin := createUser("admin", policy.RoleAdmin)
+
+			Expect(readSummaryOf(viewer)).To(Equal(map[string]mcRBAC.Access{
+				policy.ResourceConfig:     mcRBAC.AccessAll,
+				policy.ResourceComponent:  mcRBAC.AccessAll,
+				policy.ResourceCanary:     mcRBAC.AccessAll,
+				policy.ResourcePlaybook:   mcRBAC.AccessAll,
+				policy.ResourceConnection: mcRBAC.AccessNone,
+			}))
+			Expect(summaryOf(viewer, policy.ActionUpdate)).To(HaveEach(mcRBAC.AccessNone))
+
+			mcRBAC.FlushAccessSummaries()
+			for _, actions := range mcRBAC.AccessSummary(DefaultContext.WithUser(admin)) {
+				Expect(actions).To(HaveEach(mcRBAC.AccessAll))
+			}
+		})
+
+		It("gives some of a write a Permission grants on selected resources", func() {
+			viewer := createUser("scoped-writer", policy.RoleViewer)
+			createPermission(&models.Permission{
+				Name:           "summary-update-media-configs",
+				Action:         policy.ActionUpdate,
+				Subject:        viewer.ID.String(),
+				ObjectSelector: []byte(`{"configs":[{"tagSelector":"namespace=media"}]}`),
 			})
 
-			Expect(summaryOf(viewer)).To(Equal(map[string]mcRBAC.ReadAccess{
-				policy.ResourceConfig:     mcRBAC.ReadAll,
-				policy.ResourceComponent:  mcRBAC.ReadAll,
-				policy.ResourceCanary:     mcRBAC.ReadAll,
-				policy.ResourcePlaybook:   mcRBAC.ReadAll,
-				policy.ResourceConnection: mcRBAC.ReadNone,
-			}))
-			Expect(summaryOf(admin)).To(HaveEach(mcRBAC.ReadAll))
+			Expect(summaryOf(viewer, policy.ActionUpdate)).To(Equal(only(policy.ResourceConfig, mcRBAC.AccessSome)))
+			Expect(summaryOf(viewer, policy.ActionCreate)).To(HaveEach(mcRBAC.AccessNone))
+		})
+
+		It("gives all of a write granted on the whole type", func() {
+			viewer := createUser("whole-writer", policy.RoleViewer)
+			createPermission(&models.Permission{
+				Name:    "summary-update-catalog",
+				Action:  policy.ActionUpdate,
+				Subject: viewer.ID.String(),
+				Object:  policy.ObjectCatalog,
+			})
+
+			Expect(summaryOf(viewer, policy.ActionUpdate)).To(Equal(only(policy.ResourceConfig, mcRBAC.AccessAll)))
+		})
+
+		It("lowers all to some under a deny on part of the type", func() {
+			viewer := createUser("partly-denied", policy.RoleViewer)
+			createPermission(&models.Permission{
+				Name:           "summary-deny-production-configs",
+				Action:         policy.ActionRead,
+				Subject:        viewer.ID.String(),
+				Deny:           true,
+				ObjectSelector: []byte(`{"configs":[{"tagSelector":"namespace=production"}]}`),
+			})
+
+			Expect(readSummaryOf(viewer)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessSome))
+			Expect(readSummaryOf(viewer)[policy.ResourceComponent]).To(Equal(mcRBAC.AccessAll))
+		})
+
+		It("doesn't count a Permission that names several types towards any of them", func() {
+			viewer := createUser("multi-type", policy.RoleViewer)
+			createPermission(&models.Permission{
+				Name:           "summary-update-configs-with-playbook",
+				Action:         policy.ActionUpdate,
+				Subject:        viewer.ID.String(),
+				ObjectSelector: []byte(`{"configs":[{"name":"*"}],"playbooks":[{"name":"echo-config"}]}`),
+			})
+			createPermission(&models.Permission{
+				Name:           "summary-deny-configs-with-playbook",
+				Action:         policy.ActionRead,
+				Subject:        viewer.ID.String(),
+				Deny:           true,
+				ObjectSelector: []byte(`{"configs":[{"name":"*"}],"playbooks":[{"name":"echo-config"}]}`),
+			})
+
+			Expect(summaryOf(viewer, policy.ActionUpdate)).To(HaveEach(mcRBAC.AccessNone))
+			Expect(readSummaryOf(viewer)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessAll))
+		})
+
+		It("reads a selector whatever its text contains", func() {
+			viewer := createUser("search-deny", policy.RoleViewer)
+			createPermission(&models.Permission{
+				Name:           "summary-deny-search",
+				Action:         policy.ActionRead,
+				Subject:        viewer.ID.String(),
+				Deny:           true,
+				ObjectSelector: []byte(`{"configs":[{"search":"a && b"}]}`),
+			})
+
+			Expect(readSummaryOf(viewer)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessSome))
+		})
+
+		It("gives none under a deny whose selector matches every resource", func() {
+			viewer := createUser("empty-selector-deny", policy.RoleViewer)
+			createPermission(&models.Permission{
+				Name:           "summary-deny-empty-selector",
+				Action:         policy.ActionRead,
+				Subject:        viewer.ID.String(),
+				Deny:           true,
+				ObjectSelector: []byte(`{"configs":[{}]}`),
+			})
+
+			Expect(readSummaryOf(viewer)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessNone))
+		})
+
+		It("gives none under a deny on the whole type", func() {
+			viewer := createUser("wholly-denied", policy.RoleViewer)
+			createPermission(&models.Permission{
+				Name:    "summary-deny-topology",
+				Action:  policy.ActionRead,
+				Subject: viewer.ID.String(),
+				Deny:    true,
+				Object:  policy.ObjectTopology,
+			})
+
+			Expect(readSummaryOf(viewer)[policy.ResourceComponent]).To(Equal(mcRBAC.AccessNone))
+			Expect(readSummaryOf(viewer)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessAll))
 		})
 	})
 })
