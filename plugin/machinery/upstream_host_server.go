@@ -174,10 +174,13 @@ func upstreamHostContextWithInvocation(base dutyContext.Context, ctx context.Con
 	if entry == nil || entry.AgentID == nil || *entry.AgentID != agent.ID {
 		return nil, status.Error(codes.PermissionDenied, "agent does not own proxied plugin")
 	}
+	if claims.User == "" {
+		return nil, status.Error(codes.Unauthenticated, "plugin invocation user is required")
+	}
 
 	var person models.Person
-	if err := dutyCtx.DB().WithContext(ctx).Where("id = ?", claims.Subject).First(&person).Error; err != nil {
-		return nil, status.Errorf(codes.Unauthenticated, "plugin invocation subject %s: %v", claims.Subject, err)
+	if err := dutyCtx.DB().WithContext(ctx).Where("id = ?", claims.User).First(&person).Error; err != nil {
+		return nil, status.Errorf(codes.Unauthenticated, "plugin invocation user %s: %v", claims.User, err)
 	}
 
 	return dutyCtx.WithAgent(*agent).WithUser(&person), nil

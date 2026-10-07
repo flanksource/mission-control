@@ -68,7 +68,7 @@ func pluginUIToken(c echo.Context) error {
 		return dutyAPI.WriteError(c, err)
 	}
 
-	token, err := plugin.MintInvocationToken(user.ID.String(), entry.ID, 0, roles...)
+	token, err := plugin.MintInvocationToken(ctx.Subject(), user.ID.String(), entry.ID, 0, roles...)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 	}
@@ -158,6 +158,7 @@ func operationHTTPProxy(c echo.Context) error {
 
 	var roles []string
 	var subject string
+	var userID string
 	invocationToken := c.Request().Header.Get(api.InvocationTokenHTTPHeader)
 	if invocationToken != "" {
 		// Proxied operations arriving on an agent already carry an upstream-minted
@@ -168,6 +169,7 @@ func operationHTTPProxy(c echo.Context) error {
 		}
 
 		subject = claims.Subject
+		userID = claims.User
 		roles = claims.Roles
 
 		// A UI-minted token (local/remote plugins) is issued without an
@@ -186,7 +188,8 @@ func operationHTTPProxy(c echo.Context) error {
 			return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in"))
 		}
 
-		subject = user.ID.String()
+		subject = ctx.Subject()
+		userID = user.ID.String()
 		if err := machinery.EnforceInvokePermission(ctx, subject, entry, op, configID); err != nil {
 			return dutyAPI.WriteError(c, err)
 		}
@@ -199,7 +202,7 @@ func operationHTTPProxy(c echo.Context) error {
 	}
 
 	if entry.Kind == api.PluginKindProxied {
-		invocationToken, err = plugin.MintInvocationToken(subject, entry.ID, 0, roles...)
+		invocationToken, err = plugin.MintInvocationToken(subject, userID, entry.ID, 0, roles...)
 		if err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 		}
@@ -216,7 +219,7 @@ func operationHTTPProxy(c echo.Context) error {
 	}
 
 	if invocationToken == "" {
-		invocationToken, err = plugin.MintInvocationToken(subject, entry.ID, 0, roles...)
+		invocationToken, err = plugin.MintInvocationToken(subject, userID, entry.ID, 0, roles...)
 		if err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 		}

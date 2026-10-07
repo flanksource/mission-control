@@ -27,6 +27,7 @@ type Request struct {
 	ParamsJSON      []byte
 	ConfigItemID    string
 	Subject         string
+	User            string
 	Roles           []string
 	Depth           int
 	InvocationToken string
@@ -93,7 +94,7 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*api.InvokeResponse,
 		}
 
 		var err error
-		token, err = plugin.MintInvocationToken(subject, entry.ID, req.Depth, req.Roles...)
+		token, err = plugin.MintInvocationToken(subject, req.User, entry.ID, req.Depth, req.Roles...)
 		if err != nil {
 			return nil, entry, ctx.Oops().Wrapf(err, "mint plugin invocation token")
 		}

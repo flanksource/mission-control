@@ -153,9 +153,11 @@ func (s *Service) InvokePlugin(ctx context.Context, req *pluginAPI.InvokePluginR
 	// chain. The same subject authorizes the invoke and becomes the next
 	// token's sub — no plugin-scoped invoke permission is required.
 	userSubject := ""
+	user := ""
 	if claims, ok := invocationClaimsFromContext(ctx); ok {
 		depth = claims.Depth + 1
 		userSubject = claims.Subject
+		user = claims.User
 	}
 
 	configID := req.ConfigItemId
@@ -166,6 +168,7 @@ func (s *Service) InvokePlugin(ctx context.Context, req *pluginAPI.InvokePluginR
 		Operation:  req.Operation,
 		ParamsJSON: req.ParamsJson,
 		Subject:    userSubject,
+		User:       user,
 		Depth:      depth,
 		Deadline:   req.Deadline,
 
