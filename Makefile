@@ -153,7 +153,7 @@ EXE = $(if $(filter windows,$(GOOS)),.exe)
 # compress-binary compresses the binaries built for $GOOS/$GOARCH with upx.
 .PHONY: compress-binary
 compress-binary: .bin/upx
-	upx -1 $(wildcard ./.bin/$(NAME)_$(GOOS)_$(GOARCH)$(EXE) ./.bin/faro_$(GOOS)_$(GOARCH)$(EXE))
+	upx -1 ./.bin/$(NAME)_$(GOOS)_$(GOARCH)$(EXE) ./.bin/faro_$(GOOS)_$(GOARCH)$(EXE)
 
 # incident-commander-binary builds incident-commander for $GOOS/$GOARCH.
 .PHONY: incident-commander-binary
@@ -163,7 +163,7 @@ incident-commander-binary: $(TAILWIND_JS)
 # faro-binary builds faro, a slim Mission Control client (remote-only surfaces), for $GOOS/$GOARCH.
 .PHONY: faro-binary
 faro-binary: $(TAILWIND_JS)
-	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -o ./.bin/faro_$(GOOS)_$(GOARCH)$(EXE) -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -o ./.bin/faro_$(GOOS)_$(GOARCH)$(EXE) -ldflags '-s -w $(FARO_LDFLAGS)' ./faro
 
 .PHONY: linux
 linux: $(TAILWIND_JS)
@@ -274,7 +274,7 @@ install:
 test-e2e: bin
 	./test/e2e.sh
 
-.bin/upx: .bin
+.bin/upx: | .bin
 	wget -nv -O upx.tar.xz https://github.com/upx/upx/releases/download/v3.96/upx-3.96-$(ARCH)_$(OS).tar.xz
 	tar xf upx.tar.xz
 	mv upx-3.96-$(ARCH)_$(OS)/upx .bin

@@ -18,6 +18,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: build-binaries-${{ github.event_name == 'pull_request' && github.ref || github.run_id }}
+  cancel-in-progress: true
+
 jobs:
   ui:
     runs-on: ubuntu-latest
@@ -38,7 +42,7 @@ jobs:
           path: ui/frontend/dist
           include-hidden-files: true
           if-no-files-found: error
-          retention-days: 7
+          retention-days: ${{ github.event_name == 'pull_request' && 1 || 7 }}
 
   go-mod:
     runs-on: ubuntu-latest
@@ -51,15 +55,19 @@ jobs:
           cache: false
       - name: Restore Go module cache
         id: cache
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
         with:
           path: ~/go/pkg/mod
-          key: go-mod-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            go-mod-
+          key: go-mod-${{ hashFiles('go.sum') }}
       - name: Download Go modules
         if: steps.cache.outputs.cache-hit != 'true'
         run: go mod download
+      - name: Save Go module cache
+        if: steps.cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
+        uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
+        with:
+          path: ~/go/pkg/mod
+          key: ${{ steps.cache.outputs.cache-primary-key }}
 
   build:
     needs: [ui, go-mod]
@@ -90,7 +98,7 @@ jobs:
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
         with:
           path: ~/go/pkg/mod
-          key: go-mod-${{ hashFiles('**/go.sum') }}
+          key: go-mod-${{ hashFiles('go.sum') }}
           restore-keys: |
             go-mod-
       - name: Restore Go build cache
@@ -98,9 +106,8 @@ jobs:
         uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
         with:
           path: ~/.cache/go-build
-          key: go-build-${{ steps.go.outputs.go-version }}-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
+          key: go-build-${{ steps.go.outputs.go-version }}-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('go.sum') }}
           restore-keys: |
-            go-build-${{ steps.go.outputs.go-version }}-${{ matrix.goos }}-${{ matrix.goarch }}-${{ hashFiles('**/go.sum') }}-
             go-build-${{ steps.go.outputs.go-version }}-${{ matrix.goos }}-${{ matrix.goarch }}-
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -111,9 +118,8 @@ jobs:
         run: make incident-commander-binary
       - name: Build faro
         run: make faro-binary
-      # PR runs only restore, so each release saves at most one build cache per target.
       - name: Save Go build cache
-        if: github.event_name != 'pull_request'
+        if: steps.build-cache.outputs.cache-hit != 'true' && github.event_name != 'pull_request'
         uses: actions/cache/save@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
         with:
           path: ~/.cache/go-build
@@ -129,4 +135,4 @@ jobs:
             .bin/faro_*
           include-hidden-files: true
           if-no-files-found: error
-          retention-days: 7
+          retention-days: ${{ github.event_name == 'pull_request' && 1 || 7 }}
