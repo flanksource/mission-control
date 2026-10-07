@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/membership"
 	"github.com/flanksource/duty/rbac/policy"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/timestamppb"
@@ -180,6 +181,12 @@ func EnforceInvokePermission(ctx dutyContext.Context, subject string, entry *plu
 			return ctx.Oops().Wrapf(err, "get config item %s", configID)
 		}
 		attr.Config = item
+
+		// Both checks see the config's Scope membership of one moment
+		if ctx, err = membership.ForOperation(ctx, dutyRBAC.MembershipRefs(attr)...); err != nil {
+			return ctx.Oops().Wrapf(err, "read scope membership of config %s", configID)
+		}
+
 		if !dutyRBAC.HasPermission(ctx, subject, attr, policy.ActionRead) {
 			return ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("not allowed to read config %s", configID)
 		}
