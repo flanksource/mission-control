@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
@@ -110,6 +111,11 @@ func canListFilteredRows(ctx context.Context, table, action string) bool {
 
 	resourceType, ok := rowFilteredTables[table]
 	return ok && ReadGrantsCover(ctx, resourceType)
+}
+
+// isGuest reports whether the subject is a person with the guest role.
+func isGuest(ctx context.Context) bool {
+	return lo.Contains(builtInRoles(ctx), policy.RoleGuest)
 }
 
 // PlaybookList authorizes listing playbooks through a read of the whole type,
