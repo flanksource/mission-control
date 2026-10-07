@@ -146,7 +146,7 @@ A Role grants `read` on this Scope, and a RoleBinding gives it to Team A's guest
   - Storage needs stable row identities that distinguish Views and result variants with different variable values. Maintaining membership for generated rows adds work when rows or Scopes change; the storage details and cost still need a design.
   - Panels remain unresolved. Filtering table rows does not fix a panel already computed over all inputs. Panels MUST use only data permitted by the reader's View grants, or be withheld when that cannot be enforced. A global count of `42` cannot be split into per-team counts after it is computed. How to compute and cache permitted panels still needs a design.
 
-### Option C: rows reference the resources they come from
+### Option C: rows reference the resources they come from (ruled out)
 
 Each row carries the ids of the resources it's about, e.g. its config. A reader sees a row when they may read every resource it references, by their existing `read` grants, through stored membership. The restriction is written once, on configs.
 
@@ -156,6 +156,15 @@ Who fills in the references:
 - The view's author, where it can't: a merge, an SQL query or a Prometheus series. The author maps a column to the resource it holds, e.g. a config id.
 
 A row with no reference is hidden from every subject whose listings are filtered.
+
+**Why ruled out:** C can only decide a row that is about exactly one config, and most rows a view shows are not. Suppose a view lists Prometheus series, and each row names a pod, the node it runs on and the deployment it belongs to. Which config does the row reference? If it references all three, a reader needs `read` on all three, so a team that owns the pod and the deployment but not the node loses the row. If it references one of them, the author picks which, and that pick decides who sees the row with no Scope behind it. Now suppose a view shows total CPU use as a single row. There is no config to reference, so no filtered reader ever sees it. The same is true of every count, sum and cluster-wide panel, and of any row from an SQL or HTTP query that didn't come from the catalog. Views exist to show data the catalog doesn't hold, and C makes the catalog the limit of what a filtered reader may see. "A row with no reference is hidden" reads as a safe default, but for these rows it isn't a decision; it is the lack of one. The reason is not that C trusts the author to map references, since B and E trust the author just as much. The reason is that C has no answer for a row about several resources or about none, and those are most rows. A View MUST be able to show totals, and rows about several or no catalog resources, to a reader who sees only part of it. C cannot, so it is not the model.
+
+What doesn't rescue it:
+
+- **Reference every resource the row names.** Then every reader needs every one of them. The node example shows why that is the wrong answer, and a single-row total still has nothing to reference.
+- **Let the author mark a row as "about nothing, show it".** That is a grant with no Scope behind it, which is Option A for that row. It would also be the first thing an author reaches for whenever a reference is awkward.
+- **Let the author pick one of the resources.** The same thing in a smaller form: the author decides who sees the row, and no rule says whether the pick was right.
+- **Use a column or a variable for the rows C can't place.** That is Option B or E for those rows and C for the rest. Two rules, and a reader can't tell from the view which one applies to a row.
 
 - **For:** define once. A grant change applies on the next read, with no refresh. A row about several resources needs all of them readable, as relationships between configs already do. An author who forgets a reference hides rows; nothing leaks.
 - **Against:**
