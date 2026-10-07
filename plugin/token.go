@@ -17,6 +17,7 @@ var PluginJWTTTL = 5 * time.Minute
 // Mission Control, plugins, and plugin host callbacks.
 type InvocationTokenClaims struct {
 	Plugin uuid.UUID `json:"pluginID"`
+	User   string    `json:"user,omitempty"`
 	Depth  int       `json:"depth,omitempty"`
 	Roles  []string  `json:"roles,omitempty"`
 	jwt.RegisteredClaims
@@ -30,7 +31,7 @@ func (c *InvocationTokenClaims) VerifyExpiresAt(cmp int64, req bool) bool {
 }
 
 // MintInvocationToken creates a short-lived token for invoking a specific plugin.
-func MintInvocationToken(subject string, pluginID uuid.UUID, depth int, roles ...string) (string, error) {
+func MintInvocationToken(subject, user string, pluginID uuid.UUID, depth int, roles ...string) (string, error) {
 	if subject == "" {
 		return "", fmt.Errorf("plugin invocation subject is required")
 	}
@@ -41,6 +42,7 @@ func MintInvocationToken(subject string, pluginID uuid.UUID, depth int, roles ..
 	now := time.Now()
 	claims := InvocationTokenClaims{
 		Plugin: pluginID,
+		User:   user,
 		Depth:  depth,
 		Roles:  append([]string(nil), roles...),
 		RegisteredClaims: jwt.RegisteredClaims{

@@ -220,14 +220,14 @@ func invokeProxiedOperation(c echo.Context, ctx dutyContext.Context, entry *plug
 	if user == nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in"))
 	}
-	if err := machinery.EnforceInvokePermission(ctx, user.ID.String(), entry, op, configID); err != nil {
+	if err := machinery.EnforceInvokePermission(ctx, ctx.Subject(), entry, op, configID); err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
 	roles, err := pluginRolesForUser(ctx, entry, configID)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
-	invocationToken, err := plugin.MintInvocationToken(user.ID.String(), entry.ID, 0, roles...)
+	invocationToken, err := plugin.MintInvocationToken(ctx.Subject(), user.ID.String(), entry.ID, 0, roles...)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 	}
@@ -245,6 +245,7 @@ func invokeProxiedOperation(c echo.Context, ctx dutyContext.Context, entry *plug
 func invokeLocalOperation(ctx dutyContext.Context, req *http.Request, entry *plugin.Entry, pluginRef, op, configID string, configUUID uuid.UUID) (*api.InvokeResponse, error) {
 	var roles []string
 	var subject string
+	var user string
 	invocationToken := req.Header.Get(api.InvocationTokenHTTPHeader)
 	if invocationToken == "" {
 		var err error
@@ -257,11 +258,12 @@ func invokeLocalOperation(ctx dutyContext.Context, req *http.Request, entry *plu
 			return nil, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("cannot invoke local operation")
 		}
 		subject = ctx.Subject()
+		user = ctx.User().ID.String()
 	}
-	return invokeLocalOperationWithRoles(ctx, req, entry, pluginRef, op, configID, configUUID, roles, subject, invocationToken)
+	return invokeLocalOperationWithRoles(ctx, req, entry, pluginRef, op, configID, configUUID, roles, subject, user, invocationToken)
 }
 
-func invokeLocalOperationWithRoles(ctx dutyContext.Context, req *http.Request, entry *plugin.Entry, pluginRef, op, configID string, configUUID uuid.UUID, roles []string, subject string, invocationToken string) (*api.InvokeResponse, error) {
+func invokeLocalOperationWithRoles(ctx dutyContext.Context, req *http.Request, entry *plugin.Entry, pluginRef, op, configID string, configUUID uuid.UUID, roles []string, subject, user string, invocationToken string) (*api.InvokeResponse, error) {
 	body, err := io.ReadAll(req.Body)
 	if err != nil {
 		return nil, ctx.Oops().Wrapf(err, "read request body")
@@ -275,6 +277,7 @@ func invokeLocalOperationWithRoles(ctx dutyContext.Context, req *http.Request, e
 		ConfigItemID:    configID,
 		ParamsJSON:      body,
 		Subject:         subject,
+		User:            user,
 		Roles:           roles,
 		Depth:           0,
 		Timeout:         60 * time.Second,

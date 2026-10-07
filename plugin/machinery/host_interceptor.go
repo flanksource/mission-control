@@ -125,13 +125,16 @@ func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, e
 	if commanderAPI.UpstreamConf.Valid() {
 		return baseCtx, nil
 	}
+	if claims.User == "" {
+		return nil, status.Error(codes.Unauthenticated, "plugin invocation user is required")
+	}
 
 	var person models.Person
-	if err := baseCtx.DB().WithContext(ctx).Where("id = ?", claims.Subject).First(&person).Error; err != nil {
+	if err := baseCtx.DB().WithContext(ctx).Where("id = ?", claims.User).First(&person).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, status.Errorf(codes.Unauthenticated, "plugin invocation subject %s not found", claims.Subject)
+			return nil, status.Errorf(codes.Unauthenticated, "plugin invocation user %s not found", claims.User)
 		}
-		return nil, status.Errorf(codes.Unauthenticated, "plugin invocation subject %s: %v", claims.Subject, err)
+		return nil, status.Errorf(codes.Unauthenticated, "plugin invocation user %s: %v", claims.User, err)
 	}
 
 	return baseCtx.WithUser(&person), nil

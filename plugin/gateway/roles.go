@@ -29,7 +29,7 @@ func pluginRolesForUser(ctx dutyContext.Context, entry *plugin.Entry, configID s
 		if role == nil || role.Name == "" {
 			continue
 		}
-		if canAssumePluginRole(ctx, user.ID.String(), attr, entry.Name, role.Name) {
+		if canAssumePluginRole(ctx, ctx.Subject(), attr, entry.Name, role.Name) {
 			roles = append(roles, role.Name)
 		}
 	}
