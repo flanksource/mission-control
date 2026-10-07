@@ -276,17 +276,11 @@ func permissionSelectorGrants(ctx context.Context, policies map[uuid.UUID][]poli
 // A policy only matches requests that carry every type it names, so a policy naming several types selects none of them
 // on its own and isn't returned.
 func permissionSelections(ctx context.Context, permission models.Permission) ([]map[string]bool, error) {
-	objects, err := adapter.ExpandPermissionScopes(ctx, nil, permission)
-	if err != nil {
-		return nil, err
-	} else if objects == nil {
-		var object v1.PermissionObject
-		if len(permission.ObjectSelector) > 0 {
-			if err := json.Unmarshal(permission.ObjectSelector, &object); err != nil {
-				return nil, adapter.NewValidationError("invalid object selector: %v", err)
-			}
+	var object v1.PermissionObject
+	if len(permission.ObjectSelector) > 0 {
+		if err := json.Unmarshal(permission.ObjectSelector, &object); err != nil {
+			return nil, adapter.NewValidationError("invalid object selector: %v", err)
 		}
-		objects = []v1.PermissionObject{object}
 	}
 
 	ids := map[string]bool{
@@ -297,32 +291,53 @@ func permissionSelections(ctx context.Context, permission models.Permission) ([]
 		policy.ResourceConnection: permission.ConnectionID != nil,
 	}
 
+	if len(object.Scopes) > 0 {
+		return scopeSelections(ctx, object.Scopes, ids)
+	}
+
+	named := map[string][]types.ResourceSelector{
+		policy.ResourceConfig:     object.Configs,
+		policy.ResourceComponent:  object.Components,
+		policy.ResourcePlaybook:   object.Playbooks,
+		policy.ResourceConnection: object.Connections,
+	}
+
+	selected := map[string]bool{}
+	for resourceType, selectors := range named {
+		if len(selectors) > 0 {
+			selected[resourceType] = !ids[resourceType] && lo.SomeBy(selectors, selectsAll)
+		}
+	}
+	for resourceType, byID := range ids {
+		if byID {
+			selected[resourceType] = false
+		}
+	}
+	if len(object.Views) > 0 {
+		selected[policy.ResourceView] = false
+	}
+
+	if len(selected) != 1 {
+		return nil, nil
+	}
+	return []map[string]bool{selected}, nil
+}
+
+// scopeSelections returns what a Permission naming Scopes selects: one per target of its Scopes,
+// each covering the whole type when the target selects every resource of it.
+func scopeSelections(ctx context.Context, refs []rbac.NamespacedNameIDSelector, ids map[string]bool) ([]map[string]bool, error) {
 	var selections []map[string]bool
-	for _, object := range objects {
-		named := map[string][]types.ResourceSelector{
-			policy.ResourceConfig:     object.Configs,
-			policy.ResourceComponent:  object.Components,
-			policy.ResourcePlaybook:   object.Playbooks,
-			policy.ResourceConnection: object.Connections,
+	for _, ref := range refs {
+		_, targets, err := adapter.LoadScope(ctx, nil, ref.Namespace, ref.Name)
+		if err != nil {
+			return nil, err
+		} else if targets == nil {
+			return nil, adapter.NewInvalid(adapter.ReasonScopeNotFound, "scope %s/%s not found", ref.Namespace, ref.Name)
 		}
 
-		selected := map[string]bool{}
-		for resourceType, selectors := range named {
-			if len(selectors) > 0 {
-				selected[resourceType] = !ids[resourceType] && lo.SomeBy(selectors, selectsAll)
-			}
-		}
-		for resourceType, byID := range ids {
-			if byID {
-				selected[resourceType] = false
-			}
-		}
-		if len(object.Views) > 0 {
-			selected[policy.ResourceView] = false
-		}
-
-		if len(selected) == 1 {
-			selections = append(selections, selected)
+		for _, target := range targets {
+			kind, selector := target.Selector()
+			selections = append(selections, map[string]bool{kind: !ids[kind] && kind != policy.ResourceView && selectsAll(selector)})
 		}
 	}
 	return selections, nil

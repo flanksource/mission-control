@@ -67,8 +67,8 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 	}
 
 	for _, permission := range permissions {
-		// Expand scope references in object_selector before converting to Casbin rules
-		expandedPerms, err := ExpandPermissionScopes(a.ctx, a.cache, permission)
+		// A permission naming Scopes is checked through their stored membership
+		conditions, err := PermissionScopeConditions(a.ctx, a.cache, permission)
 		if err != nil {
 			var validationErr *scopeExpansionValidationError
 			if errors.As(err, &validationErr) {
@@ -83,32 +83,13 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 			return err
 		}
 
-		if len(expandedPerms) == 0 {
-			policies := PermissionToCasbinRule(permission)
-			for _, policy := range policies {
-				if err := persist.LoadPolicyArray(policy, model); err != nil {
-					return err
-				}
-			}
-		} else {
-			// A permission that targets a scope will generate multiple expanded permissions
-			// If the targeted scope as N scopes, then this will generate N permissions
-			// everything about the permission remains the same apart from the object_selector
-
-			for _, expandedPerm := range expandedPerms {
-				marshalled, err := json.Marshal(expandedPerm)
-				if err != nil {
-					return err
-				}
-
-				newPerm := permission
-				newPerm.ObjectSelector = marshalled
-				policies := PermissionToCasbinRule(newPerm)
-				for _, policy := range policies {
-					if err := persist.LoadPolicyArray(policy, model); err != nil {
-						return err
-					}
-				}
+		policies := PermissionToCasbinRule(permission)
+		if len(conditions) > 0 {
+			policies = scopePermissionPolicies(permission, conditions)
+		}
+		for _, policy := range policies {
+			if err := persist.LoadPolicyArray(policy, model); err != nil {
+				return err
 			}
 		}
 	}
@@ -147,9 +128,7 @@ func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
 	for _, scope := range scopes {
 		err := SyncScopeMembership(a.ctx, scope)
 		if err != nil && !IsValidationError(err) {
-			// Nothing reads membership yet, so failing to store it mustn't change what the Scope grants
-			a.ctx.Logger.Errorf("failed to sync the membership of scope %s/%s: %v", scope.Namespace, scope.Name, err)
-			err = ValidateStoredScope(a.ctx, scope)
+			return err
 		}
 		if err := recordValidity(a.ctx, scope.TableName(), scope.ID, scope.Namespace, scope.Name, scope.Source, scope.Error, scope.ErrorReason, err); err != nil {
 			return err
@@ -376,6 +355,17 @@ func PermissionToCasbinRule(permission models.Permission) [][]string {
 		}
 	}
 
+	return policies
+}
+
+// scopePermissionPolicies returns the policies of a permission that names Scopes: one per action and condition.
+func scopePermissionPolicies(permission models.Permission, conditions []string) [][]string {
+	var policies [][]string
+	for _, action := range expandActions(strings.Split(permission.Action, ",")) {
+		for _, condition := range conditions {
+			policies = append(policies, []string{"p", permission.Principal(), "*", action, permission.Effect(), condition, permission.ID.String()})
+		}
+	}
 	return policies
 }
 

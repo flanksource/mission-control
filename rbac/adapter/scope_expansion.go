@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -135,11 +136,11 @@ func LoadScope(ctx context.Context, cache *gocache.Cache, namespace, name string
 	return scope.id, scope.targets, nil
 }
 
-// ExpandPermissionScopes expands scope references in a permission's object_selector
-// and returns a new permission with the expanded selectors merged in.
-// This is the exported version for testing.
-func ExpandPermissionScopes(ctx context.Context, cache *gocache.Cache, perm models.Permission) ([]v1.PermissionObject, error) {
-	// If no object selector, nothing to expand
+// PermissionScopeConditions returns the casbin conditions of a permission that names Scopes in its object_selector:
+// one per Scope and resource type, each holding when the request has a resource of the type that's in the Scope.
+// Membership is stored for every type but views, whose targets are still matched by their selectors.
+// It returns nil when the permission names no Scopes.
+func PermissionScopeConditions(ctx context.Context, cache *gocache.Cache, perm models.Permission) ([]string, error) {
 	if len(perm.ObjectSelector) == 0 {
 		return nil, nil
 	}
@@ -147,21 +148,11 @@ func ExpandPermissionScopes(ctx context.Context, cache *gocache.Cache, perm mode
 	var selectors v1.PermissionObject
 	if err := json.Unmarshal(perm.ObjectSelector, &selectors); err != nil {
 		return nil, NewValidationError(ErrScopeExpansionInvalidObjectSelector)
-	}
-
-	return expandObjectScopes(ctx, cache, selectors)
-}
-
-// expandObjectScopes returns one object per target of the scopes the object references,
-// or nil when it references no scopes.
-func expandObjectScopes(ctx context.Context, cache *gocache.Cache, selectors v1.PermissionObject) ([]v1.PermissionObject, error) {
-	if len(selectors.Scopes) == 0 {
+	} else if len(selectors.Scopes) == 0 {
 		return nil, nil
 	}
 
-	var output []v1.PermissionObject
-
-	// Expand scopes and merge into selectors
+	var conditions []string
 	for _, scopeRef := range selectors.Scopes {
 		scope, err := getScope(ctx, cache, scopeRef.Namespace, scopeRef.Name)
 		if err != nil {
@@ -174,40 +165,31 @@ func expandObjectScopes(ctx context.Context, cache *gocache.Cache, selectors v1.
 			return nil, NewInvalid(ReasonScopeNotFound, "%s:%s/%s", ErrScopeExpansionScopeNotFound, scopeRef.Namespace, scopeRef.Name)
 		}
 
-		// Merge targets into selectors (union approach)
 		for _, target := range scope.targets {
-			var selectors v1.PermissionObject
-			_, selector := target.Selector()
-			if target.Config != nil {
-				selectors.Configs = append(selectors.Configs, selector)
-			}
-			if target.Component != nil {
-				selectors.Components = append(selectors.Components, selector)
-			}
-			if target.Playbook != nil {
-				selectors.Playbooks = append(selectors.Playbooks, selector)
-			}
-			if target.Connection != nil {
-				selectors.Connections = append(selectors.Connections, selector)
-			}
+			kind, _ := target.Selector()
 			if target.View != nil {
-				selectors.Views = append(selectors.Views, dutyRBAC.ViewRef{
-					ID:        target.View.ID,
-					Name:      target.View.Name,
-					Namespace: target.View.Namespace,
-				})
+				object := dutyRBAC.Selectors{Views: []dutyRBAC.ViewRef{{ID: target.View.ID, Name: target.View.Name, Namespace: target.View.Namespace}}}
+				raw, err := json.Marshal(object)
+				if err != nil {
+					return nil, err
+				}
+				conditions = append(conditions, selectorCondition(raw))
+				continue
 			}
 
-			// Canary and check targets have no selectors here, and an object without selectors would match everything
-			if selectors.HasSelectors() {
-				output = append(output, selectors)
+			condition, err := dutyRBAC.ScopeCondition(kind, scope.id)
+			if err != nil {
+				return nil, NewValidationError("%s: %v", ErrScopeExpansionInvalidScopeTargets, err)
+			}
+			if !slices.Contains(conditions, condition) {
+				conditions = append(conditions, condition)
 			}
 		}
 	}
 
-	if len(output) == 0 {
+	if len(conditions) == 0 {
 		return nil, NewValidationError("%s: scopes select no resources a permission can match", ErrScopeExpansionInvalidScopeTargets)
 	}
 
-	return output, nil
+	return conditions, nil
 }

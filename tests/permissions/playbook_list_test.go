@@ -16,9 +16,13 @@ import (
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sTypes "k8s.io/apimachinery/pkg/types"
 
 	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
@@ -26,9 +30,10 @@ import (
 
 var _ = ginkgo.Describe("Playbook list", ginkgo.Ordered, func() {
 	var (
-		e     *echo.Echo
-		admin *models.Person
-		other models.Playbook
+		e      *echo.Echo
+		admin  *models.Person
+		other  models.Playbook
+		scopes = map[string]string{}
 	)
 
 	ginkgo.BeforeAll(func() {
@@ -45,6 +50,21 @@ var _ = ginkgo.Describe("Playbook list", ginkgo.Ordered, func() {
 		}
 		Expect(DefaultContext.DB().Create(&other).Error).To(Succeed())
 
+		for name, targets := range map[string][]v1.ScopeTarget{
+			"echo-on-every-config": {
+				{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}},
+				{Playbook: &v1.ScopePlaybookRef{Name: dummy.EchoConfig.Name}},
+			},
+			"every-playbook": {{Playbook: &v1.ScopePlaybookRef{Name: "*"}}},
+		} {
+			scope := &v1.Scope{
+				ObjectMeta: metav1.ObjectMeta{Name: "playbook-list-" + name, Namespace: "default", UID: k8sTypes.UID(uuid.NewString())},
+				Spec:       v1.ScopeSpec{Targets: targets},
+			}
+			Expect(db.PersistScopeFromCRD(DefaultContext, scope)).To(Succeed())
+			scopes[name] = string(scope.UID)
+		}
+
 		e = echo.New()
 		e.Use(auth.ScopeImpersonation)
 		playbook.RegisterRoutes(e)
@@ -53,15 +73,18 @@ var _ = ginkgo.Describe("Playbook list", ginkgo.Ordered, func() {
 	ginkgo.AfterAll(func() {
 		Expect(DefaultContext.DB().Delete(&other).Error).To(Succeed())
 		Expect(DefaultContext.DB().Delete(admin).Error).To(Succeed())
+		Expect(DefaultContext.DB().Where("name LIKE ?", "playbook-list-%").Delete(&models.Scope{}).Error).To(Succeed())
 	})
 
-	list := func(rowFilters string) (int, []string) {
+	list := func(scopeNames ...string) (int, []string) {
 		ginkgo.GinkgoHelper()
 
 		req := httptest.NewRequest(http.MethodGet, "/playbook/list?config_id="+dummy.NginxIngressPod.ID.String(), nil)
 		req = req.WithContext(DefaultContext.WithUser(admin))
-		if rowFilters != "" {
-			req.Header.Set(auth.HeaderFlanksourceScope, rowFilters)
+		if len(scopeNames) > 0 {
+			header, err := json.Marshal(lo.Map(scopeNames, func(name string, _ int) string { return scopes[name] }))
+			Expect(err).ToNot(HaveOccurred())
+			req.Header.Set(auth.HeaderFlanksourceScope, string(header))
 		}
 
 		rec := httptest.NewRecorder()
@@ -76,19 +99,19 @@ var _ = ginkgo.Describe("Playbook list", ginkgo.Ordered, func() {
 	}
 
 	ginkgo.It("lists every playbook of the config for a caller whose rows aren't filtered", func() {
-		status, names := list("")
+		status, names := list()
 		Expect(status).To(Equal(http.StatusOK))
 		Expect(names).To(ContainElements(dummy.EchoConfig.Name, other.Name))
 	})
 
 	ginkgo.It("lists only the playbooks the caller's row filters select", func() {
-		status, names := list(`{"config":[{"id":"*"}],"playbook":[{"names":["` + dummy.EchoConfig.Name + `"]}]}`)
+		status, names := list("echo-on-every-config")
 		Expect(status).To(Equal(http.StatusOK))
 		Expect(names).To(ConsistOf(dummy.EchoConfig.Name))
 	})
 
 	ginkgo.It("lists no playbook of a config the caller can't read", func() {
-		status, _ := list(`{"playbook":[{"id":"*"}]}`)
+		status, _ := list("every-playbook")
 		Expect(status).To(Equal(http.StatusNotFound))
 	})
 
@@ -101,12 +124,14 @@ var _ = ginkgo.Describe("Playbook list", ginkgo.Ordered, func() {
 			ginkgo.DeferCleanup(func() { Expect(DefaultContext.DB().Delete(&run).Error).To(Succeed()) })
 		})
 
-		get := func(path, rowFilters string) int {
+		get := func(path string, scopeNames ...string) int {
 			ginkgo.GinkgoHelper()
 			req := httptest.NewRequest(http.MethodGet, path, nil)
 			req = req.WithContext(DefaultContext.WithUser(admin))
-			if rowFilters != "" {
-				req.Header.Set(auth.HeaderFlanksourceScope, rowFilters)
+			if len(scopeNames) > 0 {
+				header, err := json.Marshal(lo.Map(scopeNames, func(name string, _ int) string { return scopes[name] }))
+				Expect(err).ToNot(HaveOccurred())
+				req.Header.Set(auth.HeaderFlanksourceScope, string(header))
 			}
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, req)
@@ -114,12 +139,11 @@ var _ = ginkgo.Describe("Playbook list", ginkgo.Ordered, func() {
 		}
 
 		ginkgo.It("returns a run of a playbook the caller may read", func() {
-			Expect(get("/playbook/run/"+run.ID.String(), "")).To(Equal(http.StatusOK))
+			Expect(get("/playbook/run/" + run.ID.String())).To(Equal(http.StatusOK))
 		})
 
 		ginkgo.It("doesn't find a run of a playbook outside the caller's row filters", func() {
-			rowFilters := `{"playbook":[{"names":["` + dummy.EchoConfig.Name + `"]}]}`
-			Expect(get("/playbook/run/"+run.ID.String(), rowFilters)).To(Equal(http.StatusNotFound))
+			Expect(get("/playbook/run/"+run.ID.String(), "echo-on-every-config")).To(Equal(http.StatusNotFound))
 		})
 	})
 

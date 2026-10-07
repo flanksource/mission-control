@@ -7,10 +7,21 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/membership"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
+
+func init() {
+	dutyRBAC.ActionContract = func(action string) ([]string, []string, bool) {
+		contract, err := ContractFor(action)
+		if err != nil {
+			return nil, nil, false
+		}
+		return contract.Resources, contract.Targets, true
+	}
+}
 
 // MembershipTargets converts a valid Scope's targets, with agents resolved, to the targets its membership is built from.
 // Targets of types whose membership isn't stored, i.e. views, are left out.

@@ -11,7 +11,6 @@ import (
 	"github.com/flanksource/duty/rls"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
-	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -97,286 +96,156 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 	})
 
 	Context("Permission to RLS translation", func() {
-		It("should return RLS payload with config scope for guest user", func() {
-			ctx := DefaultContext.WithUser(guestUser)
+		const (
+			missioncontrolScope  = "db80e7f5-b6af-4896-8431-8d6e5430c6f2"
+			monitoringScope      = "eb5a2647-f377-4fd9-83fd-07020e761740"
+			homelabScope         = "3c4e5f6a-7b8c-4d9e-0f1a-2b3c4d5e6f7a"
+			homelabDefaultScope  = "7a8b9c0d-1e2f-4a3b-5c6d-7e8f9a0b1c2d"
+			multiTargetScope     = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"
+			restartPodScope      = "f1e2d3c4-b5a6-4978-8abc-def012345678"
+			wildcardConfigsScope = "f1e2d3c4-b5a6-4c7d-8e9f-0a1b2c3d4e5f"
+		)
 
-			payload, err := auth.GetRLSPayload(ctx)
+		grants := func(scopeIDs ...string) *rls.Grants {
+			g := rls.NoRows()
+			for _, id := range scopeIDs {
+				g.Add(rls.Grant{Scope: id})
+			}
+			return g
+		}
+
+		It("should grant rows only through the Scopes a guest's permissions name", func() {
+			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(guestUser))
 			Expect(err).ToNot(HaveOccurred())
-			Expect(payload).ToNot(BeNil())
 
 			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users with scopes")
-			Expect(payload.Config).To(HaveLen(3), "should have three config scopes")
-			Expect(payload.Config).To(ContainElements([]rls.Scope{
-				{Tags: map[string]string{"namespace": "missioncontrol"}},
-				{Tags: map[string]string{"namespace": "monitoring"}},
-				{Tags: map[string]string{"namespace": "media"}},
+			Expect(payload.Config).To(Equal(grants(missioncontrolScope, monitoringScope)),
+				"the inline namespace=media config selector grants no rows")
+			Expect(payload.Playbook).To(Equal(grants(restartPodScope)),
+				"the inline echo-config playbook selector grants no rows")
+			Expect(payload.View).To(ConsistOf(rls.Scope{Names: []string{"pods"}}), "views are still filtered by their selectors")
+			Expect(payload.Component).To(BeNil())
+			Expect(payload.Canary).To(BeNil())
+		})
+
+		It("should grant each type a multi-target Scope selects", func() {
+			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(guestUserMultiTarget))
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload).To(Equal(&rls.Payload{
+				Config:   grants(multiTargetScope),
+				Playbook: grants(multiTargetScope),
+				View:     []rls.Scope{{Names: []string{"metrics"}}},
+				Scopes:   []string{multiTargetScope},
 			}))
-
-			// Playbook scopes should include echo-config and restart-pod
-			Expect(payload.Playbook).To(HaveLen(2), "should have two playbook scopes")
-			Expect(payload.Playbook).To(ContainElements([]rls.Scope{
-				{Names: []string{"echo-config"}},
-				{Names: []string{"restart-pod"}},
-			}))
-
-			// View scopes should be included if user has view permissions
-			Expect(payload.View).To(HaveLen(1), "should have one view scope for pods view")
-			Expect(payload.View).To(ContainElement(rls.Scope{
-				Names: []string{"pods"},
-			}))
-
-			// Other resource types should be empty
-			Expect(payload.Component).To(BeEmpty(), "component scope should be empty")
-			Expect(payload.Canary).To(BeEmpty(), "canary scope should be empty")
 		})
 
-		It("should return RLS payload for guest user with multi-target scope", func() {
-			ctx := DefaultContext.WithUser(guestUserMultiTarget)
+		for _, tc := range []struct {
+			name  string
+			user  func() *models.Person
+			scope string
+		}{
+			{"an agent-based Scope", func() *models.Person { return homelabManager }, homelabScope},
+			{"a whole-type Scope", func() *models.Person { return wildcardManager }, wildcardConfigsScope},
+			{"a combined agent and tag Scope", func() *models.Person { return homelabDefaultManager }, homelabDefaultScope},
+		} {
+			It("should grant the rows of "+tc.name, func() {
+				payload, err := auth.GetRLSPayload(DefaultContext.WithUser(tc.user()))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(payload).To(Equal(&rls.Payload{Config: grants(tc.scope), Scopes: []string{tc.scope}}))
+			})
+		}
 
-			payload, err := auth.GetRLSPayload(ctx)
+		It("should grant the rows of any of several Scopes", func() {
+			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(multiScopeUser))
 			Expect(err).ToNot(HaveOccurred())
-			Expect(payload).ToNot(BeNil())
 
-			// Verify exact match of entire payload - user should have access to ONLY these resources
-			expectedPayload := &rls.Payload{
-				Disable: false,
-				Config: []rls.Scope{
-					{Tags: map[string]string{"namespace": "database"}},
-				},
-				Playbook: []rls.Scope{
-					{Names: []string{"echo-config"}},
-				},
-				View: []rls.Scope{
-					{Names: []string{"metrics"}},
-				},
-				Scopes:    []string{"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"},
-				Component: nil,
-				Canary:    nil,
-			}
-
-			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should only see database configs, echo-config playbook, and metrics view")
-		})
-
-		It("should return RLS payload for guest user with agent-based scope", func() {
-			ctx := DefaultContext.WithUser(homelabManager)
-
-			payload, err := auth.GetRLSPayload(ctx)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(payload).ToNot(BeNil())
-
-			// Verify exact match of entire payload - user should have access to ONLY homelab agent configs
-			expectedPayload := &rls.Payload{
-				Disable: false,
-				Config: []rls.Scope{
-					{Agents: []string{dummy.HomelabAgent.ID.String()}},
-				},
-				Scopes:    []string{"3c4e5f6a-7b8c-4d9e-0f1a-2b3c4d5e6f7a"},
-				Playbook:  nil,
-				Component: nil,
-				Canary:    nil,
-			}
-
-			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should only see homelab agent configs")
-		})
-
-		It("should return RLS payload for wildcard manager with full wildcard scope", func() {
-			ctx := DefaultContext.WithUser(wildcardManager)
-
-			payload, err := auth.GetRLSPayload(ctx)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(payload).ToNot(BeNil())
-
-			// Verify exact match of entire payload - user should have access to ALL configs via "*"
-			expectedPayload := &rls.Payload{
-				Disable: false,
-				Config: []rls.Scope{
-					{Names: []string{"*"}},
-				},
-				Scopes:    []string{"f1e2d3c4-b5a6-4c7d-8e9f-0a1b2c3d4e5f"},
-				Playbook:  nil,
-				Component: nil,
-				Canary:    nil,
-			}
-
-			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should see all configs via wildcard '*'")
-		})
-
-		It("should return RLS payload for homelab default manager with combined agent+tag scope", func() {
-			ctx := DefaultContext.WithUser(homelabDefaultManager)
-
-			payload, err := auth.GetRLSPayload(ctx)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(payload).ToNot(BeNil())
-
-			// Verify exact match of entire payload - user should have access to homelab agent configs in default namespace
-			expectedPayload := &rls.Payload{
-				Disable: false,
-				Config: []rls.Scope{
-					{
-						Agents: []string{dummy.HomelabAgent.ID.String()},
-						Tags:   map[string]string{"namespace": "default"},
-					},
-				},
-				Playbook:  nil,
-				Component: nil,
-				Canary:    nil,
-				Scopes:    []string{"7a8b9c0d-1e2f-4a3b-5c6d-7e8f9a0b1c2d"},
-			}
-
-			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should see homelab agent configs in default namespace")
-		})
-
-		It("should return RLS payload for multi-scope user with multiple scopes (OR behavior)", func() {
-			ctx := DefaultContext.WithUser(multiScopeUser)
-
-			payload, err := auth.GetRLSPayload(ctx)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(payload).ToNot(BeNil())
-
-			// Verify the payload contains all three scopes (not merged/AND'ed)
-			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users")
-			Expect(payload.Config).To(HaveLen(3), "should have three separate config scopes")
-
-			// Verify all three scopes are present
-			Expect(payload.Config).To(ContainElements([]rls.Scope{
-				{Tags: map[string]string{"namespace": "missioncontrol"}},
-				{Tags: map[string]string{"namespace": "monitoring"}},
-				{Agents: []string{dummy.HomelabAgent.ID.String()}},
-			}))
-
-			// Other resource types should be empty
-			Expect(payload.Playbook).To(BeEmpty(), "playbook scope should be empty")
-			Expect(payload.Component).To(BeEmpty(), "component scope should be empty")
-			Expect(payload.Canary).To(BeEmpty(), "canary scope should be empty")
-			Expect(payload.View).To(BeEmpty(), "view scope should be empty")
+			Expect(payload.Config).To(Equal(grants(missioncontrolScope, monitoringScope, homelabScope)))
+			Expect(payload.Playbook).To(BeNil())
+			Expect(payload.Component).To(BeNil())
+			Expect(payload.Canary).To(BeNil())
+			Expect(payload.View).To(BeEmpty())
 		})
 
 		It("should disable RLS for non-guest users", func() {
-			ctx := DefaultContext.WithUser(adminUser)
-
-			payload, err := auth.GetRLSPayload(ctx)
+			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(adminUser))
 			Expect(err).ToNot(HaveOccurred())
-			Expect(payload).ToNot(BeNil())
-
-			// Admin users should have RLS disabled
 			Expect(payload.Disable).To(BeTrue(), "RLS should be disabled for admin users")
 		})
 
-		It("should return empty RLS payload for guest user with no permissions", func() {
-			ctx := DefaultContext.WithUser(guestUserNoPerms)
-
-			payload, err := auth.GetRLSPayload(ctx)
+		It("should grant no rows to a guest user with no permissions", func() {
+			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(guestUserNoPerms))
 			Expect(err).ToNot(HaveOccurred())
-			Expect(payload).ToNot(BeNil())
 
-			// RLS should be enabled (not disabled) for guest users even without permissions
 			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users even without permissions")
-
-			// All resource scopes should be empty since user has no permissions
-			Expect(payload.Config).To(BeEmpty(), "config scope should be empty for guest user with no permissions")
-			Expect(payload.Component).To(BeEmpty(), "component scope should be empty for guest user with no permissions")
-			Expect(payload.Playbook).To(BeEmpty(), "playbook scope should be empty for guest user with no permissions")
-			Expect(payload.Canary).To(BeEmpty(), "canary scope should be empty for guest user with no permissions")
-			Expect(payload.View).To(BeEmpty(), "view scope should be empty for guest user with no permissions")
+			Expect(payload).To(Equal(&rls.Payload{}))
 		})
 
-		It("should mark deny permissions with object selectors in RLS payload", func() {
+		It("should list no rows of a type a deny permission on read covers", func() {
 			denyOnlyUser := setup.CreateUserWithRole(DefaultContext, "Deny Only User", "deny-only@test.com", policy.RoleGuest)
 			DeferCleanup(func() {
 				auth.InvalidateRLSCacheForUser(denyOnlyUser.ID.String())
 				Expect(DefaultContext.DB().Delete(denyOnlyUser).Error).ToNot(HaveOccurred())
 			})
 
-			denyPermission := &models.Permission{
-				ID:             uuid.New(),
-				Name:           "deny-only-echo-config-playbook-read",
-				Namespace:      "default",
-				Action:         policy.ActionRead,
-				Subject:        denyOnlyUser.ID.String(),
-				SubjectType:    models.PermissionSubjectTypePerson,
-				Deny:           true,
-				ObjectSelector: []byte(`{"playbooks":[{"name":"echo-config","namespace":"mc"}]}`),
+			permissions := []*models.Permission{
+				{
+					ID:             uuid.New(),
+					Name:           "deny-only-echo-config-playbook-read",
+					Namespace:      "default",
+					Action:         policy.ActionRead,
+					Subject:        denyOnlyUser.ID.String(),
+					SubjectType:    models.PermissionSubjectTypePerson,
+					Deny:           true,
+					ObjectSelector: []byte(`{"playbooks":[{"name":"echo-config","namespace":"mc"}]}`),
+				},
+				{
+					ID:             uuid.New(),
+					Name:           "deny-only-restart-pod-allowed",
+					Namespace:      "default",
+					Action:         policy.ActionRead,
+					Subject:        denyOnlyUser.ID.String(),
+					SubjectType:    models.PermissionSubjectTypePerson,
+					ObjectSelector: []byte(`{"scopes":[{"namespace":"default","name":"restart-pod-playbook"}]}`),
+				},
 			}
-			Expect(DefaultContext.DB().Create(denyPermission).Error).ToNot(HaveOccurred())
+			for _, permission := range permissions {
+				Expect(DefaultContext.DB().Create(permission).Error).ToNot(HaveOccurred())
+			}
 			Expect(rbac.ReloadPolicy()).To(Succeed())
 			DeferCleanup(func() {
-				Expect(DefaultContext.DB().Delete(denyPermission).Error).ToNot(HaveOccurred())
+				for _, permission := range permissions {
+					Expect(DefaultContext.DB().Delete(permission).Error).ToNot(HaveOccurred())
+				}
 				Expect(rbac.ReloadPolicy()).To(Succeed())
 			})
 
 			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(denyOnlyUser))
 			Expect(err).ToNot(HaveOccurred())
-			Expect(payload).ToNot(BeNil())
 			Expect(payload.Disable).To(BeFalse())
-			Expect(payload.Playbook).To(ContainElement(rls.Scope{Names: []string{"echo-config"}, Deny: true}), "deny permissions must be marked as deny RLS playbook scopes")
-			Expect(payload.Playbook).ToNot(ContainElement(rls.Scope{Names: []string{"echo-config"}}), "deny permissions must not become unmarked allowed RLS playbook scopes")
+			Expect(payload.Playbook).ToNot(BeNil(), "the type is still filtered, so its listing is empty rather than refused")
+			Expect(payload.Playbook.IsEmpty()).To(BeTrue(), "a deny that can't be enforced row by row must refuse rather than allow")
 		})
 
-		It("should include direct ID-based permissions in RLS payload", func() {
-			ctx := DefaultContext.WithUser(guestUserDirectPerms)
-
-			payload, err := auth.GetRLSPayload(ctx)
+		It("should grant no rows through direct ID-based permissions", func() {
+			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(guestUserDirectPerms))
 			Expect(err).ToNot(HaveOccurred())
-			Expect(payload).ToNot(BeNil())
 
 			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users")
-
-			// Verify playbook scope includes the direct playbook ID
-			var hasPlaybookID bool
-			for _, scope := range payload.Playbook {
-				if scope.ID == dummy.EchoConfig.ID.String() {
-					hasPlaybookID = true
-					break
-				}
-			}
-			Expect(hasPlaybookID).To(BeTrue(), "playbook scope should include direct playbook ID")
-
-			// Verify canary scope includes the direct canary ID
-			var hasCanaryID bool
-			for _, scope := range payload.Canary {
-				if scope.ID == dummy.LogisticsAPICanary.ID.String() {
-					hasCanaryID = true
-					break
-				}
-			}
-			Expect(hasCanaryID).To(BeTrue(), "canary scope should include direct canary ID")
-
-			// Verify component scope includes the direct component ID
-			var hasComponentID bool
-			for _, scope := range payload.Component {
-				if scope.ID == dummy.Logistics.ID.String() {
-					hasComponentID = true
-					break
-				}
-			}
-			Expect(hasComponentID).To(BeTrue(), "component scope should include direct component ID")
+			Expect(payload.Playbook).To(BeNil())
+			Expect(payload.Canary).To(BeNil())
+			Expect(payload.Component).To(BeNil())
 		})
 
 		It("should return RLS payload for user with metrics view permission", func() {
-			ctx := DefaultContext.WithUser(userMetrics)
-
-			payload, err := auth.GetRLSPayload(ctx)
+			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(userMetrics))
 			Expect(err).ToNot(HaveOccurred())
-			Expect(payload).ToNot(BeNil())
-
-			// Verify exact match of entire payload - user should have access to ONLY metrics view
-			expectedPayload := &rls.Payload{
-				Disable:   false,
-				Config:    nil,
-				Playbook:  nil,
-				Component: nil,
-				Canary:    nil,
-				View: []rls.Scope{
-					{Names: []string{"metrics"}},
-				},
-			}
-
-			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should only see metrics view")
+			Expect(payload).To(Equal(&rls.Payload{View: []rls.Scope{{Names: []string{"metrics"}}}}))
 		})
 	})
 
-	Context("Scope expansion", func() {
-		It("should expand multi-target scope into permission object_selector", func() {
+	Context("Scope conditions", func() {
+		It("should check a multi-target Scope through its membership, and its views by their selectors", func() {
 			var permission models.Permission
 			err := DefaultContext.DB().
 				Where("subject = ? AND deleted_at IS NULL", guestUserMultiTarget.ID.String()).
@@ -384,31 +253,18 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				First(&permission).Error
 			Expect(err).ToNot(HaveOccurred(), "should find the multi-target scope permission")
 
-			// Expand the permission
-			expandedPerm, err := adapter.ExpandPermissionScopes(DefaultContext, cache.New(time.Minute, time.Minute), permission)
-			Expect(err).ToNot(HaveOccurred(), "scope expansion should succeed")
+			conditions, err := adapter.PermissionScopeConditions(DefaultContext, cache.New(time.Minute, time.Minute), permission)
+			Expect(err).ToNot(HaveOccurred())
 
-			Expect(expandedPerm).To(HaveLen(3))
-			Expect(expandedPerm).To(ContainElements(
-				v1.PermissionObject{
-					Selectors: rbac.Selectors{
-						Configs: []types.ResourceSelector{{TagSelector: "namespace=database"}},
-					},
-				},
-				v1.PermissionObject{
-					Selectors: rbac.Selectors{
-						Playbooks: []types.ResourceSelector{{Name: "echo-config"}},
-					},
-				},
-				v1.PermissionObject{
-					Selectors: rbac.Selectors{
-						Views: []rbac.ViewRef{{Name: "metrics", Namespace: "mc"}},
-					},
-				},
+			Expect(conditions).To(HaveLen(3))
+			Expect(conditions).To(ContainElements(
+				"'scope:a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d' in r.obj.Membership.Config",
+				"'scope:a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d' in r.obj.Membership.Playbook",
 			))
+			Expect(conditions).To(ContainElement(And(ContainSubstring("matchResourceSelector"), ContainSubstring("metrics"))))
 		})
 
-		It("should expand combined agent+tag scope into permission object_selector", func() {
+		It("should check a combined agent+tag Scope through its membership", func() {
 			var permission models.Permission
 			err := DefaultContext.DB().
 				Where("subject = ? AND deleted_at IS NULL", homelabDefaultManager.ID.String()).
@@ -416,21 +272,9 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				First(&permission).Error
 			Expect(err).ToNot(HaveOccurred(), "should find the combined agent+tag scope permission")
 
-			// Expand the permission
-			expandedPerm, err := adapter.ExpandPermissionScopes(DefaultContext, cache.New(time.Minute, time.Minute), permission)
-			Expect(err).ToNot(HaveOccurred(), "scope expansion should succeed")
-
-			Expect(expandedPerm).To(HaveLen(1))
-			Expect(expandedPerm).To(Equal([]v1.PermissionObject{
-				{
-					Selectors: rbac.Selectors{
-						Configs: []types.ResourceSelector{{
-							Agent:       dummy.HomelabAgent.ID.String(),
-							TagSelector: "namespace=default",
-						}},
-					},
-				},
-			}))
+			conditions, err := adapter.PermissionScopeConditions(DefaultContext, cache.New(time.Minute, time.Minute), permission)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(conditions).To(Equal([]string{"'scope:7a8b9c0d-1e2f-4a3b-5c6d-7e8f9a0b1c2d' in r.obj.Membership.Config"}))
 		})
 	})
 
@@ -459,6 +303,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 	Context("Permission to Casbin policy translation", func() {
 		DescribeTable("guest user with some permissions",
 			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
+				storeConfig(attr)
 				allowed := rbac.HasPermission(DefaultContext, guestUser.ID.String(), &attr, action)
 				Expect(allowed).To(Equal(expectedAllowed), description)
 			},
@@ -540,6 +385,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 		DescribeTable("guest user with no permissions at all",
 			func(attr models.ABACAttribute, action string, description string) {
+				storeConfig(attr)
 				allowed := rbac.HasPermission(DefaultContext, guestUserNoPerms.ID.String(), &attr, action)
 				Expect(allowed).To(BeFalse(), description)
 			},
@@ -571,6 +417,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 		DescribeTable("guest user with multi-target scope",
 			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
+				storeConfig(attr)
 				allowed := rbac.HasPermission(DefaultContext, guestUserMultiTarget.ID.String(), &attr, action)
 				Expect(allowed).To(Equal(expectedAllowed), description)
 			},
@@ -615,6 +462,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 		DescribeTable("guest user with agent-based scope",
 			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
+				storeConfig(attr)
 				allowed := rbac.HasPermission(DefaultContext, homelabManager.ID.String(), &attr, action)
 				Expect(allowed).To(Equal(expectedAllowed), description)
 			},
@@ -639,6 +487,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 		DescribeTable("admin user must have access to everything",
 			func(attr models.ABACAttribute, action string, description string) {
+				storeConfig(attr)
 				allowed := rbac.HasPermission(DefaultContext, adminUser.ID.String(), &attr, action)
 				Expect(allowed).To(BeTrue(), description)
 			},
@@ -671,6 +520,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 		DescribeTable("wildcard manager with full wildcard scope",
 			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
+				storeConfig(attr)
 				allowed := rbac.HasPermission(DefaultContext, wildcardManager.ID.String(), &attr, action)
 				Expect(allowed).To(Equal(expectedAllowed), description)
 			},
@@ -699,6 +549,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 		DescribeTable("homelab default manager with combined agent+tag scope",
 			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
+				storeConfig(attr)
 				allowed := rbac.HasPermission(DefaultContext, homelabDefaultManager.ID.String(), &attr, action)
 				Expect(allowed).To(Equal(expectedAllowed), description)
 			},
@@ -723,6 +574,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 		DescribeTable("multi-scope user with multiple scopes (OR behavior)",
 			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
+				storeConfig(attr)
 				allowed := rbac.HasPermission(DefaultContext, multiScopeUser.ID.String(), &attr, action)
 				Expect(allowed).To(Equal(expectedAllowed), description)
 			},
@@ -774,15 +626,16 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 		BeforeAll(func() {
 			// Calculate expected counts from dummy data (without RLS)
-			// Guest user: namespace in [missioncontrol, monitoring, media]
+			// Guest user: namespace in [missioncontrol, monitoring], through Scopes.
+			// Its inline namespace=media selector grants no rows.
 			DefaultContext.DB().
-				Where("tags->>'namespace' IN ?", []string{"missioncontrol", "monitoring", "media"}).
+				Where("tags->>'namespace' IN ?", []string{"missioncontrol", "monitoring"}).
 				Model(&models.ConfigItem{}).
 				Count(&guestUserConfigCount)
 
-			// Guest user: playbooks [echo-config, restart-pod]
+			// Guest user: playbook restart-pod, through a Scope. Its inline echo-config selector grants no rows.
 			DefaultContext.DB().
-				Where("name IN ?", []string{"echo-config", "restart-pod"}).
+				Where("name IN ?", []string{"restart-pod"}).
 				Model(&models.Playbook{}).
 				Count(&guestUserPlaybookCount)
 
@@ -852,7 +705,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		})
 
 		// Config items tests
-		It("should allow guest user to see only configs in permitted namespaces (missioncontrol, monitoring, media)", func() {
+		It("should allow guest user to see only configs of the Scopes it's granted (missioncontrol, monitoring)", func() {
 			ctx := DefaultContext.WithUser(guestUser)
 
 			payload, err := auth.GetRLSPayload(ctx)
@@ -862,7 +715,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 			var count int64
 			Expect(tx.Model(&models.ConfigItem{}).Count(&count).Error).To(BeNil())
-			Expect(count).To(Equal(guestUserConfigCount), "guest user should see configs in missioncontrol, monitoring, and media namespaces")
+			Expect(count).To(Equal(guestUserConfigCount), "guest user should see configs in missioncontrol and monitoring namespaces")
 		})
 
 		It("should deny access to all configs for guest user with no permissions", func() {
@@ -931,7 +784,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		})
 
 		// Playbook tests
-		It("should allow guest user to see permitted playbooks (echo-config, restart-pod)", func() {
+		It("should allow guest user to see the playbooks of the Scopes it's granted (restart-pod)", func() {
 			ctx := DefaultContext.WithUser(guestUser)
 
 			payload, err := auth.GetRLSPayload(ctx)
@@ -941,7 +794,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 			var count int64
 			Expect(tx.Model(&models.Playbook{}).Count(&count).Error).To(BeNil())
-			Expect(count).To(Equal(guestUserPlaybookCount), "guest user should see echo-config and restart-pod playbooks")
+			Expect(count).To(Equal(guestUserPlaybookCount), "guest user should see the restart-pod playbook")
 		})
 
 		It("should deny access to all playbooks for guest user with no permissions", func() {
@@ -983,7 +836,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(count).To(Equal(totalPlaybooks), "admin user should see all playbooks")
 		})
 
-		It("should apply deny playbook selector over wildcard allow in RLS filtering", func() {
+		It("should list no playbooks when a deny permission on read covers them", func() {
 			user := setup.CreateUserWithRole(DefaultContext, "Allow All Deny Echo User", "allow-all-deny-echo@test.com", policy.RoleGuest)
 			DeferCleanup(func() {
 				auth.InvalidateRLSCacheForUser(user.ID.String())
@@ -1020,17 +873,14 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
 
-			var echoCount int64
-			Expect(tx.Model(&models.Playbook{}).Where("id = ?", dummy.EchoConfig.ID).Count(&echoCount).Error).To(BeNil())
-			Expect(echoCount).To(Equal(int64(0)), "deny selector should hide echo-config despite wildcard allow")
-
-			var restartCount int64
-			Expect(tx.Model(&models.Playbook{}).Where("id = ?", dummy.RestartPod.ID).Count(&restartCount).Error).To(BeNil())
-			Expect(restartCount).To(Equal(int64(1)), "wildcard allow should still permit non-denied playbooks")
+			// A deny can't be enforced row by row, so it refuses the whole type rather than allow what it denies
+			var count int64
+			Expect(tx.Model(&models.Playbook{}).Count(&count).Error).To(BeNil())
+			Expect(count).To(BeZero())
 		})
 
 		// Direct ID permissions tests
-		It("should include direct ID-based playbook permission in RLS filtering", func() {
+		It("should grant no rows through a direct ID-based playbook permission", func() {
 			ctx := DefaultContext.WithUser(guestUserDirectPerms)
 
 			payload, err := auth.GetRLSPayload(ctx)
@@ -1038,11 +888,10 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
 
-			// guestUserDirectPerms has direct permission to echo-config playbook by ID
-			// They should see at least the echo-config playbook
+			// Inline selectors, ids included, aren't materialised: they're only checked on single resources
 			var count int64
 			Expect(tx.Model(&models.Playbook{}).Where("id = ?", dummy.EchoConfig.ID).Count(&count).Error).To(BeNil())
-			Expect(count).To(BeNumerically(">=", 1), "guest user with direct permissions should see echo-config playbook by ID")
+			Expect(count).To(BeZero())
 		})
 
 		// Specific resource verification tests
@@ -1130,7 +979,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(count).To(Equal(int64(0)), "homelab manager should NOT see LogisticsDBRDS (no homelab agent)")
 		})
 
-		It("should allow guestUserDirectPerms to see NginxIngressPod via direct ID permission", func() {
+		It("should grant guestUserDirectPerms no rows through a direct ID permission on NginxIngressPod", func() {
 			ctx := DefaultContext.WithUser(guestUserDirectPerms)
 
 			payload, err := auth.GetRLSPayload(ctx)
@@ -1141,7 +990,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			// guestUserDirectPerms has direct permission to NginxIngressPod config by ID
 			var count int64
 			Expect(tx.Model(&models.ConfigItem{}).Where("id = ?", dummy.NginxIngressPod.ID).Count(&count).Error).To(BeNil())
-			Expect(count).To(Equal(int64(1)), "guest user with direct permissions should see NginxIngressPod config by ID")
+			Expect(count).To(BeZero())
 		})
 
 		It("should allow homelab default manager to see only configs with homelab agent AND default namespace (combined scope)", func() {
@@ -1350,4 +1199,23 @@ func createDirectPermissions(userID string) []*models.Permission {
 	Expect(err).ToNot(HaveOccurred())
 
 	return []*models.Permission{directPlaybookPermission, directCanaryPermission, directComponentPermission, directConfigPermission}
+}
+
+// storeConfig stores the request's config, if any, which matches it to its Scopes:
+// checks read stored membership, so a config that isn't stored is in no Scope.
+func storeConfig(attr models.ABACAttribute) {
+	GinkgoHelper()
+	if attr.Config.ID == uuid.Nil {
+		return
+	}
+
+	config := attr.Config
+	config.Name = lo.CoalesceOrEmpty(config.Name, lo.ToPtr("permissions-test"))
+	config.Type = lo.ToPtr("Permissions::Test")
+	config.ConfigClass = "Test"
+	Expect(DefaultContext.DB().Create(&config).Error).To(Succeed())
+
+	DeferCleanup(func() {
+		Expect(DefaultContext.DB().Delete(&models.ConfigItem{}, "id = ?", config.ID).Error).To(Succeed())
+	})
 }
