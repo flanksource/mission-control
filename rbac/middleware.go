@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
@@ -84,27 +85,48 @@ func DbMiddleware() MiddlewareFunc {
 
 // rowFilteredTables are the tables whose rows are filtered by a subject's read grants of their resource type.
 var rowFilteredTables = map[string]string{
-	"config_items": policy.ResourceConfig,
-	"components":   policy.ResourceComponent,
-	"checks":       policy.ResourceCheck,
-	"canaries":     policy.ResourceCanary,
-	"playbooks":    policy.ResourcePlaybook,
+	"config_items":   policy.ResourceConfig,
+	"configs":        policy.ResourceConfig,
+	"config_changes": policy.ResourceConfig,
+	"components":     policy.ResourceComponent,
+	"checks":         policy.ResourceCheck,
+	"canaries":       policy.ResourceCanary,
+	"playbooks":      policy.ResourcePlaybook,
 }
 
 // ReadGrantsCover reports whether the subject's read grants filter rows of the resource type.
 // The auth package sets it, since it builds the row filters.
 var ReadGrantsCover func(ctx context.Context, resourceType string) bool
 
-// canListFilteredRows reports whether a subject without built-in access, e.g. a user of an external identity provider,
+// canListFilteredRows reports whether a guest or a subject without built-in access
 // can list a table because its read grants cover some rows of it. Postgres then filters the rows.
 // Its read grants on whole types pass the object check instead.
 func canListFilteredRows(ctx context.Context, table, action string) bool {
-	if action != policy.ActionRead || rbac.HasImplicitGrants(ctx.Subject()) || ReadGrantsCover == nil {
+	if action != policy.ActionRead || ReadGrantsCover == nil {
+		return false
+	}
+	if rbac.HasImplicitGrants(ctx.Subject()) && !isGuest(ctx) {
 		return false
 	}
 
 	resourceType, ok := rowFilteredTables[table]
 	return ok && ReadGrantsCover(ctx, resourceType)
+}
+
+// isGuest reports whether the subject is a person with the guest role.
+// When the roles can't be read, it reports false, so that a non-guest isn't let through.
+func isGuest(ctx context.Context) bool {
+	user := ctx.User()
+	if user == nil {
+		return false
+	}
+
+	roles, err := rbac.RolesForUser(user.ID.String())
+	if err != nil {
+		ctx.Warnf("failed to get roles of %s: %v", user.ID, err)
+		return false
+	}
+	return lo.Contains(roles, policy.RoleGuest)
 }
 
 // PlaybookList authorizes listing playbooks through a read of the whole type,
