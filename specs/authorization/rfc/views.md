@@ -71,6 +71,8 @@ No option below escapes this. Each picks a side, or a balance.
 
 ## 5. Options
 
+**Options A and D are ruled out.** A needs a separate view for each team's namespace, but we need one shared view that shows each team only its own rows. D cannot apply our permissions to arbitrary Prometheus queries or external API calls. It would also hide useful data, such as a node's AWS cost, from readers who may read the node but not the AWS resources.
+
 The examples restrict a `pods` view to the pods of the `monitoring` namespace, for a subject who may also read the monitoring configs.
 
 ### Option A: a view is a report
