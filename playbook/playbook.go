@@ -92,15 +92,9 @@ func CreateOrSaveFromFile(ctx context.Context, file string) (*models.Playbook, e
 	return db.SavePlaybook(ctx, &spec)
 }
 
-type playbookRunOptions struct {
-	CheckPermissions bool
-}
-
 // Run creates and saves a run from a run request after validating the run parameters.
 func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models.PlaybookRun, error) {
-	run, err := createPlaybookRun(ctx, playbook, req, playbookRunOptions{
-		CheckPermissions: true,
-	})
+	run, err := createPlaybookRun(ctx, playbook, req)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +106,9 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 	return run, nil
 }
 
-func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunParams, opts playbookRunOptions) (*models.PlaybookRun, error) {
+// createPlaybookRun validates the request, authorizes the subject against the
+// run target and the playbook, and saves the run.
+func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunParams) (*models.PlaybookRun, error) {
 	var spec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
 		return nil, err
@@ -191,23 +187,21 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 		return nil, ctx.Oops().Wrap(err)
 	}
 
-	if opts.CheckPermissions {
-		// Must have read access on the target, if any (required to prevent guests from accessing unauthorized resources)
-		if templateEnv.SelectableResource() != nil && !rbac.HasPermission(ctx, ctx.Subject(), templateEnv.ABACAttributes(), policy.ActionRead) {
-			return nil, ctx.Oops().
-				Code(dutyAPI.EFORBIDDEN).
-				With("permission", policy.ActionRead, "objects", templateEnv.ABACAttributes()).
-				Wrap(fmt.Errorf("access denied: read access to resource not allowed for subject: %s", ctx.Subject()))
-		}
+	// Must have read access on the target, if any (required to prevent guests from accessing unauthorized resources)
+	if templateEnv.SelectableResource() != nil && !rbac.HasPermission(ctx, ctx.Subject(), templateEnv.ABACAttributes(), policy.ActionRead) {
+		return nil, ctx.Oops().
+			Code(dutyAPI.EFORBIDDEN).
+			With("permission", policy.ActionRead, "objects", templateEnv.ABACAttributes()).
+			Wrap(fmt.Errorf("access denied: read access to resource not allowed for subject: %s", ctx.Subject()))
+	}
 
-		if attr, err := run.GetABACAttributes(ctx.DB()); err != nil {
-			return nil, ctx.Oops().Wrap(err)
-		} else if !rbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
-			return nil, ctx.Oops().
-				Code(dutyAPI.EFORBIDDEN).
-				With("permission", policy.ActionPlaybookRun, "objects", attr).
-				Wrap(fmt.Errorf("access denied to subject(%s): cannot run playbook on this resource", ctx.Subject()))
-		}
+	if attr, err := run.GetABACAttributes(ctx.DB()); err != nil {
+		return nil, ctx.Oops().Wrap(err)
+	} else if !rbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
+		return nil, ctx.Oops().
+			Code(dutyAPI.EFORBIDDEN).
+			With("permission", policy.ActionPlaybookRun, "objects", attr).
+			Wrap(fmt.Errorf("access denied to subject(%s): cannot run playbook on this resource", ctx.Subject()))
 	}
 
 	// Auto approval must be checked against the caller, not the playbook.
