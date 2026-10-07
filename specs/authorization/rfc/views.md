@@ -71,13 +71,13 @@ No option below escapes this. Each picks a side, or a balance.
 
 ## 5. Options
 
-**Options A and D are ruled out.** A needs a separate view for each team's namespace, but we need one shared view that shows each team only its own rows. D cannot apply our permissions to arbitrary Prometheus queries or external API calls. It would also hide useful data, such as a node's AWS cost, from readers who may read the node but not the AWS resources.
-
 The examples restrict a `pods` view to the pods of the `monitoring` namespace, for a subject who may also read the monitoring configs.
 
-### Option A: a view is a report
+### Option A: a view is a report (ruled out)
 
 Reading a view shows everything it shows. Rows aren't filtered. To give someone the pods of one namespace, create a view for that namespace and grant it.
+
+**Why ruled out:** Suppose Team A owns the `monitoring` namespace and Team B owns `payments`. Both teams should open the same `pods` view, but each should see only its own pods. Option A can only grant the whole view or nothing: granting the shared view exposes both namespaces. Keeping them separate would require `pods-monitoring` and `pods-payments`; ten teams with different namespaces would need ten views. A shared template could avoid copying the queries by hand, but it would still create ten separate views and grants. A single View MUST support different readers seeing different rows, so separate reports are not an acceptable substitute.
 
 ```yaml
 kind: Scope
@@ -137,9 +137,11 @@ A row with no reference is hidden from every subject whose listings are filtered
   - Rows that don't concern any resource, e.g. cluster-wide metrics, can never be shown to filtered subjects.
   - Panels are computed over every row, as in Option B.
 
-### Option D: views computed with the reader's grants
+### Option D: views computed with the reader's grants (ruled out)
 
 A view is computed once per set of grants instead of once for everyone. Readers whose listings aren't filtered share one result, as today. For a filtered reader, the view's queries run under their row-level security, so a config query returns only their configs, and an SQL query only the rows of tables they may read. Merges and panels then run over data already filtered. Readers with the same grants share a result.
+
+**Why ruled out:** Suppose Team A may read `monitoring` pods in Mission Control, but the `pods` view gets its rows from Prometheus rather than a config query. Prometheus runs the configured query using the connection's credentials; it does not know the reader's Mission Control grants. The query may leave out namespace labels or return only a count of `42` across all namespaces, so Mission Control cannot recover Team A's rows or count from the result. Prometheus can filter by namespace when a query is written to do so, but our grants cannot automatically enforce that restriction on every arbitrary query. The same problem applies to rows returned by an external API. There is also a separate problem with requiring access to all inputs: a node view may join Kubernetes nodes with AWS costs, and its readers should be able to see their nodes' costs without permission to browse the AWS resources. Running that view with the reader's source permissions would hide the costs or require broader access than intended. A View MUST support sharing such results without requiring every source to enforce the reader's grants or the reader to have direct access to every input. This rules D out as the general View model, regardless of its computing cost.
 
 - **For:** define once, with nothing to declare: no references, columns or targets on rows. Panels are right with no special case.
 - **Against:**
