@@ -96,29 +96,55 @@ spec:
 
 ### Option B: rows selected by their column values
 
-A `view` target can select rows of a view by the values of its columns, e.g. the rows whose `namespace` column is `monitoring`. The generated table filters rows by the reader's Scopes.
+**View rows are independently granted data.** A `view` target selects a View and can narrow access to rows by their column values. Access to the source resources neither grants nor restricts access to these rows, and reading a View row grants no access to its sources.
+
+**Why:** A View can contain arbitrary data from several sources. An administrator may share a cost report containing S3 bucket names and costs with someone who cannot browse those buckets directly. That is a grant to the report, not a change to the bucket permissions. Views use the existing Scopes, Roles and RoleBindings, but their rows have their own membership rather than inheriting it from the sources.
+
+**Example: pods from Prometheus.** A `pods` View in namespace `mc` gets its data entirely from Prometheus, with no config query. Its creator includes `cluster`, `namespace` and `pod` columns:
+
+| cluster    | namespace  | pod               |
+| ---------- | ---------- | ----------------- |
+| production | monitoring | prometheus-0      |
+| production | payments   | checkout-0        |
+| staging    | monitoring | prometheus-test-0 |
+
+This Scope selects only the first row:
 
 ```yaml
 kind: Scope
 metadata:
-  name: monitoring
+  name: team-a-pods
+  namespace: mc
 spec:
   targets:
-    - config:
-        tagSelector: namespace=monitoring
     - view:
         name: pods
+        namespace: mc
         columns:
+          cluster: production
           namespace: monitoring
 ```
 
-- **For:** the same for every source, since every row has columns. One view serves every slice. A view becomes a type of its own, and its rows its resources, so the two questions of Section 2 become the one `collection-access.md` already answers: `all` rows, `some`, or `none`.
-- **Against:**
-  - The restriction is stated twice, once for configs and once for the view, though in one Scope. A view that has no `namespace` column can't be restricted by namespace, and granting it whole shows everything.
-  - Whoever writes the view decides what a column means. A query that puts production pods under `namespace: monitoring` shows them to monitoring readers.
-  - Columns are arbitrary, so nothing stops a target on a column holding state, e.g. `status: failed` (`scopes.md`, Section 4.3). The view would have to declare which columns may be used.
-  - A renamed or removed column must make the Scope select nothing, never everything.
-  - Panels are computed over every row, and need either computing per reader or hiding from readers with `some`.
+A Role grants `read` on this Scope, and a RoleBinding gives it to Team A's guests, who have no other View grants. They can open the shared View and see only the `production/monitoring` row. Team B's guests can use another Scope on the same View for `production/payments`. Neither team needs a config grant. The selector's `namespace: mc` identifies the View; `columns.namespace` selects its rows. Mission Control checks the published columns, not the Prometheus query.
+
+**Who is trusted.** The creator is responsible for what the rows contain and what their columns mean. Administrators decide which rows to share through Scopes, Roles and RoleBindings. Mission Control MUST enforce those grants on every read path. If a creator labels another namespace's data as `monitoring`, or an administrator grants the whole View by mistake, the engine cannot infer their intent. Editing a shared View is therefore a trusted publishing operation: it can change what existing readers learn. Permission to execute queries with particular source credentials must also be controlled; making a View private does not make unrestricted query execution safe.
+
+**Membership and reads:**
+
+- Conditions within one target, including its column values, MUST all match. Targets combine with OR, and RoleBinding constraints intersect memberships on the same row, following the existing Scope rules. Multiple grants add access; a narrow grant does not reduce a broader one.
+- A `read` grant on a `view` target without `columns` allows all rows of the matching View; this is a whole-View grant, not a fallback when a column filter fails.
+- A guest with no `read` grant on a View MUST NOT see it or its rows. A valid grant that currently selects no rows still allows opening the View with an empty result (`collection-access.md`): visibility follows the grant, not whether data has arrived yet.
+- Each generated row's Scope membership is stored in `scope_members`, alongside membership for the View itself. Saving a Scope, changing the View's selectable fields, or publishing new, changed or removed rows MUST update the affected memberships in the same transaction (`scopes.md`, Section 7.1). Refreshing results counts as a row change even when the View definition is unchanged. Role and RoleBinding changes apply through the stored membership without waiting for a View refresh.
+- A row missing a required column value does not match. Invalid selectors or a renamed or removed filter column MUST NOT broaden a grant: a target referring to an unavailable column selects no rows from that View. A failed match never becomes a grant to the whole View.
+
+**Why:** Stored row membership lets every reader use the same grant checks without interpreting source queries. Saving data and membership together prevents stale or partially updated access. Distinguishing an absent grant, an empty result and an unrestricted grant prevents missing data from becoming permission to read everything.
+
+- **For:** one shared View serves different groups with different rows, using the same rules for configs, Prometheus, SQL and API results. The source queries do not need to understand the reader's permissions.
+- **Tradeoffs and remaining work:**
+  - Source and View grants are separate. If a team needs both catalog access and a View of the same pods, both must be granted; changing one does not automatically change the other.
+  - The creator must provide suitable identity or ownership columns. Views need to declare which columns Scopes may select; state such as `status: failed` remains unsuitable (`scopes.md`, Section 4.3). A View without a suitable column cannot be safely split along that boundary.
+  - Storage needs stable row identities that distinguish Views and result variants with different variable values. Maintaining membership for generated rows adds work when rows or Scopes change; the storage details and cost still need a design.
+  - Panels remain unresolved. Filtering table rows does not fix a panel already computed over all inputs. Panels MUST use only data permitted by the reader's View grants, or be withheld when that cannot be enforced. A global count of `42` cannot be split into per-team counts after it is computed. How to compute and cache permitted panels still needs a design.
 
 ### Option C: rows reference the resources they come from
 
@@ -186,10 +212,10 @@ spec:
 | Uniform across sources      | Yes       | Yes        | No            | No                 | Yes          |
 | No hidden rules             | Yes       | Yes        | No            | Partly             | Yes          |
 | Fails closed                | n/a       | Needs care | Yes           | Yes                | Needs care   |
-| Panels are right            | Yes       | No         | No            | Yes                | Yes          |
+| Panels are right            | Yes       | Unresolved | No            | Yes                | Yes          |
 | Takes effect when saved     | Yes       | Yes        | Yes           | At refresh         | Yes          |
 | One view serves many slices | No        | Yes        | Yes           | Yes                | Yes          |
-| Extra computing             | None      | None       | None          | Per set of grants  | None         |
+| Extra computing             | None      | Membership | None          | Per set of grants  | None         |
 
 "Needs care" means a mistake by the author shows more, not less: a column or variable the query doesn't honour.
 
