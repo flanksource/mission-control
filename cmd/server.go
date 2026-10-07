@@ -266,7 +266,7 @@ var Serve = &cobra.Command{
 		metrics.RegisterDBStats(ctx)
 
 		if err := adapter.BuildScopeMemberships(ctx); err != nil {
-			logger.Errorf("error building scope membership: %v", err)
+			shutdown.ShutdownAndExit(1, fmt.Sprintf("error building scope membership: %v", err))
 		}
 
 		if echo.UIEnabled && dev {

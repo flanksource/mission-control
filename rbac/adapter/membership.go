@@ -81,7 +81,8 @@ func SyncScopeMembership(ctx context.Context, scope models.Scope) error {
 }
 
 // BuildScopeMemberships builds every Scope that has neither targets nor members, and clears the membership of invalid
-// ones. Mission Control runs it at startup, so Scopes saved before membership was stored get theirs.
+// ones. Mission Control runs it before accepting requests: a grant through a Scope with no membership rows is refused,
+// so serving earlier would refuse grants that are in effect.
 func BuildScopeMemberships(ctx context.Context) error {
 	var scopes []models.Scope
 	if err := ctx.DB().Raw(`SELECT * FROM scopes s
