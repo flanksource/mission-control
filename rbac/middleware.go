@@ -114,8 +114,19 @@ func canListFilteredRows(ctx context.Context, table, action string) bool {
 }
 
 // isGuest reports whether the subject is a person with the guest role.
+// When the roles can't be read, it reports false, so that a non-guest isn't let through.
 func isGuest(ctx context.Context) bool {
-	return lo.Contains(builtInRoles(ctx), policy.RoleGuest)
+	user := ctx.User()
+	if user == nil {
+		return false
+	}
+
+	roles, err := rbac.RolesForUser(user.ID.String())
+	if err != nil {
+		ctx.Warnf("failed to get roles of %s: %v", user.ID, err)
+		return false
+	}
+	return lo.Contains(roles, policy.RoleGuest)
 }
 
 // PlaybookList authorizes listing playbooks through a read of the whole type,
