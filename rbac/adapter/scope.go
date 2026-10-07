@@ -141,15 +141,15 @@ func ValidateScopeTargets(targets []v1.ScopeTarget) error {
 }
 
 // ValidateSelector checks the values of a converted Scope selector.
-// name matches exactly, or any name when set to "*". namespace and id only match exactly.
-// Patterns, lists and exclusions aren't supported.
+// name matches exactly, any name when set to "*", or names starting with a prefix when it ends with "*".
+// namespace and id only match exactly. Other patterns, lists and exclusions aren't supported.
 func ValidateSelector(kind string, selector types.ResourceSelector) error {
 	if selector.ID == "" && selector.Name == "" && selector.Namespace == "" && selector.Agent == "" &&
 		len(selector.Types) == 0 && selector.TagSelector == "" && selector.LabelSelector == "" {
 		return fmt.Errorf(`an empty selector selects nothing; use name: "*" to select every %s`, kind)
 	}
 
-	if err := ValidateExactOrAny("name", selector.Name); err != nil {
+	if err := ValidateName(selector.Name); err != nil {
 		return err
 	}
 	if err := ValidateExact("namespace", selector.Namespace); err != nil {
@@ -207,13 +207,17 @@ func validateEqualities(field, value string) error {
 	return nil
 }
 
-// ValidateExactOrAny checks a value that matches exactly, or matches any value when it's "*".
-func ValidateExactOrAny(field, value string) error {
+// ValidateName checks a name: an exact value, "*" for any name, or a prefix followed by one "*".
+// Lists and exclusions aren't supported.
+func ValidateName(value string) error {
 	if value == "*" {
 		return nil
 	}
+	if prefix, ok := strings.CutSuffix(value, "*"); ok && prefix != "" && !strings.ContainsAny(prefix, "*!,") {
+		return nil
+	}
 	if strings.ContainsAny(value, "*!,") {
-		return fmt.Errorf(`%s %q must be an exact value, or "*"; patterns, lists and exclusions aren't supported`, field, value)
+		return fmt.Errorf(`name %q must be an exact value, "*", or a prefix followed by "*"; other patterns, lists and exclusions aren't supported`, value)
 	}
 	return nil
 }

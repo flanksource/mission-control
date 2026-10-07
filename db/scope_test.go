@@ -75,7 +75,8 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			target v1.ScopeTarget
 		}{
 			{"an empty selector", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{}}},
-			{"a name pattern", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "prod-*"}}}},
+			{"a name suffix", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*-db"}}}},
+			{"a wildcard in the middle of a name", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "prod-*-db"}}}},
 			{"a tag exclusion", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "env!=prod"}}},
 			{"a bare label key", v1.ScopeTarget{Component: &v1.ScopeLabelledSelector{LabelSelector: "team"}}},
 			{"a malformed tagSelector", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "env in (prod"}}},
