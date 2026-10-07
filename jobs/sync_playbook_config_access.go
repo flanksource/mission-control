@@ -7,7 +7,6 @@ import (
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/membership"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -128,14 +127,6 @@ func syncPlaybookConfigAccess(ctx context.Context) (configAccessSyncResult, erro
 		return result, fmt.Errorf("failed to query playbooks: %w", err)
 	}
 	playbooksByID := lo.KeyBy(playbooks, func(p models.Playbook) uuid.UUID { return p.ID })
-
-	// Read every playbook's Scope membership once, rather than once per check
-	ctx, err := membership.ForOperation(ctx, lo.Map(playbookIDs, func(id uuid.UUID, _ int) membership.Ref {
-		return membership.Ref{Type: policy.ResourcePlaybook, ID: id}
-	})...)
-	if err != nil {
-		return result, fmt.Errorf("failed to read playbook scope membership: %w", err)
-	}
 
 	for _, person := range people {
 		for _, playbookID := range playbookIDs {

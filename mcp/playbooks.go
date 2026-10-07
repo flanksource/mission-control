@@ -11,7 +11,6 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/membership"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
@@ -19,8 +18,8 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/samber/lo"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
+	"github.com/samber/lo"
 	"gorm.io/gorm"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -61,17 +60,9 @@ func addPlaybooksAsTool(goctx gocontext.Context, srv *server.MCPServer, session 
 		return ctx.Oops().Wrap(err)
 	}
 
-	// Read every playbook's Scope membership once, rather than once per check
-	checkCtx, err := membership.ForOperation(ctx, lo.Map(playbooks, func(pb models.Playbook, _ int) membership.Ref {
-		return membership.Ref{Type: policy.ResourcePlaybook, ID: pb.ID}
-	})...)
-	if err != nil {
-		return ctx.Oops().Wrapf(err, "failed to read playbook scope membership for session %s", sessionID)
-	}
-
 	playbooks = lo.Filter(playbooks, func(pb models.Playbook, _ int) bool {
 		attr := &models.ABACAttribute{Playbook: pb}
-		return rbac.HasPermission(checkCtx, owner, attr, policy.ActionMCPRun)
+		return rbac.HasPermission(ctx, owner, attr, policy.ActionMCPRun)
 	})
 
 	tools, err := getPlaybooksAsTools(playbooks)

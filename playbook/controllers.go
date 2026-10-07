@@ -137,25 +137,16 @@ func HandleGetPlaybookParams(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
-	attr, err := dummyRun.GetABACAttributes(ctx.DB())
-	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
-	}
-
-	// Every check of the run sees the Scope membership of one moment
-	checkCtx, err := rbac.ForOperation(ctx, attr, env.ABACAttributes())
-	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
-	}
-
-	if env.SelectableResource() != nil && !rbac.CanRead(checkCtx, ctx.Subject(), env.ABACAttributes()) {
+	if env.SelectableResource() != nil && !dutyRBAC.HasPermission(ctx, ctx.Subject(), env.ABACAttributes(), policy.ActionRead) {
 		return dutyAPI.WriteError(c, ctx.Oops().
 			Code(dutyAPI.EFORBIDDEN).
 			With("permission", policy.ActionRead, "objects", env.ABACAttributes()).
 			Wrap(errors.New("access denied: read access to resource not allowed")))
 	}
 
-	if !dutyRBAC.HasPermission(checkCtx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
+	if attr, err := dummyRun.GetABACAttributes(ctx.DB()); err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	} else if !dutyRBAC.HasPermission(ctx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
 		return dutyAPI.WriteError(c, ctx.Oops().
 			Code(dutyAPI.EFORBIDDEN).
 			With("permission", policy.ActionPlaybookRun, "objects", attr).
