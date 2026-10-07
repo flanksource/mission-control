@@ -124,12 +124,14 @@ var _ = ginkgo.Describe("Playbook list", ginkgo.Ordered, func() {
 			ginkgo.DeferCleanup(func() { Expect(DefaultContext.DB().Delete(&run).Error).To(Succeed()) })
 		})
 
-		get := func(path, rowFilters string) int {
+		get := func(path string, scopeNames ...string) int {
 			ginkgo.GinkgoHelper()
 			req := httptest.NewRequest(http.MethodGet, path, nil)
 			req = req.WithContext(DefaultContext.WithUser(admin))
-			if rowFilters != "" {
-				req.Header.Set(auth.HeaderFlanksourceScope, rowFilters)
+			if len(scopeNames) > 0 {
+				header, err := json.Marshal(lo.Map(scopeNames, func(name string, _ int) string { return scopes[name] }))
+				Expect(err).ToNot(HaveOccurred())
+				req.Header.Set(auth.HeaderFlanksourceScope, string(header))
 			}
 			rec := httptest.NewRecorder()
 			e.ServeHTTP(rec, req)
@@ -137,12 +139,11 @@ var _ = ginkgo.Describe("Playbook list", ginkgo.Ordered, func() {
 		}
 
 		ginkgo.It("returns a run of a playbook the caller may read", func() {
-			Expect(get("/playbook/run/"+run.ID.String(), "")).To(Equal(http.StatusOK))
+			Expect(get("/playbook/run/" + run.ID.String())).To(Equal(http.StatusOK))
 		})
 
 		ginkgo.It("doesn't find a run of a playbook outside the caller's row filters", func() {
-			rowFilters := `{"playbook":[{"names":["` + dummy.EchoConfig.Name + `"]}]}`
-			Expect(get("/playbook/run/"+run.ID.String(), rowFilters)).To(Equal(http.StatusNotFound))
+			Expect(get("/playbook/run/"+run.ID.String(), "echo-on-every-config")).To(Equal(http.StatusNotFound))
 		})
 	})
 
