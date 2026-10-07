@@ -59,7 +59,7 @@ DEPS_VERSION ?= $(shell go list -m -f '{{.Version}}' github.com/flanksource/deps
 LLM_PRICING_REGISTRY = llm/pricing_registry.json
 
 $(TAILWIND_JS):
-	curl -sL "https://cdn.tailwindcss.com/$(TAILWIND_VERSION)" -o $(TAILWIND_JS)
+	curl -fsSL --retry 3 "https://cdn.tailwindcss.com/$(TAILWIND_VERSION)" -o $(TAILWIND_JS)
 
 .PHONY: help
 help: ## Display this help.
@@ -143,33 +143,41 @@ tidy:
 
 .PHONY: compress
 compress: .bin/upx linux faro
-	upx -1 ./.bin/$(NAME)_linux_amd64 ./.bin/$(NAME)_linux_arm64 ./.bin/faro_linux_amd64 ./.bin/faro_linux_arm64
+	$(MAKE) compress-binary GOOS=linux GOARCH=amd64
+	$(MAKE) compress-binary GOOS=linux GOARCH=arm64
 
+GOOS ?= $(shell go env GOOS)
+GOARCH ?= $(shell go env GOARCH)
 EXE = $(if $(filter windows,$(GOOS)),.exe)
+
+# compress-binary compresses the binaries built for $GOOS/$GOARCH with upx.
+.PHONY: compress-binary
+compress-binary: .bin/upx
+	upx -1 $(wildcard ./.bin/$(NAME)_$(GOOS)_$(GOARCH)$(EXE) ./.bin/faro_$(GOOS)_$(GOARCH)$(EXE))
 
 # incident-commander-binary builds incident-commander for $GOOS/$GOARCH.
 .PHONY: incident-commander-binary
 incident-commander-binary: $(TAILWIND_JS)
-	go build -o ./.bin/$(NAME)_$(GOOS)_$(GOARCH)$(EXE) -ldflags "-X \"main.version=$(VERSION_TAG)\"" main.go
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o ./.bin/$(NAME)_$(GOOS)_$(GOARCH)$(EXE) -ldflags "-X \"main.version=$(VERSION_TAG)\"" main.go
 
 # faro-binary builds faro, a slim Mission Control client (remote-only surfaces), for $GOOS/$GOARCH.
 .PHONY: faro-binary
 faro-binary: $(TAILWIND_JS)
-	go build -trimpath -o ./.bin/faro_$(GOOS)_$(GOARCH)$(EXE) -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -trimpath -o ./.bin/faro_$(GOOS)_$(GOARCH)$(EXE) -ldflags "-s -w -X \"main.version=$(VERSION_TAG)\"" ./faro
 
 .PHONY: linux
 linux: $(TAILWIND_JS)
-	GOOS=linux GOARCH=amd64 $(MAKE) incident-commander-binary
-	GOOS=linux GOARCH=arm64 $(MAKE) incident-commander-binary
+	$(MAKE) incident-commander-binary GOOS=linux GOARCH=amd64
+	$(MAKE) incident-commander-binary GOOS=linux GOARCH=arm64
 
 .PHONY: darwin
 darwin: $(TAILWIND_JS)
-	GOOS=darwin GOARCH=amd64 $(MAKE) incident-commander-binary
-	GOOS=darwin GOARCH=arm64 $(MAKE) incident-commander-binary
+	$(MAKE) incident-commander-binary GOOS=darwin GOARCH=amd64
+	$(MAKE) incident-commander-binary GOOS=darwin GOARCH=arm64
 
 .PHONY: windows
 windows: $(TAILWIND_JS)
-	GOOS=windows GOARCH=amd64 $(MAKE) incident-commander-binary
+	$(MAKE) incident-commander-binary GOOS=windows GOARCH=amd64
 
 # faro is built for linux amd64/arm64, darwin amd64/arm64, windows amd64/arm64.
 # `faro version` falls back to the VCS stamps Go embeds when these are unset.
@@ -177,18 +185,18 @@ FARO_LDFLAGS = -X "main.version=$(VERSION_TAG)" -X "main.commit=$(GIT_COMMIT)" -
 
 .PHONY: faro-linux
 faro-linux: $(TAILWIND_JS)
-	GOOS=linux GOARCH=amd64 $(MAKE) faro-binary
-	GOOS=linux GOARCH=arm64 $(MAKE) faro-binary
+	$(MAKE) faro-binary GOOS=linux GOARCH=amd64
+	$(MAKE) faro-binary GOOS=linux GOARCH=arm64
 
 .PHONY: faro-darwin
 faro-darwin: $(TAILWIND_JS)
-	GOOS=darwin GOARCH=amd64 $(MAKE) faro-binary
-	GOOS=darwin GOARCH=arm64 $(MAKE) faro-binary
+	$(MAKE) faro-binary GOOS=darwin GOARCH=amd64
+	$(MAKE) faro-binary GOOS=darwin GOARCH=arm64
 
 .PHONY: faro-windows
 faro-windows: $(TAILWIND_JS)
-	GOOS=windows GOARCH=amd64 $(MAKE) faro-binary
-	GOOS=windows GOARCH=arm64 $(MAKE) faro-binary
+	$(MAKE) faro-binary GOOS=windows GOARCH=amd64
+	$(MAKE) faro-binary GOOS=windows GOARCH=arm64
 
 .PHONY: faro
 faro: faro-linux faro-darwin faro-windows
