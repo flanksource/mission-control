@@ -15,6 +15,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/membership"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
@@ -192,17 +193,26 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 	}
 
 	if opts.CheckPermissions {
+		attr, err := run.GetABACAttributes(ctx.DB())
+		if err != nil {
+			return nil, ctx.Oops().Wrap(err)
+		}
+
+		// Every check of the run sees the Scope membership of one moment
+		checkCtx, err := membership.ForOperation(ctx, rbac.MembershipRefs(attr, templateEnv.ABACAttributes())...)
+		if err != nil {
+			return nil, ctx.Oops().Wrap(err)
+		}
+
 		// Must have read access on the target, if any (required to prevent guests from accessing unauthorized resources)
-		if templateEnv.SelectableResource() != nil && !rbac.HasPermission(ctx, ctx.Subject(), templateEnv.ABACAttributes(), policy.ActionRead) {
+		if templateEnv.SelectableResource() != nil && !rbac.HasPermission(checkCtx, ctx.Subject(), templateEnv.ABACAttributes(), policy.ActionRead) {
 			return nil, ctx.Oops().
 				Code(dutyAPI.EFORBIDDEN).
 				With("permission", policy.ActionRead, "objects", templateEnv.ABACAttributes()).
 				Wrap(fmt.Errorf("access denied: read access to resource not allowed for subject: %s", ctx.Subject()))
 		}
 
-		if attr, err := run.GetABACAttributes(ctx.DB()); err != nil {
-			return nil, ctx.Oops().Wrap(err)
-		} else if !rbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
+		if !rbac.HasPermission(checkCtx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
 			return nil, ctx.Oops().
 				Code(dutyAPI.EFORBIDDEN).
 				With("permission", policy.ActionPlaybookRun, "objects", attr).
