@@ -148,18 +148,6 @@ func (r *Registry) SetManifest(id uuid.UUID, m *api.PluginManifest) error {
 	return nil
 }
 
-// SetManifestIfRuntime prevents a stopped runtime from publishing over its replacement.
-func (r *Registry) SetManifestIfRuntime(id uuid.UUID, runtime Runtime, m *api.PluginManifest) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	e := r.plugins[id]
-	if e == nil || e.Runtime != runtime {
-		return false
-	}
-	e.Manifest = m
-	return true
-}
-
 // Get returns the entry for the given plugin id, or nil if no plugin by that
 // id is registered.
 func (r *Registry) Get(id uuid.UUID) *Entry {

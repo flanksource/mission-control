@@ -9,19 +9,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"sync/atomic"
 	"time"
 
 	dutyContext "github.com/flanksource/duty/context"
-	"github.com/google/uuid"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/keepalive"
-	"google.golang.org/grpc/stats"
-	"google.golang.org/grpc/status"
 
 	commanderAPI "github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -29,65 +22,26 @@ import (
 	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
 )
 
-const (
-	remoteRegisterTimeout = 30 * time.Second
-
-	// remoteReregisterRetry is how long to wait before retrying a failed
-	// re-registration while the plugin stays reachable.
-	remoteReregisterRetry = 10 * time.Second
-)
+const remoteRegisterTimeout = 30 * time.Second
 
 // remoteRuntime is the host-side handle for a plugin reachable over the network.
 // It satisfies plugin.Runtime by forwarding calls to the plugin's gRPC server.
 type remoteRuntime struct {
-	id         uuid.UUID
-	name       string
-	conn       *grpc.ClientConn
-	service    pluginAPI.PluginServiceClient
-	uiPort     atomic.Uint32
-	transport  http.RoundTripper
-	register   func(gocontext.Context) (*pluginAPI.PluginManifest, error)
-	ctx        gocontext.Context
-	cancel     gocontext.CancelFunc
-	connEvents chan struct{}
-	generation atomic.Uint64
-	registered atomic.Uint64
+	conn      *grpc.ClientConn
+	service   pluginAPI.PluginServiceClient
+	uiPort    uint32
+	transport http.RoundTripper
 }
 
 func (r *remoteRuntime) Invoke(ctx gocontext.Context, req *pluginAPI.InvokeRequest) (*pluginAPI.InvokeResponse, error) {
 	return r.service.Invoke(ctx, req)
 }
 
-func (r *remoteRuntime) UIPort() uint32 { return r.uiPort.Load() }
+func (r *remoteRuntime) UIPort() uint32 { return r.uiPort }
 
 func (r *remoteRuntime) Stop() {
-	if r.cancel != nil {
-		r.cancel()
-	}
 	if r.conn != nil {
 		_ = r.conn.Close()
-	}
-}
-
-func (r *remoteRuntime) TagRPC(ctx gocontext.Context, _ *stats.RPCTagInfo) gocontext.Context {
-	return ctx
-}
-
-func (r *remoteRuntime) HandleRPC(gocontext.Context, stats.RPCStats) {}
-
-func (r *remoteRuntime) TagConn(ctx gocontext.Context, _ *stats.ConnTagInfo) gocontext.Context {
-	return ctx
-}
-
-// HandleConn records transport changes even when connectivity leaves and
-// returns to Ready before the registration worker can observe it.
-func (r *remoteRuntime) HandleConn(_ gocontext.Context, event stats.ConnStats) {
-	if _, ok := event.(*stats.ConnBegin); ok {
-		r.generation.Add(1)
-	}
-	select {
-	case r.connEvents <- struct{}{}:
-	default:
 	}
 }
 
@@ -108,43 +62,18 @@ func startRemotePlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 		transport = t
 	}
 
-	runtime := &remoteRuntime{
-		id:         entry.ID,
-		name:       entry.Name,
-		transport:  transport,
-		connEvents: make(chan struct{}, 1),
-	}
-	runtime.ctx, runtime.cancel = gocontext.WithCancel(gocontext.Background())
-	started := false
-	defer func() {
-		if !started {
-			runtime.Stop()
-		}
-	}()
-
 	conn, err := grpc.NewClient(entry.Spec.Address,
 		grpc.WithTransportCredentials(dialCreds),
-		grpc.WithStatsHandler(runtime),
 		grpc.WithDefaultCallOptions(
 			grpc.MaxCallRecvMsgSize(maxRemoteMessageSize),
 			grpc.MaxCallSendMsgSize(maxRemoteMessageSize),
 		),
-		// Idle connections remain open; ConnEnd triggers reconnection.
-		grpc.WithIdleTimeout(0),
-		// Match older gRPC servers' default enforcement policy. Health RPCs
-		// create traffic when idle and keep registration retrying on failures.
-		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:    5 * time.Minute,
-			Timeout: 10 * time.Second,
-		}),
 	)
 	if err != nil {
 		return fmt.Errorf("plugin %s: dial %s: %w", entry.Name, entry.Spec.Address, err)
 	}
 
 	service := pluginAPI.NewPluginServiceClient(conn)
-	runtime.conn = conn
-	runtime.service = service
 
 	// The plugin dials the host back-channel at the address it was given here.
 	// A plugin may override the host default when it reaches Mission Control at
@@ -164,46 +93,21 @@ func startRemotePlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 		return fmt.Errorf("plugin %s: %w", entry.Name, err)
 	}
 
-	runtime.register = func(ctx gocontext.Context) (*pluginAPI.PluginManifest, error) {
-		ctx, cancel := gocontext.WithTimeout(ctx, remoteRegisterTimeout)
-		defer cancel()
-		conn.Connect()
-		for {
-			state := conn.GetState()
-			if state == connectivity.Ready {
-				break
-			}
-			if state == connectivity.Shutdown {
-				return nil, fmt.Errorf("plugin connection closed")
-			}
-			if state == connectivity.Idle {
-				conn.Connect()
-			}
-			if !conn.WaitForStateChange(ctx, state) {
-				return nil, ctx.Err()
-			}
-		}
-		generation := runtime.generation.Load()
-		manifest, err := service.RegisterPlugin(ctx, &pluginAPI.RegisterRequest{
-			HostProtocolVersion: uint32(pluginAPI.ProtocolVersion),
-			HostGrpcAddress:     hostGRPCAddress,
-			HostGrpcTls:         hostTLS,
-			HostGrpcCaCert:      hostCACert,
-		})
-		if err == nil {
-			runtime.registered.Store(generation)
-		}
-		return manifest, err
-	}
-
-	manifest, err := runtime.register(ctx)
+	registerCtx, cancel := gocontext.WithTimeout(ctx, remoteRegisterTimeout)
+	defer cancel()
+	manifest, err := service.RegisterPlugin(registerCtx, &pluginAPI.RegisterRequest{
+		HostProtocolVersion: uint32(pluginAPI.ProtocolVersion),
+		HostGrpcAddress:     hostGRPCAddress,
+		HostGrpcTls:         hostTLS,
+		HostGrpcCaCert:      hostCACert,
+	})
 	if err != nil {
 		_ = conn.Close()
 		return fmt.Errorf("plugin %s RegisterPlugin: %w", entry.Name, err)
 	}
-	runtime.uiPort.Store(manifest.UiPort)
 
-	started, err = plugin.DefaultRegistry.SetRuntimeIfAbsent(entry.ID, runtime)
+	runtime := &remoteRuntime{conn: conn, service: service, uiPort: manifest.UiPort, transport: transport}
+	started, err := plugin.DefaultRegistry.SetRuntimeIfAbsent(entry.ID, runtime)
 	if err != nil {
 		_ = conn.Close()
 		return err
@@ -213,68 +117,13 @@ func startRemotePlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 		return nil
 	}
 
-	if !plugin.DefaultRegistry.SetManifestIfRuntime(entry.ID, runtime, manifest) {
-		runtime.Stop()
-		return nil
+	if err := plugin.DefaultRegistry.SetManifest(entry.ID, manifest); err != nil {
+		ctx.Logger.Warnf("plugin %s: register manifest: %v", entry.Name, err)
 	}
-
-	go runtime.reregisterOnReconnect(ctx)
 
 	ctx.Logger.Infof("remote plugin %s loaded: address=%s version=%q ops=%d ui_port=%d",
 		entry.Name, entry.Spec.Address, manifest.Version, len(manifest.Operations), manifest.UiPort)
 	return nil
-}
-
-// reregisterOnReconnect handles transport events rather than sampled connection
-// states. Health checks also notice silent failures without unsupported idle pings.
-func (r *remoteRuntime) reregisterOnReconnect(ctx dutyContext.Context) {
-	ticker := time.NewTicker(30 * time.Second)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-r.ctx.Done():
-			return
-		case <-r.connEvents:
-			r.conn.Connect()
-			if r.generation.Load() != r.registered.Load() {
-				r.reregister(ctx)
-			}
-		case <-ticker.C:
-			healthCtx, cancel := gocontext.WithTimeout(r.ctx, 10*time.Second)
-			_, err := r.service.Health(healthCtx, &pluginAPI.Empty{})
-			cancel()
-			if err != nil && status.Code(err) != codes.Unimplemented {
-				r.reregister(ctx)
-			}
-		}
-	}
-}
-
-// reregister retries RegisterPlugin until it succeeds or the runtime is stopped.
-func (r *remoteRuntime) reregister(ctx dutyContext.Context) {
-	for r.ctx.Err() == nil {
-		manifest, err := r.register(r.ctx)
-		if err == nil {
-			if r.ctx.Err() != nil {
-				return
-			}
-			r.uiPort.Store(manifest.UiPort)
-			if !plugin.DefaultRegistry.SetManifestIfRuntime(r.id, r, manifest) {
-				return
-			}
-			ctx.Logger.Infof("remote plugin %s registered again after reconnecting: version=%q", r.name, manifest.Version)
-			if r.generation.Load() != r.registered.Load() {
-				continue
-			}
-			return
-		}
-		ctx.Logger.Warnf("plugin %s: register again after reconnecting: %v", r.name, err)
-		select {
-		case <-r.ctx.Done():
-			return
-		case <-time.After(remoteReregisterRetry):
-		}
-	}
 }
 
 // pluginTLSConfig builds the TLS config the host uses to reach a remote plugin
