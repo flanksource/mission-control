@@ -8,27 +8,34 @@ An operation's gate can be checked inside its handler, or declared with its rout
 
 ## Design
 
-- **One answer.** A gate reads the subject's answer for the type and action from the access summary (`collection-access.md`, Section 4). The summary is cached per subject and set of built-in roles, and dropped whenever a grant, Scope, Role or binding changes. _Why:_ the gate then costs a cache lookup, as the object check it replaces did, and can't disagree with what the UI shows.
-- **Declaring a gate.** A route names its type, its action, and its gate:
-  - `some` together with row filtering, as one declaration. The route's queries run under the subject's row filters.
+- **One answer.** A gate reads the subject's answer for the type and action from the access summary (`collection-access.md`, Section 4).
+- **Cache.** Answers are cached per subject, built-in roles, impersonated Scopes and, for a user of an external identity provider, a digest of their token's claims. Every cached answer is dropped when a Permission, PermissionGroup, Scope, Role, RoleBinding, team membership, built-in role or a resource that's a subject (a playbook, notification, topology, scraper or canary) changes. _Why:_ the key covers what's read per request; the events cover what's stored. Dropping everything on any change is coarse, but these changes are rare, and a partial drop can miss a subject.
+- **Declaring a gate.** A route or MCP tool names its type, its action, and its gate:
+  - `some` together with row filtering, as one declaration. The operation's queries run under the subject's row filters.
   - `some` for an operation that checks the subject's rules against the resource in hand. The declaration says so, and is reviewed against the handler.
   - `all` for anything else.
-- **Database API.** Each table maps to a resource type, and resources' own data (changes, analyses, relationships) to their resource's type. Reads of a mapped table are gated at `some`, since the database applies the subject's row filters. Writes are gated at `all`. A table that maps to no type is checked against its object.
+- **Row filters.** A subject's row filter for a type is built whenever their `read` answer for it is `some`, members included. It admits the rows of their grants' Scopes, and leaves out the rows of their denies' Scopes. A subject answered `all` on every type gets no filter.
+- **Database API.** Each table maps to a resource type, and resources' own data to their resource's type. A read of a table is gated at `some` only when the table's row filtering is in place and covered by the tests below. Today that's `config_items`, `configs`, `config_changes`, `components`, `checks`, `canaries` and `playbooks`. Every other table of a resource type, e.g. `config_analysis`, `config_relationships`, `playbook_runs` or `check_statuses`, is gated at `all` until it is. Views and functions are gated at `some` only when they run as the caller, so the row filters apply to them. Writes are gated at `all`. A table that maps to no type is checked against its object. _Why:_ a table is safe at `some` only once its filtering is shown to work; until then, `all` refuses rather than leaks.
 - **Other services.** Operations forwarded to another service, such as config-db or canary-checker, are gated at `all`. _Why:_ those services query over their own connections, so no row filter applies.
 - **Shared caches.** A handler gated at `some` MUST NOT return a resource read from a cache shared between subjects, unless it checks the subject's rules against that resource first. _Why:_ a cache hit never reaches the database, so the row filters never apply to it.
+- **Agent pushes.** `/push` and `/upstream` are checked against `agent-push`, whatever they write.
 - **Objects that aren't resource types.** RBAC, the Kubernetes proxy, logs, notifications and similar keep a check of their object.
-- **Tests.** Every gated route is exercised by subjects whose answer for its type is `some`: a guest granted part of the type, and a member denied part of it. A resource outside their grants MUST never come back, including after another subject has read it. _Why:_ this is the only check that a `some` declaration is true, and it catches caches that serve another subject's reads.
+- **Tests.** Every gated route and MCP tool is exercised by subjects whose answer for its type is `some`: a guest granted part of the type, and a member denied part of it. A resource outside their grants MUST never come back, including after another subject has read it. _Why:_ this is the only check that a `some` declaration is true, and it catches caches that serve another subject's reads.
 
 ## Other choices
 
 - **Keep object checks, and add a deny check to each route.** Two mechanisms decide the same question, and every route must remember both. A partial grant still can't pass an object check, so guests keep their own path.
 - **Gate every operation at `some`.** Operations served by other services can't filter, so they'd show resources the subject wasn't granted.
 - **Gate inside handlers.** A forgotten gate leaves the route open, and no single place shows which routes filter.
+- **Compute the answer on every request, without a cache.** It's derived from every grant of the subject, on every request of every page. The cache costs a flush on each grant change instead.
 
 ## FAQ
 
 **What happens to a member denied part of a type, on an operation gated at `all`?**
-It's refused with `403 Forbidden`. The operations of the type gated at `some` still serve them.
+It's refused with `403 Forbidden`. The operations of the type gated at `some` still serve them, filtered by row.
 
 **Does this change anything for a subject whose answer is `all`?**
 No. Every gate lets them in, as the object check did.
+
+**Does a deny on part of a write lock the subject out of every write of the type?**
+Yes. Writes are gated at `all`, and the deny makes the answer `some`. Narrow the deny to whole types, or remove it.

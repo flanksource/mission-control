@@ -93,7 +93,7 @@ For `playbook:run`, `target` is optional. A rule without it matches only runs wi
   - A pattern grants actions added later. If the `kubernetes-logs` plugin ships a new `exec-shell` operation, `invoke:kubernetes-logs:*` would grant it without anyone reviewing the Role.
 - A plugin action isn't checked against the installed plugins: plugins are installed and upgraded often, and a Role mustn't break when one is. A rule on an operation no plugin declares matches nothing until one does.
 - `create`, `update` and `delete` are only checked on all resources of a type, so their Scope MUST consist of whole-type targets only (`scopes.md`, Section 5.2).
-- Deny rules on `read` are rejected for now, because they couldn't be enforced on listings: Mission Control's own users' database listings aren't filtered by row unless they're guests (`overview.md`, "Default access"). A deny on reading production configs would still let an editor list them.
+- Deny rules on `read` are rejected for now. A deny is only enforced where every operation that reads the type is gated by the answer (`collection-access.md`, Section 3.1), and not every one is yet. A deny on reading production configs would still let an editor read them through the others.
 
 An operation may make more than one check. For example, running a playbook on a config also checks `read` on that config. Section 4.3 lists every check each operation makes; a rule never grants the other checks implicitly.
 
@@ -342,7 +342,7 @@ The built-in roles answer two separate questions:
 
 ### 7.2 Members
 
-`viewer` is the base member role. `editor`, `commander` and `responder` inherit it, so they see everything a viewer sees, and anything granted to `viewer` reaches them too. Members' listings are never filtered by row: a member sees every resource of a type they can read.
+`viewer` is the base member role. `editor`, `commander` and `responder` inherit it, so they see everything a viewer sees, and anything granted to `viewer` reaches them too. A member's listings of a type are filtered by row only when their answer for it is `some`, e.g. because a Permission denies part of it (`collection-access.md`, Section 3.1). Otherwise a member sees every resource of a type they can read.
 
 ### 7.3 Guests
 

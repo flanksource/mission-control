@@ -96,7 +96,7 @@ No rule applies to an admin, deny rules included, however a RoleBinding or Permi
 
 Built-in access is defined in code, not in these resources. The built-in roles are described in `roles.md`, Section 7. It counts towards a subject's answer for each resource type, like any grant, and operations on resource types are gated by that answer, never by the built-in role itself (`collection-access.md`, Section 3.1). Today it's what the built-in `viewer` role can do: `read` on the catalog, topology, canaries, playbooks, views, people, applications and the public database tables, as whole types. Two things follow from it:
 
-- It's granted on whole types, and its database listings aren't filtered by row for anyone but guests. That's why deny rules on `read` aren't supported yet (`roles.md`, Section 2): a deny couldn't be enforced on those listings.
+- It's granted on whole types, so a member's listings of a type aren't filtered by row unless their answer for it is `some`, e.g. because a Permission denies part of it (`collection-access.md`, Section 3.1).
 - It only applies to Mission Control's own users. Users of an external identity provider have no built-in access, and list only what their `read` rules allow (`roles.md`, Section 3.1).
 
 ## Who may manage these resources
