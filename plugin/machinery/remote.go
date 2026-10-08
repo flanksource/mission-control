@@ -7,11 +7,15 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net/http"
 	"os"
+	"sync/atomic"
 	"time"
 
 	dutyContext "github.com/flanksource/duty/context"
+	"github.com/google/uuid"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
 
@@ -21,21 +25,31 @@ import (
 	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
 )
 
-const remoteRegisterTimeout = 30 * time.Second
+const (
+	remoteRegisterTimeout = 30 * time.Second
+
+	// remoteReregisterRetry is how long to wait before retrying a failed
+	// re-registration while the plugin stays reachable.
+	remoteReregisterRetry = 10 * time.Second
+)
 
 // remoteRuntime is the host-side handle for a plugin reachable over the network.
 // It satisfies plugin.Runtime by forwarding calls to the plugin's gRPC server.
 type remoteRuntime struct {
-	conn    *grpc.ClientConn
-	service pluginAPI.PluginServiceClient
-	uiPort  uint32
+	id        uuid.UUID
+	name      string
+	conn      *grpc.ClientConn
+	service   pluginAPI.PluginServiceClient
+	uiPort    atomic.Uint32
+	transport http.RoundTripper
+	register  func(gocontext.Context) (*pluginAPI.PluginManifest, error)
 }
 
 func (r *remoteRuntime) Invoke(ctx gocontext.Context, req *pluginAPI.InvokeRequest) (*pluginAPI.InvokeResponse, error) {
 	return r.service.Invoke(ctx, req)
 }
 
-func (r *remoteRuntime) UIPort() uint32 { return r.uiPort }
+func (r *remoteRuntime) UIPort() uint32 { return r.uiPort.Load() }
 
 func (r *remoteRuntime) Stop() {
 	if r.conn != nil {
@@ -47,9 +61,17 @@ func (r *remoteRuntime) Stop() {
 // (handing the plugin the host's HostService address so its callbacks work),
 // and installs the runtime in the registry.
 func startRemotePlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
-	dialCreds, err := pluginDialCredentials(entry.Spec)
+	tlsCfg, err := pluginTLSConfig(entry.Spec)
 	if err != nil {
 		return fmt.Errorf("plugin %s: %w", entry.Name, err)
+	}
+	dialCreds := insecure.NewCredentials()
+	var transport http.RoundTripper
+	if tlsCfg != nil {
+		dialCreds = credentials.NewTLS(tlsCfg)
+		t := http.DefaultTransport.(*http.Transport).Clone()
+		t.TLSClientConfig = tlsCfg.Clone()
+		transport = t
 	}
 
 	conn, err := grpc.NewClient(entry.Spec.Address,
@@ -58,6 +80,9 @@ func startRemotePlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 			grpc.MaxCallRecvMsgSize(maxRemoteMessageSize),
 			grpc.MaxCallSendMsgSize(maxRemoteMessageSize),
 		),
+		// Without an idle timeout the connection only goes idle when the plugin
+		// drops it, which is the signal to reconnect and register again.
+		grpc.WithIdleTimeout(0),
 	)
 	if err != nil {
 		return fmt.Errorf("plugin %s: dial %s: %w", entry.Name, entry.Spec.Address, err)
@@ -83,20 +108,31 @@ func startRemotePlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 		return fmt.Errorf("plugin %s: %w", entry.Name, err)
 	}
 
-	registerCtx, cancel := gocontext.WithTimeout(ctx, remoteRegisterTimeout)
-	defer cancel()
-	manifest, err := service.RegisterPlugin(registerCtx, &pluginAPI.RegisterRequest{
-		HostProtocolVersion: uint32(pluginAPI.ProtocolVersion),
-		HostGrpcAddress:     hostGRPCAddress,
-		HostGrpcTls:         hostTLS,
-		HostGrpcCaCert:      hostCACert,
-	})
+	runtime := &remoteRuntime{
+		id:        entry.ID,
+		name:      entry.Name,
+		conn:      conn,
+		service:   service,
+		transport: transport,
+		register: func(ctx gocontext.Context) (*pluginAPI.PluginManifest, error) {
+			ctx, cancel := gocontext.WithTimeout(ctx, remoteRegisterTimeout)
+			defer cancel()
+			return service.RegisterPlugin(ctx, &pluginAPI.RegisterRequest{
+				HostProtocolVersion: uint32(pluginAPI.ProtocolVersion),
+				HostGrpcAddress:     hostGRPCAddress,
+				HostGrpcTls:         hostTLS,
+				HostGrpcCaCert:      hostCACert,
+			})
+		},
+	}
+
+	manifest, err := runtime.register(ctx)
 	if err != nil {
 		_ = conn.Close()
 		return fmt.Errorf("plugin %s RegisterPlugin: %w", entry.Name, err)
 	}
+	runtime.uiPort.Store(manifest.UiPort)
 
-	runtime := &remoteRuntime{conn: conn, service: service, uiPort: manifest.UiPort}
 	started, err := plugin.DefaultRegistry.SetRuntimeIfAbsent(entry.ID, runtime)
 	if err != nil {
 		_ = conn.Close()
@@ -111,18 +147,69 @@ func startRemotePlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 		ctx.Logger.Warnf("plugin %s: register manifest: %v", entry.Name, err)
 	}
 
+	go runtime.reregisterOnReconnect(ctx)
+
 	ctx.Logger.Infof("remote plugin %s loaded: address=%s version=%q ops=%d ui_port=%d",
 		entry.Name, entry.Spec.Address, manifest.Version, len(manifest.Operations), manifest.UiPort)
 	return nil
 }
 
-// pluginDialCredentials builds the transport credentials the host uses to dial
-// a remote plugin's gRPC server. When spec.caCert is set the plugin's TLS
-// certificate is verified against it; otherwise the dial is plaintext (only safe
-// for same-host plugins).
-func pluginDialCredentials(spec v1.PluginSpec) (credentials.TransportCredentials, error) {
+// reregisterOnReconnect registers the plugin again whenever the connection to it
+// is re-established, until the runtime is stopped. A restarted plugin process
+// has no back-channel to the host, and older plugins pick a new UI port, until
+// they are registered.
+func (r *remoteRuntime) reregisterOnReconnect(ctx dutyContext.Context) {
+	state := r.conn.GetState()
+	connected := state == connectivity.Ready
+	for {
+		if state == connectivity.Idle {
+			r.conn.Connect()
+		}
+		if !r.conn.WaitForStateChange(gocontext.Background(), state) {
+			return
+		}
+		state = r.conn.GetState()
+		switch state {
+		case connectivity.Shutdown:
+			return
+		case connectivity.Ready:
+			if !connected {
+				r.reregister(ctx)
+			}
+			connected = true
+		default:
+			connected = false
+		}
+	}
+}
+
+// reregister retries RegisterPlugin until it succeeds or the runtime is stopped.
+func (r *remoteRuntime) reregister(ctx dutyContext.Context) {
+	for {
+		manifest, err := r.register(gocontext.Background())
+		if err == nil {
+			r.uiPort.Store(manifest.UiPort)
+			if err := plugin.DefaultRegistry.SetManifest(r.id, manifest); err != nil {
+				ctx.Logger.Warnf("plugin %s: register manifest: %v", r.name, err)
+			}
+			ctx.Logger.Infof("remote plugin %s registered again after reconnecting: version=%q", r.name, manifest.Version)
+			return
+		}
+		ctx.Logger.Warnf("plugin %s: register again after reconnecting: %v", r.name, err)
+		time.Sleep(remoteReregisterRetry)
+		if r.conn.GetState() == connectivity.Shutdown {
+			return
+		}
+	}
+}
+
+// pluginTLSConfig builds the TLS config the host uses to reach a remote plugin
+// over gRPC and HTTP. When spec.caCert is set the plugin's TLS certificate is
+// verified against it; otherwise it returns nil and the host uses plaintext
+// (only safe for same-host plugins).
+func pluginTLSConfig(spec v1.PluginSpec) (*tls.Config, error) {
 	if spec.CACert == "" {
-		return insecure.NewCredentials(), nil
+		return nil, nil
 	}
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM([]byte(spec.CACert)) {
@@ -137,7 +224,7 @@ func pluginDialCredentials(spec v1.PluginSpec) (credentials.TransportCredentials
 		}
 		cfg.Certificates = []tls.Certificate{cert}
 	}
-	return credentials.NewTLS(cfg), nil
+	return cfg, nil
 }
 
 // hostBackChannelTLS reports whether the host's HostService is served over TLS

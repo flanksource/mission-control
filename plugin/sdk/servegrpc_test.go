@@ -14,14 +14,13 @@ import (
 
 var _ = ginkgo.Describe("ServeGRPC", func() {
 	ginkgo.It("serves the plugin service over a plain gRPC listener", func() {
-		grpcServer, httpServer, err := newGRPCServer(httpTestPlugin{})
+		server, err := newStandaloneServer(httpTestPlugin{})
 		Expect(err).NotTo(HaveOccurred())
-		defer httpServer.Close()
 
 		lis, err := net.Listen("tcp", "127.0.0.1:0")
 		Expect(err).NotTo(HaveOccurred())
-		go func() { _ = grpcServer.Serve(lis) }()
-		defer grpcServer.Stop()
+		go func() { _ = server.Serve(lis) }()
+		defer server.Close()
 
 		conn, err := grpc.NewClient(lis.Addr().String(), grpc.WithTransportCredentials(insecure.NewCredentials()))
 		Expect(err).NotTo(HaveOccurred())

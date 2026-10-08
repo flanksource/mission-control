@@ -3,6 +3,7 @@ package machinery
 import (
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
 	"strconv"
 
@@ -182,38 +183,50 @@ func StopAll(ctx dutyContext.Context) {
 	}
 }
 
-func HTTPURL(ctx dutyContext.Context, pluginID uuid.UUID) (*url.URL, error) {
+// HTTPTarget returns where the host reaches a plugin's UI and HTTP operations,
+// and the transport to use (nil means http.DefaultTransport).
+func HTTPTarget(ctx dutyContext.Context, pluginID uuid.UUID) (*url.URL, http.RoundTripper, error) {
 	entry := plugin.DefaultRegistry.Get(pluginID)
 	if entry == nil {
-		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not registered", pluginID)
+		return nil, nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not registered", pluginID)
+	}
+	if entry.Runtime == nil {
+		return nil, nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
 	}
 
 	switch entry.Kind {
 	case "", api.PluginKindLocal:
-		if entry.Runtime == nil {
-			return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
-		}
 		port := entry.Runtime.UIPort()
 		if port == 0 {
-			return nil, ctx.Oops().Code(dutyAPI.EINTERNAL).Errorf("plugin %s did not advertise a UI port", pluginID)
+			return nil, nil, ctx.Oops().Code(dutyAPI.EINTERNAL).Errorf("plugin %s did not advertise a UI port", pluginID)
 		}
-		return url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
+		target, err := url.Parse(fmt.Sprintf("http://127.0.0.1:%d", port))
+		return target, nil, err
 	case api.PluginKindRemote:
-		if entry.Runtime == nil {
-			return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("plugin %s not running", pluginID)
+		if port := entry.Runtime.UIPort(); port != 0 {
+			// Older plugins serve their UI over plain HTTP on a separate port of
+			// the plugin's host.
+			host, _, err := net.SplitHostPort(entry.Spec.Address)
+			if err != nil {
+				return nil, nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has invalid address %q: %v", pluginID, entry.Spec.Address, err)
+			}
+			target, err := url.Parse("http://" + net.JoinHostPort(host, strconv.Itoa(int(port))))
+			return target, nil, err
 		}
-		port := entry.Runtime.UIPort()
-		if port == 0 {
-			return nil, ctx.Oops().Code(dutyAPI.EINTERNAL).Errorf("plugin %s did not advertise a UI port", pluginID)
+
+		// The plugin serves its UI on the same address and TLS settings as gRPC.
+		var transport http.RoundTripper
+		scheme := "http"
+		if rt, ok := entry.Runtime.(*remoteRuntime); ok && rt.transport != nil {
+			scheme = "https"
+			transport = rt.transport
 		}
-		// The plugin serves its UI on its own host (the gRPC address) but on the
-		// manifest-advertised UI port.
-		host, _, err := net.SplitHostPort(entry.Spec.Address)
+		target, err := url.Parse(scheme + "://" + entry.Spec.Address)
 		if err != nil {
-			return nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has invalid address %q: %v", pluginID, entry.Spec.Address, err)
+			return nil, nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has invalid address %q: %v", pluginID, entry.Spec.Address, err)
 		}
-		return url.Parse("http://" + net.JoinHostPort(host, strconv.Itoa(int(port))))
+		return target, transport, nil
 	default:
-		return nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has unsupported connection kind %q", pluginID, entry.Kind)
+		return nil, nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s has unsupported connection kind %q", pluginID, entry.Kind)
 	}
 }

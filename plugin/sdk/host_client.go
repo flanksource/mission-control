@@ -6,6 +6,8 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/structpb"
 
 	pluginpb "github.com/flanksource/incident-commander/plugin/api"
@@ -49,7 +51,25 @@ type hostClient struct {
 }
 
 func newHostClient(conn *grpc.ClientConn, token string) *hostClient {
-	return &hostClient{c: pluginpb.NewHostServiceClient(conn), invocationToken: token}
+	var cc grpc.ClientConnInterface = unregisteredConn{}
+	if conn != nil {
+		cc = conn
+	}
+	return &hostClient{c: pluginpb.NewHostServiceClient(cc), invocationToken: token}
+}
+
+var errNotRegistered = status.Error(codes.FailedPrecondition, "plugin is not registered with Mission Control: host callbacks are unavailable")
+
+// unregisteredConn stands in for the host back-channel until the host calls
+// RegisterPlugin, so host callbacks fail with an error instead of panicking.
+type unregisteredConn struct{}
+
+func (unregisteredConn) Invoke(context.Context, string, any, any, ...grpc.CallOption) error {
+	return errNotRegistered
+}
+
+func (unregisteredConn) NewStream(context.Context, *grpc.StreamDesc, string, ...grpc.CallOption) (grpc.ClientStream, error) {
+	return nil, errNotRegistered
 }
 
 func (h *hostClient) authContext(ctx context.Context) context.Context {

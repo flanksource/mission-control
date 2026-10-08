@@ -54,6 +54,18 @@ func newPluginServer(impl Plugin, uiPort uint32) *pluginServer {
 	return &pluginServer{impl: impl, uiPort: uiPort, ops: ops}
 }
 
+// setHostConn installs the back-channel to the host. A host registers the plugin
+// again after reconnecting, so any previous back-channel is closed.
+func (s *pluginServer) setHostConn(conn *grpc.ClientConn) {
+	s.mu.Lock()
+	previous := s.mcgPRCConn
+	s.mcgPRCConn = conn
+	s.mu.Unlock()
+	if previous != nil && previous != conn {
+		_ = previous.Close()
+	}
+}
+
 func (s *pluginServer) RegisterPlugin(ctx context.Context, req *pluginpb.RegisterRequest) (*pluginpb.PluginManifest, error) {
 	switch {
 	case s.hostBrk != nil && req.HostBrokerId != 0:
@@ -62,9 +74,7 @@ func (s *pluginServer) RegisterPlugin(ctx context.Context, req *pluginpb.Registe
 		if err != nil {
 			return nil, fmt.Errorf("dial host broker: %w", err)
 		}
-		s.mu.Lock()
-		s.mcgPRCConn = conn
-		s.mu.Unlock()
+		s.setHostConn(conn)
 
 	case req.HostGrpcAddress != "":
 		// Standalone/remote mode: there is no broker, so dial the host's
@@ -88,9 +98,7 @@ func (s *pluginServer) RegisterPlugin(ctx context.Context, req *pluginpb.Registe
 			_ = conn.Close()
 			return nil, fmt.Errorf("dial host %s: %w", req.HostGrpcAddress, err)
 		}
-		s.mu.Lock()
-		s.mcgPRCConn = conn
-		s.mu.Unlock()
+		s.setHostConn(conn)
 	}
 
 	manifest := s.impl.Manifest()
