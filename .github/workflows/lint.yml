@@ -27,6 +27,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # For deps
       - run: make auth/oidc/static/tailwind.min.js
       - run: make ui
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # For deps
       - name: golangci-lint
         uses: golangci/golangci-lint-action@1e7e51e771db61008b38414a730f564565cf7c20 # v9.2.0
         with:
