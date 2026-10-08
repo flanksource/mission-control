@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+	"net/http"
 	"os"
 	"time"
 
@@ -26,9 +27,10 @@ const remoteRegisterTimeout = 30 * time.Second
 // remoteRuntime is the host-side handle for a plugin reachable over the network.
 // It satisfies plugin.Runtime by forwarding calls to the plugin's gRPC server.
 type remoteRuntime struct {
-	conn    *grpc.ClientConn
-	service pluginAPI.PluginServiceClient
-	uiPort  uint32
+	conn      *grpc.ClientConn
+	service   pluginAPI.PluginServiceClient
+	uiPort    uint32
+	transport http.RoundTripper
 }
 
 func (r *remoteRuntime) Invoke(ctx gocontext.Context, req *pluginAPI.InvokeRequest) (*pluginAPI.InvokeResponse, error) {
@@ -47,9 +49,17 @@ func (r *remoteRuntime) Stop() {
 // (handing the plugin the host's HostService address so its callbacks work),
 // and installs the runtime in the registry.
 func startRemotePlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
-	dialCreds, err := pluginDialCredentials(entry.Spec)
+	tlsCfg, err := pluginTLSConfig(entry.Spec)
 	if err != nil {
 		return fmt.Errorf("plugin %s: %w", entry.Name, err)
+	}
+	dialCreds := insecure.NewCredentials()
+	var transport http.RoundTripper
+	if tlsCfg != nil {
+		dialCreds = credentials.NewTLS(tlsCfg)
+		t := http.DefaultTransport.(*http.Transport).Clone()
+		t.TLSClientConfig = tlsCfg.Clone()
+		transport = t
 	}
 
 	conn, err := grpc.NewClient(entry.Spec.Address,
@@ -96,7 +106,7 @@ func startRemotePlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 		return fmt.Errorf("plugin %s RegisterPlugin: %w", entry.Name, err)
 	}
 
-	runtime := &remoteRuntime{conn: conn, service: service, uiPort: manifest.UiPort}
+	runtime := &remoteRuntime{conn: conn, service: service, uiPort: manifest.UiPort, transport: transport}
 	started, err := plugin.DefaultRegistry.SetRuntimeIfAbsent(entry.ID, runtime)
 	if err != nil {
 		_ = conn.Close()
@@ -116,13 +126,13 @@ func startRemotePlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 	return nil
 }
 
-// pluginDialCredentials builds the transport credentials the host uses to dial
-// a remote plugin's gRPC server. When spec.caCert is set the plugin's TLS
-// certificate is verified against it; otherwise the dial is plaintext (only safe
-// for same-host plugins).
-func pluginDialCredentials(spec v1.PluginSpec) (credentials.TransportCredentials, error) {
+// pluginTLSConfig builds the TLS config the host uses to reach a remote plugin
+// over gRPC and HTTP. When spec.caCert is set the plugin's TLS certificate is
+// verified against it; otherwise it returns nil and the host uses plaintext
+// (only safe for same-host plugins).
+func pluginTLSConfig(spec v1.PluginSpec) (*tls.Config, error) {
 	if spec.CACert == "" {
-		return insecure.NewCredentials(), nil
+		return nil, nil
 	}
 	pool := x509.NewCertPool()
 	if !pool.AppendCertsFromPEM([]byte(spec.CACert)) {
@@ -137,7 +147,7 @@ func pluginDialCredentials(spec v1.PluginSpec) (credentials.TransportCredentials
 		}
 		cfg.Certificates = []tls.Certificate{cert}
 	}
-	return credentials.NewTLS(cfg), nil
+	return cfg, nil
 }
 
 // hostBackChannelTLS reports whether the host's HostService is served over TLS

@@ -228,12 +228,13 @@ func operationHTTPProxy(c echo.Context) error {
 }
 
 func proxyToPluginUI(c echo.Context, entry *plugin.Entry, prefix string) error {
-	target, err := pluginHTTPURL(c, entry)
+	target, transport, err := pluginHTTPTarget(c, entry)
 	if err != nil {
 		return err
 	}
 
 	rp := &httputil.ReverseProxy{
+		Transport: transport,
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
 			pr.Out.URL.Path = pluginUITargetPath(prefix, pr.In.URL.Path)
@@ -246,12 +247,13 @@ func proxyToPluginUI(c echo.Context, entry *plugin.Entry, prefix string) error {
 }
 
 func proxyToPluginOperation(c echo.Context, entry *plugin.Entry, op, invocationToken string) error {
-	target, err := pluginHTTPURL(c, entry)
+	target, transport, err := pluginHTTPTarget(c, entry)
 	if err != nil {
 		return err
 	}
 
 	rp := &httputil.ReverseProxy{
+		Transport: transport,
 		Rewrite: func(pr *httputil.ProxyRequest) {
 			pr.SetURL(target)
 			pr.Out.URL.Path = pluginOperationTargetPath(op)
@@ -323,13 +325,13 @@ func proxiedPluginAgentID(c echo.Context, entry *plugin.Entry) (uuid.UUID, error
 	return *entry.AgentID, nil
 }
 
-func pluginHTTPURL(c echo.Context, entry *plugin.Entry) (*url.URL, error) {
+func pluginHTTPTarget(c echo.Context, entry *plugin.Entry) (*url.URL, http.RoundTripper, error) {
 	ctx := c.Request().Context().(dutyContext.Context)
-	target, err := machinery.HTTPURL(ctx, entry.ID)
+	target, transport, err := machinery.HTTPTarget(ctx, entry.ID)
 	if err != nil {
-		return nil, dutyAPI.WriteError(c, err)
+		return nil, nil, dutyAPI.WriteError(c, err)
 	}
-	return target, nil
+	return target, transport, nil
 }
 
 func pluginOperationTargetPath(op string) string {

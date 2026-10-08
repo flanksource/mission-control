@@ -1,8 +1,10 @@
 package sdk
 
 import (
+	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io/fs"
 	"net"
@@ -16,7 +18,6 @@ import (
 
 	goplugin "github.com/hashicorp/go-plugin"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials"
 
 	"github.com/flanksource/incident-commander/plugin/api"
 )
@@ -26,12 +27,6 @@ type Option func(*serveOptions)
 
 type serveOptions struct {
 	staticAssets fs.FS
-
-	// httpBindHost is the interface the static-asset/operations HTTP server binds
-	// to. Empty means loopback (go-plugin subprocess mode, reached only by the
-	// local host). ServeGRPC sets it to all-interfaces so a remote host can reach
-	// the plugin's UI and HTTP operations.
-	httpBindHost string
 
 	// tlsCertFile/tlsKeyFile, when set, make ServeGRPC serve the plugin's gRPC
 	// server over TLS so the host can dial it securely. Empty means plaintext.
@@ -158,12 +153,12 @@ func Serve(impl Plugin, opts ...Option) {
 	_ = httpServer.Close()
 }
 
-// ServeGRPC runs the plugin as a standalone gRPC server listening on addr
-// (e.g. ":9000"), instead of as a go-plugin subprocess started by the host.
-// There is no go-plugin handshake: the server simply binds the PluginService
-// on a plain TCP listener and blocks until the process is signalled or the
-// host calls the Shutdown RPC. The static-asset HTTP server is started exactly
-// as it is under Serve.
+// ServeGRPC runs the plugin as a standalone server listening on addr (e.g.
+// ":9000"), instead of as a go-plugin subprocess started by the host. There is
+// no go-plugin handshake. The one listener serves both the PluginService over
+// gRPC and the UI and HTTP operations, so the host reaches everything at the
+// plugin's address. It blocks until the process is signalled or the host calls
+// the Shutdown RPC.
 func ServeGRPC(impl Plugin, addr string, opts ...Option) error {
 	lis, err := net.Listen("tcp", addr)
 	if err != nil {
@@ -174,51 +169,57 @@ func ServeGRPC(impl Plugin, addr string, opts ...Option) error {
 		fmt.Fprintf(os.Stderr, "plugin %s serving on %s: version=%s\n", m.Name, lis.Addr(), m.Version)
 	}
 
-	grpcServer, httpServer, err := newGRPCServer(impl, opts...)
+	server, err := newStandaloneServer(impl, opts...)
 	if err != nil {
 		_ = lis.Close()
 		return err
 	}
-	defer httpServer.Close()
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sig)
+	serveDone := make(chan struct{})
+	shutdownDone := make(chan struct{})
 	go func() {
+		defer close(shutdownDone)
 		select {
 		case <-sig:
 		case <-shutdownCh:
+		case <-serveDone:
+			return
 		}
-		grpcServer.GracefulStop()
+		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+		defer cancel()
+		if err := server.Shutdown(ctx); err != nil {
+			_ = server.Close()
+		}
 	}()
 
-	return grpcServer.Serve(lis)
+	if server.TLSConfig != nil {
+		err = server.ServeTLS(lis, "", "")
+	} else {
+		err = server.Serve(lis)
+	}
+	close(serveDone)
+	<-shutdownDone
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return err
 }
 
-// newGRPCServer builds the standalone gRPC server and its companion static
-// HTTP server from a plugin. It mirrors Serve's wiring (newPluginServer +
-// startHTTPServer + the api gRPC server factory) so both entry points dispatch
-// operations identically.
-func newGRPCServer(impl Plugin, opts ...Option) (*grpc.Server, *http.Server, error) {
+// shutdownTimeout bounds how long ServeGRPC waits for in-flight requests (e.g.
+// streaming logs) before closing their connections.
+const shutdownTimeout = 10 * time.Second
+
+// newStandaloneServer builds the HTTP server ServeGRPC runs. gRPC requests go
+// to the PluginService; everything else goes to the UI/operations handler that
+// Serve exposes on its loopback port. The manifest reports ui_port 0, which
+// tells the host the UI is served on the plugin's own address.
+func newStandaloneServer(impl Plugin, opts ...Option) (*http.Server, error) {
 	cfg := &serveOptions{}
 	for _, o := range opts {
 		o(cfg)
-	}
-	// A standalone server is reached over the network, so its UI/operations HTTP
-	// server must bind all interfaces rather than loopback.
-	if cfg.httpBindHost == "" {
-		cfg.httpBindHost = "0.0.0.0"
-	}
-
-	var serverOpts []grpc.ServerOption
-	// A client CA alone (mTLS) still requires the server's own certificate, so
-	// entering the TLS branch on any TLS option ensures a partial config is
-	// rejected by serverTLSConfig rather than silently starting in plaintext.
-	if cfg.tlsCertFile != "" || cfg.tlsKeyFile != "" || cfg.tlsClientCAFile != "" {
-		tlsCfg, err := serverTLSConfig(cfg.tlsCertFile, cfg.tlsKeyFile, cfg.tlsClientCAFile)
-		if err != nil {
-			return nil, nil, err
-		}
-		serverOpts = append(serverOpts, grpc.Creds(credentials.NewTLS(tlsCfg)))
 	}
 
 	srv := newPluginServer(impl, 0)
@@ -226,15 +227,46 @@ func newGRPCServer(impl Plugin, opts ...Option) (*grpc.Server, *http.Server, err
 	// dials the host back-channel (mTLS).
 	srv.tlsCertFile = cfg.tlsCertFile
 	srv.tlsKeyFile = cfg.tlsKeyFile
-	uiPort, httpServer, err := startHTTPServer(cfg, srv)
-	if err != nil {
-		return nil, nil, err
-	}
-	srv.uiPort = uiPort
 
-	grpcServer := api.GRPCServerFactory(serverOpts)
+	grpcServer := api.GRPCServerFactory(nil)
 	api.RegisterPluginServiceServer(grpcServer, srv)
-	return grpcServer, httpServer, nil
+
+	server := &http.Server{
+		Handler:           grpcOrHTTP(grpcServer, newHTTPHandler(cfg, srv)),
+		ReadHeaderTimeout: 10 * time.Second,
+		Protocols:         new(http.Protocols),
+	}
+	server.Protocols.SetHTTP1(true)
+	server.Protocols.SetHTTP2(true)
+
+	// A client CA alone (mTLS) still requires the server's own certificate, so
+	// entering the TLS branch on any TLS option ensures a partial config is
+	// rejected by serverTLSConfig rather than silently starting in plaintext.
+	if cfg.tlsCertFile != "" || cfg.tlsKeyFile != "" || cfg.tlsClientCAFile != "" {
+		tlsCfg, err := serverTLSConfig(cfg.tlsCertFile, cfg.tlsKeyFile, cfg.tlsClientCAFile)
+		if err != nil {
+			return nil, err
+		}
+		server.TLSConfig = tlsCfg
+	} else {
+		// gRPC clients speak HTTP/2 without TLS using prior knowledge.
+		server.Protocols.SetUnencryptedHTTP2(true)
+	}
+	return server, nil
+}
+
+// grpcOrHTTP routes gRPC requests to grpcServer and all others to httpHandler.
+// grpc.Server.ServeHTTP is experimental and slower than grpc.Server.Serve, but
+// it lets gRPC and the UI share one port, so a plugin's Service needs only that
+// port. Plugin traffic is low enough that the cost doesn't matter.
+func grpcOrHTTP(grpcServer *grpc.Server, httpHandler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.ProtoMajor == 2 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {
+			grpcServer.ServeHTTP(w, r)
+			return
+		}
+		httpHandler.ServeHTTP(w, r)
+	})
 }
 
 // serverTLSConfig builds the plugin gRPC server's TLS config. When clientCAFile
@@ -263,7 +295,9 @@ func serverTLSConfig(certFile, keyFile, clientCAFile string) (*tls.Config, error
 	return cfg, nil
 }
 
-func startHTTPServer(cfg *serveOptions, srv *pluginServer) (uint32, *http.Server, error) {
+// newHTTPHandler serves static UI assets under /__mc/ui/ and manifest-declared
+// HTTP operations under /__mc/operations/.
+func newHTTPHandler(cfg *serveOptions, srv *pluginServer) http.Handler {
 	mux := http.NewServeMux()
 	mux.Handle("/__mc/operations/", srv.httpOperationsHandler())
 
@@ -272,19 +306,20 @@ func startHTTPServer(cfg *serveOptions, srv *pluginServer) (uint32, *http.Server
 		staticHandler = http.FileServer(http.FS(cfg.staticAssets))
 	}
 	mux.Handle("/__mc/ui/", http.StripPrefix("/__mc/ui", staticHandler))
+	return mux
+}
 
-	bindHost := cfg.httpBindHost
-	if bindHost == "" {
-		bindHost = "127.0.0.1"
-	}
-	listener, err := net.Listen("tcp", net.JoinHostPort(bindHost, "0"))
+// startHTTPServer serves the UI/operations handler on a random loopback port
+// for a go-plugin subprocess, which the host reaches on the same machine.
+func startHTTPServer(cfg *serveOptions, srv *pluginServer) (uint32, *http.Server, error) {
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		return 0, nil, fmt.Errorf("bind http listener: %w", err)
 	}
 
 	port := uint32(listener.Addr().(*net.TCPAddr).Port)
 	server := &http.Server{
-		Handler:           mux,
+		Handler:           newHTTPHandler(cfg, srv),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 	go func() {
