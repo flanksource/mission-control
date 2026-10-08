@@ -177,10 +177,16 @@ func ServeGRPC(impl Plugin, addr string, opts ...Option) error {
 
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sig)
+	serveDone := make(chan struct{})
+	shutdownDone := make(chan struct{})
 	go func() {
+		defer close(shutdownDone)
 		select {
 		case <-sig:
 		case <-shutdownCh:
+		case <-serveDone:
+			return
 		}
 		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
@@ -194,6 +200,8 @@ func ServeGRPC(impl Plugin, addr string, opts ...Option) error {
 	} else {
 		err = server.Serve(lis)
 	}
+	close(serveDone)
+	<-shutdownDone
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
