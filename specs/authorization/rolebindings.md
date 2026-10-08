@@ -27,7 +27,6 @@ spec:
 | `constraint`  | object | No                        | Narrows the Role's rules for these subjects (Section 3). |
 | `description` | string | No                        | Explanatory text; no effect.                             |
 
-`role` never names a built-in role, since no Role can be named after one (`roles.md`, Section 1).
 
 A RoleBinding MUST have a namespace, and its Role and constraint Scopes must be in it (`overview.md`, "Namespaces"). Subjects can match resources in any namespace (Section 2.5).
 
@@ -39,11 +38,11 @@ A RoleBinding MUST have a namespace, and its Role and constraint Scopes must be 
 | ------------------------------------------------------------------ | --------------- | -------------------------------------------------------------------- |
 | `people`                                                           | list of strings | Mission Control users, by email only                                 |
 | `teams`                                                            | list of strings | Every member of the teams, by team name                              |
-| `roles`                                                            | list of strings | Every user, every guest, or every agent (Section 2.3)                |
+| `agents`                                                           | list of strings | Agents, by name (Section 2.3)                                        |
 | `oidc`                                                             | list of objects | Users of an external identity provider, by the claims in their token |
 | `playbooks`, `notifications`, `topologies`, `scrapers`, `canaries` | list of objects | Those resources, when they act on their own                          |
 
-A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either; use `roles: [agent]` (Section 2.3).
+A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either; they're selected by `agents` (Section 2.3).
 
 ### 2.1 People
 
@@ -54,7 +53,7 @@ subjects:
     - bob@example.com
 ```
 
-Each entry MUST be a person's email address, never their name. There's no wildcard: to select every Mission Control user, use `roles: [everyone]` (Section 2.3).
+Each entry MUST be a person's email address, never their name, or `*` alone to select every person, e.g. to bind `viewer` to everyone in the organisation.
 
 ### 2.2 Teams
 
@@ -67,25 +66,15 @@ subjects:
 
 Each entry is a team name. Members get the Role through their team, so joining or leaving the team changes who has it.
 
-### 2.3 Built-in roles
+### 2.3 Agents
 
 ```yaml
 subjects:
-  roles:
-    - guest
+  agents:
+    - eu-cluster
 ```
 
-`roles` selects subjects by their built-in role (`roles.md`, Section 7). Only three values are allowed, each because nothing else can select those subjects:
-
-- `everyone`: every Mission Control user, guests and agents included. `people` has no wildcard, so this is the only way to select every user, e.g. to bind a deny rule that applies to all of them.
-- `guest`: every guest. Guests see only what's shared with them (`roles.md`, Section 7.3); this shares with all of them at once, without a team to keep in step with who's invited.
-- `agent`: every agent. Agents aren't people and can't be in a team, so this is the only way to select them.
-
-`viewer`, `editor`, `commander` and `responder` are rejected. A team selects the same people, and these roles inherit from each other (`roles.md`, Section 7.2), so binding to one would also reach every role that inherits it, which a reader of the binding can't see. `commander` and `responder` aren't defined yet either.
-
-`admin` is rejected too, since admins can already do everything. No binding applies to an admin, whether it names them in `people` or through `teams`: no rule applies to admins, deny rules included (`overview.md`, "Default access").
-
-Users of an external identity provider have no built-in role, so no value selects them (Section 2.4).
+Each entry is an agent's name, or `*` alone to select every agent. Agents aren't people and can't be in a team, so this is the only way to select them.
 
 ### 2.4 External identity provider users
 
@@ -125,7 +114,7 @@ spec:
     email: email
 ```
 
-A user who signs in through an identity provider only gets what their RoleBindings grant. They get no built-in access. See `external-identity-providers.md`.
+See `external-identity-providers.md`.
 
 ### 2.5 Resources
 
@@ -205,7 +194,7 @@ spec:
       scopeRef: tenant-a
 ```
 
-Tenant A's users can run and approve monitoring playbooks on the configs that are in both `production-configs` and `tenant-a`. A binding for tenant B does the same with `tenant-b`. Running a playbook on a config also checks `read` on the config (`roles.md`, Section 4.3), and users of an external identity provider have no built-in access, so in practice they need a `read` grant too; Section 3.3 adds one.
+Tenant A's users can run and approve monitoring playbooks on the configs that are in both `production-configs` and `tenant-a`. A binding for tenant B does the same with `tenant-b`. Running a playbook on a config also checks `read` on the config (`roles.md`, Section 4.3), so they need a `read` grant too; Section 3.3 adds one.
 
 `constraint` is an object with the shape of a rule:
 
@@ -352,7 +341,7 @@ To narrow two rules differently, put them in two Roles and bind each with its ow
 
 A binding is validated against what it references: its Role, and the Scopes its constraint names. Nothing is ever validated against the binding.
 
-A binding that's wrong on its own is rejected (`overview.md`, "Rejected or not in effect"): no subjects, a `people` entry that isn't an email, a built-in role that can't be bound, an `oidc.match` that doesn't compile or doesn't return a bool, an empty or wildcard-namespace resource subject, or a `constraint` that sets neither `resource` nor `target`. Everything else is checked against the Role and Scopes, as follows.
+A binding that's wrong on its own is rejected (`overview.md`, "Rejected or not in effect"): no subjects, a `people` entry that isn't an email or `*`, an `oidc.match` that doesn't compile or doesn't return a bool, an empty or wildcard-namespace resource subject, or a `constraint` that sets neither `resource` nor `target`. Everything else is checked against the Role and Scopes, as follows.
 
 - A binding takes effect only once its Role exists and is valid. Until then it's `Ready=False` with the reason and none of its rules apply. There is no previous version to fall back to; the binding is whatever was last written.
 - Its deny rules apply whenever the Role is valid. The constraint never touches them, so nothing about the constraint, a missing Scope included, stops a deny: a constraint failure must never lower a guardrail.

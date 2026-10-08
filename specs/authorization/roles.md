@@ -39,7 +39,7 @@ spec:
 
 A Scope is a named set of resources (see `scopes.md`). A rule references exactly one Scope per input, by name. A Role MUST have a namespace, and `scopeRef` only names Scopes in it (`overview.md`, "Namespaces"). The resources a Scope selects can be in any namespace.
 
-A Role can't be named after a built-in role: `admin`, `everyone`, `guest`, `viewer`, `editor`, `commander`, `responder` or `agent`. Such a Role is rejected (`overview.md`, "Rejected or not in effect"). The built-in roles are described in Section 7. In a RoleBinding, `role` always names a Role and `subjects.roles` always names a built-in role (`rolebindings.md`, Section 2.3), so `role: viewer` must never read as the built-in `viewer`.
+Mission Control ships a few Roles, e.g. `viewer` and `admin` (`overview.md`, "Shipped Roles"). They're Roles like any other.
 
 ### 1.1 Why one Scope per input
 
@@ -93,7 +93,7 @@ For `playbook:run`, `target` is optional. A rule without it matches only runs wi
   - A pattern grants actions added later. If the `kubernetes-logs` plugin ships a new `exec-shell` operation, `invoke:kubernetes-logs:*` would grant it without anyone reviewing the Role.
 - A plugin action isn't checked against the installed plugins: plugins are installed and upgraded often, and a Role mustn't break when one is. A rule on an operation no plugin declares matches nothing until one does.
 - `create`, `update` and `delete` are only checked on all resources of a type, so their Scope MUST consist of whole-type targets only (`scopes.md`, Section 5.2).
-- Deny rules on `read` are rejected for now, because they couldn't be enforced on listings: Mission Control's own users' database listings aren't filtered by row unless they're guests (`overview.md`, "Default access"). A deny on reading production configs would still let an editor list them.
+- Deny rules on `read` are rejected for now, because they couldn't be enforced on listings: a `read` rule covering a type whole lists it unfiltered (Section 3.1). A deny on reading production configs would still let a subject bound to `viewer` list them.
 
 An operation may make more than one check. For example, running a playbook on a config also checks `read` on that config. Section 4.3 lists every check each operation makes; a rule never grants the other checks implicitly.
 
@@ -181,7 +181,7 @@ A `read` rule accepts any Scope whose membership is decided by the resource alon
 
 Listings are only filtered while row-level security is enabled. It's turned on or off when Mission Control starts, from the `rls.enable` property, so changing the property takes effect on restart. So a `read` rule whose Scope has a target that isn't a whole-type target (`scopes.md`, Section 5.2) needs it: while row-level security is off, a Role with such a rule is `Ready=False` with reason `RowLevelSecurityRequired`, and none of its rules apply, like any invalid Role (Section 6). It becomes valid when row-level security is enabled, without being re-applied. A rule whose Scope consists of whole-type targets only doesn't need it: opening any resource and listing all of them allow the same resources.
 
-Whether a subject may list a type at all, and what a listing returns for a subject whose grants cover only part of it, is specified in `collection-access.md`. Subjects without built-in access (`overview.md`, "Default access") list only what their `read` grants select, and a listing of a type none of their grants covers is refused with `403 Forbidden`, whether or not row-level security is on.
+Whether a subject may list a type at all, and what a listing returns for a subject whose grants cover only part of it, is specified in `collection-access.md`. Every subject lists only what their `read` grants select, and a listing of a type none of their grants covers is refused with `403 Forbidden`, whether or not row-level security is on.
 
 ## 4. Matching
 
@@ -290,12 +290,10 @@ Find a design that removes this trap. What's been considered so far:
 Across all the rules that apply to a subject, from every Role they're bound to, the same rule decides:
 
 - An operation is allowed when an allow rule matches and no deny rule does.
-- A deny always wins, over built-in access too: a deny on `delete` stops an editor even though the built-in `editor` role allows it. Only admins are exempt.
+- A deny always wins: a deny on `delete` stops a subject even though the `editor` Role they're bound to allows it. That includes subjects bound to `admin`.
 - Order doesn't matter, and it doesn't matter which Role a rule comes from.
 - Roles only add access. A Role can't remove access another Role grants, except with a deny.
 - Row filters follow the same rule: a subject's rows are the ones any of their `read` rules allows (Section 3.1).
-
-None of this applies to admins: no rule, allow or deny, applies to them (`overview.md`, "Default access").
 
 ## 6. How changes take effect
 
@@ -314,43 +312,3 @@ Because one broken rule silences the whole Role, a rule is only as reliable as t
 - After adding a rule to a Role that's bound with a constraint, check the Role's status for bindings the rule doesn't apply through (Section 6).
 
 A subject bound to several Roles holds the union of the valid ones (Section 5), so splitting a Role changes nothing while all of them are valid.
-
-## 7. Built-in roles
-
-Besides the Roles written as resources, Mission Control has built-in roles, defined in code. A person is given a built-in role when they're invited, by their identity provider's role mapping, or by an admin. RoleBindings can select every user, every guest or every agent as subjects, with `roles` (`rolebindings.md`, Section 2.3), but no Role can be named after a built-in role (Section 1).
-
-The built-in roles answer two separate questions:
-
-- **How much can you see?** Members are the organisation's own users and see every resource. Guests are outsiders and only see the resources shared with them.
-- **What can you do?** Viewers can only read. Editors can also change things.
-
-| Role        | Who it's for                                                        | Can do                                                                                                                                                                                                                     |
-| ----------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `everyone`  | Every Mission Control user                                          | Nothing on its own, apart from what's granted to it. It's denied the Kratos database                                                                                                                                       |
-| `admin`     | Members who administer Mission Control                              | Everything. No rule applies to them, deny rules included (`overview.md`, "Default access")                                                                                                                                 |
-| `viewer`    | Members who only read                                               | `read` on the catalog, topology, canaries, playbooks, views, people, applications and the public database tables, as whole types, with listings unfiltered                                                                 |
-| `editor`    | Members who also change things                                      | What a viewer can, plus `create`, `read`, `update` and `delete` on canaries, the catalog, topology, playbooks, the Kubernetes proxy, notifications, applications and connections, and `read` on connection details         |
-| `guest`     | Outsiders, e.g. contractors, customers or another team's users      | The built-in read access every user has, but their listings are always filtered by row, to what Permissions and RoleBindings grant them (Section 7.3)                                                                      |
-| `agent`     | Mission Control agents pushing data from other clusters             | `read` on playbooks and the public database tables; `create`, `read` and `update` on agent pushes; `create` and `update` on topology                                                                                       |
-| `commander` | **TODO:** not defined yet                                           | **TODO**                                                                                                                                                                                                                   |
-| `responder` | **TODO:** not defined yet                                           | **TODO**                                                                                                                                                                                                                   |
-
-### 7.1 Everyone
-
-`everyone` is every Mission Control user: every person, whatever their built-in role, agents included. A user is a member of `everyone` directly, so no role needs to inherit it. Users of an external identity provider aren't Mission Control users, and aren't members (`external-identity-providers.md`, Section 6).
-
-### 7.2 Members
-
-`viewer` is the base member role. `editor`, `commander` and `responder` inherit it, so they see everything a viewer sees, and anything granted to `viewer` reaches them too. Members' listings are never filtered by row: a member sees every resource of a type they can read.
-
-### 7.3 Guests
-
-A guest is the restricted role. Guests get past the same whole-type checks as viewers for `read`, the built-in access every user has (`overview.md`, "Default access"). But their listings are always filtered by row, to the resources their Permissions and RoleBindings grant (Section 3.1). So a guest sees only what's been shared with them.
-
-`guest` doesn't inherit `viewer`. A guest isn't reached by what's granted to `viewer` or to any other member role.
-
-### 7.4 Open questions
-
-- **TODO:** A person with no built-in role. Today they get the built-in access every user has, unfiltered, so in practice they're a viewer. Decide whether that's intended, or whether they should get nothing until they're given a role.
-- **TODO:** Reads granted to `viewer`. Section 7.3 says they don't reach guests, but the code currently lets them reach every user, guests and agents included, on whole-type checks. Confirm guests are excluded, and fix the code.
-- Guest visibility is settled by `collection-access.md`: a guest's built-in `read` doesn't count, so a guest opening one resource is checked against their grants only, and while row-level security is off a guest lists only types their grants cover whole (Sections 2 and 2.3).

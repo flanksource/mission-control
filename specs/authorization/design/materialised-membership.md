@@ -125,7 +125,7 @@ The write fails with it, as with any trigger. That's why the trigger only runs t
 **What does a deny Permission on `read` do to a listing?**
 It empties it: the claim grants no rows of the types the deny covers, so every path that applies the claim enforces it the same way, through PostgREST and through Go alike. It's never `403` (see Permissions).
 
-**Do guests who rely on Permissions with inline selectors lose their listings?**
+**Do subjects who rely on Permissions with inline selectors lose their listings?**
 Yes, and that's accepted (`permissions.md`). Their single-resource checks keep working. It's called out in the release notes. Permissions get no new status condition, since they get no new features.
 
 **What happens to a stored Scope that uses `!=`, `in`, `notin` or a bare key?**
