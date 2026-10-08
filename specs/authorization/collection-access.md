@@ -45,8 +45,6 @@ An invalid Scope is a different case. A Scope naming an agent that isn't registe
 
 A subject often has several `read` grants on a type, from different Roles and bindings. If any one of them is a whole-type grant, the answer is `all`. Otherwise, if there is any grant on the type, the answer is `some`, however many grants there are: three Scopes on three namespaces are still a subset. What the subject sees is the union of what the grants select. A rule that doesn't apply, because its Role or binding isn't in effect ([roles.md, Section 6](roles.md#6-how-changes-take-effect); [rolebindings.md, Section 4](rolebindings.md#4-how-changes-take-effect)), gives nothing.
 
-Roles can't deny `read` yet ([roles.md, Section 2](roles.md#2-actions)), but a Permission can, and its denies are enforced on listings ([roles.md, Section 5](roles.md#5-allow-and-deny)). A deny lowers the answer: a deny that covers the type whole gives `none`; any other deny on the type caps the answer at `some`. The same rule applies to Role rules once they can deny `read`.
-
 ### 2.3 Row-level security off
 
 While row-level security is off, a `read` rule whose Scope isn't whole-type doesn't apply ([roles.md, Section 3.1](roles.md#31-the-read-action)). Neither does a rule a constraint narrows to less than the whole type ([rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)). So the answer is then `all` or `none`, never `some`.

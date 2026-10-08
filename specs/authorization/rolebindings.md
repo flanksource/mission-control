@@ -205,7 +205,7 @@ Tenant A's users can run and approve monitoring playbooks on the configs that ar
 
 At least one of them MUST be set: a `constraint` that sets neither is rejected. A missing `constraint` and `null` both mean no constraint, and the binding grants the Role's rules as written.
 
-A constraint applies to every allow rule of the Role, one side at a time:
+A constraint applies to every rule of the Role, one side at a time:
 
 - With `resource`, an operation's resource must be in the rule's `resource` Scope **and** the constraint's.
 - With `target`, an operation's target must be in the rule's `target` Scope **and** the constraint's.
@@ -220,7 +220,6 @@ A binding always grants its whole Role. A constraint doesn't choose among its ru
 - The binding says which Role is granted, and the constraint only says where. Which actions are granted is still read from the Role alone (`overview.md`: actions only live in Roles).
 - A rule added to the Role later is narrowed like the others as soon as the Role is stored, without the binding being updated. If the constraint can't narrow it, it doesn't apply through the binding, and the binding reports it (Section 3.2). It's never granted as written.
 - Renaming a rule doesn't affect the Role's bindings.
-- Deny rules are never narrowed, since narrowing a deny lets through what it used to block. They apply in full whenever the Role is valid, whatever the constraint does to the allow rules (Section 4).
 
 To grant only some rules of a Role, put them in a Role of their own and bind that.
 
@@ -235,7 +234,7 @@ Kubernetes and GCP IAM narrow a binding as a whole too: a RoleBinding limits a C
 
 ### 3.2 Which rules a constraint narrows
 
-A constraint can't widen a rule: it narrows each input to the resources in both Scopes, and a resource is in the constraint's Scope by the usual membership rule (`scopes.md`, Section 4). For each allow rule, and each side the constraint sets:
+A constraint can't widen a rule: it narrows each input to the resources in both Scopes, and a resource is in the constraint's Scope by the usual membership rule (`scopes.md`, Section 4). For each rule, and each side the constraint sets:
 
 | The rule's input on that side          | Types both Scopes select | Effect on the rule                                     |
 | -------------------------------------- | ------------------------ | ------------------------------------------------------ |
@@ -252,7 +251,7 @@ For `read`, a constraint's Scope narrows a type to all of it when it has a whole
 
 Two rules close the gaps:
 
-- **A rule that no side narrows doesn't apply through the binding.** That's a `read` rule under a constraint that only sets `target`. Leaving it as written would grant the subjects every resource of the rule, the leak Section 3.1 rules out. So a constraint never leaves an allow rule un-narrowed: either it narrows the rule, or the rule doesn't apply.
+- **A rule that no side narrows doesn't apply through the binding.** That's a `read` rule under a constraint that only sets `target`. Leaving it as written would grant the subjects every resource of the rule, the leak Section 3.1 rules out. So a constraint never leaves a rule un-narrowed: either it narrows the rule, or the rule doesn't apply.
 - **A type the input can't carry is ignored for that input.** A Scope of tenant A's configs and playbooks can be a constraint's `target` even though a target is never a playbook. Unlike a rule, a constraint may use part of a Scope: a rule's Scope is the grant, so a type the action can't use means the rule is wrong, while a constraint's Scope is a boundary, and a boundary that covers more than one input needs is harmless. This lets one Scope per tenant serve every input of every Role.
 
 The narrowed input must still be enforceable for the rule's action, by the same requirements the rule's own Scope meets (`roles.md`, Sections 2 and 3.1). A constraint isn't a way around them. They're checked on the constraint's targets of the types both Scopes select, and only those: a target of another type never narrows the rule, so it's never checked against the rule's action. The playbook target in `tenant-a` (Section 3.3) is never checked against `read`, although `read` accepts playbooks, because `read-production`'s Scope selects no playbook. Where the checked targets don't meet the requirements, the rule doesn't apply through the binding:
@@ -260,13 +259,11 @@ The narrowed input must still be enforceable for the rule's action, by the same 
 - **`create`, `update`, `delete`.** These are only checked on all resources of a type (`roles.md`, Section 2), so a constraint can't narrow them within a type: the checked targets MUST be whole-type targets. It can still drop types: on a rule whose Scope selects every config and every component, a constraint whose Scope selects every config grants the action on configs only.
 - **`read`.** Any checked target is accepted, since membership is decided by the resource alone (`scopes.md`, Section 4.3), except that connections MUST be whole-type targets (`roles.md`, Section 3.1). If a checked target isn't a whole-type target, the rule needs row-level security even when its own Scope doesn't: while it's off, the rule doesn't apply through the binding, with reason `RowLevelSecurityRequired`. It applies again when row-level security is enabled, without the binding being re-applied.
 
-Deny rules aren't narrowed, so none of this applies to them.
-
 #### Reporting
 
-A binding reports the allow rules that don't apply through it. Its `AllRulesApply` condition is `True` when every allow rule applies, and `False` with a message naming each rule that doesn't and why. The Role's status lists the bindings whose `AllRulesApply` is `False` (`roles.md`, Section 6), and the response to a Role update through the API carries the same list. A binding with that condition is `Ready=True` while at least one allow rule applies through it, and `Ready=False` once none does (Section 4). Its deny rules apply either way.
+A binding reports the rules that don't apply through it. Its `AllRulesApply` condition is `True` when every rule applies, and `False` with a message naming each rule that doesn't and why. The Role's status lists the bindings whose `AllRulesApply` is `False` (`roles.md`, Section 6), and the response to a Role update through the API carries the same list. A binding with that condition is `Ready=True` while at least one rule applies through it, and `Ready=False` once none does (Section 4).
 
-A rule the constraint can't narrow is reported rather than failing the binding, for two reasons. Rules are added to the Role, and whoever adds one can't see its bindings: failing the binding would turn a rule added to a shared Role into an outage for every tenant, and drop the Role's deny rules with it (Section 4). Reporting keeps what worked working, lowers no guardrail, and still never grants as written. The price is that what a binding grants isn't readable from its Role alone, which is why the Role shows it too.
+A rule the constraint can't narrow is reported rather than failing the binding, for two reasons. Rules are added to the Role, and whoever adds one can't see its bindings: failing the binding would turn a rule added to a shared Role into an outage for every tenant. Reporting keeps what worked working, and still never grants as written. The price is that what a binding grants isn't readable from its Role alone, which is why the Role shows it too.
 
 ### 3.3 Rules of different shapes
 
@@ -344,12 +341,9 @@ A binding is validated against what it references: its Role, and the Scopes its 
 A binding that's wrong on its own is rejected (`overview.md`, "Rejected or not in effect"): no subjects, a `people` entry that isn't an email or `*`, an `oidc.match` that doesn't compile or doesn't return a bool, an empty or wildcard-namespace resource subject, or a `constraint` that sets neither `resource` nor `target`. Everything else is checked against the Role and Scopes, as follows.
 
 - A binding takes effect only once its Role exists and is valid. Until then it's `Ready=False` with the reason and none of its rules apply. There is no previous version to fall back to; the binding is whatever was last written.
-- Its deny rules apply whenever the Role is valid. The constraint never touches them, so nothing about the constraint, a missing Scope included, stops a deny: a constraint failure must never lower a guardrail.
-- Its allow rules apply as the constraint narrows them (Section 3.2). When the Role or a Scope the constraint names changes, is deleted or becomes invalid, or row-level security is turned on or off, each allow rule is checked again. A Scope that's gone or invalid selects nothing (`scopes.md`, Section 7), so no allow rule applies through the binding while that holds. A rule the constraint can't narrow doesn't apply and is reported; the others keep applying.
-- A binding is `Ready=False` when its Role is missing or invalid, when a Scope its constraint names is missing or invalid, or when the Role has allow rules and none applies through the binding. In the last two cases its deny rules still apply. The reason names the cause.
+- Its rules apply as the constraint narrows them (Section 3.2). When the Role or a Scope the constraint names changes, is deleted or becomes invalid, or row-level security is turned on or off, each rule is checked again. A Scope that's gone or invalid selects nothing (`scopes.md`, Section 7), so no rule applies through the binding while that holds. A rule the constraint can't narrow doesn't apply and is reported; the others keep applying.
+- A binding is `Ready=False` when its Role is missing or invalid, when a Scope its constraint names is missing or invalid, or when none of the Role's rules applies through the binding. The reason names the cause.
 - It becomes `Ready=True` again, without being re-applied, as soon as the cause is gone.
-
-A constraint on a Role with no allow rules has no effect.
 
 So a Role and its bindings can be changed in any order. A constraint names no rule, so rules can be added, renamed or removed without touching the bindings: an added rule applies, already narrowed, as soon as the Role is stored, or is reported if the constraint can't narrow it.
 

@@ -35,7 +35,6 @@ spec:
 | `action`            | Yes                   | What may be done (Section 2).                                                                |
 | `resource.scopeRef` | Yes                   | The Scope of resources the action is performed on, e.g. the playbooks to run.                |
 | `target.scopeRef`   | Depends on the action | The Scope of resources the action is performed against, e.g. the configs a playbook runs on. |
-| `deny`              | No                    | Deny the action instead of allowing it.                                                      |
 
 A Scope is a named set of resources (see `scopes.md`). A rule references exactly one Scope per input, by name. A Role MUST have a namespace, and `scopeRef` only names Scopes in it (`overview.md`, "Namespaces"). The resources a Scope selects can be in any namespace.
 
@@ -78,13 +77,13 @@ The intent might be "`echo` on staging, `restart-pod` on production". But the ru
 
 Every action has a contract, defined in code: the resource types it accepts, and whether it takes a target and of which types. An action without a contract can't be used in a rule. The contracts are:
 
-| Action                                                | Resource                                               | Target                             | Can deny |
-| ----------------------------------------------------- | ------------------------------------------------------ | ---------------------------------- | -------- |
-| `read`                                                | Config, Component, Check, Canary, Playbook, Connection | None                               | Not yet  |
-| `create`, `update`, `delete`                          | Config, Component, Canary, Playbook, Connection        | None                               | Yes      |
-| `playbook:run`, `playbook:approve`, `playbook:cancel` | Playbook                                               | Optional: Config, Component, Check | Yes      |
-| `mcp:run`                                             | Playbook                                               | None                               | Yes      |
-| `invoke:<plugin>:<operation>`                         | Config                                                 | None                               | Yes      |
+| Action                                                | Resource                                               | Target                             |
+| ----------------------------------------------------- | ------------------------------------------------------ | ---------------------------------- |
+| `read`                                                | Config, Component, Check, Canary, Playbook, Connection | None                               |
+| `create`, `update`, `delete`                          | Config, Component, Canary, Playbook, Connection        | None                               |
+| `playbook:run`, `playbook:approve`, `playbook:cancel` | Playbook                                               | Optional: Config, Component, Check |
+| `mcp:run`                                             | Playbook                                               | None                               |
+| `invoke:<plugin>:<operation>`                         | Config                                                 | None                               |
 
 For `playbook:run`, `target` is optional. A rule without it matches only runs with no target. A rule with `target.scopeRef` matches only runs on Configs, Components or Checks in that Scope (Section 4.1).
 
@@ -93,19 +92,18 @@ For `playbook:run`, `target` is optional. A rule without it matches only runs wi
   - A pattern grants actions added later. If the `kubernetes-logs` plugin ships a new `exec-shell` operation, `invoke:kubernetes-logs:*` would grant it without anyone reviewing the Role.
 - A plugin action isn't checked against the installed plugins: plugins are installed and upgraded often, and a Role mustn't break when one is. A rule on an operation no plugin declares matches nothing until one does.
 - `create`, `update` and `delete` are only checked on all resources of a type, so their Scope MUST consist of whole-type targets only (`scopes.md`, Section 5.2).
-- Deny rules on `read` are rejected for now, because they couldn't be enforced on listings: a `read` rule covering a type whole lists it unfiltered (Section 3.1). A deny on reading production configs would still let a subject bound to `viewer` list them.
 
 An operation may make more than one check. For example, running a playbook on a config also checks `read` on that config. Section 4.3 lists every check each operation makes; a rule never grants the other checks implicitly.
 
 ### 2.1 Why one action per rule
 
-A rule has exactly one action, because the action decides what the rest of the rule means. Its contract fixes the resource types the `resource` Scope may select, whether the rule takes a `target` and of which types, what its Scopes must meet (Section 3), whether it can be a deny, and how it's enforced. A rule with several actions would need one Scope to meet several contracts at once. One action per rule also lets an invalid rule name the action that's wrong. To grant several actions on the same Scope, write a rule for each.
+A rule has exactly one action, because the action decides what the rest of the rule means. Its contract fixes the resource types the `resource` Scope may select, whether the rule takes a `target` and of which types, what its Scopes must meet (Section 3), and how it's enforced. A rule with several actions would need one Scope to meet several contracts at once. One action per rule also lets an invalid rule name the action that's wrong. To grant several actions on the same Scope, write a rule for each.
 
 ## 3. Which Scopes a rule accepts
 
 Every type a Scope selects MUST be accepted by the input it fills (Section 2). Otherwise the rule is invalid, and so is the Role: it's `Ready=False` and none of its rules apply (Section 6). A rule never uses part of a Scope.
 
-Whether a Scope fits depends on the Scope, which can change after the Role is written, so a Role whose Scope doesn't fit is stored `Ready=False`, not rejected (`overview.md`, "Rejected or not in effect"). The same holds for every other requirement a rule's Scopes must meet (Sections 2 and 3.1). What a rule says on its own is checked when it's written, and a Role that fails it is rejected: an unknown action or a pattern, a deny on an action that can't be denied, a `target` on an action that takes none, a rule name used twice, or a reserved Role name.
+Whether a Scope fits depends on the Scope, which can change after the Role is written, so a Role whose Scope doesn't fit is stored `Ready=False`, not rejected (`overview.md`, "Rejected or not in effect"). The same holds for every other requirement a rule's Scopes must meet (Sections 2 and 3.1). What a rule says on its own is checked when it's written, and a Role that fails it is rejected: an unknown action or a pattern, a `target` on an action that takes none, or a rule name used twice.
 
 Given these Scopes:
 
@@ -213,7 +211,7 @@ It doesn't match running `restart-pod` on a production config, or running any pl
 | Set           | In the Scope               | Yes     |
 | Set           | None, or outside the Scope | No      |
 
-So a rule without a target only covers operations without one. To cover running on any config, use a Scope of all configs as the target. The same holds for deny rules.
+So a rule without a target only covers operations without one. To cover running on any config, use a Scope of all configs as the target.
 
 ### 4.2 Resources and targets stay paired
 
@@ -242,7 +240,7 @@ This allows `echo` on staging and `restart` on production, but not `echo` on pro
 A rule is matched against the actual resource and target of an operation:
 
 - The operation MUST name its resource, and its target if it has one. A missing or unknown target is never treated as "no target".
-- An operation that doesn't fit the action, such as a target of the wrong type, matches no allow rule and every deny rule.
+- An operation that doesn't fit the action, such as a target of the wrong type, matches no rule.
 - An entry point may require an extra permission, e.g. `mcp:run` for playbooks run through MCP. It never replaces the check of the operation itself.
 
 A check carries only the resources its action's contract can match (Section 2). An action without a target carries the resource alone, even when the operation it gates has one. So each operation makes these checks:
@@ -256,50 +254,20 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Invoke a plugin operation on config C | `invoke:<plugin>:<operation>`, then `read`  | C, then C       | None                              |
 | Open resource X                       | `read`                                      | X               | None                              |
 
-### 4.4 Open question: deny rules without a target
+## 5. Combining rules
 
-**TODO:** This Role looks like it stops everyone from running `restart-pod`, but it doesn't:
+Across all the rules that apply to a subject, from every Role they're bound to:
 
-```yaml
-apiVersion: mission-control.flanksource.com/v1
-kind: Role
-metadata:
-  name: no-restart
-  namespace: default
-spec:
-  description: Only on-call may restart pods
-  rules:
-    - name: deny-restart
-      action: playbook:run
-      deny: true
-      resource:
-        scopeRef: restart-pod-playbook
-```
-
-The rule has no target, so it only covers runs of `restart-pod` without a resource (Section 4.1). Anyone otherwise allowed to run `restart-pod` on a pod config can still do it. Once a run must fit its playbook (`specs/playbooks.md`), `restart-pod` can't run without a resource at all, and this rule blocks nothing. Nothing tells the author.
-
-Find a design that removes this trap. What's been considered so far:
-
-- **Make a deny rule without a target cover every target.** Rejected: allow and deny rules would read the same field differently, which users would have to know in advance.
-- **Add `none` and `any` values to `target`.** Rejected: `target: {none: true}` is confusing to read.
-- **Make `target` mandatory on `playbook:run`.** A ban then names every target, e.g. a Scope selecting every config, component and check. But a rule can no longer cover a playbook that runs on its own, like `create-namespace`. A separate action for those playbooks, e.g. `playbook:run-standalone`, would fill that gap; `playbook:approve` and `playbook:cancel` would need the same split.
-- **Ask two questions per run**, "may this person run the playbook?" and "may they run it on this resource?". Rejected: a deny rule without a target would ban the playbook everywhere, which is again something users would have to know in advance.
-
-## 5. Allow and deny
-
-Across all the rules that apply to a subject, from every Role they're bound to, the same rule decides:
-
-- An operation is allowed when an allow rule matches and no deny rule does.
-- A deny always wins: a deny on `delete` stops a subject even though the `editor` Role they're bound to allows it. That includes subjects bound to `admin`.
+- An operation is allowed when any rule matches it, and refused otherwise.
 - Order doesn't matter, and it doesn't matter which Role a rule comes from.
-- Roles only add access. A Role can't remove access another Role grants, except with a deny.
+- Roles only add access. No Role can remove access another Role grants: rules only allow (`overview.md`, "Access").
 - Row filters follow the same rule: a subject's rows are the ones any of their `read` rules allows (Section 3.1).
 
 ## 6. How changes take effect
 
 A Role is validated against what it references: its rules, and the Scopes they name. It's never validated against the bindings that reference it. A Role change goes through even when a binding's constraint can't narrow the new rule: that rule doesn't apply through the binding, the rest of the Role does, and the binding reports it (`rolebindings.md`, Sections 3.2 and 4). The Role's status lists the bindings reporting one of its rules. That's information, not validation: it doesn't affect whether the Role is valid.
 
-A Role that's wrong on its own is rejected (Section 3). Otherwise it's stored, and takes effect only when all its rules are valid. One invalid rule makes the whole Role invalid: it's `Ready=False` with the reason, and none of its rules apply, allow or deny. There is no previous version to fall back to; the Role is whatever was last written.
+A Role that's wrong on its own is rejected (Section 3). Otherwise it's stored, and takes effect only when all its rules are valid. One invalid rule makes the whole Role invalid: it's `Ready=False` with the reason, and none of its rules apply. There is no previous version to fall back to; the Role is whatever was last written.
 
 A Role becomes invalid when it's written with an invalid rule, when a Scope it references changes into one a rule can't accept, is deleted, or becomes invalid itself (`scopes.md`, Section 7), or when row-level security is turned off while a rule needs it (Section 3.1). It becomes valid again, and its rules apply again, as soon as the cause is gone, without being re-applied.
 
@@ -307,7 +275,6 @@ A Role becomes invalid when it's written with an invalid rule, when a Scope it r
 
 Because one broken rule silences the whole Role, a rule is only as reliable as the rules beside it. Prefer several small Roles over one large one, and bind them together:
 
-- Put a deny rule in its own Role, with Scopes nothing else edits. A deny that shares a Role with an allow rule stops denying whenever that allow rule breaks.
 - Group rules by the Scopes they share, so a Scope change invalidates one Role, not every Role.
 - After adding a rule to a Role that's bound with a constraint, check the Role's status for bindings the rule doesn't apply through (Section 6).
 

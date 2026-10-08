@@ -321,7 +321,7 @@ An agent change MAY take effect shortly after it's saved rather than with it. Un
 
 An operation that makes several checks (`roles.md`, Section 4.3) MUST make all of them against the membership of one moment, for every resource the operation involves. It MUST NOT see a Scope's previous membership in one check and its new membership in another.
 
-**Why.** Each check alone sees a real state, but two checks on either side of a change can together allow what neither state allows. E.g. a subject reads configs through Scope S, may run playbook P on any config, and is denied running P on configs in S. S is changed to drop config C. Before, C is readable and running P on it is denied; after, C isn't readable. If the `read` check sees S before the change and the `playbook:run` check sees it after, both pass, and P runs on C.
+**Why.** Each check alone sees a real state, but two checks on either side of a change can together allow what neither state allows. E.g. a subject may run playbook P on configs tagged `env=dev`, and may read configs tagged `env=prod`. Config C's tag changes from `env=dev` to `env=prod`. Before, P may run on C but C can't be read; after, C can be read but P may not run on it. If the `playbook:run` check sees C before the change and the `read` check sees it after, both pass, and P runs on C.
 
 ## 8. Operations
 
@@ -338,4 +338,4 @@ A Scope can't intersect two targets, exclude resources, or list names (Sections 
 
 ### 8.2 Across Scopes
 
-Two Scopes are combined in one place only: a RoleBinding constraint, which narrows a rule's Scope to the resources in both (`rolebindings.md`, Section 3). Combining grants (allow rules adding up, deny rules refusing) is specified in `roles.md`, Section 5.
+Two Scopes are combined in one place only: a RoleBinding constraint, which narrows a rule's Scope to the resources in both (`rolebindings.md`, Section 3). Combining grants is specified in `roles.md`, Section 5.

@@ -90,14 +90,17 @@ The word appears twice, with different meanings:
 
 ## Access
 
-**A subject may perform an action on a resource when a RoleBinding that selects the subject gives it a Role with an allow rule matching the action and resource, and no deny rule matching them.** Nothing else grants or refuses anything, apart from deprecated Permissions (`permissions.md`).
+**A subject may perform an action on a resource when a RoleBinding that selects the subject gives it a Role with a rule matching the action and resource.** Otherwise it's refused. Nothing else grants anything, apart from deprecated Permissions (`permissions.md`).
 
 - **Every subject is checked the same way.** A person, a team member, an agent, a user of an external identity provider and a playbook acting on its own are all subjects. What kind of subject they are only decides which RoleBinding subjects can select them (`rolebindings.md`, Section 2). It never decides what they may do.
 - **Signing in grants nothing.** A new person, an invited person and a new agent can do nothing until a RoleBinding selects them.
 - **Listings follow the same grants.** A subject lists every resource of a type their `read` rules cover whole, the resources their `read` rules select where they cover part of it, and is refused where none applies (`collection-access.md`).
-- **Deny wins, for every subject.** An admin is a subject bound to the `admin` Role, so a deny rule that selects them applies to them too.
+- **Rules only allow.** There are no deny rules. Adding a binding never removes access, and removing one never adds any. To keep something from a subject, don't grant it: bind the narrower Role to the narrower group.
+- **Admins are subjects like any other.** An admin is a subject bound to the `admin` Role. With no deny rules, nothing can take an admin's access away except removing their binding.
 
-_Why:_ every exception is something a reader of a Role or RoleBinding can't see. One rule, with no kinds of subject and no access outside the resources, means what's written is what's granted, and an access review only has to read RoleBindings.
+_Why:_ every exception is something a reader of a Role or RoleBinding can't see. One rule, with no kinds of subject, no access outside the resources and no denies, means what's written is what's granted, and an access review only has to read the allow rules RoleBindings grant.
+
+_Why no deny rules:_ with nothing allowed by default, every restriction can be written as a narrower grant. A deny adds a second way to read every rule, a way to lock admins out, and traps such as a deny that matches nothing (Kubernetes RBAC, GitHub and Postgres are allow-only for the same reasons).
 
 ### Shipped Roles
 
@@ -116,7 +119,7 @@ Mission Control writes them when it starts, and again whenever the set of action
 
 Mission Control's configuration MAY declare RoleBindings, e.g. the first admins, or every agent bound to `agent`. Mission Control writes them when it starts, so they're back in place after a restart even if they were deleted.
 
-_Why:_ someone has to be able to create the first RoleBinding, and a deleted admin binding has to come back without going through Mission Control's API. Configured bindings are RoleBindings like any other, checked by the same rule, deny included. A deny that locks every admin out is undone through Kubernetes or the database, like any other misconfiguration.
+_Why:_ someone has to be able to create the first RoleBinding, and a deleted admin binding has to come back without going through Mission Control's API. Configured bindings are RoleBindings like any other.
 
 ### Open questions
 
@@ -133,8 +136,8 @@ Scopes, Roles, RoleBindings and ExternalIdentityProviders are managed in one of 
 
 An invalid object is either rejected or stored `Ready=False`. Which one depends on why it's invalid:
 
-- **Rejected**: the object is wrong on its own, so no change elsewhere can make it valid. For example, a Scope target with two types or `namespace: "*"`; a Role with two rules of the same name, `action: playbook:*`, a deny on `read`, or a `target` on an action that takes none; a RoleBinding with no subjects, a `people` entry that isn't an email, or an `oidc.match` that doesn't compile; an ExternalIdentityProvider with an `http` issuer or `HS256`.
-- **Stored `Ready=False`**: the object is valid on its own, but not together with something it references, or with Mission Control's settings. For example, a Scope whose `agent` isn't registered; a Role whose Scope doesn't exist, is invalid, or selects types its rule can't use, or whose rule needs row-level security while it's off; a RoleBinding whose Role doesn't exist or is invalid, or whose constraint leaves none of the Role's allow rules applying; an ExternalIdentityProvider whose `issuer` or `name` another provider already uses.
+- **Rejected**: the object is wrong on its own, so no change elsewhere can make it valid. For example, a Scope target with two types or `namespace: "*"`; a Role with two rules of the same name, `action: playbook:*`, a `deny` field, or a `target` on an action that takes none; a RoleBinding with no subjects, a `people` entry that isn't an email, or an `oidc.match` that doesn't compile; an ExternalIdentityProvider with an `http` issuer or `HS256`.
+- **Stored `Ready=False`**: the object is valid on its own, but not together with something it references, or with Mission Control's settings. For example, a Scope whose `agent` isn't registered; a Role whose Scope doesn't exist, is invalid, or selects types its rule can't use, or whose rule needs row-level security while it's off; a RoleBinding whose Role doesn't exist or is invalid, or whose constraint leaves none of the Role's rules applying; an ExternalIdentityProvider whose `issuer` or `name` another provider already uses.
 
 An object stored `Ready=False` takes effect, without being re-applied, as soon as what it references fits it. That's what lets related objects be applied in any order: a RoleBinding can be applied before its Role, and a Role before its Scopes.
 
