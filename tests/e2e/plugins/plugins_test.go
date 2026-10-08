@@ -63,4 +63,57 @@ var _ = ginkgo.Describe("Plugins E2E", ginkgo.Ordered, func() {
 			Expect(resp.StatusCode).To(Equal(http.StatusUnauthorized), resp.Body)
 		}
 	})
+
+	ginkgo.It("authorizes token-bearing /invoke and /proxy plugin operations", func() {
+		otherConfig := dummy.LogisticsUIPodConfig
+
+		ginkgo.By("ui-token is refused for a user without config read")
+		resp, _ := mintUIToken(noConfigUser.Email, config.ID.String())
+		Expect(resp.StatusCode).To(Equal(http.StatusForbidden), resp.Body)
+
+		resp, goodToken := mintUIToken(goodUser.Email, config.ID.String())
+		Expect(resp.StatusCode).To(Equal(http.StatusOK), resp.Body)
+
+		resp, noInvokeToken := mintUIToken(noInvokeUser.Email, config.ID.String())
+		Expect(resp.StatusCode).To(Equal(http.StatusOK), resp.Body)
+
+		for _, endpoint := range []struct {
+			name   string
+			method string
+			path   func(configID string) string
+			body   []byte
+		}{
+			{
+				name:   "invoke",
+				method: http.MethodPost,
+				path: func(configID string) string {
+					return fmt.Sprintf("/api/plugins/%s/invoke/%s?config_id=%s", pluginName, pluginOperation, configID)
+				},
+				body: []byte(`{}`),
+			},
+			{
+				name:   "proxy",
+				method: http.MethodGet,
+				path: func(configID string) string {
+					return fmt.Sprintf("/api/plugins/%s/proxy/%s?config_id=%s", pluginName, pluginOperation, configID)
+				},
+			},
+		} {
+			ginkgo.By(endpoint.name + " allows a token whose user has config read and plugin invoke")
+			resp := doPluginTokenRequest(endpoint.method, endpoint.path(config.ID.String()), endpoint.body, goodToken)
+			Expect(resp.StatusCode).To(Equal(http.StatusOK), resp.Body)
+
+			ginkgo.By(endpoint.name + " rejects a token whose user lacks plugin invoke")
+			resp = doPluginTokenRequest(endpoint.method, endpoint.path(config.ID.String()), endpoint.body, noInvokeToken)
+			Expect(resp.StatusCode).To(Equal(http.StatusForbidden), resp.Body)
+
+			ginkgo.By(endpoint.name + " rejects a token used against a config its user cannot read")
+			resp = doPluginTokenRequest(endpoint.method, endpoint.path(otherConfig.ID.String()), endpoint.body, goodToken)
+			Expect(resp.StatusCode).To(Equal(http.StatusForbidden), resp.Body)
+
+			ginkgo.By(endpoint.name + " rejects an invalid token")
+			resp = doPluginTokenRequest(endpoint.method, endpoint.path(config.ID.String()), endpoint.body, "not-a-token")
+			Expect(resp.StatusCode).To(Equal(http.StatusUnauthorized), resp.Body)
+		}
+	})
 })

@@ -63,6 +63,11 @@ func pluginUIToken(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in"))
 	}
 
+	// Never issue a token for a config the user cannot see.
+	if err := machinery.EnforceConfigReadPermission(ctx, ctx.Subject(), configID); err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
 	roles, err := pluginRolesForUser(ctx, entry, configID)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
@@ -161,26 +166,14 @@ func operationHTTPProxy(c echo.Context) error {
 	var userID string
 	invocationToken := c.Request().Header.Get(api.InvocationTokenHTTPHeader)
 	if invocationToken != "" {
-		// Proxied operations arriving on an agent already carry an upstream-minted
-		// invocation token. Validate and reuse it rather than minting an agent-signed token.
-		claims, err := plugin.ValidateRequestInvocationToken(c.Request().Context(), invocationToken, entry.ID)
+		claims, err := machinery.AuthorizeInvocationToken(ctx, invocationToken, entry, op, configID)
 		if err != nil {
-			return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("invalid plugin invocation token: %v", err))
+			return dutyAPI.WriteError(c, err)
 		}
 
 		subject = claims.Subject
 		userID = claims.User
 		roles = claims.Roles
-
-		// A UI-minted token (local/remote plugins) is issued without an
-		// operation-level check, so authorize the operation here against the
-		// token's subject. Proxied tokens were already authorized upstream and
-		// this agent lacks the RBAC data to re-check.
-		if entry.Kind != api.PluginKindProxied {
-			if err := machinery.EnforceInvokePermission(ctx, subject, entry, op, configID); err != nil {
-				return dutyAPI.WriteError(c, err)
-			}
-		}
 	} else {
 		// No invocation token was supplied, so authorize locally before minting one.
 		user := ctx.User()
