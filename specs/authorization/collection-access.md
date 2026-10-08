@@ -1,6 +1,6 @@
 # Collection-level Access Specification
 
-This specifies how Mission Control answers whether a subject may read resources of a type, as opposed to one resource, and what every listing, search, page and derived credential does with that answer.
+This specifies how Mission Control answers whether a subject may act on resources of a type, as opposed to one resource, and what every operation, listing, search, page and derived credential does with that answer.
 
 The terms **MUST**, **MUST NOT** and **MAY** describe requirements.
 
@@ -9,7 +9,7 @@ The terms **MUST**, **MUST NOT** and **MAY** describe requirements.
 Authorization answers two different questions about reading:
 
 - **Resource-level:** may this subject read _this_ config? The resource is in hand, and the subject's `read` rules are matched against it ([roles.md, Section 4](roles.md#4-matching)).
-- **Collection-level:** may this subject read configs _at all_? Nothing is in hand. Listings, searches, the pages of the UI and derived credentials all ask it before any resource is known.
+- **Collection-level:** may this subject read configs _at all_? Nothing is in hand. Listings, searches, the pages of the UI and derived credentials all ask it before any resource is known, and every operation on the type is gated by it (Section 3.1).
 
 A `read` rule on a Scope that selects some configs answers the first directly, and the second only by implication. This document makes the implication explicit, so that every place that asks the collection-level question gets the same answer.
 
@@ -87,6 +87,32 @@ The answer decides every collection-level operation on the type:
 - A `none` refusal is the same for every id of the type, whether or not a resource with that id exists, so it reveals nothing about which resources exist ([Section 6](#6-what-a-subject-may-learn)). A `some` subject gets the not-found response for a resource outside their grants, the same as for an id that doesn't exist.
 - A search is a search however it's filtered. A search limited to one type skips the type when the answer is `none` and returns an empty result; it never returns `403`. Only an endpoint that lists one type refuses.
 - A page takes its type's answer ([Section 5](#5-pages-and-types)).
+
+### 3.1 Gates
+
+Every operation that reads, creates, updates or deletes resources of a type is let in or refused by the subject's answer for that type and action. No such operation is decided by a check of the type as a whole object. This covers configs, components, canaries, playbooks and connections. Checks take their canary's answer ([Section 5](#5-pages-and-types)). Data that belongs to a resource, such as a config's changes, analyses and relationships, takes its resource's type.
+
+Each operation is gated at the least answer it can serve:
+
+| Gate   | Used by an operation that                                           | `all` | `some`                       | `none`                       |
+| ------ | ------------------------------------------------------------------- | ----- | ---------------------------- | ---------------------------- |
+| `some` | enforces the subject's grants on every resource it returns or acts on | In    | In                           | Refused with `403 Forbidden` |
+| `all`  | doesn't                                                             | In    | Refused with `403 Forbidden` | Refused with `403 Forbidden` |
+
+An operation enforces the subject's grants on a resource when it reads the resource through the subject's row filters ([roles.md, Section 3.1](roles.md#31-the-read-action)), or checks the subject's rules against the resource in hand ([roles.md, Section 4.3](roles.md#43-what-an-operation-must-provide)).
+
+- An operation gated at `some` MUST NOT return or act on a resource without enforcing the subject's grants on it. A resource read from a cache shared between subjects, or from another service that doesn't apply the subject's grants, is read without them.
+- An operation that can't enforce the subject's grants, e.g. one served by another service, MUST be gated at `all`.
+- A search across types isn't gated. It leaves out the types answered `none` and filters the rest (Section 3).
+- Other actions, such as `playbook:run` or `invoke:<plugin>:<operation>`, are always checked against the resource in hand ([roles.md, Section 4.3](roles.md#43-what-an-operation-must-provide)), so they need no gate.
+- Built-in access isn't checked on its own. It counts towards the answer (Section 2), like any grant.
+- What no rule can select, such as RBAC objects, the Kubernetes proxy, logs, notifications or database tables of no resource type, isn't a resource type. It's checked against its object, which only built-in roles and Permissions grant.
+
+**Why gate by the answer.** A check of the type as a whole object can't see a grant or a deny on part of the type. A deny on production configs doesn't stop a check of "read configs", which every viewer passes, so an operation behind such a check shows the denied configs. The answer accounts for both: a partial grant or deny is `some`, and an operation that can't filter refuses it. The server and the UI then decide from the same answer (Section 4).
+
+**Why `some` is refused at an `all` gate.** Letting the subject in would show them the resources their grants leave out. The operations gated at `some` still serve them.
+
+How operations declare their gates is the design's business (`design/operation-gates.md`).
 
 ## 4. One answer
 

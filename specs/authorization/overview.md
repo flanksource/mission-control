@@ -10,7 +10,7 @@ Mission Control decides who may do what with three resources:
 
 An ExternalIdentityProvider lets an external application's users sign in with its own tokens, so RoleBindings can grant them Roles (`external-identity-providers.md`).
 
-`collection-access.md` cuts across the three: it says how a subject's grants decide whether they may read a type at all, which is what listings, searches and the pages of the UI ask.
+`collection-access.md` cuts across the three: it says how a subject's grants decide whether they may act on a type at all. That answer gates every operation on the type, and is what listings, searches and the pages of the UI ask.
 
 Each has one job. Resource selectors only live in Scopes, actions only in Roles, and subjects only in RoleBindings.
 
@@ -94,7 +94,7 @@ Nothing is allowed unless a rule allows it, apart from the built-in access every
 
 No rule applies to an admin, deny rules included, however a RoleBinding or Permission names them: as a person, through a team or through a built-in role. A deny rule is a guardrail for everyone else. To restrict someone, don't make them an admin.
 
-Built-in access is defined in code, not in these resources. The built-in roles are described in `roles.md`, Section 7. Today it's what the built-in `viewer` role can do: `read` on the catalog, topology, canaries, playbooks, views, people, applications and the public database tables, as whole types. Two things follow from it:
+Built-in access is defined in code, not in these resources. The built-in roles are described in `roles.md`, Section 7. It counts towards a subject's answer for each resource type, like any grant, and operations on resource types are gated by that answer, never by the built-in role itself (`collection-access.md`, Section 3.1). Today it's what the built-in `viewer` role can do: `read` on the catalog, topology, canaries, playbooks, views, people, applications and the public database tables, as whole types. Two things follow from it:
 
 - It's granted on whole types, and its database listings aren't filtered by row for anyone but guests. That's why deny rules on `read` aren't supported yet (`roles.md`, Section 2): a deny couldn't be enforced on those listings.
 - It only applies to Mission Control's own users. Users of an external identity provider have no built-in access, and list only what their `read` rules allow (`roles.md`, Section 3.1).
