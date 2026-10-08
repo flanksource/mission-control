@@ -78,20 +78,27 @@ func ValidateInvocationToken(tokenString string) (*InvocationTokenClaims, error)
 // operation request where the route already determines the expected plugin. If
 // the request came from upstream over the trusted tunnel, the upstream JWK is
 // used; otherwise the local signing key is used.
-func ValidateRequestInvocationToken(_ context.Context, token string, pluginID uuid.UUID) (*InvocationTokenClaims, error) {
-	claims, err := ValidateInvocationToken(token)
+//
+// upstream reports whether the token was signed by the upstream rather than by
+// this instance.
+func ValidateRequestInvocationToken(_ context.Context, token string, pluginID uuid.UUID) (claims *InvocationTokenClaims, upstream bool, err error) {
+	claims, err = ValidateInvocationToken(token)
 	if err == nil {
 		if claims.Plugin != pluginID {
-			return nil, fmt.Errorf("plugin invocation token is for plugin %q, not %q", claims.Plugin, pluginID)
+			return nil, false, fmt.Errorf("plugin invocation token is for plugin %q, not %q", claims.Plugin, pluginID)
 		}
-		return claims, nil
+		return claims, false, nil
 	}
 
 	if api.UpstreamConf.JWK != "" {
-		return validateInvocationTokenWithJWK(token, api.UpstreamConf.JWK, &pluginID)
+		claims, err = validateInvocationTokenWithJWK(token, api.UpstreamConf.JWK, &pluginID)
+		if err != nil {
+			return nil, false, err
+		}
+		return claims, true, nil
 	}
 
-	return nil, err
+	return nil, false, err
 }
 
 // ValidateHostInvocationToken validates tokens presented by a plugin to the host

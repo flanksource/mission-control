@@ -76,11 +76,9 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*api.InvokeResponse,
 	subject := req.Subject
 	token := req.InvocationToken
 	if token != "" {
-		// Proxied operations arriving on an agent already carry an upstream-minted
-		// invocation token. Validate and reuse it rather than minting an agent-signed token.
-		claims, err := plugin.ValidateRequestInvocationToken(req.Context, token, entry.ID)
+		claims, err := AuthorizeInvocationToken(ctx, token, entry, req.Operation, req.ConfigItemID)
 		if err != nil {
-			return nil, entry, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "invalid plugin invocation token: %v", err)
+			return nil, entry, err
 		}
 		subject = claims.Subject
 		req.Roles = claims.Roles
@@ -170,33 +168,74 @@ func SelectorMatches(ctx dutyContext.Context, entry *plugin.Entry, configID stri
 	return selector.Matches(item)
 }
 
-func EnforceInvokePermission(ctx dutyContext.Context, subject string, entry *plugin.Entry, op, configID string) error {
-	if subject == "" {
-		return ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in")
+// AuthorizeInvocationToken validates a caller-supplied invocation token for the
+// plugin and authorizes the operation against the token's subject.
+//
+// A token only proves who the caller is, not what they may do: tokens minted for
+// a plugin UI carry no operation or config scope. So the subject must hold read
+// on the config and invoke:<plugin>:<op>, exactly as a session-authenticated
+// caller would. The only exception is a token signed by the upstream and
+// received over the agent tunnel: the upstream already authorized the call and
+// the agent lacks the RBAC data to re-check it.
+func AuthorizeInvocationToken(ctx dutyContext.Context, token string, entry *plugin.Entry, op, configID string) (*plugin.InvocationTokenClaims, error) {
+	claims, upstream, err := plugin.ValidateRequestInvocationToken(ctx, token, entry.ID)
+	if err != nil {
+		return nil, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("invalid plugin invocation token: %v", err)
 	}
+	if upstream {
+		return claims, nil
+	}
+	if err := EnforceInvokePermission(ctx, claims.Subject, entry, op, configID); err != nil {
+		return nil, err
+	}
+	return claims, nil
+}
 
-	attr := &models.ABACAttribute{}
-	if configID != "" {
-		item, err := query.ConfigItemFromCache(ctx, configID)
-		if err != nil {
-			return ctx.Oops().Wrapf(err, "get config item %s", configID)
-		}
-		attr.Config = item
-
-		// Both checks see the config's Scope membership of one moment
-		if ctx, err = membership.ForOperation(ctx, dutyRBAC.MembershipRefs(attr)...); err != nil {
-			return ctx.Oops().Wrapf(err, "read scope membership of config %s", configID)
-		}
-
-		if !dutyRBAC.HasPermission(ctx, subject, attr, policy.ActionRead) {
-			return ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("not allowed to read config %s", configID)
-		}
+func EnforceInvokePermission(ctx dutyContext.Context, subject string, entry *plugin.Entry, op, configID string) error {
+	ctx, attr, err := authorizeConfigRead(ctx, subject, configID)
+	if err != nil {
+		return err
 	}
 
 	if CanInvokePluginOperation(ctx, subject, attr, entry.Name, op) {
 		return nil
 	}
 	return ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("not allowed to invoke plugin %s operation %s", entry.Name, op)
+}
+
+// EnforceConfigReadPermission ensures the subject is logged in and can read the config.
+func EnforceConfigReadPermission(ctx dutyContext.Context, subject, configID string) error {
+	_, _, err := authorizeConfigRead(ctx, subject, configID)
+	return err
+}
+
+// authorizeConfigRead checks that the subject can read the config and returns a
+// context pinned to the config's Scope membership, so that later checks on the
+// same attribute see the same membership.
+func authorizeConfigRead(ctx dutyContext.Context, subject, configID string) (dutyContext.Context, *models.ABACAttribute, error) {
+	if subject == "" {
+		return ctx, nil, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in")
+	}
+
+	attr := &models.ABACAttribute{}
+	if configID == "" {
+		return ctx, attr, nil
+	}
+
+	item, err := query.ConfigItemFromCache(ctx, configID)
+	if err != nil {
+		return ctx, nil, ctx.Oops().Wrapf(err, "get config item %s", configID)
+	}
+	attr.Config = item
+
+	if ctx, err = membership.ForOperation(ctx, dutyRBAC.MembershipRefs(attr)...); err != nil {
+		return ctx, nil, ctx.Oops().Wrapf(err, "read scope membership of config %s", configID)
+	}
+
+	if !dutyRBAC.HasPermission(ctx, subject, attr, policy.ActionRead) {
+		return ctx, nil, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("not allowed to read config %s", configID)
+	}
+	return ctx, attr, nil
 }
 
 func CanInvokePluginOperation(ctx dutyContext.Context, subject string, attr *models.ABACAttribute, pluginName, op string) bool {

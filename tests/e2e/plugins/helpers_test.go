@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 	"github.com/flanksource/duty/types"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
+	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
 	"github.com/google/uuid"
 
 	. "github.com/onsi/gomega"
@@ -90,17 +92,47 @@ type pluginHTTPResponse struct {
 }
 
 func doPluginRequest(method, path string, body []byte, username, password string) pluginHTTPResponse {
+	req := newPluginRequest(method, path, body)
+	req.SetBasicAuth(username, password)
+	return sendPluginRequest(req)
+}
+
+// doPluginTokenRequest sends a request authenticated only by a plugin invocation token, as a plugin UI does.
+func doPluginTokenRequest(method, path string, body []byte, token string) pluginHTTPResponse {
+	req := newPluginRequest(method, path, body)
+	req.Header.Set(pluginAPI.InvocationTokenHTTPHeader, token)
+	return sendPluginRequest(req)
+}
+
+// mintUIToken requests a plugin UI invocation token for the config as the given user.
+func mintUIToken(username, configID string) (pluginHTTPResponse, string) {
+	resp := doPluginRequest(http.MethodGet, fmt.Sprintf("/api/plugins/%s/ui-token?config_id=%s", pluginName, configID), nil, username, "test-password")
+	if resp.StatusCode != http.StatusOK {
+		return resp, ""
+	}
+
+	var payload struct {
+		Token string `json:"token"`
+	}
+	Expect(json.Unmarshal([]byte(resp.Body), &payload)).To(Succeed())
+	Expect(payload.Token).ToNot(BeEmpty())
+	return resp, payload.Token
+}
+
+func newPluginRequest(method, path string, body []byte) *http.Request {
 	var reader io.Reader
 	if body != nil {
 		reader = bytes.NewReader(body)
 	}
 	req, err := http.NewRequest(method, serverURL+path, reader)
 	Expect(err).ToNot(HaveOccurred())
-	req.SetBasicAuth(username, password)
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
+	return req
+}
 
+func sendPluginRequest(req *http.Request) pluginHTTPResponse {
 	resp, err := http.DefaultClient.Do(req)
 	Expect(err).ToNot(HaveOccurred())
 	defer resp.Body.Close()
