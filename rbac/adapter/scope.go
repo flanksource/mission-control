@@ -92,17 +92,12 @@ func ValidateScope(ctx context.Context, targets []v1.ScopeTarget) ([]v1.ScopeTar
 	return resolved, nil
 }
 
-// resolveAgent returns the id of the agent with the given name or id.
+// resolveAgent returns the id of the agent with the given name. The value is never read as an id.
 func resolveAgent(ctx context.Context, agent string) (string, error) {
-	query := ctx.DB().Model(&models.Agent{}).Select("id").Where("deleted_at IS NULL")
-	if uuid.Validate(agent) == nil {
-		query = query.Where("id = ?", agent)
-	} else {
-		query = query.Where("name = ?", agent)
-	}
-
 	var ids []uuid.UUID
-	if err := query.Limit(1).Find(&ids).Error; err != nil {
+	if err := ctx.DB().Model(&models.Agent{}).Select("id").
+		Where("deleted_at IS NULL AND name = ?", agent).
+		Limit(1).Find(&ids).Error; err != nil {
 		return "", fmt.Errorf("failed to resolve agent %q: %w", agent, err)
 	} else if len(ids) == 0 {
 		return "", NewInvalid(ReasonAgentNotFound, "agent %q not found", agent)

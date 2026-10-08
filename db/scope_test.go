@@ -184,12 +184,16 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			Expect(*saved.Error).To(ContainSubstring("no-such-agent"))
 		})
 
-		ginkgo.It("resolves an agent id as well as a name", func() {
+		ginkgo.It("reads an agent as a name, never as an id", func() {
 			scopeObj := &v1.Scope{
 				ObjectMeta: metav1.ObjectMeta{Name: "agent-by-id", Namespace: "default", UID: k8sTypes.UID(uuid.New().String())},
 				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{Agent: dummy.HomelabAgent.ID.String()}}}},
 			}
-			Expect(PersistScopeFromCRD(DefaultContext, scopeObj)).To(Succeed())
+			Expect(PersistScopeFromCRD(DefaultContext, scopeObj)).ToNot(Succeed())
+
+			var saved models.Scope
+			Expect(DefaultContext.DB().Where("id = ?", scopeObj.UID).First(&saved).Error).To(Succeed())
+			Expect(*saved.ErrorReason).To(Equal("AgentNotFound"))
 		})
 
 		ginkgo.It("should fail with invalid UID", func() {
