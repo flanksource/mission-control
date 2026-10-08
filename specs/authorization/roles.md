@@ -93,7 +93,7 @@ For `playbook:run`, `target` is optional. A rule without it matches only runs wi
   - A pattern grants actions added later. If the `kubernetes-logs` plugin ships a new `exec-shell` operation, `invoke:kubernetes-logs:*` would grant it without anyone reviewing the Role.
 - A plugin action isn't checked against the installed plugins: plugins are installed and upgraded often, and a Role mustn't break when one is. A rule on an operation no plugin declares matches nothing until one does.
 - `create`, `update` and `delete` are only checked on all resources of a type, so their Scope MUST consist of whole-type targets only (`scopes.md`, Section 5.2).
-- Deny rules on `read` are rejected for now. A deny is only enforced where every operation that reads the type is gated by the answer (`collection-access.md`, Section 3.1), and not every one is yet. A deny on reading production configs would still let an editor read them through the others.
+- **TODO:** Deny rules on `read` are rejected. Allowing them is specified separately, on top of gates (`collection-access.md`, Section 3.1).
 
 An operation may make more than one check. For example, running a playbook on a config also checks `read` on that config. Section 4.3 lists every check each operation makes; a rule never grants the other checks implicitly.
 

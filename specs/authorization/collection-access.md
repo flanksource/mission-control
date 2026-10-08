@@ -49,11 +49,13 @@ An invalid Scope is a different case. A Scope naming an agent that isn't registe
 
 A subject often has several `read` grants on a type, from different Roles and bindings. If any one of them is a whole-type grant, the answer is `all`. Otherwise, if there is any grant on the type, the answer is `some`, however many grants there are: three Scopes on three namespaces are still a subset. What the subject sees is the union of what the grants select. A rule that doesn't apply, because its Role or binding isn't in effect ([roles.md, Section 6](roles.md#6-how-changes-take-effect); [rolebindings.md, Section 4](rolebindings.md#4-how-changes-take-effect)), gives nothing.
 
-Roles can't deny `read` yet ([roles.md, Section 2](roles.md#2-actions)), but a Permission can, and its denies are enforced on listings ([roles.md, Section 5](roles.md#5-allow-and-deny)). A deny lowers the answer: a deny that covers the type whole gives `none`; any other deny on the type caps the answer at `some`. The same rule applies to Role rules once they can deny `read`.
+Roles can't deny `read` yet ([roles.md, Section 2](roles.md#2-actions)), but a Permission can, and its denies are enforced on listings ([roles.md, Section 5](roles.md#5-allow-and-deny)). A deny lowers the answer: a deny that covers the type whole gives `none`; so does a `read` deny on part of the type that row filters can't express, e.g. a Permission's inline selectors (Section 3.1); any other deny on the type caps the answer at `some`. The same rule applies to Role rules once they can deny `read`.
 
 ### 2.3 Row-level security off
 
-While row-level security is off, a `read` rule whose Scope isn't whole-type doesn't apply ([roles.md, Section 3.1](roles.md#31-the-read-action)). Neither does a rule a constraint narrows to less than the whole type ([rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)). So the answer is then `all` or `none`, never `some`.
+While row-level security is off, a `read` rule whose Scope isn't whole-type doesn't apply ([roles.md, Section 3.1](roles.md#31-the-read-action)). Neither does a rule a constraint narrows to less than the whole type ([rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)). A `read` deny that isn't whole-type does apply, and gives `none` on its type. So the answer is then `all` or `none`, never `some`.
+
+**Why a partial deny gives `none` here.** Dropping it would show the subject what it denies. With no row filters, the only answer that enforces it is to refuse the type.
 
 ### 2.4 Whole-type under a constraint
 
@@ -101,9 +103,9 @@ Each operation is gated at the least answer it can serve:
 
 An operation enforces the subject's grants on a resource when it reads the resource through the subject's row filters ([roles.md, Section 3.1](roles.md#31-the-read-action)), or checks the subject's rules against the resource in hand ([roles.md, Section 4.3](roles.md#43-what-an-operation-must-provide)).
 
-**Row filters follow the answer.** While row-level security is on, a subject whose `read` answer for a type is `some` MUST have every listing of that type filtered by row, whatever their built-in role. The filter admits the rows their grants select and leaves out the rows their denies select. A deny it can't express as rows, e.g. a Permission's inline selectors, leaves out every row of the type. A subject whose answer is `all` MAY be left unfiltered.
+**Row filters follow the answer.** While row-level security is on, a subject whose `read` answer for a type is `some` MUST have every listing of that type filtered by row, whatever their built-in role. The filter admits the rows their grants select and leaves out the rows their denies select. A subject whose answer is `all` MAY be left unfiltered.
 
-**Why.** A `some` gate is only safe where the operation filters. A member's built-in access selects the type whole, so without this a member lowered to `some` by a deny would pass the gate and list every row. Leaving out every row for a deny that can't be expressed refuses what it denied rather than allowing it (`permissions.md`, "Never wider").
+**Why.** A `some` gate is only safe where the operation filters. A member's built-in access selects the type whole, so without this a member lowered to `some` by a deny would pass the gate and list every row. A deny the filter can't express makes the answer `none` instead (Section 2.2), so the listing, the page and a direct link refuse together, and never show what it denies (`permissions.md`, "Never wider").
 
 - An operation gated at `some` MUST NOT return or act on a resource without enforcing the subject's grants on it. A resource read from a cache shared between subjects, or from another service that doesn't apply the subject's grants, is read without them.
 - An operation that can't enforce the subject's grants, e.g. one served by another service, MUST be gated at `all`.
@@ -112,7 +114,7 @@ An operation enforces the subject's grants on a resource when it reads the resou
 - Other actions, such as `playbook:run` or `invoke:<plugin>:<operation>`, are always checked against the resource in hand ([roles.md, Section 4.3](roles.md#43-what-an-operation-must-provide)), so they need no gate.
 - Every way into an operation is gated the same, whether it's an HTTP route or an MCP tool.
 - Built-in access is counted towards the answer (Section 2), like any grant, and never checked separately.
-- What no rule can select isn't a resource type, and is checked against its object, which only built-in roles and Permissions grant. That includes RBAC objects, the Kubernetes proxy, logs, notifications, database tables of no resource type, and agent pushes, which are checked against `agent-push` whatever they write.
+- What no rule can select isn't a resource type, and is checked against its object, which only built-in roles and Permissions grant. That includes RBAC objects, the Kubernetes proxy, logs, notifications, database tables of no resource type, and what agents push through their upstream connection, which is checked against `agent-push` whatever it writes. Pushing a topology directly is a component `update`.
 
 **Why gate by the answer.** A check of the type as a whole object can't see a grant or a deny on part of the type. A deny on production configs doesn't stop a check of "read configs", which every viewer passes, so an operation behind such a check shows the denied configs. The answer accounts for both: a partial grant or deny is `some`, and an operation that can't filter refuses it. The server and the UI then decide from the same answer (Section 4).
 
@@ -124,7 +126,7 @@ How operations declare their gates is the design's business (`design/operation-g
 
 Mission Control computes the answer. Clients MUST NOT derive it themselves from the subject's rules or roles.
 
-Every authenticated subject can obtain their **access summary**, a user of an external identity provider included, for whom it's derived from the token of the request: for each resource type, the answer for `read`, `create`, `update` and `delete`, each one of `all`, `some` or `none`. The UI uses the summary, and nothing else, to decide which resource pages to show, which to mark as showing some resources only, and which write controls to offer. Listings and searches apply the same derivation on the server. So, evaluated against the same grants, a page the summary shows never answers its listing with `403 Forbidden`, and a listing that succeeds is never behind a page the summary hides. Grants change between requests: a Scope or binding is edited, a Role becomes `Ready=False`, an external identity provider user's next token matches differently. So the answer MUST reflect the grants in effect when the request is made. Mission Control MAY cache it, keyed by everything it's derived from: the subject, their built-in roles, the Scopes they impersonate, and for a user of an external identity provider, the claims their bindings match. It MUST drop the cached answers whenever anything changes which grants apply to a subject: a Permission, PermissionGroup, Scope, Role or RoleBinding, a team's members, a person's built-in role, or a resource that's a subject itself. A client MUST NOT keep the summary for a session, and a client that gets `403 Forbidden` fetches the summary again rather than treating it as a fault.
+Every authenticated subject can obtain their **access summary**, a user of an external identity provider included, for whom it's derived from the token of the request: for each resource type, the answer for `read`, `create`, `update` and `delete`, each one of `all`, `some` or `none`. The UI uses the summary, and nothing else, to decide which resource pages to show, which to mark as showing some resources only, and which write controls to offer. Listings and searches apply the same derivation on the server. So, evaluated against the same grants, a page the summary shows never answers its listing with `403 Forbidden`, and a listing that succeeds is never behind a page the summary hides. Grants change between requests: a Scope or binding is edited, a Role becomes `Ready=False`, an external identity provider user's next token matches differently. So the answer MUST reflect the grants in effect when the request is made. Mission Control MAY cache it, keyed by everything it's derived from: the subject, their built-in roles, the Scopes they impersonate, and for a user of an external identity provider, the bindings their token matches. It MUST drop the cached answers whenever anything changes which grants apply to a subject: a Permission, PermissionGroup, Scope, Role or RoleBinding, a team's members, a person's built-in role, an agent being registered or removed, or a resource that's a subject itself. A client MUST NOT keep the summary for a session, and a client that gets `403 Forbidden` fetches the summary again rather than treating it as a fault.
 
 **Why.** The answer gates requests (Section 3.1), so a stale answer keeps granting what was revoked: a person removed from a team would keep the team's access until the entry expired.
 
@@ -138,13 +140,13 @@ For `create`, `update` and `delete`, the answer is derived as in [Section 2](#2-
 | ----------- | -------------- |
 | Catalog     | Config         |
 | Topology    | Component      |
-| Health      | Canary         |
+| Health      | Canary, Check  |
 | Playbooks   | Playbook       |
 | Connections | Connection     |
 
 Pages that show no resource type, such as settings, have no such answer. How they're gated is out of scope here.
 
-Checks are read through their canary (flanksource/mission-control#3520), so Health shows one type.
+Health shows canaries and checks. Each list takes its own type's answer, so a subject answered `none` on canaries and `some` on checks sees Health with only their checks. The page is shown when either answer isn't `none`, and marked as showing some resources unless both are `all`.
 
 Views and dashboards aren't covered: no rule can select Views yet ([overview.md, "Not covered yet"](overview.md#not-covered-yet)).
 
