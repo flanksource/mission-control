@@ -248,6 +248,9 @@ func newStandaloneServer(impl Plugin, opts ...Option) (*http.Server, error) {
 }
 
 // grpcOrHTTP routes gRPC requests to grpcServer and all others to httpHandler.
+// grpc.Server.ServeHTTP is experimental and slower than grpc.Server.Serve, but
+// it lets gRPC and the UI share one port, so a plugin's Service needs only that
+// port. Plugin traffic is low enough that the cost doesn't matter.
 func grpcOrHTTP(grpcServer *grpc.Server, httpHandler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.ProtoMajor == 2 && strings.HasPrefix(r.Header.Get("Content-Type"), "application/grpc") {

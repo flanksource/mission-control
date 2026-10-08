@@ -215,6 +215,11 @@ func HTTPTarget(ctx dutyContext.Context, pluginID uuid.UUID) (*url.URL, http.Rou
 		}
 
 		// The plugin serves its UI on the same address and TLS settings as gRPC.
+		// gRPC also accepts resolver addresses such as dns:///host:port, which
+		// can't be used as a URL host.
+		if _, _, err := net.SplitHostPort(entry.Spec.Address); err != nil {
+			return nil, nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("plugin %s: spec.address %q must be host:port to serve the plugin UI", pluginID, entry.Spec.Address)
+		}
 		var transport http.RoundTripper
 		scheme := "http"
 		if rt, ok := entry.Runtime.(*remoteRuntime); ok && rt.transport != nil {

@@ -18,6 +18,7 @@ import (
 	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
 
 	commanderAPI "github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -83,6 +84,13 @@ func startRemotePlugin(ctx dutyContext.Context, entry *plugin.Entry) error {
 		// Without an idle timeout the connection only goes idle when the plugin
 		// drops it, which is the signal to reconnect and register again.
 		grpc.WithIdleTimeout(0),
+		// Pings detect a plugin whose node or pod died without closing the
+		// connection, so it is re-registered once it is back.
+		grpc.WithKeepaliveParams(keepalive.ClientParameters{
+			Time:                30 * time.Second,
+			Timeout:             10 * time.Second,
+			PermitWithoutStream: true,
+		}),
 	)
 	if err != nil {
 		return fmt.Errorf("plugin %s: dial %s: %w", entry.Name, entry.Spec.Address, err)
