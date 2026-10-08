@@ -216,18 +216,28 @@ func invokeProxiedOperation(c echo.Context, ctx dutyContext.Context, entry *plug
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("plugin %q is not enabled for config %s", pluginRef, configID))
 	}
 
-	user := ctx.User()
-	if user == nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in"))
+	var subject, userID string
+	var roles []string
+	if token := c.Request().Header.Get(api.InvocationTokenHTTPHeader); token != "" {
+		claims, err := machinery.AuthorizeInvocationToken(ctx, token, entry, op, configID)
+		if err != nil {
+			return dutyAPI.WriteError(c, err)
+		}
+		subject, userID, roles = claims.Subject, claims.User, claims.Roles
+	} else {
+		user := ctx.User()
+		if user == nil {
+			return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("not logged in"))
+		}
+		if err := machinery.EnforceInvokePermission(ctx, ctx.Subject(), entry, op, configID); err != nil {
+			return dutyAPI.WriteError(c, err)
+		}
+		subject, userID = ctx.Subject(), user.ID.String()
+		if roles, err = pluginRolesForUser(ctx, entry, configID); err != nil {
+			return dutyAPI.WriteError(c, err)
+		}
 	}
-	if err := machinery.EnforceInvokePermission(ctx, ctx.Subject(), entry, op, configID); err != nil {
-		return dutyAPI.WriteError(c, err)
-	}
-	roles, err := pluginRolesForUser(ctx, entry, configID)
-	if err != nil {
-		return dutyAPI.WriteError(c, err)
-	}
-	invocationToken, err := plugin.MintInvocationToken(ctx.Subject(), user.ID.String(), entry.ID, 0, roles...)
+	invocationToken, err := plugin.MintInvocationToken(subject, userID, entry.ID, 0, roles...)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 	}

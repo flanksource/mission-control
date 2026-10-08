@@ -15,6 +15,7 @@ import (
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/api"
 )
@@ -174,15 +175,15 @@ func SelectorMatches(ctx dutyContext.Context, entry *plugin.Entry, configID stri
 // A token only proves who the caller is, not what they may do: tokens minted for
 // a plugin UI carry no operation or config scope. So the subject must hold read
 // on the config and invoke:<plugin>:<op>, exactly as a session-authenticated
-// caller would. The only exception is a token signed by the upstream and
-// received over the agent tunnel: the upstream already authorized the call and
-// the agent lacks the RBAC data to re-check it.
+// caller would. The only exception is a token signed by the upstream on a
+// request that arrived over the authenticated agent tunnel: the upstream already
+// authorized the call and the agent lacks the RBAC data to re-check it.
 func AuthorizeInvocationToken(ctx dutyContext.Context, token string, entry *plugin.Entry, op, configID string) (*plugin.InvocationTokenClaims, error) {
 	claims, upstream, err := plugin.ValidateRequestInvocationToken(ctx, token, entry.ID)
 	if err != nil {
 		return nil, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("invalid plugin invocation token: %v", err)
 	}
-	if upstream {
+	if upstream && auth.IsTrustedUpstream(ctx) {
 		return claims, nil
 	}
 	if err := EnforceInvokePermission(ctx, claims.Subject, entry, op, configID); err != nil {
