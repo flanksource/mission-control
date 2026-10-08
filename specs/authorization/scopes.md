@@ -50,15 +50,31 @@ spec:
 
 Each entry under `targets` MUST set exactly one of these keys:
 
-| Key          | Selects                                                   |
-| ------------ | --------------------------------------------------------- |
-| `config`     | Config items                                              |
-| `component`  | Topology components                                       |
-| `check`      | Health checks                                             |
-| `canary`     | Canaries                                                  |
-| `playbook`   | Playbooks                                                 |
-| `view`       | Views                                                     |
-| `connection` | Connections                                               |
+| Key                   | Selects                                                  |
+| --------------------- | -------------------------------------------------------- |
+| `config`              | Config items                                             |
+| `component`           | Topology components                                      |
+| `check`               | Health checks                                            |
+| `canary`              | Canaries                                                 |
+| `playbook`            | Playbooks                                                |
+| `view`                | Views                                                    |
+| `connection`          | Connections                                              |
+| `application`         | Applications                                             |
+| `notification`        | Notifications                                            |
+| `notificationSilence` | Notification silences                                    |
+| `scraper`             | Config scrapers                                          |
+| `topology`            | Topologies                                               |
+| `agent`               | Agents                                                   |
+| `person`              | People                                                   |
+| `team`                | Teams                                                    |
+| `scope`               | Scopes                                                   |
+| `role`                | Roles                                                    |
+| `roleBinding`         | RoleBindings                                             |
+| `event`               | Events in Mission Control's event queue                  |
+| `job`                 | Job history that belongs to no other resource (Section 3.2) |
+| `property`            | Properties, Mission Control's settings and feature flags |
+
+Everything Mission Control protects is one of these types. There's no other kind of object a Role can grant, and no global switch: "all of a type" is a whole-type target (Section 5.2).
 
 Keys are exact. `playbooks`, `configs` or any other spelling is not a resource type. An entry with two keys, or none, is invalid.
 
@@ -80,6 +96,12 @@ targets:
 - **AND** (the `echo` playbook together with a beta config) pairs resources, and a Scope is only a set.
 
 So it would either add nothing or stop being a set. Write one target per type instead.
+
+### 3.2 Records
+
+Some data belongs to a resource rather than being one: a config's changes and analysis, a playbook's runs, a notification's send history, a check's statuses, and job history about a resource. A record isn't a type. It's readable exactly when the resource it belongs to is (`roles.md`, Section 3.1).
+
+**Why.** Who may see a run or a change is never a separate question from who may see what it's about. Job history about no resource has nothing to follow, so it's the type `job`, selected by the job's name.
 
 ## 4. Membership
 
@@ -138,6 +160,7 @@ Every target is a selector over the fields its resource type has. A selector MUS
 | `namespace`     | Resource namespace                    | One exact value                                                                     |
 | `id`            | Resource id                           | A lowercase UUID                                                                    |
 | `agent`         | Agent the resource belongs to         | An agent's name. MUST resolve to an existing agent (Section 5.4).                  |
+| `email`         | A person's email                      | One exact value                                                                     |
 | `types`         | Resource type, e.g. `Kubernetes::Pod` | A list of exact values; any of them matches                                         |
 | `tagSelector`   | Tags                                  | `key=value` pairs (see below)                                                       |
 | `labelSelector` | Labels                                | `key=value` pairs (see below)                                                       |
@@ -208,6 +231,12 @@ A selector MUST only use fields its type has. Anything else is rejected, never i
 | `playbook`   | `id`, `name`, `namespace`                                                        |
 | `view`       | `id`, `name`, `namespace`                                                        |
 | `connection` | `id`, `name`, `namespace`, `types`                                               |
+| `application`, `notification`, `notificationSilence`, `scraper`, `topology`, `scope`, `role`, `roleBinding` | `id`, `name`, `namespace` |
+| `agent`, `team` | `id`, `name`                                                                  |
+| `person`     | `id`, `name`, `email`                                                            |
+| `event`      | `name`, the event's name, e.g. `config.updated`                                  |
+| `job`        | `name`, the job's name                                                           |
+| `property`   | `name`, the property's key                                                       |
 
 Notes:
 

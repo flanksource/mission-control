@@ -93,6 +93,7 @@ The word appears twice, with different meanings:
 **A subject may perform an action on a resource when a RoleBinding that selects the subject gives it a Role with a rule matching the action and resource.** Otherwise it's refused. Nothing else grants anything, apart from deprecated Permissions (`permissions.md`).
 
 - **Every subject is checked the same way.** A person, a team member, an agent, a user of an external identity provider and a playbook acting on its own are all subjects. What kind of subject they are only decides which RoleBinding subjects can select them (`rolebindings.md`, Section 2). It never decides what they may do.
+- **Everything is a resource.** Every protected thing is a type a Scope selects, from configs to RoleBindings and the event queue (`scopes.md`, Section 3.1). Data about a resource, such as a playbook's runs, follows it. Properties alone are public to read (`roles.md`, Section 3.1).
 - **Signing in grants nothing.** A new person, an invited person and a new agent can do nothing until a RoleBinding selects them.
 - **Listings follow the same grants.** A subject lists every resource of a type their `read` rules cover whole, the resources their `read` rules select where they cover part of it, and is refused where none applies (`collection-access.md`).
 - **Rules only allow.** There are no deny rules. Adding a binding never removes access, and removing one never adds any. To keep something from a subject, don't grant it: bind the narrower Role to the narrower group.
@@ -108,9 +109,9 @@ Mission Control ships these Roles in its own namespace. They're ordinary Roles, 
 
 | Role     | Allows                                                                                       |
 | -------- | -------------------------------------------------------------------------------------------- |
-| `viewer` | `read` on every resource type                                                                |
-| `editor` | What `viewer` allows, plus `create`, `update` and `delete` on every type that takes them     |
-| `admin`  | Every action on every resource type, including `rbac:update` and every plugin operation      |
+| `viewer` | `read` on every type that takes it                                                           |
+| `editor` | What `viewer` allows, plus `create`, `update` and `delete` on every type but `person`, `team`, `scope`, `role`, `roleBinding` and `property` |
+| `admin`  | Every action on every type (`scopes.md`, Section 3.1), every plugin operation included       |
 | `agent`  | What an agent needs to push data from another cluster                                        |
 
 Mission Control writes them when it starts, and again whenever the set of actions changes, e.g. when a plugin with a new operation is installed. They can't be changed or deleted through the API, and a change made through Kubernetes is overwritten. _Why:_ `admin` has to hold every action, including ones added after it was written, and Role rules name actions exactly (`roles.md`, Section 2). Keeping shipped Roles up to date is cheaper than a pattern that would have to mean something different in them than in every other Role.
@@ -123,14 +124,14 @@ _Why:_ someone has to be able to create the first RoleBinding, and a deleted adm
 
 ### Open questions
 
-- **Types without a Scope.** Everything Mission Control checks has to be a resource type a Scope can select, so that the shipped Roles can name it. Some objects have none yet, e.g. the public database tables, the Kubernetes proxy, notifications, applications, people, teams, settings and these access resources themselves (`rbac`). **TODO:** add them to `scopes.md`, Section 3.1, as types that can only be selected whole.
+- **Bootstrap configuration.** **TODO:** where configured bindings are declared, e.g. Helm values, and what an install declares by default, e.g. the first admin and every agent bound to `agent`.
 
 ## Who may manage these resources
 
 Scopes, Roles, RoleBindings and ExternalIdentityProviders are managed in one of two ways, and each has one rule:
 
 - **Through Kubernetes.** Objects are trusted as written, and who may create or change them is the cluster's RBAC. Namespaces don't limit what an object can do: a Scope in any namespace can select any resource (`scopes.md`, Section 4.2), and a RoleBinding in any namespace can name any subject (`rolebindings.md`, Section 2). So write access to any of these kinds, in any namespace, is equivalent to Mission Control admin. Don't delegate it per namespace expecting isolation.
-- **Through Mission Control's API.** Creating or changing any of them requires `rbac:update`, which the shipped `admin` Role allows. Only Scopes, Roles and RoleBindings have an API for now. ExternalIdentityProviders are managed through Kubernetes only. There's no design reason for that: it's the scope of this first phase, and an API for them can be added later.
+- **Through Mission Control's API.** Creating, changing or deleting one requires `create`, `update` or `delete` on its type, `scope`, `role` or `roleBinding`, which the shipped `admin` Role allows. Only Scopes, Roles and RoleBindings have an API for now. ExternalIdentityProviders are managed through Kubernetes only. There's no design reason for that: it's the scope of this first phase, and an API for them can be added later.
 
 ## Rejected or not in effect
 
