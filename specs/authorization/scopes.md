@@ -116,15 +116,15 @@ A Scope whose `agent` no longer exists isn't an empty set. It's invalid (Section
 
 A Scope MUST select resources by what they are or who owns them, never by their current state.
 
-Membership MUST be decidable from the Scope and the resource's own identity and ownership fields, and MUST NOT change unless the Scope or those fields change. A selector MUST NOT depend on another resource, e.g. a parent, a related resource or the members of another Scope, nor on anything outside the resource, e.g. the current time.
+Membership MUST be decidable from the Scope and the resource's own identity and ownership fields, and MUST NOT change unless the Scope or those fields change. A selector MUST NOT depend on another resource, e.g. a parent, a related resource or the members of another Scope, nor on anything outside the resource, e.g. the current time. The one exception is the name of the resource's agent (below).
 
 **Why:** Health and status change without anyone deciding to change access. State-based grants make access disappear when a fix succeeds, flicker when a resource flaps, and grow during an outage. They can also change a playbook permission between run and approval, and prevent a stable access review.
 
 The grant defines the resources a person is responsible for. Listing filters narrow that set to, for example, unhealthy resources. A playbook's own configs filter decides whether it should run on a resource; a Scope decides whether the person may run it. An open-ended field selector would bypass this rule and silently expose new fields as the resource record grows.
 
-An `agent` written by name is resolved when the Scope is validated (Section 5.4). The id it resolves to is part of the Scope, not of the resource: when it resolves differently, the Scope has changed (Section 7).
+The name of the agent a resource belongs to counts as the resource's ownership, although it's stored on the agent (Section 5.4). Registering, renaming or deleting an agent therefore changes the membership of its resources, the same way a change to their own fields does.
 
-**Why.** Mission Control may evaluate a Scope once, when a resource or the Scope changes, and store which Scopes each resource belongs to, rather than evaluating it on every read (`design/materialised-membership.md`). That's only correct if nothing but a change to the resource or to the Scope can change the resource's membership. Every field in Section 5.1 meets this. A selector that wouldn't is rejected when it's proposed for the language, never evaluated differently.
+**Why.** Mission Control may evaluate a Scope once, when a resource or the Scope changes, and store which Scopes each resource belongs to, rather than evaluating it on every read (`design/materialised-membership.md`). That's only correct if nothing but a change to the resource, to its agent's name or to the Scope can change the resource's membership. Every field in Section 5.1 meets this. A selector that wouldn't is rejected when it's proposed for the language, never evaluated differently.
 
 ## 5. Selector language
 
@@ -137,7 +137,7 @@ Every target is a selector over the fields its resource type has. A selector MUS
 | `name`          | Resource name                         | One exact value, `*`, or a pattern (Section 5.2)                                    |
 | `namespace`     | Resource namespace                    | One exact value                                                                     |
 | `id`            | Resource id                           | A lowercase UUID                                                                    |
-| `agent`         | Agent the resource belongs to         | An agent's name or id. MUST resolve to an existing agent (Section 5.4).            |
+| `agent`         | Agent the resource belongs to         | An agent's name. MUST resolve to an existing agent (Section 5.4).                  |
 | `types`         | Resource type, e.g. `Kubernetes::Pod` | A list of exact values; any of them matches                                         |
 | `tagSelector`   | Tags                                  | `key=value` pairs (see below)                                                       |
 | `labelSelector` | Labels                                | `key=value` pairs (see below)                                                       |
@@ -217,12 +217,9 @@ Notes:
 
 ### 5.4 Agents
 
-`agent` is stored as written, and resolved to an agent's id every time the Scope is validated (Section 7). The id MAY be cached between validations, but the value in the Scope is what's checked.
+`agent` is an agent's name, never an id. It's stored as written, and resolved to the id of the agent registered under that name every time the Scope is validated (Section 7). The id MAY be cached between validations, but the name in the Scope is what's checked. An agent deleted and re-registered under the same name has a new id, and the Scope follows it without being updated.
 
-- A **name** is resolved again on every validation. An agent deleted and re-registered under the same name has a new id, and the Scope follows it without being updated.
-- An **id** names one registration. Once that agent is deleted, the Scope stays invalid until it's updated, even if an agent with the same name exists again.
-
-Two Scopes, one written `agent: eu-cluster` and one `agent: a1000000-0000-0000-0000-000000000001`, select the same resources while that agent exists and differ once it's deleted and re-registered.
+**Why.** A Scope is often written apart from the agent it names, e.g. in a repository shared by several environments, where the same agent name has a different id in each. An id would only add a Scope that stops working once its agent is re-registered.
 
 ## 6. Validity
 
@@ -294,7 +291,7 @@ targets:
 
 A Scope that's wrong on its own, i.e. any rule of Section 6 other than its `agent` resolving, is rejected (`overview.md`, "Rejected or not in effect"). A Scope whose `agent` doesn't resolve is stored `Ready=False`, since the agent may be registered later.
 
-A Scope is validated (Section 6) when it's saved, and again whenever an agent is registered or deleted. Validation on save alone isn't enough: an agent can be deleted or re-registered without any Scope being saved.
+A Scope is validated (Section 6) when it's saved, and again shortly after an agent is registered, renamed or deleted. Validation on save alone isn't enough: an agent can be deleted or re-registered without any Scope being saved.
 
 A stored Scope that becomes invalid, because its `agent` no longer resolves (Section 5.4), is `Ready=False` with the reason and selects nothing. It becomes valid again, and selects again, as soon as its `agent` resolves, without being re-applied. Roles and RoleBindings that reference it follow it (`roles.md`, Section 6; `rolebindings.md`, Section 4).
 
@@ -309,7 +306,7 @@ Membership MUST be decided when a Scope or a resource changes, never when a chec
 | Change                                       | Takes effect                       |
 | -------------------------------------------- | ---------------------------------- |
 | A Scope is created or its targets change     | When it's saved                    |
-| A Scope's `agent` resolves to a different id | When it's re-validated (Section 7) |
+| A Scope's `agent` resolves to a different id | Shortly after the agent changes    |
 | A Scope becomes invalid or is deleted        | When it's saved or re-validated    |
 | A resource is created, changed or deleted    | When it's saved                    |
 | A Role or RoleBinding changes                | Immediately                        |
@@ -317,6 +314,8 @@ Membership MUST be decided when a Scope or a resource changes, never when a chec
 **Why.** A resource's membership depends only on the Scope and the resource's own fields (Section 4.3), so the write that changes either can decide it. A resource is never selected by a Scope that no longer matches it, and a playbook or a Scope applied and used straight away is never refused for being new.
 
 Saving a Scope therefore takes as long as finding every resource it selects: seconds for a broad Scope on a large tenant, while resources wait to be saved (`design/materialised-membership.md`, notice at the top).
+
+An agent change MAY take effect shortly after it's saved rather than with it. Until it does, the previous membership holds in full. _Why:_ agents are set up once and rarely registered, renamed or deleted again, and a new agent's resources arrive after it registers anyway.
 
 ### 7.2 Operations with several checks
 

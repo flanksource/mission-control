@@ -4,23 +4,24 @@ Details how a Scope's membership is written, for `materialised-membership.md` ("
 
 ## Background
 
-A Scope's membership, `scope_targets` and `scope_members`, can be written by Mission Control when it saves the Scope, or by a trigger on `scopes`. This design uses a trigger. _Why:_ Postgres then writes all membership, for resources and Scopes alike, so a Scope written any way, through Mission Control, a migration or plain SQL, gets its membership in the same transaction. Deciding membership is already SQL (the one predicate and the rebuild); only turning a Scope's targets into rows was left outside it.
+A Scope's membership, `scope_targets` and `scope_members`, can be written by Mission Control when it saves the Scope, or by a trigger on `scopes`. This design has Mission Control write it. _Why:_ Mission Control already validates the Scope and resolves its agents (`scopes.md` §5.4, §6) before saving it, so turning the targets into rows in the same transaction keeps one place that reads a Scope. Scopes are only written through Mission Control, from a CRD or its API, so no Scope is saved without it.
+
+Resources are the opposite: other processes, such as config-db and canary-checker, write them directly, so a resource's membership is written by a trigger on its table (`materialised-membership.md`). Both directions match with the same SQL predicate.
 
 ## Design
 
-- **Writers.** Only triggers in Postgres write `scope_targets` and `scope_members`. Mission Control MUST NOT write them.
-- **Validity.** Mission Control validates a Scope (`scopes.md` §6) when it's saved and on every policy reload. It rejects a Scope that's wrong on its own, and stores the rest with their error, if any, which is what `Ready` reports. The trigger MUST NOT decide validity; it follows the stored error. _Why:_ the API and CRD status need readable reasons before anything is written, and one validator can't disagree with itself.
-- **Scope written.** A trigger on `scopes` runs on insert, and on update when `targets`, the error or `deleted_at` changes, in the writing transaction:
-  1. A deleted Scope, or one stored with an error, has its membership cleared.
-  2. Otherwise each target becomes a `scope_targets` row: `agent` resolved to an id, a trailing `*` in `name` to a name prefix, `tagSelector` and `labelSelector` to `key=value` maps. A whole-type target becomes one `scope_members` row with no `resource_id`. View targets are skipped.
+- **Writers.** Mission Control writes `scope_targets`, and the members of the Scope it saves. Triggers on resource tables write the membership of the resources they write. Nothing else writes either table.
+- **Scope saved.** In the save transaction, after validation:
+  1. A Scope stored with an error, including an `agent` that isn't registered, has its membership cleared. Its targets aren't written. _Why:_ the Scope selects nothing (`scopes.md` §7), so there's no target row to build, and no agent id to put in one.
+  2. Otherwise each target becomes a `scope_targets` row: `agent` resolved to the id of the agent with that name, a trailing `*` in `name` to a name prefix, `tagSelector` and `labelSelector` to `key=value` maps. A whole-type target becomes one `scope_members` row with no `resource_id`. View targets are skipped.
   3. The Scope's members are rebuilt from those rows with the one predicate.
 
-  A save that changes none of those columns runs nothing. _Why:_ a reconcile saves every Scope again on restart. A Scope deleted outright loses its membership in the same transaction.
-- **Agent doesn't resolve.** The Scope's membership is cleared, and the write succeeds. _Why:_ an agent can be deleted between validation and the write. The Scope then selects nothing, as `scopes.md` §7 requires, and the next policy reload marks it `Ready=False`.
-- **Target can't be converted.** The write fails. Through Mission Control, that's a failed save: `PersistFailed`, with the previous version in effect. _Why:_ it means validation passed a Scope the trigger can't build. Failing keeps `Ready=True` from ever describing a Scope without membership, and refuses a bad Scope written with plain SQL.
-- **Agent written.** A trigger on `agents` runs on insert, on a name change and on a `deleted_at` change. It rebuilds every Scope that names the agent, by name or id, and isn't stored with an error, by steps 2 and 3. _Why:_ an agent deleted and re-registered under the same name between two policy reloads changes no Scope, so only this trigger sees the new id (`scopes.md` §5.4).
-- **Lock.** The rebuild takes the membership lock exclusively inside the trigger, with the timeout and bounded retries of `materialised-membership.md` ("Lock"). Out of retries, the write fails.
-- **Scopes without membership.** Every Scope that's neither deleted nor stored with an error has membership before Mission Control accepts requests; duty's migrations build any that have neither targets nor members. _Why:_ a grant through a Scope with no rows is refused.
+  A save whose targets and resolved agents haven't changed rebuilds nothing. _Why:_ a reconcile saves every Scope again on restart.
+- **Scope deleted.** Its membership is cleared in the transaction that deletes it.
+- **Agent registered, renamed or deleted.** Postgres notifies Mission Control, which schedules a policy reload. The reload validates every Scope again, and rebuilds those whose `agent` now resolves to a different id, or no longer resolves. _Why:_ agents are set up once and rarely change, so a lag of one reload costs nothing a user would notice (`scopes.md` §7.1), and needs no trigger that resolves names.
+- **Target can't be converted.** The save fails: `PersistFailed`, with the previous version in effect. _Why:_ validation passed a Scope that can't be built, and failing keeps `Ready=True` from ever describing a Scope without membership.
+- **Lock.** The rebuild takes the membership lock exclusively, with the timeout and bounded retries of `materialised-membership.md` ("Lock"). Out of retries, the save fails.
+- **Scopes without membership.** Before accepting requests, Mission Control builds every Scope that's neither deleted nor stored with an error and has neither targets nor members. If one can't be built, it doesn't start. _Why:_ a grant through a Scope with no rows is refused.
 
 Example: saving
 
@@ -42,14 +43,14 @@ scope_members  (config, <id>) for every config the target matches
 
 ## Other choices
 
-- **Mission Control converts targets and calls the rebuild in its save transaction.** Membership is then written in two places. A Scope written outside Mission Control has none until something re-syncs it, and the save needs a check that the Scope wasn't saved again between resolving its targets and rebuilding.
+- **Triggers on `scopes` and `agents` write all membership.** Postgres would then write membership for Scopes and resources alike, and a Scope written with plain SQL would get it too. Not taken: converting targets and resolving agents would be written again in plpgsql beside Mission Control's validation, for Scopes that are only written through Mission Control and agents that rarely change.
 - **The trigger also validates, and Mission Control doesn't.** The API and CRD status would only get a database error, and every rule of `scopes.md` §6 would have to be written in plpgsql.
-- **Agent changes handled by the policy reload.** Lags by a reload, and writes membership from outside a trigger.
+- **Resolve `agent` inside the predicate.** The name would be looked up on every resource write, and an agent change would still need the Scopes naming it rebuilt.
 
 ## FAQ
 
 **What does a Scope written with plain SQL get?**
-Its membership, in the same transaction. Its `Ready` catches up on the policy reload that the write's notification schedules.
+Nothing until the next policy reload, which validates it and builds its membership. Writes to these tables through `/db` are refused.
 
-**What does Mission Control still do for a Scope?**
-Validate it, reject it or record why it isn't in effect, and save the row. Nothing about its membership.
+**What does Mission Control do for a Scope?**
+Validate it, reject it or record why it isn't in effect, save it, and write its membership in the same transaction.
