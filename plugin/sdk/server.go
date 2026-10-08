@@ -41,7 +41,8 @@ type pluginServer struct {
 	tlsKeyFile  string
 
 	// a connection back to the mission-control gRPC server
-	mcgPRCConn *grpc.ClientConn
+	mcgPRCConn    *grpc.ClientConn
+	hostConnUsers map[*grpc.ClientConn]int
 }
 
 func newPluginServer(impl Plugin, uiPort uint32) *pluginServer {
@@ -51,7 +52,47 @@ func newPluginServer(impl Plugin, uiPort uint32) *pluginServer {
 			ops[op.Def.Name] = op
 		}
 	}
-	return &pluginServer{impl: impl, uiPort: uiPort, ops: ops}
+	return &pluginServer{impl: impl, uiPort: uiPort, ops: ops, hostConnUsers: make(map[*grpc.ClientConn]int)}
+}
+
+// setHostConn installs the back-channel to the host. A host registers the plugin
+// again after reconnecting; existing operations retain their previous connection
+// until they finish, while new operations use the replacement.
+func (s *pluginServer) setHostConn(conn *grpc.ClientConn) {
+	s.mu.Lock()
+	previous := s.mcgPRCConn
+	s.mcgPRCConn = conn
+	closePrevious := previous != nil && previous != conn && s.hostConnUsers[previous] == 0
+	s.mu.Unlock()
+	if closePrevious {
+		_ = previous.Close()
+	}
+}
+
+// acquireHostClient pins the back-channel for the lifetime of an operation.
+func (s *pluginServer) acquireHostClient(token string) (*hostClient, func()) {
+	s.mu.Lock()
+	conn := s.mcgPRCConn
+	if conn != nil {
+		s.hostConnUsers[conn]++
+	}
+	s.mu.Unlock()
+	return newHostClient(conn, token), func() {
+		if conn == nil {
+			return
+		}
+		s.mu.Lock()
+		s.hostConnUsers[conn]--
+		unused := s.hostConnUsers[conn] == 0
+		if unused {
+			delete(s.hostConnUsers, conn)
+		}
+		closeConn := unused && conn != s.mcgPRCConn
+		s.mu.Unlock()
+		if closeConn {
+			_ = conn.Close()
+		}
+	}
 }
 
 func (s *pluginServer) RegisterPlugin(ctx context.Context, req *pluginpb.RegisterRequest) (*pluginpb.PluginManifest, error) {
@@ -62,9 +103,7 @@ func (s *pluginServer) RegisterPlugin(ctx context.Context, req *pluginpb.Registe
 		if err != nil {
 			return nil, fmt.Errorf("dial host broker: %w", err)
 		}
-		s.mu.Lock()
-		s.mcgPRCConn = conn
-		s.mu.Unlock()
+		s.setHostConn(conn)
 
 	case req.HostGrpcAddress != "":
 		// Standalone/remote mode: there is no broker, so dial the host's
@@ -88,9 +127,7 @@ func (s *pluginServer) RegisterPlugin(ctx context.Context, req *pluginpb.Registe
 			_ = conn.Close()
 			return nil, fmt.Errorf("dial host %s: %w", req.HostGrpcAddress, err)
 		}
-		s.mu.Lock()
-		s.mcgPRCConn = conn
-		s.mu.Unlock()
+		s.setHostConn(conn)
 	}
 
 	manifest := s.impl.Manifest()
@@ -198,9 +235,8 @@ func (s *pluginServer) Invoke(ctx context.Context, req *pluginpb.InvokeRequest) 
 	}
 
 	token := invocationTokenFromIncomingContext(ctx)
-	s.mu.Lock()
-	host := newHostClient(s.mcgPRCConn, token)
-	s.mu.Unlock()
+	host, release := s.acquireHostClient(token)
+	defer release()
 
 	res, err := op.Handler(ctx, InvokeCtx{
 		Operation:    req.Operation,
@@ -249,9 +285,8 @@ func (s *pluginServer) httpOperationsHandler() http.Handler {
 func (s *pluginServer) httpOperationMiddleware(operationName string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		token := r.Header.Get(pluginpb.InvocationTokenHTTPHeader)
-		s.mu.Lock()
-		host := newHostClient(s.mcgPRCConn, token)
-		s.mu.Unlock()
+		host, release := s.acquireHostClient(token)
+		defer release()
 
 		ctx := withHTTPRequestContext(r.Context(), httpRequestContext{
 			operation:    operationName,
