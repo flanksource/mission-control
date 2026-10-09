@@ -290,18 +290,19 @@ Each check is made as the subject performing the operation: the caller, or, wher
 
 ### 4.4 Operations without a caller
 
-Some work isn't done by the person who started it: a playbook running on its schedule or from a webhook, a notification being sent, a playbook started by a notification or by another playbook, a plugin carrying out an operation someone invoked. Mission Control has no identity of its own to run it as (`overview.md`, "Access"). It's checked as the resource doing it, which a RoleBinding selects like any subject (`rolebindings.md`, Section 2.5):
+Some work isn't done by the person who started it: a playbook running on its schedule, from a webhook or from an event it's triggered by, a notification being sent, a playbook started by a notification or by another playbook, a plugin carrying out an operation someone invoked. Mission Control has no identity of its own to run it as (`overview.md`, "Access"). It's checked as the resource doing it, which a RoleBinding selects like any subject (`rolebindings.md`, Section 2.5):
 
 | Work                                              | Starting it is checked as             | Checks made during it are made as |
 | ------------------------------------------------- | ------------------------------------- | --------------------------------- |
 | A person runs playbook P                          | The person                            | P                                 |
-| P runs on its schedule, or from a webhook         | Not checked: no one asks for the run  | P                                 |
+| P runs on its schedule, from a webhook, or from an event it's triggered by | P: `playbook:run` on P, then `read` on the target | P |
 | Notification N runs playbook P                    | N                                     | P                                 |
 | Playbook Q's run starts playbook P                | Q                                     | P                                 |
 | N is evaluated against an event                   | Not checked                           | Not checked                       |
 | N is sent                                         | Not checked: no one asks for the send | N                                 |
 | A person invokes operation O of plugin X on config C | The person: `invoke:X:O`, then `read` on C | X                          |
 
+- A run no person started is created only if the playbook passes the checks a person starting it would (Section 4.3): `playbook:run` on itself, with the run's target if it has one, then `read` on the target. A playbook refused either check gets no run, and the refusal is recorded in its job history. _Why:_ starting a run makes the same checks whoever starts it, with no exception for the playbook. The `read` check also matters on its own: a run's templates are filled with its target's data before any step runs, so without it, a playbook could be triggered on configs it may not read and send their data anywhere.
 - A run's actions are checked as its playbook, whoever started it. A playbook with no binding can do nothing that's checked: it can't read a config, use a connection or run another playbook.
 - A webhook authenticates the request with the playbook's own webhook settings. The webhook isn't a subject, and grants nothing.
 - Evaluating a notification matches an event against the notification's events, filter and silences, and queues what to send. It makes no check, and MUST NOT fill in a connection's credentials. It records the connection to send through by id only.
