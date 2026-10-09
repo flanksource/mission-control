@@ -128,9 +128,8 @@ Each user of a provider is represented by a person record, created on their firs
 
 An external user gets exactly what the RoleBindings matching their token grant, and nothing else:
 
-- No built-in role, not even `viewer` or `everyone`. The default access described in `overview.md` doesn't apply to them.
 - Permissions never apply to them, not even a Permission whose subject is their person record.
-- A RoleBinding reaches them only through an `oidc` subject naming this provider. `people`, `teams` and `roles` subjects never match them. To select every user of the provider, use `match: "true"`.
+- A RoleBinding reaches them only through an `oidc` subject naming this provider. `people`, `teams` and `agents` subjects never match them, not even `people: ["*"]`. To select every user of the provider, use `match: "true"`.
 - Every claim of the token is available to `match`, not only the ones in `claims`:
 
   ```yaml
@@ -148,7 +147,6 @@ An external user gets exactly what the RoleBindings matching their token grant, 
   With the token in Section 1, Alice gets `production-operator`.
 
 - Bindings are matched on every request, so the user's access follows their latest token. If the next token has `"tenant": "b"`, Alice loses `tenant-a-operators` on that request.
-- Their reads come only from `read` rules, and they list only what those rules allow (`roles.md`, Section 3.1). They have no built-in access that lists anything unfiltered.
 
 ## 7. Uniqueness
 

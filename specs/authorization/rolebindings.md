@@ -27,7 +27,6 @@ spec:
 | `constraint`  | object | No                        | Narrows the Role's rules for these subjects (Section 3). |
 | `description` | string | No                        | Explanatory text; no effect.                             |
 
-`role` never names a built-in role, since no Role can be named after one (`roles.md`, Section 1).
 
 A RoleBinding MUST have a namespace, and its Role and constraint Scopes must be in it (`overview.md`, "Namespaces"). Subjects can match resources in any namespace (Section 2.5).
 
@@ -37,13 +36,13 @@ A RoleBinding MUST have a namespace, and its Role and constraint Scopes must be 
 
 | Field                                                              | Type            | Selects                                                              |
 | ------------------------------------------------------------------ | --------------- | -------------------------------------------------------------------- |
-| `people`                                                           | list of strings | Mission Control users, by email only                                 |
+| `people`                                                           | list of strings | Humans who sign in to Mission Control, by email or `*`              |
 | `teams`                                                            | list of strings | Every member of the teams, by team name                              |
-| `roles`                                                            | list of strings | Every user, every guest, or every agent (Section 2.3)                |
+| `agents`                                                           | list of strings | Agents, by name (Section 2.3)                                        |
 | `oidc`                                                             | list of objects | Users of an external identity provider, by the claims in their token |
-| `playbooks`, `notifications`, `topologies`, `scrapers`, `canaries` | list of objects | Those resources, when they act on their own                          |
+| `playbooks`, `notifications`, `topologies`, `scrapers`, `canaries`, `plugins` | list of objects | Those resources, when they act on their own               |
 
-A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either; use `roles: [agent]` (Section 2.3).
+A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either; they're selected by `agents` (Section 2.3). Neither are access tokens or the System user. `people` selects humans only, whether by email or by `*`, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents or access tokens too would hand them access no one meant to grant.
 
 ### 2.1 People
 
@@ -54,7 +53,7 @@ subjects:
     - bob@example.com
 ```
 
-Each entry MUST be a person's email address, never their name. There's no wildcard: to select every Mission Control user, use `roles: [everyone]` (Section 2.3).
+Each entry MUST be a person's email address, never their name, or `*` alone to select every person, e.g. to bind `viewer` to everyone in the organisation.
 
 ### 2.2 Teams
 
@@ -67,25 +66,56 @@ subjects:
 
 Each entry is a team name. Members get the Role through their team, so joining or leaving the team changes who has it.
 
-### 2.3 Built-in roles
+#### Team membership from login
+
+A person's teams can follow their login provider, through a **team mapper**: one CEL expression per install, given inline or as a file path prefixed with `file://`, set by the operator, that returns the teams a person belongs to. Only Mission Control's own logins have one:
+
+| Login  | Setting                  | Input                                                           |
+| ------ | ------------------------ | --------------------------------------------------------------- |
+| Kratos | `--identity-role-mapper` | `identity`, the person's Kratos identity: traits and metadata    |
+| Clerk  | `--clerk-team-mapper`    | `claims`, the claims of the verified Clerk session token        |
+
+The expression returns `{"teams": [...]}`, a list of team names:
+
+```
+{
+  "teams": claims.org_role == "org:admin" ? ["clerk-admins"] : ["clerk-members"]
+}
+```
+
+- **Teams only.** A mapper never grants a Role. Admins bind Roles to the teams it returns, like to any team. A result with any other field, e.g. the `role` older Kratos scripts returned, is logged as an error and changes nothing.
+- **When it runs.** On a person's first request after they sign in, and again whenever their claims change, e.g. a refreshed Clerk token with a different organisation role.
+- **Kept in sync.** The person's mapped teams become exactly what the mapper returns: they're added to new teams and removed from mapped teams it no longer returns. Teams an admin added them to directly are never touched. A team that doesn't exist is skipped and logged.
+- **Without a mapper**, signing in to Kratos adds the person to no team. Clerk has a default, used when `--clerk-team-mapper` isn't set, which puts organisation admins in `admins`, guests in no team, and everyone else in `viewers`:
+
+  ```
+  {
+    "teams":
+      (has(claims.role) && claims.role == "admin") ||
+      (has(claims.org_role) && claims.org_role == "org:admin") ? ["admins"] :
+      (has(claims.org_role) && claims.org_role == "org:guest") ? [] :
+      ["viewers"]
+  }
+  ```
+
+  _Why:_ it keeps the grouping Clerk installs had with built-in roles, so only the teams and their bindings need creating. The teams grant nothing until an admin creates them and binds Roles to them.
+- **Invites** name teams instead of a role. The person joins them when they accept.
+
+A mapper that reads attributes a person can change themselves, e.g. Kratos traits the settings flow lets them edit, lets them choose their own teams. Map from attributes only admins can set, e.g. Kratos `metadata_public` or the Clerk organisation role.
+
+_Why teams:_ access stays in Mission Control, readable from its teams and RoleBindings, while the login provider only says who belongs where. _Why sync both ways:_ leaving a group in the login provider has to remove what it gave, or access only ever grows. A change reaches Mission Control on the person's next request, which is the first moment it could be used.
+
+Users of an external identity provider aren't mapped into teams. Their access comes from `oidc` subjects, matched on every request (Section 2.4).
+
+### 2.3 Agents
 
 ```yaml
 subjects:
-  roles:
-    - guest
+  agents:
+    - eu-cluster
 ```
 
-`roles` selects subjects by their built-in role (`roles.md`, Section 7). Only three values are allowed, each because nothing else can select those subjects:
-
-- `everyone`: every Mission Control user, guests and agents included. `people` has no wildcard, so this is the only way to select every user, e.g. to bind a deny rule that applies to all of them.
-- `guest`: every guest. Guests see only what's shared with them (`roles.md`, Section 7.3); this shares with all of them at once, without a team to keep in step with who's invited.
-- `agent`: every agent. Agents aren't people and can't be in a team, so this is the only way to select them.
-
-`viewer`, `editor`, `commander` and `responder` are rejected. A team selects the same people, and these roles inherit from each other (`roles.md`, Section 7.2), so binding to one would also reach every role that inherits it, which a reader of the binding can't see. `commander` and `responder` aren't defined yet either.
-
-`admin` is rejected too, since admins can already do everything. No binding applies to an admin, whether it names them in `people` or through `teams`: no rule applies to admins, deny rules included (`overview.md`, "Default access").
-
-Users of an external identity provider have no built-in role, so no value selects them (Section 2.4).
+Each entry is an agent's name, or `*` alone to select every agent. Agents aren't people and can't be in a team, so this is the only way to select them.
 
 ### 2.4 External identity provider users
 
@@ -125,11 +155,11 @@ spec:
     email: email
 ```
 
-A user who signs in through an identity provider only gets what their RoleBindings grant. They get no built-in access. See `external-identity-providers.md`.
+See `external-identity-providers.md`.
 
 ### 2.5 Resources
 
-Some resources act on their own and need permissions too, e.g. a playbook calling Mission Control while it runs, or a notification reading the resources it reports on. These can be subjects:
+Some resources act on their own and need permissions too, e.g. a playbook calling Mission Control while it runs, a notification reading the resources it reports on, or a plugin using a connection's credentials. These can be subjects:
 
 | Field | Selects |
 |---|---|
@@ -138,6 +168,7 @@ Some resources act on their own and need permissions too, e.g. a playbook callin
 | `topologies` | Topologies |
 | `scrapers` | Config scrapers |
 | `canaries` | Canaries |
+| `plugins` | Plugins, by the namespace and name of their Plugin resource. They can only be granted `read` and `connection:use` on connections (`roles.md`, Section 4.4) |
 
 ```yaml
 subjects:
@@ -148,6 +179,9 @@ subjects:
     - namespace: monitoring
   scrapers:
     - name: "*"
+  plugins:
+    - namespace: mission-control
+      name: kubernetes-logs
 ```
 
 Each entry is an object with `namespace` and `name`, and MUST set at least one of them; an empty entry is rejected. The values follow the same rules as in a Scope (`scopes.md`, Section 5.2):
@@ -156,11 +190,19 @@ Each entry is an object with `namespace` and `name`, and MUST set at least one o
 - `namespace` is one exact value. To match any namespace, omit it. `namespace: "*"` is rejected.
 - Prefixes, suffixes, lists and exclusions are rejected in both.
 
-So `name: "*"` alone selects every resource of that kind, and `namespace: monitoring` alone selects every resource of that kind in `monitoring`. Here: the `cleanup-pods` playbook, every notification in `monitoring`, and every scraper.
+So `name: "*"` alone selects every resource of that kind, and `namespace: monitoring` alone selects every resource of that kind in `monitoring`. Here: the `cleanup-pods` playbook, every notification in `monitoring`, every scraper, and the `kubernetes-logs` plugin in `mission-control`.
 
 Subjects are matched by namespace and name, not by reference to a specific object, so they can match resources in any namespace, not only the binding's.
 
 Editors of a resource’s executable definition are trusted with the permissions and credentials available to its execution.
+
+Since resource subjects are matched this way, a binding also reaches resources created later that match it, and whoever can create one gets the binding's Role for what it does:
+
+- `notifications: [{namespace: monitoring}]` grants its Role to every notification in `monitoring`. Anyone who can create a notification there can make one that uses it.
+- `name: "*"` does the same across every namespace.
+- An exact name not yet in use is taken by whoever first creates a resource with that name.
+
+Bind by exact namespace and name wherever the Role is sensitive, e.g. `connection:use` on a connection that pages people, or anything bound to `admin`. _Why it's allowed:_ a playbook or notification's access is a property of where it lives, like a Kubernetes pod using any service account in its namespace. Granting by namespace is how a team gives its own playbooks access without a binding per playbook. The binding is still the grant: creating a resource that matches no binding gets it nothing, whatever connections or resources it names (`roles.md`, Section 4.4).
 
 ## 3. Constraint
 
@@ -205,7 +247,7 @@ spec:
       scopeRef: tenant-a
 ```
 
-Tenant A's users can run and approve monitoring playbooks on the configs that are in both `production-configs` and `tenant-a`. A binding for tenant B does the same with `tenant-b`. Running a playbook on a config also checks `read` on the config (`roles.md`, Section 4.3), and users of an external identity provider have no built-in access, so in practice they need a `read` grant too; Section 3.3 adds one.
+Tenant A's users can run and approve monitoring playbooks on the configs that are in both `production-configs` and `tenant-a`. A binding for tenant B does the same with `tenant-b`. Running a playbook on a config also checks `read` on the config (`roles.md`, Section 4.3), so they need a `read` grant too; Section 3.3 adds one.
 
 `constraint` is an object with the shape of a rule:
 
@@ -216,7 +258,7 @@ Tenant A's users can run and approve monitoring playbooks on the configs that ar
 
 At least one of them MUST be set: a `constraint` that sets neither is rejected. A missing `constraint` and `null` both mean no constraint, and the binding grants the Role's rules as written.
 
-A constraint applies to every allow rule of the Role, one side at a time:
+A constraint applies to every rule of the Role, one side at a time:
 
 - With `resource`, an operation's resource must be in the rule's `resource` Scope **and** the constraint's.
 - With `target`, an operation's target must be in the rule's `target` Scope **and** the constraint's.
@@ -231,7 +273,6 @@ A binding always grants its whole Role. A constraint doesn't choose among its ru
 - The binding says which Role is granted, and the constraint only says where. Which actions are granted is still read from the Role alone (`overview.md`: actions only live in Roles).
 - A rule added to the Role later is narrowed like the others as soon as the Role is stored, without the binding being updated. If the constraint can't narrow it, it doesn't apply through the binding, and the binding reports it (Section 3.2). It's never granted as written.
 - Renaming a rule doesn't affect the Role's bindings.
-- Deny rules are never narrowed, since narrowing a deny lets through what it used to block. They apply in full whenever the Role is valid, whatever the constraint does to the allow rules (Section 4).
 
 To grant only some rules of a Role, put them in a Role of their own and bind that.
 
@@ -246,7 +287,7 @@ Kubernetes and GCP IAM narrow a binding as a whole too: a RoleBinding limits a C
 
 ### 3.2 Which rules a constraint narrows
 
-A constraint can't widen a rule: it narrows each input to the resources in both Scopes, and a resource is in the constraint's Scope by the usual membership rule (`scopes.md`, Section 4). For each allow rule, and each side the constraint sets:
+A constraint can't widen a rule: it narrows each input to the resources in both Scopes, and a resource is in the constraint's Scope by the usual membership rule (`scopes.md`, Section 4). For each rule, and each side the constraint sets:
 
 | The rule's input on that side          | Types both Scopes select | Effect on the rule                                     |
 | -------------------------------------- | ------------------------ | ------------------------------------------------------ |
@@ -263,7 +304,7 @@ For `read`, a constraint's Scope narrows a type to all of it when it has a whole
 
 Two rules close the gaps:
 
-- **A rule that no side narrows doesn't apply through the binding.** That's a `read` rule under a constraint that only sets `target`. Leaving it as written would grant the subjects every resource of the rule, the leak Section 3.1 rules out. So a constraint never leaves an allow rule un-narrowed: either it narrows the rule, or the rule doesn't apply.
+- **A rule that no side narrows doesn't apply through the binding.** That's a `read` rule under a constraint that only sets `target`, and every rule of an action that takes no resource (`roles.md`, Section 2.3). Leaving it as written would grant the subjects every resource of the rule, the leak Section 3.1 rules out. So a constraint never leaves a rule un-narrowed: either it narrows the rule, or the rule doesn't apply.
 - **A type the input can't carry is ignored for that input.** A Scope of tenant A's configs and playbooks can be a constraint's `target` even though a target is never a playbook. Unlike a rule, a constraint may use part of a Scope: a rule's Scope is the grant, so a type the action can't use means the rule is wrong, while a constraint's Scope is a boundary, and a boundary that covers more than one input needs is harmless. This lets one Scope per tenant serve every input of every Role.
 
 The narrowed input must still be enforceable for the rule's action, by the same requirements the rule's own Scope meets (`roles.md`, Sections 2 and 3.1). A constraint isn't a way around them. They're checked on the constraint's targets of the types both Scopes select, and only those: a target of another type never narrows the rule, so it's never checked against the rule's action. The playbook target in `tenant-a` (Section 3.3) is never checked against `read`, although `read` accepts playbooks, because `read-production`'s Scope selects no playbook. Where the checked targets don't meet the requirements, the rule doesn't apply through the binding:
@@ -271,13 +312,11 @@ The narrowed input must still be enforceable for the rule's action, by the same 
 - **`create`, `update`, `delete`.** These are only checked on all resources of a type (`roles.md`, Section 2), so a constraint can't narrow them within a type: the checked targets MUST be whole-type targets. It can still drop types: on a rule whose Scope selects every config and every component, a constraint whose Scope selects every config grants the action on configs only.
 - **`read`.** Any checked target is accepted, since membership is decided by the resource alone (`scopes.md`, Section 4.3), except that connections MUST be whole-type targets (`roles.md`, Section 3.1). If a checked target isn't a whole-type target, the rule needs row-level security even when its own Scope doesn't: while it's off, the rule doesn't apply through the binding, with reason `RowLevelSecurityRequired`. It applies again when row-level security is enabled, without the binding being re-applied.
 
-Deny rules aren't narrowed, so none of this applies to them.
-
 #### Reporting
 
-A binding reports the allow rules that don't apply through it. Its `AllRulesApply` condition is `True` when every allow rule applies, and `False` with a message naming each rule that doesn't and why. The Role's status lists the bindings whose `AllRulesApply` is `False` (`roles.md`, Section 6), and the response to a Role update through the API carries the same list. A binding with that condition is `Ready=True` while at least one allow rule applies through it, and `Ready=False` once none does (Section 4). Its deny rules apply either way.
+A binding reports the rules that don't apply through it. Its `AllRulesApply` condition is `True` when every rule applies, and `False` with a message naming each rule that doesn't and why. The Role's status lists the bindings whose `AllRulesApply` is `False` (`roles.md`, Section 6), and the response to a Role update through the API carries the same list. A binding with that condition is `Ready=True` while at least one rule applies through it, and `Ready=False` once none does (Section 4).
 
-A rule the constraint can't narrow is reported rather than failing the binding, for two reasons. Rules are added to the Role, and whoever adds one can't see its bindings: failing the binding would turn a rule added to a shared Role into an outage for every tenant, and drop the Role's deny rules with it (Section 4). Reporting keeps what worked working, lowers no guardrail, and still never grants as written. The price is that what a binding grants isn't readable from its Role alone, which is why the Role shows it too.
+A rule the constraint can't narrow is reported rather than failing the binding, for two reasons. Rules are added to the Role, and whoever adds one can't see its bindings: failing the binding would turn a rule added to a shared Role into an outage for every tenant. Reporting keeps what worked working, and still never grants as written. The price is that what a binding grants isn't readable from its Role alone, which is why the Role shows it too.
 
 ### 3.3 Rules of different shapes
 
@@ -352,15 +391,12 @@ To narrow two rules differently, put them in two Roles and bind each with its ow
 
 A binding is validated against what it references: its Role, and the Scopes its constraint names. Nothing is ever validated against the binding.
 
-A binding that's wrong on its own is rejected (`overview.md`, "Rejected or not in effect"): no subjects, a `people` entry that isn't an email, a built-in role that can't be bound, an `oidc.match` that doesn't compile or doesn't return a bool, an empty or wildcard-namespace resource subject, or a `constraint` that sets neither `resource` nor `target`. Everything else is checked against the Role and Scopes, as follows.
+A binding that's wrong on its own is rejected (`overview.md`, "Rejected or not in effect"): no subjects, a `people` entry that isn't an email or `*`, an `oidc.match` that doesn't compile or doesn't return a bool, an empty or wildcard-namespace resource subject, or a `constraint` that sets neither `resource` nor `target`. Everything else is checked against the Role and Scopes, as follows.
 
 - A binding takes effect only once its Role exists and is valid. Until then it's `Ready=False` with the reason and none of its rules apply. There is no previous version to fall back to; the binding is whatever was last written.
-- Its deny rules apply whenever the Role is valid. The constraint never touches them, so nothing about the constraint, a missing Scope included, stops a deny: a constraint failure must never lower a guardrail.
-- Its allow rules apply as the constraint narrows them (Section 3.2). When the Role or a Scope the constraint names changes, is deleted or becomes invalid, or row-level security is turned on or off, each allow rule is checked again. A Scope that's gone or invalid selects nothing (`scopes.md`, Section 7), so no allow rule applies through the binding while that holds. A rule the constraint can't narrow doesn't apply and is reported; the others keep applying.
-- A binding is `Ready=False` when its Role is missing or invalid, when a Scope its constraint names is missing or invalid, or when the Role has allow rules and none applies through the binding. In the last two cases its deny rules still apply. The reason names the cause.
+- Its rules apply as the constraint narrows them (Section 3.2). When the Role or a Scope the constraint names changes, is deleted or becomes invalid, or row-level security is turned on or off, each rule is checked again. A Scope that's gone or invalid selects nothing (`scopes.md`, Section 7), so no rule applies through the binding while that holds. A rule the constraint can't narrow doesn't apply and is reported; the others keep applying.
+- A binding is `Ready=False` when its Role is missing or invalid, when a Scope its constraint names is missing or invalid, or when none of the Role's rules applies through the binding. The reason names the cause.
 - It becomes `Ready=True` again, without being re-applied, as soon as the cause is gone.
-
-A constraint on a Role with no allow rules has no effect.
 
 So a Role and its bindings can be changed in any order. A constraint names no rule, so rules can be added, renamed or removed without touching the bindings: an added rule applies, already narrowed, as soon as the Role is stored, or is reported if the constraint can't narrow it.
 

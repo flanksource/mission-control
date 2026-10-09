@@ -50,15 +50,30 @@ spec:
 
 Each entry under `targets` MUST set exactly one of these keys:
 
-| Key          | Selects                                                   |
-| ------------ | --------------------------------------------------------- |
-| `config`     | Config items                                              |
-| `component`  | Topology components                                       |
-| `check`      | Health checks                                             |
-| `canary`     | Canaries                                                  |
-| `playbook`   | Playbooks                                                 |
-| `view`       | Views                                                     |
-| `connection` | Connections                                               |
+| Key                   | Selects                                                  |
+| --------------------- | -------------------------------------------------------- |
+| `config`              | Config items                                             |
+| `component`           | Topology components                                      |
+| `check`               | Health checks                                            |
+| `canary`              | Canaries                                                 |
+| `playbook`            | Playbooks                                                |
+| `view`                | Views                                                    |
+| `connection`          | Connections                                              |
+| `application`         | Applications                                             |
+| `notification`        | Notifications                                            |
+| `notificationSilence` | Notification silences                                    |
+| `scraper`             | Config scrapers                                          |
+| `agent`               | Agents                                                   |
+| `person`              | People                                                   |
+| `team`                | Teams                                                    |
+| `scope`               | Scopes                                                   |
+| `role`                | Roles                                                    |
+| `roleBinding`         | RoleBindings                                             |
+| `event`               | Events in Mission Control's event queue                  |
+| `job`                 | Job history that belongs to no other resource (Section 3.2) |
+| `property`            | Properties, Mission Control's settings and feature flags |
+
+Everything Mission Control protects is one of these types. There's no other kind of object a Role can grant, and no global switch: "all of a type" is a whole-type target (Section 5.2).
 
 Keys are exact. `playbooks`, `configs` or any other spelling is not a resource type. An entry with two keys, or none, is invalid.
 
@@ -80,6 +95,19 @@ targets:
 - **AND** (the `echo` playbook together with a beta config) pairs resources, and a Scope is only a set.
 
 So it would either add nothing or stop being a set. Write one target per type instead.
+
+### 3.2 Records
+
+Some data belongs to a resource rather than being one: a config's changes and analysis, a playbook's runs, a notification's send history, a check's statuses, and job history about a resource. A record isn't a type. It's readable exactly when every resource it belongs to is (`roles.md`, Section 3.1):
+
+- A playbook run belongs to its playbook, and to the config or check it ran on, if any.
+- A run's steps, approvals and the data its agent reports belong to the run, so they follow the run.
+- A relationship between two configs belongs to both.
+- An artifact, e.g. a file a run's step or a check produced, belongs to what produced it: a run's step, a check, a config change or a scraper. So an artifact from a playbook run is visible exactly when the run is, whoever started the run.
+
+**TODO:** runs on a component. Today they follow their playbook alone, so anyone who can read the playbook sees them.
+
+**Why.** Who may see a run or a change is never a separate question from who may see what it's about. A run on a config is about the config as much as the playbook, so a subject who can't read the config can't read the run, its steps or their results. Job history about no resource has nothing to follow, so it's the type `job`.
 
 ## 4. Membership
 
@@ -208,12 +236,16 @@ A selector MUST only use fields its type has. Anything else is rejected, never i
 | `playbook`   | `id`, `name`, `namespace`                                                        |
 | `view`       | `id`, `name`, `namespace`                                                        |
 | `connection` | `id`, `name`, `namespace`, `types`                                               |
+| `scraper`    | `id`, `name`, `namespace`, `agent`                                               |
+| `application`, `notification`, `notificationSilence`, `agent`, `person`, `team`, `scope`, `role`, `roleBinding`, `event`, `job`, `property` | `name`, and only `*` |
 
 Notes:
 
 - A Config's namespace is its `namespace` tag. `namespace: staging` and `tagSelector: namespace=staging` select the same Configs.
 - Only Configs have tags. Components, checks and canaries have labels.
 - Playbooks have neither tags nor labels.
+- A target of a type whose only field is `name` is a whole-type target or nothing: `name: "*"` is its only valid form, and every other value is rejected. _Why:_ there's no technical reason. It's the simplest first step for types that are new to Scopes: a whole-type grant needs no selector fields, no Scope membership and no row filtering. Each type can get the fields its resources have, and partial grants, when they're needed, without breaking a Scope written today.
+- Scrapers have the selector fields their resources have, since grants on some scrapers, e.g. those of one agent or namespace, are needed from the start. They have no tags or labels.
 
 ### 5.4 Agents
 
@@ -321,7 +353,7 @@ An agent change MAY take effect shortly after it's saved rather than with it. Un
 
 An operation that makes several checks (`roles.md`, Section 4.3) MUST make all of them against the membership of one moment, for every resource the operation involves. It MUST NOT see a Scope's previous membership in one check and its new membership in another.
 
-**Why.** Each check alone sees a real state, but two checks on either side of a change can together allow what neither state allows. E.g. a subject reads configs through Scope S, may run playbook P on any config, and is denied running P on configs in S. S is changed to drop config C. Before, C is readable and running P on it is denied; after, C isn't readable. If the `read` check sees S before the change and the `playbook:run` check sees it after, both pass, and P runs on C.
+**Why.** Each check alone sees a real state, but two checks on either side of a change can together allow what neither state allows. E.g. a subject may run playbook P on configs tagged `env=dev`, and may read configs tagged `env=prod`. Config C's tag changes from `env=dev` to `env=prod`. Before, P may run on C but C can't be read; after, C can be read but P may not run on it. If the `playbook:run` check sees C before the change and the `read` check sees it after, both pass, and P runs on C.
 
 ## 8. Operations
 
@@ -338,4 +370,4 @@ A Scope can't intersect two targets, exclude resources, or list names (Sections 
 
 ### 8.2 Across Scopes
 
-Two Scopes are combined in one place only: a RoleBinding constraint, which narrows a rule's Scope to the resources in both (`rolebindings.md`, Section 3). Combining grants (allow rules adding up, deny rules refusing) is specified in `roles.md`, Section 5.
+Two Scopes are combined in one place only: a RoleBinding constraint, which narrows a rule's Scope to the resources in both (`rolebindings.md`, Section 3). Combining grants is specified in `roles.md`, Section 5.

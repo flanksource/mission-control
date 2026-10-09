@@ -40,10 +40,21 @@ scope_members (scope_id, resource_type, resource_id)   -- no resource_id: every 
 
 - **One predicate:** each resource type has one SQL predicate deciding whether a resource matches a target row. It's used both ways: a written resource against every target of its type, and a Scope's targets against every resource. A Scope's rebuild runs it with each target's values as constants, so the tag and label indexes apply. The trigger runs the predicate on two sets of targets: those sharing a `key=value` tag or label, or the namespace, with the written resource, found through an index on `scope_targets`; and every target of the type that sets none of those. Every target is in one set or the other, so a target that sets only `id`, `name`, a prefix, `agent` or `types` is still checked. _Why:_ the two can't disagree, and there's no compiler to keep in step with the Scope language beyond writing targets as rows. Measured, constants took a 20k-config rebuild from 3.7 s to 0.2 s, and the keyed lookup made matching negligible next to writing the rows.
 - **Resource written:** in the writing transaction, a database trigger replaces the resource's membership rows with the targets it matches. Inserts are matched once per statement, not once per row. Updates are matched only when a field a Scope can select changes (`scopes.md` §5.1), decided before any function runs. A row deleted outright loses its membership; setting `deleted_at` changes nothing. _Why:_ membership then commits with the write. Resources are also written by other processes, such as config-db and canary-checker, so only a trigger sees every write. Health and status change constantly and can't change membership (`scopes.md` §4.3), so they cost nothing.
-- **Scope saved:** created or its targets changed, from a CRD or through the UI alike, or re-validated with its `agent` resolving to a different id. Mission Control rewrites the Scope's targets and members in the save transaction, and the save returns once that commits; a re-resolved `agent` is rebuilt on the policy reload that follows the agent change (`scope-membership-writes.md`). A save whose targets haven't changed rebuilds nothing, and a rebuild writes only the members that change. If the rebuild fails, the save fails and rolls back: the old Scope and its membership stay in force, a CRD's reconcile retries, and the UI gets the error. A CRD then shows `Ready=False` with reason `PersistFailed`, which means the previous version is still in effect (`overview.md`, "Rejected or not in effect"); kopper advances `observedGeneration` even then, so that's no sign the save succeeded. Otherwise `Ready` only says whether the Scope is valid; no status reports a rebuild. _Why:_ Postgres shows readers the old rows until the commit and the new ones after, so membership switches at once with no generations to track (`scopes.md` §7.1). A reconcile saves every Scope again on restart, and rewriting a broad Scope's 500k rows each time would take 7 s per Scope. `Ready=False` during a rebuild would stop every Role that references the Scope from applying, deny rules included.
+- **Scope saved:** created or its targets changed, from a CRD or through the UI alike, or re-validated with its `agent` resolving to a different id. Mission Control rewrites the Scope's targets and members in the save transaction, and the save returns once that commits; a re-resolved `agent` is rebuilt on the policy reload that follows the agent change (`scope-membership-writes.md`). A save whose targets haven't changed rebuilds nothing, and a rebuild writes only the members that change. If the rebuild fails, the save fails and rolls back: the old Scope and its membership stay in force, a CRD's reconcile retries, and the UI gets the error. A CRD then shows `Ready=False` with reason `PersistFailed`, which means the previous version is still in effect (`overview.md`, "Rejected or not in effect"); kopper advances `observedGeneration` even then, so that's no sign the save succeeded. Otherwise `Ready` only says whether the Scope is valid; no status reports a rebuild. _Why:_ Postgres shows readers the old rows until the commit and the new ones after, so membership switches at once with no generations to track (`scopes.md` §7.1). A reconcile saves every Scope again on restart, and rewriting a broad Scope's 500k rows each time would take 7 s per Scope. `Ready=False` during a rebuild would stop every Role that references the Scope from applying.
 - **Scope invalid or deleted:** its targets and members are deleted in one transaction.
 - **Lock:** every write to `scope_targets` takes one advisory lock exclusively, and the trigger takes it shared. A rebuild waits for the lock for at most a short `lock_timeout`, about 1 s; if it times out, the rebuild backs off and retries, a bounded number of times. A save that runs out of retries fails like any failed save: the UI gets the error, and a CRD shows `Ready=False` with reason `PersistFailed`, with the previous version in effect, until its reconcile tries again. _Why:_ a resource written during a rebuild would otherwise be matched against the old targets while the rebuild's snapshot misses it, leaving a row from neither version. One lock for all types, since a rebuild covers every type its Scope selects at once, and locks per type could deadlock against a transaction writing several types. The timeout matters because an exclusive request first waits for every writer already holding the lock, and Postgres queues new requests behind it meanwhile: without it, one long scraper transaction would stall every resource write for its whole length, plus the rebuild. With it, writes wait at most the timeout plus the rebuild, which only happens when a Scope is saved.
 - **Startup:** every valid Scope with neither targets nor members is built by Mission Control before it accepts requests; if one can't be built, it doesn't start. _Why:_ a grant through a Scope with no rows is refused, so serving earlier would refuse grants that are in effect.
+
+## Scrapers and the types granted whole
+
+Most types added to Scopes only take type-wide grants (`scopes.md` §5.3), so they're never filtered by row and need no membership rows beyond the whole-type one. Scrapers are the exception: they can be granted in part, by `id`, `name`, `namespace` and `agent`, so `config_scrapers` is filtered like configs.
+
+- **Targets and predicate.** A scraper target is a `scope_targets` row with `resource_type = scraper`, using the `id`, `name`/`name_prefix`, `namespace` and `agent_id` columns. The scraper predicate tests those against `config_scrapers` columns of the same names.
+- **Trigger.** `config_scrapers` gets the membership trigger every resource table has. Its selectable fields are the four above, so other updates, e.g. to `spec`, change nothing.
+- **Row-level security.** `config_scrapers` gets a policy admitting a row through the claim's `scraper` grants, and `scraper` joins the claim's grant types.
+- **Records.** Artifacts and job history a scraper produced follow the scraper (`scopes.md` §3.2): their policies test the scraper's row with `EXISTS`, like the child tables in the FAQ.
+
+_Why not leave scrapers whole-type only:_ grants on some scrapers, e.g. one agent's or one namespace's, are needed from the start, and the fields that express them are already columns.
 
 ## Claim
 
@@ -53,7 +64,7 @@ A listing admits a row through a Scope when the Scope has a membership row for i
 
 ## Single-resource checks
 
-Every check but a listing is a Casbin check. A Role rule's policy has the shape every policy has, `sub, obj, act, eft, condition, id`, and its Scopes go in `condition`, as a plain Casbin expression over the request.
+Every check but a listing is a Casbin check. A Role rule's policy has the shape every policy has, `sub, obj, act, eft, condition, id`, with `eft` always `allow`, and its Scopes go in `condition`, as a plain Casbin expression over the request.
 
 - **Request.** Before an operation's checks, the memberships of every resource it involves are read in one query, and every check of the operation uses them (`scopes.md` §7.2). They're added to the request beside its other fields, as `Membership`:
 
@@ -66,7 +77,7 @@ Every check but a listing is a Casbin check. A Role rule's policy has the shape 
 
   _Why:_ the condition then only tests whether a value is in a list, which Casbin does natively, so nothing on the Casbin side interprets a rule. Primary and target are kept apart so that a Scope selecting several types can't match through the wrong resource of the request.
 
-- **Condition.** An allow rule's condition holds when the request fits, the primary resource is in every Scope of the rule's resource (its own and the constraint's), and the target is in every Scope of the rule's target, or there's no target when the rule has none. A deny rule's holds when the request doesn't fit, or when the same membership test holds. _Why:_ a request the action doesn't accept never matches an allow and always matches a deny, so it fails closed.
+- **Condition.** A rule's condition holds when the request fits, the primary resource is in every Scope of the rule's resource (its own and the constraint's), and the target is in every Scope of the rule's target, or there's no target when the rule has none. _Why:_ a request the action doesn't accept never matches, so it fails closed.
 - **Policies name Scopes only**, like the claim. _Why:_ a rebuild, including one that makes a Scope whole-type or not, takes effect on the next check with no policy reload, and a Scope with no rows is in no request's lists, so a grant naming it fails whole.
 - **Compatibility.** The policy shape, the matcher and the request's other fields are the same for every policy, so a policy whose condition doesn't read `Membership` evaluates exactly as it would without it. _Why:_ Role rules share one enforcer with every other policy, and must not change how those evaluate.
 
@@ -84,7 +95,17 @@ Permissions are kept working only where that costs Role rules nothing (`permissi
 
 - **Naming Scopes** (`object.scopes`): checked through the Scopes' membership, like a rule, on single resources and on listings.
 - **Inline selectors:** not materialised. A single-resource check evaluates them, and a listing grants no rows through them. _Why:_ materialising them needs a second kind of Scope to build and store, for a feature on its way out.
-- **Deny on `read`:** not enforced row by row. A subject it applies to lists no rows of any type it covers: an empty result, not `403`. _Why:_ Role rules can't deny `read` (`roles.md` §2), so the claim has no deny, and a deny that can't be enforced must refuse rather than allow (`permissions.md`).
+- **Deny:** there's none, for Permissions or Role rules (`permissions.md`; `overview.md`, "Access"). The claim has no deny, and neither does any policy.
+
+## Removing deny
+
+Deny is removed outright, not kept and ignored:
+
+- **API and database.** `deny` is removed from the API's Role and Permission types, so a request that sets it is rejected as an unknown field. The `deny` column of `permissions` is dropped, and every Permission stored with `deny` set is deleted in the same migration. A Role stored in the database with a deny rule is deleted too.
+- **CRDs.** The Role and Permission CRDs keep `deny` in their schema and Go types, only to refuse it. The schema validates `self.deny != true`, so `kubectl apply` of `deny: true` fails. An object already in Kubernetes with `deny: true` is `Ready=False` with reason `Invalid` when it's reconciled, and grants nothing until it's rewritten without it. `deny: false` is accepted and ignored.
+- **Casbin.** The effect becomes `some(where (p.eft == allow))`. The matcher loses its admin exemption, and the built-in deny on the Kratos tables goes with `policies.yaml`.
+
+_Why delete the stored denies rather than drop the column alone:_ without the column, each deny row reads as an allow of the same subject, object and action, granting exactly what it was written to refuse. _Why the CRDs keep the field:_ Kubernetes prunes fields a structural schema doesn't list, unless the client asks for strict validation, so a `deny: true` still in Git would be stored as an allow rule, silently. Validation only runs when an object is written, so the reconciler has to see the field too, for objects stored before the change. _Why accept `deny: false`:_ it changes nothing, and manifests that spell it out keep applying.
 
 ## Not covered
 
@@ -122,10 +143,7 @@ Soft deletion doesn't. `deleted_at` is state, not identity or ownership (`scopes
 **What happens if the trigger fails?**
 The write fails with it, as with any trigger. That's why the trigger only runs the one predicate, and why it's tested on every resource type.
 
-**What does a deny Permission on `read` do to a listing?**
-It empties it: the claim grants no rows of the types the deny covers, so every path that applies the claim enforces it the same way, through PostgREST and through Go alike. It's never `403` (see Permissions).
-
-**Do guests who rely on Permissions with inline selectors lose their listings?**
+**Do subjects who rely on Permissions with inline selectors lose their listings?**
 Yes, and that's accepted (`permissions.md`). Their single-resource checks keep working. It's called out in the release notes. Permissions get no new status condition, since they get no new features.
 
 **What happens to a stored Scope that uses `!=`, `in`, `notin` or a bare key?**
