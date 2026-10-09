@@ -93,7 +93,7 @@ For `playbook:run`, `target` is optional. A rule without it matches only runs wi
   - A pattern grants actions added later. If the `kubernetes-logs` plugin ships a new `exec-shell` operation, `invoke:kubernetes-logs:*` would grant it without anyone reviewing the Role.
 - A plugin action isn't checked against the installed plugins: plugins are installed and upgraded often, and a Role mustn't break when one is. A rule on an operation no plugin declares matches nothing until one does.
 - `create`, `update` and `delete` are only checked on all resources of a type, so their Scope MUST consist of whole-type targets only (`scopes.md`, Section 5.2).
-- Deny rules on `read` are rejected for now, because they couldn't be enforced on listings: Mission Control's own users' database listings aren't filtered by row unless they're guests (`overview.md`, "Default access"). A deny on reading production configs would still let an editor list them.
+- **TODO:** Deny rules on `read` are rejected. Allowing them is specified separately, on top of gates (`collection-access.md`, Section 3.1).
 
 An operation may make more than one check. For example, running a playbook on a config also checks `read` on that config. Section 4.3 lists every check each operation makes; a rule never grants the other checks implicitly.
 
@@ -244,6 +244,7 @@ A rule is matched against the actual resource and target of an operation:
 - The operation MUST name its resource, and its target if it has one. A missing or unknown target is never treated as "no target".
 - An operation that doesn't fit the action, such as a target of the wrong type, matches no allow rule and every deny rule.
 - An entry point may require an extra permission, e.g. `mcp:run` for playbooks run through MCP. It never replaces the check of the operation itself.
+- An operation that reads, creates, updates or deletes resources of a type is first gated by the subject's answer for the type and action (`collection-access.md`, Section 3.1). The gate never replaces these checks.
 
 A check carries only the resources its action's contract can match (Section 2). An action without a target carries the resource alone, even when the operation it gates has one. So each operation makes these checks:
 
@@ -341,16 +342,16 @@ The built-in roles answer two separate questions:
 
 ### 7.2 Members
 
-`viewer` is the base member role. `editor`, `commander` and `responder` inherit it, so they see everything a viewer sees, and anything granted to `viewer` reaches them too. Members' listings are never filtered by row: a member sees every resource of a type they can read.
+`viewer` is the base member role. `editor`, `commander` and `responder` inherit it, so they see everything a viewer sees, and anything granted to `viewer` reaches them too. A member's listings of a type are filtered by row only when their answer for it is `some`, e.g. because a Permission denies part of it (`collection-access.md`, Section 3.1). Otherwise a member sees every resource of a type they can read.
 
 ### 7.3 Guests
 
-A guest is the restricted role. Guests get past the same whole-type checks as viewers for `read`, the built-in access every user has (`overview.md`, "Default access"). But their listings are always filtered by row, to the resources their Permissions and RoleBindings grant (Section 3.1). So a guest sees only what's been shared with them.
+A guest is the restricted role. Guests have the built-in `read` every user has (`overview.md`, "Default access"), but it doesn't count towards their answer for a resource type (`collection-access.md`, Section 2). So operations on resource types let a guest in only through their Permissions and RoleBindings, and their listings are always filtered by row to what those grant (Section 3.1). A guest sees only what's been shared with them.
 
 `guest` doesn't inherit `viewer`. A guest isn't reached by what's granted to `viewer` or to any other member role.
 
 ### 7.4 Open questions
 
 - **TODO:** A person with no built-in role. Today they get the built-in access every user has, unfiltered, so in practice they're a viewer. Decide whether that's intended, or whether they should get nothing until they're given a role.
-- **TODO:** Reads granted to `viewer`. Section 7.3 says they don't reach guests, but the code currently lets them reach every user, guests and agents included, on whole-type checks. Confirm guests are excluded, and fix the code.
+- **TODO:** Reads granted to `viewer` on objects that aren't resource types. Section 7.3 says they don't reach guests, but the code currently lets them reach every user, guests and agents included. Confirm guests are excluded, and fix the code. On resource types, gates settle it (`collection-access.md`, Section 3.1).
 - Guest visibility is settled by `collection-access.md`: a guest's built-in `read` doesn't count, so a guest opening one resource is checked against their grants only, and while row-level security is off a guest lists only types their grants cover whole (Sections 2 and 2.3).
