@@ -12,7 +12,7 @@ Built-in roles are removed outright, with no automatic conversion. On upgrade:
 
 - Every built-in role assignment stops granting, and its Casbin row is deleted. Admins included, nobody has access until a RoleBinding selects them.
 - The first admin binding is applied by hand through Kubernetes, e.g. `kubectl apply` of a RoleBinding binding `admin` to the operator's email. Mission Control's API can't be used for it, since nobody holds a grant yet. Further bindings can then be made through the UI.
-- Kratos team mapper scripts that return a `role` must be rewritten to return teams (`rolebindings.md`, Section 2.2). Clerk installs need a `--clerk-team-mapper` to replace the built-in mapping of Clerk organisation roles.
+- Kratos team mapper scripts that return a `role` must be rewritten to return teams (`rolebindings.md`, Section 2.2). Clerk installs get the default team mapper, which puts people in `admins` or `viewers`: create those teams and bind `admin` and `viewer` to them to restore the old access.
 
 _Why by hand:_ few installations exist, and each is upgraded by its operator. Recreating their access by hand costs less than conversion code that would have to guess which teams and bindings each built-in role should become.
 
