@@ -304,6 +304,24 @@ Some work isn't started by a person: a playbook running on its schedule or from 
 
 _Why the resource and not its author:_ a resource's author can change, and resources come from Git, the UI and other tools. Granting the resource itself makes what it may do one question, answered by its bindings, whoever wrote it last. Who can change a resource with a grant is covered by `rolebindings.md`, Section 2.5.
 
+### 4.5 Agents
+
+An agent is a Mission Control instance in another cluster that sends what it scrapes and checks to this one. Every request it makes carries an access token issued to that agent. The agent a request acts as MUST be the one its token belongs to: a request that names another agent, or a token that belongs to no agent, is refused. A request never creates an agent.
+
+An agent may, without any Role or RoleBinding:
+
+- push its own data, e.g. configs, changes, components, checks and their statuses, job history and artifacts, and delete data it pushed before;
+- fetch what's assigned to it: its canaries, scrape configs and playbook actions, and report the results of those actions;
+- keep its connection: ping, and open the tunnel this instance uses to reach it;
+- read the column definitions of any view, never its rows;
+- register the plugins it runs. It MUST NOT replace a plugin registered by anyone else.
+
+Everything else, e.g. reading configs other agents pushed or listing playbooks, takes a RoleBinding that selects the agent (`rolebindings.md`, Section 2.3), like any subject.
+
+_Why no Role:_ everything above acts on the agent's own data, and the token already proves which agent is asking. A rule would be the same for every agent, so it would grant nothing a reader of a Role couldn't assume. Creating the agent is the grant: only a subject with `create` on `agent` can, and only they receive its token. Kubernetes authorizes a kubelet the same way, by the node its credential names rather than by RBAC.
+
+An agent sets the tags and labels of what it pushes. A Scope that selects by them, e.g. `tagSelector: env=prod`, includes an agent's resources when the agent tags them so, and grants on that Scope reach them. A Scope that must only select resources from trusted sources SHOULD also select by `agent` (`scopes.md`, Section 5.4).
+
 ## 5. Combining rules
 
 Across all the rules that apply to a subject, from every Role they're bound to:

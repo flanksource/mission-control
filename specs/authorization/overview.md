@@ -92,9 +92,9 @@ The word appears twice, with different meanings:
 
 **A subject may perform an action on a resource when a RoleBinding that selects the subject gives it a Role with a rule matching the action and resource.** Otherwise it's refused. Nothing else grants anything, apart from deprecated Permissions (`permissions.md`).
 
-- **Every subject is checked the same way.** A person, a team member, an agent, a user of an external identity provider and a playbook acting on its own are all subjects. What kind of subject they are only decides which RoleBinding subjects can select them (`rolebindings.md`, Section 2). It never decides what they may do.
+- **Every subject is checked the same way.** A person, a team member, an agent, a user of an external identity provider and a playbook acting on its own are all subjects. What kind of subject they are only decides which RoleBinding subjects can select them (`rolebindings.md`, Section 2). It never decides what they may do, with one exception: an agent acts on its own data without a grant (`roles.md`, Section 4.5).
 - **Everything is a resource.** Every protected thing is a type a Scope selects, from configs to RoleBindings and the event queue (`scopes.md`, Section 3.1). Data about a resource, such as a playbook's runs, follows it. Properties alone are readable by every signed-in subject without a rule (`roles.md`, Section 3.1).
-- **Signing in grants nothing.** A new person, an invited person and a new agent can do nothing until a RoleBinding selects them.
+- **Signing in grants nothing.** A new person or an invited person can do nothing until a RoleBinding selects them. A new agent can only push and fetch its own data.
 - **Listings follow the same grants.** A subject lists every resource of a type their `read` rules cover whole, the resources their `read` rules select where they cover part of it, and is refused where none applies (`collection-access.md`).
 - **Rules only allow.** There are no deny rules. Adding a binding never removes access, and removing one never adds any. To keep something from a subject, don't grant it: bind the narrower Role to the narrower group.
 - **Admins are subjects like any other.** An admin is a subject bound to the `admin` Role. With no deny rules, nothing can take an admin's access away except removing their binding.
@@ -115,7 +115,6 @@ Mission Control ships these Roles in the `mission-control` namespace. They're or
 | `viewer` | `read` on every type that takes it                                                           |
 | `editor` | What `viewer` allows, plus `create`, `update` and `delete` on every type but `person`, `team`, `scope`, `role`, `roleBinding` and `property`, and `connection:use` on every connection |
 | `admin`  | Every action on every type (`scopes.md`, Section 3.1), every plugin operation included       |
-| `agent`  | What an agent needs to push data from another cluster                                        |
 
 `viewer` sees connections but never uses their credentials (`roles.md`, Section 2.2).
 
@@ -129,7 +128,7 @@ _Why one namespace:_ references never cross namespaces, and keeping the shipped 
 
 ### Configured bindings
 
-Mission Control's configuration MAY declare RoleBindings, e.g. the first admins, or every agent bound to `agent`. Mission Control writes them when it starts, so they're back in place after a restart even if they were deleted.
+Mission Control's configuration MAY declare RoleBindings, e.g. the first admins. Mission Control writes them when it starts, so they're back in place after a restart even if they were deleted.
 
 _Why:_ someone has to be able to create the first RoleBinding, and a deleted admin binding has to come back without going through Mission Control's API. Configured bindings are RoleBindings like any other.
 

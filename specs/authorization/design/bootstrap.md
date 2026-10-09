@@ -11,5 +11,5 @@ Nothing is allowed by default, admins included (`overview.md`, "Access"), so a n
 **TODO**, to be decided with the implementation. It doesn't change any requirement of the specs:
 
 - Where configured bindings are declared, e.g. Helm values or a file Mission Control reads at startup.
-- What an install declares by default, e.g. the first admin, and every agent bound to the shipped `agent` Role.
+- What an install declares by default, e.g. the first admin.
 - How a configured binding is told apart from one created through the API or Kubernetes, and whether it can be changed or deleted through them.
