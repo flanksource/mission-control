@@ -184,7 +184,7 @@ subjects:
       name: kubernetes-logs
 ```
 
-Each entry is an object with `namespace` and `name`, and MUST set at least one of them; an empty entry is rejected. The values follow the rules of a Scope's selectors (`scopes.md`, Section 5.2), except that `name: "*"` is allowed here:
+Each entry is an object with `namespace` and `name`, and MUST set at least one of them; an empty entry is rejected. The values follow the same rules as in a Scope (`scopes.md`, Section 5.2):
 
 - `name` is one exact value, or `*` as the whole value to match any name.
 - `namespace` is one exact value. To match any namespace, omit it. `namespace: "*"` is rejected.

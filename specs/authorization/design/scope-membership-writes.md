@@ -29,7 +29,7 @@ Example: saving
 spec:
   targets:
     - config: { name: "web-*", agent: prod, tagSelector: "env=prod,team=web" }
-    - type: playbook
+    - playbook: { name: "*" }
     - view: { name: dashboards }
 ```
 

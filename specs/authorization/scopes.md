@@ -48,12 +48,7 @@ spec:
 
 ### 3.1 Resource types
 
-Each entry under `targets` is either a **selector** or a **type target**:
-
-- A selector sets exactly one of the keys below, with conditions on that type's fields (Section 5), e.g. `config: {tagSelector: env=prod}`.
-- A type target is `type:` with one of the keys below as its value, e.g. `type: config`. It selects every resource of that type (Section 5.2).
-
-The keys are:
+Each entry under `targets` MUST set exactly one of these keys:
 
 | Key                   | Selects                                                  |
 | --------------------- | -------------------------------------------------------- |
@@ -80,7 +75,7 @@ The keys are:
 
 Everything Mission Control protects is one of these types. There's no other kind of object a Role can grant, and no global switch: "all of a type" is a whole-type target (Section 5.2).
 
-Keys are exact. `playbooks`, `configs` or any other spelling is not a resource type. An entry with two keys, or none, is invalid, and so is a `type:` naming anything but one key.
+Keys are exact. `playbooks`, `configs` or any other spelling is not a resource type. An entry with two keys, or none, is invalid.
 
 Different entries MAY select different types.
 
@@ -185,26 +180,28 @@ Every target is a selector over the fields its resource type has. A selector MUS
 
 | Form          | Matches                          | Example                                                        |
 | ------------- | -------------------------------- | -------------------------------------------------------------- |
+| `*`           | Any name, including an empty one | `name: "*"`                                                    |
 | `prefix*`     | Names that start with `prefix`   | `name: "prod-*"` matches `prod-db` and `prod-`, not `prod`     |
 | anything else | Exactly that name                | `name: "prod-db"`                                              |
 
 A pattern has exactly one `*`, at the end, and at least one character before it. Everything else is rejected:
 
 - `*` at the start (`*-db`), in the middle (`prod-*-db`), at both ends (`*db*`), or more than once (`prod-*-*`).
-- `*` alone. To select every resource of a type, use a type target (below).
 - Lists (`a,b`) and exclusions (`!a`). To select several names, use one target per name; targets combine with OR (Section 4).
 - `*` in `namespace` or `id`.
 
 Matching is case-sensitive: `prod-*` doesn't match `Prod-db`. Every character other than a trailing `*` is literal, including `,`, `!`, `%` and `_`. A resource whose name contains `*` can only be selected by `id`.
 
+- `name: "*"` selects every resource of the target's type, not of every type.
 - `types` values are exact: `*` and `!` are rejected.
 - Label selector values can't contain `*`, so no wildcard is inferred in `tagSelector` or `labelSelector`.
 
-A **whole-type target** is a type target, e.g. `type: config`. It selects every resource of its type, now and later, and it's the only target that counts as selecting a whole type where that matters (`roles.md`, Sections 2 and 3.1). A selector isn't a whole-type target, however many resources it matches:
+A **whole-type target** is `name: "*"` and nothing else. It selects every resource of its type, and it's the only target that counts as selecting a whole type where that matters (`roles.md`, Sections 2 and 3.1). A pattern target isn't a whole-type target, however many resources it matches:
 
 ```yaml
 targets:
-  - type: config
+  - config:
+      name: "*"
 ```
 
 #### Why these patterns and no others
@@ -224,7 +221,6 @@ Every form a `name` can take has to mean exactly the same set in both, or a reso
 - **Exclusions** (`!a`) make a selector match everything it doesn't name, including resources created later. A Scope grants access, so it names what's in, never what's out.
 - **Case-sensitive** matching selects what was typed and nothing wider. Resource names from cloud providers can differ only by case, and a Scope must not quietly include both.
 - **Literal `,`, `!`, `%` and `_`** keep a name that contains them selectable exactly. Only `*` has a meaning.
-- **A whole type is a target of its own**, not a value of `name`. A selector says which resources, a type target says all of them, and no one reading a Scope has to know that one name value means something different from the rest.
 - **A pattern is not a whole type**, even one that happens to match every resource today, because what it matches changes as resources come and go. A whole-type grant must be decidable from the Scope alone.
 
 ### 5.3 Fields each type supports
@@ -241,14 +237,14 @@ A selector MUST only use fields its type has. Anything else is rejected, never i
 | `view`       | `id`, `name`, `namespace`                                                        |
 | `connection` | `id`, `name`, `namespace`, `types`                                               |
 | `scraper`    | `id`, `name`, `namespace`, `agent`                                               |
-| `application`, `notification`, `notificationSilence`, `agent`, `person`, `team`, `scope`, `role`, `roleBinding`, `event`, `job`, `property` | None: type targets only, e.g. `type: person` |
+| `application`, `notification`, `notificationSilence`, `agent`, `person`, `team`, `scope`, `role`, `roleBinding`, `event`, `job`, `property` | `name`, and only `*` |
 
 Notes:
 
 - A Config's namespace is its `namespace` tag. `namespace: staging` and `tagSelector: namespace=staging` select the same Configs.
 - Only Configs have tags. Components, checks and canaries have labels.
 - Playbooks have neither tags nor labels.
-- A type with no supported fields can only be selected whole, by a type target. A selector of it, e.g. `person: {name: alice}`, is rejected. _Why:_ there's no technical reason. It's the simplest first step for types that are new to Scopes: a whole-type grant needs no selector fields, no Scope membership and no row filtering. Each type can get the fields its resources have, and partial grants, when they're needed, without breaking a Scope written today.
+- A target of a type whose only field is `name` is a whole-type target or nothing: `name: "*"` is its only valid form, and every other value is rejected. _Why:_ there's no technical reason. It's the simplest first step for types that are new to Scopes: a whole-type grant needs no selector fields, no Scope membership and no row filtering. Each type can get the fields its resources have, and partial grants, when they're needed, without breaking a Scope written today.
 - Scrapers have the selector fields their resources have, since grants on some scrapers, e.g. those of one agent or namespace, are needed from the start. They have no tags or labels.
 
 ### 5.4 Agents
@@ -278,13 +274,8 @@ targets:
 # Two types in one target
 targets:
   - config:
-      name: prod-db
+      name: "*"
     playbook:
-      name: echo
----
-# A name wildcard instead of a type target: use `type: config`
-targets:
-  - config:
       name: "*"
 ---
 # Empty selector: a config target without conditions
