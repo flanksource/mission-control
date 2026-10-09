@@ -8,16 +8,14 @@ import (
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rls"
 	"github.com/google/uuid"
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 )
 
-const (
-	HeaderFlanksourceScope = "X-Flanksource-Scope"
-	impersonatedRLSCtxKey  = "impersonated-rls-scopes"
-)
+const HeaderFlanksourceScope = "X-Flanksource-Scope"
 
 // parseImpersonatedScopes parses the X-Flanksource-Scope header: a JSON array of Scope ids.
 func parseImpersonatedScopes(header string) ([]string, error) {
@@ -76,7 +74,8 @@ func applyImpersonation(real *rls.Payload, scopeIDs []string) *rls.Payload {
 }
 
 // ScopeImpersonation is an echo middleware that reads the X-Flanksource-Scope header, a JSON array of Scope ids,
-// and stores them in the request context. GetRLSPayload then narrows the subject's grants to them.
+// and narrows the request to them: GetRLSPayload narrows the subject's listings, and duty's rbac.HasPermission
+// its checks on resources.
 func ScopeImpersonation(next echov4.HandlerFunc) echov4.HandlerFunc {
 	return func(c echov4.Context) error {
 		ctx := c.Request().Context().(context.Context)
@@ -95,7 +94,10 @@ func ScopeImpersonation(next echov4.HandlerFunc) echov4.HandlerFunc {
 			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid %s header: %v", HeaderFlanksourceScope, err))
 		}
 
-		ctx = ctx.WithValue(impersonatedRLSCtxKey, ids)
+		ctx, err = dutyRBAC.Impersonate(ctx, ids)
+		if err != nil {
+			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "failed to read the scopes of the %s header", HeaderFlanksourceScope))
+		}
 		c.SetRequest(c.Request().WithContext(ctx))
 		return next(c)
 	}
@@ -103,8 +105,9 @@ func ScopeImpersonation(next echov4.HandlerFunc) echov4.HandlerFunc {
 
 // getImpersonatedScopes returns the Scope ids set by the ScopeImpersonation middleware, or nil.
 func getImpersonatedScopes(ctx context.Context) []string {
-	if v, ok := ctx.Value(impersonatedRLSCtxKey).([]string); ok {
-		return v
+	scopes, ok := dutyRBAC.Impersonation(ctx)
+	if !ok {
+		return nil
 	}
-	return nil
+	return lo.Map(scopes, func(s dutyRBAC.ImpersonatedScope, _ int) string { return s.ID })
 }
