@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
@@ -20,7 +21,7 @@ var _ = ginkgo.Describe("Views endpoint authorization", func() {
 		/*
 			Context for this endpoint test:
 			- viewer: gets permission by default from built-in RBAC policies for views:read
-			- guest: needs explicit permission to read views
+			- guest: needs explicit permission to read views; without one, it is refused before the handler runs
 		*/
 		viewerUser := setup.CreateUserWithRole(DefaultContext, "Views Endpoint Viewer", "views-endpoint-viewer@test.com", policy.RoleViewer)
 		guestUser := setup.CreateUserWithRole(DefaultContext, "Views Endpoint Guest", "views-endpoint-guest@test.com", policy.RoleGuest)
@@ -55,7 +56,7 @@ var _ = ginkgo.Describe("Views endpoint authorization", func() {
 
 		body, err := io.ReadAll(guestResp.Body)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(string(body)).To(ContainSubstring("access denied"))
+		Expect(strings.ToLower(string(body))).To(ContainSubstring("access denied"))
 	})
 
 	ginkgo.It("should return metadata for GET /view/metadata/:id without rows", func() {
@@ -97,6 +98,6 @@ var _ = ginkgo.Describe("Views endpoint authorization", func() {
 
 		body, err := io.ReadAll(guestResp.Body)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(string(body)).To(ContainSubstring("access denied"))
+		Expect(strings.ToLower(string(body))).To(ContainSubstring("access denied"))
 	})
 })
