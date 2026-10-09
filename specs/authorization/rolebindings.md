@@ -255,7 +255,7 @@ A constraint can't widen a rule: it narrows each input to the resources in both 
 
 "Types both Scopes select" are the types the input accepts (`roles.md`, Section 2) that a target of the rule's Scope and a target of the constraint's Scope both select. Two Scopes with a type in common can still select no resource in common, e.g. configs in two different namespaces. That's an empty set like any other (`scopes.md`, Section 4.1), and isn't reported.
 
-For `read`, a constraint's Scope narrows a type to all of it when it has a whole-type target of the type, whatever its other targets, since targets combine with OR (`scopes.md`, Section 4). Such a rule doesn't need row-level security for that type, and `collection-access.md`, Section 2.4 counts it as whole-type by the same test.
+For `read`, a constraint's Scope narrows a type to all of it when it has a whole-type target of the type, whatever its other targets, since targets combine with OR (`scopes.md`, Section 4). Such a rule's listings of that type aren't filtered by row, and `collection-access.md`, Section 2.3 counts it as whole-type by the same test.
 
 Two rules close the gaps:
 
@@ -265,7 +265,7 @@ Two rules close the gaps:
 The narrowed input must still be enforceable for the rule's action, by the same requirements the rule's own Scope meets (`roles.md`, Sections 2 and 3.1). A constraint isn't a way around them. They're checked on the constraint's targets of the types both Scopes select, and only those: a target of another type never narrows the rule, so it's never checked against the rule's action. The playbook target in `tenant-a` (Section 3.3) is never checked against `read`, although `read` accepts playbooks, because `read-production`'s Scope selects no playbook. Where the checked targets don't meet the requirements, the rule doesn't apply through the binding:
 
 - **`create`, `update`, `delete`.** These are only checked on all resources of a type (`roles.md`, Section 2), so a constraint can't narrow them within a type: the checked targets MUST be whole-type targets. It can still drop types: on a rule whose Scope selects every config and every component, a constraint whose Scope selects every config grants the action on configs only.
-- **`read`.** Any checked target is accepted, since membership is decided by the resource alone (`scopes.md`, Section 4.3), except that connections MUST be whole-type targets (`roles.md`, Section 3.1). If a checked target isn't a whole-type target, the rule needs row-level security even when its own Scope doesn't: while it's off, the rule doesn't apply through the binding, with reason `RowLevelSecurityRequired`. It applies again when row-level security is enabled, without the binding being re-applied.
+- **`read`.** Any checked target is accepted, since membership is decided by the resource alone (`scopes.md`, Section 4.3), except that connections MUST be whole-type targets (`roles.md`, Section 3.1). If a checked target isn't a whole-type target, the rule's listings are filtered by row, even when its own Scope is whole-type.
 
 #### Reporting
 
@@ -349,7 +349,7 @@ A binding is validated against what it references: its Role, and the Scopes its 
 A binding that's wrong on its own is rejected (`overview.md`, "Rejected or not in effect"): no subjects, a `people` entry that isn't an email or `*`, an `oidc.match` that doesn't compile or doesn't return a bool, an empty or wildcard-namespace resource subject, or a `constraint` that sets neither `resource` nor `target`. Everything else is checked against the Role and Scopes, as follows.
 
 - A binding takes effect only once its Role exists and is valid. Until then it's `Ready=False` with the reason and none of its rules apply. There is no previous version to fall back to; the binding is whatever was last written.
-- Its rules apply as the constraint narrows them (Section 3.2). When the Role or a Scope the constraint names changes, is deleted or becomes invalid, or row-level security is turned on or off, each rule is checked again. A Scope that's gone or invalid selects nothing (`scopes.md`, Section 7), so no rule applies through the binding while that holds. A rule the constraint can't narrow doesn't apply and is reported; the others keep applying.
+- Its rules apply as the constraint narrows them (Section 3.2). When the Role or a Scope the constraint names changes, is deleted or becomes invalid, each rule is checked again. A Scope that's gone or invalid selects nothing (`scopes.md`, Section 7), so no rule applies through the binding while that holds. A rule the constraint can't narrow doesn't apply and is reported; the others keep applying.
 - A binding is `Ready=False` when its Role is missing or invalid, when a Scope its constraint names is missing or invalid, or when none of the Role's rules applies through the binding. The reason names the cause.
 - It becomes `Ready=True` again, without being re-applied, as soon as the cause is gone.
 
