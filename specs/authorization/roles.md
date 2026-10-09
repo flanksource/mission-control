@@ -320,7 +320,7 @@ Everything else, e.g. reading configs other agents pushed or listing playbooks, 
 
 _Why no Role:_ everything above acts on the agent's own data, and the token already proves which agent is asking. A rule would be the same for every agent, so it would grant nothing a reader of a Role couldn't assume. Creating the agent is the grant: only a subject with `create` on `agent` can, and only they receive its token. Kubernetes authorizes a kubelet the same way, by the node its credential names rather than by RBAC.
 
-An agent sets the tags and labels of what it pushes. A Scope that selects by them, e.g. `tagSelector: env=prod`, includes an agent's resources when the agent tags them so, and grants on that Scope reach them. A Scope that must only select resources from trusted sources SHOULD also select by `agent` (`scopes.md`, Section 5.4).
+An agent sets the tags and labels of what it pushes. A Scope that selects by them, e.g. `tagSelector: env=prod`, includes an agent's resources when the agent tags them so, and grants on that Scope reach them. To keep an agent's resources out of a Scope, select by `agent` too (`scopes.md`, Section 5.4).
 
 ## 5. Combining rules
 
