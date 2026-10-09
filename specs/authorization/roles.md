@@ -87,11 +87,12 @@ Every action has a contract, defined in code: the resource types it accepts, and
 | `connection:use`                                      | Connection                                             | None                               |
 | `person:invite`                                       | None                                                   | None                               |
 | `person:manage`                                       | None                                                   | None                               |
+| `person:delete`                                       | None                                                   | None                               |
 | `mcp:use`                                             | None                                                   | None                               |
 
 The types are those of `scopes.md`, Section 3.1. Checks, events and jobs are only written by Mission Control itself. Properties aren't read through a rule (Section 3.1). `connection:use` allows acting with a connection's credentials (Section 2.2).
 
-`person:invite` allows inviting someone to Mission Control. `person:manage` allows managing existing accounts: disabling and re-enabling them, changing their properties, name or email, and deleting them. People aren't created, changed or deleted any other way, so `create`, `update` and `delete` don't apply to them. _Why:_ inviting someone and managing their account are what an admin actually does, and named actions say so. A rule allowing `create` on people would leave its reader asking where people are created. An invite that names teams adds the person to them when it's accepted (`rolebindings.md`, Section 2.2), so `person:invite` also places people into teams and whatever the teams' bindings grant.
+`person:invite` allows inviting someone to Mission Control. `person:manage` allows managing existing accounts: disabling and re-enabling them, and changing their properties, name or email. `person:delete` allows deleting them. People aren't created, changed or deleted any other way, so `create`, `update` and `delete` don't apply to them. _Why:_ inviting someone and managing their account are what an admin actually does, and named actions say so. A rule allowing `create` on people would leave its reader asking where people are created. An invite that names teams adds the person to them when it's accepted (`rolebindings.md`, Section 2.2), so `person:invite` also places people into teams and whatever the teams' bindings grant.
 
 **TODO:** the Kubernetes proxy, i.e. the kubeconfig download and the requests made through it, has no action. It's left for a later design (`overview.md`, "Not covered yet").
 
@@ -132,7 +133,8 @@ A few actions aren't performed on a resource a Scope could select. They act on a
 | Action          | Allows                                                                                         |
 | --------------- | ---------------------------------------------------------------------------------------------- |
 | `person:invite` | Inviting someone to Mission Control                                                            |
-| `person:manage` | Managing existing accounts: disabling, re-enabling, changing properties, name or email, deleting |
+| `person:manage` | Managing existing accounts: disabling, re-enabling, changing properties, name or email          |
+| `person:delete` | Deleting someone's account                                                                     |
 | `mcp:use`       | Using Mission Control's MCP server at all. Each MCP tool still checks what it touches (Section 4.3) |
 
 ```yaml
@@ -341,6 +343,7 @@ Some work isn't done by the person who started it: a playbook running on its sch
 
 - A plugin's checks are made as the plugin, selected by `plugins` in a RoleBinding (`rolebindings.md`, Section 2.5). Every connection it resolves is checked this way, by whatever path it resolves it: `read` lets it see a connection's name, type and settings, and `connection:use` lets it act with the credentials (Section 2.2). The rule's `resource` Scope selects the connections.
 - A plugin can only be granted two actions, `read` and `connection:use`, on Scopes that select connections and nothing else. A RoleBinding that selects a plugin and binds a Role with any other rule, or with a rule whose Scope selects another type, is `Ready=False` and grants nothing, to any of its subjects, until the Role or the binding is changed. _Why:_ a plugin only needs Mission Control's authorization to reach connections. Keeping its grants to connections keeps what a plugin can touch small and readable from one kind of rule.
+- Plugins are upgraded by Mission Control itself, on a schedule. No person or Role can trigger an upgrade.
 - The caller's `invoke:<plugin>:<operation>` only lets the caller start the operation. It gives the plugin no access to any connection or resource. A plugin without a grant that matches is refused, and the operation fails. It's never retried as the caller or as any other subject.
 
   ```yaml
@@ -373,7 +376,13 @@ _Why the plugin and not its caller:_ the plugin's code decides what it does with
 
 _Why the resource and not its author:_ a resource's author can change, and resources come from Git, the UI and other tools. Granting the resource itself makes what it may do one question, answered by its bindings, whoever wrote it last. Who can change a resource with a grant is covered by `rolebindings.md`, Section 2.5.
 
-### 4.5 Agents
+### 4.5 Access tokens
+
+A person may always create, change and delete their own access tokens, without any grant. No one can create, change or delete a token for anyone else, and no action grants it. A token acts as the person it belongs to, so it can never do more than they can.
+
+_Why no grant:_ a token adds no access its owner doesn't already have, so there's nothing for a Role to decide.
+
+### 4.6 Agents
 
 An agent is a Mission Control instance in another cluster that sends what it scrapes and checks to this one. Every request it makes carries an access token issued to that agent. The agent a request acts as MUST be the one its token belongs to: a request that names another agent, or a token that belongs to no agent, is refused. A request never creates an agent.
 
