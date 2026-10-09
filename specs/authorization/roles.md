@@ -85,8 +85,9 @@ Every action has a contract, defined in code: the resource types it accepts, and
 | `mcp:run`                                             | Playbook                                               | None                               |
 | `invoke:<plugin>:<operation>`                         | Config                                                 | None                               |
 | `kubernetes:proxy`                                    | Config                                                 | None                               |
+| `connection:use`                                      | Connection                                             | None                               |
 
-The types are those of `scopes.md`, Section 3.1. Checks, events and jobs are only written by Mission Control itself. Properties aren't read through a rule (Section 3.1). `kubernetes:proxy` allows calling the Kubernetes API of a cluster config, e.g. one of type `Kubernetes::Cluster`, through Mission Control's proxy.
+The types are those of `scopes.md`, Section 3.1. Checks, events and jobs are only written by Mission Control itself. Properties aren't read through a rule (Section 3.1). `kubernetes:proxy` allows calling the Kubernetes API of a cluster config, e.g. one of type `Kubernetes::Cluster`, through Mission Control's proxy. `connection:use` allows acting with a connection's credentials (Section 2.2).
 
 For `playbook:run`, `target` is optional. A rule without it matches only runs with no target. A rule with `target.scopeRef` matches only runs on Configs, Components or Checks in that Scope (Section 4.1).
 
@@ -101,6 +102,22 @@ An operation may make more than one check. For example, running a playbook on a 
 ### 2.1 Why one action per rule
 
 A rule has exactly one action, because the action decides what the rest of the rule means. Its contract fixes the resource types the `resource` Scope may select, whether the rule takes a `target` and of which types, what its Scopes must meet (Section 3), and how it's enforced. A rule with several actions would need one Scope to meet several contracts at once. One action per rule also lets an invalid rule name the action that's wrong. To grant several actions on the same Scope, write a rule for each.
+
+### 2.2 Reading and using a connection
+
+A connection is read and used separately:
+
+| Operation                                                                                     | Action           |
+| --------------------------------------------------------------------------------------------- | ---------------- |
+| List or open a connection: its name, type and settings, and which secret it references        | `read`           |
+| Act with its credentials: a notification sending through it, a playbook or plugin calling it | `connection:use` |
+| Test it                                                                                       | `connection:use` |
+| Create, change or delete it                                                                   | `create`, `update`, `delete` |
+
+- `read` MUST NOT return a connection's credentials, in plain text or decrypted from a secret. They're masked wherever a connection is shown.
+- Mission Control MUST check `connection:use` wherever it fills in a connection's credentials, as the subject doing the work (Section 4.4). Looking a connection up by name to record which one is meant, without its credentials, checks nothing.
+
+_Why two actions:_ seeing that a connection exists and acting with its credentials are different risks. With one action, letting someone see the connections a notification can use would let anything bound the same way send with them. _Why testing is a use:_ a test makes an authenticated call to the other system, and its result can show what the masked connection doesn't, e.g. whether the credentials work.
 
 ## 3. Which Scopes a rule accepts
 
@@ -249,6 +266,7 @@ A rule is matched against the actual resource and target of an operation:
 - The operation MUST name its resource, and its target if it has one. A missing or unknown target is never treated as "no target".
 - An operation that doesn't fit the action, such as a target of the wrong type, matches no rule.
 - An entry point may require an extra permission, e.g. `mcp:run` for playbooks run through MCP. It never replaces the check of the operation itself.
+- Reaching an entry point, e.g. the HTTP API or Mission Control's MCP server, needs authentication only. There's no action for using one: each endpoint or MCP tool checks the resources it touches, so a subject with no grants reaches the MCP server and is offered no tools. _Why:_ an entry point isn't a resource, and a check at the door would only decide which channel someone works through, not what they may do. Authorizing once, at the resource, leaves one place to read.
 
 A check carries only the resources its action's contract can match (Section 2). An action without a target carries the resource alone, even when the operation it gates has one. So each operation makes these checks:
 
@@ -260,6 +278,31 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Approve or cancel run R               | `playbook:approve` or `playbook:cancel`     | R's playbook    | R's resource, if the run had one  |
 | Invoke a plugin operation on config C | `invoke:<plugin>:<operation>`, then `read`  | C, then C       | None                              |
 | Open resource X                       | `read`                                      | X               | None                              |
+| Use connection C, e.g. to send        | `connection:use`                            | C               | None                              |
+| Test connection C                     | `connection:use`                            | C               | None                              |
+
+Each check is made as the subject performing the operation: the caller, or, where there's none, the resource doing the work (Section 4.4).
+
+### 4.4 Operations without a caller
+
+Some work isn't started by a person: a playbook running on its schedule or from a webhook, a notification being sent, a playbook started by a notification or by another playbook. Mission Control has no identity of its own to run it as (`overview.md`, "Access"). It's checked as the resource doing it, which a RoleBinding selects like any subject (`rolebindings.md`, Section 2.5):
+
+| Work                                              | Starting it is checked as             | Checks made during it are made as |
+| ------------------------------------------------- | ------------------------------------- | --------------------------------- |
+| A person runs playbook P                          | The person                            | P                                 |
+| P runs on its schedule, or from a webhook         | Not checked: no one asks for the run  | P                                 |
+| Notification N runs playbook P                    | N                                     | P                                 |
+| Playbook Q's run starts playbook P                | Q                                     | P                                 |
+| N is evaluated against an event                   | Not checked                           | Not checked                       |
+| N is sent                                         | Not checked: no one asks for the send | N                                 |
+
+- A run's actions are checked as its playbook, whoever started it. A playbook with no binding can do nothing that's checked: it can't read a config, use a connection or run another playbook.
+- A webhook authenticates the request with the playbook's own webhook settings. The webhook isn't a subject, and grants nothing.
+- Evaluating a notification matches an event against the notification's events, filter and silences, and queues what to send. It makes no check, and MUST NOT fill in a connection's credentials. It records the connection to send through by id only.
+- Sending checks `connection:use` on that connection as the notification. If the check fails, the send fails, and the failure is recorded on the notification's send history and status. It's never retried as another subject.
+- No one's access is checked when a notification or playbook is created or changed against the connections and resources it names. What it may do comes only from the bindings that select it. A notification created from a custom resource has no author to check, so an author check would treat the same notification differently depending on where it was written.
+
+_Why the resource and not its author:_ a resource's author can change, and resources come from Git, the UI and other tools. Granting the resource itself makes what it may do one question, answered by its bindings, whoever wrote it last. Who can change a resource with a grant is covered by `rolebindings.md`, Section 2.5.
 
 ## 5. Combining rules
 

@@ -151,6 +151,14 @@ Subjects are matched by namespace and name, not by reference to a specific objec
 
 Editors of a resource’s executable definition are trusted with the permissions and credentials available to its execution.
 
+Since resource subjects are matched this way, a binding also reaches resources created later that match it, and whoever can create one gets the binding's Role for what it does:
+
+- `notifications: [{namespace: monitoring}]` grants its Role to every notification in `monitoring`. Anyone who can create a notification there can make one that uses it.
+- `name: "*"` does the same across every namespace.
+- An exact name not yet in use is taken by whoever first creates a resource with that name.
+
+Bind by exact namespace and name wherever the Role is sensitive, e.g. `connection:use` on a connection that pages people, or anything bound to `admin`. _Why it's allowed:_ a playbook or notification's access is a property of where it lives, like a Kubernetes pod using any service account in its namespace. Granting by namespace is how a team gives its own playbooks access without a binding per playbook. The binding is still the grant: creating a resource that matches no binding gets it nothing, whatever connections or resources it names (`roles.md`, Section 4.4).
+
 ## 3. Constraint
 
 A constraint lets one Role serve many groups, each limited to its own resources. Given this Role:
