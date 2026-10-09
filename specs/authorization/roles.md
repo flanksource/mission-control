@@ -33,7 +33,7 @@ spec:
 | ------------------- | --------------------- | -------------------------------------------------------------------------------------------- |
 | `name`              | Yes                   | Unique within the Role.                                                                      |
 | `action`            | Yes                   | What may be done (Section 2).                                                                |
-| `resource.scopeRef` | Yes                   | The Scope of resources the action is performed on, e.g. the playbooks to run.                |
+| `resource.scopeRef` | Depends on the action | The Scope of resources the action is performed on, e.g. the playbooks to run. Omitted for the few actions that take no resource (Section 2.3). |
 | `target.scopeRef`   | Depends on the action | The Scope of resources the action is performed against, e.g. the configs a playbook runs on. |
 
 A Scope is a named set of resources (see `scopes.md`). A rule references exactly one Scope per input, by name. A Role MUST have a namespace, and `scopeRef` only names Scopes in it (`overview.md`, "Namespaces"). The resources a Scope selects can be in any namespace.
@@ -85,8 +85,9 @@ Every action has a contract, defined in code: the resource types it accepts, and
 | `mcp:run`                                             | Playbook                                               | None                               |
 | `invoke:<plugin>:<operation>`                         | Config                                                 | None                               |
 | `connection:use`                                      | Connection                                             | None                               |
-| `person:invite`                                       | Person                                                 | None                               |
-| `person:manage`                                       | Person                                                 | None                               |
+| `person:invite`                                       | None                                                   | None                               |
+| `person:manage`                                       | None                                                   | None                               |
+| `mcp:use`                                             | None                                                   | None                               |
 
 The types are those of `scopes.md`, Section 3.1. Checks, events and jobs are only written by Mission Control itself. Properties aren't read through a rule (Section 3.1). `connection:use` allows acting with a connection's credentials (Section 2.2).
 
@@ -123,6 +124,30 @@ A connection is read and used separately:
 - Mission Control MUST check `connection:use` wherever it fills in a connection's credentials, as the subject doing the work (Section 4.4). Looking a connection up by name to record which one is meant, without its credentials, checks nothing.
 
 _Why two actions:_ seeing that a connection exists and acting with its credentials are different risks. With one action, letting someone see the connections a notification can use would let anything bound the same way send with them. _Why testing is a use:_ a test makes an authenticated call to the other system, and its result can show what the masked connection doesn't, e.g. whether the credentials work.
+
+### 2.3 Actions without a resource
+
+A few actions aren't performed on a resource a Scope could select. They act on a type as a whole, or on Mission Control itself. They take no `resource`, and a rule that sets one is rejected. They're exactly these:
+
+| Action          | Allows                                                                                         |
+| --------------- | ---------------------------------------------------------------------------------------------- |
+| `person:invite` | Inviting someone to Mission Control                                                            |
+| `person:manage` | Managing existing accounts: disabling, re-enabling, changing properties, name or email, deleting |
+| `mcp:use`       | Using Mission Control's MCP server at all. Each MCP tool still checks what it touches (Section 4.3) |
+
+```yaml
+rules:
+  - name: invite
+    action: person:invite
+  - name: use-mcp
+    action: mcp:use
+```
+
+- Every other action takes a resource, and a rule that omits it is rejected. `read`, `create`, `update`, `delete` and every other generic action always take one: no rule grants them on everything.
+- An action without a resource is named `<type>:<verb>`, after what it acts on, so the rule still says what it's about without a Scope.
+- A RoleBinding constraint has nothing to narrow on such a rule, so the rule never applies through a binding with a constraint, and the binding reports it (`rolebindings.md`, Section 3.2).
+
+_Why:_ the person being invited doesn't exist yet, and the MCP server isn't a resource, so a Scope would have nothing to select and would only repeat the action's name. Keeping the list closed and named means every other rule still says what it's on.
 
 ## 3. Which Scopes a rule accepts
 
@@ -217,7 +242,7 @@ Whether a subject may list a type at all, and what a listing returns for a subje
 A rule matches an operation when all three hold:
 
 1. The operation's action is the rule's `action`.
-2. The operation's resource is in the rule's `resource` Scope.
+2. The operation's resource is in the rule's `resource` Scope, for an action that takes one (Section 2.3).
 3. The operation's target matches the rule's `target` (Section 4.1).
 
 For example, this rule matches running `restart-pod` on a staging config, because `restart-pod` is in `monitoring-playbooks` and the config is in `staging-configs`:
@@ -273,7 +298,7 @@ A rule is matched against the actual resource and target of an operation:
 - The operation MUST name its resource, and its target if it has one. A missing or unknown target is never treated as "no target".
 - An operation that doesn't fit the action, such as a target of the wrong type, matches no rule.
 - An entry point may require an extra permission, e.g. `mcp:run` for playbooks run through MCP. It never replaces the check of the operation itself.
-- Reaching an entry point, e.g. the HTTP API or Mission Control's MCP server, needs authentication only. There's no action for using one: each endpoint or MCP tool checks the resources it touches, so a subject with no grants reaches the MCP server and is offered no tools. _Why:_ an entry point isn't a resource, and a check at the door would only decide which channel someone works through, not what they may do. Authorizing once, at the resource, leaves one place to read.
+- Reaching an entry point needs authentication. Mission Control's MCP server also needs `mcp:use` (Section 2.3), and each MCP tool then checks the resources it touches, e.g. `mcp:run` and the run's own checks for a playbook. _Why `mcp:use`:_ it lets an admin allow someone to use Mission Control directly but not through an AI agent, whatever else they're granted.
 
 A check carries only the resources its action's contract can match (Section 2). An action without a target carries the resource alone, even when the operation it gates has one. So each operation makes these checks:
 
@@ -287,6 +312,7 @@ A check carries only the resources its action's contract can match (Section 2). 
 
 The plugin's own checks during the operation, e.g. on the connections it uses, are made as the plugin (Section 4.4).
 | Open resource X                       | `read`                                      | X               | None                              |
+| Connect to the MCP server             | `mcp:use`                                   | None            | None                              |
 | Use connection C, e.g. to send        | `connection:use`                            | C               | None                              |
 | Test connection C                     | `connection:use`                            | C               | None                              |
 
