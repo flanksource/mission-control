@@ -36,7 +36,7 @@ A RoleBinding MUST have a namespace, and its Role and constraint Scopes must be 
 
 | Field                                                              | Type            | Selects                                                              |
 | ------------------------------------------------------------------ | --------------- | -------------------------------------------------------------------- |
-| `people`                                                           | list of strings | Mission Control users, by email only                                 |
+| `people`                                                           | list of strings | Humans who sign in to Mission Control, by email or `*`              |
 | `teams`                                                            | list of strings | Every member of the teams, by team name                              |
 | `agents`                                                           | list of strings | Agents, by name (Section 2.3)                                        |
 | `oidc`                                                             | list of objects | Users of an external identity provider, by the claims in their token |
