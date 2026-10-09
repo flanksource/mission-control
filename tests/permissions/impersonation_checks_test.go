@@ -26,6 +26,7 @@ import (
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
+	mcRBAC "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
@@ -119,6 +120,7 @@ var _ = ginkgo.Describe("Scope impersonation of resource checks", ginkgo.Ordered
 		e = echo.New()
 		e.Use(auth.ScopeImpersonation)
 		playbook.RegisterRoutes(e)
+		mcRBAC.RegisterRoutes(e)
 
 		// The read check views, plugins and others make on a single resource
 		e.GET("/test/read-config/:id", func(c echo.Context) error {
@@ -265,6 +267,29 @@ var _ = ginkgo.Describe("Scope impersonation of resource checks", ginkgo.Ordered
 		ginkgo.It("is unchanged without the header", func() {
 			rec := do(admin, http.MethodGet, "/test/connection/"+connOut.Name, nil)
 			Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+		})
+	})
+
+	ginkgo.Context("an access review", func() {
+		review := func(cfg models.ConfigItem, scopeIDs ...string) bool {
+			ginkgo.GinkgoHelper()
+			rec := do(admin, http.MethodPost, "/rbac/subject-access-reviews", map[string]any{
+				"resource": map[string]any{"config": cfg.ID.String()},
+				"action":   policy.ActionRead,
+				"subjects": []string{guest.ID.String()},
+			}, scopeIDs...)
+			Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+
+			var response mcRBAC.SubjectAccessReviewResponse
+			Expect(json.Unmarshal(rec.Body.Bytes(), &response)).To(Succeed())
+			Expect(response.Results).To(HaveLen(1))
+			return response.Results[0].Allowed
+		}
+
+		ginkgo.It("answers by the reviewed subject's own access, whatever the requester's header", func() {
+			Expect(review(cfgIn)).To(BeTrue())
+			Expect(review(cfgIn, scopes["out"])).To(BeTrue())
+			Expect(review(cfgOut, scopes["out"])).To(BeFalse(), "the guest has no grant through out")
 		})
 	})
 
