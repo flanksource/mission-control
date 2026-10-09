@@ -230,7 +230,8 @@ A selector MUST only use fields its type has. Anything else is rejected, never i
 | `playbook`   | `id`, `name`, `namespace`                                                        |
 | `view`       | `id`, `name`, `namespace`                                                        |
 | `connection` | `id`, `name`, `namespace`, `types`                                               |
-| `application`, `notification`, `notificationSilence`, `scraper`, `scope`, `role`, `roleBinding` | `id`, `name`, `namespace` |
+| `application`, `notification`, `notificationSilence`, `scraper` | `id`, `name`, `namespace` |
+| `scope`, `role`, `roleBinding` | `name`, and only `*` |
 | `agent`, `team` | `id`, `name`                                                                  |
 | `person`     | `id`, `name`, `email`                                                            |
 | `event`      | `name`, the event's name, e.g. `config.updated`                                  |
@@ -242,6 +243,7 @@ Notes:
 - A Config's namespace is its `namespace` tag. `namespace: staging` and `tagSelector: namespace=staging` select the same Configs.
 - Only Configs have tags. Components, checks and canaries have labels.
 - Playbooks have neither tags nor labels.
+- A `scope`, `role` or `roleBinding` target selects the whole type or nothing: `name: "*"` is its only valid form. _Why:_ anyone who can change one Scope, Role or RoleBinding can grant anyone anything (`overview.md`, "Who may manage these resources"), so a grant on some of them is no narrower than a grant on all. Narrower targets wait for delegated administration (`overview.md`, "Not covered yet").
 
 ### 5.4 Agents
 
