@@ -84,10 +84,11 @@ Every action has a contract, defined in code: the resource types it accepts, and
 | `playbook:run`, `playbook:approve`, `playbook:cancel` | Playbook                                               | Optional: Config, Component, Check |
 | `mcp:run`                                             | Playbook                                               | None                               |
 | `invoke:<plugin>:<operation>`                         | Config                                                 | None                               |
-| `kubernetes:proxy`                                    | Config                                                 | None                               |
 | `connection:use`                                      | Connection                                             | None                               |
 
-The types are those of `scopes.md`, Section 3.1. Checks, events and jobs are only written by Mission Control itself. Properties aren't read through a rule (Section 3.1). `kubernetes:proxy` allows calling the Kubernetes API of a cluster config, e.g. one of type `Kubernetes::Cluster`, through Mission Control's proxy. `connection:use` allows acting with a connection's credentials (Section 2.2).
+The types are those of `scopes.md`, Section 3.1. Checks, events and jobs are only written by Mission Control itself. Properties aren't read through a rule (Section 3.1). `connection:use` allows acting with a connection's credentials (Section 2.2).
+
+**TODO:** the Kubernetes proxy, i.e. the kubeconfig download and the requests made through it, has no action. It's left for a later design (`overview.md`, "Not covered yet").
 
 For `playbook:run`, `target` is optional. A rule without it matches only runs with no target. A rule with `target.scopeRef` matches only runs on Configs, Components or Checks in that Scope (Section 4.1).
 

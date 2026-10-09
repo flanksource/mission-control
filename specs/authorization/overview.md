@@ -165,4 +165,5 @@ Where the specs say an object "is rejected", this is what they mean.
 
 - **Views.** No rule can select Views, and Roles grant no rows of the tables Views generate.
 - **Permissions and PermissionGroups** are deprecated, and not specified here (`permissions.md`).
+- **The Kubernetes proxy. TODO, deliberately postponed.** The kubeconfig download and the requests made through Mission Control's Kubernetes proxy have no action under these specs, so no Role or RoleBinding can grant them, and they don't work under this model. That's a known gap, accepted for now: the feature is rarely used and isn't worth holding the rest of this design back, though some installations may rely on it. A proposed design is recorded in `design/kubernetes-proxy.md`, and is not adopted.
 - **Delegated administration.** Letting a team manage the Roles and RoleBindings of its own namespace isn't supported. It needs an escalation check, so that a binding can't grant more than its author holds.
