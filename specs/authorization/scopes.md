@@ -63,7 +63,6 @@ Each entry under `targets` MUST set exactly one of these keys:
 | `notification`        | Notifications                                            |
 | `notificationSilence` | Notification silences                                    |
 | `scraper`             | Config scrapers                                          |
-| `topology`            | Topologies                                               |
 | `agent`               | Agents                                                   |
 | `person`              | People                                                   |
 | `team`                | Teams                                                    |
@@ -231,7 +230,7 @@ A selector MUST only use fields its type has. Anything else is rejected, never i
 | `playbook`   | `id`, `name`, `namespace`                                                        |
 | `view`       | `id`, `name`, `namespace`                                                        |
 | `connection` | `id`, `name`, `namespace`, `types`                                               |
-| `application`, `notification`, `notificationSilence`, `scraper`, `topology`, `scope`, `role`, `roleBinding` | `id`, `name`, `namespace` |
+| `application`, `notification`, `notificationSilence`, `scraper`, `scope`, `role`, `roleBinding` | `id`, `name`, `namespace` |
 | `agent`, `team` | `id`, `name`                                                                  |
 | `person`     | `id`, `name`, `email`                                                            |
 | `event`      | `name`, the event's name, e.g. `config.updated`                                  |
