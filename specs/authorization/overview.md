@@ -164,6 +164,7 @@ Where the specs say an object "is rejected", this is what they mean.
 ## Not covered yet
 
 - **Incidents. Deliberately skipped.** Incidents, with their hypotheses, evidence, responders and comments, have been behind a feature flag that's been off for years, and are expected to be removed. They get no type or action, so no Role can grant them.
+- **Component logs. Deliberately skipped.** Fetching a component's logs through its log selectors is behind a disabled feature flag and is expected to be removed. It gets no action, so no one can fetch them.
 - **Views.** No rule can select Views, and Roles grant no rows of the tables Views generate.
 - **Permissions and PermissionGroups** are deprecated, and not specified here (`permissions.md`).
 - **The Kubernetes proxy. TODO, deliberately postponed.** The kubeconfig download and the requests made through Mission Control's Kubernetes proxy have no action under these specs, so no Role or RoleBinding can grant them, and they don't work under this model. That's a known gap, accepted for now: the feature is rarely used and isn't worth holding the rest of this design back, though some installations may rely on it. A proposed design is recorded in `design/kubernetes-proxy.md`, and is not adopted.

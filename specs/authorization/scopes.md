@@ -103,6 +103,7 @@ Some data belongs to a resource rather than being one: a config's changes and an
 - A playbook run belongs to its playbook, and to the config or check it ran on, if any.
 - A run's steps, approvals and the data its agent reports belong to the run, so they follow the run.
 - A relationship between two configs belongs to both.
+- An artifact, e.g. a file a run's step or a check produced, belongs to what produced it: a run's step, a check, a config change or a scraper. So an artifact from a playbook run is visible exactly when the run is, whoever started the run.
 
 **TODO:** runs on a component. Today they follow their playbook alone, so anyone who can read the playbook sees them.
 
