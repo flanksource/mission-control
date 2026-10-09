@@ -79,8 +79,8 @@ Every action has a contract, defined in code: the resource types it accepts, and
 
 | Action                                                | Resource                                               | Target                             |
 | ----------------------------------------------------- | ------------------------------------------------------ | ---------------------------------- |
-| `read`                                                | Every type but Property                                | None                               |
-| `create`, `update`, `delete`                          | Every type but Check, Event, Job and Person            | None                               |
+| `read`                                                | Every type but Property and View                       | None                               |
+| `create`, `update`, `delete`                          | Every type but Check, Event, Job, Person and View      | None                               |
 | `playbook:run`, `playbook:approve`, `playbook:cancel` | Playbook                                               | Optional: Config, Component, Check |
 | `mcp:run`                                             | Playbook                                               | None                               |
 | `invoke:<plugin>:<operation>`                         | Config                                                 | None                               |
@@ -90,7 +90,7 @@ Every action has a contract, defined in code: the resource types it accepts, and
 | `person:delete`                                       | None                                                   | None                               |
 | `mcp:use`                                             | None                                                   | None                               |
 
-The types are those of `scopes.md`, Section 3.1. Checks, events and jobs are only written by Mission Control itself. Properties aren't read through a rule (Section 3.1). `connection:use` allows acting with a connection's credentials (Section 2.2).
+The types are those of `scopes.md`, Section 3.1. Views aren't covered yet, so no action accepts them (`overview.md`, "Not covered yet"). Checks, events and jobs are only written by Mission Control itself. Properties aren't read through a rule (Section 3.1). `connection:use` allows acting with a connection's credentials (Section 2.2).
 
 `person:invite` allows inviting someone to Mission Control. `person:manage` allows managing existing accounts: disabling and re-enabling them, and changing their properties, name or email. `person:delete` allows deleting them. People aren't created, changed or deleted any other way, so `create`, `update` and `delete` don't apply to them. _Why:_ inviting someone and managing their account are what an admin actually does, and named actions say so. A rule allowing `create` on people would leave its reader asking where people are created. An invite that names teams adds the person to them when it's accepted (`rolebindings.md`, Section 2.2), so `person:invite` also places people into teams and whatever the teams' bindings grant.
 

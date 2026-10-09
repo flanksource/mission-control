@@ -112,7 +112,7 @@ Mission Control ships these Roles in the `mission-control` namespace. They're or
 
 | Role     | Allows                                                                                       |
 | -------- | -------------------------------------------------------------------------------------------- |
-| `viewer` | `read` on `config`, `component`, `check`, `canary`, `playbook`, `view`, `application`, `person` and `team` |
+| `viewer` | `read` on `config`, `component`, `check`, `canary`, `playbook`, `application`, `person` and `team` |
 | `editor` | What `viewer` allows, plus `read`, `create`, `update` and `delete` on every type but `person`, `team`, `scope`, `role`, `roleBinding`, `property`, `event` and `job`, no `person:invite`, `person:manage`, `person:delete` or `mcp:use`, and `connection:use` on every connection |
 | `admin`  | Every action on every type (`scopes.md`, Section 3.1), every plugin operation included       |
 

@@ -29,7 +29,7 @@ The answer is derived from the subject's grants alone, in this order:
 2. Otherwise `some`, when a `read` rule applies to the subject and its Scope, narrowed by the binding's constraint where there is one ([rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)), can select resources of the type: both Scopes have a target of the type.
 3. Otherwise `none`.
 
-A subject bound to the shipped `viewer` or `admin` Role is `all` on every type, through those Roles' rules ([overview.md, "Shipped Roles"](overview.md#shipped-roles)). A subject with no grants is `none` on every type.
+A subject bound to the shipped `admin` Role is `all` on every type, and one bound to `viewer` is `all` on the types it reads, through those Roles' rules ([overview.md, "Shipped Roles"](overview.md#shipped-roles)). A subject with no grants is `none` on every type.
 
 Permissions ([overview.md, "Not covered yet"](overview.md#not-covered-yet)) count too. A Permission that allows `read` counts like a rule, with its selectors in place of a Scope, type by type. For connections, which can't be filtered by row ([roles.md, Section 3.1](roles.md#31-the-read-action)), a Permission that isn't whole-type gives nothing.
 
