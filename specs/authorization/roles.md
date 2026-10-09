@@ -201,7 +201,7 @@ Listings are only filtered while row-level security is enabled. It's turned on o
 
 **TODO:** decide whether row-level security is always on, with the `rls.enable` setting removed. The lean is towards always on: every partial `read` grant and every constrained binding depends on it, and with it off they grant nothing, so a mode without it may serve no one.
 
-Records follow the resource they belong to (`scopes.md`, Section 3.2): a playbook run is listed and opened exactly when its playbook can be read. A database table that's neither a type nor a record of one isn't served through the database API.
+Records follow the resource they belong to (`scopes.md`, Section 3.2): a playbook run is listed and opened exactly when its playbook, and the config or check it ran on, can be read, and its steps exactly when the run can. A database table that's neither a type nor a record of one isn't served through the database API.
 
 Properties are the one thing read without a rule: any signed-in subject may read them. Reading them still requires authentication, like every other endpoint. They configure Mission Control's behaviour, e.g. which pages are enabled, and MUST NOT hold anything confidential. Writing them takes `create`, `update` or `delete` on `property` like any other type. _Why:_ every page needs them before it can decide what to show, a subject with no grants included.
 

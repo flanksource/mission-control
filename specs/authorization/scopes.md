@@ -98,9 +98,15 @@ So it would either add nothing or stop being a set. Write one target per type in
 
 ### 3.2 Records
 
-Some data belongs to a resource rather than being one: a config's changes and analysis, a playbook's runs, a notification's send history, a check's statuses, and job history about a resource. A record isn't a type. It's readable exactly when the resource it belongs to is (`roles.md`, Section 3.1).
+Some data belongs to a resource rather than being one: a config's changes and analysis, a playbook's runs, a notification's send history, a check's statuses, and job history about a resource. A record isn't a type. It's readable exactly when every resource it belongs to is (`roles.md`, Section 3.1):
 
-**Why.** Who may see a run or a change is never a separate question from who may see what it's about. Job history about no resource has nothing to follow, so it's the type `job`.
+- A playbook run belongs to its playbook, and to the config or check it ran on, if any.
+- A run's steps, approvals and the data its agent reports belong to the run, so they follow the run.
+- A relationship between two configs belongs to both.
+
+**TODO:** runs on a component. Today they follow their playbook alone, so anyone who can read the playbook sees them.
+
+**Why.** Who may see a run or a change is never a separate question from who may see what it's about. A run on a config is about the config as much as the playbook, so a subject who can't read the config can't read the run, its steps or their results. Job history about no resource has nothing to follow, so it's the type `job`.
 
 ## 4. Membership
 
