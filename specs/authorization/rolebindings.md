@@ -127,7 +127,7 @@ Some resources act on their own and need permissions too, e.g. a playbook callin
 | `topologies` | Topologies |
 | `scrapers` | Config scrapers |
 | `canaries` | Canaries |
-| `plugins` | Plugins, by the namespace and name of their Plugin resource |
+| `plugins` | Plugins, by the namespace and name of their Plugin resource. They can only be granted `read` and `connection:use` on connections (`roles.md`, Section 4.4) |
 
 ```yaml
 subjects:
