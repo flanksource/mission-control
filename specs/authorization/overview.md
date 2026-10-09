@@ -133,9 +133,7 @@ Mission Control's configuration MAY declare RoleBindings, e.g. the first admins,
 
 _Why:_ someone has to be able to create the first RoleBinding, and a deleted admin binding has to come back without going through Mission Control's API. Configured bindings are RoleBindings like any other.
 
-### Open questions
-
-- **Bootstrap configuration.** **TODO:** where configured bindings are declared, e.g. Helm values, and what an install declares by default, e.g. the first admin and every agent bound to `agent`.
+Where they're declared, and what an install declares by default, is left to the design (`design/bootstrap.md`).
 
 ## Who may manage these resources
 
