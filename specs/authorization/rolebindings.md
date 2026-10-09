@@ -42,7 +42,7 @@ A RoleBinding MUST have a namespace, and its Role and constraint Scopes must be 
 | `oidc`                                                             | list of objects | Users of an external identity provider, by the claims in their token |
 | `playbooks`, `notifications`, `topologies`, `scrapers`, `canaries`, `plugins` | list of objects | Those resources, when they act on their own               |
 
-A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either; they're selected by `agents` (Section 2.3).
+A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either; they're selected by `agents` (Section 2.3). Neither are access tokens or the System user. `people` selects humans only, whether by email or by `*`, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents or access tokens too would hand them access no one meant to grant.
 
 ### 2.1 People
 
