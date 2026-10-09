@@ -199,6 +199,8 @@ A `read` rule accepts any Scope whose membership is decided by the resource alon
 
 Listings are only filtered while row-level security is enabled. It's turned on or off when Mission Control starts, from the `rls.enable` property, so changing the property takes effect on restart. So a `read` rule whose Scope has a target that isn't a whole-type target (`scopes.md`, Section 5.2) needs it: while row-level security is off, a Role with such a rule is `Ready=False` with reason `RowLevelSecurityRequired`, and none of its rules apply, like any invalid Role (Section 6). It becomes valid when row-level security is enabled, without being re-applied. A rule whose Scope consists of whole-type targets only doesn't need it: opening any resource and listing all of them allow the same resources.
 
+**TODO:** decide whether row-level security is always on, with the `rls.enable` setting removed. The lean is towards always on: every partial `read` grant and every constrained binding depends on it, and with it off they grant nothing, so a mode without it may serve no one.
+
 Records follow the resource they belong to (`scopes.md`, Section 3.2): a playbook run is listed and opened exactly when its playbook can be read. A database table that's neither a type nor a record of one isn't served through the database API.
 
 Properties are the one thing read without a rule: any signed-in subject may read them. Reading them still requires authentication, like every other endpoint. They configure Mission Control's behaviour, e.g. which pages are enabled, and MUST NOT hold anything confidential. Writing them takes `create`, `update` or `delete` on `property` like any other type. _Why:_ every page needs them before it can decide what to show, a subject with no grants included.
