@@ -84,7 +84,17 @@ Permissions are kept working only where that costs Role rules nothing (`permissi
 
 - **Naming Scopes** (`object.scopes`): checked through the Scopes' membership, like a rule, on single resources and on listings.
 - **Inline selectors:** not materialised. A single-resource check evaluates them, and a listing grants no rows through them. _Why:_ materialising them needs a second kind of Scope to build and store, for a feature on its way out.
-- **Deny:** ignored, on single resources and listings alike (`permissions.md`). The claim has no deny.
+- **Deny:** there's none, for Permissions or Role rules (`permissions.md`; `overview.md`, "Access"). The claim has no deny, and neither does any policy.
+
+## Removing deny
+
+Deny is removed outright, not kept and ignored:
+
+- **API and database.** `deny` is removed from the API's Role and Permission types, so a request that sets it is rejected as an unknown field. The `deny` column of `permissions` is dropped, and every Permission stored with `deny` set is deleted in the same migration. A Role stored in the database with a deny rule is deleted too.
+- **CRDs.** The Role and Permission CRDs keep `deny` in their schema and Go types, only to refuse it. The schema validates `self.deny != true`, so `kubectl apply` of `deny: true` fails. An object already in Kubernetes with `deny: true` is `Ready=False` with reason `Invalid` when it's reconciled, and grants nothing until it's rewritten without it. `deny: false` is accepted and ignored.
+- **Casbin.** The effect becomes `some(where (p.eft == allow))`. The matcher loses its admin exemption, and the built-in deny on the Kratos tables goes with `policies.yaml`.
+
+_Why delete the stored denies rather than drop the column alone:_ without the column, each deny row reads as an allow of the same subject, object and action, granting exactly what it was written to refuse. _Why the CRDs keep the field:_ Kubernetes prunes fields a structural schema doesn't list, unless the client asks for strict validation, so a `deny: true` still in Git would be stored as an allow rule, silently. Validation only runs when an object is written, so the reconciler has to see the field too, for objects stored before the change. _Why accept `deny: false`:_ it changes nothing, and manifests that spell it out keep applying.
 
 ## Not covered
 

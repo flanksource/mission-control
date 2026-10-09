@@ -4,7 +4,7 @@
 
 - **Supported, but frozen.** Permissions keep working until they're removed, and get no new features.
 - **Roles and RoleBindings come first.** No requirement of Scopes, Roles or RoleBindings is weakened, and no design of them made harder, to keep a Permission working as it does. Where the two conflict, the Permission changes or loses the feature, with no compatibility path.
-- **No denies.** A Permission with `deny` has no effect. The field is kept so existing objects still apply, but nothing reads it (`overview.md`, "Access").
+- **No denies.** A Permission only allows, like a Role rule (`overview.md`, "Access"). A Permission that sets `deny: true` is rejected (`overview.md`, "Rejected or not in effect"), and one stored with it grants nothing.
 - **Otherwise never wider.** A change MAY make an allow Permission grant less, or nothing. It MUST NOT make one grant more.
 - **Not specified here.** These specifications don't define how Permissions behave, and where one mentions Permissions, the mention isn't a requirement. A design that changes how Permissions behave says so.
 
