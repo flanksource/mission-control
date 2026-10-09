@@ -155,6 +155,15 @@ var _ = Describe("Scope Impersonation E2E", Ordered, func() {
 			Expect(payload.Component.Any).To(Equal([]rls.Grant{{Impersonated: []string{scopeIDs["backend"]}}}))
 		})
 
+		It("should grant the rows of any of several named Scopes", func() {
+			payload, status := getRLSPayload(adminUser.Email, header(scopeIDs["backend"], scopeIDs["frontend"]))
+			Expect(status).To(Equal(http.StatusOK))
+			Expect(payload.Config.Any).To(ConsistOf(
+				rls.Grant{Impersonated: []string{scopeIDs["backend"]}},
+				rls.Grant{Impersonated: []string{scopeIDs["frontend"]}},
+			))
+		})
+
 		It("should restrict admin to nothing with an empty list", func() {
 			payload, status := getRLSPayload(adminUser.Email, `[]`)
 			Expect(status).To(Equal(http.StatusOK))

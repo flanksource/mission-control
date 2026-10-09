@@ -65,7 +65,7 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		return nil, fmt.Errorf("user is required for RLS payload")
 	}
 
-	impersonated := getImpersonatedScopes(ctx)
+	limits := dutyRBAC.ScopeLimits(ctx)
 
 	// Federated identities have no implicit grants: their row filters come from their own grants
 	subject := user.ID.String()
@@ -74,8 +74,8 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 	}
 
 	cacheKey := getRLSCacheKey(subject)
-	if impersonated != nil {
-		cacheKey = fmt.Sprintf("%s:scopes=%s", cacheKey, strings.Join(impersonated, ","))
+	for _, limit := range limits {
+		cacheKey = fmt.Sprintf("%s:scopes=%s", cacheKey, strings.Join(limit, ","))
 	}
 
 	if cached, ok := tokenCache.Get(cacheKey); ok {
@@ -87,7 +87,7 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		if roles, err := dutyRBAC.RolesForUser(user.ID.String()); err != nil {
 			return nil, err
 		} else if !lo.Contains(roles, policy.RoleGuest) {
-			payload := applyImpersonation(&rls.Payload{Disable: true}, impersonated)
+			payload := applyScopeLimits(&rls.Payload{Disable: true}, limits)
 			tokenCache.SetDefault(cacheKey, payload)
 			return payload, nil
 		}
@@ -99,7 +99,7 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		return nil, ctx.Oops().Wrap(err)
 	}
 
-	payload = applyImpersonation(payload, impersonated)
+	payload = applyScopeLimits(payload, limits)
 	tokenCache.SetDefault(cacheKey, payload)
 	return payload, nil
 }

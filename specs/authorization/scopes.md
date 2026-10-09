@@ -15,6 +15,7 @@ Other objects reference a Scope by name to say which resources they apply to:
 - **Role rules**, to select the resources an action is performed on, or with.
 - **RoleBinding constraints**, to narrow the rules of a Role.
 - **Permissions**, through `object.scopes` (legacy).
+- **The `X-Flanksource-Scope` header**, to limit one request (Section 9).
 
 Each of those decides which resource types, and which forms of target (e.g. whole-type only), it accepts from a Scope, and rejects a reference to a Scope it can't use. Those rules are specified with the objects themselves, in `roles.md` and `rolebindings.md`. This document only covers the Scope.
 
@@ -338,4 +339,21 @@ A Scope can't intersect two targets, exclude resources, or list names (Sections 
 
 ### 8.2 Across Scopes
 
-Two Scopes are combined in one place only: a RoleBinding constraint, which narrows a rule's Scope to the resources in both (`rolebindings.md`, Section 3). Combining grants (allow rules adding up, deny rules refusing) is specified in `roles.md`, Section 5.
+Two Scopes are combined in two places only: a RoleBinding constraint, which narrows a rule's Scope to the resources in both (`rolebindings.md`, Section 3), and the `X-Flanksource-Scope` header, which limits a request to the resources in any of the Scopes it names (Section 9). Combining grants (allow rules adding up, deny rules refusing) is specified in `roles.md`, Section 5.
+
+## 9. Limiting a request
+
+The `X-Flanksource-Scope` header limits one request to the Scopes it names, a JSON array of Scope ids. It's a limit, not a grant: the subject's own rules still decide, and the header removes what's outside its Scopes. Listings and checks on a resource follow one rule:
+
+**A resource is allowed when the subject's rules allow it and it's in at least one of the header's Scopes.**
+
+- **Listings** list a row when the subject's grants list it and it's in one of the Scopes. With Scopes of staging configs and production configs, both are listed.
+- **Checks on a resource**, e.g. `read` on a config, `playbook:run`, `playbook:approve`, or resolving a connection, pass when the subject's rules allow them and every resource of the check, primary or target, is in one of the Scopes. A playbook run under the header therefore needs the playbook in one of its Scopes too, just as the playbook is only listed when it is.
+
+A header naming no Scope, or only Scopes that select nothing, e.g. ones that don't exist, allows nothing. A resource whose membership isn't stored, e.g. a view, isn't limited, and neither are checks on a whole type, e.g. `catalog:read`. Connections are limited in checks, e.g. resolving one outside the Scopes is refused, but not in listings, since their rows aren't filtered by row-level security.
+
+The limit applies to the requester's own request. An access review (`/rbac/subject-access-reviews`) answers by each reviewed subject's own access, without it.
+
+Limits add up: a request limited twice, e.g. by an access token's Scopes and by the header, allows only resources in a Scope of each, so a later limit can't widen an earlier one.
+
+A resource is in a Scope by its stored membership (Section 4), from the operation's snapshot (Section 7.2), so a limit adds no query.
