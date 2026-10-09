@@ -66,6 +66,35 @@ subjects:
 
 Each entry is a team name. Members get the Role through their team, so joining or leaving the team changes who has it.
 
+#### Team membership from login
+
+A person's teams can follow their login provider, through a **team mapper**: one CEL expression per install, set by the operator, that returns the teams a person belongs to. Only Mission Control's own logins have one:
+
+| Login  | Setting                  | Input                                                           |
+| ------ | ------------------------ | --------------------------------------------------------------- |
+| Kratos | `--identity-role-mapper` | `identity`, the person's Kratos identity: traits and metadata    |
+| Clerk  | `--clerk-team-mapper`    | `claims`, the claims of the verified Clerk session token        |
+
+The expression returns `{"teams": [...]}`, a list of team names:
+
+```
+{
+  "teams": claims.org_role == "org:admin" ? ["clerk-admins"] : ["clerk-members"]
+}
+```
+
+- **Teams only.** A mapper never grants a Role. Admins bind Roles to the teams it returns, like to any team. A result with any other field, e.g. the `role` older Kratos scripts returned, is logged as an error and changes nothing.
+- **When it runs.** On a person's first request after they sign in, and again whenever their claims change, e.g. a refreshed Clerk token with a different organisation role.
+- **Kept in sync.** The person's mapped teams become exactly what the mapper returns: they're added to new teams and removed from mapped teams it no longer returns. Teams an admin added them to directly are never touched. A team that doesn't exist is skipped and logged.
+- **Without a mapper**, signing in adds the person to no team.
+- **Invites** name teams instead of a role. The person joins them when they accept.
+
+A mapper that reads attributes a person can change themselves, e.g. Kratos traits the settings flow lets them edit, lets them choose their own teams. Map from attributes only admins can set, e.g. Kratos `metadata_public` or the Clerk organisation role.
+
+_Why teams:_ access stays in Mission Control, readable from its teams and RoleBindings, while the login provider only says who belongs where. _Why sync both ways:_ leaving a group in the login provider has to remove what it gave, or access only ever grows. A change reaches Mission Control on the person's next request, which is the first moment it could be used.
+
+Users of an external identity provider aren't mapped into teams. Their access comes from `oidc` subjects, matched on every request (Section 2.4).
+
 ### 2.3 Agents
 
 ```yaml
