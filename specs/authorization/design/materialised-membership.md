@@ -45,6 +45,17 @@ scope_members (scope_id, resource_type, resource_id)   -- no resource_id: every 
 - **Lock:** every write to `scope_targets` takes one advisory lock exclusively, and the trigger takes it shared. A rebuild waits for the lock for at most a short `lock_timeout`, about 1 s; if it times out, the rebuild backs off and retries, a bounded number of times. A save that runs out of retries fails like any failed save: the UI gets the error, and a CRD shows `Ready=False` with reason `PersistFailed`, with the previous version in effect, until its reconcile tries again. _Why:_ a resource written during a rebuild would otherwise be matched against the old targets while the rebuild's snapshot misses it, leaving a row from neither version. One lock for all types, since a rebuild covers every type its Scope selects at once, and locks per type could deadlock against a transaction writing several types. The timeout matters because an exclusive request first waits for every writer already holding the lock, and Postgres queues new requests behind it meanwhile: without it, one long scraper transaction would stall every resource write for its whole length, plus the rebuild. With it, writes wait at most the timeout plus the rebuild, which only happens when a Scope is saved.
 - **Startup:** every valid Scope with neither targets nor members is built by Mission Control before it accepts requests; if one can't be built, it doesn't start. _Why:_ a grant through a Scope with no rows is refused, so serving earlier would refuse grants that are in effect.
 
+## Scrapers and the types granted whole
+
+Most types added to Scopes only take type-wide grants (`scopes.md` §5.3), so they're never filtered by row and need no membership rows beyond the whole-type one. Scrapers are the exception: they can be granted in part, by `id`, `name`, `namespace` and `agent`, so `config_scrapers` is filtered like configs.
+
+- **Targets and predicate.** A scraper target is a `scope_targets` row with `resource_type = scraper`, using the `id`, `name`/`name_prefix`, `namespace` and `agent_id` columns. The scraper predicate tests those against `config_scrapers` columns of the same names.
+- **Trigger.** `config_scrapers` gets the membership trigger every resource table has. Its selectable fields are the four above, so other updates, e.g. to `spec`, change nothing.
+- **Row-level security.** `config_scrapers` gets a policy admitting a row through the claim's `scraper` grants, and `scraper` joins the claim's grant types.
+- **Records.** Artifacts and job history a scraper produced follow the scraper (`scopes.md` §3.2): their policies test the scraper's row with `EXISTS`, like the child tables in the FAQ.
+
+_Why not leave scrapers whole-type only:_ grants on some scrapers, e.g. one agent's or one namespace's, are needed from the start, and the fields that express them are already columns.
+
 ## Claim
 
 Per type: `all`, for access that names no Scope, or grants, each a set of Scopes the row must be in all of. A grant is never empty and never repeats a Scope. The claim names Scopes only.
