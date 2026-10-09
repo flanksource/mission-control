@@ -100,7 +100,7 @@ So it would either add nothing or stop being a set. Write one target per type in
 
 Some data belongs to a resource rather than being one: a config's changes and analysis, a playbook's runs, a notification's send history, a check's statuses, and job history about a resource. A record isn't a type. It's readable exactly when the resource it belongs to is (`roles.md`, Section 3.1).
 
-**Why.** Who may see a run or a change is never a separate question from who may see what it's about. Job history about no resource has nothing to follow, so it's the type `job`, selected by the job's name.
+**Why.** Who may see a run or a change is never a separate question from who may see what it's about. Job history about no resource has nothing to follow, so it's the type `job`.
 
 ## 4. Membership
 
@@ -159,7 +159,6 @@ Every target is a selector over the fields its resource type has. A selector MUS
 | `namespace`     | Resource namespace                    | One exact value                                                                     |
 | `id`            | Resource id                           | A lowercase UUID                                                                    |
 | `agent`         | Agent the resource belongs to         | An agent's name. MUST resolve to an existing agent (Section 5.4).                  |
-| `email`         | A person's email                      | One exact value                                                                     |
 | `types`         | Resource type, e.g. `Kubernetes::Pod` | A list of exact values; any of them matches                                         |
 | `tagSelector`   | Tags                                  | `key=value` pairs (see below)                                                       |
 | `labelSelector` | Labels                                | `key=value` pairs (see below)                                                       |
@@ -230,20 +229,16 @@ A selector MUST only use fields its type has. Anything else is rejected, never i
 | `playbook`   | `id`, `name`, `namespace`                                                        |
 | `view`       | `id`, `name`, `namespace`                                                        |
 | `connection` | `id`, `name`, `namespace`, `types`                                               |
-| `application`, `notification`, `notificationSilence`, `scraper` | `id`, `name`, `namespace` |
-| `scope`, `role`, `roleBinding` | `name`, and only `*` |
-| `agent`, `team` | `id`, `name`                                                                  |
-| `person`     | `id`, `name`, `email`                                                            |
-| `event`      | `name`, the event's name, e.g. `config.updated`                                  |
-| `job`        | `name`, the job's name                                                           |
-| `property`   | `name`, the property's key                                                       |
+| `scraper`    | `id`, `name`, `namespace`, `agent`                                               |
+| `application`, `notification`, `notificationSilence`, `agent`, `person`, `team`, `scope`, `role`, `roleBinding`, `event`, `job`, `property` | `name`, and only `*` |
 
 Notes:
 
 - A Config's namespace is its `namespace` tag. `namespace: staging` and `tagSelector: namespace=staging` select the same Configs.
 - Only Configs have tags. Components, checks and canaries have labels.
 - Playbooks have neither tags nor labels.
-- A `scope`, `role` or `roleBinding` target selects the whole type or nothing: `name: "*"` is its only valid form. _Why:_ anyone who can change one Scope, Role or RoleBinding can grant anyone anything (`overview.md`, "Who may manage these resources"), so a grant on some of them is no narrower than a grant on all. Narrower targets wait for delegated administration (`overview.md`, "Not covered yet").
+- A target of a type whose only field is `name` is a whole-type target or nothing: `name: "*"` is its only valid form, and every other value is rejected. _Why:_ there's no technical reason. It's the simplest first step for types that are new to Scopes: a whole-type grant needs no selector fields, no Scope membership and no row filtering. Each type can get the fields its resources have, and partial grants, when they're needed, without breaking a Scope written today.
+- Scrapers have the selector fields their resources have, since grants on some scrapers, e.g. those of one agent or namespace, are needed from the start. They have no tags or labels.
 
 ### 5.4 Agents
 
