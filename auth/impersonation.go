@@ -36,46 +36,52 @@ func parseImpersonatedScopes(header string) ([]string, error) {
 	return slices.Compact(ids), nil
 }
 
-// applyImpersonation narrows the effective RLS payload to the Scopes the X-Flanksource-Scope header names:
-// each of them is added to every grant, so it can only narrow. For a subject whose listings aren't filtered,
-// the Scopes are the only grant of every type. Rows of views are narrowed to the Scopes' view grants.
-// A header naming no Scope lists nothing.
-func applyImpersonation(real *rls.Payload, scopeIDs []string) *rls.Payload {
-	if scopeIDs == nil {
+// applyScopeLimits limits the effective RLS payload to the request's Scope limits (rls.Grants.Limit): a row must be
+// in at least one Scope of each limit, on top of what the subject's grants list. For a subject whose listings
+// aren't filtered, the limits are the only grants of every type. A limit naming no Scope lists nothing.
+func applyScopeLimits(real *rls.Payload, limits [][]string) *rls.Payload {
+	if limits == nil {
 		return real
 	}
 
 	result := &rls.Payload{}
-	if len(scopeIDs) == 0 {
-		return result
-	}
-
+	scopes := real.Scopes
 	if real.Disable {
-		for _, kind := range rls.GrantTypes {
-			grants := rls.AllRows()
-			grants.Impersonate(scopeIDs...)
-			result.SetGrants(kind, grants)
-		}
-		result.View = []rls.Scope{{ID: "*"}}
-		result.Scopes = slices.Clone(scopeIDs)
-		return result
+		scopes = limits[0]
 	}
+	for _, limit := range limits {
+		if len(limit) == 0 {
+			return result
+		}
+		scopes = lo.Intersect(scopes, limit)
+	}
+	result.Scopes = scopes
 
 	for _, kind := range rls.GrantTypes {
-		if grants := real.GrantsFor(kind); grants != nil {
-			narrowed := &rls.Grants{All: grants.All, Any: slices.Clone(grants.Any)}
-			narrowed.Impersonate(scopeIDs...)
-			result.SetGrants(kind, narrowed)
+		grants := real.GrantsFor(kind)
+		if real.Disable {
+			grants = rls.AllRows()
+		} else if grants == nil {
+			continue
 		}
+
+		limited := &rls.Grants{All: grants.All, Any: slices.Clone(grants.Any)}
+		for _, limit := range limits {
+			limited.Limit(limit...)
+		}
+		result.SetGrants(kind, limited)
 	}
+
 	result.View = real.View
-	result.Scopes = lo.Intersect(real.Scopes, scopeIDs)
+	if real.Disable {
+		result.View = []rls.Scope{{ID: "*"}}
+	}
 	return result
 }
 
 // ScopeImpersonation is an echo middleware that reads the X-Flanksource-Scope header, a JSON array of Scope ids,
-// and narrows the request to them: GetRLSPayload narrows the subject's listings, and duty's rbac.HasPermission
-// its checks on resources.
+// and limits the request to them (dutyRBAC.LimitToScopes): GetRLSPayload limits the subject's listings, and duty's
+// rbac.HasPermission its checks on resources, by the same rule.
 func ScopeImpersonation(next echov4.HandlerFunc) echov4.HandlerFunc {
 	return func(c echov4.Context) error {
 		ctx := c.Request().Context().(context.Context)
@@ -94,20 +100,8 @@ func ScopeImpersonation(next echov4.HandlerFunc) echov4.HandlerFunc {
 			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid %s header: %v", HeaderFlanksourceScope, err))
 		}
 
-		ctx, err = dutyRBAC.Impersonate(ctx, ids)
-		if err != nil {
-			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "failed to read the scopes of the %s header", HeaderFlanksourceScope))
-		}
+		ctx = dutyRBAC.LimitToScopes(ctx, ids)
 		c.SetRequest(c.Request().WithContext(ctx))
 		return next(c)
 	}
-}
-
-// getImpersonatedScopes returns the Scope ids set by the ScopeImpersonation middleware, or nil.
-func getImpersonatedScopes(ctx context.Context) []string {
-	scopes, ok := dutyRBAC.Impersonation(ctx)
-	if !ok {
-		return nil
-	}
-	return lo.Map(scopes, func(s dutyRBAC.ImpersonatedScope, _ int) string { return s.ID })
 }

@@ -29,7 +29,8 @@ import (
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
-// The X-Flanksource-Scope header narrows the checks made through rbac.HasPermission, not only listings.
+// The X-Flanksource-Scope header limits the checks made through rbac.HasPermission by the same rule as listings:
+// every resource of a check must be in at least one of its Scopes.
 var _ = ginkgo.Describe("Scope impersonation of resource checks", ginkgo.Ordered, ginkgo.ContinueOnFailure, func() {
 	var (
 		e                   *echo.Echo
@@ -89,12 +90,12 @@ var _ = ginkgo.Describe("Scope impersonation of resource checks", ginkgo.Ordered
 		Expect(DefaultContext.DB().Create(&approvable).Error).To(Succeed())
 
 		for name, targets := range map[string][]v1.ScopeTarget{
-			// Selects configs and connections, never playbooks
 			"in": {
 				{Config: &v1.ScopeConfigSelector{TagSelector: "impersonated-checks=in"}},
 				{Connection: &v1.ScopeConnectionSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: connIn.Name}}},
 			},
-			"out": {{Config: &v1.ScopeConfigSelector{TagSelector: "impersonated-checks=out"}}},
+			"out":       {{Config: &v1.ScopeConfigSelector{TagSelector: "impersonated-checks=out"}}},
+			"playbooks": {{Playbook: &v1.ScopePlaybookRef{Name: "impersonated-checks-*"}}},
 		} {
 			scope := &v1.Scope{
 				ObjectMeta: metav1.ObjectMeta{Name: "impersonated-checks-" + name, Namespace: "default", UID: k8sTypes.UID(uuid.NewString())},
@@ -202,14 +203,19 @@ var _ = ginkgo.Describe("Scope impersonation of resource checks", ginkgo.Ordered
 	}
 
 	ginkgo.Context("playbook:run", func() {
-		ginkgo.It("is refused on a config outside the header's Scope", func() {
-			rec := run(cfgOut.ID, scopes["in"])
+		ginkgo.It("is refused on a config outside the header's Scopes", func() {
+			rec := run(cfgOut.ID, scopes["in"], scopes["playbooks"])
 			Expect(rec.Code).To(Equal(http.StatusForbidden), rec.Body.String())
 		})
 
-		ginkgo.It("is allowed on a config in the header's Scope, although the Scope selects no playbook", func() {
-			rec := run(cfgIn.ID, scopes["in"])
+		ginkgo.It("is allowed when the playbook and the config are each in one of the header's Scopes", func() {
+			rec := run(cfgIn.ID, scopes["in"], scopes["playbooks"])
 			Expect(rec.Code).To(Equal(http.StatusCreated), rec.Body.String())
+		})
+
+		ginkgo.It("is refused when the playbook is in none of the header's Scopes", func() {
+			rec := run(cfgIn.ID, scopes["in"])
+			Expect(rec.Code).To(Equal(http.StatusForbidden), rec.Body.String())
 		})
 
 		ginkgo.It("is unchanged without the header", func() {
@@ -217,20 +223,20 @@ var _ = ginkgo.Describe("Scope impersonation of resource checks", ginkgo.Ordered
 			Expect(rec.Code).To(Equal(http.StatusCreated), rec.Body.String())
 		})
 
-		ginkgo.It("is refused without a target, since the header's Scope narrows nothing of the run", func() {
-			rec := do(admin, http.MethodPost, "/playbook/run", map[string]any{"id": runbook.ID}, scopes["in"])
-			Expect(rec.Code).To(Equal(http.StatusForbidden), rec.Body.String())
+		ginkgo.It("is allowed without a target when the playbook is in one of the header's Scopes", func() {
+			rec := do(admin, http.MethodPost, "/playbook/run", map[string]any{"id": runbook.ID}, scopes["playbooks"])
+			Expect(rec.Code).To(Equal(http.StatusCreated), rec.Body.String())
 		})
 	})
 
 	ginkgo.Context("playbook:approve", func() {
 		ginkgo.It("is refused on a run against a config outside the header's Scope", func() {
-			rec := do(admin, http.MethodPost, "/playbook/run/approve/"+pendingRun(cfgOut.ID).String(), nil, scopes["in"])
+			rec := do(admin, http.MethodPost, "/playbook/run/approve/"+pendingRun(cfgOut.ID).String(), nil, scopes["in"], scopes["playbooks"])
 			Expect(rec.Code).To(Equal(http.StatusForbidden), rec.Body.String())
 		})
 
 		ginkgo.It("is allowed on a run against a config in the header's Scope", func() {
-			rec := do(admin, http.MethodPost, "/playbook/run/approve/"+pendingRun(cfgIn.ID).String(), nil, scopes["in"])
+			rec := do(admin, http.MethodPost, "/playbook/run/approve/"+pendingRun(cfgIn.ID).String(), nil, scopes["in"], scopes["playbooks"])
 			Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
 		})
 
@@ -274,20 +280,22 @@ var _ = ginkgo.Describe("Scope impersonation of resource checks", ginkgo.Ordered
 			Expect(read(admin, cfgOut)).To(Equal(http.StatusOK))
 		})
 
-		ginkgo.It("requires the resource to be in every Scope the header names", func() {
-			Expect(read(admin, cfgIn, scopes["in"], scopes["out"])).To(Equal(http.StatusForbidden))
+		ginkgo.It("allows a resource in any of the header's Scopes", func() {
+			Expect(read(admin, cfgIn, scopes["in"], scopes["out"])).To(Equal(http.StatusOK))
+			Expect(read(admin, cfgOut, scopes["in"], scopes["out"])).To(Equal(http.StatusOK))
 		})
 
-		ginkgo.It("allows nothing with an empty header, or one naming a Scope that doesn't exist", func() {
+		ginkgo.It("allows nothing with an empty header, or one naming only a Scope that doesn't exist", func() {
 			Expect(read(admin, cfgIn, []string{}...)).To(Equal(http.StatusForbidden), "header []")
 			Expect(read(admin, cfgIn, uuid.NewString())).To(Equal(http.StatusForbidden), "a Scope that doesn't exist")
-			Expect(read(admin, cfgIn, scopes["in"], uuid.NewString())).To(Equal(http.StatusForbidden), "with a Scope that doesn't exist")
+			Expect(read(admin, cfgIn, scopes["in"], uuid.NewString())).To(Equal(http.StatusOK), "a Scope that doesn't exist adds nothing")
 		})
 
-		ginkgo.It("narrows to nothing through a Scope the subject has no grant through", func() {
+		ginkgo.It("can only narrow what the subject's grants allow", func() {
 			Expect(read(guest, cfgIn)).To(Equal(http.StatusOK))
 			Expect(read(guest, cfgIn, scopes["out"])).To(Equal(http.StatusForbidden))
-			Expect(read(guest, cfgOut, scopes["out"])).To(Equal(http.StatusForbidden))
+			Expect(read(guest, cfgOut, scopes["out"])).To(Equal(http.StatusForbidden), "a Scope the guest has no grant through")
+			Expect(read(guest, cfgOut, scopes["in"], scopes["out"])).To(Equal(http.StatusForbidden))
 		})
 	})
 })

@@ -15,7 +15,7 @@ Other objects reference a Scope by name to say which resources they apply to:
 - **Role rules**, to select the resources an action is performed on, or with.
 - **RoleBinding constraints**, to narrow the rules of a Role.
 - **Permissions**, through `object.scopes` (legacy).
-- **The `X-Flanksource-Scope` header**, to narrow one request (Section 9).
+- **The `X-Flanksource-Scope` header**, to limit one request (Section 9).
 
 Each of those decides which resource types, and which forms of target (e.g. whole-type only), it accepts from a Scope, and rejects a reference to a Scope it can't use. Those rules are specified with the objects themselves, in `roles.md` and `rolebindings.md`. This document only covers the Scope.
 
@@ -339,19 +339,19 @@ A Scope can't intersect two targets, exclude resources, or list names (Sections 
 
 ### 8.2 Across Scopes
 
-Two Scopes are combined in two places only: a RoleBinding constraint, which narrows a rule's Scope to the resources in both (`rolebindings.md`, Section 3), and the `X-Flanksource-Scope` header, which narrows a request to the resources in every Scope it names (Section 9). Combining grants (allow rules adding up, deny rules refusing) is specified in `roles.md`, Section 5.
+Two Scopes are combined in two places only: a RoleBinding constraint, which narrows a rule's Scope to the resources in both (`rolebindings.md`, Section 3), and the `X-Flanksource-Scope` header, which limits a request to the resources in any of the Scopes it names (Section 9). Combining grants (allow rules adding up, deny rules refusing) is specified in `roles.md`, Section 5.
 
-## 9. Narrowing a request
+## 9. Limiting a request
 
-The `X-Flanksource-Scope` header narrows one request to the Scopes it names, a JSON array of Scope ids. It can only narrow: the subject's own rules still decide, and the header removes what's outside its Scopes. It applies to listings and to checks on a resource alike, so a narrowed request never acts on a resource its listings would hide.
+The `X-Flanksource-Scope` header limits one request to the Scopes it names, a JSON array of Scope ids. It's a limit, not a grant: the subject's own rules still decide, and the header removes what's outside its Scopes. Listings and checks on a resource follow one rule:
 
-**Listings.** A row is listed when the subject's grants list it **and** it's in every Scope the header names.
+**A resource is allowed when the subject's rules allow it and it's in at least one of the header's Scopes.**
 
-**Checks on a resource**, e.g. `read` on a config, `playbook:run`, `playbook:approve`, or resolving a connection. A check passes when the subject's rules allow it **and**:
+- **Listings** list a row when the subject's grants list it and it's in one of the Scopes. With Scopes of staging configs and production configs, both are listed.
+- **Checks on a resource**, e.g. `read` on a config, `playbook:run`, `playbook:approve`, or resolving a connection, pass when the subject's rules allow them and every resource of the check, primary or target, is in one of the Scopes. A playbook run under the header therefore needs the playbook in one of its Scopes too, just as the playbook is only listed when it is.
 
-- Each resource of the check, primary or target, is in every named Scope that selects its type. A Scope that doesn't select the type doesn't narrow it, as a RoleBinding constraint ignores the types its Scope doesn't select (`rolebindings.md`, Section 3.2). So a Scope of configs narrows a run on a config to the configs in it, and doesn't refuse the run because the playbook isn't in it. The run's `read` check on the config is narrowed the same way.
-- At least one resource of the check is narrowed. A check no named Scope speaks for is refused, as its listing would be empty: e.g. a `read` on a component, or a run with no target, through a Scope of configs only.
+A header naming no Scope, or only Scopes that select nothing, e.g. ones that don't exist, allows nothing. A resource whose membership isn't stored, e.g. a view, isn't limited, and neither are checks on a whole type, e.g. `catalog:read`.
 
-A header naming no Scope, or a Scope that selects nothing (one that doesn't exist or isn't valid), narrows every listing and check on a resource to nothing. A check with no resource whose membership is stored, e.g. `read` on a view, isn't narrowed, and neither are checks on a whole type, e.g. `catalog:read`.
+Limits add up: a request limited twice, e.g. by an access token's Scopes and by the header, allows only resources in a Scope of each, so a later limit can't widen an earlier one.
 
-A resource is in a Scope by its stored membership (Section 4), from the operation's snapshot (Section 7.2), so the header adds no query per check: the types its Scopes select are read once per request.
+A resource is in a Scope by its stored membership (Section 4), from the operation's snapshot (Section 7.2), so a limit adds no query.
