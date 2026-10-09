@@ -80,13 +80,17 @@ Every action has a contract, defined in code: the resource types it accepts, and
 | Action                                                | Resource                                               | Target                             |
 | ----------------------------------------------------- | ------------------------------------------------------ | ---------------------------------- |
 | `read`                                                | Every type but Property                                | None                               |
-| `create`, `update`, `delete`                          | Every type but Check, Event and Job                    | None                               |
+| `create`, `update`, `delete`                          | Every type but Check, Event, Job and Person            | None                               |
 | `playbook:run`, `playbook:approve`, `playbook:cancel` | Playbook                                               | Optional: Config, Component, Check |
 | `mcp:run`                                             | Playbook                                               | None                               |
 | `invoke:<plugin>:<operation>`                         | Config                                                 | None                               |
 | `connection:use`                                      | Connection                                             | None                               |
+| `person:invite`                                       | Person                                                 | None                               |
+| `person:manage`                                       | Person                                                 | None                               |
 
 The types are those of `scopes.md`, Section 3.1. Checks, events and jobs are only written by Mission Control itself. Properties aren't read through a rule (Section 3.1). `connection:use` allows acting with a connection's credentials (Section 2.2).
+
+`person:invite` allows inviting someone to Mission Control. `person:manage` allows managing existing accounts: disabling and re-enabling them, changing their properties, name or email, and deleting them. People aren't created, changed or deleted any other way, so `create`, `update` and `delete` don't apply to them. _Why:_ inviting someone and managing their account are what an admin actually does, and named actions say so. A rule allowing `create` on people would leave its reader asking where people are created. An invite that names teams adds the person to them when it's accepted (`rolebindings.md`, Section 2.2), so `person:invite` also places people into teams and whatever the teams' bindings grant.
 
 **TODO:** the Kubernetes proxy, i.e. the kubeconfig download and the requests made through it, has no action. It's left for a later design (`overview.md`, "Not covered yet").
 
