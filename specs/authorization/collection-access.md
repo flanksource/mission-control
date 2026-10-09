@@ -59,7 +59,7 @@ A constraint narrows a rule to the resources in both Scopes ([rolebindings.md, S
 | All configs        | Tenant A's configs             | `some` |
 | Tenant A's configs | All configs                    | `some` |
 | All configs        | All configs                    | `all`  |
-| All configs        | `name: "*"` and a tag target   | `all`  |
+| All configs        | `type: config` and a tag target | `all`  |
 
 This is the same test [rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows) uses to decide whether a narrowed `read` rule needs row-level security, and the two MUST agree: a narrowed rule is whole-type for the answer exactly when it doesn't need row-level security.
 
