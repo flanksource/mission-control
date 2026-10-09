@@ -350,7 +350,9 @@ The `X-Flanksource-Scope` header limits one request to the Scopes it names, a JS
 - **Listings** list a row when the subject's grants list it and it's in one of the Scopes. With Scopes of staging configs and production configs, both are listed.
 - **Checks on a resource**, e.g. `read` on a config, `playbook:run`, `playbook:approve`, or resolving a connection, pass when the subject's rules allow them and every resource of the check, primary or target, is in one of the Scopes. A playbook run under the header therefore needs the playbook in one of its Scopes too, just as the playbook is only listed when it is.
 
-A header naming no Scope, or only Scopes that select nothing, e.g. ones that don't exist, allows nothing. A resource whose membership isn't stored, e.g. a view, isn't limited, and neither are checks on a whole type, e.g. `catalog:read`.
+A header naming no Scope, or only Scopes that select nothing, e.g. ones that don't exist, allows nothing. A resource whose membership isn't stored, e.g. a view, isn't limited, and neither are checks on a whole type, e.g. `catalog:read`. Connections are limited in checks, e.g. resolving one outside the Scopes is refused, but not in listings, since their rows aren't filtered by row-level security.
+
+The limit applies to the requester's own request. An access review (`/rbac/subject-access-reviews`) answers by each reviewed subject's own access, without it.
 
 Limits add up: a request limited twice, e.g. by an access token's Scopes and by the header, allows only resources in a Scope of each, so a later limit can't widen an earlier one.
 
