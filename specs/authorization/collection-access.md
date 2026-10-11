@@ -51,9 +51,9 @@ A subject often has several `read` grants on a type, from different Roles and bi
 
 Roles can't deny `read` yet ([roles.md, Section 2](roles.md#2-actions)), but a Permission can, and its denies are enforced on listings ([roles.md, Section 5](roles.md#5-allow-and-deny)). A deny lowers the answer: a deny that covers the type whole gives `none`; any other deny on the type caps the answer at `some`. The same rule applies to Role rules once they can deny `read`.
 
-### 2.3 Row-level security off
+### 2.3 Row-level security
 
-While row-level security is off, a `read` rule whose Scope isn't whole-type doesn't apply ([roles.md, Section 3.1](roles.md#31-the-read-action)). Neither does a rule a constraint narrows to less than the whole type ([rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)). So the answer is then `all` or `none`, never `some`.
+Row-level security is always on; there's no setting to turn it off ([roles.md, Section 3.1](roles.md#31-the-read-action)). So a `read` rule whose Scope isn't whole-type, or that a constraint narrows to less than the whole type ([rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)), applies like any other, and makes the answer `some` (Section 2.2).
 
 ### 2.4 Whole-type under a constraint
 
@@ -67,7 +67,7 @@ A constraint narrows a rule to the resources in both Scopes ([rolebindings.md, S
 | All configs        | All configs                    | `all`  |
 | All configs        | `name: "*"` and a tag target   | `all`  |
 
-This is the same test [rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows) uses to decide whether a narrowed `read` rule needs row-level security, and the two MUST agree: a narrowed rule is whole-type for the answer exactly when it doesn't need row-level security.
+This is the same test [rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows) uses to decide whether a narrowed `read` rule filters listings by row, and the two MUST agree: a narrowed rule is whole-type for the answer exactly when it doesn't filter by row.
 
 **Why.** The one unsafe reading of step 1 is "look at the rule's Scope alone": it would list every config to a subject whose binding limits them to tenant A. Requiring an explicit whole-type target on both sides leaves no path to `all` on which a constraint is bypassed.
 
@@ -96,7 +96,7 @@ Every authenticated subject can obtain their **access summary**, a user of an ex
 
 For `create`, `update` and `delete`, the answer is derived as in [Section 2](#2-all-some-or-none), from the subject's rules for that action instead of `read`. Unlike `read`, it isn't affected by row-level security: a write is always checked against the one resource it acts on. Under `some`, the UI offers the write control, and the server's resource-level check decides each request; a refusal is not a fault. Under `none`, the UI MUST NOT offer it.
 
-**Why the server answers.** The answer is a function of rules, bindings, constraints, built-in roles and the row-level security setting. A client that re-derives it has to re-implement all of them, and drifts with every release. The bug that motivated this specification was a client treating a `some` grant as `none`, and showing a user with a valid grant a screen saying they had no access to anything.
+**Why the server answers.** The answer is a function of rules, bindings, constraints, and built-in roles. A client that re-derives it has to re-implement all of them, and drifts with every release. The bug that motivated this specification was a client treating a `some` grant as `none`, and showing a user with a valid grant a screen saying they had no access to anything.
 
 ## 5. Pages and types
 

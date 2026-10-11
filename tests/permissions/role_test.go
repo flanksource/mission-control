@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 
-	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
@@ -27,7 +26,6 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
-	"github.com/flanksource/incident-commander/vars"
 )
 
 var _ = Describe("Role and RoleBinding", Ordered, func() {
@@ -640,21 +638,6 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(rbac.ReloadPolicy()).To(Succeed())
 			Expect(storedBinding(namespace, "tenant-a-operators").Error).To(BeNil())
 			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue())
-		})
-
-		It("invalidates a read rule that needs row-level security while it's off", func() {
-			properties.Set(vars.FlagRLSEnable, "false")
-			DefaultContext.ClearCache()
-			DeferCleanup(func() {
-				properties.Set(vars.FlagRLSEnable, "true")
-				DefaultContext.ClearCache()
-				Expect(rbac.ReloadPolicy()).To(Succeed())
-			})
-			Expect(DefaultContext.Properties().On(false, vars.FlagRLSEnable)).To(BeFalse())
-			Expect(rbac.ReloadPolicy()).To(Succeed())
-
-			Expect(*storedRole(roles[namespace+"/read-configs"].UID).ErrorReason).To(Equal(adapter.ReasonRowLevelSecurityRequired))
-			Expect(canRead(rlsGuest.ID.String(), tenantA)).To(BeFalse())
 		})
 
 		It("applies none of an invalid role's rules, deny rules included", func() {

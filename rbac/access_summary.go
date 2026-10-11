@@ -149,8 +149,8 @@ func wholeType(ctx context.Context, object, action string, guest bool) bool {
 
 // hasSomeGrant reports whether the subject has a grant that selects some resources of the type.
 //
-// Reads are granted by the row filters of read grants, the same ones its listings use. They only exist while
-// row-level security is on, and never for connections, which can't be filtered by row.
+// Reads are granted by the row filters of read grants, the same ones its listings use. They never exist
+// for connections, which can't be filtered by row.
 func hasSomeGrant(ctx context.Context, grants []selectorGrant, resourceType, action string) bool {
 	if action == policy.ActionRead {
 		return ReadGrantsCover != nil && ReadGrantsCover(ctx, resourceType)

@@ -17,7 +17,6 @@ import (
 	"github.com/samber/lo"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/vars"
 )
 
 // BindingRuleID identifies a rule of a role as granted by a binding. It's carried in the last field of the
@@ -66,11 +65,6 @@ func ValidateRoleName(name string) error {
 		return NewValidationError("a role can't be named after the built-in role %q", name)
 	}
 	return nil
-}
-
-// rowLevelSecurityEnabled reports whether listings are filtered by row.
-func rowLevelSecurityEnabled(ctx context.Context) bool {
-	return vars.RLSEnabled(ctx)
 }
 
 // ResolveRoleRules validates the rules of a role and resolves their Scopes in the role's namespace.
@@ -163,11 +157,6 @@ func resolveInput(ctx context.Context, cache *gocache.Cache, namespace string, c
 		return ScopeSelection{}, err
 	} else if err := contract.validateInput(input, scope); err != nil {
 		return ScopeSelection{}, NewValidationError("%v", err)
-	}
-
-	if contract.requiresRowLevelSecurity(scope) && !rowLevelSecurityEnabled(ctx) {
-		return ScopeSelection{}, NewInvalid(ReasonRowLevelSecurityRequired,
-			"scope %s doesn't select whole types, so %s needs row-level security (%s) to filter listings", scope.Name, contract.Action, vars.FlagRLSEnable)
 	}
 
 	return scope, nil
@@ -354,7 +343,7 @@ func resolveConstraintScopes(ctx context.Context, cache *gocache.Cache, namespac
 func narrowRule(ctx context.Context, compiled CompiledRule, rule ResolvedRule, scopes constraintScopes) (CompiledRule, error) {
 	narrowed := false
 	if scopes.resource != nil {
-		scope, err := narrowInput(ctx, rule.Contract, "resource", rule.Resource, *scopes.resource)
+		scope, err := narrowInput(rule.Contract, "resource", rule.Resource, *scopes.resource)
 		if err != nil {
 			return CompiledRule{}, err
 		}
@@ -368,7 +357,7 @@ func narrowRule(ctx context.Context, compiled CompiledRule, rule ResolvedRule, s
 				"%s takes a target and the rule has none, so it only allows operations without a target, which the constraint's target can't narrow", rule.Action)
 		}
 
-		scope, err := narrowInput(ctx, rule.Contract, "target", *rule.Target, *scopes.target)
+		scope, err := narrowInput(rule.Contract, "target", *rule.Target, *scopes.target)
 		if err != nil {
 			return CompiledRule{}, err
 		}
@@ -388,9 +377,8 @@ func narrowRule(ctx context.Context, compiled CompiledRule, rule ResolvedRule, s
 // both Scopes select. Types the input can't carry are ignored, so one Scope can narrow every input of every rule.
 //
 // The input can't be narrowed when the Scopes share no type, or when those targets can't be enforced for the action
-// as the rule's own Scope must be: whole-type targets for create, update and delete, and row filters for read,
-// which need row-level security unless every target is a whole-type target.
-func narrowInput(ctx context.Context, contract ActionContract, input string, ruleScope, constraintScope ScopeSelection) (ScopeSelection, error) {
+// as the rule's own Scope must be: whole-type targets for create, update and delete, and row filters for read.
+func narrowInput(contract ActionContract, input string, ruleScope, constraintScope ScopeSelection) (ScopeSelection, error) {
 	common := lo.Intersect(ruleScope.DeclaredTypes(), constraintScope.DeclaredTypes())
 	if len(common) == 0 {
 		return ScopeSelection{}, NewInvalid(ReasonConstraintDoesNotFit, "the rule's %s scope %s selects %s and the constraint's scope %s selects %s: they share no type",
@@ -405,11 +393,6 @@ func narrowInput(ctx context.Context, contract ActionContract, input string, rul
 			}
 		}
 		narrowed.Selectors[kind] = constraintScope.Selectors[kind]
-	}
-
-	if contract.requiresRowLevelSecurity(narrowed) && !rowLevelSecurityEnabled(ctx) {
-		return ScopeSelection{}, NewInvalid(ReasonRowLevelSecurityRequired,
-			"constraint scope %s doesn't select whole types, so %s needs row-level security (%s) to filter listings", constraintScope.Name, contract.Action, vars.FlagRLSEnable)
 	}
 
 	return narrowed, nil

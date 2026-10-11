@@ -130,30 +130,6 @@ var _ = ginkgo.Describe("validateInput", func() {
 	})
 })
 
-var _ = ginkgo.Describe("row-level security requirement", func() {
-	read, _ := ContractFor(policy.ActionRead)
-	run, _ := ContractFor(policy.ActionPlaybookRun)
-
-	ginkgo.It("is needed by a read rule whose scope doesn't select whole types", func() {
-		Expect(read.requiresRowLevelSecurity(scope("staging", map[string][]types.ResourceSelector{
-			policy.ResourceConfig: {{Name: "*"}, {TagSelector: "env=staging"}},
-		}))).To(BeTrue())
-	})
-
-	ginkgo.It("isn't needed by a read rule of whole-type targets only", func() {
-		Expect(read.requiresRowLevelSecurity(scope("all", map[string][]types.ResourceSelector{
-			policy.ResourceConfig: {{Name: "*"}},
-			policy.ResourceCheck:  {{Name: "*"}},
-		}))).To(BeFalse())
-	})
-
-	ginkgo.It("isn't needed by actions checked per request", func() {
-		Expect(run.requiresRowLevelSecurity(scope("monitoring", map[string][]types.ResourceSelector{
-			policy.ResourcePlaybook: {{Namespace: "monitoring"}},
-		}))).To(BeFalse())
-	})
-})
-
 var _ = ginkgo.Describe("CompiledRule", func() {
 	read, _ := ContractFor(policy.ActionRead)
 	run, _ := ContractFor(policy.ActionPlaybookRun)

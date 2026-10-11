@@ -179,9 +179,9 @@ Both MUST allow the same resources at every moment (`scopes.md`, Section 7.1): a
 
 A `read` rule accepts any Scope whose membership is decided by the resource alone (`scopes.md`, Section 4.3), which every Scope is, with one exception: connections aren't filtered by row, so a `read` rule's Scope MUST select connections with a whole-type target only.
 
-Listings are only filtered while row-level security is enabled. It's turned on or off when Mission Control starts, from the `rls.enable` property, so changing the property takes effect on restart. So a `read` rule whose Scope has a target that isn't a whole-type target (`scopes.md`, Section 5.2) needs it: while row-level security is off, a Role with such a rule is `Ready=False` with reason `RowLevelSecurityRequired`, and none of its rules apply, like any invalid Role (Section 6). It becomes valid when row-level security is enabled, without being re-applied. A rule whose Scope consists of whole-type targets only doesn't need it: opening any resource and listing all of them allow the same resources.
+Listings are filtered by row-level security, which is always on: there's no setting to turn it off. So a `read` rule whose Scope has a target that isn't a whole-type target (`scopes.md`, Section 5.2) filters listings to what it selects. A rule whose Scope consists of whole-type targets only doesn't need row filters: opening any resource and listing all of them allow the same resources.
 
-Whether a subject may list a type at all, and what a listing returns for a subject whose grants cover only part of it, is specified in `collection-access.md`. Subjects without built-in access (`overview.md`, "Default access") list only what their `read` grants select, and a listing of a type none of their grants covers is refused with `403 Forbidden`, whether or not row-level security is on.
+Whether a subject may list a type at all, and what a listing returns for a subject whose grants cover only part of it, is specified in `collection-access.md`. Subjects without built-in access (`overview.md`, "Default access") list only what their `read` grants select, and a listing of a type none of their grants covers is refused with `403 Forbidden`.
 
 ## 4. Matching
 
@@ -303,7 +303,7 @@ A Role is validated against what it references: its rules, and the Scopes they n
 
 A Role that's wrong on its own is rejected (Section 3). Otherwise it's stored, and takes effect only when all its rules are valid. One invalid rule makes the whole Role invalid: it's `Ready=False` with the reason, and none of its rules apply, allow or deny. There is no previous version to fall back to; the Role is whatever was last written.
 
-A Role becomes invalid when it's written with an invalid rule, when a Scope it references changes into one a rule can't accept, is deleted, or becomes invalid itself (`scopes.md`, Section 7), or when row-level security is turned off while a rule needs it (Section 3.1). It becomes valid again, and its rules apply again, as soon as the cause is gone, without being re-applied.
+A Role becomes invalid when it's written with an invalid rule, when a Scope it references changes into one a rule can't accept, is deleted, or becomes invalid itself (`scopes.md`, Section 7). It becomes valid again, and its rules apply again, as soon as the cause is gone, without being re-applied.
 
 ### 6.1 Keep Roles small
 
@@ -353,4 +353,4 @@ A guest is the restricted role. Guests get past the same whole-type checks as vi
 
 - **TODO:** A person with no built-in role. Today they get the built-in access every user has, unfiltered, so in practice they're a viewer. Decide whether that's intended, or whether they should get nothing until they're given a role.
 - **TODO:** Reads granted to `viewer`. Section 7.3 says they don't reach guests, but the code currently lets them reach every user, guests and agents included, on whole-type checks. Confirm guests are excluded, and fix the code.
-- Guest visibility is settled by `collection-access.md`: a guest's built-in `read` doesn't count, so a guest opening one resource is checked against their grants only, and while row-level security is off a guest lists only types their grants cover whole (Sections 2 and 2.3).
+- Guest visibility is settled by `collection-access.md`: a guest's built-in `read` doesn't count, so a guest opening one resource is checked against their grants only, and a guest's listings are filtered to what their grants select (Sections 2 and 2.3).
