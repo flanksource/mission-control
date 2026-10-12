@@ -73,6 +73,16 @@ func IsShipped(namespace, source string) bool {
 	return namespace == ShippedNamespace && source == SourceShipped
 }
 
+// ShippedPrefix starts the names of the shipped objects the specs don't name, e.g. the Scope shipped-all-configs.
+// In the shipped namespace, a Scope, Role or RoleBinding whose name starts with it can only be a shipped one, so a
+// later release can ship a new one without replacing an object someone else created.
+const ShippedPrefix = "shipped-"
+
+// IsReservedName reports whether only a shipped Scope, Role or RoleBinding may have the namespace and name.
+func IsReservedName(namespace, name string) bool {
+	return namespace == ShippedNamespace && strings.HasPrefix(name, ShippedPrefix)
+}
+
 // ValidateRoleName checks that a Role isn't named after a built-in role.
 func ValidateRoleName(name string) error {
 	if slices.Contains(reservedRoleNames, name) {

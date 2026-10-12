@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	_ "embed"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -17,9 +18,11 @@ import (
 	"sync"
 
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/membership"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/kopper"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"github.com/samber/lo"
@@ -44,7 +47,7 @@ const (
 	RoleAdmin  = "admin"
 
 	// allConfigs is the Scope admin's plugin rules are on.
-	allConfigs = "all-configs"
+	allConfigs = "shipped-all-configs"
 
 	apiVersion = "mission-control.flanksource.com/v1"
 )
@@ -155,56 +158,127 @@ func invokeRuleName(action string, used map[string]bool) string {
 
 var syncLock sync.Mutex
 
-// Sync writes the shipped Scopes and Roles, with admin's rules for the operations of the plugins installed now.
+// Sync writes the shipped Scopes and Roles, with admin's rules for the operations of the installed plugins.
 // It replaces any other Scope or Role of the same namespace and name, and deletes shipped ones that are no longer
-// shipped, e.g. admin's rule for an operation that's gone. It's idempotent.
+// shipped, e.g. admin's rule for an operation that's gone. It's idempotent, and writes everything or nothing.
+// The policy is reloaded whenever Sync may have changed something, even when it fails.
 // A shipped object that's stored but not in effect is a bug, and is returned as an error.
 func Sync(ctx context.Context) error {
 	syncLock.Lock()
 	defer syncLock.Unlock()
 
-	scopes, roles, err := Build(plugin.DefaultRegistry.Operations())
-	if err != nil {
-		return err
-	}
-
-	var errs []error
-	var scopeIDs, roleIDs []string
-	for i := range scopes {
-		scope := &scopes[i]
-		scope.UID = objectID("scopes", scope.Namespace, scope.Name)
-		scopeIDs = append(scopeIDs, string(scope.UID))
-		if err := replaceOthers(ctx, "scopes", scope.ObjectMeta); err != nil {
+	var notReady []error
+	err := ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
+		operations, err := installedOperations(txCtx)
+		if err != nil {
 			return err
 		}
-		if err := db.PersistScope(ctx, scope, adapter.SourceShipped, nil); err != nil {
-			errs = append(errs, fmt.Errorf("scope %s/%s: %w", scope.Namespace, scope.Name, err))
-		}
-	}
 
-	for i := range roles {
-		role := &roles[i]
-		role.UID = objectID("roles", role.Namespace, role.Name)
-		roleIDs = append(roleIDs, string(role.UID))
-		if err := replaceOthers(ctx, "roles", role.ObjectMeta); err != nil {
+		scopes, roles, err := Build(operations)
+		if err != nil {
 			return err
 		}
-		if err := db.PersistRole(ctx, role, adapter.SourceShipped, nil); err != nil {
-			errs = append(errs, fmt.Errorf("role %s/%s: %w", role.Namespace, role.Name, err))
+
+		var scopeIDs, roleIDs []string
+		for i := range scopes {
+			scope := &scopes[i]
+			scope.UID = objectID("scopes", scope.Namespace, scope.Name)
+			scopeIDs = append(scopeIDs, string(scope.UID))
+			if err := replaceOthers(txCtx, "scopes", scope.ObjectMeta); err != nil {
+				return err
+			}
+			if err := persisted(db.PersistScope(txCtx, scope, adapter.SourceShipped, nil), &notReady); err != nil {
+				return fmt.Errorf("scope %s/%s: %w", scope.Namespace, scope.Name, err)
+			}
 		}
-	}
 
-	if err := deleteUnshipped(ctx, "roles", roleIDs); err != nil {
-		return err
-	}
-	if err := deleteUnshipped(ctx, "scopes", scopeIDs); err != nil {
-		return err
-	}
+		for i := range roles {
+			role := &roles[i]
+			role.UID = objectID("roles", role.Namespace, role.Name)
+			roleIDs = append(roleIDs, string(role.UID))
+			if err := replaceOthers(txCtx, "roles", role.ObjectMeta); err != nil {
+				return err
+			}
+			if err := persisted(db.PersistRole(txCtx, role, adapter.SourceShipped, nil), &notReady); err != nil {
+				return fmt.Errorf("role %s/%s: %w", role.Namespace, role.Name, err)
+			}
+		}
 
+		if err := deleteUnshipped(txCtx, "roles", roleIDs); err != nil {
+			return err
+		}
+		return deleteUnshipped(txCtx, "scopes", scopeIDs)
+	})
+
+	errs := append([]error{err}, notReady...)
 	if err := dutyRBAC.ReloadPolicy(); err != nil {
 		errs = append(errs, fmt.Errorf("failed to reload policy: %w", err))
 	}
 	return errors.Join(errs...)
+}
+
+// persisted returns the error of a persist that failed, and adds one that stored an object that isn't in effect
+// to notReady instead, so the object is still written.
+func persisted(err error, notReady *[]error) error {
+	var notReadyErr *kopper.NotReadyError
+	if errors.As(err, &notReadyErr) {
+		*notReady = append(*notReady, err)
+		return nil
+	}
+	return err
+}
+
+// installedOperations returns the operations admin gets rules for: those of the plugins that have registered, and,
+// for installed plugins that haven't registered yet, e.g. right after a restart, the operations admin already has
+// rules for. So a restart doesn't take plugin operations away from admins until each plugin is back.
+// A plugin is installed when it's stored or in the registry; plugins proxied by agents are only in the registry.
+func installedOperations(ctx context.Context) (map[string][]string, error) {
+	operations := plugin.DefaultRegistry.Operations()
+
+	pending := map[string]bool{}
+	for _, entry := range plugin.DefaultRegistry.List() {
+		pending[entry.Name] = true
+	}
+	rows, err := db.ListPlugins(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		pending[row.Name] = true
+	}
+	for name := range operations {
+		delete(pending, name)
+	}
+	if len(pending) == 0 {
+		return operations, nil
+	}
+
+	var stored []models.Role
+	if err := ctx.DB().Where("namespace = ? AND name = ? AND source = ? AND deleted_at IS NULL",
+		adapter.ShippedNamespace, RoleAdmin, adapter.SourceShipped).Find(&stored).Error; err != nil {
+		return nil, ctx.Oops().Wrap(err)
+	}
+	for _, role := range stored {
+		var rules []v1.RoleRule
+		if err := json.Unmarshal(role.Rules, &rules); err != nil {
+			return nil, ctx.Oops().Wrapf(err, "invalid rules of role %s/%s", role.Namespace, role.Name)
+		}
+		for _, rule := range rules {
+			rest, ok := strings.CutPrefix(rule.Action, policy.ActionPluginInvokePrefix)
+			if !ok {
+				continue
+			}
+			if name, op, ok := strings.Cut(rest, ":"); ok && pending[name] {
+				operations[name] = append(operations[name], op)
+			}
+		}
+	}
+
+	for name, ops := range operations {
+		slices.Sort(ops)
+		operations[name] = slices.Compact(ops)
+	}
+	return operations, nil
 }
 
 // Start syncs whenever the operations of the installed plugins change, until the context is done.
@@ -237,35 +311,23 @@ func objectID(table, namespace, name string) k8sTypes.UID {
 }
 
 // replaceOthers deletes any other object in the table with the namespace and name, e.g. one applied through
-// Kubernetes before Mission Control shipped one by that name, with a Scope's membership.
+// Kubernetes before Mission Control shipped one by that name.
 func replaceOthers(ctx context.Context, table string, meta metav1.ObjectMeta) error {
-	return ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
-		var replaced []uuid.UUID
-		if err := txCtx.DB().Raw(fmt.Sprintf(`UPDATE %s SET deleted_at = NOW()
-			WHERE namespace = ? AND name = ? AND id != ? AND deleted_at IS NULL
-			RETURNING id`, table), meta.Namespace, meta.Name, meta.UID).Scan(&replaced).Error; err != nil {
-			return ctx.Oops().Wrapf(err, "failed to replace %s %s/%s", table, meta.Namespace, meta.Name)
-		}
-
-		if table == "scopes" {
-			for _, id := range replaced {
-				if err := membership.Clear(txCtx, id); err != nil {
-					return ctx.Oops().Wrap(err)
-				}
-			}
-		}
-		return nil
-	})
+	return softDelete(ctx, table, "namespace = ? AND name = ? AND id != ?", meta.Namespace, meta.Name, meta.UID)
 }
 
-// deleteUnshipped deletes the shipped objects in the table that aren't among the ids, with a Scope's membership.
+// deleteUnshipped deletes the shipped objects in the table that aren't among the ids.
 func deleteUnshipped(ctx context.Context, table string, ids []string) error {
+	return softDelete(ctx, table, "source = ? AND NOT (id::text = ANY (?))", adapter.SourceShipped, pq.StringArray(ids))
+}
+
+// softDelete soft deletes the objects in the table that match the condition, and clears a Scope's membership.
+func softDelete(ctx context.Context, table, condition string, args ...any) error {
 	return ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
 		var deleted []uuid.UUID
-		if err := txCtx.DB().Raw(fmt.Sprintf(`UPDATE %s SET deleted_at = NOW()
-			WHERE source = ? AND deleted_at IS NULL AND NOT (id::text = ANY (?))
-			RETURNING id`, table), adapter.SourceShipped, pq.StringArray(ids)).Scan(&deleted).Error; err != nil {
-			return ctx.Oops().Wrapf(err, "failed to delete %s no longer shipped", table)
+		if err := txCtx.DB().Raw(fmt.Sprintf(`UPDATE %s SET deleted_at = NOW() WHERE deleted_at IS NULL AND %s RETURNING id`, table, condition),
+			args...).Scan(&deleted).Error; err != nil {
+			return ctx.Oops().Wrapf(err, "failed to delete %s", table)
 		}
 
 		if table == "scopes" {

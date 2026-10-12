@@ -76,13 +76,11 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 			read = append(read, selects(rule.Resource)...)
 		}
 
-		// overview.md lists application, person and team too: no Scope can select them yet, so read doesn't accept them
-		contract, err := adapter.ContractFor(policy.ActionRead)
-		Expect(err).ToNot(HaveOccurred())
-		wanted := lo.Intersect(contract.Resources, []string{
+		// overview.md, "Shipped Roles"
+		wanted := []string{
 			policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck, policy.ResourceCanary,
-			policy.ResourcePlaybook, "application", "person", "team",
-		})
+			policy.ResourcePlaybook, v1.ResourceApplication, v1.ResourcePerson, v1.ResourceTeam,
+		}
 		Expect(read).To(ConsistOf(wanted))
 	})
 

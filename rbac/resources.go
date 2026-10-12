@@ -34,6 +34,9 @@ type managedKind struct {
 	// table stores the kind.
 	table string
 
+	// object is the RBAC object whole-type grants of the kind are checked on, e.g. by the shipped admin Role.
+	object string
+
 	// newObject returns an empty object to decode a request into.
 	newObject func() client.Object
 
@@ -56,6 +59,7 @@ var managedKinds = []managedKind{
 	{
 		path:      "scopes",
 		table:     "scopes",
+		object:    adapter.ObjectScopes,
 		newObject: func() client.Object { return &v1.Scope{} },
 		newModel:  func() any { return &models.Scope{} },
 		newList:   func() any { return &[]models.Scope{} },
@@ -70,6 +74,7 @@ var managedKinds = []managedKind{
 	{
 		path:      "roles",
 		table:     "roles",
+		object:    adapter.ObjectRoles,
 		newObject: func() client.Object { return &v1.Role{} },
 		newModel:  func() any { return &models.Role{} },
 		newList:   func() any { return &[]models.Role{} },
@@ -92,6 +97,7 @@ var managedKinds = []managedKind{
 	{
 		path:      "role-bindings",
 		table:     "role_bindings",
+		object:    adapter.ObjectRoleBindings,
 		newObject: func() client.Object { return &v1.RoleBinding{} },
 		newModel:  func() any { return &models.RoleBinding{} },
 		newList:   func() any { return &[]models.RoleBinding{} },
@@ -124,11 +130,11 @@ func init() {
 func registerManagedKinds(e *echo.Echo) {
 	for _, kind := range managedKinds {
 		group := e.Group("/rbac/" + kind.path)
-		group.GET("", kind.list, Authorization(policy.ObjectRBAC, policy.ActionRead))
-		group.GET("/:namespace/:name", kind.get, Authorization(policy.ObjectRBAC, policy.ActionRead))
-		group.POST("", kind.create, Authorization(policy.ObjectRBAC, policy.ActionUpdate))
-		group.PUT("/:namespace/:name", kind.update, Authorization(policy.ObjectRBAC, policy.ActionUpdate))
-		group.DELETE("/:namespace/:name", kind.remove, Authorization(policy.ObjectRBAC, policy.ActionUpdate))
+		group.GET("", kind.list, Authorization(kind.object, policy.ActionRead))
+		group.GET("/:namespace/:name", kind.get, Authorization(kind.object, policy.ActionRead))
+		group.POST("", kind.create, Authorization(kind.object, policy.ActionCreate))
+		group.PUT("/:namespace/:name", kind.update, Authorization(kind.object, policy.ActionUpdate))
+		group.DELETE("/:namespace/:name", kind.remove, Authorization(kind.object, policy.ActionDelete))
 	}
 }
 
@@ -219,6 +225,11 @@ func (k managedKind) create(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ECONFLICT, "%s %s/%s is shipped with Mission Control and can't be changed or deleted", k.path, obj.GetNamespace(), obj.GetName()))
 	} else if stored != nil {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ECONFLICT, "%s %s/%s already exists", k.path, obj.GetNamespace(), obj.GetName()))
+	}
+
+	if adapter.IsReservedName(obj.GetNamespace(), obj.GetName()) {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "names starting with %q are reserved in %s for objects shipped with Mission Control",
+			adapter.ShippedPrefix, obj.GetNamespace()))
 	}
 
 	id := uuid.New()

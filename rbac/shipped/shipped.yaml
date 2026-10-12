@@ -7,10 +7,10 @@
 apiVersion: mission-control.flanksource.com/v1
 kind: Scope
 metadata:
-  name: operated-resources
+  name: shipped-operated-resources
   namespace: mission-control
 spec:
-  description: Every config, component, check, canary and playbook
+  description: Every config, component, check, canary, playbook, application, person and team
   targets:
     - config:
         name: "*"
@@ -22,14 +22,20 @@ spec:
         name: "*"
     - playbook:
         name: "*"
+    - application:
+        name: "*"
+    - person:
+        name: "*"
+    - team:
+        name: "*"
 ---
 apiVersion: mission-control.flanksource.com/v1
 kind: Scope
 metadata:
-  name: writable-resources
+  name: shipped-writable-resources
   namespace: mission-control
 spec:
-  description: Every config, component, canary, playbook and connection
+  description: Every config, component, canary, playbook, connection, application and team
   targets:
     - config:
         name: "*"
@@ -41,11 +47,36 @@ spec:
         name: "*"
     - connection:
         name: "*"
+    - application:
+        name: "*"
+    - team:
+        name: "*"
 ---
 apiVersion: mission-control.flanksource.com/v1
 kind: Scope
 metadata:
-  name: playbook-targets
+  name: shipped-configuration-resources
+  namespace: mission-control
+spec:
+  description: Every notification, notification silence, agent, Scope, Role and RoleBinding
+  targets:
+    - notification:
+        name: "*"
+    - notificationSilence:
+        name: "*"
+    - agent:
+        name: "*"
+    - scope:
+        name: "*"
+    - role:
+        name: "*"
+    - roleBinding:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: shipped-playbook-targets
   namespace: mission-control
 spec:
   description: Every config, component and check, i.e. everything a playbook can run on
@@ -60,7 +91,7 @@ spec:
 apiVersion: mission-control.flanksource.com/v1
 kind: Scope
 metadata:
-  name: all-configs
+  name: shipped-all-configs
   namespace: mission-control
 spec:
   description: Every config
@@ -71,7 +102,7 @@ spec:
 apiVersion: mission-control.flanksource.com/v1
 kind: Scope
 metadata:
-  name: all-playbooks
+  name: shipped-all-playbooks
   namespace: mission-control
 spec:
   description: Every playbook
@@ -82,7 +113,7 @@ spec:
 apiVersion: mission-control.flanksource.com/v1
 kind: Scope
 metadata:
-  name: all-connections
+  name: shipped-all-connections
   namespace: mission-control
 spec:
   description: Every connection
@@ -101,7 +132,7 @@ spec:
     - name: read-resources
       action: read
       resource:
-        scopeRef: operated-resources
+        scopeRef: shipped-operated-resources
 ---
 apiVersion: mission-control.flanksource.com/v1
 kind: Role
@@ -114,62 +145,78 @@ spec:
     - name: read-resources
       action: read
       resource:
-        scopeRef: operated-resources
+        scopeRef: shipped-operated-resources
     - name: read-connections
       action: read
       resource:
-        scopeRef: all-connections
+        scopeRef: shipped-all-connections
+    - name: read-configuration
+      action: read
+      resource:
+        scopeRef: shipped-configuration-resources
     - name: create-resources
       action: create
       resource:
-        scopeRef: writable-resources
+        scopeRef: shipped-writable-resources
     - name: update-resources
       action: update
       resource:
-        scopeRef: writable-resources
+        scopeRef: shipped-writable-resources
     - name: delete-resources
       action: delete
       resource:
-        scopeRef: writable-resources
+        scopeRef: shipped-writable-resources
+    - name: create-configuration
+      action: create
+      resource:
+        scopeRef: shipped-configuration-resources
+    - name: update-configuration
+      action: update
+      resource:
+        scopeRef: shipped-configuration-resources
+    - name: delete-configuration
+      action: delete
+      resource:
+        scopeRef: shipped-configuration-resources
     # A rule with a target only matches runs on a target, and one without only runs with no target (roles.md, Section 2).
     - name: run-playbooks
       action: playbook:run
       resource:
-        scopeRef: all-playbooks
+        scopeRef: shipped-all-playbooks
       target:
-        scopeRef: playbook-targets
+        scopeRef: shipped-playbook-targets
     - name: run-playbooks-without-target
       action: playbook:run
       resource:
-        scopeRef: all-playbooks
+        scopeRef: shipped-all-playbooks
     - name: approve-playbooks
       action: playbook:approve
       resource:
-        scopeRef: all-playbooks
+        scopeRef: shipped-all-playbooks
       target:
-        scopeRef: playbook-targets
+        scopeRef: shipped-playbook-targets
     - name: approve-playbooks-without-target
       action: playbook:approve
       resource:
-        scopeRef: all-playbooks
+        scopeRef: shipped-all-playbooks
     - name: cancel-playbooks
       action: playbook:cancel
       resource:
-        scopeRef: all-playbooks
+        scopeRef: shipped-all-playbooks
       target:
-        scopeRef: playbook-targets
+        scopeRef: shipped-playbook-targets
     - name: cancel-playbooks-without-target
       action: playbook:cancel
       resource:
-        scopeRef: all-playbooks
+        scopeRef: shipped-all-playbooks
     - name: run-playbooks-through-mcp
       action: mcp:run
       resource:
-        scopeRef: all-playbooks
+        scopeRef: shipped-all-playbooks
     - name: use-connections
       action: connection:use
       resource:
-        scopeRef: all-connections
+        scopeRef: shipped-all-connections
     - name: manage-people
       action: person:manage
     - name: use-mcp

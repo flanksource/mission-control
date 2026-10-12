@@ -121,14 +121,15 @@ func DeletePlugin(ctx context.Context, id string) error {
 	if err := machinery.StopPlugin(pluginID); err != nil {
 		return err
 	}
+	// Deleted before it leaves the registry, which syncs the shipped admin Role: a stored plugin counts as installed
+	if err := db.DeletePlugin(ctx, pluginID.String()); err != nil {
+		return err
+	}
 	plugin.DefaultRegistry.Remove(pluginID)
 	if entry != nil && entry.Name != "" {
 		if err := manifestcache.Delete(entry.Name); err != nil {
 			ctx.Logger.V(2).Infof("plugin %s: drop manifest cache: %v", entry.Name, err)
 		}
-	}
-	if err := db.DeletePlugin(ctx, pluginID.String()); err != nil {
-		return err
 	}
 
 	reloadPluginSubjects(ctx)

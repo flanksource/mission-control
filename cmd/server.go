@@ -278,7 +278,6 @@ var Serve = &cobra.Command{
 		if err := shipped.Sync(ctx); err != nil {
 			logger.Errorf("failed to sync shipped roles: %v", err)
 		}
-		shipped.Start(ctx)
 
 		// This is outside echo pkg to prevent import cycle
 		// Cannot be registered because we need to pass ctx for
@@ -316,6 +315,9 @@ var Serve = &cobra.Command{
 		// consumers, kopper) stop before the database pool is closed.
 		ctx, cancel := ctx.WithCancel()
 		shutdown.AddHookWithPriority("workers", shutdown.PriorityJobs, func() { cancel() })
+
+		// Before plugins are replayed, so their operations reach the shipped admin Role
+		shipped.Start(ctx)
 
 		if api.UpstreamConf.Valid() {
 			go tunnel.StartAgentTunnel(ctx, api.UpstreamConf, e)
