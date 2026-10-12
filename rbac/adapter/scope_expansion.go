@@ -25,13 +25,12 @@ const (
 // Reasons an object isn't in effect. They're stored in the error_reason column of scopes, roles and role_bindings,
 // and reported as the reason of the Ready condition.
 const (
-	ReasonInvalid                  = "Invalid"
-	ReasonAgentNotFound            = "AgentNotFound"
-	ReasonScopeNotFound            = "ScopeNotFound"
-	ReasonScopeInvalid             = "ScopeInvalid"
-	ReasonRoleNotFound             = "RoleNotFound"
-	ReasonRoleInvalid              = "RoleInvalid"
-	ReasonRowLevelSecurityRequired = "RowLevelSecurityRequired"
+	ReasonInvalid       = "Invalid"
+	ReasonAgentNotFound = "AgentNotFound"
+	ReasonScopeNotFound = "ScopeNotFound"
+	ReasonScopeInvalid  = "ScopeInvalid"
+	ReasonRoleNotFound  = "RoleNotFound"
+	ReasonRoleInvalid   = "RoleInvalid"
 
 	// ReasonNoRulesApply is a binding with a constraint that none of its role's allow rules applies through.
 	ReasonNoRulesApply = "NoRulesApply"

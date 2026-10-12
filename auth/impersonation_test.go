@@ -37,14 +37,14 @@ var _ = Describe("parseImpersonatedScopes", func() {
 	}
 })
 
-var _ = Describe("applyImpersonation", func() {
+var _ = Describe("applyScopeLimits", func() {
 	It("returns the real payload without the header", func() {
 		real := &rls.Payload{Disable: true}
-		Expect(applyImpersonation(real, nil)).To(BeIdenticalTo(real))
+		Expect(applyScopeLimits(real, nil)).To(BeIdenticalTo(real))
 	})
 
 	It("grants only the header's Scopes to a subject whose listings aren't filtered", func() {
-		got := applyImpersonation(&rls.Payload{Disable: true}, []string{scopeX})
+		got := applyScopeLimits(&rls.Payload{Disable: true}, [][]string{{scopeX}})
 		Expect(got.Disable).To(BeFalse())
 		for _, kind := range rls.GrantTypes {
 			Expect(got.GrantsFor(kind).Any).To(Equal([]rls.Grant{{Impersonated: []string{scopeX}}}), kind)
@@ -53,14 +53,26 @@ var _ = Describe("applyImpersonation", func() {
 		Expect(got.View).To(Equal([]rls.Scope{{ID: "*"}}))
 	})
 
-	It("adds the header's Scopes to every grant, so it can only narrow", func() {
+	It("lists the rows in any of the header's Scopes", func() {
+		got := applyScopeLimits(&rls.Payload{Disable: true}, [][]string{{scopeX, scopeA}})
+		Expect(got.Config.Any).To(ConsistOf(rls.Grant{Impersonated: []string{scopeX}}, rls.Grant{Impersonated: []string{scopeA}}))
+
+		real := &rls.Payload{Config: grantsOf(rls.Grant{Scope: scopeB})}
+		got = applyScopeLimits(real, [][]string{{scopeX, scopeA}})
+		Expect(got.Config.Any).To(ConsistOf(
+			rls.Grant{Scope: scopeB, Impersonated: []string{scopeX}},
+			rls.Grant{Scope: scopeB, Impersonated: []string{scopeA}},
+		))
+	})
+
+	It("limits every grant to the header's Scopes, so it can only narrow", func() {
 		real := &rls.Payload{
 			Config:    grantsOf(rls.Grant{Scope: scopeA}, rls.Grant{Scope: scopeB}),
 			Component: rls.AllRows(),
 			Check:     rls.NoRows(),
 			Scopes:    []string{scopeA, scopeX},
 		}
-		got := applyImpersonation(real, []string{scopeX})
+		got := applyScopeLimits(real, [][]string{{scopeX}})
 
 		Expect(got.Config.Any).To(Equal([]rls.Grant{
 			{Scope: scopeA, Impersonated: []string{scopeX}},
@@ -75,7 +87,7 @@ var _ = Describe("applyImpersonation", func() {
 	})
 
 	It("lists nothing for a header naming no Scope", func() {
-		got := applyImpersonation(&rls.Payload{Disable: true}, []string{})
+		got := applyScopeLimits(&rls.Payload{Disable: true}, [][]string{{}})
 		Expect(got.Disable).To(BeFalse())
 		Expect(got.Config).To(BeNil())
 	})

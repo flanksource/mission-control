@@ -229,15 +229,13 @@ Both MUST allow the same resources at every moment (`scopes.md`, Section 7.1): a
 
 A `read` rule accepts any Scope whose membership is decided by the resource alone (`scopes.md`, Section 4.3), which every Scope is, with one exception: connections aren't filtered by row, so a `read` rule's Scope MUST select connections with a whole-type target only. The types that only take `name: "*"` (`scopes.md`, Section 5.3) can only be selected whole, so they need no row filtering either.
 
-Listings are only filtered while row-level security is enabled. It's turned on or off when Mission Control starts, from the `rls.enable` property, so changing the property takes effect on restart. So a `read` rule whose Scope has a target that isn't a whole-type target (`scopes.md`, Section 5.2) needs it: while row-level security is off, a Role with such a rule is `Ready=False` with reason `RowLevelSecurityRequired`, and none of its rules apply, like any invalid Role (Section 6). It becomes valid when row-level security is enabled, without being re-applied. A rule whose Scope consists of whole-type targets only doesn't need it: opening any resource and listing all of them allow the same resources.
-
-**TODO:** decide whether row-level security is always on, with the `rls.enable` setting removed. The lean is towards always on: every partial `read` grant and every constrained binding depends on it, and with it off they grant nothing, so a mode without it may serve no one.
+Listings are filtered by row-level security, which is always on: there's no setting to turn it off. So a `read` rule whose Scope has a target that isn't a whole-type target (`scopes.md`, Section 5.2) filters listings to what it selects. A rule whose Scope consists of whole-type targets only doesn't need row filters: opening any resource and listing all of them allow the same resources. A binding's constraint can still narrow it, and then its listings are filtered by the constraint's Scope (`rolebindings.md`, Section 3.2).
 
 Records follow the resource they belong to (`scopes.md`, Section 3.2): a playbook run is listed and opened exactly when its playbook, and the config or check it ran on, can be read, and its steps exactly when the run can. Lookup views derived from a type, e.g. `config_types` or `config_tags`, which list the distinct values the UI's filters offer, are readable by anyone with a `read` grant on that type, and MUST only show values from rows the subject can read. A database table that's neither a type, a record of one, nor a lookup view derived from one isn't served through the database API.
 
 Properties are the one thing read without a rule: any signed-in subject may read them. Reading them still requires authentication, like every other endpoint. They configure Mission Control's behaviour, e.g. which pages are enabled, and MUST NOT hold anything confidential. Writing them takes `create`, `update` or `delete` on `property` like any other type. _Why:_ every page needs them before it can decide what to show, a subject with no grants included.
 
-Whether a subject may list a type at all, and what a listing returns for a subject whose grants cover only part of it, is specified in `collection-access.md`. Every subject lists only what their `read` grants select, and a listing of a type none of their grants covers is refused with `403 Forbidden`, whether or not row-level security is on.
+Whether a subject may list a type at all, and what a listing returns for a subject whose grants cover only part of it, is specified in `collection-access.md`. Every subject lists only what their `read` grants select, and a listing of a type none of their grants covers is refused with `403 Forbidden`.
 
 ## 4. Matching
 
@@ -415,7 +413,7 @@ A Role is validated against what it references: its rules, and the Scopes they n
 
 A Role that's wrong on its own is rejected (Section 3). Otherwise it's stored, and takes effect only when all its rules are valid. One invalid rule makes the whole Role invalid: it's `Ready=False` with the reason, and none of its rules apply. There is no previous version to fall back to; the Role is whatever was last written.
 
-A Role becomes invalid when it's written with an invalid rule, when a Scope it references changes into one a rule can't accept, is deleted, or becomes invalid itself (`scopes.md`, Section 7), or when row-level security is turned off while a rule needs it (Section 3.1). It becomes valid again, and its rules apply again, as soon as the cause is gone, without being re-applied.
+A Role becomes invalid when it's written with an invalid rule, when a Scope it references changes into one a rule can't accept, is deleted, or becomes invalid itself (`scopes.md`, Section 7). It becomes valid again, and its rules apply again, as soon as the cause is gone, without being re-applied.
 
 ### 6.1 Keep Roles small
 

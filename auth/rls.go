@@ -18,7 +18,6 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
-	"github.com/flanksource/incident-commander/vars"
 )
 
 func init() {
@@ -27,7 +26,6 @@ func init() {
 
 // readGrantsCover reports whether the subject's claim filters the rows of the resource type.
 // A deny Permission on read leaves a type with no grants, which still filters it: its listing is empty, not refused.
-// While row-level security is off, nothing is filtered by row, so they cover nothing.
 func readGrantsCover(ctx context.Context, resourceType string) bool {
 	payload, err := GetRLSPayload(ctx)
 	if err != nil {
@@ -56,16 +54,12 @@ func InvalidateRLSCacheForUser(userID string) {
 }
 
 func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
-	if !vars.RLSEnabled(ctx) {
-		return &rls.Payload{Disable: true}, nil
-	}
-
 	user := ctx.User()
 	if user == nil {
 		return nil, fmt.Errorf("user is required for RLS payload")
 	}
 
-	impersonated := getImpersonatedScopes(ctx)
+	limits := dutyRBAC.ScopeLimits(ctx)
 
 	// Federated identities have no implicit grants: their row filters come from their own grants
 	subject := user.ID.String()
@@ -74,8 +68,8 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 	}
 
 	cacheKey := getRLSCacheKey(subject)
-	if impersonated != nil {
-		cacheKey = fmt.Sprintf("%s:scopes=%s", cacheKey, strings.Join(impersonated, ","))
+	for _, limit := range limits {
+		cacheKey = fmt.Sprintf("%s:scopes=%s", cacheKey, strings.Join(limit, ","))
 	}
 
 	if cached, ok := tokenCache.Get(cacheKey); ok {
@@ -87,7 +81,7 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		if roles, err := dutyRBAC.RolesForUser(user.ID.String()); err != nil {
 			return nil, err
 		} else if !lo.Contains(roles, policy.RoleGuest) {
-			payload := applyImpersonation(&rls.Payload{Disable: true}, impersonated)
+			payload := applyScopeLimits(&rls.Payload{Disable: true}, limits)
 			tokenCache.SetDefault(cacheKey, payload)
 			return payload, nil
 		}
@@ -99,7 +93,7 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		return nil, ctx.Oops().Wrap(err)
 	}
 
-	payload = applyImpersonation(payload, impersonated)
+	payload = applyScopeLimits(payload, limits)
 	tokenCache.SetDefault(cacheKey, payload)
 	return payload, nil
 }

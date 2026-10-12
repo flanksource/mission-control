@@ -159,18 +159,3 @@ func (c ActionContract) enforceable(kind string, selector types.ResourceSelector
 
 	return nil
 }
-
-// requiresRowLevelSecurity reports whether the Scope, filling an input of the action, needs row-level security:
-// the action's listings are filtered by row, and the Scope has a target that isn't a whole-type target.
-func (c ActionContract) requiresRowLevelSecurity(scope ScopeSelection) bool {
-	if c.enforcement != enforcedWithRows {
-		return false
-	}
-
-	for _, selectors := range scope.Selectors {
-		if slices.ContainsFunc(selectors, func(s types.ResourceSelector) bool { return !s.Wildcard() }) {
-			return true
-		}
-	}
-	return false
-}

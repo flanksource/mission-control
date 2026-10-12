@@ -62,12 +62,13 @@ var _ = BeforeSuite(func() {
 		"viewer":    policy.RoleViewer,
 	}
 
+	// Requests are checked as the person's id, so that's who gets the role
 	for user, role := range usersAndRoles {
-		DefaultContext.DB().Save(&models.Person{
-			Name:  user,
-			Email: user + "@test.com",
-		})
-		if err := dutyRBAC.AddRoleForUser(user, role); err != nil {
+		person := models.Person{Name: user, Email: user + "@test.com"}
+		if err := DefaultContext.DB().Save(&person).Error; err != nil {
+			Fail(fmt.Sprintf("error saving user %s: %v", user, err))
+		}
+		if err := dutyRBAC.AddRoleForUser(person.ID.String(), role); err != nil {
 			Fail(fmt.Sprintf("error adding roles for users: %v", err))
 		}
 	}
