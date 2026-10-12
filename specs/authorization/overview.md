@@ -113,10 +113,9 @@ Mission Control ships these Roles in the `mission-control` namespace. They're or
 | Role     | Allows                                                                                       |
 | -------- | -------------------------------------------------------------------------------------------- |
 | `viewer` | `read` on `config`, `component`, `check`, `canary`, `playbook`, `application`, `person` and `team` |
-| `editor` | What `viewer` allows, plus `read`, `create`, `update` and `delete` on every type but `person`, `team`, `scope`, `role`, `roleBinding`, `property`, `event` and `job`, no `person:invite`, `person:manage`, `person:delete` or `mcp:use`, and `connection:use` on every connection |
 | `admin`  | Every action on every type (`scopes.md`, Section 3.1), every plugin operation included       |
 
-`viewer` reads the resources people operate on, and nothing that configures access, holds credentials or exposes Mission Control's internals: no connections, notifications, notification silences, scrapers, agents, Scopes, Roles, RoleBindings, events or job history. _Why:_ `viewer` is the Role most often bound to everyone, so it grants only what everyone may see. Each of the excluded types takes an explicit grant, e.g. `read` on `scope`, `role` and `roleBinding` for an auditor. `editor` reads every type it can change, so it can see the connections, notifications and scrapers it edits, but not the access configuration.
+`viewer` reads the resources people operate on, and nothing that configures access, holds credentials or exposes Mission Control's internals: no connections, notifications, notification silences, scrapers, agents, Scopes, Roles, RoleBindings, events or job history. _Why:_ `viewer` is the Role most often bound to everyone, so it grants only what everyone may see. Each of the excluded types takes an explicit grant, e.g. `read` on `scope`, `role` and `roleBinding` for an auditor.
 
 Each rule of a shipped Role needs a Scope (`roles.md`, Section 1), so the Scopes they use ship with them, in the same namespace: whole-type targets of every type (`scopes.md`, Section 5.2), split across as many Scopes as the ten-target limit requires.
 
