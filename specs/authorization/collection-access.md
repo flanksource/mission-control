@@ -127,4 +127,4 @@ Uma sees the Catalog page, marked as showing some resources only, listing only t
 
 ## 8. Not covered
 
-- **Access tokens.** Which resources a token may read, whether it can be narrower than its owner, and whether it follows later changes to the owner's grants are for a spec of their own. **TODO.** Until then, the only requirement this document relies on is that a token never reads more than its owner.
+- **Access tokens.** A token can be narrower than its owner, e.g. limited to reading the configs of one namespace although its owner reads every config, and never reads more than its owner. How a token is narrowed, and whether it follows later changes to the owner's grants, are for a spec of their own. **TODO.**

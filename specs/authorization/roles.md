@@ -376,7 +376,9 @@ _Why the resource and not its author:_ a resource's author can change, and resou
 
 ### 4.5 Access tokens
 
-A person may always create, change and delete their own access tokens, without any grant. No one can create, change or delete a token for anyone else, and no action grants it. A token acts as the person it belongs to, so it can never do more than they can.
+A person may always create, change and delete their own access tokens, without any grant. No person can create, change or delete a token for another person, and no action grants it. A token acts as the person it belongs to, so it can never do more than they can.
+
+An agent's token is different: it's created with the agent, by a subject with `create` on `agent`, and handed to them (Section 4.6). Rotating or revoking an agent's token takes `update` on `agent`.
 
 _Why no grant:_ a token adds no access its owner doesn't already have, so there's nothing for a Role to decide.
 
