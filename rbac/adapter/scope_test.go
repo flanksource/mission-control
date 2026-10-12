@@ -72,3 +72,42 @@ var _ = ginkgo.Describe("Scope selectors", func() {
 		})
 	}
 })
+
+var _ = ginkgo.Describe("Whole-type Scope targets", func() {
+	for _, kind := range v1.WholeTypeResources {
+		decode := func(raw string) (v1.ScopeTarget, error) {
+			decoder := json.NewDecoder(strings.NewReader(raw))
+			decoder.DisallowUnknownFields()
+			var target v1.ScopeTarget
+			return target, decoder.Decode(&target)
+		}
+
+		ginkgo.It(`accepts `+kind+` with name: "*"`, func() {
+			target, err := decode(fmt.Sprintf(`{"%s":{"name":"*"}}`, kind))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ValidateScopeTargets([]v1.ScopeTarget{target})).To(Succeed())
+			Expect(MembershipTargets([]v1.ScopeTarget{target})).To(BeEmpty())
+		})
+
+		ginkgo.It("rejects "+kind+" with any other name, or none", func() {
+			for _, selector := range []string{`{"name":"api"}`, `{"name":"api-*"}`, `{"name":""}`, `{}`} {
+				target, err := decode(fmt.Sprintf(`{"%s":%s}`, kind, selector))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(ValidateScopeTargets([]v1.ScopeTarget{target})).ToNot(Succeed(), selector)
+			}
+		})
+
+		for _, field := range []string{`"id":"3c3e0b2a-9f1e-4d2b-8c5a-1e2f3a4b5c6d"`, `"namespace":"default"`, `"agent":"homelab"`, `"types":["x"]`, `"labelSelector":"a=b"`, `"tagSelector":"a=b"`} {
+			ginkgo.It("rejects "+kind+" with "+field, func() {
+				_, err := decode(fmt.Sprintf(`{"%s":{"name":"*",%s}}`, kind, field))
+				Expect(err).To(MatchError(ContainSubstring("unknown field")))
+			})
+		}
+
+		ginkgo.It("rejects "+kind+" alongside another type", func() {
+			target, err := decode(fmt.Sprintf(`{"%s":{"name":"*"},"playbook":{"name":"*"}}`, kind))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(ValidateScopeTargets([]v1.ScopeTarget{target})).To(MatchError(ContainSubstring("exactly one resource type")))
+		})
+	}
+})

@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/duty/types"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
@@ -346,4 +347,55 @@ var _ = ginkgo.Describe("connection:use", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(InvalidReason(err)).To(Equal(ReasonConstraintDoesNotFit))
 	})
+})
+
+var _ = ginkgo.Describe("Whole-type resources", func() {
+	read, _ := ContractFor(policy.ActionRead)
+
+	wholeType := func(kind string) ScopeSelection {
+		return ScopeSelection{ID: "00000000-0000-4000-8000-000000000006", Name: "all-" + kind, Selectors: map[string][]types.ResourceSelector{
+			kind: {{Name: "*"}},
+		}}
+	}
+
+	ginkgo.It("gives every type its own object", func() {
+		objects := lo.Values(objectForType)
+		Expect(lo.Uniq(objects)).To(HaveLen(len(objects)))
+		for _, kind := range v1.WholeTypeResources {
+			Expect(objectForType).To(HaveKey(kind))
+		}
+	})
+
+	ginkgo.It("takes every type but views for read", func() {
+		Expect(read.Resources).To(ConsistOf(append([]string{
+			policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck, policy.ResourceCanary, policy.ResourcePlaybook, policy.ResourceConnection,
+		}, v1.WholeTypeResources...)))
+	})
+
+	for _, action := range []string{policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete} {
+		ginkgo.It("takes every type but checks, people and views for "+action, func() {
+			contract, _ := ContractFor(action)
+			Expect(contract.Resources).To(ConsistOf(append([]string{
+				policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCanary, policy.ResourcePlaybook, policy.ResourceConnection,
+			}, lo.Without(v1.WholeTypeResources, v1.ResourcePerson)...)))
+
+			Expect(contract.validateInput("resource", wholeType(v1.ResourcePerson))).To(MatchError(ContainSubstring("selects person")))
+			Expect(contract.validateInput("resource", wholeType(v1.ResourceTeam))).To(Succeed())
+		})
+	}
+
+	for _, kind := range v1.WholeTypeResources {
+		ginkgo.It("compiles read on all of "+kind+" to its object only", func() {
+			scope := wholeType(kind)
+			Expect(read.validateInput("resource", scope)).To(Succeed())
+
+			policies, err := compiledRuleToCasbinRules("binding:default/ops", CompiledRule{ID: "binding:1/read", Name: "read", Contract: read, Resource: []ScopeSelection{scope}})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(policies).To(Equal([][]string{
+				{"p", "binding:default/ops", "*", policy.ActionRead, "allow",
+					"r.obj.Membership.Fits && !r.obj.Membership.HasTarget && 'scope:" + scope.ID + "' in r.obj.Membership.Resource", "binding:1/read"},
+				{"p", "binding:default/ops", objectForType[kind], policy.ActionRead, "allow", "", "binding:1/read"},
+			}))
+		})
+	}
 })

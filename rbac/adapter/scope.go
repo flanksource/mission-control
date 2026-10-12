@@ -119,10 +119,7 @@ func ValidateScopeTargets(targets []v1.ScopeTarget) error {
 	}
 
 	for i, target := range targets {
-		if n := lo.Count([]bool{
-			target.Config != nil, target.Component != nil, target.Check != nil, target.Canary != nil,
-			target.Playbook != nil, target.View != nil, target.Connection != nil,
-		}, true); n != 1 {
+		if n := target.TypeCount(); n != 1 {
 			return fmt.Errorf("target %d must select exactly one resource type, not %d", i, n)
 		}
 
@@ -142,6 +139,10 @@ func ValidateSelector(kind string, selector types.ResourceSelector) error {
 	if selector.ID == "" && selector.Name == "" && selector.Namespace == "" && selector.Agent == "" &&
 		len(selector.Types) == 0 && selector.TagSelector == "" && selector.LabelSelector == "" {
 		return fmt.Errorf(`an empty selector selects nothing; use name: "*" to select every %s`, kind)
+	}
+
+	if slices.Contains(v1.WholeTypeResources, kind) && !selector.Wildcard() {
+		return fmt.Errorf(`%s can only be selected entirely, with name: "*"`, kind)
 	}
 
 	if err := ValidateName(selector.Name); err != nil {

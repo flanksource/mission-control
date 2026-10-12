@@ -7,6 +7,9 @@ import (
 
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
+	"github.com/samber/lo"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
 // enforcement is how Mission Control checks an action, which limits the selectors its rules can use.
@@ -67,7 +70,18 @@ type ActionContract struct {
 // would also list every check: bindings get an object of their own for checks.
 const ObjectChecks = "checks"
 
+// RBAC objects that whole-type grants of a type compile to, where duty's object for the type is shared with another type.
+// duty's policy package doesn't define them yet.
+const (
+	ObjectNotificationSilences = "notification-silences"
+	ObjectTeams                = "teams"
+	ObjectScopes               = "scopes"
+	ObjectRoles                = "roles"
+	ObjectRoleBindings         = "role-bindings"
+)
+
 // objectForType is the RBAC object of each resource type that can be checked on whole types.
+// Every type has its own object, so a grant on one type never grants another.
 var objectForType = map[string]string{
 	policy.ResourceConfig:     policy.ObjectCatalog,
 	policy.ResourceComponent:  policy.ObjectTopology,
@@ -75,12 +89,28 @@ var objectForType = map[string]string{
 	policy.ResourceCanary:     policy.ObjectCanary,
 	policy.ResourcePlaybook:   policy.ObjectPlaybooks,
 	policy.ResourceConnection: policy.ObjectConnection,
+
+	v1.ResourceApplication:         policy.ObjectApplication,
+	v1.ResourceNotification:        policy.ObjectNotification,
+	v1.ResourceNotificationSilence: ObjectNotificationSilences,
+	v1.ResourceAgent:               policy.ObjectAgent,
+	v1.ResourcePerson:              policy.ObjectPeople,
+	v1.ResourceTeam:                ObjectTeams,
+	v1.ResourceScope:               ObjectScopes,
+	v1.ResourceRole:                ObjectRoles,
+	v1.ResourceRoleBinding:         ObjectRoleBindings,
 }
 
 var (
-	genericResources  = []string{policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCanary, policy.ResourcePlaybook, policy.ResourceConnection}
-	readableResources = []string{policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck, policy.ResourceCanary, policy.ResourcePlaybook, policy.ResourceConnection}
-	playbookTargets   = []string{policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck}
+	// genericResources are what create, update and delete take: every type but checks, people and views.
+	genericResources = append([]string{policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCanary, policy.ResourcePlaybook, policy.ResourceConnection},
+		lo.Without(v1.WholeTypeResources, v1.ResourcePerson)...)
+
+	// readableResources are what read takes: every type but views.
+	readableResources = append([]string{policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck, policy.ResourceCanary, policy.ResourcePlaybook, policy.ResourceConnection},
+		v1.WholeTypeResources...)
+
+	playbookTargets = []string{policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck}
 )
 
 var contracts = map[string]ActionContract{
