@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query/grammar"
+	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -33,8 +35,17 @@ func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
 		return err
 	}
 
+	var existing int64
+	if err := ctx.DB().Model(&models.Plugin{}).Where("id = ? AND deleted_at IS NULL", id).Count(&existing).Error; err != nil {
+		return err
+	}
+
 	if err := db.PersistPluginFromCRD(ctx, p); err != nil {
 		return err
+	}
+
+	if existing == 0 {
+		reloadPluginSubjects(ctx)
 	}
 
 	var previous *plugin.Entry
@@ -116,7 +127,20 @@ func DeletePlugin(ctx context.Context, id string) error {
 			ctx.Logger.V(2).Infof("plugin %s: drop manifest cache: %v", entry.Name, err)
 		}
 	}
-	return db.DeletePlugin(ctx, pluginID.String())
+	if err := db.DeletePlugin(ctx, pluginID.String()); err != nil {
+		return err
+	}
+
+	reloadPluginSubjects(ctx)
+	return nil
+}
+
+// reloadPluginSubjects reloads the authorization policy when a plugin is created or deleted, so RoleBindings
+// that select plugins by namespace or "*" reach it, or stop reaching it.
+func reloadPluginSubjects(ctx context.Context) {
+	if err := dutyRBAC.ReloadPolicy(); err != nil {
+		ctx.Logger.Errorf("failed to reload rbac policy after a plugin change: %v", err)
+	}
 }
 
 // DeleteStalePlugin removes registry entries for plugins whose CRD has been

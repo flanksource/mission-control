@@ -124,7 +124,12 @@ func pluginSubject(selector string) (string, models.PermissionSubjectType, error
 
 	// Since we do not persist plugins to the database, we don't have a handy namespacedName -> uuid lookup at this point.
 	// So we use the namespacedName as the casbin policy subject.
-	return "plugin:" + strings.TrimSpace(splits[0]) + "/" + strings.TrimSpace(splits[1]), models.PermissionSubjectTypePlugin, nil
+	return PluginSubject(strings.TrimSpace(splits[0]), strings.TrimSpace(splits[1])), models.PermissionSubjectTypePlugin, nil
+}
+
+// PluginSubject is the casbin subject a plugin's checks are made as.
+func PluginSubject(namespace, name string) string {
+	return "plugin:" + namespace + "/" + name
 }
 
 func findNamespacedResource(ctx context.Context, table string, selector string, subjectType models.PermissionSubjectType) (string, models.PermissionSubjectType, error) {

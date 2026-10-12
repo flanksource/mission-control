@@ -536,8 +536,14 @@ func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding,
 		return nil, nil, fmt.Errorf("failed to resolve teams for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
 	}
 
+	plugins, err := a.resolvePlugins(subjects.Plugins)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to resolve plugins for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
+	}
+
 	allSubjects = append(allSubjects, people...)
 	allSubjects = append(allSubjects, teams...)
+	allSubjects = append(allSubjects, plugins...)
 	allSubjects = append(allSubjects, subjects.Roles...)
 
 	for _, subject := range lo.Uniq(allSubjects) {
@@ -596,6 +602,21 @@ func (a *PermissionAdapter) resolveTeams(names []string) ([]string, error) {
 		Where("name IN ?", names).
 		Find(&ids).Error
 	return ids, err
+}
+
+// resolvePlugins returns the subjects of the plugins the selectors match: plugin:<namespace>/<name>.
+func (a *PermissionAdapter) resolvePlugins(selectors []v1.PermissionGroupSelector) ([]string, error) {
+	ids, err := a.findNamespacedResources(models.Plugin{}.TableName(), selectors)
+	if err != nil || len(ids) == 0 {
+		return nil, err
+	}
+
+	var plugins []models.Plugin
+	if err := a.ctx.DB().Select("namespace", "name").Where("id IN ?", ids).Find(&plugins).Error; err != nil {
+		return nil, err
+	}
+
+	return lo.Map(plugins, func(p models.Plugin, _ int) string { return v1.PluginSubject(p.Namespace, p.Name) }), nil
 }
 
 // resolveNamespacedSubjects resolves the resource subjects: playbooks, notifications, topologies, scrapers and canaries.

@@ -49,7 +49,7 @@ type RoleBindingSpec struct {
 	Role string `json:"role" yaml:"role"`
 
 	// Subjects the role is granted to. At least one is required.
-	// +kubebuilder:validation:XValidation:rule="[has(self.people) && size(self.people) > 0, has(self.teams) && size(self.teams) > 0, has(self.roles) && size(self.roles) > 0, has(self.oidc) && size(self.oidc) > 0, has(self.notifications) && size(self.notifications) > 0, has(self.playbooks) && size(self.playbooks) > 0, has(self.topologies) && size(self.topologies) > 0, has(self.scrapers) && size(self.scrapers) > 0, has(self.canaries) && size(self.canaries) > 0].exists(x, x)",message="at least one subject is required"
+	// +kubebuilder:validation:XValidation:rule="[has(self.people) && size(self.people) > 0, has(self.teams) && size(self.teams) > 0, has(self.roles) && size(self.roles) > 0, has(self.oidc) && size(self.oidc) > 0, has(self.notifications) && size(self.notifications) > 0, has(self.playbooks) && size(self.playbooks) > 0, has(self.topologies) && size(self.topologies) > 0, has(self.scrapers) && size(self.scrapers) > 0, has(self.canaries) && size(self.canaries) > 0, has(self.plugins) && size(self.plugins) > 0].exists(x, x)",message="at least one subject is required"
 	Subjects RoleBindingSubjects `json:"subjects" yaml:"subjects"`
 
 	// Constraint narrows every allow rule of the role for this binding's subjects.
@@ -80,11 +80,15 @@ type RoleBindingSubjects struct {
 
 	// OIDC selects users of external identity providers by the claims of their tokens.
 	OIDC []OIDCSubject `json:"oidc,omitempty" yaml:"oidc,omitempty"`
+
+	// Plugins selects plugins by the namespace and name of their Plugin resource.
+	// A binding that selects one can only grant read on connections.
+	Plugins []PermissionGroupSelector `json:"plugins,omitempty" yaml:"plugins,omitempty"`
 }
 
 func (t RoleBindingSubjects) Empty() bool {
 	s := t.PermissionGroupSubjects
-	return len(t.Roles) == 0 && len(t.OIDC) == 0 && len(s.People) == 0 && len(s.Teams) == 0 &&
+	return len(t.Roles) == 0 && len(t.OIDC) == 0 && len(t.Plugins) == 0 && len(s.People) == 0 && len(s.Teams) == 0 &&
 		len(s.Notifications) == 0 && len(s.Playbooks) == 0 && len(s.Topologies) == 0 &&
 		len(s.Scrapers) == 0 && len(s.Canaries) == 0
 }
@@ -172,6 +176,7 @@ func (t RoleBindingSpec) Validate() error {
 		"topologies":    t.Subjects.Topologies,
 		"scrapers":      t.Subjects.Scrapers,
 		"canaries":      t.Subjects.Canaries,
+		"plugins":       t.Subjects.Plugins,
 	} {
 		for i, selector := range selectors {
 			if err := validateResourceSubject(selector); err != nil {

@@ -37,6 +37,9 @@ const (
 
 	// ReasonConstraintDoesNotFit is an allow rule a binding's constraint can't narrow.
 	ReasonConstraintDoesNotFit = "ConstraintDoesNotFit"
+
+	// ReasonPluginRuleNotAllowed is a binding that selects a plugin and binds a role with a rule a plugin can't be granted.
+	ReasonPluginRuleNotAllowed = "PluginRuleNotAllowed"
 )
 
 // scopeExpansionValidationError represents a validation failure that should be persisted

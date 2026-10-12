@@ -549,6 +549,118 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		})
 	})
 
+	Describe("plugin subjects", Ordered, func() {
+		const pluginNamespace = "role-plugins"
+
+		var (
+			human       *models.Person
+			logsPlugin  models.Plugin
+			otherPlugin models.Plugin
+		)
+
+		canReadConnections := func(subject string) bool {
+			return rbac.Check(DefaultContext, subject, policy.ObjectConnection, policy.ActionRead)
+		}
+
+		createPlugin := func(name string) models.Plugin {
+			GinkgoHelper()
+			p := models.Plugin{ID: uuid.New(), Name: name, Namespace: pluginNamespace, Source: models.SourceCRD, Spec: []byte(`{}`)}
+			Expect(DefaultContext.DB().Create(&p).Error).To(Succeed())
+			return p
+		}
+
+		// bind persists a binding, and reloads the policy so it's in effect.
+		bind := func(binding *v1.RoleBinding) error {
+			GinkgoHelper()
+			err := db.PersistRoleBindingFromCRD(DefaultContext, binding)
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Where("id = ?", binding.UID).Delete(&models.RoleBinding{}).Error).To(Succeed())
+				Expect(rbac.ReloadPolicy()).To(Succeed())
+			})
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+			return err
+		}
+
+		BeforeAll(func() {
+			human = setup.CreateUserWithRole(DefaultContext, "Role Human", "role-human@test.com", policy.RoleGuest)
+			logsPlugin = createPlugin("kubernetes-logs")
+			otherPlugin = createPlugin("other")
+
+			for _, scope := range []*v1.Scope{
+				newScope("all-connections", namespace, v1.ScopeTarget{Connection: &v1.ScopeConnectionSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}),
+				newScope("connections-and-configs", namespace,
+					v1.ScopeTarget{Connection: &v1.ScopeConnectionSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}},
+					v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}),
+			} {
+				Expect(db.PersistScopeFromCRD(DefaultContext, scope)).To(Succeed())
+			}
+
+			for _, role := range []*v1.Role{
+				newRole("read-connections", namespace, allow("read", policy.ActionRead, "all-connections")),
+				newRole("read-connections-and-run", namespace,
+					allow("read", policy.ActionRead, "all-connections"),
+					allow("run", policy.ActionPlaybookRun, "all-playbooks")),
+				newRole("read-connections-and-configs", namespace, allow("read", policy.ActionRead, "connections-and-configs")),
+			} {
+				persistRole(role)
+			}
+		})
+
+		AfterAll(func() {
+			Expect(DefaultContext.DB().Where("namespace = ?", pluginNamespace).Delete(&models.Plugin{}).Error).To(Succeed())
+			Expect(DefaultContext.DB().Delete(human).Error).To(Succeed())
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+		})
+
+		It("grants the role to plugins by namespace and name", func() {
+			Expect(bind(newBinding("logs-plugin", "read-connections", v1.RoleBindingSubjects{
+				Plugins: []v1.PermissionGroupSelector{{Namespace: pluginNamespace, Name: logsPlugin.Name}},
+			}))).To(Succeed())
+
+			Expect(canReadConnections(v1.PluginSubject(pluginNamespace, logsPlugin.Name))).To(BeTrue())
+			Expect(canReadConnections(v1.PluginSubject(pluginNamespace, otherPlugin.Name))).To(BeFalse())
+		})
+
+		It("grants the role to every plugin of a namespace", func() {
+			Expect(bind(newBinding("namespace-plugins", "read-connections", v1.RoleBindingSubjects{
+				Plugins: []v1.PermissionGroupSelector{{Namespace: pluginNamespace}},
+			}))).To(Succeed())
+
+			Expect(canReadConnections(v1.PluginSubject(pluginNamespace, logsPlugin.Name))).To(BeTrue())
+			Expect(canReadConnections(v1.PluginSubject(pluginNamespace, otherPlugin.Name))).To(BeTrue())
+			Expect(canReadConnections(v1.PluginSubject("elsewhere", logsPlugin.Name))).To(BeFalse())
+		})
+
+		for _, tt := range []struct{ name, role string }{
+			{"a rule with another action", "read-connections-and-run"},
+			{"a rule whose scope selects another type", "read-connections-and-configs"},
+		} {
+			It("grants nothing, to any subject, when a plugin is bound to a role with "+tt.name, func() {
+				binding := newBinding("restricted-"+tt.role, tt.role, v1.RoleBindingSubjects{
+					PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{human.Email}},
+					Plugins:                 []v1.PermissionGroupSelector{{Namespace: pluginNamespace, Name: logsPlugin.Name}},
+				})
+				Expect(bind(binding)).To(BeAssignableToTypeOf(&kopper.NotReadyError{}))
+
+				stored := storedBinding(namespace, binding.Name)
+				Expect(stored.ErrorReason).To(HaveValue(Equal(adapter.ReasonPluginRuleNotAllowed)))
+
+				for _, subject := range []string{human.ID.String(), v1.PluginSubject(pluginNamespace, logsPlugin.Name)} {
+					Expect(canReadConnections(subject)).To(BeFalse(), subject)
+					hasRole, err := rbac.Enforcer().HasRoleForUser(subject, models.BindingPrincipal(namespace, binding.Name))
+					Expect(err).ToNot(HaveOccurred())
+					Expect(hasRole).To(BeFalse(), subject)
+				}
+			})
+		}
+
+		It("applies the same role when no plugin is selected", func() {
+			Expect(bind(newBinding("run-without-plugins", "read-connections-and-run", people(human)))).To(Succeed())
+
+			Expect(canReadConnections(human.ID.String())).To(BeTrue())
+		})
+	})
+
 	Describe("lifecycle", func() {
 		It("narrows a rule added to a role, or reports it when the constraint can't narrow it", func() {
 			role := roles[namespace+"/read-configs"]
