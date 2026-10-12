@@ -11,8 +11,6 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-
-	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 var _ = ginkgo.Describe("Job tools", ginkgo.Ordered, func() {
@@ -44,7 +42,7 @@ var _ = ginkgo.Describe("Job tools", ginkgo.Ordered, func() {
 		Expect(DefaultContext.DB().Create(&catalogReader).Error).To(Succeed())
 
 		_, err := dutyRBAC.Enforcer().AddPermissionsForUser(jobReader.ID.String(),
-			[]string{adapter.ObjectJobs, adapter.ActionJobRead, "allow", "", "na"},
+			[]string{policy.ObjectJobs, policy.ActionJobRead, "allow", "", "na"},
 		)
 		Expect(err).NotTo(HaveOccurred())
 		_, err = dutyRBAC.Enforcer().AddPermissionsForUser(catalogReader.ID.String(),
@@ -65,7 +63,7 @@ var _ = ginkgo.Describe("Job tools", ginkgo.Ordered, func() {
 		ginkgo.It(tool.name+" refuses a subject without job:read", func() {
 			result := call(DefaultContext.WithUser(&catalogReader), tool)
 			Expect(result.IsError).To(BeTrue())
-			checkResultInMCPResponse(result.Content, []string{"forbidden", adapter.ActionJobRead})
+			checkResultInMCPResponse(result.Content, []string{"forbidden", policy.ActionJobRead})
 		})
 
 		ginkgo.It(tool.name+" allows a subject with job:read", func() {

@@ -31,27 +31,11 @@ const (
 const ActionConnectionUse = "connection:use"
 
 // Actions that take no resource (see specs/authorization/roles.md, Section 2.3).
-// mcp:use is policy.ActionMCPUse, checked on policy.ObjectMCP.
+// mcp:use, property:manage, event:read and job:read are defined in duty's policy package.
 const (
 	// ActionPersonManage allows inviting, disabling, re-enabling and deleting accounts, and changing their
 	// properties, name or email. Checked on policy.ObjectPeople.
 	ActionPersonManage = "person:manage"
-
-	// ActionPropertyManage allows creating, changing and deleting properties. Reading them needs no rule.
-	ActionPropertyManage = "property:manage"
-
-	// ActionEventRead allows reading Mission Control's event queue and its in-memory event rings.
-	ActionEventRead = "event:read"
-
-	// ActionJobRead allows reading all job history, whether or not a job ran for a resource.
-	ActionJobRead = "job:read"
-)
-
-// RBAC objects the actions without a resource are checked on.
-const (
-	ObjectProperties = "properties"
-	ObjectEvents     = "events"
-	ObjectJobs       = "jobs"
 )
 
 // ActionContract declares the inputs an action accepts.
@@ -125,11 +109,11 @@ var contracts = map[string]ActionContract{
 	// Connections are checked per request, on their stored Scope membership, so unlike read any connection selector works.
 	ActionConnectionUse: {Resources: []string{policy.ResourceConnection}, enforcement: enforcedPerRequest},
 
-	ActionPersonManage:   {Object: policy.ObjectPeople, enforcement: enforcedWithoutResource},
-	policy.ActionMCPUse:  {Object: policy.ObjectMCP, enforcement: enforcedWithoutResource},
-	ActionPropertyManage: {Object: ObjectProperties, enforcement: enforcedWithoutResource},
-	ActionEventRead:      {Object: ObjectEvents, enforcement: enforcedWithoutResource},
-	ActionJobRead:        {Object: ObjectJobs, enforcement: enforcedWithoutResource},
+	ActionPersonManage:          {Object: policy.ObjectPeople, enforcement: enforcedWithoutResource},
+	policy.ActionMCPUse:         {Object: policy.ObjectMCP, enforcement: enforcedWithoutResource},
+	policy.ActionPropertyManage: {Object: policy.ObjectProperties, enforcement: enforcedWithoutResource},
+	policy.ActionEventRead:      {Object: policy.ObjectEvents, enforcement: enforcedWithoutResource},
+	policy.ActionJobRead:        {Object: policy.ObjectJobs, enforcement: enforcedWithoutResource},
 }
 
 // ContractFor returns the contract of an action.

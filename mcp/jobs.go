@@ -11,6 +11,7 @@ import (
 	dutyjob "github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/timberio/go-datemath"
@@ -18,7 +19,6 @@ import (
 
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/jobs"
-	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 const (
@@ -222,8 +222,8 @@ func registerJobs(s *server.MCPServer) {
 // requireJobRead checks job:read, which grants all job history or none.
 // It's checked as the request's own subject, like the HTTP routes, so an access token's scope applies.
 func requireJobRead(ctx context.Context) error {
-	if !rbac.CheckContext(ctx, adapter.ObjectJobs, adapter.ActionJobRead) {
-		return fmt.Errorf("forbidden: %s does not have %s permission", ctx.Subject(), adapter.ActionJobRead)
+	if !rbac.CheckContext(ctx, policy.ObjectJobs, policy.ActionJobRead) {
+		return fmt.Errorf("forbidden: %s does not have %s permission", ctx.Subject(), policy.ActionJobRead)
 	}
 	return nil
 }

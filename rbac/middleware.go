@@ -70,6 +70,21 @@ func DbMiddleware() MiddlewareFunc {
 				object = adapter.ObjectChecks
 			}
 
+			if readAction, ok := readOnlyObjects[object]; ok {
+				if action != policy.ActionRead {
+					return c.String(http.StatusMethodNotAllowed, fmt.Sprintf("%s is read-only", resource))
+				}
+				action = readAction
+			}
+
+			// Any signed-in subject may read properties; writing them takes property:manage
+			if resource == "properties" {
+				if action == policy.ActionRead {
+					return next(c)
+				}
+				object, action = policy.ObjectProperties, policy.ActionPropertyManage
+			}
+
 			if !rbac.CheckContext(ctx, object, action) && !canListFilteredRows(ctx, resource, action) {
 				c.Response().Header().Add("X-Rbac-Subject", ctx.Subject())
 				c.Response().Header().Add("X-Rbac-Object", object)
@@ -81,6 +96,12 @@ func DbMiddleware() MiddlewareFunc {
 			return next(c)
 		}
 	}
+}
+
+// readOnlyObjects are the objects only read through /db, with the action each read is checked with.
+var readOnlyObjects = map[string]string{
+	policy.ObjectJobs:   policy.ActionJobRead,
+	policy.ObjectEvents: policy.ActionEventRead,
 }
 
 // rowFilteredTables are the tables whose rows are filtered by a subject's read grants of their resource type.
