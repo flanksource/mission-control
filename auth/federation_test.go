@@ -141,7 +141,7 @@ var _ = ginkgo.Describe("External identity providers", ginkgo.Ordered, func() {
 			Spec: v1.RoleSpec{Rules: []v1.RoleRule{{
 				Name:     "run",
 				Action:   policy.ActionPlaybookRun,
-				Resource: v1.ScopeReference{ScopeRef: "all-playbooks"},
+				Resource: &v1.ScopeReference{ScopeRef: "all-playbooks"},
 			}}},
 		}
 		Expect(db.PersistRoleFromCRD(DefaultContext, role)).To(Succeed())

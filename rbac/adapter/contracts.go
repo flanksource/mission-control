@@ -21,6 +21,28 @@ const (
 
 	// enforcedOnObjects actions are only checked on whole object types (e.g. catalog), never on individual resources.
 	enforcedOnObjects enforcement = "objects"
+
+	// enforcedWithoutResource actions aren't performed on a resource: they're checked on the contract's Object alone.
+	enforcedWithoutResource enforcement = "none"
+)
+
+// Actions that take no resource (see specs/authorization/roles.md, Section 2.3).
+const (
+	// ActionPropertyManage allows creating, changing and deleting properties. Reading them needs no rule.
+	ActionPropertyManage = "property:manage"
+
+	// ActionEventRead allows reading Mission Control's event queue and its in-memory event rings.
+	ActionEventRead = "event:read"
+
+	// ActionJobRead allows reading all job history, whether or not a job ran for a resource.
+	ActionJobRead = "job:read"
+)
+
+// RBAC objects the actions without a resource are checked on.
+const (
+	ObjectProperties = "properties"
+	ObjectEvents     = "events"
+	ObjectJobs       = "jobs"
 )
 
 // ActionContract declares the inputs an action accepts.
@@ -39,6 +61,10 @@ type ActionContract struct {
 
 	// Requires describes what else an operation checks, e.g. read on the target.
 	Requires string
+
+	// Object is the RBAC object an action without a resource is checked on.
+	// Empty for every action that takes a resource.
+	Object string
 
 	enforcement enforcement
 }
@@ -86,10 +112,14 @@ var contracts = map[string]ActionContract{
 		Resources: []string{policy.ResourcePlaybook}, AllowsDeny: true, enforcement: enforcedPerRequest,
 		Requires: "mcp:use; the run itself also needs playbook:run",
 	},
+
+	ActionPropertyManage: {Object: ObjectProperties, enforcement: enforcedWithoutResource},
+	ActionEventRead:      {Object: ObjectEvents, enforcement: enforcedWithoutResource},
+	ActionJobRead:        {Object: ObjectJobs, enforcement: enforcedWithoutResource},
 }
 
 // ContractFor returns the contract of an action.
-// Unknown actions, patterns, and actions that aren't performed on a resource (e.g. mcp:use) have none.
+// Unknown actions, patterns, and mcp:use and person:manage, which roles can't grant yet, have none.
 func ContractFor(action string) (ActionContract, error) {
 	if contract, ok := contracts[action]; ok {
 		contract.Action = action
@@ -113,6 +143,11 @@ func ContractFor(action string) (ActionContract, error) {
 	}
 
 	return ActionContract{}, fmt.Errorf("unknown action %q", action)
+}
+
+// TakesResource reports whether the action is performed on a resource, so its rules need a resource Scope.
+func (c ActionContract) TakesResource() bool {
+	return c.enforcement != enforcedWithoutResource
 }
 
 // validateInput checks that a Scope can fill an input ("resource" or "target") of the action:

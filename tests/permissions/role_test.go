@@ -48,7 +48,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 	}
 
 	allow := func(name, action, resource string) v1.RoleRule {
-		return v1.RoleRule{Name: name, Action: action, Resource: v1.ScopeReference{ScopeRef: resource}}
+		return v1.RoleRule{Name: name, Action: action, Resource: &v1.ScopeReference{ScopeRef: resource}}
 	}
 
 	on := func(rule v1.RoleRule, target string) v1.RoleRule {

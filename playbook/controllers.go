@@ -27,6 +27,7 @@ import (
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 	_ "github.com/flanksource/incident-commander/upstream"
 )
 
@@ -47,7 +48,7 @@ func RegisterRoutes(e *echo.Echo) {
 
 	playbookGroup.GET("/events", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, EventRing.Get())
-	}, rbac.Authorization(policy.ObjectMonitor, policy.ActionRead))
+	}, rbac.Authorization(adapter.ObjectEvents, adapter.ActionEventRead))
 
 	runGroup := playbookGroup.Group("/run")
 	runGroup.POST("", HandlePlaybookRun)
