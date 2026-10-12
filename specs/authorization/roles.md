@@ -307,14 +307,14 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Run playbook P with no resource       | `playbook:run`                              | P               | None                              |
 | Run playbook P on resource X          | `playbook:run`, then `read`                 | P, then X       | X, then none                      |
 | Run playbook P through MCP            | `mcp:run`, then the checks of the run       | P               | None                              |
-| Approve or cancel run R               | `playbook:approve` or `playbook:cancel`     | R's playbook    | R's resource, if the run had one  |
+| Approve or cancel run R               | `playbook:approve` or `playbook:cancel`, then `read` if R had a resource | R's playbook, then R's resource | R's resource, then none |
 | Invoke a plugin operation on config C | `invoke:<plugin>:<operation>`, then `read`  | C, then C       | None                              |
-
-The plugin's own checks during the operation, e.g. on the connections it uses, are made as the plugin (Section 4.4).
 | Open resource X                       | `read`                                      | X               | None                              |
 | Connect to the MCP server             | `mcp:use`                                   | None            | None                              |
 | Use connection C, e.g. to send        | `connection:use`                            | C               | None                              |
 | Test connection C                     | `connection:use`                            | C               | None                              |
+
+The plugin's own checks during the operation, e.g. on the connections it uses, are made as the plugin (Section 4.4). Approving or cancelling a run checks `read` on its resource for the same reason running it does: the run, its parameters and its results are about that resource, and are only readable with it (`scopes.md`, Section 3.2).
 
 Each check is made as the subject performing the operation: the caller, or, where there's none, the resource doing the work (Section 4.4).
 
@@ -334,6 +334,7 @@ Some work isn't done by the person who started it: a playbook running on its sch
 
 - A run no person started is created only if the playbook passes the checks a person starting it would (Section 4.3): `playbook:run` on itself, with the run's target if it has one, then `read` on the target. A playbook refused either check gets no run, and the refusal is recorded in its job history. _Why:_ starting a run makes the same checks whoever starts it, with no exception for the playbook. The `read` check also matters on its own: a run's templates are filled with its target's data before any step runs, so without it, a playbook could be triggered on configs it may not read and send their data anywhere.
 - A run's actions are checked as its playbook, whoever started it. A playbook with no binding can do nothing that's checked: it can't read a config, use a connection or run another playbook.
+- So whoever may run P may have P act with P's grants, through the parameters they pass too, e.g. a parameter naming the connection or config a step acts on. `playbook:run` on P is as sensitive as P's own bindings: grant it, and write P's parameters, with that in mind.
 - A webhook authenticates the request with the playbook's own webhook settings. The webhook isn't a subject, and grants nothing.
 - Evaluating a notification matches an event against the notification's events, filter and silences, and queues what to send. It makes no check, and MUST NOT fill in a connection's credentials. It records the connection to send through by id only.
 - Sending checks `connection:use` on that connection as the notification. If the check fails, the send fails, and the failure is recorded on the notification's send history and status. It's never retried as another subject.
