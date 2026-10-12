@@ -14,6 +14,7 @@ import (
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/api"
 	"google.golang.org/protobuf/proto"
@@ -215,10 +216,10 @@ func readDefaultKubeconfig() (string, error) {
 
 func pluginRBACSubject(entry *pluginpb.Entry) string {
 	if entry == nil {
-		return "plugin:/"
+		return v1.PluginSubject("", "")
 	}
 	// Plugin permissions use namespace/name instead of UUID because plugins are
 	// persisted as CRDs/registry entries, not database rows whose IDs can be
 	// resolved when Permission CRDs are converted into Casbin rules.
-	return "plugin:" + entry.Namespace + "/" + entry.Name
+	return v1.PluginSubject(entry.Namespace, entry.Name)
 }

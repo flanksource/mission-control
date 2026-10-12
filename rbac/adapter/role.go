@@ -241,6 +241,14 @@ func CompileBinding(ctx context.Context, cache *gocache.Cache, binding models.Ro
 		return CompiledBinding{}, withContext(withReason(err, ReasonRoleInvalid), "role %s/%s is invalid", role.Namespace, role.Name)
 	}
 
+	if selectsPlugins, err := bindingSelectsPlugins(binding); err != nil {
+		return CompiledBinding{}, err
+	} else if selectsPlugins {
+		if err := checkPluginRules(resolvedRules); err != nil {
+			return CompiledBinding{}, withContext(err, "role %s/%s can't be granted to a plugin", role.Namespace, role.Name)
+		}
+	}
+
 	var compiled CompiledBinding
 	var allows []ResolvedRule
 	for _, rule := range resolvedRules {
@@ -281,6 +289,47 @@ func CompileBinding(ctx context.Context, cache *gocache.Cache, binding models.Ro
 	}
 
 	return compiled, nil
+}
+
+// pluginActions are the actions a plugin can be granted, on connections only.
+var pluginActions = []string{policy.ActionRead}
+
+// bindingSelectsPlugins reports whether a stored binding has plugin subjects.
+func bindingSelectsPlugins(binding models.RoleBinding) (bool, error) {
+	if len(binding.Subjects) == 0 {
+		return false, nil
+	}
+
+	var subjects v1.RoleBindingSubjects
+	if err := json.Unmarshal(binding.Subjects, &subjects); err != nil {
+		return false, NewValidationError("role binding %s/%s: invalid subjects: %v", binding.Namespace, binding.Name, err)
+	}
+	return len(subjects.Plugins) > 0, nil
+}
+
+// checkPluginRules checks that every rule of a role is one a plugin can be granted: one of pluginActions,
+// over Scopes that select connections and nothing else.
+func checkPluginRules(rules []ResolvedRule) error {
+	for _, rule := range rules {
+		if !slices.Contains(pluginActions, rule.Action) {
+			return NewInvalid(ReasonPluginRuleNotAllowed, "rule %s: a plugin can only be granted %s, not %s",
+				rule.Name, strings.Join(pluginActions, ", "), rule.Action)
+		}
+
+		scopes := []ScopeSelection{rule.Resource}
+		if rule.Target != nil {
+			scopes = append(scopes, *rule.Target)
+		}
+
+		for _, scope := range scopes {
+			if kinds := scope.DeclaredTypes(); !slices.Equal(kinds, []string{policy.ResourceConnection}) {
+				return NewInvalid(ReasonPluginRuleNotAllowed, "rule %s: a plugin can only be granted rules on connections, and scope %s selects %s",
+					rule.Name, scope.Name, strings.Join(kinds, ", "))
+			}
+		}
+	}
+
+	return nil
 }
 
 // bindingConstraint returns the constraint of a stored binding, or nil when it has none.

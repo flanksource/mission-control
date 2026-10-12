@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -536,8 +537,20 @@ func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding,
 		return nil, nil, fmt.Errorf("failed to resolve teams for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
 	}
 
+	agents, err := a.resolveAgents(subjects.Agents)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to resolve agents for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
+	}
+
+	plugins, err := a.resolvePlugins(subjects.Plugins)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to resolve plugins for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
+	}
+
 	allSubjects = append(allSubjects, people...)
 	allSubjects = append(allSubjects, teams...)
+	allSubjects = append(allSubjects, agents...)
+	allSubjects = append(allSubjects, plugins...)
 	allSubjects = append(allSubjects, subjects.Roles...)
 
 	for _, subject := range lo.Uniq(allSubjects) {
@@ -596,6 +609,40 @@ func (a *PermissionAdapter) resolveTeams(names []string) ([]string, error) {
 		Where("name IN ?", names).
 		Find(&ids).Error
 	return ids, err
+}
+
+// resolveAgents returns the subjects agents are checked as: the person each agent authenticates as.
+// ["*"] selects every agent.
+func (a *PermissionAdapter) resolveAgents(names []string) ([]string, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+
+	query := a.ctx.DB().Select("person_id").Model(&models.Agent{}).
+		Where("deleted_at IS NULL").
+		Where("person_id IS NOT NULL")
+	if !slices.Equal(names, []string{"*"}) {
+		query = query.Where("name IN ?", names)
+	}
+
+	var ids []string
+	err := query.Find(&ids).Error
+	return ids, err
+}
+
+// resolvePlugins returns the subjects of the plugins the selectors match: plugin:<namespace>/<name>.
+func (a *PermissionAdapter) resolvePlugins(selectors []v1.PermissionGroupSelector) ([]string, error) {
+	ids, err := a.findNamespacedResources(models.Plugin{}.TableName(), selectors)
+	if err != nil || len(ids) == 0 {
+		return nil, err
+	}
+
+	var plugins []models.Plugin
+	if err := a.ctx.DB().Select("namespace", "name").Where("id IN ?", ids).Find(&plugins).Error; err != nil {
+		return nil, err
+	}
+
+	return lo.Map(plugins, func(p models.Plugin, _ int) string { return v1.PluginSubject(p.Namespace, p.Name) }), nil
 }
 
 // resolveNamespacedSubjects resolves the resource subjects: playbooks, notifications, topologies, scrapers and canaries.

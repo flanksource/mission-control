@@ -545,6 +545,150 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		})
 	})
 
+	Describe("agent and plugin subjects", Ordered, func() {
+		const pluginNamespace = "role-plugins"
+
+		var (
+			euAgent, usAgent *models.Person
+			human            *models.Person
+			logsPlugin       models.Plugin
+			otherPlugin      models.Plugin
+		)
+
+		canReadConnections := func(subject string) bool {
+			return rbac.Check(DefaultContext, subject, policy.ObjectConnection, policy.ActionRead)
+		}
+
+		createAgent := func(name string) *models.Person {
+			GinkgoHelper()
+			person, err := db.CreatePerson(DefaultContext, name, name+"@local", db.PersonTypeAgent)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(db.CreateAgent(DefaultContext, name, &person.ID, nil)).To(Succeed())
+			return person
+		}
+
+		createPlugin := func(name string) models.Plugin {
+			GinkgoHelper()
+			p := models.Plugin{ID: uuid.New(), Name: name, Namespace: pluginNamespace, Source: models.SourceCRD, Spec: []byte(`{}`)}
+			Expect(DefaultContext.DB().Create(&p).Error).To(Succeed())
+			return p
+		}
+
+		// bind persists a binding, and reloads the policy so it's in effect.
+		bind := func(binding *v1.RoleBinding) error {
+			GinkgoHelper()
+			err := db.PersistRoleBindingFromCRD(DefaultContext, binding)
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Where("id = ?", binding.UID).Delete(&models.RoleBinding{}).Error).To(Succeed())
+				Expect(rbac.ReloadPolicy()).To(Succeed())
+			})
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+			return err
+		}
+
+		BeforeAll(func() {
+			euAgent = createAgent("role-eu-cluster")
+			usAgent = createAgent("role-us-cluster")
+			human = setup.CreateUserWithRole(DefaultContext, "Role Human", "role-human@test.com", policy.RoleGuest)
+			logsPlugin = createPlugin("kubernetes-logs")
+			otherPlugin = createPlugin("other")
+
+			for _, scope := range []*v1.Scope{
+				newScope("all-connections", namespace, v1.ScopeTarget{Connection: &v1.ScopeConnectionSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}),
+				newScope("connections-and-configs", namespace,
+					v1.ScopeTarget{Connection: &v1.ScopeConnectionSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}},
+					v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}),
+			} {
+				Expect(db.PersistScopeFromCRD(DefaultContext, scope)).To(Succeed())
+			}
+
+			for _, role := range []*v1.Role{
+				newRole("read-connections", namespace, allow("read", policy.ActionRead, "all-connections")),
+				newRole("read-connections-and-run", namespace,
+					allow("read", policy.ActionRead, "all-connections"),
+					allow("run", policy.ActionPlaybookRun, "all-playbooks")),
+				newRole("read-connections-and-configs", namespace, allow("read", policy.ActionRead, "connections-and-configs")),
+			} {
+				persistRole(role)
+			}
+		})
+
+		AfterAll(func() {
+			Expect(DefaultContext.DB().Where("person_id IN ?", []uuid.UUID{euAgent.ID, usAgent.ID}).Delete(&models.Agent{}).Error).To(Succeed())
+			Expect(DefaultContext.DB().Where("namespace = ?", pluginNamespace).Delete(&models.Plugin{}).Error).To(Succeed())
+			for _, p := range []*models.Person{euAgent, usAgent, human} {
+				Expect(DefaultContext.DB().Delete(p).Error).To(Succeed())
+			}
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+		})
+
+		It("grants the role to agents by name, as the person they authenticate as", func() {
+			Expect(bind(newBinding("eu-agent", "read-connections", v1.RoleBindingSubjects{Agents: []string{"role-eu-cluster"}}))).To(Succeed())
+
+			Expect(canReadConnections(euAgent.ID.String())).To(BeTrue())
+			Expect(canReadConnections(usAgent.ID.String())).To(BeFalse())
+		})
+
+		It("grants the role to every agent, and to no person, with *", func() {
+			Expect(bind(newBinding("every-agent", "read-connections", v1.RoleBindingSubjects{Agents: []string{"*"}}))).To(Succeed())
+
+			Expect(canReadConnections(euAgent.ID.String())).To(BeTrue())
+			Expect(canReadConnections(usAgent.ID.String())).To(BeTrue())
+			Expect(canReadConnections(human.ID.String())).To(BeFalse())
+		})
+
+		It("grants the role to plugins by namespace and name", func() {
+			Expect(bind(newBinding("logs-plugin", "read-connections", v1.RoleBindingSubjects{
+				Plugins: []v1.PermissionGroupSelector{{Namespace: pluginNamespace, Name: logsPlugin.Name}},
+			}))).To(Succeed())
+
+			Expect(canReadConnections(v1.PluginSubject(pluginNamespace, logsPlugin.Name))).To(BeTrue())
+			Expect(canReadConnections(v1.PluginSubject(pluginNamespace, otherPlugin.Name))).To(BeFalse())
+		})
+
+		It("grants the role to every plugin of a namespace", func() {
+			Expect(bind(newBinding("namespace-plugins", "read-connections", v1.RoleBindingSubjects{
+				Plugins: []v1.PermissionGroupSelector{{Namespace: pluginNamespace}},
+			}))).To(Succeed())
+
+			Expect(canReadConnections(v1.PluginSubject(pluginNamespace, logsPlugin.Name))).To(BeTrue())
+			Expect(canReadConnections(v1.PluginSubject(pluginNamespace, otherPlugin.Name))).To(BeTrue())
+			Expect(canReadConnections(v1.PluginSubject("elsewhere", logsPlugin.Name))).To(BeFalse())
+		})
+
+		for _, tt := range []struct{ name, role string }{
+			{"a rule with another action", "read-connections-and-run"},
+			{"a rule whose scope selects another type", "read-connections-and-configs"},
+		} {
+			It("grants nothing, to any subject, when a plugin is bound to a role with "+tt.name, func() {
+				binding := newBinding("restricted-"+tt.role, tt.role, v1.RoleBindingSubjects{
+					PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{human.Email}},
+					Agents:                  []string{"role-eu-cluster"},
+					Plugins:                 []v1.PermissionGroupSelector{{Namespace: pluginNamespace, Name: logsPlugin.Name}},
+				})
+				Expect(bind(binding)).To(BeAssignableToTypeOf(&kopper.NotReadyError{}))
+
+				stored := storedBinding(namespace, binding.Name)
+				Expect(stored.ErrorReason).To(HaveValue(Equal(adapter.ReasonPluginRuleNotAllowed)))
+
+				for _, subject := range []string{human.ID.String(), euAgent.ID.String(), v1.PluginSubject(pluginNamespace, logsPlugin.Name)} {
+					Expect(canReadConnections(subject)).To(BeFalse(), subject)
+					hasRole, err := rbac.Enforcer().HasRoleForUser(subject, models.BindingPrincipal(namespace, binding.Name))
+					Expect(err).ToNot(HaveOccurred())
+					Expect(hasRole).To(BeFalse(), subject)
+				}
+			})
+		}
+
+		It("applies the same role when no plugin is selected", func() {
+			Expect(bind(newBinding("run-without-plugins", "read-connections-and-run", v1.RoleBindingSubjects{
+				Agents: []string{"role-eu-cluster"},
+			}))).To(Succeed())
+
+			Expect(canReadConnections(euAgent.ID.String())).To(BeTrue())
+		})
+	})
+
 	Describe("lifecycle", func() {
 		It("narrows a rule added to a role, or reports it when the constraint can't narrow it", func() {
 			role := roles[namespace+"/read-configs"]
