@@ -545,26 +545,17 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		})
 	})
 
-	Describe("agent and plugin subjects", Ordered, func() {
+	Describe("plugin subjects", Ordered, func() {
 		const pluginNamespace = "role-plugins"
 
 		var (
-			euAgent, usAgent *models.Person
-			human            *models.Person
-			logsPlugin       models.Plugin
-			otherPlugin      models.Plugin
+			human       *models.Person
+			logsPlugin  models.Plugin
+			otherPlugin models.Plugin
 		)
 
 		canReadConnections := func(subject string) bool {
 			return rbac.Check(DefaultContext, subject, policy.ObjectConnection, policy.ActionRead)
-		}
-
-		createAgent := func(name string) *models.Person {
-			GinkgoHelper()
-			person, err := db.CreatePerson(DefaultContext, name, name+"@local", db.PersonTypeAgent)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(db.CreateAgent(DefaultContext, name, &person.ID, nil)).To(Succeed())
-			return person
 		}
 
 		createPlugin := func(name string) models.Plugin {
@@ -587,8 +578,6 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		}
 
 		BeforeAll(func() {
-			euAgent = createAgent("role-eu-cluster")
-			usAgent = createAgent("role-us-cluster")
 			human = setup.CreateUserWithRole(DefaultContext, "Role Human", "role-human@test.com", policy.RoleGuest)
 			logsPlugin = createPlugin("kubernetes-logs")
 			otherPlugin = createPlugin("other")
@@ -614,27 +603,9 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		})
 
 		AfterAll(func() {
-			Expect(DefaultContext.DB().Where("person_id IN ?", []uuid.UUID{euAgent.ID, usAgent.ID}).Delete(&models.Agent{}).Error).To(Succeed())
 			Expect(DefaultContext.DB().Where("namespace = ?", pluginNamespace).Delete(&models.Plugin{}).Error).To(Succeed())
-			for _, p := range []*models.Person{euAgent, usAgent, human} {
-				Expect(DefaultContext.DB().Delete(p).Error).To(Succeed())
-			}
+			Expect(DefaultContext.DB().Delete(human).Error).To(Succeed())
 			Expect(rbac.ReloadPolicy()).To(Succeed())
-		})
-
-		It("grants the role to agents by name, as the person they authenticate as", func() {
-			Expect(bind(newBinding("eu-agent", "read-connections", v1.RoleBindingSubjects{Agents: []string{"role-eu-cluster"}}))).To(Succeed())
-
-			Expect(canReadConnections(euAgent.ID.String())).To(BeTrue())
-			Expect(canReadConnections(usAgent.ID.String())).To(BeFalse())
-		})
-
-		It("grants the role to every agent, and to no person, with *", func() {
-			Expect(bind(newBinding("every-agent", "read-connections", v1.RoleBindingSubjects{Agents: []string{"*"}}))).To(Succeed())
-
-			Expect(canReadConnections(euAgent.ID.String())).To(BeTrue())
-			Expect(canReadConnections(usAgent.ID.String())).To(BeTrue())
-			Expect(canReadConnections(human.ID.String())).To(BeFalse())
 		})
 
 		It("grants the role to plugins by namespace and name", func() {
@@ -663,7 +634,6 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			It("grants nothing, to any subject, when a plugin is bound to a role with "+tt.name, func() {
 				binding := newBinding("restricted-"+tt.role, tt.role, v1.RoleBindingSubjects{
 					PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{human.Email}},
-					Agents:                  []string{"role-eu-cluster"},
 					Plugins:                 []v1.PermissionGroupSelector{{Namespace: pluginNamespace, Name: logsPlugin.Name}},
 				})
 				Expect(bind(binding)).To(BeAssignableToTypeOf(&kopper.NotReadyError{}))
@@ -671,7 +641,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 				stored := storedBinding(namespace, binding.Name)
 				Expect(stored.ErrorReason).To(HaveValue(Equal(adapter.ReasonPluginRuleNotAllowed)))
 
-				for _, subject := range []string{human.ID.String(), euAgent.ID.String(), v1.PluginSubject(pluginNamespace, logsPlugin.Name)} {
+				for _, subject := range []string{human.ID.String(), v1.PluginSubject(pluginNamespace, logsPlugin.Name)} {
 					Expect(canReadConnections(subject)).To(BeFalse(), subject)
 					hasRole, err := rbac.Enforcer().HasRoleForUser(subject, models.BindingPrincipal(namespace, binding.Name))
 					Expect(err).ToNot(HaveOccurred())
@@ -681,11 +651,9 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		}
 
 		It("applies the same role when no plugin is selected", func() {
-			Expect(bind(newBinding("run-without-plugins", "read-connections-and-run", v1.RoleBindingSubjects{
-				Agents: []string{"role-eu-cluster"},
-			}))).To(Succeed())
+			Expect(bind(newBinding("run-without-plugins", "read-connections-and-run", people(human)))).To(Succeed())
 
-			Expect(canReadConnections(euAgent.ID.String())).To(BeTrue())
+			Expect(canReadConnections(human.ID.String())).To(BeTrue())
 		})
 	})
 

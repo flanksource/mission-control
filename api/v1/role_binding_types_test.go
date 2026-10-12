@@ -11,12 +11,6 @@ var _ = ginkgo.Describe("RoleBindingSpec.Validate", func() {
 		subjects RoleBindingSubjects
 		err      string
 	}{
-		{name: "agents by name", subjects: RoleBindingSubjects{Agents: []string{"eu-cluster", "us-cluster"}}},
-		{name: "every agent", subjects: RoleBindingSubjects{Agents: []string{"*"}}},
-		{name: "every agent alongside a name", subjects: RoleBindingSubjects{Agents: []string{"*", "eu-cluster"}}, err: `agent "*" must be the only agent subject`},
-		{name: "an empty agent", subjects: RoleBindingSubjects{Agents: []string{""}}, err: "agent name is required"},
-		{name: "an agent prefix", subjects: RoleBindingSubjects{Agents: []string{"eu-*"}}, err: `agent "eu-*" must be an exact name`},
-		{name: "an agent list", subjects: RoleBindingSubjects{Agents: []string{"eu,us"}}, err: `agent "eu,us" must be an exact name`},
 		{name: "a plugin by namespace and name", subjects: RoleBindingSubjects{Plugins: []PermissionGroupSelector{{Namespace: "mission-control", Name: "kubernetes-logs"}}}},
 		{name: "plugins by namespace", subjects: RoleBindingSubjects{Plugins: []PermissionGroupSelector{{Namespace: "mission-control"}}}},
 		{name: "every plugin", subjects: RoleBindingSubjects{Plugins: []PermissionGroupSelector{{Name: "*"}}}},
@@ -36,8 +30,7 @@ var _ = ginkgo.Describe("RoleBindingSpec.Validate", func() {
 		})
 	}
 
-	ginkgo.It("counts agents and plugins as subjects", func() {
-		Expect(RoleBindingSubjects{Agents: []string{"eu-cluster"}}.Empty()).To(BeFalse())
+	ginkgo.It("counts plugins as subjects", func() {
 		Expect(RoleBindingSubjects{Plugins: []PermissionGroupSelector{{Name: "*"}}}.Empty()).To(BeFalse())
 		Expect(RoleBindingSpec{Role: "connections"}.Validate()).To(MatchError(ContainSubstring("at least one subject is required")))
 	})

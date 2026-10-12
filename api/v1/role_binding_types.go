@@ -49,7 +49,7 @@ type RoleBindingSpec struct {
 	Role string `json:"role" yaml:"role"`
 
 	// Subjects the role is granted to. At least one is required.
-	// +kubebuilder:validation:XValidation:rule="[has(self.people) && size(self.people) > 0, has(self.teams) && size(self.teams) > 0, has(self.roles) && size(self.roles) > 0, has(self.oidc) && size(self.oidc) > 0, has(self.notifications) && size(self.notifications) > 0, has(self.playbooks) && size(self.playbooks) > 0, has(self.topologies) && size(self.topologies) > 0, has(self.scrapers) && size(self.scrapers) > 0, has(self.canaries) && size(self.canaries) > 0, has(self.agents) && size(self.agents) > 0, has(self.plugins) && size(self.plugins) > 0].exists(x, x)",message="at least one subject is required"
+	// +kubebuilder:validation:XValidation:rule="[has(self.people) && size(self.people) > 0, has(self.teams) && size(self.teams) > 0, has(self.roles) && size(self.roles) > 0, has(self.oidc) && size(self.oidc) > 0, has(self.notifications) && size(self.notifications) > 0, has(self.playbooks) && size(self.playbooks) > 0, has(self.topologies) && size(self.topologies) > 0, has(self.scrapers) && size(self.scrapers) > 0, has(self.canaries) && size(self.canaries) > 0, has(self.plugins) && size(self.plugins) > 0].exists(x, x)",message="at least one subject is required"
 	Subjects RoleBindingSubjects `json:"subjects" yaml:"subjects"`
 
 	// Constraint narrows every allow rule of the role for this binding's subjects.
@@ -81,9 +81,6 @@ type RoleBindingSubjects struct {
 	// OIDC selects users of external identity providers by the claims of their tokens.
 	OIDC []OIDCSubject `json:"oidc,omitempty" yaml:"oidc,omitempty"`
 
-	// Agents selects agents by name, or every agent with "*" alone.
-	Agents []string `json:"agents,omitempty" yaml:"agents,omitempty"`
-
 	// Plugins selects plugins by the namespace and name of their Plugin resource.
 	// A binding that selects one can only grant read on connections.
 	Plugins []PermissionGroupSelector `json:"plugins,omitempty" yaml:"plugins,omitempty"`
@@ -91,7 +88,7 @@ type RoleBindingSubjects struct {
 
 func (t RoleBindingSubjects) Empty() bool {
 	s := t.PermissionGroupSubjects
-	return len(t.Roles) == 0 && len(t.OIDC) == 0 && len(t.Agents) == 0 && len(t.Plugins) == 0 && len(s.People) == 0 && len(s.Teams) == 0 &&
+	return len(t.Roles) == 0 && len(t.OIDC) == 0 && len(t.Plugins) == 0 && len(s.People) == 0 && len(s.Teams) == 0 &&
 		len(s.Notifications) == 0 && len(s.Playbooks) == 0 && len(s.Topologies) == 0 &&
 		len(s.Scrapers) == 0 && len(s.Canaries) == 0
 }
@@ -188,10 +185,6 @@ func (t RoleBindingSpec) Validate() error {
 		}
 	}
 
-	if err := validateAgentSubjects(t.Subjects.Agents); err != nil {
-		return err
-	}
-
 	for _, role := range t.Subjects.Roles {
 		if !slices.Contains(BindableRoles, role) {
 			return fmt.Errorf("role %q cannot be bound. Must be one of %v", role, BindableRoles)
@@ -205,25 +198,6 @@ func (t RoleBindingSpec) Validate() error {
 
 		if _, err := CompileClaimsMatch(subject.Match); err != nil {
 			return fmt.Errorf("oidc subject %d: invalid match %q: %w", i, subject.Match, err)
-		}
-	}
-
-	return nil
-}
-
-// validateAgentSubjects checks the agent subjects: agent names, or "*" alone to select every agent.
-func validateAgentSubjects(agents []string) error {
-	for _, agent := range agents {
-		if strings.TrimSpace(agent) == "" {
-			return fmt.Errorf("agent name is required")
-		}
-
-		if agent == "*" && len(agents) > 1 {
-			return fmt.Errorf(`agent "*" must be the only agent subject`)
-		}
-
-		if agent != "*" && strings.ContainsAny(agent, "*!,") {
-			return fmt.Errorf(`agent %q must be an exact name, or "*" alone`, agent)
 		}
 	}
 

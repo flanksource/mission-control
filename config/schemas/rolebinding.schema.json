@@ -330,13 +330,6 @@
           "type": "array",
           "description": "OIDC selects users of external identity providers by the claims of their tokens."
         },
-        "agents": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array",
-          "description": "Agents selects agents by name, or every agent with \"*\" alone."
-        },
         "plugins": {
           "items": {
             "$ref": "#/$defs/PermissionGroupSelector"

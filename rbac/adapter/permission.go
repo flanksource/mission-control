@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -537,11 +536,6 @@ func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding,
 		return nil, nil, fmt.Errorf("failed to resolve teams for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
 	}
 
-	agents, err := a.resolveAgents(subjects.Agents)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to resolve agents for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
-	}
-
 	plugins, err := a.resolvePlugins(subjects.Plugins)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to resolve plugins for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
@@ -549,7 +543,6 @@ func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding,
 
 	allSubjects = append(allSubjects, people...)
 	allSubjects = append(allSubjects, teams...)
-	allSubjects = append(allSubjects, agents...)
 	allSubjects = append(allSubjects, plugins...)
 	allSubjects = append(allSubjects, subjects.Roles...)
 
@@ -608,25 +601,6 @@ func (a *PermissionAdapter) resolveTeams(names []string) ([]string, error) {
 		Where("deleted_at IS NULL").
 		Where("name IN ?", names).
 		Find(&ids).Error
-	return ids, err
-}
-
-// resolveAgents returns the subjects agents are checked as: the person each agent authenticates as.
-// ["*"] selects every agent.
-func (a *PermissionAdapter) resolveAgents(names []string) ([]string, error) {
-	if len(names) == 0 {
-		return nil, nil
-	}
-
-	query := a.ctx.DB().Select("person_id").Model(&models.Agent{}).
-		Where("deleted_at IS NULL").
-		Where("person_id IS NOT NULL")
-	if !slices.Equal(names, []string{"*"}) {
-		query = query.Where("name IN ?", names)
-	}
-
-	var ids []string
-	err := query.Find(&ids).Error
 	return ids, err
 }
 

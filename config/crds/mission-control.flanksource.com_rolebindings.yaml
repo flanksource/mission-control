@@ -84,12 +84,6 @@ spec:
               subjects:
                 description: Subjects the role is granted to. At least one is required.
                 properties:
-                  agents:
-                    description: Agents selects agents by name, or every agent with
-                      "*" alone.
-                    items:
-                      type: string
-                    type: array
                   canaries:
                     items:
                       properties:
@@ -199,8 +193,7 @@ spec:
                     && size(self.notifications) > 0, has(self.playbooks) && size(self.playbooks)
                     > 0, has(self.topologies) && size(self.topologies) > 0, has(self.scrapers)
                     && size(self.scrapers) > 0, has(self.canaries) && size(self.canaries)
-                    > 0, has(self.agents) && size(self.agents) > 0, has(self.plugins)
-                    && size(self.plugins) > 0].exists(x, x)'
+                    > 0, has(self.plugins) && size(self.plugins) > 0].exists(x, x)'
             required:
             - role
             - subjects

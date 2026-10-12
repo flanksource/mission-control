@@ -4103,11 +4103,6 @@ func (in *RoleBindingSubjects) DeepCopyInto(out *RoleBindingSubjects) {
 		*out = make([]OIDCSubject, len(*in))
 		copy(*out, *in)
 	}
-	if in.Agents != nil {
-		in, out := &in.Agents, &out.Agents
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
 	if in.Plugins != nil {
 		in, out := &in.Plugins, &out.Plugins
 		*out = make([]PermissionGroupSelector, len(*in))
