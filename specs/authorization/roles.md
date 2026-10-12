@@ -297,6 +297,7 @@ A rule is matched against the actual resource and target of an operation:
 - An operation that doesn't fit the action, such as a target of the wrong type, matches no rule.
 - An entry point may require an extra permission, e.g. `mcp:run` for playbooks run through MCP. It never replaces the check of the operation itself.
 - Reaching an entry point needs authentication. Mission Control's MCP server also needs `mcp:use` (Section 2.3), and each MCP tool then checks the resources it touches, e.g. `mcp:run` and the run's own checks for a playbook. _Why `mcp:use`:_ it lets an admin allow someone to use Mission Control directly but not through an AI agent, whatever else they're granted.
+- An operation that reads, creates, updates or deletes resources of a type is first gated by the subject's answer for the type and action (`collection-access.md`, Section 3.1). The gate never replaces these checks.
 
 A check carries only the resources its action's contract can match (Section 2). An action without a target carries the resource alone, even when the operation it gates has one. So each operation makes these checks:
 
