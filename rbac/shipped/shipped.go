@@ -163,11 +163,18 @@ func invokeRuleName(action string, used map[string]bool) string {
 	}
 
 	sum := sha256.Sum256([]byte(action))
-	hashed := strings.TrimRight(name[:min(len(name), 50)], "-") + "-" + hex.EncodeToString(sum[:])[:8]
-	for i := 2; used[hashed]; i++ {
-		hashed = fmt.Sprintf("%s-%s-%d", strings.TrimRight(name[:min(len(name), 50)], "-"), hex.EncodeToString(sum[:])[:8], i)
+	hash := hex.EncodeToString(sum[:])[:8]
+	for i := 1; ; i++ {
+		suffix := "-" + hash
+		if i > 1 {
+			suffix += fmt.Sprintf("-%d", i)
+		}
+		// The name is cut to leave room for the suffix, so it never exceeds a rule name's 63 characters
+		hashed := strings.TrimRight(name[:min(len(name), 63-len(suffix))], "-") + suffix
+		if !used[hashed] {
+			return hashed
+		}
 	}
-	return hashed
 }
 
 var syncLock sync.Mutex

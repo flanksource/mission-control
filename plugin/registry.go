@@ -9,6 +9,7 @@ package plugin
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"maps"
@@ -338,7 +339,9 @@ func (r *Registry) stateLocked() map[string]string {
 		}
 	}
 	for name, ops := range r.operationsLocked() {
-		state[name] = "registered:" + strings.Join(ops, ",")
+		// JSON, so operation names containing a separator, e.g. "run,stop", can't read as several
+		encoded, _ := json.Marshal(ops)
+		state[name] = "registered:" + string(encoded)
 	}
 	return state
 }

@@ -76,6 +76,14 @@ var _ = ginkgo.Describe("Registry changes", func() {
 		Expect(changes).To(Equal(3))
 	})
 
+	ginkgo.It("tells operations apart from an operation whose name contains a separator", func() {
+		Expect(registry.SetManifest(id, manifest("run,stop"))).To(Succeed())
+		Expect(changes).To(Equal(1))
+
+		Expect(registry.SetManifest(id, manifest("run", "stop"))).To(Succeed())
+		Expect(changes).To(Equal(2))
+	})
+
 	ginkgo.It("reports operations of proxied plugins", func() {
 		_, err := registry.UpsertProxied(uuid.New(), "agent", "remote", v1.PluginSpec{}, manifest("run"), uuid.New())
 		Expect(err).ToNot(HaveOccurred())

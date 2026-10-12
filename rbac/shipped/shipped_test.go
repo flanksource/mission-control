@@ -1,6 +1,9 @@
 package shipped
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"slices"
 	"strings"
 
@@ -151,6 +154,25 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 		for _, rule := range invoke {
 			Expect(selects(rule.Resource)).To(Equal([]string{policy.ResourceConfig}))
 		}
+	})
+
+	ginkgo.It("keeps plugin rule names within 63 characters, however long their counter", func() {
+		// <X>_y falls back to <X>-<hash>; operations named after that hash and its first counters push it to -1000
+		stem := strings.Repeat("x", 41)
+		sum := sha256.Sum256([]byte(policy.NewPluginInvokeAction("p", stem+"_y")))
+		hash := hex.EncodeToString(sum[:])[:8]
+		ops := []string{stem + "-y", stem + "-" + hash, stem + "_y"}
+		for i := 2; i <= 999; i++ {
+			ops = append(ops, fmt.Sprintf("%s-%s-%d", stem, hash, i))
+		}
+		slices.Sort(ops)
+
+		rules := invokeRules(map[string][]string{"p": ops})
+		Expect(rules).To(HaveLen(len(ops)))
+		for _, rule := range rules {
+			Expect(len(rule.Name)).To(BeNumerically("<=", 63), rule.Name)
+		}
+		Expect(adapter.ValidateRoleSpec(RolePluginAdmin, rules)).To(Succeed())
 	})
 
 	ginkgo.It("names plugin rules uniquely, within the length of a rule name", func() {
