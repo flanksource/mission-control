@@ -392,11 +392,36 @@ roles:
 Alice is an editor. With this token she can read configs, playbooks and components, but can't run a playbook, delete a config or read a connection: her own rules allow each of them, but no rule of `viewer` does.
 
 - **A limit, not a grant.** Each check of an operation (Section 4.3) passes when the owner's rules allow it and a rule of one of the token's Roles matches it (Section 4). A listing returns the rows both allow. A rule the owner doesn't hold adds nothing, so a token never does more than its owner.
+- **Any Role, matched check by check.** A token's Roles needn't be the owner's, or bound to anyone. Each check is one action on one resource, with its target, and the owner's rules and the token's Roles must each have a rule matching that same check. Which Roles they come from doesn't matter, so neither side can pair a resource from one rule with a target from another (Section 4.2).
 - **Roles mean what they mean anywhere.** A Role's rules are matched against a token's checks exactly as against a binding's. A token names Roles by namespace and name, in any namespace, since a token has none. Naming one takes no grant on it: a Role in a token only removes access.
-- **Live.** Every check uses the owner's current grants and the Roles' current rules. A Role that's missing or invalid (Section 6) matches nothing, so a token limited only by it can do nothing until it's valid again.
+- **Every check of an operation.** An operation's checks are each limited (Section 4.3), so a Role meant to let a token run a playbook on a config needs `read` on the config too.
+- **Live.** Every check uses the owner's current grants and the Roles' current rules. A Role that's missing or invalid (Section 6) matches nothing, so a token limited only by it can do nothing until it's valid again. Nothing is granted to the token, so nothing is left behind: when the owner loses an action, every token of theirs loses it on the next request, whatever its Roles; when the owner gains one, a token gains it only where its Roles allow it.
 - **No Roles, no limit.** A token that lists no Roles may do everything its owner may.
 - **Tokens don't manage tokens.** A request made with a token can't create, change or delete a token, whatever its Roles. _Why:_ otherwise a limited token could create one without its limit.
 - **The summary follows the token.** The access summary of a request made with a token is computed with the token's limit (`collection-access.md`, Section 4).
+
+For example, `production` selects the configs of the `payments`, `billing` and `search` namespaces, and `production-payments` those of `payments` alone. Alice is bound to a Role that runs the ops playbooks on `production` and reads it. An admin publishes a Role bound to no one:
+
+```yaml
+kind: Role
+metadata:
+  name: payments-runner
+  namespace: default
+spec:
+  rules:
+    - name: run-ops
+      action: playbook:run
+      resource:
+        scopeRef: ops-playbooks
+      target:
+        scopeRef: production-payments
+    - name: read-payments
+      action: read
+      resource:
+        scopeRef: production-payments
+```
+
+A token of Alice's limited by `payments-runner` runs the ops playbooks on `payments` configs only, and lists those configs only. The same Role limits Bob's token, who may only read `payments`, to reading them. If Alice's binding is removed, her token can run nothing, though it still lists `payments-runner`.
 
 A person may create, change and delete their own tokens, without any grant, but not through a token. No person can create, change or delete a token for another person, and no action grants it.
 
