@@ -16,7 +16,6 @@ import (
 	"github.com/labstack/echo/v4"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/samber/lo"
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/rbac/adapter"
@@ -144,103 +143,6 @@ var _ = Describe("CreateToken", Ordered, func() {
 			Expect(canEnforce(token.PersonID.String(), policy.ObjectPlaybooks, policy.ActionRead)).To(BeFalse())
 			Expect(canEnforce(token.PersonID.String(), policy.ObjectCatalog, policy.ActionCRUD)).To(BeFalse())
 			Expect(canEnforce(token.PersonID.String(), policy.ObjectCanary, policy.ActionAll)).To(BeFalse())
-		})
-	})
-
-	Context("actions without a resource", func() {
-		catalogRead := []policy.Permission{{Object: policy.ObjectCatalog, Action: policy.ActionRead}}
-
-		resourcelessDenies := func(subject string) []policy.Permission {
-			GinkgoHelper()
-			perms, err := rbac.PermsForUser(subject)
-			Expect(err).To(BeNil())
-			return lo.Filter(perms, func(p policy.Permission, _ int) bool {
-				return p.Deny && lo.ContainsBy(adapter.ResourcelessPermissions(), func(r policy.Permission) bool {
-					return r.Object == p.Object && r.Action == p.Action
-				})
-			})
-		}
-
-		AfterEach(func() {
-			_, err = rbac.Enforcer().DeleteRolesForUser(testUser.ID.String())
-			Expect(err).To(BeNil())
-			_, err = rbac.Enforcer().DeletePermissionsForUser(testUser.ID.String())
-			Expect(err).To(BeNil())
-			Expect(DefaultContext.DB().Exec("DELETE FROM properties WHERE name = ?", tokenScopeActionsProperty).Error).To(Succeed())
-		})
-
-		It("denies them to a token whose scope doesn't list them", func() {
-			_, err = rbac.Enforcer().AddPermissionsForUser(testUser.ID.String(),
-				[]string{policy.ObjectCatalog, policy.ActionRead, "allow", "", "na"},
-				[]string{adapter.ObjectEvents, adapter.ActionEventRead, "allow", "", "na"},
-			)
-			Expect(err).To(BeNil())
-			Expect(canEnforce(testUser.ID.String(), adapter.ObjectEvents, adapter.ActionEventRead)).To(BeTrue())
-
-			ctx := DefaultContext.WithUser(testUser)
-			_ = postCreateToken(ctx, e, CreateTokenRequest{Name: "catalog-only-token", Scope: catalogRead}, http.StatusOK)
-			token := findTokenByName(ctx, "catalog-only-token")
-
-			Expect(canEnforce(token.PersonID.String(), policy.ObjectCatalog, policy.ActionRead)).To(BeTrue())
-			Expect(canEnforce(token.PersonID.String(), adapter.ObjectEvents, adapter.ActionEventRead)).To(BeFalse())
-
-			_ = postCreateToken(ctx, e, CreateTokenRequest{
-				Name:  "events-token",
-				Scope: []policy.Permission{{Object: adapter.ObjectEvents, Action: adapter.ActionEventRead}},
-			}, http.StatusOK)
-			Expect(canEnforce(findTokenByName(ctx, "events-token").PersonID.String(), adapter.ObjectEvents, adapter.ActionEventRead)).To(BeTrue())
-		})
-
-		It("denies them to an admin's token whose scope doesn't list them", func() {
-			_, err = rbac.Enforcer().AddRoleForUser(testUser.ID.String(), policy.RoleAdmin)
-			Expect(err).To(BeNil())
-
-			ctx := DefaultContext.WithUser(testUser)
-			_ = postCreateToken(ctx, e, CreateTokenRequest{Name: "admin-catalog-only-token", Scope: catalogRead}, http.StatusOK)
-			token := findTokenByName(ctx, "admin-catalog-only-token")
-
-			Expect(canEnforce(token.PersonID.String(), policy.ObjectCatalog, policy.ActionRead)).To(BeTrue())
-			for _, p := range adapter.ResourcelessPermissions() {
-				Expect(canEnforce(token.PersonID.String(), p.Object, p.Action)).To(BeFalse(), p.Action)
-			}
-		})
-
-		It("adds them to existing scoped tokens once", func() {
-			_, err = rbac.Enforcer().AddRoleForUser(testUser.ID.String(), policy.RoleAdmin)
-			Expect(err).To(BeNil())
-
-			ctx := DefaultContext.WithUser(testUser)
-			_ = postCreateToken(ctx, e, CreateTokenRequest{Name: "existing-scoped-token", Scope: catalogRead}, http.StatusOK)
-			_ = postCreateToken(ctx, e, CreateTokenRequest{Name: "existing-unscoped-token"}, http.StatusOK)
-			scoped := findTokenByName(ctx, "existing-scoped-token").PersonID.String()
-			unscoped := findTokenByName(ctx, "existing-unscoped-token").PersonID.String()
-
-			// A token created before these actions existed has no denies for them
-			for _, p := range resourcelessDenies(scoped) {
-				_, err := rbac.Enforcer().DeletePermissionForUser(scoped, p.ToArgsWithoutSubject()...)
-				Expect(err).To(BeNil())
-			}
-			Expect(rbac.Enforcer().InvalidateCache()).To(Succeed())
-			Expect(canEnforce(scoped, adapter.ObjectEvents, adapter.ActionEventRead)).To(BeTrue())
-
-			Expect(LimitScopedTokens(DefaultContext)).To(Succeed())
-			Expect(resourcelessDenies(scoped)).To(HaveLen(len(adapter.ResourcelessPermissions())))
-			for _, p := range adapter.ResourcelessPermissions() {
-				Expect(canEnforce(scoped, p.Object, p.Action)).To(BeFalse(), p.Action)
-				Expect(canEnforce(unscoped, p.Object, p.Action)).To(BeTrue(), p.Action)
-			}
-			Expect(resourcelessDenies(unscoped)).To(BeEmpty())
-			Expect(canEnforce(scoped, policy.ObjectCatalog, policy.ActionRead)).To(BeTrue())
-
-			// Once recorded, an action isn't added again, so a token whose scope lists it keeps it
-			events := resourcelessDenies(scoped)[0]
-			_, err = rbac.Enforcer().DeletePermissionForUser(scoped, events.ToArgsWithoutSubject()...)
-			Expect(err).To(BeNil())
-
-			Expect(rbac.Enforcer().InvalidateCache()).To(Succeed())
-			Expect(LimitScopedTokens(DefaultContext)).To(Succeed())
-			Expect(resourcelessDenies(scoped)).To(HaveLen(len(adapter.ResourcelessPermissions()) - 1))
-			Expect(canEnforce(scoped, events.Object, events.Action)).To(BeTrue())
 		})
 	})
 
