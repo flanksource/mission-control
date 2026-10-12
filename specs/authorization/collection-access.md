@@ -25,17 +25,13 @@ For every subject and every resource type a `read` rule can accept ([roles.md, S
 
 The answer is derived from the subject's grants alone, in this order:
 
-1. `all`, when either:
-   - the subject's built-in role grants the type as a whole and doesn't filter their listings by row, which is every built-in role but `guest` ([roles.md, Section 7](roles.md#7-built-in-roles)); or
-   - a `read` rule applies to the subject whose Scope has a whole-type target of the type ([scopes.md, Section 5.2](scopes.md#52-wildcards-and-patterns)), and the binding it comes through either has no `resource` constraint or constrains it with a Scope that also has a whole-type target of the type ([Section 2.4](#24-whole-type-under-a-constraint)).
+1. `all`, when a `read` rule applies to the subject whose Scope has a whole-type target of the type ([scopes.md, Section 5.2](scopes.md#52-wildcards-and-patterns)), and the binding it comes through either has no `resource` constraint or constrains it with a Scope that also has a whole-type target of the type ([Section 2.4](#24-whole-type-under-a-constraint)).
 2. Otherwise `some`, when a `read` rule applies to the subject and its Scope, narrowed by the binding's constraint where there is one ([rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)), can select resources of the type: both Scopes have a target of the type.
 3. Otherwise `none`.
 
-For admins the answer is `all` on every type ([overview.md, "Default access"](overview.md#default-access)).
+A subject bound to the shipped `admin` Role is `all` on every type, and one bound to `viewer` is `all` on the types it reads, through those Roles' rules ([overview.md, "Shipped Roles"](overview.md#shipped-roles)). A subject with no grants is `none` on every type.
 
-A guest's built-in `read` doesn't count towards `all`. It lets a guest past whole-type checks only for their listings to be filtered to their grants ([roles.md, Section 7.3](roles.md#73-guests)), so for the answer it's as if they had none: a guest with no grants is `none`, and their listing is refused rather than empty. The same holds when a guest opens one resource: it's checked against their grants only, never passed by the built-in `read`. Where that differs from [roles.md, Section 7.3](roles.md#73-guests), this document applies. A person with no built-in role is treated as a viewer, as [roles.md, Section 7.4](roles.md#74-open-questions) leaves it.
-
-Permissions ([overview.md, "Not covered yet"](overview.md#not-covered-yet)) count too. A Permission that allows `read` counts like a rule, with its selectors in place of a Scope, type by type. For connections, which can't be filtered by row ([roles.md, Section 3.1](roles.md#31-the-read-action)), a Permission that isn't whole-type gives nothing.
+Permissions ([permissions.md](permissions.md)) count too. A Permission that allows `read` counts like a rule, with its selectors in place of a Scope, type by type. For connections, which can't be filtered by row ([roles.md, Section 3.1](roles.md#31-the-read-action)), a Permission that isn't whole-type gives nothing.
 
 ### 2.1 Derived from grants, not from resources
 
@@ -48,8 +44,6 @@ An invalid Scope is a different case. A Scope naming an agent that isn't registe
 ### 2.2 Several grants
 
 A subject often has several `read` grants on a type, from different Roles and bindings. If any one of them is a whole-type grant, the answer is `all`. Otherwise, if there is any grant on the type, the answer is `some`, however many grants there are: three Scopes on three namespaces are still a subset. What the subject sees is the union of what the grants select. A rule that doesn't apply, because its Role or binding isn't in effect ([roles.md, Section 6](roles.md#6-how-changes-take-effect); [rolebindings.md, Section 4](rolebindings.md#4-how-changes-take-effect)), gives nothing.
-
-Roles can't deny `read` yet ([roles.md, Section 2](roles.md#2-actions)), but a Permission can, and its denies are enforced on listings ([roles.md, Section 5](roles.md#5-allow-and-deny)). A deny lowers the answer: a deny that covers the type whole gives `none`; any other deny on the type caps the answer at `some`. The same rule applies to Role rules once they can deny `read`.
 
 ### 2.3 Row-level security
 
@@ -92,11 +86,11 @@ The answer decides every collection-level operation on the type:
 
 Mission Control computes the answer. Clients MUST NOT derive it themselves from the subject's rules or roles.
 
-Every authenticated subject can obtain their **access summary**, a user of an external identity provider included, for whom it's derived from the token of the request: for each resource type, the answer for `read`, `create`, `update` and `delete`, each one of `all`, `some` or `none`. The UI uses the summary, and nothing else, to decide which resource pages to show, which to mark as showing some resources only, and which write controls to offer. Listings and searches apply the same derivation on the server. So, evaluated against the same grants, a page the summary shows never answers its listing with `403 Forbidden`, and a listing that succeeds is never behind a page the summary hides. Grants change between requests: a Scope or binding is edited, a Role becomes `Ready=False`, an external identity provider user's next token matches differently. So the summary is computed on every request, never kept for a session, and a client that gets `403 Forbidden` from a listing fetches the summary again rather than treating it as a fault.
+Every authenticated subject can obtain their **access summary**, a user of an external identity provider included, for whom it's derived from the token of the request. A request made with an access token gets the summary of what the token may do, its Roles' limit included (`roles.md`, Section 4.5): for each resource type, the answer for `read`, `create`, `update` and `delete`, each one of `all`, `some` or `none`. The UI uses the summary, and nothing else, to decide which resource pages to show, which to mark as showing some resources only, and which write controls to offer. Listings and searches apply the same derivation on the server. So, evaluated against the same grants, a page the summary shows never answers its listing with `403 Forbidden`, and a listing that succeeds is never behind a page the summary hides. Grants change between requests: a Scope or binding is edited, a Role becomes `Ready=False`, an external identity provider user's next token matches differently. So the summary is computed on every request, never kept for a session, and a client that gets `403 Forbidden` from a listing fetches the summary again rather than treating it as a fault.
 
-For `create`, `update` and `delete`, the answer is derived as in [Section 2](#2-all-some-or-none), from the subject's rules for that action instead of `read`. Unlike `read`, it isn't affected by row-level security: a write is always checked against the one resource it acts on. Under `some`, the UI offers the write control, and the server's resource-level check decides each request; a refusal is not a fault. Under `none`, the UI MUST NOT offer it.
+For `create`, `update` and `delete`, the answer is derived as in [Section 2](#2-all-some-or-none), from the subject's rules for that action instead of `read`. Their rules, and the constraints that narrow them, select whole types only ([roles.md, Section 2](roles.md#2-actions); [rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)), so the answer is `all` or `none`, never `some`. Under `all`, the UI offers the write control. Under `none`, it MUST NOT.
 
-**Why the server answers.** The answer is a function of rules, bindings, constraints, and built-in roles. A client that re-derives it has to re-implement all of them, and drifts with every release. The bug that motivated this specification was a client treating a `some` grant as `none`, and showing a user with a valid grant a screen saying they had no access to anything.
+**Why the server answers.** The answer is a function of rules, bindings and constraints. A client that re-derives it has to re-implement all of them, and drifts with every release. The bug that motivated this specification was a client treating a `some` grant as `none`, and showing a user with a valid grant a screen saying they had no access to anything.
 
 ## 5. Pages and types
 
@@ -122,15 +116,11 @@ A subject may learn the answer for each type, and so may learn that what they se
 
 ## 7. Example
 
-Uma is a guest, bound to a Role with one rule: `read` on a Scope that selects configs with the tag `namespace=media`.
+Uma is bound to one Role, with one rule: `read` on a Scope that selects configs with the tag `namespace=media`.
 
 | Type                                           | Answer | Because                                                                           |
 | ---------------------------------------------- | -------- | --------------------------------------------------------------------------------- |
 | Config                                         | `some` | The rule's Scope has a config target that isn't whole-type                        |
-| Component, Canary, Playbook, Connection        | `none`   | No `read` rule applies on those types, and a guest has no built-in access to them |
+| Component, Canary, Playbook, Connection        | `none`   | No `read` rule applies on those types                                             |
 
 Uma sees the Catalog page, marked as showing some resources only, listing only the media configs. She sees no other resource page. A search returns media configs and nothing else. Opening a media config by link works; opening any other config is refused. If the media namespace hasn't been scraped yet, she sees the Catalog page with an empty list.
-
-## 8. Not covered
-
-- **Access tokens.** Which resources a token may read, whether it can be narrower than its owner, and whether it follows later changes to the owner's grants are for a spec of their own. **TODO.** Until then, the only requirement this document relies on is that a token never reads more than its owner.
