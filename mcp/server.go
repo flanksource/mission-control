@@ -13,6 +13,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/flanksource/incident-commander/api"
+
+	icrbac "github.com/flanksource/incident-commander/rbac"
 )
 
 type dutyContextType string
@@ -46,7 +48,7 @@ func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 		}
 
-		if !allowed {
+		if !allowed || !icrbac.TokenAllowsObject(ctx, ctx.Subject(), policy.ObjectMCP, policy.ActionMCPUse) {
 			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "forbidden: user %s does not have mcp:use permission", owner))
 		}
 

@@ -9,7 +9,6 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
-	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
@@ -153,7 +152,7 @@ func GetViewByID(c echo.Context) error {
 	attr := &models.ABACAttribute{
 		View: view,
 	}
-	if !dutyRBAC.HasPermission(ctx, ctx.Subject(), attr, policy.ActionRead) {
+	if !rbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionRead) {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("access denied to view %s/%s", view.Namespace, view.Name))
 	}
 
@@ -179,7 +178,7 @@ func GetViewByNamespaceName(c echo.Context) error {
 	attr := &models.ABACAttribute{
 		View: view,
 	}
-	if !dutyRBAC.HasPermission(ctx, ctx.Subject(), attr, policy.ActionRead) {
+	if !rbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionRead) {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("access denied to view %s/%s", view.Namespace, view.Name))
 	}
 

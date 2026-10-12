@@ -10,21 +10,22 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	pkgView "github.com/flanksource/duty/view"
 	"github.com/invopop/jsonschema"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"github.com/samber/lo"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/views"
+
+	icrbac "github.com/flanksource/incident-commander/rbac"
 )
 
 const (
@@ -192,7 +193,7 @@ func viewRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 	}
 
 	attr := &models.ABACAttribute{View: view}
-	if !rbac.HasPermission(ctx, owner, attr, policy.ActionMCPRun) {
+	if !icrbac.HasPermission(ctx, owner, attr, policy.ActionMCPRun) || !icrbac.TokenAllows(ctx, ctx.Subject(), attr, policy.ActionMCPRun) {
 		return mcp.NewToolResultError(fmt.Sprintf("forbidden: mcp:run not permitted on view %s/%s", view.Namespace, view.Name)), nil
 	}
 
@@ -282,7 +283,7 @@ func addViewsAsTool(goctx gocontext.Context, srv *server.MCPServer, session serv
 
 	permittedViews := lo.Filter(allViews, func(view models.View, _ int) bool {
 		attr := &models.ABACAttribute{View: view}
-		return rbac.HasPermission(ctx, owner, attr, policy.ActionMCPRun)
+		return icrbac.HasPermission(ctx, owner, attr, policy.ActionMCPRun) && icrbac.TokenAllows(ctx, ctx.Subject(), attr, policy.ActionMCPRun)
 	})
 
 	tools, toolsMap, err := getViewsAsTools(ctx, permittedViews)

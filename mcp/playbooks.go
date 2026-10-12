@@ -10,7 +10,6 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
-	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/membership"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
@@ -27,6 +26,8 @@ import (
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
+
+	icrbac "github.com/flanksource/incident-commander/rbac"
 )
 
 // playbookToolNameToID maps tool names to playbook IDs
@@ -71,7 +72,7 @@ func addPlaybooksAsTool(goctx gocontext.Context, srv *server.MCPServer, session 
 
 	playbooks = lo.Filter(playbooks, func(pb models.Playbook, _ int) bool {
 		attr := &models.ABACAttribute{Playbook: pb}
-		return rbac.HasPermission(checkCtx, owner, attr, policy.ActionMCPRun)
+		return icrbac.HasPermission(checkCtx, owner, attr, policy.ActionMCPRun) && icrbac.TokenAllows(checkCtx, ctx.Subject(), attr, policy.ActionMCPRun)
 	})
 
 	tools, err := getPlaybooksAsTools(playbooks)
@@ -185,7 +186,7 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 	}
 
 	attr := &models.ABACAttribute{Playbook: *pb}
-	if !rbac.HasPermission(ctx, owner, attr, policy.ActionMCPRun) {
+	if !icrbac.HasPermission(ctx, owner, attr, policy.ActionMCPRun) || !icrbac.TokenAllows(ctx, ctx.Subject(), attr, policy.ActionMCPRun) {
 		return mcp.NewToolResultError(fmt.Sprintf("forbidden: mcp:run not permitted on playbook %s", pb.NamespacedName())), nil
 	}
 

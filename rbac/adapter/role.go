@@ -45,6 +45,42 @@ func ParseBindingRuleID(id string) (bindingID uuid.UUID, rule string, ok bool) {
 	return bindingID, rule, true
 }
 
+// RoleLimitPrincipalPrefix prefixes the casbin subject a Role's rules are filed under to limit access tokens.
+const RoleLimitPrincipalPrefix = "role:"
+
+// RoleLimitPrincipal returns the casbin subject a Role's rules are filed under to limit access tokens.
+// Nothing is grouped under it, so it grants nothing: it's only checked alongside a token's owner.
+func RoleLimitPrincipal(namespace, name string) string {
+	return RoleLimitPrincipalPrefix + namespace + "/" + name
+}
+
+// RoleLimitRules returns the rules of a valid Role as they limit an access token: as written, with no constraint.
+func RoleLimitRules(role models.Role, rules []ResolvedRule) []CompiledRule {
+	return lo.Map(rules, func(rule ResolvedRule, _ int) CompiledRule {
+		return compileResolvedRule(fmt.Sprintf("%s%s/%s", RoleLimitPrincipalPrefix, role.ID, rule.Name), rule)
+	})
+}
+
+// LoadRoleLimitRules returns the rules of the Role as they limit an access token.
+// A Role that doesn't exist or is invalid has none, so it matches nothing.
+func LoadRoleLimitRules(ctx context.Context, namespace, name string) ([]CompiledRule, error) {
+	var role models.Role
+	if err := ctx.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", namespace, name).Find(&role).Error; err != nil {
+		return nil, err
+	} else if role.ID == uuid.Nil {
+		return nil, nil
+	}
+
+	rules, err := ValidateRole(ctx, nil, role)
+	if err != nil {
+		if IsValidationError(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return RoleLimitRules(role, rules), nil
+}
+
 // ResolvedRule is a validated rule of a role, with its Scopes resolved.
 type ResolvedRule struct {
 	v1.RoleRule
@@ -397,8 +433,12 @@ func bindingConstraint(binding models.RoleBinding) (*v1.RoleBindingConstraint, e
 
 // compileRule returns the rule as written, granted through the binding.
 func compileRule(binding models.RoleBinding, rule ResolvedRule) CompiledRule {
+	return compileResolvedRule(BindingRuleID(binding.ID, rule.Name), rule)
+}
+
+func compileResolvedRule(id string, rule ResolvedRule) CompiledRule {
 	c := CompiledRule{
-		ID:       BindingRuleID(binding.ID, rule.Name),
+		ID:       id,
 		Name:     rule.Name,
 		Deny:     rule.Deny,
 		Contract: rule.Contract,

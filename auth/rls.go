@@ -3,6 +3,7 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/flanksource/commons/logger"
@@ -76,26 +77,94 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		return cached.(*rls.Payload), nil
 	}
 
-	// RLS is disabled for everyone but guests. Subjects without implicit grants are always filtered.
-	if dutyRBAC.HasImplicitGrants(subject) {
-		if roles, err := dutyRBAC.RolesForUser(user.ID.String()); err != nil {
-			return nil, err
-		} else if !lo.Contains(roles, policy.RoleGuest) {
-			payload := applyScopeLimits(&rls.Payload{Disable: true}, limits)
-			tokenCache.SetDefault(cacheKey, payload)
-			return payload, nil
-		}
+	payload, err := ownRLSPayload(ctx, subject)
+	if err != nil {
+		return nil, err
 	}
 
-	// Build the row filters from the user's read grants
-	payload, err := buildRLSPayload(ctx, subject)
-	if err != nil {
-		return nil, ctx.Oops().Wrap(err)
+	if tokenRoles, limited := rbac.TokenLimit(ctx, user.ID.String()); limited {
+		if payload, err = limitToTokenRoles(ctx, payload, tokenRoles); err != nil {
+			return nil, ctx.Oops().Wrap(err)
+		}
 	}
 
 	payload = applyScopeLimits(payload, limits)
 	tokenCache.SetDefault(cacheKey, payload)
 	return payload, nil
+}
+
+// ownRLSPayload returns the subject's row filters, from its own grants.
+// RLS is disabled for everyone but guests. Subjects without implicit grants are always filtered.
+func ownRLSPayload(ctx context.Context, subject string) (*rls.Payload, error) {
+	if dutyRBAC.HasImplicitGrants(subject) {
+		if roles, err := dutyRBAC.RolesForUser(ctx.User().ID.String()); err != nil {
+			return nil, err
+		} else if !lo.Contains(roles, policy.RoleGuest) {
+			return &rls.Payload{Disable: true}, nil
+		}
+	}
+
+	payload, err := buildRLSPayload(ctx, subject)
+	if err != nil {
+		return nil, ctx.Oops().Wrap(err)
+	}
+	return payload, nil
+}
+
+// limitToTokenRoles narrows the owner's row filters to the rows the read rules of the token's Roles list:
+// a row is listed when a grant of the owner and a grant of a Role both admit it. Roles list no view rows,
+// as Role rules don't for bindings. A Role that's missing or invalid lists nothing.
+func limitToTokenRoles(ctx context.Context, owner *rls.Payload, roles models.AccessTokenRoles) (*rls.Payload, error) {
+	limit := newClaim()
+	for _, role := range roles {
+		rules, err := adapter.LoadRoleLimitRules(ctx, role.Namespace, role.Name)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load the rules of role %s/%s: %w", role.Namespace, role.Name, err)
+		}
+		for _, rule := range rules {
+			for kind, grant := range rule.ReadGrants() {
+				limit.grant(kind, grant)
+			}
+		}
+	}
+
+	result := &rls.Payload{}
+	for _, kind := range rls.GrantTypes {
+		ownerGrants := owner.GrantsFor(kind)
+		if owner.Disable {
+			ownerGrants = rls.AllRows()
+		}
+		if ownerGrants == nil || limit.grants[kind] == nil {
+			continue
+		}
+		result.SetGrants(kind, intersectGrants(ownerGrants, limit.grants[kind]))
+	}
+	return result, nil
+}
+
+// intersectGrants returns the grants that admit the rows both a and b admit: one grant per pair of their grants,
+// which a row must satisfy both of. b's Scopes are added to each of a's grants as Scopes the row must also be in.
+func intersectGrants(a, b *rls.Grants) *rls.Grants {
+	if a.All {
+		return &rls.Grants{All: b.All, Any: slices.Clone(b.Any)}
+	} else if b.All {
+		return &rls.Grants{Any: slices.Clone(a.Any)}
+	}
+
+	result := rls.NoRows()
+	for _, x := range a.Any {
+		for _, y := range b.Any {
+			narrowed := x
+			narrowed.Impersonated = append(slices.Clone(x.Impersonated), y.Impersonated...)
+			for _, id := range []string{y.Scope, y.Constraint} {
+				if id != "" {
+					narrowed.Impersonated = append(narrowed.Impersonated, id)
+				}
+			}
+			result.Add(narrowed)
+		}
+	}
+	return result
 }
 
 // WithRLS wraps a function with RLS enforcement in a transaction.

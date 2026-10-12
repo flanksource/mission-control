@@ -86,7 +86,7 @@ func DbMiddleware() MiddlewareFunc {
 				object, action = policy.ObjectProperties, policy.ActionPropertyManage
 			}
 
-			if !rbac.CheckContext(ctx, object, action) && !canListFilteredRows(ctx, resource, action) && !teamGrants(ctx, resource, action) {
+			if !CheckContext(ctx, object, action) && !canListFilteredRows(ctx, resource, action) && !teamGrants(ctx, resource, action) {
 				c.Response().Header().Add("X-Rbac-Subject", ctx.Subject())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)
@@ -117,12 +117,12 @@ var readOnlyObjects = map[string]string{
 func teamGrants(ctx context.Context, table, action string) bool {
 	switch table {
 	case "teams":
-		return rbac.CheckContext(ctx, adapter.ObjectTeams, action)
+		return CheckContext(ctx, adapter.ObjectTeams, action)
 	case "team_members":
 		if action != policy.ActionRead {
 			action = policy.ActionUpdate
 		}
-		return rbac.CheckContext(ctx, adapter.ObjectTeams, action)
+		return CheckContext(ctx, adapter.ObjectTeams, action)
 	}
 	return false
 }
@@ -142,15 +142,17 @@ var rowFilteredTables = map[string]string{
 // The auth package sets it, since it builds the row filters.
 var ReadGrantsCover func(ctx context.Context, resourceType string) bool
 
-// canListFilteredRows reports whether a guest or a subject without built-in access
-// can list a table because its read grants cover some rows of it. Postgres then filters the rows.
+// canListFilteredRows reports whether a guest, a subject without built-in access or a request made with a token
+// limited by Roles can list a table because its read grants cover some rows of it. Postgres then filters the rows.
 // Its read grants on whole types pass the object check instead.
 func canListFilteredRows(ctx context.Context, table, action string) bool {
 	if action != policy.ActionRead || ReadGrantsCover == nil {
 		return false
 	}
 	if rbac.HasImplicitGrants(ctx.Subject()) && !isGuest(ctx) {
-		return false
+		if _, limited := TokenLimit(ctx, ctx.User().ID.String()); !limited {
+			return false
+		}
 	}
 
 	resourceType, ok := rowFilteredTables[table]
@@ -210,7 +212,7 @@ func authorize(object, action string, orElse func(ctx context.Context) bool) Mid
 				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
 			}
 
-			if !rbac.CheckContext(ctx, object, action) && (orElse == nil || !orElse(ctx)) {
+			if !CheckContext(ctx, object, action) && (orElse == nil || !orElse(ctx)) {
 				c.Response().Header().Add("X-Rbac-Subject", ctx.Subject())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)

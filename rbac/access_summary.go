@@ -99,12 +99,58 @@ func AccessSummary(ctx context.Context) map[string]map[string]Access {
 		}
 	}
 
+	if tokenRoles, limited := TokenLimit(ctx, user.ID.String()); limited {
+		if err := limitSummary(ctx, summary, user.ID.String(), tokenRoles); err != nil {
+			ctx.Warnf("failed to limit the access summary of %s to its token's roles: %v", ctx.Subject(), err)
+			return noAccess()
+		}
+	}
+
 	summaryFlush.RLock()
 	if summaryGeneration.Load() == generation {
 		summaryCache.SetDefault(cacheKey, summary)
 	}
 	summaryFlush.RUnlock()
 	return summary
+}
+
+// limitSummary lowers each entry of the summary to what the token's Roles allow: all when a Role's rules match every
+// resource of the type, some when they select some of them, and none otherwise.
+func limitSummary(ctx context.Context, summary map[string]map[string]Access, subject string, roles models.AccessTokenRoles) error {
+	var rules []adapter.CompiledRule
+	for _, role := range roles {
+		roleRules, err := adapter.LoadRoleLimitRules(ctx, role.Namespace, role.Name)
+		if err != nil {
+			return err
+		}
+		rules = append(rules, roleRules...)
+	}
+
+	for resourceType, object := range summaryObjects {
+		for _, action := range summaryActions {
+			limit := AccessNone
+			if TokenAllowsObject(ctx, subject, object, action) {
+				limit = AccessAll
+			} else if lo.SomeBy(rules, func(rule adapter.CompiledRule) bool {
+				return !rule.Deny && rule.Contract.Action == action && len(rule.Resource) > 0 &&
+					lo.Contains(rule.Resource[0].DeclaredTypes(), resourceType)
+			}) {
+				limit = AccessSome
+			}
+
+			summary[resourceType][action] = leastAccess(summary[resourceType][action], limit)
+		}
+	}
+	return nil
+}
+
+func leastAccess(a, b Access) Access {
+	if a == AccessNone || b == AccessNone {
+		return AccessNone
+	} else if a == AccessAll && b == AccessAll {
+		return AccessAll
+	}
+	return AccessSome
 }
 
 func noAccess() map[string]map[string]Access {

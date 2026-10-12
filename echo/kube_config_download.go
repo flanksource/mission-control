@@ -18,6 +18,8 @@ import (
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+
+	icrbac "github.com/flanksource/incident-commander/rbac"
 )
 
 const kubeConfigTemplate = `apiVersion: v1
@@ -99,9 +101,9 @@ func KubeProxyTokenMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		ctx := c.Request().Context().(context.Context)
 
 		var impersonateUser string
-		if rbac.CheckContext(ctx, policy.ObjectKubernetesProxy, policy.ActionUpdate) {
+		if icrbac.CheckContext(ctx, policy.ObjectKubernetesProxy, policy.ActionUpdate) {
 			impersonateUser = "mission-control-writer"
-		} else if rbac.CheckContext(ctx, policy.ObjectKubernetesProxy, policy.ActionRead) {
+		} else if icrbac.CheckContext(ctx, policy.ObjectKubernetesProxy, policy.ActionRead) {
 			impersonateUser = "mission-control-reader"
 		} else {
 			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "user cannot impersonate mission-control reader or writer"))
