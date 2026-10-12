@@ -18,7 +18,6 @@ jobs.ReconcileAll.failed.success=100
 # Log the matching policy that was used to make the authorization decision
 # casbin.explain=true
 
-rls.enable=true
 # rls.debug=true
 
 # Logs

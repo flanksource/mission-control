@@ -240,19 +240,6 @@ var Serve = &cobra.Command{
 			dutyArgs = append(dutyArgs, duty.KratosAuth)
 		}
 
-		{
-			// Create a dummy context to access the properties
-			rlsEnabled := context.NewContext(cmd.Context()).Properties().On(false, vars.FlagRLSEnable)
-			if rlsEnabled {
-				dutyArgs = append(dutyArgs, duty.EnableRLS)
-			}
-			rlsDisabled := context.NewContext(cmd.Context()).Properties().On(false, vars.FlagRLSDisable)
-			if rlsDisabled {
-				dutyArgs = append(dutyArgs, duty.DisableRLS)
-			}
-			vars.SetRLSEnabledAtStart(rlsEnabled && !rlsDisabled)
-		}
-
 		ctx, stop, err := duty.Start("mission-control", dutyArgs...)
 		if err != nil {
 			shutdown.ShutdownAndExit(1, fmt.Sprintf("error setting up db connection: %v", err))

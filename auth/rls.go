@@ -18,7 +18,6 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
-	"github.com/flanksource/incident-commander/vars"
 )
 
 func init() {
@@ -27,7 +26,6 @@ func init() {
 
 // readGrantsCover reports whether the subject's claim filters the rows of the resource type.
 // A deny Permission on read leaves a type with no grants, which still filters it: its listing is empty, not refused.
-// While row-level security is off, nothing is filtered by row, so they cover nothing.
 func readGrantsCover(ctx context.Context, resourceType string) bool {
 	payload, err := GetRLSPayload(ctx)
 	if err != nil {
@@ -56,10 +54,6 @@ func InvalidateRLSCacheForUser(userID string) {
 }
 
 func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
-	if !vars.RLSEnabled(ctx) {
-		return &rls.Payload{Disable: true}, nil
-	}
-
 	user := ctx.User()
 	if user == nil {
 		return nil, fmt.Errorf("user is required for RLS payload")

@@ -316,10 +316,6 @@ func PersistExternalIdentityProvider(ctx context.Context, obj *v1.ExternalIdenti
 
 	notifyProviderValidityChanged(changed)
 
-	if invalid == nil && !vars.RLSEnabled(ctx) {
-		ctx.Warnf("%s is off: users of external identity provider %s/%s can only be granted reads of whole types", vars.FlagRLSEnable, obj.Namespace, obj.Name)
-	}
-
 	if invalid != nil {
 		return kopper.NotReady(kopper.ReasonInvalid, "%w", invalid)
 	}
