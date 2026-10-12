@@ -6,9 +6,13 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 func TestViews(t *testing.T) {
@@ -24,6 +28,8 @@ var (
 
 var _ = ginkgo.BeforeSuite(func() {
 	DefaultContext = setup.BeforeSuiteFn()
+	Expect(dutyRBAC.Init(DefaultContext, []string{dummy.JohnDoe.ID.String()}, adapter.NewPermissionAdapter)).To(Succeed())
+	DefaultContext = DefaultContext.WithUser(&dummy.JohnDoe)
 
 	conn = models.Connection{
 		Name:      "test-db-connection",
