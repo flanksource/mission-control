@@ -175,6 +175,10 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 		return fmt.Errorf("failed to initialize rbac: %w", err)
 	}
 
+	if err := LimitScopedTokens(ctx); err != nil {
+		return fmt.Errorf("failed to limit scoped access tokens: %w", err)
+	}
+
 	return nil
 }
 

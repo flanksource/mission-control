@@ -145,6 +145,19 @@ func ContractFor(action string) (ActionContract, error) {
 	return ActionContract{}, fmt.Errorf("unknown action %q", action)
 }
 
+// ResourcelessPermissions returns the object and action every action without a resource is checked on.
+func ResourcelessPermissions() []policy.Permission {
+	var permissions []policy.Permission
+	for action, contract := range contracts {
+		if !contract.TakesResource() {
+			permissions = append(permissions, policy.Permission{Object: contract.Object, Action: action})
+		}
+	}
+
+	slices.SortFunc(permissions, func(a, b policy.Permission) int { return strings.Compare(a.Action, b.Action) })
+	return permissions
+}
+
 // TakesResource reports whether the action is performed on a resource, so its rules need a resource Scope.
 func (c ActionContract) TakesResource() bool {
 	return c.enforcement != enforcedWithoutResource

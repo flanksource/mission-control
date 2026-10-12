@@ -2,6 +2,9 @@ package rbac
 
 import (
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/samber/lo"
+
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 var (
@@ -14,4 +17,6 @@ func init() {
 			AllPermissions = append(AllPermissions, policy.NewPermission([]string{"", obj, act}))
 		}
 	}
+
+	AllPermissions = lo.Uniq(append(AllPermissions, adapter.ResourcelessPermissions()...))
 }
