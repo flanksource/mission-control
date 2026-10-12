@@ -1,93 +1,9 @@
 # Roles and Scopes shipped with Mission Control (specs/authorization/overview.md, "Shipped Roles").
-# Mission Control writes them to its database on startup, and again whenever the operations of the installed plugins
-# change: admin gets one invoke rule per plugin operation. They can't be changed through the API or Kubernetes.
+# Mission Control writes them to its database on startup. plugin-admin isn't here: it's built from the operations of the
+# installed plugins, and written again whenever they change. They can't be changed through the API or Kubernetes.
 #
-# Every target is a whole-type target. A Scope only fills an input that accepts every type it selects
-# (roles.md, Section 3), so the Scopes are grouped by the inputs they fill.
-apiVersion: mission-control.flanksource.com/v1
-kind: Scope
-metadata:
-  name: operated-resources
-  namespace: mission-control-builtin
-spec:
-  description: Every config, component, check, canary, playbook, application, person and team
-  targets:
-    - config:
-        name: "*"
-    - component:
-        name: "*"
-    - check:
-        name: "*"
-    - canary:
-        name: "*"
-    - playbook:
-        name: "*"
-    - application:
-        name: "*"
-    - person:
-        name: "*"
-    - team:
-        name: "*"
----
-apiVersion: mission-control.flanksource.com/v1
-kind: Scope
-metadata:
-  name: writable-resources
-  namespace: mission-control-builtin
-spec:
-  description: Every config, component, canary, playbook, connection, application and team
-  targets:
-    - config:
-        name: "*"
-    - component:
-        name: "*"
-    - canary:
-        name: "*"
-    - playbook:
-        name: "*"
-    - connection:
-        name: "*"
-    - application:
-        name: "*"
-    - team:
-        name: "*"
----
-apiVersion: mission-control.flanksource.com/v1
-kind: Scope
-metadata:
-  name: configuration-resources
-  namespace: mission-control-builtin
-spec:
-  description: Every notification, notification silence, agent, Scope, Role and RoleBinding
-  targets:
-    - notification:
-        name: "*"
-    - notificationSilence:
-        name: "*"
-    - agent:
-        name: "*"
-    - scope:
-        name: "*"
-    - role:
-        name: "*"
-    - roleBinding:
-        name: "*"
----
-apiVersion: mission-control.flanksource.com/v1
-kind: Scope
-metadata:
-  name: playbook-targets
-  namespace: mission-control-builtin
-spec:
-  description: Every config, component and check, i.e. everything a playbook can run on
-  targets:
-    - config:
-        name: "*"
-    - component:
-        name: "*"
-    - check:
-        name: "*"
----
+# There's one Scope per resource type, all-<type>, with a single whole-type target. Roles anyone creates in this
+# namespace may use them, so each always selects exactly its type: a new type gets a new Scope, never a wider one.
 apiVersion: mission-control.flanksource.com/v1
 kind: Scope
 metadata:
@@ -97,6 +13,39 @@ spec:
   description: Every config
   targets:
     - config:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-components
+  namespace: mission-control-builtin
+spec:
+  description: Every component
+  targets:
+    - component:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-checks
+  namespace: mission-control-builtin
+spec:
+  description: Every check
+  targets:
+    - check:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-canaries
+  namespace: mission-control-builtin
+spec:
+  description: Every canary
+  targets:
+    - canary:
         name: "*"
 ---
 apiVersion: mission-control.flanksource.com/v1
@@ -122,6 +71,105 @@ spec:
         name: "*"
 ---
 apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-applications
+  namespace: mission-control-builtin
+spec:
+  description: Every application
+  targets:
+    - application:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-notifications
+  namespace: mission-control-builtin
+spec:
+  description: Every notification
+  targets:
+    - notification:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-notification-silences
+  namespace: mission-control-builtin
+spec:
+  description: Every notification silence
+  targets:
+    - notificationSilence:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-agents
+  namespace: mission-control-builtin
+spec:
+  description: Every agent
+  targets:
+    - agent:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-people
+  namespace: mission-control-builtin
+spec:
+  description: Every person
+  targets:
+    - person:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-teams
+  namespace: mission-control-builtin
+spec:
+  description: Every team
+  targets:
+    - team:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-scopes
+  namespace: mission-control-builtin
+spec:
+  description: Every Scope
+  targets:
+    - scope:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-roles
+  namespace: mission-control-builtin
+spec:
+  description: Every Role
+  targets:
+    - role:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-role-bindings
+  namespace: mission-control-builtin
+spec:
+  description: Every RoleBinding
+  targets:
+    - roleBinding:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
 kind: Role
 metadata:
   name: viewer
@@ -129,10 +177,38 @@ metadata:
 spec:
   description: Reads the resources people operate on, and nothing that configures access, holds credentials or exposes Mission Control's internals
   rules:
-    - name: read-resources
+    - name: read-configs
       action: read
       resource:
-        scopeRef: operated-resources
+        scopeRef: all-configs
+    - name: read-components
+      action: read
+      resource:
+        scopeRef: all-components
+    - name: read-checks
+      action: read
+      resource:
+        scopeRef: all-checks
+    - name: read-canaries
+      action: read
+      resource:
+        scopeRef: all-canaries
+    - name: read-playbooks
+      action: read
+      resource:
+        scopeRef: all-playbooks
+    - name: read-applications
+      action: read
+      resource:
+        scopeRef: all-applications
+    - name: read-people
+      action: read
+      resource:
+        scopeRef: all-people
+    - name: read-teams
+      action: read
+      resource:
+        scopeRef: all-teams
 ---
 apiVersion: mission-control.flanksource.com/v1
 kind: Role
@@ -140,71 +216,287 @@ metadata:
   name: admin
   namespace: mission-control-builtin
 spec:
-  description: Every action on every type, every plugin operation, and every action without a resource
+  description: Every action on every type, and every action without a resource, except plugin operations (see plugin-admin)
   rules:
-    - name: read-resources
+    - name: read-configs
       action: read
       resource:
-        scopeRef: operated-resources
+        scopeRef: all-configs
+    - name: read-components
+      action: read
+      resource:
+        scopeRef: all-components
+    - name: read-checks
+      action: read
+      resource:
+        scopeRef: all-checks
+    - name: read-canaries
+      action: read
+      resource:
+        scopeRef: all-canaries
+    - name: read-playbooks
+      action: read
+      resource:
+        scopeRef: all-playbooks
     - name: read-connections
       action: read
       resource:
         scopeRef: all-connections
-    - name: read-configuration
+    - name: read-applications
       action: read
       resource:
-        scopeRef: configuration-resources
-    - name: create-resources
+        scopeRef: all-applications
+    - name: read-notifications
+      action: read
+      resource:
+        scopeRef: all-notifications
+    - name: read-notification-silences
+      action: read
+      resource:
+        scopeRef: all-notification-silences
+    - name: read-agents
+      action: read
+      resource:
+        scopeRef: all-agents
+    - name: read-people
+      action: read
+      resource:
+        scopeRef: all-people
+    - name: read-teams
+      action: read
+      resource:
+        scopeRef: all-teams
+    - name: read-scopes
+      action: read
+      resource:
+        scopeRef: all-scopes
+    - name: read-roles
+      action: read
+      resource:
+        scopeRef: all-roles
+    - name: read-role-bindings
+      action: read
+      resource:
+        scopeRef: all-role-bindings
+    - name: create-configs
       action: create
       resource:
-        scopeRef: writable-resources
-    - name: update-resources
-      action: update
-      resource:
-        scopeRef: writable-resources
-    - name: delete-resources
-      action: delete
-      resource:
-        scopeRef: writable-resources
-    - name: create-configuration
+        scopeRef: all-configs
+    - name: create-components
       action: create
       resource:
-        scopeRef: configuration-resources
-    - name: update-configuration
+        scopeRef: all-components
+    - name: create-canaries
+      action: create
+      resource:
+        scopeRef: all-canaries
+    - name: create-playbooks
+      action: create
+      resource:
+        scopeRef: all-playbooks
+    - name: create-connections
+      action: create
+      resource:
+        scopeRef: all-connections
+    - name: create-applications
+      action: create
+      resource:
+        scopeRef: all-applications
+    - name: create-notifications
+      action: create
+      resource:
+        scopeRef: all-notifications
+    - name: create-notification-silences
+      action: create
+      resource:
+        scopeRef: all-notification-silences
+    - name: create-agents
+      action: create
+      resource:
+        scopeRef: all-agents
+    - name: create-teams
+      action: create
+      resource:
+        scopeRef: all-teams
+    - name: create-scopes
+      action: create
+      resource:
+        scopeRef: all-scopes
+    - name: create-roles
+      action: create
+      resource:
+        scopeRef: all-roles
+    - name: create-role-bindings
+      action: create
+      resource:
+        scopeRef: all-role-bindings
+    - name: update-configs
       action: update
       resource:
-        scopeRef: configuration-resources
-    - name: delete-configuration
+        scopeRef: all-configs
+    - name: update-components
+      action: update
+      resource:
+        scopeRef: all-components
+    - name: update-canaries
+      action: update
+      resource:
+        scopeRef: all-canaries
+    - name: update-playbooks
+      action: update
+      resource:
+        scopeRef: all-playbooks
+    - name: update-connections
+      action: update
+      resource:
+        scopeRef: all-connections
+    - name: update-applications
+      action: update
+      resource:
+        scopeRef: all-applications
+    - name: update-notifications
+      action: update
+      resource:
+        scopeRef: all-notifications
+    - name: update-notification-silences
+      action: update
+      resource:
+        scopeRef: all-notification-silences
+    - name: update-agents
+      action: update
+      resource:
+        scopeRef: all-agents
+    - name: update-teams
+      action: update
+      resource:
+        scopeRef: all-teams
+    - name: update-scopes
+      action: update
+      resource:
+        scopeRef: all-scopes
+    - name: update-roles
+      action: update
+      resource:
+        scopeRef: all-roles
+    - name: update-role-bindings
+      action: update
+      resource:
+        scopeRef: all-role-bindings
+    - name: delete-configs
       action: delete
       resource:
-        scopeRef: configuration-resources
+        scopeRef: all-configs
+    - name: delete-components
+      action: delete
+      resource:
+        scopeRef: all-components
+    - name: delete-canaries
+      action: delete
+      resource:
+        scopeRef: all-canaries
+    - name: delete-playbooks
+      action: delete
+      resource:
+        scopeRef: all-playbooks
+    - name: delete-connections
+      action: delete
+      resource:
+        scopeRef: all-connections
+    - name: delete-applications
+      action: delete
+      resource:
+        scopeRef: all-applications
+    - name: delete-notifications
+      action: delete
+      resource:
+        scopeRef: all-notifications
+    - name: delete-notification-silences
+      action: delete
+      resource:
+        scopeRef: all-notification-silences
+    - name: delete-agents
+      action: delete
+      resource:
+        scopeRef: all-agents
+    - name: delete-teams
+      action: delete
+      resource:
+        scopeRef: all-teams
+    - name: delete-scopes
+      action: delete
+      resource:
+        scopeRef: all-scopes
+    - name: delete-roles
+      action: delete
+      resource:
+        scopeRef: all-roles
+    - name: delete-role-bindings
+      action: delete
+      resource:
+        scopeRef: all-role-bindings
     # A rule with a target only matches runs on a target, and one without only runs with no target (roles.md, Section 2).
-    - name: run-playbooks
+    - name: run-playbooks-on-configs
       action: playbook:run
       resource:
         scopeRef: all-playbooks
       target:
-        scopeRef: playbook-targets
+        scopeRef: all-configs
+    - name: run-playbooks-on-components
+      action: playbook:run
+      resource:
+        scopeRef: all-playbooks
+      target:
+        scopeRef: all-components
+    - name: run-playbooks-on-checks
+      action: playbook:run
+      resource:
+        scopeRef: all-playbooks
+      target:
+        scopeRef: all-checks
     - name: run-playbooks-without-target
       action: playbook:run
       resource:
         scopeRef: all-playbooks
-    - name: approve-playbooks
+    - name: approve-playbooks-on-configs
       action: playbook:approve
       resource:
         scopeRef: all-playbooks
       target:
-        scopeRef: playbook-targets
+        scopeRef: all-configs
+    - name: approve-playbooks-on-components
+      action: playbook:approve
+      resource:
+        scopeRef: all-playbooks
+      target:
+        scopeRef: all-components
+    - name: approve-playbooks-on-checks
+      action: playbook:approve
+      resource:
+        scopeRef: all-playbooks
+      target:
+        scopeRef: all-checks
     - name: approve-playbooks-without-target
       action: playbook:approve
       resource:
         scopeRef: all-playbooks
-    - name: cancel-playbooks
+    - name: cancel-playbooks-on-configs
       action: playbook:cancel
       resource:
         scopeRef: all-playbooks
       target:
-        scopeRef: playbook-targets
+        scopeRef: all-configs
+    - name: cancel-playbooks-on-components
+      action: playbook:cancel
+      resource:
+        scopeRef: all-playbooks
+      target:
+        scopeRef: all-components
+    - name: cancel-playbooks-on-checks
+      action: playbook:cancel
+      resource:
+        scopeRef: all-playbooks
+      target:
+        scopeRef: all-checks
     - name: cancel-playbooks-without-target
       action: playbook:cancel
       resource:

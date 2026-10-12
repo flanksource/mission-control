@@ -223,6 +223,8 @@ func (k managedKind) create(c echo.Context) error {
 		return dutyAPI.WriteError(c, err)
 	} else if stored != nil && adapter.IsShipped(obj.GetNamespace(), stored.Source) {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ECONFLICT, "%s %s/%s is shipped with Mission Control and can't be changed or deleted", k.path, obj.GetNamespace(), obj.GetName()))
+	} else if adapter.IsReservedShippedName(k.table, obj.GetNamespace(), obj.GetName()) {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ECONFLICT, "%s %s/%s is reserved for an object shipped with Mission Control", k.path, obj.GetNamespace(), obj.GetName()))
 	} else if stored != nil {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ECONFLICT, "%s %s/%s already exists", k.path, obj.GetNamespace(), obj.GetName()))
 	}

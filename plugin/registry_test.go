@@ -84,6 +84,11 @@ var _ = ginkgo.Describe("Registry changes", func() {
 		Expect(changes).To(Equal(2))
 	})
 
+	ginkgo.It("notifies changes it can't see when told to", func() {
+		registry.NotifyChanged()
+		Expect(changes).To(Equal(1))
+	})
+
 	ginkgo.It("reports operations of proxied plugins", func() {
 		_, err := registry.UpsertProxied(uuid.New(), "agent", "remote", v1.PluginSpec{}, manifest("run"), uuid.New())
 		Expect(err).ToNot(HaveOccurred())

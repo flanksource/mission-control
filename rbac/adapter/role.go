@@ -73,6 +73,22 @@ func IsShipped(namespace, source string) bool {
 	return namespace == ShippedNamespace && source == SourceShipped
 }
 
+// RolePluginAdmin is the shipped Role that allows every operation of the installed plugins. It's only written while
+// some plugin has an operation.
+const RolePluginAdmin = "plugin-admin"
+
+// reservedShippedNames are the names, by table, of shipped objects that aren't always written. Only Mission Control
+// may write an object with one of them in the shipped namespace, whether or not it exists yet. Otherwise someone could
+// create one before it's shipped, and their bindings to it would widen when the shipped one replaces it.
+var reservedShippedNames = map[string][]string{
+	"roles": {RolePluginAdmin},
+}
+
+// IsReservedShippedName reports whether only a shipped object may have the namespace and name in the table.
+func IsReservedShippedName(table, namespace, name string) bool {
+	return namespace == ShippedNamespace && slices.Contains(reservedShippedNames[table], name)
+}
+
 // ValidateRoleName checks that a Role isn't named after a built-in role.
 func ValidateRoleName(name string) error {
 	if slices.Contains(reservedRoleNames, name) {

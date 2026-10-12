@@ -305,6 +305,25 @@ var _ = Describe("Shipped roles", Ordered, func() {
 		Expect(canRead(viewerPerson, &models.ABACAttribute{Config: config})).To(BeTrue())
 	})
 
+	It("reserves plugin-admin before any plugin has an operation", func() {
+		Expect(pluginAdminActions()).To(BeEmpty(), "no plugin is installed")
+
+		// Otherwise bindings to this Role would grant every plugin operation once the shipped one replaces it
+		role := &v1.Role{
+			ObjectMeta: metav1.ObjectMeta{Name: shipped.RolePluginAdmin, Namespace: namespace, UID: uid()},
+			Spec: v1.RoleSpec{Rules: []v1.RoleRule{
+				{Name: "read-configs", Action: policy.ActionRead, Resource: &v1.ScopeReference{ScopeRef: "all-configs"}},
+			}},
+		}
+		var notReady *kopper.NotReadyError
+		Expect(errors.As(db.PersistRoleFromCRD(DefaultContext, role), &notReady)).To(BeTrue())
+		Expect(notReady.Reason).To(Equal(db.ReasonShipped))
+
+		var count int64
+		Expect(DefaultContext.DB().Model(&models.Role{}).Where("id = ?", role.UID).Count(&count).Error).To(Succeed())
+		Expect(count).To(BeZero())
+	})
+
 	It("isn't overwritten by a Role or Scope applied through Kubernetes", func() {
 		role := &v1.Role{
 			ObjectMeta: metav1.ObjectMeta{Name: shipped.RoleViewer, Namespace: namespace, UID: uid()},
@@ -326,7 +345,7 @@ var _ = Describe("Shipped roles", Ordered, func() {
 
 		viewer := storedRole(shipped.RoleViewer)
 		Expect(viewer.Source).To(Equal(adapter.SourceShipped))
-		Expect(ruleActions(viewer)).To(Equal([]string{policy.ActionRead}))
+		Expect(ruleActions(viewer)).To(HaveEach(policy.ActionRead))
 		var count int64
 		Expect(DefaultContext.DB().Model(&models.Role{}).Where("id = ?", role.UID).Count(&count).Error).To(Succeed())
 		Expect(count).To(BeZero())
@@ -382,6 +401,14 @@ var _ = Describe("Shipped roles", Ordered, func() {
 			Expect(rec.Code).To(Equal(http.StatusCreated), rec.Body.String())
 			Expect(requestAs(adminPerson, http.MethodGet, "/rbac/role-bindings/mission-control-builtin/api-viewers", nil).Code).To(Equal(http.StatusOK))
 			Expect(requestAs(adminPerson, http.MethodDelete, "/rbac/role-bindings/mission-control-builtin/api-viewers", nil).Code).To(Equal(http.StatusOK))
+		})
+
+		It("refuses to create plugin-admin, shipped or not", func() {
+			rec := request(http.MethodPost, "/rbac/roles", map[string]any{
+				"metadata": map[string]any{"name": shipped.RolePluginAdmin, "namespace": namespace}, "spec": readRole,
+			})
+			Expect(rec.Code).To(Equal(http.StatusConflict), rec.Body.String())
+			Expect(rec.Body.String()).To(ContainSubstring("reserved"))
 		})
 
 		It("refuses changes, deletes and same-named creates of shipped Roles and Scopes", func() {

@@ -297,6 +297,18 @@ func (r *Registry) OnPluginsChanged(fn func()) {
 	r.listeners = append(r.listeners, fn)
 }
 
+// NotifyChanged calls the listeners of OnPluginsChanged for a change the registry can't see, e.g. deleting a stored
+// plugin that never made it into the registry.
+func (r *Registry) NotifyChanged() {
+	r.mu.RLock()
+	listeners := slices.Clone(r.listeners)
+	r.mu.RUnlock()
+
+	for _, listener := range listeners {
+		listener()
+	}
+}
+
 // Operations returns the operations of the registered plugins, by plugin name, each list sorted.
 // Plugins of the same name in different namespaces share one list. A plugin without a manifest has no operations yet.
 func (r *Registry) Operations() map[string][]string {

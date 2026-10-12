@@ -56,10 +56,17 @@ func PersistRoleFromCRD(ctx context.Context, obj *v1.Role) error {
 // namespace and name.
 const ReasonShipped = "Shipped"
 
-// notShipped returns a not-ready error when the table stores a shipped object with the namespace and name.
+// notShipped returns a not-ready error when the table stores a shipped object with the namespace and name, or the
+// name is reserved for one.
 func notShipped(ctx context.Context, table, namespace, name string) error {
 	if namespace != adapter.ShippedNamespace {
 		return nil
+	}
+	if adapter.IsReservedShippedName(table, namespace, name) {
+		return &kopper.NotReadyError{
+			Reason:  ReasonShipped,
+			Message: fmt.Sprintf("%s/%s is reserved for an object shipped with Mission Control", namespace, name),
+		}
 	}
 
 	var count int64

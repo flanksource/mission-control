@@ -62,6 +62,33 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 		return scope.DeclaredTypes()
 	}
 
+	ginkgo.It("ships one Scope per type, each selecting exactly that type", func() {
+		// Roles anyone creates may use these Scopes, so a Scope never changes what it selects: a new type gets a new Scope
+		Expect(lo.MapValues(scopes, func(scope adapter.ScopeSelection, _ string) []string { return scope.DeclaredTypes() })).To(Equal(map[string][]string{
+			"all-configs":               {policy.ResourceConfig},
+			"all-components":            {policy.ResourceComponent},
+			"all-checks":                {policy.ResourceCheck},
+			"all-canaries":              {policy.ResourceCanary},
+			"all-playbooks":             {policy.ResourcePlaybook},
+			"all-connections":           {policy.ResourceConnection},
+			"all-applications":          {v1.ResourceApplication},
+			"all-notifications":         {v1.ResourceNotification},
+			"all-notification-silences": {v1.ResourceNotificationSilence},
+			"all-agents":                {v1.ResourceAgent},
+			"all-people":                {v1.ResourcePerson},
+			"all-teams":                 {v1.ResourceTeam},
+			"all-scopes":                {v1.ResourceScope},
+			"all-roles":                 {v1.ResourceRole},
+			"all-role-bindings":         {v1.ResourceRoleBinding},
+		}))
+		for name, scope := range scopes {
+			Expect(scope.Selectors).To(HaveLen(1), name)
+			for _, selectors := range scope.Selectors {
+				Expect(selectors).To(HaveLen(1), name)
+			}
+		}
+	})
+
 	ginkgo.It("uses only shipped Scopes", func() {
 		for _, role := range roles {
 			for _, rule := range role.Spec.Rules {

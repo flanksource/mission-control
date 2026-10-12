@@ -48,7 +48,7 @@ const (
 
 	// RolePluginAdmin is the shipped Role that allows every operation of the installed plugins. It's built from
 	// them, apart from admin, so a plugin can only ever change or invalidate this Role.
-	RolePluginAdmin = "plugin-admin"
+	RolePluginAdmin = adapter.RolePluginAdmin
 
 	// allConfigs is the Scope plugin-admin's rules are on.
 	allConfigs = "all-configs"
@@ -260,6 +260,9 @@ func installedOperations(ctx context.Context) (map[string][]string, error) {
 	pending := map[string]bool{}
 	registered := map[string]bool{}
 	for _, entry := range plugin.DefaultRegistry.List() {
+		if entry.Name == "" {
+			continue
+		}
 		pending[entry.Name] = true
 		if entry.Manifest != nil {
 			registered[entry.Name] = true
