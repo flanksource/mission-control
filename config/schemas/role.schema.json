@@ -222,7 +222,7 @@
         },
         "resource": {
           "$ref": "#/$defs/ScopeReference",
-          "description": "Resource is the Scope selecting the resources the action is performed on."
+          "description": "Resource is the Scope selecting the resources the action is performed on.\nOmitted for the actions that take no resource: person:manage, mcp:use, property:manage, event:read and job:read."
         },
         "target": {
           "$ref": "#/$defs/ScopeReference",
@@ -237,8 +237,7 @@
       "type": "object",
       "required": [
         "name",
-        "action",
-        "resource"
+        "action"
       ]
     },
     "RoleSpec": {

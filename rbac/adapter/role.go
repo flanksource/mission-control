@@ -49,7 +49,9 @@ func ParseBindingRuleID(id string) (bindingID uuid.UUID, rule string, ok bool) {
 type ResolvedRule struct {
 	v1.RoleRule
 	Contract ActionContract
-	Resource ScopeSelection
+
+	// Resource is nil when the action takes no resource.
+	Resource *ScopeSelection
 	Target   *ScopeSelection
 }
 
@@ -107,7 +109,7 @@ func ValidateRoleSpec(name string, rules []v1.RoleRule) error {
 }
 
 // ruleContract returns the contract of the rule's action, and checks the rule fits it on its own:
-// a deny the action can enforce, and a target only on an action that takes one.
+// a deny the action can enforce, a resource exactly when the action takes one, and a target only on an action that takes one.
 func ruleContract(rule v1.RoleRule) (ActionContract, error) {
 	contract, err := ContractFor(rule.Action)
 	if err != nil {
@@ -115,7 +117,16 @@ func ruleContract(rule v1.RoleRule) (ActionContract, error) {
 	}
 
 	if rule.Deny && !contract.AllowsDeny {
-		return ActionContract{}, NewValidationError("%s can't be denied yet: built-in read access, and listings not being filtered by row for Mission Control's own users, would bypass the deny", rule.Action)
+		if rule.Action == policy.ActionRead {
+			return ActionContract{}, NewValidationError("%s can't be denied yet: built-in read access, and listings not being filtered by row for Mission Control's own users, would bypass the deny", rule.Action)
+		}
+		return ActionContract{}, NewValidationError("%s can't be denied: its rules only allow", rule.Action)
+	}
+
+	if contract.TakesResource() && rule.Resource == nil {
+		return ActionContract{}, NewValidationError("%s needs a resource", rule.Action)
+	} else if !contract.TakesResource() && rule.Resource != nil {
+		return ActionContract{}, NewValidationError("%s takes no resource", rule.Action)
 	}
 
 	if rule.Target != nil && len(contract.Targets) == 0 {
@@ -131,12 +142,17 @@ func resolveRule(ctx context.Context, cache *gocache.Cache, namespace string, ru
 		return ResolvedRule{}, err
 	}
 
+	resolved := ResolvedRule{RoleRule: rule, Contract: contract}
+	if rule.Resource == nil {
+		return resolved, nil
+	}
+
 	resource, err := resolveInput(ctx, cache, namespace, contract, "resource", rule.Resource.ScopeRef)
 	if err != nil {
 		return ResolvedRule{}, err
 	}
 
-	resolved := ResolvedRule{RoleRule: rule, Contract: contract, Resource: resource}
+	resolved.Resource = &resource
 	if rule.Target == nil {
 		return resolved, nil
 	}
@@ -178,7 +194,7 @@ type CompiledRule struct {
 	Contract ActionContract
 
 	// Resource are the Scopes the primary resource must belong to: the rule's, then the constraint's narrowed to the
-	// types both select.
+	// types both select. Empty when the action takes no resource.
 	Resource []ScopeSelection
 
 	// Target are the Scopes the target must belong to. Empty when the rule has no target.
@@ -316,12 +332,11 @@ func checkPluginRules(rules []ResolvedRule) error {
 				rule.Name, strings.Join(pluginActions, ", "), rule.Action)
 		}
 
-		scopes := []ScopeSelection{rule.Resource}
-		if rule.Target != nil {
-			scopes = append(scopes, *rule.Target)
-		}
+		for _, scope := range []*ScopeSelection{rule.Resource, rule.Target} {
+			if scope == nil {
+				continue
+			}
 
-		for _, scope := range scopes {
 			if kinds := scope.DeclaredTypes(); !slices.Equal(kinds, []string{policy.ResourceConnection}) {
 				return NewInvalid(ReasonPluginRuleNotAllowed, "rule %s: a plugin can only be granted rules on connections, and scope %s selects %s",
 					rule.Name, scope.Name, strings.Join(kinds, ", "))
@@ -352,7 +367,9 @@ func compileRule(binding models.RoleBinding, rule ResolvedRule) CompiledRule {
 		Name:     rule.Name,
 		Deny:     rule.Deny,
 		Contract: rule.Contract,
-		Resource: []ScopeSelection{rule.Resource},
+	}
+	if rule.Resource != nil {
+		c.Resource = []ScopeSelection{*rule.Resource}
 	}
 	if rule.Target != nil {
 		c.Target = []ScopeSelection{*rule.Target}
@@ -385,14 +402,20 @@ func resolveConstraintScopes(ctx context.Context, cache *gocache.Cache, namespac
 // narrowRule narrows an allow rule by the constraint's Scopes, one side at a time.
 // A side the rule's action can't take is skipped. A validation error means the rule doesn't apply through the binding:
 //
+//   - the action takes no resource, so the constraint has nothing to narrow
 //   - the action takes a target, the constraint sets one, and the rule has none: the rule allows only operations
 //     without a target, so its set of targets is empty and stays empty when narrowed
 //   - no side narrows the rule, so leaving it would grant it as written
 //   - an input can't be narrowed (see narrowInput)
 func narrowRule(ctx context.Context, compiled CompiledRule, rule ResolvedRule, scopes constraintScopes) (CompiledRule, error) {
+	if !rule.Contract.TakesResource() {
+		return CompiledRule{}, NewInvalid(ReasonConstraintDoesNotFit,
+			"%s takes no resource, so the constraint has nothing to narrow", rule.Action)
+	}
+
 	narrowed := false
 	if scopes.resource != nil {
-		scope, err := narrowInput(rule.Contract, "resource", rule.Resource, *scopes.resource)
+		scope, err := narrowInput(rule.Contract, "resource", *rule.Resource, *scopes.resource)
 		if err != nil {
 			return CompiledRule{}, err
 		}
@@ -557,6 +580,10 @@ func (r CompiledRule) condition() (string, error) {
 // wholeTypeObjects returns the RBAC objects of the resource types that every Scope of the rule's resource
 // selects entirely, e.g. catalog when every Scope has config: {name: "*"}.
 func (r CompiledRule) wholeTypeObjects() []string {
+	if len(r.Resource) == 0 {
+		return nil
+	}
+
 	var objects []string
 	for _, kind := range r.Resource[0].DeclaredTypes() {
 		object, ok := objectForType[kind]
@@ -583,10 +610,16 @@ func (r CompiledRule) wholeTypeObjects() []string {
 //
 // A rule checked on whole object types is granted on the object of each type it selects entirely, e.g. catalog.
 // So is a read rule, for endpoints that check reads on whole object types.
+//
+// A rule whose action takes no resource is granted on the action's object, e.g. events for event:read.
 func compiledRuleToCasbinRules(principal string, rule CompiledRule) ([][]string, error) {
 	effect := "allow"
 	if rule.Deny {
 		effect = "deny"
+	}
+
+	if !rule.Contract.TakesResource() {
+		return [][]string{{"p", principal, rule.Contract.Object, rule.Contract.Action, effect, "", rule.ID}}, nil
 	}
 
 	var policies [][]string

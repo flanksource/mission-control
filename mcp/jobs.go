@@ -11,7 +11,6 @@ import (
 	dutyjob "github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/timberio/go-datemath"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/jobs"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 const (
@@ -53,7 +53,7 @@ func listJobsHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Cal
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	if err := requireMonitorRead(ctx); err != nil {
+	if err := requireJobRead(ctx); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -100,7 +100,7 @@ func listJobRunsHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	if err := requireMonitorRead(ctx); err != nil {
+	if err := requireJobRead(ctx); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -165,7 +165,7 @@ func getJobRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Ca
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	if err := requireMonitorRead(ctx); err != nil {
+	if err := requireJobRead(ctx); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -219,17 +219,11 @@ func registerJobs(s *server.MCPServer) {
 	), getJobRunHandler)
 }
 
-func requireMonitorRead(ctx context.Context) error {
-	owner, err := resolveOwner(ctx)
-	if err != nil {
-		return err
-	}
-	allowed, err := rbac.Enforcer().Enforce(owner, policy.ObjectMonitor, policy.ActionRead)
-	if err != nil {
-		return ctx.Oops().Wrap(err)
-	}
-	if !allowed {
-		return fmt.Errorf("forbidden: user %s does not have monitor:read permission", owner)
+// requireJobRead checks job:read, which grants all job history or none.
+// It's checked as the request's own subject, like the HTTP routes, so an access token's scope applies.
+func requireJobRead(ctx context.Context) error {
+	if !rbac.CheckContext(ctx, adapter.ObjectJobs, adapter.ActionJobRead) {
+		return fmt.Errorf("forbidden: %s does not have %s permission", ctx.Subject(), adapter.ActionJobRead)
 	}
 	return nil
 }

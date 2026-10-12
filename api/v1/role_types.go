@@ -42,7 +42,9 @@ type RoleSpec struct {
 }
 
 // +kubebuilder:object:generate=true
-// +kubebuilder:validation:XValidation:rule="self.action in ['read','create','update','delete','playbook:run','playbook:approve','playbook:cancel','mcp:run'] || self.action.matches('^invoke:[^:*!, ]+:[^:*!, ]+$')",message="action must be a known action or invoke:<plugin>:<operation>, without patterns"
+// +kubebuilder:validation:XValidation:rule="self.action in ['read','create','update','delete','playbook:run','playbook:approve','playbook:cancel','mcp:run','connection:use','person:manage','mcp:use','property:manage','event:read','job:read'] || self.action.matches('^invoke:[^:*!, ]+:[^:*!, ]+$')",message="action must be a known action or invoke:<plugin>:<operation>, without patterns"
+// +kubebuilder:validation:XValidation:rule="has(self.resource) != (self.action in ['person:manage','mcp:use','property:manage','event:read','job:read'])",message="person:manage, mcp:use, property:manage, event:read and job:read take no resource; every other action needs one"
+// +kubebuilder:validation:XValidation:rule="!(has(self.deny) && self.deny && self.action in ['connection:use','person:manage','mcp:use','property:manage','event:read','job:read'])",message="deny rules on connection:use, person:manage, mcp:use, property:manage, event:read and job:read aren't supported"
 // +kubebuilder:validation:XValidation:rule="!(has(self.deny) && self.deny && self.action == 'read')",message="deny rules on read aren't supported"
 // +kubebuilder:validation:XValidation:rule="!has(self.target) || self.action in ['playbook:run','playbook:approve','playbook:cancel']",message="only playbook:run, playbook:approve and playbook:cancel take a target"
 type RoleRule struct {
@@ -60,7 +62,8 @@ type RoleRule struct {
 	Action string `json:"action" yaml:"action"`
 
 	// Resource is the Scope selecting the resources the action is performed on.
-	Resource ScopeReference `json:"resource" yaml:"resource"`
+	// Omitted for the actions that take no resource: person:manage, mcp:use, property:manage, event:read and job:read.
+	Resource *ScopeReference `json:"resource,omitempty" yaml:"resource,omitempty"`
 
 	// Target is the Scope selecting what the action is performed on the resource with,
 	// e.g. the configs a playbook runs on. Only actions that take a target accept it.
@@ -102,8 +105,8 @@ func (t RoleSpec) Validate() error {
 			return fmt.Errorf("rule %s: action is required", rule.Name)
 		}
 
-		if rule.Resource.ScopeRef == "" {
-			return fmt.Errorf("rule %s: resource.scopeRef is required", rule.Name)
+		if rule.Resource != nil && rule.Resource.ScopeRef == "" {
+			return fmt.Errorf("rule %s: resource.scopeRef is required when resource is set", rule.Name)
 		}
 
 		if rule.Target != nil && rule.Target.ScopeRef == "" {
