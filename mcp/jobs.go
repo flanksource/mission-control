@@ -220,17 +220,10 @@ func registerJobs(s *server.MCPServer) {
 }
 
 // requireJobRead checks job:read, which grants all job history or none.
+// It's checked as the request's own subject, like the HTTP routes, so an access token's scope applies.
 func requireJobRead(ctx context.Context) error {
-	owner, err := resolveOwner(ctx)
-	if err != nil {
-		return err
-	}
-	allowed, err := rbac.Enforcer().Enforce(owner, adapter.ObjectJobs, adapter.ActionJobRead)
-	if err != nil {
-		return ctx.Oops().Wrap(err)
-	}
-	if !allowed {
-		return fmt.Errorf("forbidden: user %s does not have %s permission", owner, adapter.ActionJobRead)
+	if !rbac.CheckContext(ctx, adapter.ObjectJobs, adapter.ActionJobRead) {
+		return fmt.Errorf("forbidden: %s does not have %s permission", ctx.Subject(), adapter.ActionJobRead)
 	}
 	return nil
 }
