@@ -12,7 +12,6 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
 	incAPI "github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth/accesstoken"
 	"github.com/flanksource/incident-commander/auth/oidc"
@@ -122,14 +121,6 @@ func (k *kratosMiddleware) basicAuthLogin(ctx context.Context, username, passwor
 			},
 		}
 
-		var agent models.Agent
-		if err := ctx.DB().Where("person_id = ?", accessToken.PersonID.String()).Find(&agent).Error; err != nil {
-			return nil, err
-		}
-		if agent.ID != uuid.Nil {
-			traits["agent"] = agent
-		}
-
 		s := &client.Session{
 			Id:        uuid.NewString(),
 			Active:    lo.ToPtr(true),
@@ -203,15 +194,10 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 		ctx = ctx.WithUser(&person)
 
-		if person.Type == db.PersonTypeAgent {
-			agent, err := db.FindAgent(ctx, person.Name)
-			if err != nil {
-				ctx.GetSpan().RecordError(err)
-				return c.String(http.StatusInternalServerError, "Error fetching agent details from database")
-			}
-			if agent != nil {
-				ctx = ctx.WithAgent(*agent)
-			}
+		ctx, err = withPersonAgent(ctx, person.ID)
+		if err != nil {
+			ctx.GetSpan().RecordError(err)
+			return c.String(http.StatusInternalServerError, "Error fetching agent details from database")
 		}
 
 		mappingCtx := ctx.WithObject(person)

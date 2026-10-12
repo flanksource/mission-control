@@ -31,7 +31,10 @@ func MockAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 			return err
 		}
 
-		ctx = ctx.WithUser(&person)
+		ctx, err := withPersonAgent(ctx.WithUser(&person), person.ID)
+		if err != nil {
+			return c.String(http.StatusInternalServerError, "Error fetching agent details from database")
+		}
 
 		c.SetRequest(c.Request().WithContext(ctx))
 		return next(c)

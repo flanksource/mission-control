@@ -166,7 +166,10 @@ func authenticateFromCookie(c echo.Context) bool {
 		return false
 	}
 
-	ctx = ctx.WithUser(&person)
+	ctx, err = withPersonAgent(ctx.WithUser(&person), person.ID)
+	if err != nil {
+		return false
+	}
 	c.SetRequest(c.Request().WithContext(ctx))
 	return true
 }
@@ -190,7 +193,10 @@ func validateBasicAuth(c echo.Context, user, pass string) (bool, error) {
 		return false, err
 	}
 
-	ctx = ctx.WithUser(person)
+	ctx, err = withPersonAgent(ctx.WithUser(person), person.ID)
+	if err != nil {
+		return false, err
+	}
 	c.SetRequest(c.Request().WithContext(ctx))
 	return true, nil
 }
@@ -251,7 +257,10 @@ func basicAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 				var person models.Person
 				if err := ctx.DB().Where("id = ?", accessToken.PersonID).First(&person).Error; err == nil {
 					if err := InjectToken(ctx, c, &person, ""); err == nil {
-						ctx = ctx.WithUser(&person)
+						ctx, err = withPersonAgent(ctx.WithUser(&person), person.ID)
+						if err != nil {
+							return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal error"})
+						}
 						c.SetRequest(c.Request().WithContext(ctx))
 						return next(c)
 					}
