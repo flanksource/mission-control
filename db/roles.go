@@ -56,16 +56,10 @@ func PersistRoleFromCRD(ctx context.Context, obj *v1.Role) error {
 // namespace and name.
 const ReasonShipped = "Shipped"
 
-// notShipped returns a not-ready error when the table stores a shipped object with the namespace and name,
-// or the name is reserved for one.
+// notShipped returns a not-ready error when the table stores a shipped object with the namespace and name.
 func notShipped(ctx context.Context, table, namespace, name string) error {
 	if namespace != adapter.ShippedNamespace {
 		return nil
-	} else if adapter.IsReservedName(namespace, name) {
-		return &kopper.NotReadyError{
-			Reason:  ReasonShipped,
-			Message: fmt.Sprintf("names starting with %q are reserved in %s for objects shipped with Mission Control", adapter.ShippedPrefix, namespace),
-		}
 	}
 
 	var count int64
@@ -143,7 +137,7 @@ func DeleteStaleRole(ctx context.Context, newer *v1.Role) error {
 }
 
 // PersistRoleBindingFromCRD stores a RoleBinding CRD. See PersistRoleBinding.
-// A RoleBinding with a name reserved for shipped objects isn't stored.
+// A RoleBinding with the namespace and name of a shipped one isn't stored: the shipped one stays.
 func PersistRoleBindingFromCRD(ctx context.Context, obj *v1.RoleBinding) error {
 	if err := notShipped(ctx, "role_bindings", obj.GetNamespace(), obj.GetName()); err != nil {
 		return err

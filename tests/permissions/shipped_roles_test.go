@@ -107,13 +107,12 @@ var _ = Describe("Shipped roles", Ordered, func() {
 		connection = models.Connection{ID: uuid.New(), Name: "shipped-connection", Namespace: "default", Type: "http", URL: "http://example.com", Source: models.SourceUI}
 		Expect(DefaultContext.DB().Create(&connection).Error).To(Succeed())
 
-		// A Scope stored before Mission Control shipped one of the same name
+		// A Scope applied through Kubernetes before Mission Control shipped one of the same name
 		preexistingScope = &v1.Scope{
-			ObjectMeta: metav1.ObjectMeta{Name: "shipped-all-configs", Namespace: namespace, UID: uid()},
+			ObjectMeta: metav1.ObjectMeta{Name: "all-configs", Namespace: namespace, UID: uid()},
 			Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{TagSelector: "env=preexisting"}}}},
 		}
-		// Stored before the name was shipped, e.g. by an older release, since its name is reserved now
-		Expect(db.PersistScope(DefaultContext, preexistingScope, models.SourceCRD, nil)).To(Succeed())
+		Expect(db.PersistScopeFromCRD(DefaultContext, preexistingScope)).To(Succeed())
 
 		_, err := plugin.DefaultRegistry.Upsert(pluginID, "default", pluginName, v1.PluginSpec{Source: "test"})
 		Expect(err).ToNot(HaveOccurred())
@@ -160,7 +159,7 @@ var _ = Describe("Shipped roles", Ordered, func() {
 
 	It("replaces a Scope of the same name applied before it was shipped", func() {
 		scopes, _ := stored()
-		allConfigs, ok := lo.Find(scopes, func(s models.Scope) bool { return s.Name == "shipped-all-configs" })
+		allConfigs, ok := lo.Find(scopes, func(s models.Scope) bool { return s.Name == "all-configs" })
 		Expect(ok).To(BeTrue())
 		Expect(allConfigs.ID.String()).ToNot(Equal(string(preexistingScope.UID)))
 	})
@@ -271,7 +270,7 @@ var _ = Describe("Shipped roles", Ordered, func() {
 		role := &v1.Role{
 			ObjectMeta: metav1.ObjectMeta{Name: shipped.RoleViewer, Namespace: namespace, UID: uid()},
 			Spec: v1.RoleSpec{Rules: []v1.RoleRule{
-				{Name: "read-connections", Action: policy.ActionRead, Resource: &v1.ScopeReference{ScopeRef: "shipped-all-connections"}},
+				{Name: "read-connections", Action: policy.ActionRead, Resource: &v1.ScopeReference{ScopeRef: "all-connections"}},
 			}},
 		}
 		var notReady *kopper.NotReadyError
@@ -280,19 +279,11 @@ var _ = Describe("Shipped roles", Ordered, func() {
 		Expect(db.DeleteStaleRole(DefaultContext, role)).ToNot(Succeed())
 
 		scope := &v1.Scope{
-			ObjectMeta: metav1.ObjectMeta{Name: "shipped-all-configs", Namespace: namespace, UID: uid()},
+			ObjectMeta: metav1.ObjectMeta{Name: "all-configs", Namespace: namespace, UID: uid()},
 			Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{TagSelector: "env=none"}}}},
 		}
 		Expect(errors.As(db.PersistScopeFromCRD(DefaultContext, scope), &notReady)).To(BeTrue())
 		Expect(db.DeleteStaleScope(DefaultContext, scope)).ToNot(Succeed())
-
-		// Names Mission Control may ship later are reserved, shipped or not
-		reserved := &v1.Scope{
-			ObjectMeta: metav1.ObjectMeta{Name: "shipped-not-yet", Namespace: namespace, UID: uid()},
-			Spec:       scope.Spec,
-		}
-		Expect(errors.As(db.PersistScopeFromCRD(DefaultContext, reserved), &notReady)).To(BeTrue())
-		Expect(notReady.Reason).To(Equal(db.ReasonShipped))
 
 		viewer := storedRole(shipped.RoleViewer)
 		Expect(viewer.Source).To(Equal(adapter.SourceShipped))
@@ -302,7 +293,7 @@ var _ = Describe("Shipped roles", Ordered, func() {
 		Expect(count).To(BeZero())
 
 		scopes, _ := stored()
-		allConfigs, _ := lo.Find(scopes, func(s models.Scope) bool { return s.Name == "shipped-all-configs" })
+		allConfigs, _ := lo.Find(scopes, func(s models.Scope) bool { return s.Name == "all-configs" })
 		Expect(allConfigs.Source).To(Equal(adapter.SourceShipped))
 	})
 
@@ -332,21 +323,13 @@ var _ = Describe("Shipped roles", Ordered, func() {
 		}
 
 		readRole := map[string]any{"rules": []any{map[string]any{
-			"name": "read", "action": "read", "resource": map[string]any{"scopeRef": "shipped-all-connections"},
+			"name": "read", "action": "read", "resource": map[string]any{"scopeRef": "all-connections"},
 		}}}
 		configTargets := map[string]any{"targets": []any{map[string]any{"config": map[string]any{"tagSelector": "env=none"}}}}
 
 		BeforeAll(func() {
 			e = echo.New()
 			mcRBAC.RegisterRoutes(e)
-		})
-
-		It("refuses to create objects with a name reserved for shipped ones", func() {
-			rec := request(http.MethodPost, "/rbac/scopes", map[string]any{
-				"metadata": map[string]any{"name": "shipped-not-yet", "namespace": namespace}, "spec": configTargets,
-			})
-			Expect(rec.Code).To(Equal(http.StatusBadRequest), rec.Body.String())
-			Expect(rec.Body.String()).To(ContainSubstring("reserved"))
 		})
 
 		It("lets a subject bound to admin manage RoleBindings, and not one bound to viewer", func() {
@@ -358,8 +341,8 @@ var _ = Describe("Shipped roles", Ordered, func() {
 
 			rec := requestAs(adminPerson, http.MethodPost, "/rbac/role-bindings", binding)
 			Expect(rec.Code).To(Equal(http.StatusCreated), rec.Body.String())
-			Expect(requestAs(adminPerson, http.MethodGet, "/rbac/role-bindings/mission-control/api-viewers", nil).Code).To(Equal(http.StatusOK))
-			Expect(requestAs(adminPerson, http.MethodDelete, "/rbac/role-bindings/mission-control/api-viewers", nil).Code).To(Equal(http.StatusOK))
+			Expect(requestAs(adminPerson, http.MethodGet, "/rbac/role-bindings/mission-control-builtin/api-viewers", nil).Code).To(Equal(http.StatusOK))
+			Expect(requestAs(adminPerson, http.MethodDelete, "/rbac/role-bindings/mission-control-builtin/api-viewers", nil).Code).To(Equal(http.StatusOK))
 		})
 
 		It("refuses changes, deletes and same-named creates of shipped Roles and Scopes", func() {
@@ -367,12 +350,12 @@ var _ = Describe("Shipped roles", Ordered, func() {
 			viewerBefore := storedRole(shipped.RoleViewer)
 
 			conflicts := []*httptest.ResponseRecorder{
-				request(http.MethodPut, "/rbac/roles/mission-control/viewer", map[string]any{"spec": readRole}),
-				request(http.MethodDelete, "/rbac/roles/mission-control/admin", nil),
-				request(http.MethodPut, "/rbac/scopes/mission-control/shipped-all-configs", map[string]any{"spec": configTargets}),
-				request(http.MethodDelete, "/rbac/scopes/mission-control/shipped-all-configs", nil),
+				request(http.MethodPut, "/rbac/roles/mission-control-builtin/viewer", map[string]any{"spec": readRole}),
+				request(http.MethodDelete, "/rbac/roles/mission-control-builtin/admin", nil),
+				request(http.MethodPut, "/rbac/scopes/mission-control-builtin/all-configs", map[string]any{"spec": configTargets}),
+				request(http.MethodDelete, "/rbac/scopes/mission-control-builtin/all-configs", nil),
 				request(http.MethodPost, "/rbac/scopes", map[string]any{
-					"metadata": map[string]any{"name": "shipped-all-configs", "namespace": namespace}, "spec": configTargets,
+					"metadata": map[string]any{"name": "all-configs", "namespace": namespace}, "spec": configTargets,
 				}),
 			}
 			for _, rec := range conflicts {

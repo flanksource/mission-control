@@ -1,5 +1,5 @@
-// Package shipped writes the Roles and Scopes Mission Control ships: viewer and admin, in the mission-control
-// namespace, with the Scopes they use (see specs/authorization/overview.md, "Shipped Roles").
+// Package shipped writes the Roles and Scopes Mission Control ships: viewer and admin, in the
+// mission-control-builtin namespace, with the Scopes they use (see specs/authorization/overview.md, "Shipped Roles").
 package shipped
 
 import (
@@ -47,7 +47,7 @@ const (
 	RoleAdmin  = "admin"
 
 	// allConfigs is the Scope admin's plugin rules are on.
-	allConfigs = "shipped-all-configs"
+	allConfigs = "all-configs"
 
 	apiVersion = "mission-control.flanksource.com/v1"
 )

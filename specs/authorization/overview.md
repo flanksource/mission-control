@@ -109,7 +109,7 @@ _Why no deny rules:_ with nothing allowed by default, every restriction can be w
 
 ### Shipped Roles
 
-Mission Control ships these Roles in the `mission-control` namespace. They're ordinary Roles, bound by ordinary RoleBindings; Mission Control ships no bindings to them.
+Mission Control ships these Roles in the `mission-control-builtin` namespace. They're ordinary Roles, bound by ordinary RoleBindings; Mission Control ships no bindings to them.
 
 | Role     | Allows                                                                                       |
 | -------- | -------------------------------------------------------------------------------------------- |
@@ -120,13 +120,11 @@ Mission Control ships these Roles in the `mission-control` namespace. They're or
 
 Each rule of a shipped Role, apart from those on actions without a resource, needs a Scope (`roles.md`, Section 1), so the Scopes they use ship with them, in the same namespace. Their targets are whole-type targets only (`scopes.md`, Section 5.2). A Scope can only fill an input that accepts every type it selects (`roles.md`, Section 3), so they're grouped by the inputs they fill, e.g. one for what `create` accepts and one for what a playbook runs on, and split further where the ten-target limit requires. No action accepts views, so no shipped Scope selects them.
 
-The shipped Scopes are named `shipped-…`, e.g. `shipped-all-configs`. In `mission-control`, every Scope, Role and RoleBinding name starting with `shipped-` is reserved for Mission Control, whether or not it ships one by that name yet: the API refuses to create one, and one applied through Kubernetes is `Ready=False` and has no effect. _Why:_ bindings to the shipped Roles, and the Scopes of their constraints, live in `mission-control` too, so a later release must be able to ship a new Scope without replacing one someone created. Roles and RoleBindings anyone creates in `mission-control` may reference the shipped Scopes.
-
-A RoleBinding to a shipped Role MUST be created in `mission-control`, through the API or Kubernetes, since a binding's `role` only names a Role in its own namespace ("Namespaces"). The subjects it selects can be anyone.
+A RoleBinding to a shipped Role MUST be created in `mission-control-builtin`, through the API or Kubernetes, since a binding's `role` only names a Role in its own namespace ("Namespaces"), and so must the Scopes of its constraint. The subjects it selects can be anyone. Roles and RoleBindings created there may use the shipped Scopes.
 
 Mission Control writes the shipped Roles and their Scopes when it starts, and again whenever the set of actions changes, e.g. when a plugin with a new operation is installed. They aren't Kubernetes objects. They can't be changed or deleted through the API, and a Role or Scope applied through Kubernetes under the same namespace and name is overwritten. _Why:_ `admin` has to hold every action, including ones added after it was written, and Role rules name actions exactly (`roles.md`, Section 2). Keeping shipped Roles up to date is cheaper than a pattern that would have to mean something different in them than in every other Role.
 
-_Why one namespace:_ references never cross namespaces, and keeping the shipped Roles, their Scopes and the bindings to them together keeps that rule without an exception. The namespace exists on every install, with or without Kubernetes, because Mission Control writes these objects to its database itself.
+_Why one namespace:_ references never cross namespaces, and keeping the shipped Roles, their Scopes and the bindings to them together keeps that rule without an exception. The namespace exists on every install, with or without Kubernetes, because Mission Control writes these objects to its database itself. It's a namespace of its own, apart from the one Mission Control is installed in, so the shipped objects don't share a namespace with everything else applied there. A Scope, Role or RoleBinding created in it under the name of a shipped one, e.g. before a release ships that name, is replaced by the shipped one.
 
 ### Configured bindings
 

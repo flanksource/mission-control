@@ -227,11 +227,6 @@ func (k managedKind) create(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ECONFLICT, "%s %s/%s already exists", k.path, obj.GetNamespace(), obj.GetName()))
 	}
 
-	if adapter.IsReservedName(obj.GetNamespace(), obj.GetName()) {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "names starting with %q are reserved in %s for objects shipped with Mission Control",
-			adapter.ShippedPrefix, obj.GetNamespace()))
-	}
-
 	id := uuid.New()
 	obj.SetUID(k8sTypes.UID(id.String()))
 	var createdBy *uuid.UUID
