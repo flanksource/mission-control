@@ -219,8 +219,7 @@ func registerJobs(s *server.MCPServer) {
 	), getJobRunHandler)
 }
 
-// requireJobRead checks job:read. Job history about a resource should follow its resource instead,
-// which needs row-level security on job_history, so until then every job tool requires job:read.
+// requireJobRead checks job:read, which grants all job history or none.
 func requireJobRead(ctx context.Context) error {
 	owner, err := resolveOwner(ctx)
 	if err != nil {

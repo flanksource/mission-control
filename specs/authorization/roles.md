@@ -91,7 +91,7 @@ Every action has a contract, defined in code: the resource types it accepts, and
 | `event:read`                                          | None                                                   | None                               |
 | `job:read`                                            | None                                                   | None                               |
 
-The types are those of `scopes.md`, Section 3.1. Views aren't covered yet, so no action accepts them (`overview.md`, "Not covered yet"). Checks are only written by Mission Control itself. Properties, the event queue and job history that belongs to no resource aren't types: they're reached through actions without a resource (Section 2.3). `connection:use` allows acting with a connection's credentials (Section 2.2).
+The types are those of `scopes.md`, Section 3.1. Views aren't covered yet, so no action accepts them (`overview.md`, "Not covered yet"). Checks are only written by Mission Control itself. Properties, the event queue and job history aren't types: they're reached through actions without a resource (Section 2.3). `connection:use` allows acting with a connection's credentials (Section 2.2).
 
 `person:manage` allows everything about accounts: inviting someone to Mission Control, disabling and re-enabling them, changing their properties, name or email, and deleting them. People aren't created, changed or deleted any other way, so `create`, `update` and `delete` don't apply to them. _Why:_ inviting someone and managing their account are what an admin actually does, and a named action says so. A rule allowing `create` on people would leave its reader asking where people are created.
 
@@ -139,7 +139,7 @@ A few actions aren't performed on a resource a Scope could select. They act on a
 | `mcp:use`         | Using Mission Control's MCP server at all. Each MCP tool still checks what it touches (Section 4.3) |
 | `property:manage` | Creating, changing and deleting properties, Mission Control's settings and feature flags. Reading them needs no rule (Section 3.1) |
 | `event:read`      | Reading Mission Control's event queue, and the recent events playbooks and notifications have handled |
-| `job:read`        | Reading job history that belongs to no resource                                                |
+| `job:read`        | Reading all of Mission Control's job history                                                   |
 
 ```yaml
 rules:
@@ -153,13 +153,14 @@ rules:
 
 - `property:manage` is one action for every write. A property changes what Mission Control does for everyone, e.g. which pages are enabled, so creating, changing and deleting one are equally privileged.
 - `event:read` covers the event queue (`event_queue`) and the recent events kept in memory by playbooks and notifications. Events are only written by Mission Control itself, so no action writes them.
-- `job:read` covers job history about no resource, e.g. a cleanup job's runs. Job history about a resource is a record and follows its resource (`scopes.md`, Section 3.2): `read` on the resource lets a subject see it, and `job:read` doesn't. A listing of job history combines the two: a row about a resource is listed when the resource can be read, and a row about none when the subject has `job:read` (`collection-access.md`, Section 3.1).
+- `job:read` covers all job history, e.g. a cleanup job's runs and a scraper's runs, whether or not a job ran for a resource. A subject with it sees all of it, and a subject without it sees none, whatever resources they may read (`collection-access.md`, Section 3.1). A resource's latest job status shown in its own row stays visible with the resource (`scopes.md`, Section 3.2).
+- `job:read` is as privileged as `admin`, like `person:manage`, and is only for subjects trusted as admins. A job's details and errors mention the resources it worked on, e.g. configs a scraper found or the playbook a run was refused for, which the holder may not otherwise be able to read. _Why not per resource:_ one job touches many resources, and its details aren't split by resource, so a row can't be shown only to those who may read everything it mentions.
 
 - Every other action takes a resource, and a rule that omits it is rejected. `read`, `create`, `update`, `delete` and every other generic action always take one: no rule grants them on everything.
 - An action without a resource is named `<type>:<verb>`, after what it acts on, so the rule still says what it's about without a Scope.
 - A RoleBinding constraint has nothing to narrow on such a rule, so the rule never applies through a binding with a constraint, and the binding reports it (`rolebindings.md`, Section 3.2).
 
-_Why:_ the person being invited doesn't exist yet, and the MCP server isn't a resource, so a Scope would have nothing to select and would only repeat the action's name. Properties, events and job history about no resource are Mission Control's own settings and internals: nobody grants some of them and not others, so a Scope could only ever select all of them. Keeping the list closed and named means every other rule still says what it's on.
+_Why:_ the person being invited doesn't exist yet, and the MCP server isn't a resource, so a Scope would have nothing to select and would only repeat the action's name. Properties, events and job history are Mission Control's own settings and internals: nobody grants some of them and not others, so a Scope could only ever select all of them. Keeping the list closed and named means every other rule still says what it's on.
 
 ## 3. Which Scopes a rule accepts
 
@@ -323,8 +324,7 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Connect to the MCP server             | `mcp:use`                                   | None            | None                              |
 | Create, change or delete a property   | `property:manage`                           | None            | None                              |
 | Read the event queue or recent events | `event:read`                                | None            | None                              |
-| Read job history about no resource    | `job:read`                                  | None            | None                              |
-| Read job history about resource X     | `read`                                      | X               | None                              |
+| Read job history                      | `job:read`                                  | None            | None                              |
 | Use connection C, e.g. to send        | `connection:use`                            | C               | None                              |
 | Test connection C                     | `connection:use`                            | C               | None                              |
 

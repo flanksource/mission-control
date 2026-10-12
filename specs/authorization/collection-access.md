@@ -89,10 +89,10 @@ The event queue and job history aren't types: they're reached through `event:rea
 | Listing                       | Returns                                                                                                   |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------- |
 | The event queue (`event_queue`) | Every event, to a subject with `event:read`. Refused with `403 Forbidden` without it                    |
-| Job history (`job_history`)   | Each row about a resource the subject may read ([scopes.md, Section 3.2](scopes.md#32-records)), and, with `job:read`, each row about no resource |
+| Job history (`job_history`)   | Every row, to a subject with `job:read`. Refused with `403 Forbidden` without it                          |
 
-- A job history row about a resource is listed exactly when the resource can be opened, whether or not the subject has `job:read`. `job:read` never shows a row about a resource the subject can't read.
-- A job history row about no resource is left out without `job:read`, as a row about a resource the subject can't read is.
+- Both are all or nothing. There's no per-row rule: a job history row about a resource is listed with `job:read` whether or not the subject may read the resource, and never without `job:read`, whatever resources the subject may read.
+- A resource's latest job status shown in its own row, e.g. in `canaries_with_status`, isn't job history: it's listed with the resource ([scopes.md, Section 3.2](scopes.md#32-records)).
 
 ## 4. One answer
 

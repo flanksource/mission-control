@@ -71,7 +71,7 @@ Each entry under `targets` MUST set exactly one of these keys:
 | `role`                | Roles                                                    |
 | `roleBinding`         | RoleBindings                                             |
 
-Everything Mission Control protects is one of these types, apart from what the few actions without a resource reach: properties, the event queue and job history that belongs to no resource (`roles.md`, Section 2.3). There's no other kind of object a Role can grant, and no global switch: "all of a type" is a whole-type target (Section 5.2).
+Everything Mission Control protects is one of these types, apart from what the few actions without a resource reach: properties, the event queue and job history (`roles.md`, Section 2.3). There's no other kind of object a Role can grant, and no global switch: "all of a type" is a whole-type target (Section 5.2).
 
 Keys are exact. `playbooks`, `configs` or any other spelling is not a resource type. An entry with two keys, or none, is invalid.
 
@@ -96,16 +96,18 @@ So it would either add nothing or stop being a set. Write one target per type in
 
 ### 3.2 Records
 
-Some data belongs to a resource rather than being one: a config's changes and analysis, a playbook's runs, a notification's send history, a check's statuses, and job history about a resource. A record isn't a type. It's readable exactly when every resource it belongs to is (`roles.md`, Section 3.1):
+Some data belongs to a resource rather than being one: a config's changes and analysis, a playbook's runs, a notification's send history and a check's statuses. A record isn't a type. It's readable exactly when every resource it belongs to is (`roles.md`, Section 3.1):
 
 - A playbook run belongs to its playbook, and to the config or check it ran on, if any.
 - A run's steps, approvals and the data its agent reports belong to the run, so they follow the run.
 - A relationship between two configs belongs to both.
 - An artifact, e.g. a file a run's step or a check produced, belongs to what produced it: a run's step, a check, a config change or a scraper. So an artifact from a playbook run is visible exactly when the run is, whoever started the run.
 
+Job history isn't a record, even when a job ran for a resource, e.g. a scraper's runs. All of it is read with `job:read`, and none of it without (`roles.md`, Section 2.3). A resource's latest job status, where it's shown in the resource's own row, e.g. a canary's in `canaries_with_status`, is part of the resource and is visible with it.
+
 **TODO:** runs on a component. Today they follow their playbook alone, so anyone who can read the playbook sees them.
 
-**Why.** Who may see a run or a change is never a separate question from who may see what it's about. A run on a config is about the config as much as the playbook, so a subject who can't read the config can't read the run, its steps or their results. Job history about no resource has nothing to follow, so reading it takes `job:read` (`roles.md`, Section 2.3).
+**Why.** Who may see a run or a change is never a separate question from who may see what it's about. A run on a config is about the config as much as the playbook, so a subject who can't read the config can't read the run, its steps or their results. Job history is different: it's Mission Control's record of its own work, and one job's details can mention many resources, so it's read whole or not at all (`roles.md`, Section 2.3).
 
 ## 4. Membership
 

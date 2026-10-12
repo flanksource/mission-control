@@ -52,7 +52,7 @@ Most types added to Scopes only take type-wide grants (`scopes.md` §5.3), so th
 - **Targets and predicate.** A scraper target is a `scope_targets` row with `resource_type = scraper`, using the `id`, `name`/`name_prefix`, `namespace` and `agent_id` columns. The scraper predicate tests those against `config_scrapers` columns of the same names.
 - **Trigger.** `config_scrapers` gets the membership trigger every resource table has. Its selectable fields are the four above, so other updates, e.g. to `spec`, change nothing.
 - **Row-level security.** `config_scrapers` gets a policy admitting a row through the claim's `scraper` grants, and `scraper` joins the claim's grant types.
-- **Records.** Artifacts and job history a scraper produced follow the scraper (`scopes.md` §3.2): their policies test the scraper's row with `EXISTS`, like the child tables in the FAQ.
+- **Records.** Artifacts a scraper produced follow the scraper (`scopes.md` §3.2): their policies test the scraper's row with `EXISTS`, like the child tables in the FAQ. Job history isn't a record: it's read whole with `job:read`, so it has no row-level policy.
 
 _Why not leave scrapers whole-type only:_ grants on some scrapers, e.g. one agent's or one namespace's, are needed from the start, and the fields that express them are already columns.
 

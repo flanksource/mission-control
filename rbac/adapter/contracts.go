@@ -34,7 +34,7 @@ const (
 	// ActionEventRead allows reading Mission Control's event queue and its in-memory event rings.
 	ActionEventRead = "event:read"
 
-	// ActionJobRead allows reading job history that belongs to no resource.
+	// ActionJobRead allows reading all job history, whether or not a job ran for a resource.
 	ActionJobRead = "job:read"
 )
 

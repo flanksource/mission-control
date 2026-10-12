@@ -14,7 +14,7 @@ import (
 )
 
 // tokenScopeActionsProperty lists the actions without a resource that scoped access tokens already deny unless listed.
-const tokenScopeActionsProperty = "rbac.token_scope.resourceless_actions"
+const tokenScopeActionsProperty = "rbac.token_scope.actions"
 
 // LimitScopedTokens makes scoped access tokens deny the actions without a resource added since they were created.
 //
