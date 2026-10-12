@@ -441,7 +441,7 @@ An agent may, without any Role or RoleBinding:
 - read the column definitions of any view, never its rows;
 - register the plugins it runs. It MUST NOT replace a plugin registered by anyone else.
 
-Everything else, e.g. reading configs other agents pushed or listing playbooks, takes a RoleBinding that selects the agent (`rolebindings.md`, Section 2.3), like any subject.
+An agent may do nothing else, e.g. read configs other agents pushed or list playbooks. No RoleBinding can select an agent (`rolebindings.md`, Section 2.3), so nothing grants it more.
 
 _Why no Role:_ everything above acts on the agent's own data, and the token already proves which agent is asking. A rule would be the same for every agent, so it would grant nothing a reader of a Role couldn't assume. Creating the agent is the grant: only a subject with `create` on `agent` can, and only they receive its token. Kubernetes authorizes a kubelet the same way, by the node its credential names rather than by RBAC.
 

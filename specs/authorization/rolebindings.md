@@ -38,11 +38,10 @@ A RoleBinding MUST have a namespace, and its Role and constraint Scopes must be 
 | ------------------------------------------------------------------ | --------------- | -------------------------------------------------------------------- |
 | `people`                                                           | list of strings | Humans who sign in to Mission Control, by email or `*`              |
 | `teams`                                                            | list of strings | Every member of the teams, by team name                              |
-| `agents`                                                           | list of strings | Agents, by name (Section 2.3)                                        |
 | `oidc`                                                             | list of objects | Users of an external identity provider, by the claims in their token |
 | `playbooks`, `notifications`, `topologies`, `scrapers`, `canaries`, `plugins` | list of objects | Those resources, when they act on their own               |
 
-A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either; they're selected by `agents` (Section 2.3). An access token isn't a subject at all: a request made with one is checked as its owner (`roles.md`, Section 4.5). `people` selects humans only, whether by email or by `*`, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
+A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either, and no subject selects them (Section 2.3). An access token isn't a subject at all: a request made with one is checked as its owner (`roles.md`, Section 4.5). `people` selects humans only, whether by email or by `*`, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
 
 ### 2.1 People
 
@@ -111,13 +110,7 @@ Users of an external identity provider aren't mapped into teams. Their access co
 
 ### 2.3 Agents
 
-```yaml
-subjects:
-  agents:
-    - eu-cluster
-```
-
-Each entry is an agent's name, or `*` alone to select every agent. Agents aren't people and can't be in a team, so this is the only way to select them.
+Agents aren't subjects of a RoleBinding: no field selects them, and they can't be in a team. An agent only pushes its own data and fetches what's assigned to it, which its token allows without a Role (`roles.md`, Section 4.6). _Why:_ nothing an agent does needs a grant yet. A subject that selects agents can be added when one does.
 
 ### 2.4 External identity provider users
 
