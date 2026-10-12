@@ -179,7 +179,7 @@ Both MUST allow the same resources at every moment (`scopes.md`, Section 7.1): a
 
 A `read` rule accepts any Scope whose membership is decided by the resource alone (`scopes.md`, Section 4.3), which every Scope is, with one exception: connections aren't filtered by row, so a `read` rule's Scope MUST select connections with a whole-type target only.
 
-Listings are filtered by row-level security, which is always on: there's no setting to turn it off. So a `read` rule whose Scope has a target that isn't a whole-type target (`scopes.md`, Section 5.2) filters listings to what it selects. A rule whose Scope consists of whole-type targets only doesn't need row filters: opening any resource and listing all of them allow the same resources.
+Listings are filtered by row-level security, which is always on: there's no setting to turn it off. So a `read` rule whose Scope has a target that isn't a whole-type target (`scopes.md`, Section 5.2) filters listings to what it selects. A rule whose Scope consists of whole-type targets only doesn't need row filters: opening any resource and listing all of them allow the same resources. A binding's constraint can still narrow it, and then its listings are filtered by the constraint's Scope (`rolebindings.md`, Section 3.2).
 
 Whether a subject may list a type at all, and what a listing returns for a subject whose grants cover only part of it, is specified in `collection-access.md`. Subjects without built-in access (`overview.md`, "Default access") list only what their `read` grants select, and a listing of a type none of their grants covers is refused with `403 Forbidden`.
 

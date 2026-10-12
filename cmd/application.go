@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty"
+	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
@@ -17,6 +18,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/application"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/report"
 )
 
@@ -44,6 +46,15 @@ var ExportApplication = &cobra.Command{
 		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 		shutdown.WaitForSignal()
 		applyFacetFlags(ctx)
+
+		sysUser, err := db.GetSystemUser(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to get system user: %w", err)
+		}
+		if err := dutyRBAC.Init(ctx, []string{sysUser.ID.String()}, adapter.NewPermissionAdapter); err != nil {
+			return fmt.Errorf("failed to initialize rbac: %w", err)
+		}
+		ctx = ctx.WithUser(sysUser)
 
 		manifest, err := os.ReadFile(args[0])
 		if err != nil {
