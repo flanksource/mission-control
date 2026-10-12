@@ -43,6 +43,18 @@ func FindAgent(ctx context.Context, name string) (*models.Agent, error) {
 	return nil, err
 }
 
+// FindAgentByPersonID returns the non-deleted agent owned by the given person, or nil if there is none.
+func FindAgentByPersonID(ctx context.Context, personID uuid.UUID) (*models.Agent, error) {
+	var agents []models.Agent
+	if err := ctx.DB().Where("person_id = ?", personID).Where("deleted_at IS NULL").Limit(1).Find(&agents).Error; err != nil {
+		return nil, err
+	}
+	if len(agents) == 0 {
+		return nil, nil
+	}
+	return &agents[0], nil
+}
+
 // Deprecated used FindAgent
 func GetAgent(ctx context.Context, name string) (*models.Agent, error) {
 	return FindAgent(ctx, name)

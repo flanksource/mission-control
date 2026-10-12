@@ -162,6 +162,11 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		)
 
 		ctx = ctx.WithUser(user)
+		ctx, err = withPersonAgent(ctx, user.ID)
+		if err != nil {
+			ctx.GetSpan().RecordError(err)
+			return c.String(http.StatusInternalServerError, "Error fetching agent details from database")
+		}
 		c.SetRequest(c.Request().WithContext(ctx))
 		return next(c)
 	}

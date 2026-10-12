@@ -73,7 +73,10 @@ func authenticateOIDCToken(c echo.Context, tokenStr string) (bool, error) {
 		if err := InjectToken(ctx, c, &person, "oidc"); err != nil {
 			return false, err
 		}
-		ctx = ctx.WithUser(&person)
+		ctx, err = withPersonAgent(ctx.WithUser(&person), person.ID)
+		if err != nil {
+			return false, err
+		}
 		c.SetRequest(c.Request().WithContext(ctx))
 		return true, nil
 	}
