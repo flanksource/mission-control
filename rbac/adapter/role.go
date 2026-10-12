@@ -117,7 +117,10 @@ func ruleContract(rule v1.RoleRule) (ActionContract, error) {
 	}
 
 	if rule.Deny && !contract.AllowsDeny {
-		return ActionContract{}, NewValidationError("%s can't be denied yet: built-in read access, and listings not being filtered by row for Mission Control's own users, would bypass the deny", rule.Action)
+		if rule.Action == policy.ActionRead {
+			return ActionContract{}, NewValidationError("%s can't be denied yet: built-in read access, and listings not being filtered by row for Mission Control's own users, would bypass the deny", rule.Action)
+		}
+		return ActionContract{}, NewValidationError("%s can't be denied: its rules only allow", rule.Action)
 	}
 
 	if contract.TakesResource() && rule.Resource == nil {
