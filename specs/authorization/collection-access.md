@@ -82,6 +82,18 @@ The answer decides every collection-level operation on the type:
 - A search is a search however it's filtered. A search limited to one type skips the type when the answer is `none` and returns an empty result; it never returns `403`. Only an endpoint that lists one type refuses.
 - A page takes its type's answer ([Section 5](#5-pages-and-types)).
 
+### 3.1 The event queue and job history
+
+The event queue and job history aren't types: they're reached through `event:read` and `job:read`, actions without a resource ([roles.md, Section 2.3](roles.md#23-actions-without-a-resource)). So they have no answer of their own, and the access summary doesn't list them. Their listings are decided by the actions:
+
+| Listing                       | Returns                                                                                                   |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------- |
+| The event queue (`event_queue`) | Every event, to a subject with `event:read`. Refused with `403 Forbidden` without it                    |
+| Job history (`job_history`)   | Each row about a resource the subject may read ([scopes.md, Section 3.2](scopes.md#32-records)), and, with `job:read`, each row about no resource |
+
+- A job history row about a resource is listed exactly when the resource can be opened, whether or not the subject has `job:read`. `job:read` never shows a row about a resource the subject can't read.
+- A job history row about no resource is left out without `job:read`, as a row about a resource the subject can't read is.
+
 ## 4. One answer
 
 Mission Control computes the answer. Clients MUST NOT derive it themselves from the subject's rules or roles.

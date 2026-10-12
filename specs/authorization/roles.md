@@ -79,16 +79,19 @@ Every action has a contract, defined in code: the resource types it accepts, and
 
 | Action                                                | Resource                                               | Target                             |
 | ----------------------------------------------------- | ------------------------------------------------------ | ---------------------------------- |
-| `read`                                                | Every type but Property and View                       | None                               |
-| `create`, `update`, `delete`                          | Every type but Check, Event, Job, Person and View      | None                               |
+| `read`                                                | Every type but View                                    | None                               |
+| `create`, `update`, `delete`                          | Every type but Check, Person and View                  | None                               |
 | `playbook:run`, `playbook:approve`, `playbook:cancel` | Playbook                                               | Optional: Config, Component, Check |
 | `mcp:run`                                             | Playbook                                               | None                               |
 | `invoke:<plugin>:<operation>`                         | Config                                                 | None                               |
 | `connection:use`                                      | Connection                                             | None                               |
 | `person:manage`                                       | None                                                   | None                               |
 | `mcp:use`                                             | None                                                   | None                               |
+| `property:manage`                                     | None                                                   | None                               |
+| `event:read`                                          | None                                                   | None                               |
+| `job:read`                                            | None                                                   | None                               |
 
-The types are those of `scopes.md`, Section 3.1. Views aren't covered yet, so no action accepts them (`overview.md`, "Not covered yet"). Checks, events and jobs are only written by Mission Control itself. Properties aren't read through a rule (Section 3.1). `connection:use` allows acting with a connection's credentials (Section 2.2).
+The types are those of `scopes.md`, Section 3.1. Views aren't covered yet, so no action accepts them (`overview.md`, "Not covered yet"). Checks are only written by Mission Control itself. Properties, the event queue and job history that belongs to no resource aren't types: they're reached through actions without a resource (Section 2.3). `connection:use` allows acting with a connection's credentials (Section 2.2).
 
 `person:manage` allows everything about accounts: inviting someone to Mission Control, disabling and re-enabling them, changing their properties, name or email, and deleting them. People aren't created, changed or deleted any other way, so `create`, `update` and `delete` don't apply to them. _Why:_ inviting someone and managing their account are what an admin actually does, and a named action says so. A rule allowing `create` on people would leave its reader asking where people are created.
 
@@ -130,10 +133,13 @@ _Why two actions:_ seeing that a connection exists and acting with its credentia
 
 A few actions aren't performed on a resource a Scope could select. They act on a type as a whole, or on Mission Control itself. They take no `resource`, and a rule that sets one is rejected. They're exactly these:
 
-| Action          | Allows                                                                                         |
-| --------------- | ---------------------------------------------------------------------------------------------- |
-| `person:manage` | Inviting, disabling, re-enabling and deleting accounts, and changing their properties, name or email |
-| `mcp:use`       | Using Mission Control's MCP server at all. Each MCP tool still checks what it touches (Section 4.3) |
+| Action            | Allows                                                                                         |
+| ----------------- | ---------------------------------------------------------------------------------------------- |
+| `person:manage`   | Inviting, disabling, re-enabling and deleting accounts, and changing their properties, name or email |
+| `mcp:use`         | Using Mission Control's MCP server at all. Each MCP tool still checks what it touches (Section 4.3) |
+| `property:manage` | Creating, changing and deleting properties, Mission Control's settings and feature flags. Reading them needs no rule (Section 3.1) |
+| `event:read`      | Reading Mission Control's event queue, and the recent events playbooks and notifications have handled |
+| `job:read`        | Reading job history that belongs to no resource                                                |
 
 ```yaml
 rules:
@@ -141,13 +147,19 @@ rules:
     action: person:manage
   - name: use-mcp
     action: mcp:use
+  - name: read-jobs
+    action: job:read
 ```
+
+- `property:manage` is one action for every write. A property changes what Mission Control does for everyone, e.g. which pages are enabled, so creating, changing and deleting one are equally privileged.
+- `event:read` covers the event queue (`event_queue`) and the recent events kept in memory by playbooks and notifications. Events are only written by Mission Control itself, so no action writes them.
+- `job:read` covers job history about no resource, e.g. a cleanup job's runs. Job history about a resource is a record and follows its resource (`scopes.md`, Section 3.2): `read` on the resource lets a subject see it, and `job:read` doesn't. A listing of job history combines the two: a row about a resource is listed when the resource can be read, and a row about none when the subject has `job:read` (`collection-access.md`, Section 3.1).
 
 - Every other action takes a resource, and a rule that omits it is rejected. `read`, `create`, `update`, `delete` and every other generic action always take one: no rule grants them on everything.
 - An action without a resource is named `<type>:<verb>`, after what it acts on, so the rule still says what it's about without a Scope.
 - A RoleBinding constraint has nothing to narrow on such a rule, so the rule never applies through a binding with a constraint, and the binding reports it (`rolebindings.md`, Section 3.2).
 
-_Why:_ the person being invited doesn't exist yet, and the MCP server isn't a resource, so a Scope would have nothing to select and would only repeat the action's name. Keeping the list closed and named means every other rule still says what it's on.
+_Why:_ the person being invited doesn't exist yet, and the MCP server isn't a resource, so a Scope would have nothing to select and would only repeat the action's name. Properties, events and job history about no resource are Mission Control's own settings and internals: nobody grants some of them and not others, so a Scope could only ever select all of them. Keeping the list closed and named means every other rule still says what it's on.
 
 ## 3. Which Scopes a rule accepts
 
@@ -231,7 +243,7 @@ Listings are filtered by row-level security, which is always on: there's no sett
 
 Records follow the resource they belong to (`scopes.md`, Section 3.2): a playbook run is listed and opened exactly when its playbook, and the config or check it ran on, can be read, and its steps exactly when the run can. Lookup views derived from a type, e.g. `config_types` or `config_tags`, which list the distinct values the UI's filters offer, are readable by anyone with a `read` grant on that type, and MUST only show values from rows the subject can read. A database table that's neither a type, a record of one, nor a lookup view derived from one isn't served through the database API.
 
-Properties are the one thing read without a rule: any signed-in subject may read them. Reading them still requires authentication, like every other endpoint. They configure Mission Control's behaviour, e.g. which pages are enabled, and MUST NOT hold anything confidential. Writing them takes `create`, `update` or `delete` on `property` like any other type. _Why:_ every page needs them before it can decide what to show, a subject with no grants included.
+Properties are the one thing read without a rule: any signed-in subject may read them. Reading them still requires authentication, like every other endpoint. They configure Mission Control's behaviour, e.g. which pages are enabled, and MUST NOT hold anything confidential. Writing them takes `property:manage` (Section 2.3). _Why:_ every page needs them before it can decide what to show, a subject with no grants included.
 
 Whether a subject may list a type at all, and what a listing returns for a subject whose grants cover only part of it, is specified in `collection-access.md`. Every subject lists only what their `read` grants select, and a listing of a type none of their grants covers is refused with `403 Forbidden`.
 
@@ -309,6 +321,10 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Invoke a plugin operation on config C | `invoke:<plugin>:<operation>`, then `read`  | C, then C       | None                              |
 | Open resource X                       | `read`                                      | X               | None                              |
 | Connect to the MCP server             | `mcp:use`                                   | None            | None                              |
+| Create, change or delete a property   | `property:manage`                           | None            | None                              |
+| Read the event queue or recent events | `event:read`                                | None            | None                              |
+| Read job history about no resource    | `job:read`                                  | None            | None                              |
+| Read job history about resource X     | `read`                                      | X               | None                              |
 | Use connection C, e.g. to send        | `connection:use`                            | C               | None                              |
 | Test connection C                     | `connection:use`                            | C               | None                              |
 

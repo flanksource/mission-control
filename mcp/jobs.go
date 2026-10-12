@@ -11,7 +11,6 @@ import (
 	dutyjob "github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/timberio/go-datemath"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/jobs"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 const (
@@ -53,7 +53,7 @@ func listJobsHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Cal
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	if err := requireMonitorRead(ctx); err != nil {
+	if err := requireJobRead(ctx); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -100,7 +100,7 @@ func listJobRunsHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	if err := requireMonitorRead(ctx); err != nil {
+	if err := requireJobRead(ctx); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -165,7 +165,7 @@ func getJobRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Ca
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	if err := requireMonitorRead(ctx); err != nil {
+	if err := requireJobRead(ctx); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -219,17 +219,19 @@ func registerJobs(s *server.MCPServer) {
 	), getJobRunHandler)
 }
 
-func requireMonitorRead(ctx context.Context) error {
+// requireJobRead checks job:read. Job history about a resource should follow its resource instead,
+// which needs row-level security on job_history, so until then every job tool requires job:read.
+func requireJobRead(ctx context.Context) error {
 	owner, err := resolveOwner(ctx)
 	if err != nil {
 		return err
 	}
-	allowed, err := rbac.Enforcer().Enforce(owner, policy.ObjectMonitor, policy.ActionRead)
+	allowed, err := rbac.Enforcer().Enforce(owner, adapter.ObjectJobs, adapter.ActionJobRead)
 	if err != nil {
 		return ctx.Oops().Wrap(err)
 	}
 	if !allowed {
-		return fmt.Errorf("forbidden: user %s does not have monitor:read permission", owner)
+		return fmt.Errorf("forbidden: user %s does not have %s permission", owner, adapter.ActionJobRead)
 	}
 	return nil
 }

@@ -1,11 +1,14 @@
 package adapter
 
 import (
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/rls"
 	"github.com/flanksource/duty/types"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
 var _ = ginkgo.Describe("ContractFor", func() {
@@ -170,5 +173,91 @@ var _ = ginkgo.Describe("CompiledRule", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(condition).To(Equal("!r.obj.Membership.Fits || (r.obj.Membership.HasTarget && " +
 			"'scope:" + production.ID + "' in r.obj.Membership.Resource && 'scope:" + tenantA.ID + "' in r.obj.Membership.Target)"))
+	})
+})
+
+var _ = ginkgo.Describe("Actions without a resource", func() {
+	resourceless := map[string]string{
+		ActionPropertyManage: ObjectProperties,
+		ActionEventRead:      ObjectEvents,
+		ActionJobRead:        ObjectJobs,
+	}
+
+	rule := func(name, action string, resource *v1.ScopeReference) v1.RoleRule {
+		return v1.RoleRule{Name: name, Action: action, Resource: resource}
+	}
+
+	for action, object := range resourceless {
+		ginkgo.It(action+" is checked on "+object, func() {
+			contract, err := ContractFor(action)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(contract.TakesResource()).To(BeFalse())
+			Expect(contract.Resources).To(BeEmpty())
+			Expect(contract.Targets).To(BeEmpty())
+			Expect(contract.AllowsDeny).To(BeFalse())
+			Expect(contract.Object).To(Equal(object))
+		})
+
+		ginkgo.It(action+" is accepted without a resource", func() {
+			Expect(ValidateRoleSpec("ops", []v1.RoleRule{rule("ops", action, nil)})).To(Succeed())
+
+			resolved, err := ResolveRoleRules(context.New(), nil, "default", []v1.RoleRule{rule("ops", action, nil)})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(resolved).To(HaveLen(1))
+			Expect(resolved[0].Resource).To(BeNil())
+		})
+
+		ginkgo.It(action+" is rejected with a resource", func() {
+			err := ValidateRoleSpec("ops", []v1.RoleRule{rule("ops", action, &v1.ScopeReference{ScopeRef: "everything"})})
+			Expect(err).To(HaveOccurred())
+			Expect(IsValidationError(err)).To(BeTrue())
+			Expect(err.Error()).To(ContainSubstring("takes no resource"))
+		})
+
+		ginkgo.It(action+" is rejected with a target or as a deny", func() {
+			withTarget := rule("ops", action, nil)
+			withTarget.Target = &v1.ScopeReference{ScopeRef: "configs"}
+			Expect(ValidateRoleSpec("ops", []v1.RoleRule{withTarget})).ToNot(Succeed())
+
+			deny := rule("ops", action, nil)
+			deny.Deny = true
+			Expect(ValidateRoleSpec("ops", []v1.RoleRule{deny})).ToNot(Succeed())
+		})
+	}
+
+	ginkgo.It("rejects an action that takes a resource without one", func() {
+		for _, action := range []string{policy.ActionRead, policy.ActionUpdate, policy.ActionPlaybookRun, "invoke:kubernetes-logs:tail"} {
+			err := ValidateRoleSpec("ops", []v1.RoleRule{rule("ops", action, nil)})
+			Expect(err).To(HaveOccurred(), action)
+			Expect(err.Error()).To(ContainSubstring("needs a resource"), action)
+		}
+	})
+
+	ginkgo.It("still rejects mcp:use and person:manage", func() {
+		Expect(ValidateRoleSpec("ops", []v1.RoleRule{rule("ops", policy.ActionMCPUse, nil)})).ToNot(Succeed())
+		Expect(ValidateRoleSpec("ops", []v1.RoleRule{rule("ops", "person:manage", nil)})).ToNot(Succeed())
+	})
+
+	ginkgo.It("compiles to a single policy on the action's object, with no condition", func() {
+		contract, _ := ContractFor(ActionEventRead)
+		policies, err := compiledRuleToCasbinRules("binding:default/ops", CompiledRule{ID: "binding:1/events", Name: "events", Contract: contract})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(policies).To(Equal([][]string{{"p", "binding:default/ops", ObjectEvents, ActionEventRead, "allow", "", "binding:1/events"}}))
+		Expect(CompiledRule{Contract: contract}.ReadGrants()).To(BeEmpty())
+	})
+
+	ginkgo.It("never applies through a binding with a constraint", func() {
+		contract, _ := ContractFor(ActionJobRead)
+		resolved := ResolvedRule{RoleRule: rule("jobs", ActionJobRead, nil), Contract: contract}
+		configs := ScopeSelection{ID: "00000000-0000-4000-8000-000000000003", Name: "configs", Selectors: map[string][]types.ResourceSelector{
+			policy.ResourceConfig: {{Name: "*"}},
+		}}
+
+		for _, scopes := range []constraintScopes{{resource: &configs}, {target: &configs}} {
+			_, err := narrowRule(context.New(), CompiledRule{Name: "jobs", Contract: contract}, resolved, scopes)
+			Expect(err).To(HaveOccurred())
+			Expect(InvalidReason(err)).To(Equal(ReasonConstraintDoesNotFit))
+			Expect(err.Error()).To(ContainSubstring("takes no resource"))
+		}
 	})
 })

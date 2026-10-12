@@ -70,11 +70,8 @@ Each entry under `targets` MUST set exactly one of these keys:
 | `scope`               | Scopes                                                   |
 | `role`                | Roles                                                    |
 | `roleBinding`         | RoleBindings                                             |
-| `event`               | Events in Mission Control's event queue                  |
-| `job`                 | Job history that belongs to no other resource (Section 3.2) |
-| `property`            | Properties, Mission Control's settings and feature flags |
 
-Everything Mission Control protects is one of these types. There's no other kind of object a Role can grant, and no global switch: "all of a type" is a whole-type target (Section 5.2).
+Everything Mission Control protects is one of these types, apart from what the few actions without a resource reach: properties, the event queue and job history that belongs to no resource (`roles.md`, Section 2.3). There's no other kind of object a Role can grant, and no global switch: "all of a type" is a whole-type target (Section 5.2).
 
 Keys are exact. `playbooks`, `configs` or any other spelling is not a resource type. An entry with two keys, or none, is invalid.
 
@@ -108,7 +105,7 @@ Some data belongs to a resource rather than being one: a config's changes and an
 
 **TODO:** runs on a component. Today they follow their playbook alone, so anyone who can read the playbook sees them.
 
-**Why.** Who may see a run or a change is never a separate question from who may see what it's about. A run on a config is about the config as much as the playbook, so a subject who can't read the config can't read the run, its steps or their results. Job history about no resource has nothing to follow, so it's the type `job`.
+**Why.** Who may see a run or a change is never a separate question from who may see what it's about. A run on a config is about the config as much as the playbook, so a subject who can't read the config can't read the run, its steps or their results. Job history about no resource has nothing to follow, so reading it takes `job:read` (`roles.md`, Section 2.3).
 
 ## 4. Membership
 
@@ -238,7 +235,7 @@ A selector MUST only use fields its type has. Anything else is rejected, never i
 | `view`       | `id`, `name`, `namespace`                                                        |
 | `connection` | `id`, `name`, `namespace`, `types`                                               |
 | `scraper`    | `id`, `name`, `namespace`, `agent`                                               |
-| `application`, `notification`, `notificationSilence`, `agent`, `person`, `team`, `scope`, `role`, `roleBinding`, `event`, `job`, `property` | `name`, and only `*` |
+| `application`, `notification`, `notificationSilence`, `agent`, `person`, `team`, `scope`, `role`, `roleBinding` | `name`, and only `*` |
 
 Notes:
 
