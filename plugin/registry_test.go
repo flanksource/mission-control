@@ -9,7 +9,7 @@ import (
 	"github.com/flanksource/incident-commander/plugin/api"
 )
 
-var _ = ginkgo.Describe("Registry operations", func() {
+var _ = ginkgo.Describe("Registry changes", func() {
 	var (
 		registry *Registry
 		changes  int
@@ -27,15 +27,33 @@ var _ = ginkgo.Describe("Registry operations", func() {
 	ginkgo.BeforeEach(func() {
 		registry = New()
 		changes = 0
-		registry.OnOperationsChanged(func() { changes++ })
+		registry.OnPluginsChanged(func() { changes++ })
 		id = uuid.New()
 		_, err := registry.Upsert(id, "default", "logs", v1.PluginSpec{Source: "test"})
 		Expect(err).ToNot(HaveOccurred())
+		Expect(changes).To(Equal(1), "a new plugin")
+		changes = 0
 	})
 
-	ginkgo.It("doesn't report a plugin without a manifest", func() {
+	ginkgo.It("lists no operations for a plugin without a manifest", func() {
 		Expect(registry.Operations()).To(BeEmpty())
-		Expect(changes).To(BeZero())
+	})
+
+	ginkgo.It("reports removing a plugin that never registered", func() {
+		registry.Remove(id)
+		Expect(changes).To(Equal(1))
+	})
+
+	ginkgo.It("reports a manifest without operations", func() {
+		Expect(registry.SetManifest(id, manifest())).To(Succeed())
+		Expect(registry.Operations()).To(BeEmpty())
+		Expect(changes).To(Equal(1))
+
+		Expect(registry.SetManifest(id, manifest("tail"))).To(Succeed())
+		Expect(changes).To(Equal(2))
+
+		Expect(registry.SetManifest(id, manifest())).To(Succeed())
+		Expect(changes).To(Equal(3), "its operations removed")
 	})
 
 	ginkgo.It("reports when a plugin's operations are installed, upgraded or removed", func() {

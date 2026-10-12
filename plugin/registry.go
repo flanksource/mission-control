@@ -288,9 +288,9 @@ func (r *Registry) Remove(id uuid.UUID) {
 	})
 }
 
-// OnOperationsChanged registers a function called whenever a plugin is registered, upgraded or removed in a way
-// that changes the operations of the registered plugins. It's called outside the registry's lock.
-func (r *Registry) OnOperationsChanged(fn func()) {
+// OnPluginsChanged registers a function called whenever a change adds or removes a plugin, or changes whether a
+// plugin has a manifest or which operations it has. It's called outside the registry's lock.
+func (r *Registry) OnPluginsChanged(fn func()) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.listeners = append(r.listeners, fn)
@@ -324,12 +324,31 @@ func (r *Registry) operationsLocked() map[string][]string {
 	return operations
 }
 
-// mutate runs fn under the write lock, and calls the listeners when it changed the operations.
+// stateLocked returns what the listeners follow, by plugin name: whether a plugin has registered, i.e. sent its
+// manifest, and its operations once it has.
+func (r *Registry) stateLocked() map[string]string {
+	state := map[string]string{}
+	for _, e := range r.plugins {
+		if e.Name == "" {
+			continue
+		} else if e.Manifest != nil {
+			state[e.Name] = "registered"
+		} else if _, ok := state[e.Name]; !ok {
+			state[e.Name] = "pending"
+		}
+	}
+	for name, ops := range r.operationsLocked() {
+		state[name] = "registered:" + strings.Join(ops, ",")
+	}
+	return state
+}
+
+// mutate runs fn under the write lock, and calls the listeners when it changed the state they follow.
 func (r *Registry) mutate(fn func()) {
 	r.mu.Lock()
-	before := r.operationsLocked()
+	before := r.stateLocked()
 	fn()
-	changed := !maps.EqualFunc(before, r.operationsLocked(), slices.Equal[[]string])
+	changed := !maps.Equal(before, r.stateLocked())
 	listeners := slices.Clone(r.listeners)
 	r.mu.Unlock()
 

@@ -1,4 +1,4 @@
-// Package shipped writes the Roles and Scopes Mission Control ships: viewer and admin, in the
+// Package shipped writes the Roles and Scopes Mission Control ships: viewer, admin and plugin-admin, in the
 // mission-control-builtin namespace, with the Scopes they use (see specs/authorization/overview.md, "Shipped Roles").
 package shipped
 
@@ -42,11 +42,15 @@ import (
 var manifests []byte
 
 const (
-	// RoleViewer and RoleAdmin are the names of the shipped Roles.
+	// RoleViewer and RoleAdmin are the names of the shipped Roles written in shipped.yaml.
 	RoleViewer = "viewer"
 	RoleAdmin  = "admin"
 
-	// allConfigs is the Scope admin's plugin rules are on.
+	// RolePluginAdmin is the shipped Role that allows every operation of the installed plugins. It's built from
+	// them, apart from admin, so a plugin can only ever change or invalidate this Role.
+	RolePluginAdmin = "plugin-admin"
+
+	// allConfigs is the Scope plugin-admin's rules are on.
 	allConfigs = "all-configs"
 
 	apiVersion = "mission-control.flanksource.com/v1"
@@ -55,7 +59,7 @@ const (
 // idNamespace derives the ids of shipped objects from their kind, namespace and name, so every Sync writes the same rows.
 var idNamespace = uuid.MustParse("6f1d4c8e-5a0b-4e8f-9c3d-2b7a1e6f9d40")
 
-// Objects returns the shipped Scopes and Roles, as written in shipped.yaml, without admin's plugin rules.
+// Objects returns the shipped Scopes and Roles as written in shipped.yaml, i.e. without plugin-admin.
 func Objects() ([]v1.Scope, []v1.Role, error) {
 	var scopes []v1.Scope
 	var roles []v1.Role
@@ -99,25 +103,30 @@ func Objects() ([]v1.Scope, []v1.Role, error) {
 	return scopes, roles, nil
 }
 
-// Build returns the shipped Scopes and Roles, with one admin rule for each of the plugin operations, by plugin name.
-// An operation whose action isn't valid, e.g. one with a space in its name, gets no rule.
+// Build returns the shipped Scopes and Roles, and plugin-admin with one rule for each of the plugin operations,
+// by plugin name. An operation whose action isn't valid, e.g. one with a space in its name, gets no rule.
+// Without any operation there's no plugin-admin, since a Role needs a rule.
 func Build(operations map[string][]string) ([]v1.Scope, []v1.Role, error) {
 	scopes, roles, err := Objects()
 	if err != nil {
 		return nil, nil, err
 	}
 
-	for i := range roles {
-		if roles[i].Name == RoleAdmin {
-			roles[i].Spec.Rules = append(roles[i].Spec.Rules, invokeRules(roles[i].Spec.Rules, operations)...)
-		}
+	if rules := invokeRules(operations); len(rules) > 0 {
+		roles = append(roles, v1.Role{
+			ObjectMeta: metav1.ObjectMeta{Name: RolePluginAdmin, Namespace: adapter.ShippedNamespace},
+			Spec: v1.RoleSpec{
+				Description: "Invokes every operation of the installed plugins, on any config",
+				Rules:       rules,
+			},
+		})
 	}
 	return scopes, roles, nil
 }
 
-// invokeRules returns one rule for each plugin operation, named so it doesn't clash with the existing rules.
-func invokeRules(existing []v1.RoleRule, operations map[string][]string) []v1.RoleRule {
-	used := lo.SliceToMap(existing, func(r v1.RoleRule) (string, bool) { return r.Name, true })
+// invokeRules returns one rule for each plugin operation, each with a name of its own.
+func invokeRules(operations map[string][]string) []v1.RoleRule {
+	used := map[string]bool{}
 
 	var rules []v1.RoleRule
 	plugins := lo.Keys(operations)
@@ -144,7 +153,8 @@ func invokeRules(existing []v1.RoleRule, operations map[string][]string) []v1.Ro
 var notRuleNameChars = regexp.MustCompile(`[^a-z0-9]+`)
 
 // invokeRuleName returns invoke-<plugin>-<operation>, or, when that isn't a valid rule name or is taken,
-// a name ending in a hash of the action.
+// a name ending in a hash of the action, and a counter when that's taken too. It never returns a used name:
+// operation names come from plugins, and a name used twice would make plugin-admin invalid.
 func invokeRuleName(action string, used map[string]bool) string {
 	readable := strings.Trim(notRuleNameChars.ReplaceAllString(strings.ToLower(strings.TrimPrefix(action, policy.ActionPluginInvokePrefix)), "-"), "-")
 	name := "invoke-" + readable
@@ -153,14 +163,18 @@ func invokeRuleName(action string, used map[string]bool) string {
 	}
 
 	sum := sha256.Sum256([]byte(action))
-	return strings.TrimRight(name[:min(len(name), 54)], "-") + "-" + hex.EncodeToString(sum[:])[:8]
+	hashed := strings.TrimRight(name[:min(len(name), 50)], "-") + "-" + hex.EncodeToString(sum[:])[:8]
+	for i := 2; used[hashed]; i++ {
+		hashed = fmt.Sprintf("%s-%s-%d", strings.TrimRight(name[:min(len(name), 50)], "-"), hex.EncodeToString(sum[:])[:8], i)
+	}
+	return hashed
 }
 
 var syncLock sync.Mutex
 
-// Sync writes the shipped Scopes and Roles, with admin's rules for the operations of the installed plugins.
+// Sync writes the shipped Scopes and Roles, with plugin-admin's rules for the operations of the installed plugins.
 // It replaces any other Scope or Role of the same namespace and name, and deletes shipped ones that are no longer
-// shipped, e.g. admin's rule for an operation that's gone. It's idempotent, and writes everything or nothing.
+// shipped, e.g. plugin-admin's rule for an operation that's gone, or plugin-admin once no plugin has an operation. It's idempotent, and writes everything or nothing.
 // The policy is reloaded whenever Sync may have changed something, even when it fails.
 // A shipped object that's stored but not in effect is a bug, and is returned as an error.
 func Sync(ctx context.Context) error {
@@ -228,16 +242,21 @@ func persisted(err error, notReady *[]error) error {
 	return err
 }
 
-// installedOperations returns the operations admin gets rules for: those of the plugins that have registered, and,
-// for installed plugins that haven't registered yet, e.g. right after a restart, the operations admin already has
-// rules for. So a restart doesn't take plugin operations away from admins until each plugin is back.
+// installedOperations returns the operations plugin-admin gets rules for: those of the plugins that have registered,
+// and, for installed plugins that haven't registered yet, e.g. right after a restart, the operations plugin-admin
+// already has rules for. So a restart doesn't take plugin operations away until each plugin is back.
 // A plugin is installed when it's stored or in the registry; plugins proxied by agents are only in the registry.
+// A plugin has registered once its manifest arrived, even one without operations.
 func installedOperations(ctx context.Context) (map[string][]string, error) {
 	operations := plugin.DefaultRegistry.Operations()
 
 	pending := map[string]bool{}
+	registered := map[string]bool{}
 	for _, entry := range plugin.DefaultRegistry.List() {
 		pending[entry.Name] = true
+		if entry.Manifest != nil {
+			registered[entry.Name] = true
+		}
 	}
 	rows, err := db.ListPlugins(ctx)
 	if err != nil {
@@ -246,7 +265,7 @@ func installedOperations(ctx context.Context) (map[string][]string, error) {
 	for _, row := range rows {
 		pending[row.Name] = true
 	}
-	for name := range operations {
+	for name := range registered {
 		delete(pending, name)
 	}
 	if len(pending) == 0 {
@@ -255,7 +274,7 @@ func installedOperations(ctx context.Context) (map[string][]string, error) {
 
 	var stored []models.Role
 	if err := ctx.DB().Where("namespace = ? AND name = ? AND source = ? AND deleted_at IS NULL",
-		adapter.ShippedNamespace, RoleAdmin, adapter.SourceShipped).Find(&stored).Error; err != nil {
+		adapter.ShippedNamespace, RolePluginAdmin, adapter.SourceShipped).Find(&stored).Error; err != nil {
 		return nil, ctx.Oops().Wrap(err)
 	}
 	for _, role := range stored {
@@ -281,11 +300,11 @@ func installedOperations(ctx context.Context) (map[string][]string, error) {
 	return operations, nil
 }
 
-// Start syncs whenever the operations of the installed plugins change, until the context is done.
+// Start syncs whenever the installed plugins or their operations change, until the context is done.
 // Changes that arrive during a sync are synced once it's done.
 func Start(ctx context.Context) {
 	changed := make(chan struct{}, 1)
-	plugin.DefaultRegistry.OnOperationsChanged(func() {
+	plugin.DefaultRegistry.OnPluginsChanged(func() {
 		select {
 		case changed <- struct{}{}:
 		default:
@@ -299,7 +318,7 @@ func Start(ctx context.Context) {
 				return
 			case <-changed:
 				if err := Sync(ctx); err != nil {
-					ctx.Logger.Errorf("failed to sync shipped roles after plugin operations changed: %v", err)
+					ctx.Logger.Errorf("failed to sync shipped roles after plugins changed: %v", err)
 				}
 			}
 		}

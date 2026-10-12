@@ -20,6 +20,7 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 	operations := map[string][]string{
 		"kubernetes-logs": {"tail", "Get_Pods"},
 		"bad":             {"has space"},
+		"p":               {"x-y", "x-y-0ccfea77", "x_y"},
 	}
 
 	ginkgo.BeforeEach(func() {
@@ -34,7 +35,7 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 		}
 
 		roles = lo.KeyBy(shippedRoles, func(r v1.Role) string { return r.Name })
-		Expect(roles).To(HaveLen(2))
+		Expect(lo.Keys(roles)).To(ConsistOf(RoleViewer, RoleAdmin, RolePluginAdmin))
 		for _, role := range shippedRoles {
 			Expect(role.Namespace).To(Equal(adapter.ShippedNamespace))
 			// Shipped Roles are the only ones that may take a built-in role's name, which ValidateRoleSpec alone refuses
@@ -114,17 +115,38 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 		}
 	})
 
-	ginkgo.It("gives admin one rule per valid plugin operation", func() {
-		admin := roles[RoleAdmin]
-		invoke := lo.Filter(admin.Spec.Rules, func(r v1.RoleRule, _ int) bool {
-			return strings.HasPrefix(r.Action, policy.ActionPluginInvokePrefix)
-		})
+	ginkgo.It("keeps admin as written, whatever plugins are installed", func() {
+		_, without, err := Build(nil)
+		Expect(err).ToNot(HaveOccurred())
+		withoutAdmin, _ := lo.Find(without, func(r v1.Role) bool { return r.Name == RoleAdmin })
+		Expect(roles[RoleAdmin]).To(Equal(withoutAdmin))
+
+		for _, rule := range roles[RoleAdmin].Spec.Rules {
+			Expect(rule.Action).ToNot(HavePrefix(policy.ActionPluginInvokePrefix))
+		}
+	})
+
+	ginkgo.It("ships no plugin-admin without a plugin operation", func() {
+		_, without, err := Build(map[string][]string{"bad": {"has space"}, "empty": nil})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(lo.Map(without, func(r v1.Role, _ int) string { return r.Name })).To(ConsistOf(RoleViewer, RoleAdmin))
+	})
+
+	ginkgo.It("gives plugin-admin one rule per valid plugin operation, and nothing else", func() {
+		invoke := roles[RolePluginAdmin].Spec.Rules
+		for _, rule := range invoke {
+			Expect(rule.Action).To(HavePrefix(policy.ActionPluginInvokePrefix))
+		}
 		Expect(lo.Map(invoke, func(r v1.RoleRule, _ int) string { return r.Action })).To(ConsistOf(
 			policy.NewPluginInvokeAction("kubernetes-logs", "tail"),
 			policy.NewPluginInvokeAction("kubernetes-logs", "Get_Pods"),
+			policy.NewPluginInvokeAction("p", "x-y"),
+			policy.NewPluginInvokeAction("p", "x-y-0ccfea77"),
+			policy.NewPluginInvokeAction("p", "x_y"),
 		))
 		Expect(lo.Map(invoke, func(r v1.RoleRule, _ int) string { return r.Name })).To(ConsistOf(
 			"invoke-kubernetes-logs-tail", "invoke-kubernetes-logs-get-pods",
+			"invoke-p-x-y", "invoke-p-x-y-0ccfea77", "invoke-p-x-y-0ccfea77-2",
 		))
 		for _, rule := range invoke {
 			Expect(selects(rule.Resource)).To(Equal([]string{policy.ResourceConfig}))
@@ -134,7 +156,8 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 	ginkgo.It("names plugin rules uniquely, within the length of a rule name", func() {
 		used := map[string]bool{}
 		long := policy.NewPluginInvokeAction(strings.Repeat("p", 40), strings.Repeat("o", 40))
-		for _, action := range []string{"invoke:a:b_c", "invoke:a:b-c", long} {
+		// x_y falls back to the hash of its action, invoke-p-x-y-0ccfea77, which x-y-0ccfea77 already took
+		for _, action := range []string{"invoke:a:b_c", "invoke:a:b-c", long, "invoke:p:x-y", "invoke:p:x-y-0ccfea77", "invoke:p:x_y"} {
 			name := invokeRuleName(action, used)
 			Expect(used).ToNot(HaveKey(name))
 			Expect(len(name)).To(BeNumerically("<=", 63))

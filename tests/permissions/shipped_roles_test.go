@@ -64,6 +64,22 @@ var _ = Describe("Shipped roles", Ordered, func() {
 		return role
 	}
 
+	// pluginAdminActions returns the actions of plugin-admin, none when it isn't shipped.
+	pluginAdminActions := func() []string {
+		GinkgoHelper()
+		var roles []models.Role
+		Expect(DefaultContext.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", namespace, shipped.RolePluginAdmin).
+			Find(&roles).Error).To(Succeed())
+		var actions []string
+		for _, role := range roles {
+			Expect(role.Error).To(BeNil())
+			var rules []v1.RoleRule
+			Expect(json.Unmarshal(role.Rules, &rules)).To(Succeed())
+			actions = append(actions, lo.Map(rules, func(r v1.RoleRule, _ int) string { return r.Action })...)
+		}
+		return actions
+	}
+
 	ruleActions := func(role models.Role) []string {
 		GinkgoHelper()
 		var rules []v1.RoleRule
@@ -125,6 +141,7 @@ var _ = Describe("Shipped roles", Ordered, func() {
 
 		bind(shipped.RoleViewer, viewerPerson)
 		bind(shipped.RoleAdmin, adminPerson)
+		bind(shipped.RolePluginAdmin, adminPerson)
 		Expect(rbac.ReloadPolicy()).To(Succeed())
 	})
 
@@ -144,7 +161,7 @@ var _ = Describe("Shipped roles", Ordered, func() {
 	It("stores both Roles and their Scopes, all Ready", func() {
 		scopes, roles := stored()
 
-		Expect(lo.Map(roles, func(r models.Role, _ int) string { return r.Name })).To(ConsistOf(shipped.RoleAdmin, shipped.RoleViewer))
+		Expect(lo.Map(roles, func(r models.Role, _ int) string { return r.Name })).To(ConsistOf(shipped.RoleAdmin, shipped.RoleViewer, shipped.RolePluginAdmin))
 		for _, role := range roles {
 			Expect(role.Source).To(Equal(adapter.SourceShipped))
 			Expect(role.Error).To(BeNil(), "role %s: %s", role.Name, lo.FromPtr(role.Error))
@@ -200,16 +217,33 @@ var _ = Describe("Shipped roles", Ordered, func() {
 		Expect(canRead(adminPerson, &models.ABACAttribute{Connection: connection})).To(BeTrue())
 	})
 
-	It("lets an admin invoke an installed plugin's operation, until the plugin is removed", func() {
-		Expect(ruleActions(storedRole(shipped.RoleAdmin))).To(ContainElement(invokeAction))
+	It("lets plugin-admin invoke an installed plugin's operation, until the plugin is removed", func() {
+		Expect(pluginAdminActions()).To(ContainElement(invokeAction))
 		Expect(canInvoke(adminPerson)).To(BeTrue())
 
 		plugin.DefaultRegistry.Remove(pluginID)
 		sync()
 
-		Expect(ruleActions(storedRole(shipped.RoleAdmin))).ToNot(ContainElement(invokeAction))
-		Expect(storedRole(shipped.RoleAdmin).Error).To(BeNil())
+		Expect(pluginAdminActions()).To(BeEmpty(), "no plugin-admin without a plugin operation")
 		Expect(canInvoke(adminPerson)).To(BeFalse())
+	})
+
+	It("keeps admin as written, whatever plugins are installed", func() {
+		admin := storedRole(shipped.RoleAdmin)
+		_, err := plugin.DefaultRegistry.Upsert(pluginID, "default", pluginName, v1.PluginSpec{Source: "test"})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(plugin.DefaultRegistry.SetManifest(pluginID, &pluginAPI.PluginManifest{
+			Name: pluginName, Operations: []*pluginAPI.OperationDef{{Name: operation}},
+		})).To(Succeed())
+		sync()
+		DeferCleanup(func() {
+			plugin.DefaultRegistry.Remove(pluginID)
+			sync()
+		})
+
+		Expect(storedRole(shipped.RoleAdmin).Rules).To(MatchJSON(admin.Rules))
+		Expect(ruleActions(storedRole(shipped.RoleAdmin))).ToNot(ContainElement(HavePrefix(policy.ActionPluginInvokePrefix)))
+		Expect(canInvoke(viewerPerson)).To(BeFalse())
 	})
 
 	It("keeps an installed plugin's rules until it registers again, e.g. after a restart", func() {
@@ -220,7 +254,7 @@ var _ = Describe("Shipped roles", Ordered, func() {
 			Name: pluginName, Operations: []*pluginAPI.OperationDef{{Name: operation}},
 		})).To(Succeed())
 		sync()
-		Expect(ruleActions(storedRole(shipped.RoleAdmin))).To(ContainElement(invokeAction))
+		Expect(pluginAdminActions()).To(ContainElement(invokeAction))
 
 		// The process restarts: the plugin is in the registry again, without its manifest yet
 		plugin.DefaultRegistry.Remove(pluginID)
@@ -228,7 +262,7 @@ var _ = Describe("Shipped roles", Ordered, func() {
 		Expect(err).ToNot(HaveOccurred())
 		DeferCleanup(func() { plugin.DefaultRegistry.Remove(restarted) })
 		sync()
-		Expect(ruleActions(storedRole(shipped.RoleAdmin))).To(ContainElement(invokeAction))
+		Expect(pluginAdminActions()).To(ContainElement(invokeAction))
 		Expect(canInvoke(adminPerson)).To(BeTrue())
 
 		// It registers with a different operation
@@ -237,12 +271,17 @@ var _ = Describe("Shipped roles", Ordered, func() {
 			Name: pluginName, Operations: []*pluginAPI.OperationDef{{Name: "upgraded"}},
 		})).To(Succeed())
 		sync()
-		Expect(ruleActions(storedRole(shipped.RoleAdmin))).To(ContainElement(upgraded))
-		Expect(ruleActions(storedRole(shipped.RoleAdmin))).ToNot(ContainElement(invokeAction))
+		Expect(pluginAdminActions()).To(ContainElement(upgraded))
+		Expect(pluginAdminActions()).ToNot(ContainElement(invokeAction))
+
+		// It registers again without any operation: nothing of it is kept
+		Expect(plugin.DefaultRegistry.SetManifest(restarted, &pluginAPI.PluginManifest{Name: pluginName})).To(Succeed())
+		sync()
+		Expect(pluginAdminActions()).To(BeEmpty())
 
 		plugin.DefaultRegistry.Remove(restarted)
 		sync()
-		Expect(ruleActions(storedRole(shipped.RoleAdmin))).ToNot(ContainElement(upgraded))
+		Expect(pluginAdminActions()).To(BeEmpty())
 	})
 
 	It("is idempotent", func() {
