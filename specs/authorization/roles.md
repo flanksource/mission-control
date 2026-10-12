@@ -376,11 +376,33 @@ _Why the resource and not its author:_ a resource's author can change, and resou
 
 ### 4.5 Access tokens
 
-A person may always create, change and delete their own access tokens, without any grant. No person can create, change or delete a token for another person, and no action grants it. A token acts as the person it belongs to, so it can never do more than they can.
+An access token is a credential, not a subject. A request made with a person's token is checked as that person, and RoleBindings select the person, never the token. Actions taken with it are recorded as the person's.
 
-An agent's token is different: it's created with the agent, by a subject with `create` on `agent`, and handed to them (Section 4.6). Rotating or revoking an agent's token takes `update` on `agent`.
+A token can be limited by Roles. It may do what its owner may do, and, when it lists Roles, only what one of their rules also matches:
 
-_Why no grant:_ a token adds no access its owner doesn't already have, so there's nothing for a Role to decide.
+```yaml
+# POST /auth/tokens
+name: ci-readonly
+expiry: 720h
+roles:
+  - namespace: mission-control
+    name: viewer
+```
+
+Alice is an editor. With this token she can read configs, playbooks and components, but can't run a playbook, delete a config or read a connection: her own rules allow each of them, but no rule of `viewer` does.
+
+- **A limit, not a grant.** Each check of an operation (Section 4.3) passes when the owner's rules allow it and a rule of one of the token's Roles matches it (Section 4). A listing returns the rows both allow. A rule the owner doesn't hold adds nothing, so a token never does more than its owner.
+- **Roles mean what they mean anywhere.** A Role's rules are matched against a token's checks exactly as against a binding's. A token names Roles by namespace and name, in any namespace, since a token has none. Naming one takes no grant on it: a Role in a token only removes access.
+- **Live.** Every check uses the owner's current grants and the Roles' current rules. A Role that's missing or invalid (Section 6) matches nothing, so a token limited only by it can do nothing until it's valid again.
+- **No Roles, no limit.** A token that lists no Roles may do everything its owner may.
+- **Tokens don't manage tokens.** A request made with a token can't create, change or delete a token, whatever its Roles. _Why:_ otherwise a limited token could create one without its limit.
+- **The summary follows the token.** The access summary of a request made with a token is computed with the token's limit (`collection-access.md`, Section 4).
+
+A person may create, change and delete their own tokens, without any grant, but not through a token. No person can create, change or delete a token for another person, and no action grants it.
+
+An agent's token is different: it's created with the agent, by a subject with `create` on `agent`, and handed to them (Section 4.6). Rotating or revoking an agent's token takes `update` on `agent`. An agent's token lists no Roles.
+
+_Why no grant:_ a token adds no access its owner doesn't already have, so there's nothing for a Role to decide. _Why Roles:_ a token's limit has to say which actions as well as which resources, e.g. reading playbooks but never running them, and a Role already says exactly that. A limit of Scopes alone couldn't keep a token from running a playbook it may read, and rules written into the token would be a second way to write what a Role says.
 
 ### 4.6 Agents
 

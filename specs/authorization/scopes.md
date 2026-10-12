@@ -386,6 +386,6 @@ A header naming no Scope, or only Scopes that select nothing, e.g. ones that don
 
 The limit applies to the requester's own request. An access review (`/rbac/subject-access-reviews`) answers by each reviewed subject's own access, without it.
 
-Limits add up: a request limited twice, e.g. by an access token's Scopes and by the header, allows only resources in a Scope of each, so a later limit can't widen an earlier one.
+Limits add up: a request made with a token limited by Roles (`roles.md`, Section 4.5) and sent with the header is allowed only what both allow, so neither can widen the other.
 
 A resource is in a Scope by its stored membership (Section 4), from the operation's snapshot (Section 7.2), so a limit adds no query.
