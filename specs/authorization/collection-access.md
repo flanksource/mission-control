@@ -84,33 +84,28 @@ The answer decides every collection-level operation on the type:
 
 ### 3.1 Gates
 
-Every operation that reads, creates, updates or deletes resources of a type is let in or refused by the subject's answer for that type and action. No such operation is decided by a check of the type as a whole object. This covers configs, components, checks, canaries, playbooks and connections. Each has its own answer, derived as in Section 2. Data that belongs to a resource, such as a config's changes, analyses and relationships, takes its resource's type. A playbook run belongs to its playbook; the resource it ran on is checked as that resource's type wherever the run shows it.
+Every operation that reads, creates, updates or deletes resources of a type is let in or refused by the subject's answer for that type and action. No such operation is decided by a check of the type as a whole object. Data that belongs to a resource, such as a config's changes or a playbook's runs, takes its resource's type ([roles.md, Section 3.1](roles.md#31-the-read-action)).
 
 Each operation is gated at the least answer it can serve:
 
-| Gate   | Used by an operation that                                           | `all` | `some`                       | `none`                       |
-| ------ | ------------------------------------------------------------------- | ----- | ---------------------------- | ---------------------------- |
+| Gate   | Used by an operation that                                             | `all` | `some`                       | `none`                       |
+| ------ | --------------------------------------------------------------------- | ----- | ---------------------------- | ---------------------------- |
 | `some` | enforces the subject's grants on every resource it returns or acts on | In    | In                           | Refused with `403 Forbidden` |
-| `all`  | doesn't                                                             | In    | Refused with `403 Forbidden` | Refused with `403 Forbidden` |
+| `all`  | doesn't                                                               | In    | Refused with `403 Forbidden` | Refused with `403 Forbidden` |
 
-An operation enforces the subject's grants on a resource when it reads the resource through the subject's row filters ([roles.md, Section 3.1](roles.md#31-the-read-action)), or checks the subject's rules against the resource in hand ([roles.md, Section 4.3](roles.md#43-what-an-operation-must-provide)).
-
-**Row filters follow the answer.** While row-level security is on, a subject whose `read` answer for a type is `some` MUST have every listing of that type filtered by row, whatever their built-in role. The filter admits the rows their grants select and leaves out the rows their denies select. A subject whose answer is `all` MAY be left unfiltered.
-
-**Why.** A `some` gate is only safe where the operation filters. A member's built-in access selects the type whole, so without this a member lowered to `some` by a deny would pass the gate and list every row. A deny the filter can't express makes the answer `none` instead (Section 2.2), so the listing, the page and a direct link refuse together, and never show what it denies (`permissions.md`, "Never wider").
+An operation enforces the subject's grants on a resource when it reads the resource through the subject's row filters ([roles.md, Section 3.1](roles.md#31-the-read-action)), or checks the subject's rules against the resource in hand ([roles.md, Section 4.3](roles.md#43-what-an-operation-must-provide)). Either way, the limits of the request apply too: an access token's Roles ([roles.md, Section 4.5](roles.md#45-access-tokens)) and the `X-Flanksource-Scope` header ([scopes.md, Section 9](scopes.md#9-limiting-a-request)).
 
 - An operation gated at `some` MUST NOT return or act on a resource without enforcing the subject's grants on it. A resource read from a cache shared between subjects, or from another service that doesn't apply the subject's grants, is read without them.
 - An operation that can't enforce the subject's grants, e.g. one served by another service, MUST be gated at `all`.
 - A search across types isn't gated. It leaves out the types answered `none` and filters the rest (Section 3).
-- `create`, `update` and `delete` are only checked on whole types ([roles.md, Section 2](roles.md#2-actions)), so every write is gated at `all`.
+- Writes need no separate rule: their answer is `all` or `none` (Section 4), so either gate lets in the same subjects.
 - Other actions, such as `playbook:run` or `invoke:<plugin>:<operation>`, are always checked against the resource in hand ([roles.md, Section 4.3](roles.md#43-what-an-operation-must-provide)), so they need no gate.
 - Every way into an operation is gated the same, whether it's an HTTP route or an MCP tool.
-- Built-in access is counted towards the answer (Section 2), like any grant, and never checked separately.
-- What no rule can select isn't a resource type, and is checked against its object, which only built-in roles and Permissions grant. That includes RBAC objects, the Kubernetes proxy, logs, notifications, database tables of no resource type, and what agents push through their upstream connection, which is checked against `agent-push` whatever it writes. Pushing a topology directly is a component `update`.
+- What an owner does with its own data without a grant, such as an agent pushing what it scraped ([roles.md, Section 4.6](roles.md#46-agents)), isn't gated.
 
-**Why gate by the answer.** A check of the type as a whole object can't see a grant or a deny on part of the type. A deny on production configs doesn't stop a check of "read configs", which every viewer passes, so an operation behind such a check shows the denied configs. The answer accounts for both: a partial grant or deny is `some`, and an operation that can't filter refuses it. The server and the UI then decide from the same answer (Section 4).
+**Why gate by the answer.** A check of the type as a whole object has no right answer for a subject whose grants or limits cover part of the type. If it refuses them, it refuses listings that Section 3 says must serve them. If it lets them in, an operation that doesn't filter, such as a forward to config-db, shows them the resources their grants leave out. The answer tells the two apart: a partial grant is `some`, and only an operation that filters takes it. The server and the UI then decide from the same answer (Section 4).
 
-**Why `some` is refused at an `all` gate.** Letting the subject in would show them, or let them change, the resources their grants leave out. The operations gated at `some` still serve them. This holds for denies too: a deny on deleting production configs makes an editor's `delete` answer `some`, so they can delete no config until the deny is narrowed to whole types or removed.
+**Why `some` is refused at an `all` gate, rather than filtered there.** An operation that can't filter can't serve a subset either. Refusing it keeps every response either complete or filtered, never wider than the grants. The operations gated at `some` still serve the subject.
 
 How operations declare their gates is the design's business (`design/operation-gates.md`).
 
@@ -118,7 +113,9 @@ How operations declare their gates is the design's business (`design/operation-g
 
 Mission Control computes the answer. Clients MUST NOT derive it themselves from the subject's rules or roles.
 
-Every authenticated subject can obtain their **access summary**, a user of an external identity provider included, for whom it's derived from the token of the request. A request made with an access token gets the summary of what the token may do, its Roles' limit included (`roles.md`, Section 4.5): for each resource type, the answer for `read`, `create`, `update` and `delete`, each one of `all`, `some` or `none`. The UI uses the summary, and nothing else, to decide which resource pages to show, which to mark as showing some resources only, and which write controls to offer. Listings and searches apply the same derivation on the server. So, evaluated against the same grants, a page the summary shows never answers its listing with `403 Forbidden`, and a listing that succeeds is never behind a page the summary hides. Grants change between requests: a Scope or binding is edited, a Role becomes `Ready=False`, an external identity provider user's next token matches differently. So the summary is computed on every request, never kept for a session, and a client that gets `403 Forbidden` from a listing fetches the summary again rather than treating it as a fault.
+Every authenticated subject can obtain their **access summary**, a user of an external identity provider included, for whom it's derived from the token of the request. A request made with an access token gets the summary of what the token may do, its Roles' limit included (`roles.md`, Section 4.5): for each resource type, the answer for `read`, `create`, `update` and `delete`, each one of `all`, `some` or `none`. The UI uses the summary, and nothing else, to decide which resource pages to show, which to mark as showing some resources only, and which write controls to offer. Listings and searches apply the same derivation on the server. So, evaluated against the same grants, a page the summary shows never answers its listing with `403 Forbidden`, and a listing that succeeds is never behind a page the summary hides. Grants change between requests: a Scope or binding is edited, a Role becomes `Ready=False`, an external identity provider user's next token matches differently. So the answer MUST reflect the grants in effect when the request is made. Mission Control MAY cache it, keyed by everything it's derived from: the subject, the access token's Roles, the request's `X-Flanksource-Scope` header, and for a user of an external identity provider, the bindings their token matches. It MUST drop the cached answers whenever anything changes which grants apply to a subject: a Permission, PermissionGroup, Scope, Role or RoleBinding, a team's members, an agent being registered or removed, or a resource that's a subject itself. A client MUST NOT keep the summary for a session, and a client that gets `403 Forbidden` fetches the summary again rather than treating it as a fault.
+
+**Why.** The answer gates requests (Section 3.1), so a stale answer keeps granting what was revoked: a person removed from a team would keep the team's access until the entry expired.
 
 For `create`, `update` and `delete`, the answer is derived as in [Section 2](#2-all-some-or-none), from the subject's rules for that action instead of `read`. Their rules, and the constraints that narrow them, select whole types only ([roles.md, Section 2](roles.md#2-actions); [rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)), so the answer is `all` or `none`, never `some`. Under `all`, the UI offers the write control. Under `none`, it MUST NOT.
 
@@ -130,13 +127,13 @@ For `create`, `update` and `delete`, the answer is derived as in [Section 2](#2-
 | ----------- | -------------- |
 | Catalog     | Config         |
 | Topology    | Component      |
-| Health      | Canary, Check  |
+| Health      | Canary         |
 | Playbooks   | Playbook       |
 | Connections | Connection     |
 
 Pages that show no resource type, such as settings, have no such answer. How they're gated is out of scope here.
 
-Health shows canaries and checks. Each list takes its own type's answer, so a subject answered `none` on canaries and `some` on checks sees Health with only their checks. The page is shown when either answer isn't `none`, and marked as showing some resources unless both are `all`.
+Checks are read through their canary (flanksource/mission-control#3520), so Health shows one type.
 
 Views and dashboards aren't covered: no rule can select Views yet ([overview.md, "Not covered yet"](overview.md#not-covered-yet)).
 
