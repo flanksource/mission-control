@@ -178,11 +178,11 @@ var _ = ginkgo.Describe("CompiledRule", func() {
 
 var _ = ginkgo.Describe("Actions without a resource", func() {
 	resourceless := map[string]string{
-		ActionPersonManage:   policy.ObjectPeople,
-		policy.ActionMCPUse:  policy.ObjectMCP,
-		ActionPropertyManage: ObjectProperties,
-		ActionEventRead:      ObjectEvents,
-		ActionJobRead:        ObjectJobs,
+		ActionPersonManage:          policy.ObjectPeople,
+		policy.ActionMCPUse:         policy.ObjectMCP,
+		policy.ActionPropertyManage: policy.ObjectProperties,
+		policy.ActionEventRead:      policy.ObjectEvents,
+		policy.ActionJobRead:        policy.ObjectJobs,
 	}
 
 	rule := func(name, action string, resource *v1.ScopeReference) v1.RoleRule {
@@ -243,16 +243,16 @@ var _ = ginkgo.Describe("Actions without a resource", func() {
 	})
 
 	ginkgo.It("compiles to a single policy on the action's object, with no condition", func() {
-		contract, _ := ContractFor(ActionEventRead)
+		contract, _ := ContractFor(policy.ActionEventRead)
 		policies, err := compiledRuleToCasbinRules("binding:default/ops", CompiledRule{ID: "binding:1/events", Name: "events", Contract: contract})
 		Expect(err).ToNot(HaveOccurred())
-		Expect(policies).To(Equal([][]string{{"p", "binding:default/ops", ObjectEvents, ActionEventRead, "allow", "", "binding:1/events"}}))
+		Expect(policies).To(Equal([][]string{{"p", "binding:default/ops", policy.ObjectEvents, policy.ActionEventRead, "allow", "", "binding:1/events"}}))
 		Expect(CompiledRule{Contract: contract}.ReadGrants()).To(BeEmpty())
 	})
 
 	ginkgo.It("never applies through a binding with a constraint", func() {
-		contract, _ := ContractFor(ActionJobRead)
-		resolved := ResolvedRule{RoleRule: rule("jobs", ActionJobRead, nil), Contract: contract}
+		contract, _ := ContractFor(policy.ActionJobRead)
+		resolved := ResolvedRule{RoleRule: rule("jobs", policy.ActionJobRead, nil), Contract: contract}
 		configs := ScopeSelection{ID: "00000000-0000-4000-8000-000000000003", Name: "configs", Selectors: map[string][]types.ResourceSelector{
 			policy.ResourceConfig: {{Name: "*"}},
 		}}

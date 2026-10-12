@@ -19,7 +19,6 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 func init() {
@@ -34,7 +33,7 @@ func RegisterRoutes(e *echo.Echo) {
 
 	g.GET("/events", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, EventRing.Get())
-	}, rbac.Authorization(adapter.ObjectEvents, adapter.ActionEventRead))
+	}, rbac.Authorization(policy.ObjectEvents, policy.ActionEventRead))
 
 	g.POST("/silence", handleCreateSilence, rbac.Authorization(policy.ObjectNotification, policy.ActionCreate))
 
