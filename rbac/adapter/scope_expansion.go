@@ -140,7 +140,8 @@ func LoadScope(ctx context.Context, cache *gocache.Cache, namespace, name string
 
 // PermissionScopeConditions returns the casbin conditions of a permission that names Scopes in its object_selector:
 // one per Scope and resource type, each holding when the request has a resource of the type that's in the Scope.
-// Membership is stored for every type but views, whose targets are still matched by their selectors.
+// Membership is stored for every type but views, whose targets are still matched by their selectors,
+// and the types Scopes only select entirely, which Permissions can't match through a Scope.
 // It returns nil when the permission names no Scopes.
 func PermissionScopeConditions(ctx context.Context, cache *gocache.Cache, perm models.Permission) ([]string, error) {
 	if len(perm.ObjectSelector) == 0 {
@@ -169,6 +170,9 @@ func PermissionScopeConditions(ctx context.Context, cache *gocache.Cache, perm m
 
 		for _, target := range scope.targets {
 			kind, _ := target.Selector()
+			if slices.Contains(v1.WholeTypeResources, kind) {
+				continue
+			}
 			if target.View != nil {
 				object := dutyRBAC.Selectors{Views: []dutyRBAC.ViewRef{{ID: target.View.ID, Name: target.View.Name, Namespace: target.View.Namespace}}}
 				raw, err := json.Marshal(object)

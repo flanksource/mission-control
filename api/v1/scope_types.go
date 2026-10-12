@@ -77,10 +77,38 @@ type ScopeConnectionSelector struct {
 	Types []string `json:"types,omitempty"`
 }
 
+// Resource types a Scope can only select entirely (see specs/authorization/scopes.md, Section 5.3).
+// duty's policy package doesn't define them yet.
+const (
+	ResourceApplication         = "application"
+	ResourceNotification        = "notification"
+	ResourceNotificationSilence = "notificationSilence"
+	ResourceAgent               = "agent"
+	ResourcePerson              = "person"
+	ResourceTeam                = "team"
+	ResourceScope               = "scope"
+	ResourceRole                = "role"
+	ResourceRoleBinding         = "roleBinding"
+)
+
+// WholeTypeResources are the resource types whose only selector is name: "*".
+var WholeTypeResources = []string{
+	ResourceApplication, ResourceNotification, ResourceNotificationSilence, ResourceAgent,
+	ResourcePerson, ResourceTeam, ResourceScope, ResourceRole, ResourceRoleBinding,
+}
+
+// ScopeWholeTypeSelector selects every resource of a type that Scopes can only select entirely.
+type ScopeWholeTypeSelector struct {
+	// Name must be "*": partial selections of the type aren't supported yet.
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum="*"
+	Name string `json:"name"`
+}
+
 // ScopeTarget selects resources of exactly one type. Scope owns the authoring fields;
 // duty's query options and state filters must not enter the authorization language.
 // +kubebuilder:object:generate=true
-// +kubebuilder:validation:XValidation:rule="[has(self.config), has(self.component), has(self.check), has(self.playbook), has(self.canary), has(self.view), has(self.connection)].filter(x, x).size() == 1",message="exactly one of config, component, check, playbook, canary, view, or connection must be specified"
+// +kubebuilder:validation:XValidation:rule="[has(self.config), has(self.component), has(self.check), has(self.playbook), has(self.canary), has(self.view), has(self.connection), has(self.application), has(self.notification), has(self.notificationSilence), has(self.agent), has(self.person), has(self.team), has(self.scope), has(self.role), has(self.roleBinding)].filter(x, x).size() == 1",message="exactly one of config, component, check, playbook, canary, view, connection, application, notification, notificationSilence, agent, person, team, scope, role, or roleBinding must be specified"
 type ScopeTarget struct {
 	Config     *ScopeConfigSelector     `json:"config,omitempty"`
 	Component  *ScopeLabelledSelector   `json:"component,omitempty"`
@@ -89,6 +117,50 @@ type ScopeTarget struct {
 	Canary     *ScopeCanarySelector     `json:"canary,omitempty"`
 	View       *ScopeViewRef            `json:"view,omitempty"`
 	Connection *ScopeConnectionSelector `json:"connection,omitempty"`
+
+	Application         *ScopeWholeTypeSelector `json:"application,omitempty"`
+	Notification        *ScopeWholeTypeSelector `json:"notification,omitempty"`
+	NotificationSilence *ScopeWholeTypeSelector `json:"notificationSilence,omitempty"`
+	Agent               *ScopeWholeTypeSelector `json:"agent,omitempty"`
+	Person              *ScopeWholeTypeSelector `json:"person,omitempty"`
+	Team                *ScopeWholeTypeSelector `json:"team,omitempty"`
+	Scope               *ScopeWholeTypeSelector `json:"scope,omitempty"`
+	Role                *ScopeWholeTypeSelector `json:"role,omitempty"`
+	RoleBinding         *ScopeWholeTypeSelector `json:"roleBinding,omitempty"`
+}
+
+// wholeTypeSelectors returns the target's selector of each type in WholeTypeResources, nil when unset.
+func (t ScopeTarget) wholeTypeSelectors() map[string]*ScopeWholeTypeSelector {
+	return map[string]*ScopeWholeTypeSelector{
+		ResourceApplication:         t.Application,
+		ResourceNotification:        t.Notification,
+		ResourceNotificationSilence: t.NotificationSilence,
+		ResourceAgent:               t.Agent,
+		ResourcePerson:              t.Person,
+		ResourceTeam:                t.Team,
+		ResourceScope:               t.Scope,
+		ResourceRole:                t.Role,
+		ResourceRoleBinding:         t.RoleBinding,
+	}
+}
+
+// TypeCount returns how many resource types the target sets. A valid target sets exactly one.
+func (t ScopeTarget) TypeCount() int {
+	n := 0
+	for _, set := range []bool{
+		t.Config != nil, t.Component != nil, t.Check != nil, t.Canary != nil,
+		t.Playbook != nil, t.View != nil, t.Connection != nil,
+	} {
+		if set {
+			n++
+		}
+	}
+	for _, selector := range t.wholeTypeSelectors() {
+		if selector != nil {
+			n++
+		}
+	}
+	return n
 }
 
 // Selector converts only Scope's identity and ownership fields for duty's matcher.
@@ -123,6 +195,13 @@ func (t ScopeTarget) Selector() (string, types.ResourceSelector) {
 		s := t.Connection
 		return policy.ResourceConnection, types.ResourceSelector{
 			ID: s.ID, Name: s.Name, Namespace: s.Namespace, Types: s.Types,
+		}
+	}
+
+	selectors := t.wholeTypeSelectors()
+	for _, kind := range WholeTypeResources {
+		if s := selectors[kind]; s != nil {
+			return kind, types.ResourceSelector{Name: s.Name}
 		}
 	}
 	return "", types.ResourceSelector{}
