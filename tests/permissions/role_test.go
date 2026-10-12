@@ -414,8 +414,12 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			rejectRole(allow("unknown", "playbook:read", "all-playbooks"))
 			rejectRole(allow("pattern", "playbook:*", "all-playbooks"))
 			rejectRole(allow("all", "*", "all-playbooks"))
-			rejectRole(allow("no-resource", policy.ActionMCPUse, "all-playbooks"))
 			rejectRole(allow("plugin-role", "plugin-role:kubernetes:admin", "all-configs"))
+		})
+
+		It("rejects a resource on an action that takes none", func() {
+			rejectRole(allow("mcp-on-playbooks", policy.ActionMCPUse, "all-playbooks"))
+			rejectRole(allow("people-on-playbooks", adapter.ActionPersonManage, "all-playbooks"))
 		})
 
 		It("rejects scopes the action doesn't accept", func() {

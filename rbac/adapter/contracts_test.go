@@ -28,7 +28,7 @@ var _ = ginkgo.Describe("ContractFor", func() {
 		Expect(invoke.Resources).To(ConsistOf(policy.ResourceConfig))
 	})
 
-	for _, action := range []string{"playbook:read", "playbook:*", "*", policy.ActionMCPUse, "invoke:kubernetes-logs:*", "invoke:kubernetes-logs", "plugin-role::admin"} {
+	for _, action := range []string{"playbook:read", "playbook:*", "*", "connection:*", "person:read", "invoke:kubernetes-logs:*", "invoke:kubernetes-logs", "plugin-role::admin"} {
 		ginkgo.It("rejects "+action, func() {
 			_, err := ContractFor(action)
 			Expect(err).To(HaveOccurred())
@@ -178,6 +178,8 @@ var _ = ginkgo.Describe("CompiledRule", func() {
 
 var _ = ginkgo.Describe("Actions without a resource", func() {
 	resourceless := map[string]string{
+		ActionPersonManage:   policy.ObjectPeople,
+		policy.ActionMCPUse:  policy.ObjectMCP,
 		ActionPropertyManage: ObjectProperties,
 		ActionEventRead:      ObjectEvents,
 		ActionJobRead:        ObjectJobs,
@@ -233,9 +235,11 @@ var _ = ginkgo.Describe("Actions without a resource", func() {
 		}
 	})
 
-	ginkgo.It("still rejects mcp:use and person:manage", func() {
-		Expect(ValidateRoleSpec("ops", []v1.RoleRule{rule("ops", policy.ActionMCPUse, nil)})).ToNot(Succeed())
-		Expect(ValidateRoleSpec("ops", []v1.RoleRule{rule("ops", "person:manage", nil)})).ToNot(Succeed())
+	ginkgo.It("compiles mcp:use to the policy the MCP server checks", func() {
+		contract, _ := ContractFor(policy.ActionMCPUse)
+		policies, err := compiledRuleToCasbinRules("binding:default/ops", CompiledRule{ID: "binding:1/mcp", Name: "mcp", Contract: contract})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(policies).To(Equal([][]string{{"p", "binding:default/ops", policy.ObjectMCP, policy.ActionMCPUse, "allow", "", "binding:1/mcp"}}))
 	})
 
 	ginkgo.It("compiles to a single policy on the action's object, with no condition", func() {
@@ -259,5 +263,87 @@ var _ = ginkgo.Describe("Actions without a resource", func() {
 			Expect(InvalidReason(err)).To(Equal(ReasonConstraintDoesNotFit))
 			Expect(err.Error()).To(ContainSubstring("takes no resource"))
 		}
+	})
+})
+
+var _ = ginkgo.Describe("connection:use", func() {
+	use, _ := ContractFor(ActionConnectionUse)
+	read, _ := ContractFor(policy.ActionRead)
+
+	aws := ScopeSelection{ID: "00000000-0000-4000-8000-000000000004", Name: "aws", Selectors: map[string][]types.ResourceSelector{
+		policy.ResourceConnection: {{Namespace: "aws"}},
+	}}
+	allConnections := ScopeSelection{ID: "00000000-0000-4000-8000-000000000005", Name: "all-connections", Selectors: map[string][]types.ResourceSelector{
+		policy.ResourceConnection: {{Name: "*"}},
+	}}
+	configs := scope("configs", map[string][]types.ResourceSelector{policy.ResourceConfig: {{Name: "*"}}})
+
+	rule := func(name string, resource *v1.ScopeReference) v1.RoleRule {
+		return v1.RoleRule{Name: name, Action: ActionConnectionUse, Resource: resource}
+	}
+
+	ginkgo.It("takes connections as its resource, and no target", func() {
+		Expect(use.TakesResource()).To(BeTrue())
+		Expect(use.Resources).To(ConsistOf(policy.ResourceConnection))
+		Expect(use.Targets).To(BeEmpty())
+		Expect(use.AllowsDeny).To(BeFalse())
+		Expect(use.Object).To(BeEmpty())
+	})
+
+	ginkgo.It("accepts any connection selector, since it's checked per request", func() {
+		Expect(use.validateInput("resource", aws)).To(Succeed())
+		Expect(use.validateInput("resource", allConnections)).To(Succeed())
+		Expect(read.validateInput("resource", aws)).ToNot(Succeed(), "read still needs whole-type connections")
+	})
+
+	ginkgo.It("rejects a scope that selects anything but connections", func() {
+		Expect(use.validateInput("resource", configs)).ToNot(Succeed())
+		Expect(use.validateInput("resource", scope("mixed", map[string][]types.ResourceSelector{
+			policy.ResourceConnection: {{Name: "*"}},
+			policy.ResourceConfig:     {{Name: "*"}},
+		}))).ToNot(Succeed())
+	})
+
+	ginkgo.It("is rejected without a resource, with a target, or as a deny", func() {
+		err := ValidateRoleSpec("ops", []v1.RoleRule{rule("ops", nil)})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("needs a resource"))
+
+		withTarget := rule("ops", &v1.ScopeReference{ScopeRef: "aws"})
+		withTarget.Target = &v1.ScopeReference{ScopeRef: "configs"}
+		err = ValidateRoleSpec("ops", []v1.RoleRule{withTarget})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("doesn't take a target"))
+
+		deny := rule("ops", &v1.ScopeReference{ScopeRef: "aws"})
+		deny.Deny = true
+		err = ValidateRoleSpec("ops", []v1.RoleRule{deny})
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("can't be denied"))
+
+		Expect(ValidateRoleSpec("ops", []v1.RoleRule{rule("ops", &v1.ScopeReference{ScopeRef: "aws"})})).To(Succeed())
+	})
+
+	ginkgo.It("compiles to one policy matched by the connection's scopes, and none on the connection object", func() {
+		policies, err := compiledRuleToCasbinRules("binding:default/ops", CompiledRule{ID: "binding:1/use", Name: "use", Contract: use, Resource: []ScopeSelection{allConnections}})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(policies).To(Equal([][]string{{"p", "binding:default/ops", "*", ActionConnectionUse, "allow",
+			"r.obj.Membership.Fits && !r.obj.Membership.HasTarget && 'scope:" + allConnections.ID + "' in r.obj.Membership.Resource",
+			"binding:1/use"}}))
+		Expect(CompiledRule{Contract: use, Resource: []ScopeSelection{allConnections}}.ReadGrants()).To(BeEmpty())
+	})
+
+	ginkgo.It("is narrowed by a constraint that selects connections", func() {
+		resolved := ResolvedRule{RoleRule: rule("use", &v1.ScopeReference{ScopeRef: "all-connections"}), Contract: use, Resource: &allConnections}
+		compiled := CompiledRule{Name: "use", Contract: use, Resource: []ScopeSelection{allConnections}}
+
+		narrowed, err := narrowRule(context.New(), compiled, resolved, constraintScopes{resource: &aws})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(narrowed.Resource).To(HaveLen(2))
+		Expect(narrowed.Resource[1].Selectors).To(Equal(aws.Selectors))
+
+		_, err = narrowRule(context.New(), compiled, resolved, constraintScopes{resource: &configs})
+		Expect(err).To(HaveOccurred())
+		Expect(InvalidReason(err)).To(Equal(ReasonConstraintDoesNotFit))
 	})
 })

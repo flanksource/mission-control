@@ -26,8 +26,17 @@ const (
 	enforcedWithoutResource enforcement = "none"
 )
 
+// ActionConnectionUse allows acting with a connection's credentials, e.g. sending a notification through it or testing
+// it (see specs/authorization/roles.md, Section 2.2). Reading a connection takes read instead.
+const ActionConnectionUse = "connection:use"
+
 // Actions that take no resource (see specs/authorization/roles.md, Section 2.3).
+// mcp:use is policy.ActionMCPUse, checked on policy.ObjectMCP.
 const (
+	// ActionPersonManage allows inviting, disabling, re-enabling and deleting accounts, and changing their
+	// properties, name or email. Checked on policy.ObjectPeople.
+	ActionPersonManage = "person:manage"
+
 	// ActionPropertyManage allows creating, changing and deleting properties. Reading them needs no rule.
 	ActionPropertyManage = "property:manage"
 
@@ -113,13 +122,18 @@ var contracts = map[string]ActionContract{
 		Requires: "mcp:use; the run itself also needs playbook:run",
 	},
 
+	// Connections are checked per request, on their stored Scope membership, so unlike read any connection selector works.
+	ActionConnectionUse: {Resources: []string{policy.ResourceConnection}, enforcement: enforcedPerRequest},
+
+	ActionPersonManage:   {Object: policy.ObjectPeople, enforcement: enforcedWithoutResource},
+	policy.ActionMCPUse:  {Object: policy.ObjectMCP, enforcement: enforcedWithoutResource},
 	ActionPropertyManage: {Object: ObjectProperties, enforcement: enforcedWithoutResource},
 	ActionEventRead:      {Object: ObjectEvents, enforcement: enforcedWithoutResource},
 	ActionJobRead:        {Object: ObjectJobs, enforcement: enforcedWithoutResource},
 }
 
 // ContractFor returns the contract of an action.
-// Unknown actions, patterns, and mcp:use and person:manage, which roles can't grant yet, have none.
+// Unknown actions and patterns have none.
 func ContractFor(action string) (ActionContract, error) {
 	if contract, ok := contracts[action]; ok {
 		contract.Action = action
@@ -136,10 +150,6 @@ func ContractFor(action string) (ActionContract, error) {
 			Action: action, Resources: []string{policy.ResourceConfig}, AllowsDeny: true, enforcement: enforcedPerRequest,
 			Requires: "read on the config",
 		}, nil
-	}
-
-	if action == policy.ActionMCPUse {
-		return ActionContract{}, fmt.Errorf("%s isn't performed on a resource, so a role can't grant it", action)
 	}
 
 	return ActionContract{}, fmt.Errorf("unknown action %q", action)

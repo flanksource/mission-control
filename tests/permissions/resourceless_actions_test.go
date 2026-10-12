@@ -25,6 +25,8 @@ var _ = Describe("Actions without a resource", Ordered, func() {
 	uid := func() k8sTypes.UID { return k8sTypes.UID(uuid.NewString()) }
 
 	actions := map[string]string{
+		adapter.ActionPersonManage:   policy.ObjectPeople,
+		policy.ActionMCPUse:          policy.ObjectMCP,
 		adapter.ActionPropertyManage: adapter.ObjectProperties,
 		adapter.ActionEventRead:      adapter.ObjectEvents,
 		adapter.ActionJobRead:        adapter.ObjectJobs,
@@ -47,6 +49,8 @@ var _ = Describe("Actions without a resource", Ordered, func() {
 		Expect(db.PersistRoleFromCRD(DefaultContext, &v1.Role{
 			ObjectMeta: metav1.ObjectMeta{Name: "operations", Namespace: namespace, UID: uid()},
 			Spec: v1.RoleSpec{Rules: []v1.RoleRule{
+				{Name: "manage-people", Action: adapter.ActionPersonManage},
+				{Name: "use-mcp", Action: policy.ActionMCPUse},
 				{Name: "manage-properties", Action: adapter.ActionPropertyManage},
 				{Name: "read-events", Action: adapter.ActionEventRead},
 				{Name: "read-jobs", Action: adapter.ActionJobRead},

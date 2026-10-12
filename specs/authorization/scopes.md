@@ -71,7 +71,7 @@ Each entry under `targets` MUST set exactly one of these keys:
 | `role`                | Roles                                                    |
 | `roleBinding`         | RoleBindings                                             |
 
-Everything Mission Control protects is one of these types, apart from what the few actions without a resource reach: properties, the event queue and job history (`roles.md`, Section 2.3). There's no other kind of object a Role can grant, and no global switch: "all of a type" is a whole-type target (Section 5.2).
+Everything Mission Control protects is one of these types, apart from what the few actions without a resource reach: accounts (`person:manage`), the MCP server (`mcp:use`), properties, the event queue and job history (`roles.md`, Section 2.3). There's no other kind of object a Role can grant, and no global switch: "all of a type" is a whole-type target (Section 5.2).
 
 Keys are exact. `playbooks`, `configs` or any other spelling is not a resource type. An entry with two keys, or none, is invalid.
 
