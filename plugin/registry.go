@@ -11,6 +11,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -62,6 +64,9 @@ type Registry struct {
 	// namespace. Bare-name lookups are resolved by scanning plugins so duplicate
 	// names can be reported as ambiguous instead of stored in this index.
 	refs map[string]uuid.UUID
+
+	// listeners are called when the operations of the registered plugins change.
+	listeners []func()
 }
 
 // DefaultRegistry is the singleton used by the kopper reconciler and by every echo
@@ -80,26 +85,28 @@ func New() *Registry {
 // when a Plugin CRD is created or updated). Existing manifest/supervisor are
 // preserved so an in-flight plugin keeps running across CRD updates that
 // don't change the binary.
-func (r *Registry) Upsert(id uuid.UUID, namespace, name string, spec v1.PluginSpec) (*Entry, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
+func (r *Registry) Upsert(id uuid.UUID, namespace, name string, spec v1.PluginSpec) (entry *Entry, err error) {
 	kind := api.PluginKindLocal
 	if spec.Address != "" {
 		kind = api.PluginKindRemote
 	}
-	return r.upsertLocked(id, namespace, name, spec, kind, nil, nil)
+
+	r.mutate(func() {
+		entry, err = r.upsertLocked(id, namespace, name, spec, kind, nil, nil)
+	})
+	return entry, err
 }
 
 // UpsertProxied registers a plugin runtime reported by an authenticated agent.
-func (r *Registry) UpsertProxied(id uuid.UUID, namespace, name string, spec v1.PluginSpec, manifest *api.PluginManifest, agentID uuid.UUID) (*Entry, error) {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
+func (r *Registry) UpsertProxied(id uuid.UUID, namespace, name string, spec v1.PluginSpec, manifest *api.PluginManifest, agentID uuid.UUID) (entry *Entry, err error) {
 	if agentID == uuid.Nil {
 		return nil, fmt.Errorf("agent id is required")
 	}
-	return r.upsertLocked(id, namespace, name, spec, api.PluginKindProxied, &agentID, manifest)
+
+	r.mutate(func() {
+		entry, err = r.upsertLocked(id, namespace, name, spec, api.PluginKindProxied, &agentID, manifest)
+	})
+	return entry, err
 }
 
 func (r *Registry) upsertLocked(id uuid.UUID, namespace, name string, spec v1.PluginSpec, kind api.Kind, agentID *uuid.UUID, manifest *api.PluginManifest) (*Entry, error) {
@@ -137,27 +144,29 @@ func (r *Registry) upsertLocked(id uuid.UUID, namespace, name string, spec v1.Pl
 }
 
 // SetManifest stores the manifest a plugin returned from RegisterPlugin.
-func (r *Registry) SetManifest(id uuid.UUID, m *api.PluginManifest) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	e, ok := r.plugins[id]
-	if !ok {
-		return fmt.Errorf("plugin %s not registered", id)
-	}
-	e.Manifest = m
-	return nil
+func (r *Registry) SetManifest(id uuid.UUID, m *api.PluginManifest) (err error) {
+	r.mutate(func() {
+		e, ok := r.plugins[id]
+		if !ok {
+			err = fmt.Errorf("plugin %s not registered", id)
+			return
+		}
+		e.Manifest = m
+	})
+	return err
 }
 
 // SetManifestIfRuntime prevents a stopped runtime from publishing over its replacement.
-func (r *Registry) SetManifestIfRuntime(id uuid.UUID, runtime Runtime, m *api.PluginManifest) bool {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	e := r.plugins[id]
-	if e == nil || e.Runtime != runtime {
-		return false
-	}
-	e.Manifest = m
-	return true
+func (r *Registry) SetManifestIfRuntime(id uuid.UUID, runtime Runtime, m *api.PluginManifest) (set bool) {
+	r.mutate(func() {
+		e := r.plugins[id]
+		if e == nil || e.Runtime != runtime {
+			return
+		}
+		e.Manifest = m
+		set = true
+	})
+	return set
 }
 
 // Get returns the entry for the given plugin id, or nil if no plugin by that
@@ -271,12 +280,64 @@ func (r *Registry) PopRuntime(id uuid.UUID) Runtime {
 // Remove drops a plugin from the registry. Callers are responsible for
 // stopping the supervisor first.
 func (r *Registry) Remove(id uuid.UUID) {
+	r.mutate(func() {
+		if e, ok := r.plugins[id]; ok {
+			r.removeIndexes(e)
+		}
+		delete(r.plugins, id)
+	})
+}
+
+// OnOperationsChanged registers a function called whenever a plugin is registered, upgraded or removed in a way
+// that changes the operations of the registered plugins. It's called outside the registry's lock.
+func (r *Registry) OnOperationsChanged(fn func()) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if e, ok := r.plugins[id]; ok {
-		r.removeIndexes(e)
+	r.listeners = append(r.listeners, fn)
+}
+
+// Operations returns the operations of the registered plugins, by plugin name, each list sorted.
+// Plugins of the same name in different namespaces share one list. A plugin without a manifest has no operations yet.
+func (r *Registry) Operations() map[string][]string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.operationsLocked()
+}
+
+func (r *Registry) operationsLocked() map[string][]string {
+	operations := map[string][]string{}
+	for _, e := range r.plugins {
+		if e.Manifest == nil || e.Name == "" {
+			continue
+		}
+		for _, op := range e.Manifest.Operations {
+			if op != nil && op.Name != "" {
+				operations[e.Name] = append(operations[e.Name], op.Name)
+			}
+		}
 	}
-	delete(r.plugins, id)
+
+	for name, ops := range operations {
+		sort.Strings(ops)
+		operations[name] = slices.Compact(ops)
+	}
+	return operations
+}
+
+// mutate runs fn under the write lock, and calls the listeners when it changed the operations.
+func (r *Registry) mutate(fn func()) {
+	r.mu.Lock()
+	before := r.operationsLocked()
+	fn()
+	changed := !maps.EqualFunc(before, r.operationsLocked(), slices.Equal[[]string])
+	listeners := slices.Clone(r.listeners)
+	r.mu.Unlock()
+
+	if changed {
+		for _, listener := range listeners {
+			listener()
+		}
+	}
 }
 
 // List returns a snapshot of all registered plugins.

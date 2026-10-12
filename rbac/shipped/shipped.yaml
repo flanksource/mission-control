@@ -1,0 +1,182 @@
+# Roles and Scopes shipped with Mission Control (specs/authorization/overview.md, "Shipped Roles").
+# Mission Control writes them to its database on startup, and again whenever the operations of the installed plugins
+# change: admin gets one invoke rule per plugin operation. They can't be changed through the API or Kubernetes.
+#
+# Every target is a whole-type target. A Scope only fills an input that accepts every type it selects
+# (roles.md, Section 3), so the Scopes are grouped by the inputs they fill.
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: operated-resources
+  namespace: mission-control
+spec:
+  description: Every config, component, check, canary and playbook
+  targets:
+    - config:
+        name: "*"
+    - component:
+        name: "*"
+    - check:
+        name: "*"
+    - canary:
+        name: "*"
+    - playbook:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: writable-resources
+  namespace: mission-control
+spec:
+  description: Every config, component, canary, playbook and connection
+  targets:
+    - config:
+        name: "*"
+    - component:
+        name: "*"
+    - canary:
+        name: "*"
+    - playbook:
+        name: "*"
+    - connection:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: playbook-targets
+  namespace: mission-control
+spec:
+  description: Every config, component and check, i.e. everything a playbook can run on
+  targets:
+    - config:
+        name: "*"
+    - component:
+        name: "*"
+    - check:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-configs
+  namespace: mission-control
+spec:
+  description: Every config
+  targets:
+    - config:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-playbooks
+  namespace: mission-control
+spec:
+  description: Every playbook
+  targets:
+    - playbook:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-connections
+  namespace: mission-control
+spec:
+  description: Every connection
+  targets:
+    - connection:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: viewer
+  namespace: mission-control
+spec:
+  description: Reads the resources people operate on, and nothing that configures access, holds credentials or exposes Mission Control's internals
+  rules:
+    - name: read-resources
+      action: read
+      resource:
+        scopeRef: operated-resources
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: admin
+  namespace: mission-control
+spec:
+  description: Every action on every type, every plugin operation, and every action without a resource
+  rules:
+    - name: read-resources
+      action: read
+      resource:
+        scopeRef: operated-resources
+    - name: read-connections
+      action: read
+      resource:
+        scopeRef: all-connections
+    - name: create-resources
+      action: create
+      resource:
+        scopeRef: writable-resources
+    - name: update-resources
+      action: update
+      resource:
+        scopeRef: writable-resources
+    - name: delete-resources
+      action: delete
+      resource:
+        scopeRef: writable-resources
+    # A rule with a target only matches runs on a target, and one without only runs with no target (roles.md, Section 2).
+    - name: run-playbooks
+      action: playbook:run
+      resource:
+        scopeRef: all-playbooks
+      target:
+        scopeRef: playbook-targets
+    - name: run-playbooks-without-target
+      action: playbook:run
+      resource:
+        scopeRef: all-playbooks
+    - name: approve-playbooks
+      action: playbook:approve
+      resource:
+        scopeRef: all-playbooks
+      target:
+        scopeRef: playbook-targets
+    - name: approve-playbooks-without-target
+      action: playbook:approve
+      resource:
+        scopeRef: all-playbooks
+    - name: cancel-playbooks
+      action: playbook:cancel
+      resource:
+        scopeRef: all-playbooks
+      target:
+        scopeRef: playbook-targets
+    - name: cancel-playbooks-without-target
+      action: playbook:cancel
+      resource:
+        scopeRef: all-playbooks
+    - name: run-playbooks-through-mcp
+      action: mcp:run
+      resource:
+        scopeRef: all-playbooks
+    - name: use-connections
+      action: connection:use
+      resource:
+        scopeRef: all-connections
+    - name: manage-people
+      action: person:manage
+    - name: use-mcp
+      action: mcp:use
+    - name: manage-properties
+      action: property:manage
+    - name: read-events
+      action: event:read
+    - name: read-jobs
+      action: job:read
