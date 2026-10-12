@@ -55,6 +55,8 @@ subjects:
 
 Each entry MUST be a person's email address, never their name, or `*` alone to select every person, e.g. to bind `viewer` to everyone in the organisation.
 
+An entry selects a person only by an email address they've verified. _Why:_ a person can change their own email, e.g. through Kratos's settings flow. Matching an unverified address would let anyone take the bindings of an address they don't own, e.g. one bound for someone who hasn't signed up yet or has left.
+
 ### 2.2 Teams
 
 ```yaml

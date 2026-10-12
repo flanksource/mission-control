@@ -90,7 +90,7 @@ The word appears twice, with different meanings:
 
 ## Access
 
-**A subject may perform an action on a resource when a RoleBinding that selects the subject gives it a Role with a rule matching the action and resource.** The few actions that take no resource, e.g. `person:invite`, need a rule with that action alone (`roles.md`, Section 2.3). Otherwise it's refused. Nothing else grants anything, apart from deprecated Permissions (`permissions.md`).
+**A subject may perform an action on a resource when a RoleBinding that selects the subject gives it a Role with a rule matching the action and resource.** The few actions that take no resource, e.g. `person:manage`, need a rule with that action alone (`roles.md`, Section 2.3). Otherwise it's refused. Nothing else grants anything, apart from deprecated Permissions (`permissions.md`).
 
 - **Every subject is checked the same way.** A person, a team member, an agent, a user of an external identity provider and a playbook acting on its own are all subjects. What kind of subject they are only decides which RoleBinding subjects can select them (`rolebindings.md`, Section 2). It never decides what they may do, with one exception: an agent acts on its own data without a grant (`roles.md`, Section 4.6).
 - **Everything is a resource.** Every protected thing is a type a Scope selects, from configs to RoleBindings and the event queue (`scopes.md`, Section 3.1). Data about a resource, such as a playbook's runs, follows it. Properties alone are readable by every signed-in subject without a rule (`roles.md`, Section 3.1).

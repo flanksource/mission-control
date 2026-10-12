@@ -85,14 +85,14 @@ Every action has a contract, defined in code: the resource types it accepts, and
 | `mcp:run`                                             | Playbook                                               | None                               |
 | `invoke:<plugin>:<operation>`                         | Config                                                 | None                               |
 | `connection:use`                                      | Connection                                             | None                               |
-| `person:invite`                                       | None                                                   | None                               |
 | `person:manage`                                       | None                                                   | None                               |
-| `person:delete`                                       | None                                                   | None                               |
 | `mcp:use`                                             | None                                                   | None                               |
 
 The types are those of `scopes.md`, Section 3.1. Views aren't covered yet, so no action accepts them (`overview.md`, "Not covered yet"). Checks, events and jobs are only written by Mission Control itself. Properties aren't read through a rule (Section 3.1). `connection:use` allows acting with a connection's credentials (Section 2.2).
 
-`person:invite` allows inviting someone to Mission Control. `person:manage` allows managing existing accounts: disabling and re-enabling them, and changing their properties, name or email. `person:delete` allows deleting them. People aren't created, changed or deleted any other way, so `create`, `update` and `delete` don't apply to them. _Why:_ inviting someone and managing their account are what an admin actually does, and named actions say so. A rule allowing `create` on people would leave its reader asking where people are created. An invite that names teams adds the person to them when it's accepted (`rolebindings.md`, Section 2.2), so `person:invite` also places people into teams and whatever the teams' bindings grant.
+`person:manage` allows everything about accounts: inviting someone to Mission Control, disabling and re-enabling them, changing their properties, name or email, and deleting them. People aren't created, changed or deleted any other way, so `create`, `update` and `delete` don't apply to them. _Why:_ inviting someone and managing their account are what an admin actually does, and a named action says so. A rule allowing `create` on people would leave its reader asking where people are created.
+
+`person:manage` is as privileged as `admin`, and is only for subjects trusted as admins. An invite that names teams adds the person to them when it's accepted (`rolebindings.md`, Section 2.2), so it grants whatever the teams' bindings grant. Changing a person's email changes which `people` subjects select them (`rolebindings.md`, Section 2.1), so it moves bindings from one person to another. _Why one action:_ inviting, managing and deleting accounts are equally privileged, so splitting them would only suggest that one is safer to grant than the others.
 
 **TODO:** the Kubernetes proxy, i.e. the kubeconfig download and the requests made through it, has no action. It's left for a later design (`overview.md`, "Not covered yet").
 
@@ -132,15 +132,13 @@ A few actions aren't performed on a resource a Scope could select. They act on a
 
 | Action          | Allows                                                                                         |
 | --------------- | ---------------------------------------------------------------------------------------------- |
-| `person:invite` | Inviting someone to Mission Control                                                            |
-| `person:manage` | Managing existing accounts: disabling, re-enabling, changing properties, name or email          |
-| `person:delete` | Deleting someone's account                                                                     |
+| `person:manage` | Inviting, disabling, re-enabling and deleting accounts, and changing their properties, name or email |
 | `mcp:use`       | Using Mission Control's MCP server at all. Each MCP tool still checks what it touches (Section 4.3) |
 
 ```yaml
 rules:
-  - name: invite
-    action: person:invite
+  - name: manage-people
+    action: person:manage
   - name: use-mcp
     action: mcp:use
 ```
