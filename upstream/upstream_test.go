@@ -6,6 +6,7 @@ import (
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	"github.com/google/go-cmp/cmp"
@@ -36,7 +37,12 @@ var _ = ginkgo.Describe("Upstream Push", ginkgo.Ordered, func() {
 		DefaultContext.ClearCache()
 		properties.Global.Set("upstream.reconcile.pre-check", "false")
 
-		Expect(pushUpstream.DB().Create(&models.Agent{ID: pushAgent.id, Name: pushAgent.name}).Error).To(BeNil())
+		// The agent authenticates as its own person, which the upstream resolves the agent from
+		agentPerson := models.Person{ID: uuid.New(), Name: "push-agent", Type: "agent"}
+		Expect(pushUpstream.DB().Create(&agentPerson).Error).To(BeNil())
+		Expect(dutyRBAC.AddRoleForUser(agentPerson.ID.String(), policy.RoleAgent)).To(Succeed())
+		Expect(pushUpstream.DB().Create(&models.Agent{ID: pushAgent.id, Name: pushAgent.name, PersonID: &agentPerson.ID}).Error).To(BeNil())
+		pushAgent.username = agentPerson.Name
 	})
 
 	ginkgo.It("should push all tables", func() {
