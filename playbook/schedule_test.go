@@ -119,6 +119,7 @@ var _ = ginkgo.Describe("scheduled playbook runs", func() {
 			},
 		}
 		playbook := saveScheduledPlaybookForTest("scheduled-updated-params", spec)
+		ginkgo.DeferCleanup(bindPlaybook(playbook, runOnItself(playbook, nil)))
 
 		spec.On.Schedule[0].Parameters["message"] = "updated {{.playbook.name}}"
 		specJSON, err := json.Marshal(spec)
@@ -182,6 +183,8 @@ var _ = ginkgo.Describe("scheduled playbook runs", func() {
 			},
 		})
 
+		ginkgo.DeferCleanup(bindPlaybook(playbook, runOnItself(playbook, nil)))
+
 		triggerScheduledRun(DefaultContext, playbook.ID, 0, "@every 1h")
 
 		var runCount int64
@@ -207,6 +210,8 @@ var _ = ginkgo.Describe("scheduled playbook runs", func() {
 				{Name: "echo", Exec: &v1.ExecAction{Script: "echo hi"}},
 			},
 		})
+
+		ginkgo.DeferCleanup(bindPlaybook(playbook, runOnItself(playbook, nil)))
 
 		triggerScheduledRun(DefaultContext, playbook.ID, 0, "@every 1h")
 
