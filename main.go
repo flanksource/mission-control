@@ -21,12 +21,13 @@ var (
 )
 
 func main() {
+	api.BuildVersion = version
+	api.BuildCommit = commit
+	api.BuildDate = date
+
 	if len(commit) > 8 {
 		version = fmt.Sprintf("%v, commit %v, built at %v", version, commit[0:8], date)
 	}
-
-	api.BuildVersion = version
-	api.BuildCommit = commit
 
 	cmd.Root.AddCommand(&cobra.Command{
 		Use:   "version",

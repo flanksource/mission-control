@@ -7,6 +7,7 @@ import (
 var (
 	BuildVersion string
 	BuildCommit  string
+	BuildDate    string
 
 	SystemUserID      *uuid.UUID
 	CanaryCheckerPath string
