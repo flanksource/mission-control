@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/duty/models"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 const (
@@ -104,8 +105,21 @@ func resolveServer(ctx context.Context, opts *v1.FacetOptions) (Server, error) {
 	return Server{TimestampURL: timestampURL}, nil
 }
 
+type connectionUseKey struct{}
+
+// WithConnectionUse returns a context in which the facet connection's credentials are filled in only if
+// ctx.Subject() may use it (connection:use), e.g. for a playbook's report action, checked as the playbook.
+func WithConnectionUse(ctx context.Context) context.Context {
+	return ctx.WithValue(connectionUseKey{}, true)
+}
+
 func resolveConnection(ctx context.Context, name, timestampURL string) (Server, error) {
-	conn, err := connection.Get(ctx, name)
+	getConnection := connection.Get
+	if used, _ := ctx.Value(connectionUseKey{}).(bool); used {
+		getConnection = rbac.GetConnectionForUse
+	}
+
+	conn, err := getConnection(ctx, name)
 	if err != nil {
 		return Server{}, ctx.Oops().Wrapf(err, "failed to get facet connection %q", name)
 	}

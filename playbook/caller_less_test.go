@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -18,6 +19,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/playbook/actions"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
@@ -176,6 +178,37 @@ var _ = ginkgo.Describe("Work no person started", func() {
 				Connections: connection.ExecConnections{AWS: &connection.AWSConnection{ConnectionName: ref}},
 			})
 			Expect(err).To(MatchError(ContainSubstring("connection:use required on connection default/caller-less-http")))
+		})
+
+		ginkgo.It("is refused a connection that doesn't exist, whatever duty has cached for it", func() {
+			err := rbac.AuthorizeConnectionRefUse(asPlaybook(), "connection://default/caller-less-missing")
+			Expect(err).To(MatchError(ContainSubstring("not found")))
+		})
+
+		ginkgo.It("needs connection:use on the connections a connection's properties name too", func() {
+			aws := models.Connection{
+				ID: uuid.New(), Name: "caller-less-aws", Namespace: "default", Source: models.SourceUI,
+				Type: models.ConnectionTypeAWS, Username: "access-key", Password: "secret-key",
+			}
+			signed := models.Connection{
+				ID: uuid.New(), Name: "caller-less-signed", Namespace: "default", Source: models.SourceUI,
+				Type: models.ConnectionTypeHTTP, URL: server.URL,
+				Properties: types.JSONStringMap{"awsSigV4": `{"connection":"connection://default/caller-less-aws","service":"es"}`},
+			}
+			Expect(DefaultContext.DB().Create(&aws).Error).To(Succeed())
+			Expect(DefaultContext.DB().Create(&signed).Error).To(Succeed())
+			ginkgo.DeferCleanup(func() {
+				Expect(DefaultContext.DB().Delete(&signed).Error).To(Succeed())
+				Expect(DefaultContext.DB().Delete(&aws).Error).To(Succeed())
+			})
+
+			ginkgo.DeferCleanup(bindPlaybook(playbook, playbookGrant{
+				Action:   adapter.ActionConnectionUse,
+				Resource: v1.ScopeTarget{Connection: &v1.ScopeConnectionSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: signed.Name, Namespace: signed.Namespace}}},
+			}))
+
+			_, err := (&actions.HTTP{}).Run(asPlaybook(), v1.HTTPAction{HTTPConnection: connection.HTTPConnection{ConnectionName: "connection://default/caller-less-signed"}})
+			Expect(err).To(MatchError(ContainSubstring("connection:use required on connection default/caller-less-aws")))
 		})
 
 		ginkgo.It("succeeds with connection:use on the connection", func() {

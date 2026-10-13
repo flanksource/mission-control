@@ -91,7 +91,8 @@ func (r *Report) RunWithConfigs(ctx context.Context, action v1.ReportAction, con
 }
 
 func (r *Report) runWithConfigs(ctx context.Context, action v1.ReportAction, configs []models.ConfigItem) (*ReportResult, error) {
-	result, err := r.run(ctx, action, configs)
+	// The facet connection, named by the action or Mission Control's default, is used as the playbook
+	result, err := r.run(report.WithConnectionUse(ctx), action, configs)
 	if result == nil {
 		result = &ReportResult{}
 	}
@@ -137,8 +138,7 @@ func (r *Report) runView(ctx context.Context, action v1.ReportAction, format str
 		return nil, fmt.Errorf("view %s not found", action.View)
 	}
 
-	// The view's queries fill in their connections' credentials as the playbook
-	if err := rbac.AuthorizeConnectionRefsUse(ctx, v.Spec); err != nil {
+	if err := authorizeViewConnections(ctx, v, action.Variables); err != nil {
 		return nil, err
 	}
 
@@ -150,6 +150,21 @@ func (r *Report) runView(ctx context.Context, action v1.ReportAction, format str
 	r.logf(ctx, "view exported (%d bytes)", len(rendered))
 
 	return reportResult(format, rendered), nil
+}
+
+// authorizeViewConnections checks connection:use, as the playbook, on the connections the view's queries fill in, as
+// they'll be run: templated with the variables, in the view's namespace.
+func authorizeViewConnections(ctx context.Context, view *v1.View, variables map[string]string) error {
+	ctx = ctx.WithNamespace(view.GetNamespace())
+
+	queries := view.DeepCopy().Spec.Queries
+	if len(variables) > 0 {
+		if err := ctx.NewStructTemplater(map[string]any{"var": variables}, "", nil).Walk(&queries); err != nil {
+			return fmt.Errorf("failed to template queries: %w", err)
+		}
+	}
+
+	return rbac.AuthorizeConnectionRefsUse(ctx, queries)
 }
 
 func (r *Report) runCatalog(ctx context.Context, action v1.ReportAction, format string, configs []models.ConfigItem) (*ReportResult, error) {

@@ -248,7 +248,8 @@ func ActionAgentConsumer(ctx context.Context) (int, error) {
 			return ctx.Oops().Wrap(err)
 		}
 
-		return runner.ExecuteAndSaveAction(ctx, spec.PlaybookID, run, *spec, templateEnv)
+		// Like on Mission Control itself, the action's checks are made as its playbook
+		return runner.ExecuteAndSaveAction(ctx.WithSubject(spec.PlaybookID), spec.PlaybookID, run, *spec, templateEnv)
 	})
 
 	if err == nil {

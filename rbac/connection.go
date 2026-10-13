@@ -82,44 +82,27 @@ func withinScopeLimits(ctx context.Context, conn models.Connection) bool {
 
 // GetConnectionForUse finds the connection a reference names, by id or connection://<namespace>/<name>, and returns
 // it with its credentials filled in, if the subject doing the work may use it (connection:use, checked as
-// ctx.Subject()). It's for work done as a resource, e.g. a playbook's actions or a notification's send, so there's no
-// transitional fallback for people.
+// ctx.Subject()), and every connection its properties name. It's for work done as a resource, e.g. a playbook's
+// actions or a notification's send, so there's no transitional fallback for people.
 func GetConnectionForUse(ctx context.Context, ref string) (*models.Connection, error) {
-	conn, err := context.FindConnectionByURL(ctx, ref)
+	conn, err := findStoredConnection(ctx, ref)
 	if err != nil {
 		return nil, err
-	} else if conn == nil {
-		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("connection (%s) not found", ref)
 	}
 
-	if err := authorizeSubjectConnectionUse(ctx, *conn); err != nil {
+	if err := authorizeConnectionUse(ctx, *conn, map[uuid.UUID]bool{}); err != nil {
 		return nil, err
 	}
 
 	return context.HydrateConnection(ctx, conn)
 }
 
-// AuthorizeConnectionRefUse checks connection:use as ctx.Subject() on the connection a reference names, before
-// something else fills in its credentials. A reference that isn't a connection id or connection://<namespace>/<name>
-// names no stored connection, e.g. a URL, and passes. So does one that names no existing connection: there are no
-// credentials to fill in, and the hydration fails on its own.
+// AuthorizeConnectionRefUse checks connection:use as ctx.Subject() on the connection a reference names, and on every
+// connection its properties name, before something else fills in their credentials. A reference that isn't a
+// connection id or connection://<namespace>/<name> names no stored connection, e.g. a URL, and passes. One that names
+// no existing connection is refused: duty's connection cache could still fill in the credentials it named before.
 func AuthorizeConnectionRefUse(ctx context.Context, ref string) error {
-	ref = strings.TrimSpace(ref)
-	if _, err := uuid.Parse(ref); err != nil && !strings.HasPrefix(ref, "connection://") {
-		return nil
-	}
-
-	conn, err := context.FindConnectionByURL(ctx, ref)
-	if err != nil {
-		if dutyAPI.ErrorCode(err) == dutyAPI.ENOTFOUND {
-			return nil
-		}
-		return err
-	} else if conn == nil {
-		return nil
-	}
-
-	return authorizeSubjectConnectionUse(ctx, *conn)
+	return authorizeConnectionRefUse(ctx, ref, map[uuid.UUID]bool{})
 }
 
 // AuthorizeConnectionRefsUse checks connection:use as ctx.Subject() on every connection a spec names, i.e. every
@@ -135,9 +118,66 @@ func AuthorizeConnectionRefsUse(ctx context.Context, spec any) error {
 		return ctx.Oops().Wrap(err)
 	}
 
+	seen := map[uuid.UUID]bool{}
 	for _, ref := range lo.Uniq(connectionRefs(doc)) {
-		if err := AuthorizeConnectionRefUse(ctx, ref); err != nil {
+		if err := authorizeConnectionRefUse(ctx, ref, seen); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func isStoredConnectionRef(ref string) bool {
+	_, err := uuid.Parse(ref)
+	return err == nil || strings.HasPrefix(ref, "connection://")
+}
+
+func findStoredConnection(ctx context.Context, ref string) (*models.Connection, error) {
+	conn, err := context.FindConnectionByURL(ctx, ref)
+	if err != nil {
+		return nil, err
+	} else if conn == nil {
+		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("connection (%s) not found", ref)
+	}
+	return conn, nil
+}
+
+func authorizeConnectionRefUse(ctx context.Context, ref string, seen map[uuid.UUID]bool) error {
+	ref = strings.TrimSpace(ref)
+	if !isStoredConnectionRef(ref) {
+		return nil
+	}
+
+	conn, err := findStoredConnection(ctx, ref)
+	if err != nil {
+		return err
+	}
+
+	return authorizeConnectionUse(ctx, *conn, seen)
+}
+
+// authorizeConnectionUse checks connection:use on the connection, then on the connections its properties name, e.g.
+// an HTTP connection's awsSigV4 connection, whose credentials are filled in along with its own.
+func authorizeConnectionUse(ctx context.Context, conn models.Connection, seen map[uuid.UUID]bool) error {
+	if seen[conn.ID] {
+		return nil
+	}
+	seen[conn.ID] = true
+
+	if err := authorizeSubjectConnectionUse(ctx, conn); err != nil {
+		return err
+	}
+
+	nestedCtx := ctx.WithNamespace(conn.Namespace)
+	for _, value := range conn.Properties {
+		var doc any
+		if err := json.Unmarshal([]byte(value), &doc); err != nil {
+			continue
+		}
+		for _, ref := range lo.Uniq(connectionRefs(doc)) {
+			if err := authorizeConnectionRefUse(nestedCtx, ref, seen); err != nil {
+				return err
+			}
 		}
 	}
 	return nil

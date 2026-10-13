@@ -69,6 +69,7 @@ func ReconcileNotificationRecoveries(ctx context.Context) error {
 			err = fmt.Errorf("recovery retry limit already exceeded")
 		} else {
 			err = resolveDelivery(ctx.WithSubject(receipt.NotificationID.String()), &receipt)
+			recordRefusedSend(ctx, receipt.NotificationID.String(), err)
 		}
 		values := map[string]any{"lease_until": nil, "lease_token": nil, "error": nil}
 		if err != nil {

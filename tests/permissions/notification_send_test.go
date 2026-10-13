@@ -118,18 +118,28 @@ var _ = Describe("Sending a notification through a connection", Ordered, func() 
 		Expect(rbac.ReloadPolicy()).To(Succeed())
 	})
 
-	It("records the connection to send through by id when it's evaluated, without a check", func() {
+	It("records the connection to send through by id when it's evaluated, without a check or its credentials", func() {
+		// Filling in this connection's credentials fails: there's no such secret
+		unresolvable := models.Connection{
+			ID: uuid.New(), Name: "unresolvable", Namespace: namespace, Source: models.SourceUI,
+			Type: models.ConnectionTypeHTTP, URL: server.URL, Password: "secret://missing/password",
+		}
+		Expect(DefaultContext.DB().Create(&unresolvable).Error).To(Succeed())
+		DeferCleanup(func() { Expect(DefaultContext.DB().Delete(&unresolvable).Error).To(Succeed()) })
+		_, err := DefaultContext.HydrateConnection(&unresolvable)
+		Expect(err).To(HaveOccurred())
+
 		event := models.Event{Name: api.EventConfigUnhealthy, EventID: config.ID}
 		celEnv, err := notification.GetEnvForEvent(DefaultContext, event)
 		Expect(err).To(Succeed())
 
 		payloads, err := notification.CreateNotificationSendPayloads(DefaultContext, event, &notification.NotificationWithSpec{
 			Notification:        notif,
-			CustomNotifications: []api.NotificationConfig{{Connection: ref}},
+			CustomNotifications: []api.NotificationConfig{{Connection: fmt.Sprintf("connection://%s/%s", namespace, unresolvable.Name)}},
 		}, celEnv)
 		Expect(err).To(Succeed())
 		Expect(payloads).To(HaveLen(1))
-		Expect(payloads[0].Connection).To(Equal(&conn.ID))
+		Expect(payloads[0].Connection).To(Equal(&unresolvable.ID))
 	})
 
 	It("fails without connection:use, and records why on the send history and the notification", func() {

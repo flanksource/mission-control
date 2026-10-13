@@ -24,7 +24,11 @@ type WebhookPayload struct {
 func sendWebhookNotification(ctx *Context, celVars *celVariables, payload NotificationEventPayload, webhook *api.NotificationWebhookReceiver, notification *NotificationWithSpec) error {
 	start := time.Now()
 
-	if err := rbac.AuthorizeConnectionRefUse(ctx.Context, webhook.HTTPConnection.ConnectionName); err != nil {
+	// The receiver may belong to a cached team spec, shared by every notification sending to the team: filling in its
+	// credentials in place would hand them to the next one without a check.
+	webhook = webhook.DeepCopy()
+
+	if err := rbac.AuthorizeConnectionRefsUse(ctx.Context, webhook.HTTPConnection); err != nil {
 		notificationSendFailureCounter.WithLabelValues("webhook", string(RecipientTypeWebhook), ctx.notificationID.String()).Inc()
 		return err
 	}
