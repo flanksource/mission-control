@@ -83,6 +83,10 @@ func waitForUserPermissions(configID string) {
 	Eventually(func(g Gomega) {
 		resp := doPluginRequest(http.MethodPost, path, []byte(`{}`), goodUser.Email, "test-password")
 		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), resp.Body)
+
+		// Each Permission can land in a different debounced policy reload, so goodUser's isn't proof that noInvokeUser's is loaded.
+		resp, _ = mintUIToken(noInvokeUser.Email, configID)
+		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), resp.Body)
 	}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())
 }
 
