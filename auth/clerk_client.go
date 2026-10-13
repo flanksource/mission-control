@@ -19,8 +19,10 @@ import (
 	"github.com/flanksource/incident-commander/auth/accesstoken"
 	"github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
+	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/attribute"
 	"gorm.io/gorm"
 
@@ -216,6 +218,7 @@ func (h *ClerkHandler) getUserFromSessionClaims(ctx context.Context, claims jwt.
 	sessionID := clerkClaimString(claims, "sid")
 	cacheKey := clerkUserCacheKey(orgID, externalID)
 	if user, exists := h.userCache.Get(cacheKey); exists {
+		h.mapTeams(ctx, user.(*models.Person).ID, claims)
 		return AuthResult{User: user.(*models.Person), SessionID: sessionID}, nil
 	}
 
@@ -236,8 +239,22 @@ func (h *ClerkHandler) getUserFromSessionClaims(ctx context.Context, claims jwt.
 		return AuthResult{}, ctx.Oops().Wrapf(err, "update Clerk role for user %s", dbUser.ID.String())
 	}
 
+	h.mapTeams(ctx, dbUser.ID, claims)
+
 	h.userCache.Set(cacheKey, &dbUser, clerkUserCacheTTL)
 	return AuthResult{User: &dbUser, SessionID: sessionID}, nil
+}
+
+// mapTeams runs the Clerk team mapper on the claims. It runs again whenever the claims change,
+// e.g. after the person signs in again or their organisation role changes.
+// Errors are logged rather than returned, so a broken mapper doesn't lock anyone out.
+func (h *ClerkHandler) mapTeams(ctx context.Context, personID uuid.UUID, claims jwt.MapClaims) {
+	input := lo.OmitByKeys(map[string]any(claims), clerkVolatileClaims)
+	env := map[string]any{"claims": map[string]any(claims)}
+	if err := mapTeams(ctx, personID, lo.CoalesceOrEmpty(ClerkTeamMapper, DefaultClerkTeamMapper), env, input); err != nil {
+		ctx.GetSpan().RecordError(err)
+		ctx.Logger.Errorf("failed to map Clerk claims of person %s to teams: %v", personID, err)
+	}
 }
 
 func clerkClaimString(claims jwt.MapClaims, key string) string {
