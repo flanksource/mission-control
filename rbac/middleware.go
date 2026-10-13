@@ -77,8 +77,8 @@ func DbMiddleware() MiddlewareFunc {
 
 			ctx := c.Request().Context().(context.Context)
 
-			// Subjects without built-in access are only granted checks through their own object
-			if resource == "checks" && !rbac.HasImplicitGrants(ctx.Subject()) {
+			// Subjects without built-in access are only granted checks, and the views of them, through their own object
+			if rowFilteredTables[resource] == policy.ResourceCheck && !rbac.HasImplicitGrants(ctx.Subject()) {
 				object = adapter.ObjectChecks
 			}
 
@@ -216,6 +216,13 @@ var rowFilteredTables = map[string]string{
 	"config_tags":             policy.ResourceConfig,
 	"config_tags_labels_keys": policy.ResourceConfig,
 	"config_types":            policy.ResourceConfig,
+
+	// Lookup views of components, checks and playbooks, which duty makes security_invoker so that their base table's
+	// policy filters them. check_summary also joins the check's canary, so it only lists checks whose canary is readable.
+	"component_labels_keys": policy.ResourceComponent,
+	"checks_labels_keys":    policy.ResourceCheck,
+	"check_summary":         policy.ResourceCheck,
+	"playbook_names":        policy.ResourcePlaybook,
 
 	"config_scrapers":             policy.ResourceScraper,
 	"config_scrapers_with_status": policy.ResourceScraper,

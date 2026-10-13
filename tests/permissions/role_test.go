@@ -1012,6 +1012,10 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(listStatus("read-every-canary", "canaries")).To(Equal(http.StatusOK))
 			Expect(listStatus("read-every-canary", "checks")).To(Equal(http.StatusForbidden), "a read of canaries doesn't cover checks")
 			Expect(listStatus("read-every-check", "checks")).To(Equal(http.StatusOK))
+			for _, view := range []string{"check_summary", "checks_labels_keys"} {
+				Expect(listStatus("read-every-canary", view)).To(Equal(http.StatusForbidden), "a read of canaries doesn't cover %s", view)
+				Expect(listStatus("read-every-check", view)).To(Equal(http.StatusOK), view)
+			}
 		})
 
 		It("filters rows of canaries, which casbin requests never carry", func() {
