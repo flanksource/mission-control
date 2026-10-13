@@ -156,7 +156,7 @@ type CreateTokenRequest struct {
 	Expiry    string `json:"expiry"`
 	AutoRenew bool   `json:"auto_renew"`
 
-	// Roles limit the token to what one of their rules matches. A token with no Roles may do everything its owner may.
+	// Roles limit the token to what one of their rules also matches, within its owner's access. At least one is required.
 	Roles models.AccessTokenRoles `json:"roles"`
 }
 
@@ -180,6 +180,10 @@ func CreateToken(c echo.Context) error {
 	var reqData CreateTokenRequest
 	if err := c.Bind(&reqData); err != nil {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
+	}
+
+	if len(reqData.Roles) == 0 {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "a token must list at least one role; list mission-control-builtin/admin and mission-control-builtin/plugin-admin for all of your access"))
 	}
 
 	for _, role := range reqData.Roles {

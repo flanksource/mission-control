@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"time"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
@@ -111,6 +112,16 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		return &person
 	}
 
+	// createTokenWithoutRoles creates a token the way tokens were created before they had to list Roles.
+	createTokenWithoutRoles := func(owner *models.Person, name string) *models.Person {
+		ginkgo.GinkgoHelper()
+		result, err := db.CreateAccessTokenForPerson(DefaultContext, owner, name, time.Hour, false, nil)
+		Expect(err).ToNot(HaveOccurred())
+		_, err = rbac.Enforcer().AddGroupingPolicy(result.Person.ID.String(), owner.ID.String())
+		Expect(err).ToNot(HaveOccurred())
+		return result.Person
+	}
+
 	canRead := func(subject *models.Person, config models.ConfigItem) bool {
 		return mcRBAC.HasPermission(DefaultContext, subject.ID.String(), &models.ABACAttribute{Config: config}, policy.ActionRead)
 	}
@@ -189,7 +200,7 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		e.DELETE("/test/catalog", func(c echo.Context) error { return c.NoContent(http.StatusOK) }, mcRBAC.Authorization(policy.ObjectCatalog, policy.ActionDelete))
 
 		readonly = createToken(alice, "readonly", "readonly")
-		unscoped = createToken(alice, "unscoped")
+		unscoped = createTokenWithoutRoles(alice, "unscoped")
 		tenantToken = createToken(bob, "tenant-a", "tenant-a-reader")
 		missing = createToken(alice, "missing-role", "does-not-exist")
 	})
@@ -232,6 +243,11 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		Expect(do(readonly, http.MethodPost, "/playbook/run", run).Code).To(Equal(http.StatusForbidden))
 		rec := do(alice, http.MethodPost, "/playbook/run", run)
 		Expect(rec.Code).To(Equal(http.StatusCreated), rec.Body.String())
+	})
+
+	ginkgo.It("refuses a new token without Roles", func() {
+		rec := do(alice, http.MethodPost, "/auth/create_token", auth.CreateTokenRequest{Name: "no-roles"})
+		Expect(rec.Code).To(Equal(http.StatusBadRequest), rec.Body.String())
 	})
 
 	ginkgo.It("leaves tokens without Roles unaffected", func() {
