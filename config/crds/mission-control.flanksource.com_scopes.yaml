@@ -295,6 +295,24 @@ spec:
                       required:
                       - name
                       type: object
+                    scraper:
+                      description: ScopeScraperSelector selects config scrapers by
+                        identity and ownership. Scrapers have no tags or labels.
+                      minProperties: 1
+                      properties:
+                        agent:
+                          minLength: 1
+                          type: string
+                        id:
+                          pattern: ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$
+                          type: string
+                        name:
+                          minLength: 1
+                          type: string
+                        namespace:
+                          minLength: 1
+                          type: string
+                      type: object
                     team:
                       description: ScopeWholeTypeSelector selects every resource of
                         a type that Scopes can only select entirely.
@@ -325,14 +343,14 @@ spec:
                   type: object
                   x-kubernetes-validations:
                   - message: exactly one of config, component, check, playbook, canary,
-                      view, connection, application, notification, notificationSilence,
+                      view, connection, scraper, application, notification, notificationSilence,
                       agent, person, team, scope, role, or roleBinding must be specified
                     rule: '[has(self.config), has(self.component), has(self.check),
                       has(self.playbook), has(self.canary), has(self.view), has(self.connection),
-                      has(self.application), has(self.notification), has(self.notificationSilence),
-                      has(self.agent), has(self.person), has(self.team), has(self.scope),
-                      has(self.role), has(self.roleBinding)].filter(x, x).size() ==
-                      1'
+                      has(self.scraper), has(self.application), has(self.notification),
+                      has(self.notificationSilence), has(self.agent), has(self.person),
+                      has(self.team), has(self.scope), has(self.role), has(self.roleBinding)].filter(x,
+                      x).size() == 1'
                 maxItems: 10
                 minItems: 1
                 type: array

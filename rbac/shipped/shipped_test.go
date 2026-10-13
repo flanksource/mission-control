@@ -72,6 +72,7 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 			"all-canaries":              {policy.ResourceCanary},
 			"all-playbooks":             {policy.ResourcePlaybook},
 			"all-connections":           {policy.ResourceConnection},
+			"all-scrapers":              {policy.ResourceScraper},
 			"all-applications":          {v1.ResourceApplication},
 			"all-notifications":         {v1.ResourceNotification},
 			"all-notification-silences": {v1.ResourceNotificationSilence},

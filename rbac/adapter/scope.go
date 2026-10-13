@@ -22,6 +22,9 @@ type ScopeSelection struct {
 	ID        string
 	Name      string
 	Selectors map[string][]types.ResourceSelector
+
+	// Shipped is set for a Scope Mission Control ships, which can't be changed through the API or Kubernetes.
+	Shipped bool
 }
 
 // DeclaredTypes returns the resource types the Scope's targets select.
@@ -44,7 +47,9 @@ func ResolveScope(ctx context.Context, cache *gocache.Cache, namespace, name str
 		return ScopeSelection{}, NewInvalid(ReasonScopeNotFound, "scope %s/%s not found", namespace, name)
 	}
 
-	return NewScopeSelection(scope.id, name, scope.targets), nil
+	selection := NewScopeSelection(scope.id, name, scope.targets)
+	selection.Shipped = scope.shipped
+	return selection, nil
 }
 
 // NewScopeSelection returns what the targets of a valid Scope select.
@@ -84,6 +89,8 @@ func ValidateScope(ctx context.Context, targets []v1.ScopeTarget) ([]v1.ScopeTar
 				target.Check.Agent = id
 			case target.Canary != nil:
 				target.Canary.Agent = id
+			case target.Scraper != nil:
+				target.Scraper.Agent = id
 			}
 		}
 		resolved = append(resolved, target)

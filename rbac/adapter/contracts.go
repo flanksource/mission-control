@@ -79,6 +79,10 @@ const (
 	ObjectScopes               = "scopes"
 	ObjectRoles                = "roles"
 	ObjectRoleBindings         = "role-bindings"
+
+	// ObjectScrapers is what whole-type grants on scrapers compile to. duty files config_scrapers under
+	// database.config_scrapers, which logging backends share.
+	ObjectScrapers = "scrapers"
 )
 
 // objectForType is the RBAC object of each resource type that can be checked on whole types.
@@ -90,6 +94,7 @@ var objectForType = map[string]string{
 	policy.ResourceCanary:     policy.ObjectCanary,
 	policy.ResourcePlaybook:   policy.ObjectPlaybooks,
 	policy.ResourceConnection: policy.ObjectConnection,
+	policy.ResourceScraper:    ObjectScrapers,
 
 	v1.ResourceApplication:         policy.ObjectApplication,
 	v1.ResourceNotification:        policy.ObjectNotification,
@@ -104,11 +109,11 @@ var objectForType = map[string]string{
 
 var (
 	// genericResources are what create, update and delete take: every type but checks, people and views.
-	genericResources = append([]string{policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCanary, policy.ResourcePlaybook, policy.ResourceConnection},
+	genericResources = append([]string{policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCanary, policy.ResourcePlaybook, policy.ResourceConnection, policy.ResourceScraper},
 		lo.Without(v1.WholeTypeResources, v1.ResourcePerson)...)
 
 	// readableResources are what read takes: every type but views.
-	readableResources = append([]string{policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck, policy.ResourceCanary, policy.ResourcePlaybook, policy.ResourceConnection},
+	readableResources = append([]string{policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck, policy.ResourceCanary, policy.ResourcePlaybook, policy.ResourceConnection, policy.ResourceScraper},
 		v1.WholeTypeResources...)
 
 	playbookTargets = []string{policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck}

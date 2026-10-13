@@ -250,9 +250,9 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 
 	ginkgo.Context("ValidateScope", func() {
 		ginkgo.It("resolves agents on every supported target without changing the authored scope", func() {
-			agents := []models.Agent{dummy.GCPAgent, dummy.HomelabAgent, dummy.GCPAgent, dummy.HomelabAgent}
+			agents := []models.Agent{dummy.GCPAgent, dummy.HomelabAgent, dummy.GCPAgent, dummy.HomelabAgent, dummy.GCPAgent}
 			var targets []v1.ScopeTarget
-			for i, kind := range []string{"config", "component", "check", "canary"} {
+			for i, kind := range []string{"config", "component", "check", "canary", "scraper"} {
 				var target v1.ScopeTarget
 				Expect(json.Unmarshal([]byte(fmt.Sprintf(`{"%s":{"agent":%q}}`, kind, agents[i].Name)), &target)).To(Succeed())
 				targets = append(targets, target)

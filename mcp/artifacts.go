@@ -7,11 +7,13 @@ import (
 
 	"github.com/flanksource/artifacts"
 	pkgConnection "github.com/flanksource/duty/connection"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 )
 
@@ -21,6 +23,17 @@ const (
 	toolReadArtifactMetadata = "read_artifact_metadata"
 	toolReadArtifactContent  = "read_artifact_content"
 )
+
+// findVisibleArtifact returns the artifact when it's visible under the caller's row filters, nil otherwise.
+func findVisibleArtifact(ctx context.Context, id uuid.UUID) (*models.Artifact, error) {
+	var artifact *models.Artifact
+	err := auth.WithRLS(ctx, func(ctx context.Context) error {
+		var err error
+		artifact, err = db.FindArtifact(ctx, id)
+		return err
+	})
+	return artifact, err
+}
 
 func readArtifactMetadataHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
@@ -38,7 +51,7 @@ func readArtifactMetadataHandler(goctx gocontext.Context, req mcp.CallToolReques
 		return mcp.NewToolResultError(fmt.Sprintf("invalid id(%s). must be a uuid: %v", artifactIDStr, err)), nil
 	}
 
-	artifact, err := db.FindArtifact(ctx, artifactID)
+	artifact, err := findVisibleArtifact(ctx, artifactID)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	} else if artifact == nil {
@@ -66,7 +79,7 @@ func readArtifactContentHandler(goctx gocontext.Context, req mcp.CallToolRequest
 
 	maxLength := req.GetInt("max_length", defaultMaxLength)
 
-	artifact, err := db.FindArtifact(ctx, artifactID)
+	artifact, err := findVisibleArtifact(ctx, artifactID)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	} else if artifact == nil {

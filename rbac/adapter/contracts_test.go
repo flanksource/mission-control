@@ -369,6 +369,7 @@ var _ = ginkgo.Describe("Whole-type resources", func() {
 	ginkgo.It("takes every type but views for read", func() {
 		Expect(read.Resources).To(ConsistOf(append([]string{
 			policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck, policy.ResourceCanary, policy.ResourcePlaybook, policy.ResourceConnection,
+			policy.ResourceScraper,
 		}, v1.WholeTypeResources...)))
 	})
 
@@ -377,6 +378,7 @@ var _ = ginkgo.Describe("Whole-type resources", func() {
 			contract, _ := ContractFor(action)
 			Expect(contract.Resources).To(ConsistOf(append([]string{
 				policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCanary, policy.ResourcePlaybook, policy.ResourceConnection,
+				policy.ResourceScraper,
 			}, lo.Without(v1.WholeTypeResources, v1.ResourcePerson)...)))
 
 			Expect(contract.validateInput("resource", wholeType(v1.ResourcePerson))).To(MatchError(ContainSubstring("selects person")))
@@ -398,4 +400,32 @@ var _ = ginkgo.Describe("Whole-type resources", func() {
 			}))
 		})
 	}
+
+	ginkgo.Describe("scrapers", func() {
+		oneAgent := ScopeSelection{ID: "00000000-0000-4000-8000-000000000007", Name: "homelab-scrapers", Selectors: map[string][]types.ResourceSelector{
+			policy.ResourceScraper: {{Agent: "homelab"}},
+		}}
+
+		ginkgo.It("filters listings by row, so read takes any scraper Scope", func() {
+			Expect(read.validateInput("resource", oneAgent)).To(Succeed())
+			Expect(CompiledRule{Contract: read, Resource: []ScopeSelection{oneAgent}}.ReadGrants()).To(Equal(map[string]rls.Grant{
+				policy.ResourceScraper: {Scope: oneAgent.ID},
+			}))
+		})
+
+		for _, action := range []string{policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete} {
+			ginkgo.It("only takes all scrapers for "+action, func() {
+				contract, _ := ContractFor(action)
+				Expect(contract.validateInput("resource", wholeType(policy.ResourceScraper))).To(Succeed())
+				Expect(contract.validateInput("resource", oneAgent)).To(MatchError(ContainSubstring(`exactly name: "*"`)))
+			})
+		}
+
+		ginkgo.It("compiles a whole-type rule to the scrapers object", func() {
+			update, _ := ContractFor(policy.ActionUpdate)
+			policies, err := compiledRuleToCasbinRules("binding:default/ops", CompiledRule{ID: "binding:1/update", Name: "update", Contract: update, Resource: []ScopeSelection{wholeType(policy.ResourceScraper)}})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(policies).To(ContainElement([]string{"p", "binding:default/ops", ObjectScrapers, policy.ActionUpdate, "allow", "", "binding:1/update"}))
+		})
+	})
 })

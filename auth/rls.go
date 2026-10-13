@@ -125,9 +125,7 @@ func limitToTokenRoles(ctx context.Context, owner *rls.Payload, roles models.Acc
 			return nil, fmt.Errorf("failed to load the rules of role %s/%s: %w", role.Namespace, role.Name, err)
 		}
 		for _, rule := range rules {
-			for kind, grant := range rule.ReadGrants() {
-				limit.grant(kind, grant)
-			}
+			limit.grantRule(rule)
 		}
 	}
 
@@ -194,6 +192,16 @@ func WithRLS(ctx context.Context, fn func(context.Context) error) error {
 	})
 }
 
+// CanReadArtifact reports whether the artifact exists and is visible under the subject's row filters, e.g. an
+// artifact a scraper produced only when the subject can list the scraper.
+func CanReadArtifact(ctx context.Context, id uuid.UUID) (bool, error) {
+	var count int64
+	err := WithRLS(ctx, func(ctx context.Context) error {
+		return ctx.DB().Table("artifacts").Where("id = ? AND deleted_at IS NULL", id).Count(&count).Error
+	})
+	return count > 0, err
+}
+
 // buildRLSPayload converts the subject's read grants into the claim Postgres filters listings by,
 // since casbin can't filter rows returned by /db.
 //
@@ -257,8 +265,29 @@ func (c *claim) grant(kind string, grant rls.Grant) {
 	}
 	if c.grants[kind] == nil {
 		c.grants[kind] = rls.NoRows()
+	} else if c.grants[kind].All {
+		return
 	}
 	c.grants[kind].Add(grant)
+}
+
+// grantAll lists every row of the type.
+func (c *claim) grantAll(kind string) {
+	if lo.Contains(rls.GrantTypes, kind) {
+		c.grants[kind] = rls.AllRows()
+	}
+}
+
+// grantRule lists the rows a read rule grants. A rule over all scrapers through shipped Scopes lists every scraper
+// as "all". Other grants name their Scopes, so a cached claim follows changes to the Scopes' membership.
+func (c *claim) grantRule(rule adapter.CompiledRule) {
+	for kind, grant := range rule.ReadGrants() {
+		if kind == policy.ResourceScraper && rule.GrantsAllOf(kind) {
+			c.grantAll(kind)
+		} else {
+			c.grant(kind, grant)
+		}
+	}
 }
 
 // deny lists no rows of the type, whatever else grants them.
@@ -289,6 +318,9 @@ var typesOfObject = map[string][]string{
 	policy.ObjectTopology:  {policy.ResourceComponent},
 	policy.ObjectCanary:    {policy.ResourceCanary, policy.ResourceCheck},
 	policy.ObjectPlaybooks: {policy.ResourcePlaybook},
+
+	policy.ObjectDatabaseSettings: {policy.ResourceScraper},
+	adapter.ObjectScrapers:        {policy.ResourceScraper},
 }
 
 func addPermissionGrants(ctx context.Context, claim *claim, ids []string) error {
@@ -359,12 +391,8 @@ func addBindingRuleGrants(ctx context.Context, claim *claim, bindingRules map[uu
 		}
 
 		for _, rule := range rules {
-			if !lo.Contains(ids, rule.ID) {
-				continue
-			}
-
-			for kind, grant := range rule.ReadGrants() {
-				claim.grant(kind, grant)
+			if lo.Contains(ids, rule.ID) {
+				claim.grantRule(rule)
 			}
 		}
 	}

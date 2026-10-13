@@ -96,10 +96,11 @@ func DbMiddleware() MiddlewareFunc {
 				allowed = CheckType(ctx, Grant{typeObject, typeAction}, Grant{object, action})
 				object, action = typeObject, typeAction
 			} else {
-				allowed = CheckContext(ctx, object, action) || canListFilteredRows(ctx, resource, action) || readsConnections(ctx, resource, action)
+				allowed = CheckContext(ctx, object, action) || canListFilteredRows(ctx, resource, action) || readsConnections(ctx, resource, action) ||
+					scraperGrants(ctx, resource, object, action)
 			}
 
-			if !allowed {
+			if !allowed || scraperDenied(ctx, resource, object, action) {
 				c.Response().Header().Add("X-Rbac-Subject", ctx.Subject())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)
@@ -146,6 +147,45 @@ var typeTables = map[string]string{
 	"role_bindings":         adapter.ObjectRoleBindings,
 }
 
+// scraperGrants reports whether the subject's grants on scrapers allow the action on config scrapers. duty files the
+// table under database.config_scrapers, which logging backends share, and its view under database.monitor, so
+// Role rules on scrapers are granted on an object of their own. The subject may hold either object, but an access
+// token's Roles must allow scrapers: they're Roles, so they grant types, not the table's object.
+func scraperGrants(ctx context.Context, table, object, action string) bool {
+	switch table {
+	case "config_scrapers":
+	case "config_scrapers_with_status":
+		if action != policy.ActionRead {
+			return false
+		}
+	default:
+		return false
+	}
+
+	user := ctx.User()
+	if user == nil {
+		return false
+	}
+	owner := rbac.CheckContext(ctx, adapter.ObjectScrapers, action) || rbac.CheckContext(ctx, object, action)
+	return owner && TokenAllowsObject(ctx, user.ID.String(), adapter.ObjectScrapers, action)
+}
+
+// scraperDenied reports whether a deny on any object a scraper table is granted through applies to the action: the
+// table's own object (database.monitor for the status view), database.config_scrapers and scrapers. A grant on one
+// of them can't bypass a deny on another.
+func scraperDenied(ctx context.Context, table, object, action string) bool {
+	if (table != "config_scrapers" && table != "config_scrapers_with_status") || ctx.User() == nil || rbac.Enforcer() == nil {
+		return false
+	}
+	subject := checkedSubject(ctx)
+	for _, o := range lo.Uniq([]string{object, policy.ObjectDatabaseSettings, adapter.ObjectScrapers}) {
+		if deniedExplicitly(ctx, subject, Grant{o, action}) {
+			return true
+		}
+	}
+	return false
+}
+
 // rowFilteredTables are the tables whose rows are filtered by a subject's read grants of their resource type.
 var rowFilteredTables = map[string]string{
 	"config_items":   policy.ResourceConfig,
@@ -155,6 +195,9 @@ var rowFilteredTables = map[string]string{
 	"checks":         policy.ResourceCheck,
 	"canaries":       policy.ResourceCanary,
 	"playbooks":      policy.ResourcePlaybook,
+
+	"config_scrapers":             policy.ResourceScraper,
+	"config_scrapers_with_status": policy.ResourceScraper,
 }
 
 // ReadGrantsCover reports whether the subject's read grants filter rows of the resource type.
