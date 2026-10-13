@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	icrbac "github.com/flanksource/incident-commander/rbac"
+
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/types"
@@ -59,7 +61,7 @@ var _ = Describe("Sending a notification through a connection", Ordered, func() 
 	}
 
 	BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(icrbac.Init(DefaultContext)).To(Succeed())
 
 		server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			_, _ = io.Copy(io.Discard, r.Body)

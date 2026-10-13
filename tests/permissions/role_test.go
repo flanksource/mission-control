@@ -125,16 +125,16 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 	}
 
 	BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
 
-		alice = setup.CreateUserWithRole(DefaultContext, "Role Alice", "role-alice@test.com", policy.RoleGuest)
-		bob = setup.CreateUserWithRole(DefaultContext, "Role Bob", "role-bob@test.com", policy.RoleGuest)
-		carol = setup.CreateUserWithRole(DefaultContext, "Role Carol", "role-carol@test.com", policy.RoleGuest)
-		dave = setup.CreateUserWithRole(DefaultContext, "Role Dave", "role-dave@test.com", policy.RoleGuest)
-		erin = setup.CreateUserWithRole(DefaultContext, "Role Erin", "role-erin@test.com", policy.RoleGuest)
+		alice = setup.CreateUserWithRole(DefaultContext, "Role Alice", "role-alice@test.com")
+		bob = setup.CreateUserWithRole(DefaultContext, "Role Bob", "role-bob@test.com")
+		carol = setup.CreateUserWithRole(DefaultContext, "Role Carol", "role-carol@test.com")
+		dave = setup.CreateUserWithRole(DefaultContext, "Role Dave", "role-dave@test.com")
+		erin = setup.CreateUserWithRole(DefaultContext, "Role Erin", "role-erin@test.com")
 		builtinAgent = setup.CreateUserWithRole(DefaultContext, "Role Agent", "role-agent@test.com", policy.RoleAgent)
-		rlsGuest = setup.CreateUserWithRole(DefaultContext, "Role RLS Guest", "role-rls@test.com", policy.RoleGuest)
-		rlsTenantGuest = setup.CreateUserWithRole(DefaultContext, "Role RLS Tenant Guest", "role-rls-tenant@test.com", policy.RoleGuest)
+		rlsGuest = setup.CreateUserWithRole(DefaultContext, "Role RLS Guest", "role-rls@test.com")
+		rlsTenantGuest = setup.CreateUserWithRole(DefaultContext, "Role RLS Tenant Guest", "role-rls-tenant@test.com")
 
 		teamA = &models.Team{Name: "role-team-a", CreatedBy: alice.ID}
 		teamB = &models.Team{Name: "role-team-b", CreatedBy: alice.ID}
@@ -185,7 +185,6 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			newBinding("people-and-teams", "run-playbooks", v1.RoleBindingSubjects{
 				PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{alice.Email}, Teams: []string{teamA.Name, teamB.Name}},
 			}),
-			newBinding("built-in-roles", "run-playbooks", v1.RoleBindingSubjects{Roles: []string{policy.RoleAgent}}),
 			newBinding("pairings-a", "tenant-a-runner", people(bob)),
 			newBinding("pairings-b", "tenant-b-runner", people(bob)),
 			newBinding("run-anywhere", "run-anywhere", people(carol)),
@@ -245,8 +244,11 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			}
 		})
 
-		It("grants the role to built-in roles", func() {
-			Expect(canRunOn(builtinAgent.ID.String(), dummy.EchoConfig, nil)).To(BeTrue())
+		It("rejects a binding that selects built-in roles, which grant nothing", func() {
+			err := db.PersistRoleBindingFromCRD(DefaultContext, newBinding("built-in-roles", "run-playbooks", v1.RoleBindingSubjects{Roles: []string{policy.RoleAgent}}))
+			Expect(err).To(MatchError(ContainSubstring("subjects.roles is no longer supported")))
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+			Expect(canRunOn(builtinAgent.ID.String(), dummy.EchoConfig, nil)).To(BeFalse())
 		})
 
 		It("grants nothing to subjects without a binding", func() {
@@ -611,7 +613,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		}
 
 		BeforeAll(func() {
-			human = setup.CreateUserWithRole(DefaultContext, "Role Human", "role-human@test.com", policy.RoleGuest)
+			human = setup.CreateUserWithRole(DefaultContext, "Role Human", "role-human@test.com")
 			logsPlugin = createPlugin("kubernetes-logs")
 			otherPlugin = createPlugin("other")
 
@@ -920,7 +922,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			}
 			Expect(visibleNames(reader, readerSubject)).To(Equal([]uuid.UUID{tenantA.ID}))
 
-			admin := setup.CreateUserWithRole(DefaultContext, "Role RLS Admin", "role-rls-admin@test.com", policy.RoleAdmin)
+			admin := newAdmin("Role RLS Admin", "role-rls-admin@test.com")
 			DeferCleanup(func() { Expect(DefaultContext.DB().Delete(admin).Error).To(Succeed()) })
 			for _, view := range configViews {
 				Expect(listStatus(admin, admin.ID.String(), view)).To(Equal(http.StatusOK), "a whole-type reader reads %s", view)
@@ -960,14 +962,14 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(status).To(Equal(http.StatusOK))
 			Expect(types).To(ConsistOf("Role::Test"), "only the configs its Scope selects are summarized")
 
-			admin := setup.CreateUserWithRole(DefaultContext, "Role Summary Admin", "role-summary-admin@test.com", policy.RoleAdmin)
+			admin := newAdmin("Role Summary Admin", "role-summary-admin@test.com")
 			DeferCleanup(func() { Expect(DefaultContext.DB().Delete(admin).Error).To(Succeed()) })
 			status, types = summary(admin)
 			Expect(status).To(Equal(http.StatusOK))
 			Expect(types).To(ContainElement("Role::Test"))
 			Expect(len(types)).To(BeNumerically(">", 1), "a whole-type reader summarizes every config")
 
-			stranger := setup.CreateUserWithRole(DefaultContext, "Role Summary Stranger", "role-summary-stranger@test.com", policy.RoleGuest)
+			stranger := setup.CreateUserWithRole(DefaultContext, "Role Summary Stranger", "role-summary-stranger@test.com")
 			DeferCleanup(func() { Expect(DefaultContext.DB().Delete(stranger).Error).To(Succeed()) })
 			Expect(summary(stranger)).To(Equal(http.StatusForbidden), "a guest without read grants on configs")
 		})
@@ -1023,7 +1025,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(db.PersistScopeFromCRD(DefaultContext, canaries)).To(Succeed())
 			role := newRole("read-canaries", namespace, allow("read", policy.ActionRead, "canaries"))
 			persistRole(role)
-			guest := setup.CreateUserWithRole(DefaultContext, "Role Canary Guest", "role-canary@test.com", policy.RoleGuest)
+			guest := setup.CreateUserWithRole(DefaultContext, "Role Canary Guest", "role-canary@test.com")
 			binding := newBinding("read-canaries", role.Name, people(guest))
 			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).To(Succeed())
 			DeferCleanup(func() {
@@ -1081,16 +1083,9 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(rbac.ReloadPolicy()).To(Succeed())
 		}
 
-		createUser := func(name, role string) *models.Person {
-			GinkgoHelper()
-			person := setup.CreateUserWithRole(DefaultContext, "Role Summary "+name, "role-summary-"+name+"@test.com", role)
-			DeferCleanup(func() { Expect(DefaultContext.DB().Delete(person).Error).To(Succeed()) })
-			return person
-		}
-
 		bindGuest := func(name, role string, constraint string) *models.Person {
 			GinkgoHelper()
-			guest := setup.CreateUserWithRole(DefaultContext, "Role Summary "+name, "role-summary-"+name+"@test.com", policy.RoleGuest)
+			guest := setup.CreateUserWithRole(DefaultContext, "Role Summary "+name, "role-summary-"+name+"@test.com")
 			binding := newBinding("summary-"+name, role, people(guest))
 			if constraint != "" {
 				binding = constrained(binding, constraint, "")
@@ -1133,9 +1128,9 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(readSummaryOf(guest)).To(Equal(only(policy.ResourceConfig, mcRBAC.AccessSome)))
 		})
 
-		It("gives viewers and admins all of the types their built-in role grants", func() {
-			viewer := createUser("viewer", policy.RoleViewer)
-			admin := createUser("admin", policy.RoleAdmin)
+		It("gives people bound to the shipped viewer and admin Roles all of the types their Role grants", func() {
+			viewer := newViewer("Role Summary viewer", "role-summary-viewer@test.com")
+			admin := newAdmin("Role Summary admin", "role-summary-admin@test.com")
 
 			Expect(readSummaryOf(viewer)).To(Equal(map[string]mcRBAC.Access{
 				policy.ResourceConfig:     mcRBAC.AccessAll,
@@ -1153,7 +1148,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		})
 
 		It("gives some of a write a Permission grants on selected resources", func() {
-			viewer := createUser("scoped-writer", policy.RoleViewer)
+			viewer := newViewer("Role Summary scoped-writer", "role-summary-scoped-writer@test.com")
 			createPermission(&models.Permission{
 				Name:           "summary-update-media-configs",
 				Action:         policy.ActionUpdate,
@@ -1166,7 +1161,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		})
 
 		It("gives all of a write granted on the whole type", func() {
-			viewer := createUser("whole-writer", policy.RoleViewer)
+			viewer := newViewer("Role Summary whole-writer", "role-summary-whole-writer@test.com")
 			createPermission(&models.Permission{
 				Name:    "summary-update-catalog",
 				Action:  policy.ActionUpdate,
@@ -1178,7 +1173,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		})
 
 		It("doesn't count a Permission that names several types towards any of them", func() {
-			viewer := createUser("multi-type", policy.RoleViewer)
+			viewer := newViewer("Role Summary multi-type", "role-summary-multi-type@test.com")
 			createPermission(&models.Permission{
 				Name:           "summary-update-configs-with-playbook",
 				Action:         policy.ActionUpdate,
@@ -1190,7 +1185,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		})
 
 		It("reads a selector whatever its text contains", func() {
-			viewer := createUser("search-writer", policy.RoleViewer)
+			viewer := newViewer("Role Summary search-deny", "role-summary-search-deny@test.com")
 			createPermission(&models.Permission{
 				Name:           "summary-update-search",
 				Action:         policy.ActionUpdate,

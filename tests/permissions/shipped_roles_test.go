@@ -26,6 +26,7 @@ import (
 	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
+	"github.com/flanksource/incident-commander/rbac/rbactest"
 	"github.com/flanksource/incident-commander/rbac/shipped"
 )
 
@@ -37,11 +38,11 @@ var _ = Describe("Shipped roles", Ordered, func() {
 	)
 
 	var (
-		viewerPerson, adminPerson, builtinAdmin, outsider *models.Person
-		config                                            models.ConfigItem
-		connection                                        models.Connection
-		pluginID                                          = uuid.New()
-		preexistingScope                                  *v1.Scope
+		viewerPerson, adminPerson, teamAdmin, outsider *models.Person
+		config                                         models.ConfigItem
+		connection                                     models.Connection
+		pluginID                                       = uuid.New()
+		preexistingScope                               *v1.Scope
 	)
 
 	invokeAction := policy.NewPluginInvokeAction(pluginName, operation)
@@ -111,17 +112,20 @@ var _ = Describe("Shipped roles", Ordered, func() {
 	}
 
 	BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
 
-		viewerPerson = setup.CreateUserWithRole(DefaultContext, "Shipped Viewer", "shipped-viewer@test.com", policy.RoleGuest)
-		adminPerson = setup.CreateUserWithRole(DefaultContext, "Shipped Admin", "shipped-admin@test.com", policy.RoleGuest)
-		builtinAdmin = setup.CreateUserWithRole(DefaultContext, "Shipped Builtin Admin", "shipped-builtin-admin@test.com", policy.RoleAdmin)
-		outsider = setup.CreateUserWithRole(DefaultContext, "Shipped Outsider", "shipped-outsider@test.com", policy.RoleGuest)
+		viewerPerson = setup.CreateUserWithRole(DefaultContext, "Shipped Viewer", "shipped-viewer@test.com")
+		adminPerson = setup.CreateUserWithRole(DefaultContext, "Shipped Admin", "shipped-admin@test.com")
+		teamAdmin = setup.CreateUserWithRole(DefaultContext, "Shipped Team Admin", "shipped-builtin-admin@test.com")
+		outsider = setup.CreateUserWithRole(DefaultContext, "Shipped Outsider", "shipped-outsider@test.com")
 
 		config = models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr("shipped-config"), Type: lo.ToPtr("Shipped::Test"), ConfigClass: "Test"}
 		Expect(DefaultContext.DB().Create(&config).Error).To(Succeed())
 		connection = models.Connection{ID: uuid.New(), Name: "shipped-connection", Namespace: "default", Type: "http", URL: "http://example.com", Source: models.SourceUI}
 		Expect(DefaultContext.DB().Create(&connection).Error).To(Succeed())
+
+		// Other specs make admins, which writes the shipped objects
+		Expect(rbactest.DeleteNamespace(DefaultContext, namespace)).To(Succeed())
 
 		// A Scope applied through Kubernetes before Mission Control shipped one of the same name
 		preexistingScope = &v1.Scope{
@@ -138,6 +142,8 @@ var _ = Describe("Shipped roles", Ordered, func() {
 		})).To(Succeed())
 
 		sync()
+		Expect(shipped.AddToAdmins(DefaultContext, teamAdmin.ID)).To(Succeed())
+		Expect(rbac.ReloadPolicy()).To(Succeed())
 
 		bind(shipped.RoleViewer, viewerPerson)
 		bind(shipped.RoleAdmin, adminPerson)
@@ -154,7 +160,7 @@ var _ = Describe("Shipped roles", Ordered, func() {
 		Expect(DefaultContext.DB().Where("source = ?", adapter.SourceShipped).Delete(&models.Team{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Delete(&connection).Error).To(Succeed())
 		Expect(DefaultContext.DB().Delete(&config).Error).To(Succeed())
-		for _, p := range []*models.Person{viewerPerson, adminPerson, builtinAdmin, outsider} {
+		for _, p := range []*models.Person{viewerPerson, adminPerson, teamAdmin, outsider} {
 			Expect(DefaultContext.DB().Delete(p).Error).To(Succeed())
 		}
 		Expect(rbac.ReloadPolicy()).To(Succeed())
@@ -379,7 +385,7 @@ var _ = Describe("Shipped roles", Ordered, func() {
 
 		request := func(method, path string, body any) *httptest.ResponseRecorder {
 			GinkgoHelper()
-			return requestAs(builtinAdmin, method, path, body)
+			return requestAs(teamAdmin, method, path, body)
 		}
 
 		readRole := map[string]any{"rules": []any{map[string]any{

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 
+	icrbac "github.com/flanksource/incident-commander/rbac"
+
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -17,8 +19,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm"
-
-	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 func postCreateToken(ctx context.Context, e *echo.Echo, reqData CreateTokenRequest, expectedStatus int) dutyAPI.HTTPSuccess {
@@ -71,7 +71,7 @@ var _ = Describe("CreateToken", Ordered, func() {
 
 	BeforeAll(func() {
 		// Initialize RBAC with admin user
-		if err := rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter); err != nil {
+		if err := icrbac.Init(DefaultContext); err != nil {
 			Fail("Failed to initialize RBAC: " + err.Error())
 		}
 

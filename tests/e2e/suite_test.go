@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	icrbac "github.com/flanksource/incident-commander/rbac"
+
 	"github.com/flanksource/commons-test/container"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -20,7 +22,6 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 
@@ -33,7 +34,6 @@ import (
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/playbook/sdk"
 	"github.com/flanksource/incident-commander/playbook/testdata"
-	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/vars"
 
 	// register event handlers
@@ -190,7 +190,7 @@ var _ = ginkgo.BeforeSuite(func() {
 
 	api.DefaultArtifactConnection = "connection://default/artifacts"
 
-	if err := rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter); err != nil {
+	if err := icrbac.Init(DefaultContext); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 

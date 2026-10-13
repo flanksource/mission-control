@@ -136,9 +136,8 @@ func init() {
 
 func registerManagedKinds(e *echo.Echo) {
 	for _, kind := range managedKinds {
-		// Built-in roles grant the kinds on the rbac object
 		check := func(action string) MiddlewareFunc {
-			return TypeAuthorization(Grant{kind.object, action}, Grant{policy.ObjectRBAC, action})
+			return Authorization(kind.object, action)
 		}
 
 		group := e.Group("/rbac/" + kind.path)

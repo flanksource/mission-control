@@ -14,17 +14,23 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/setup"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/auth/signing"
+	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
+	"github.com/flanksource/incident-commander/rbac/rbactest"
+	"github.com/flanksource/incident-commander/rbac/shipped"
 	"github.com/flanksource/incident-commander/vars"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sTypes "k8s.io/apimachinery/pkg/types"
 )
 
 var (
@@ -51,27 +57,25 @@ var _ = BeforeSuite(func() {
 	e.Use(auth.MockAuthMiddleware)
 
 	Expect(DefaultContext.DB().Exec("TRUNCATE casbin_rule").Error).To(BeNil())
-	if err := dutyRBAC.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter); err != nil {
+	if err := rbac.Init(DefaultContext); err != nil {
 		Fail(fmt.Sprintf("error instantiating rbac: %v", err))
 	}
-	usersAndRoles := map[string]string{
-		"admin":     policy.RoleAdmin,
-		"editor":    policy.RoleEditor,
-		"commander": policy.RoleCommander,
-		"responder": policy.RoleResponder,
-		"viewer":    policy.RoleViewer,
+	people := map[string]*models.Person{}
+	for _, user := range []string{"admin", "viewer"} {
+		person := models.Person{Name: user, Email: user + "@test.com"}
+		Expect(DefaultContext.DB().Save(&person).Error).To(Succeed())
+		people[user] = &person
 	}
 
-	// Requests are checked as the person's id, so that's who gets the role
-	for user, role := range usersAndRoles {
-		person := models.Person{Name: user, Email: user + "@test.com"}
-		if err := DefaultContext.DB().Save(&person).Error; err != nil {
-			Fail(fmt.Sprintf("error saving user %s: %v", user, err))
-		}
-		if err := dutyRBAC.AddRoleForUser(person.ID.String(), role); err != nil {
-			Fail(fmt.Sprintf("error adding roles for users: %v", err))
-		}
-	}
+	// admin is in the shipped admins team, and viewer is bound to the shipped viewer Role
+	Expect(rbactest.MakeAdmins(DefaultContext, people["admin"].ID)).To(Succeed())
+	Expect(db.PersistRoleBindingFromCRD(DefaultContext, &v1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: "viewers", Namespace: adapter.ShippedNamespace, UID: k8sTypes.UID(uuid.NewString())},
+		Spec: v1.RoleBindingSpec{Role: shipped.RoleViewer, Subjects: v1.RoleBindingSubjects{
+			PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{people["viewer"].Email}},
+		}},
+	})).To(Succeed())
+	Expect(dutyRBAC.ReloadPolicy()).To(Succeed())
 
 	// Mock all responses with OK
 	e.Any("/db/*", func(c echo.Context) error {
@@ -173,6 +177,14 @@ var _ = Describe("Authorization", func() {
 		"GET /db/integrations",
 		"GET /db/event_queue_summary",
 		"POST|PUT|DELETE /db/config_items",
+
+		// The viewer Role reads nothing that configures access or exposes Mission Control's internals
+		"GET /db/agents",
+
+		// No Role grants database.public, which lookup tables aren't mapped from to their types yet
+		"GET /db/identities",
+		"GET /db/people_roles",
+		"GET /db/playbook_names",
 	}
 
 	for _, t := range privileged {
@@ -195,17 +207,12 @@ var _ = Describe("Authorization", func() {
 	}
 
 	var unprivileged = []string{
-		"GET /db/identities",
-		"GET /db/identities",
 		"GET /db/playbooks",
 		"GET /db/people",
-		"GET /db/agents",
-		"GET /db/playbook_names",
 
 		"GET /db/config_statuses",
 		"GET /db/rpc/related_configs_recursive",
 		"GET /db/config_analysis_items",
-		"GET /db/people_roles",
 		"GET /db/canaries",
 		"GET /db/checks",
 		"GET /db/config_items",

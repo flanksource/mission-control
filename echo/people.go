@@ -2,13 +2,10 @@ package echo
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/ory/client-go"
@@ -25,8 +22,10 @@ type UpdatePersonRequest struct {
 	FirstName *string `form:"firstName"`
 	LastName  *string `form:"lastName"`
 	Email     *string `form:"email"`
-	Role      *string `form:"role"`
-	Active    *bool   `form:"active"`
+
+	// Deprecated: built-in roles were removed, so a request that sets a role is rejected.
+	Role   *string `form:"role"`
+	Active *bool   `form:"active"`
 }
 
 func (t *UpdatePersonRequest) ToUpdateIdentityBody(traits map[string]any) client.UpdateIdentityBody {
@@ -71,8 +70,8 @@ type PersonController struct {
 // RegisterPeopleRoutes registers the routes that change or delete a person's account.
 func RegisterPeopleRoutes(e *echov4.Echo, kratos *client.APIClient) {
 	controller := PersonController{kratos: kratos}
-	e.POST("/people/update", controller.UpdatePerson, icrbac.PersonManage(policy.ObjectPeople, policy.ActionUpdate))
-	e.DELETE("/people/:id", controller.DeletePerson, icrbac.PersonManage(policy.ObjectPeople, policy.ActionDelete))
+	e.POST("/people/update", controller.UpdatePerson, icrbac.PersonManage())
+	e.DELETE("/people/:id", controller.DeletePerson, icrbac.PersonManage())
 }
 
 func (t *PersonController) UpdatePerson(c echov4.Context) error {
@@ -85,6 +84,10 @@ func (t *PersonController) UpdatePerson(c echov4.Context) error {
 	var req UpdatePersonRequest
 	if err := c.Bind(&req); err != nil {
 		return api.Errorf(api.EINVALID, "invalid request body: %v", err)
+	}
+
+	if req.Role != nil {
+		return api.WriteError(c, api.Errorf(api.EINVALID, "a person can't be given a role: built-in roles were removed, add them to teams instead"))
 	}
 
 	var traits types.JSONMap
@@ -104,16 +107,6 @@ func (t *PersonController) UpdatePerson(c echov4.Context) error {
 		}
 
 		return err
-	}
-
-	if req.Role != nil {
-		if err := rbac.DeleteAllRolesForUser(req.ID); err != nil {
-			return api.WriteError(c, fmt.Errorf("failed to delete existing roles: %w", err))
-		}
-
-		if err := rbac.AddRoleForUser(req.ID, *req.Role); err != nil {
-			return api.WriteError(c, fmt.Errorf("failed to add the new role: %w", err))
-		}
 	}
 
 	return c.JSON(http.StatusOK, identity.Traits)

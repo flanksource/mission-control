@@ -5,6 +5,7 @@ import (
 	"net/http/httptest"
 	"strings"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
@@ -128,23 +129,32 @@ var _ = ginkgo.Describe("Kratos invites", ginkgo.Ordered, func() {
 		Expect(accepted.AcceptedAt).ToNot(BeNil())
 	})
 
-	ginkgo.It("still assigns the deprecated role of an invite", func() {
-		invite("invitee-role@example.com", inviteGrants{Role: "editor"})
+	ginkgo.It("assigns nothing for the built-in role an earlier version's invite stored", func() {
+		for _, column := range []string{"editor", `{"role":"admin","teams":["invite-sre"]}`} {
+			email := "invitee-role-" + uuid.NewString()[:8] + "@example.com"
+			Expect(DefaultContext.DB().Create(&models.Invite{Email: email, Role: column}).Error).To(Succeed())
 
-		person, code := accept("invitee-role@example.com")
-		Expect(code).To(Equal(http.StatusOK))
-		Expect(memberships(person)).To(BeEmpty())
-
-		Expect(roles(person)).To(ContainElement("editor"))
-		Expect(roles(person)).ToNot(ContainElement(policy.RoleGuest))
+			person, code := accept(email)
+			Expect(code).To(Equal(http.StatusOK))
+			Expect(roles(person)).ToNot(ContainElements("editor", "admin", policy.RoleGuest))
+		}
 	})
 
-	ginkgo.It("makes a person invited without a role a guest, so their scoped read grants apply", func() {
+	ginkgo.It("assigns a person invited with teams only their teams", func() {
 		invite("invitee-guest@example.com", inviteGrants{Teams: []string{"invite-sre"}})
 
 		person, code := accept("invitee-guest@example.com")
 		Expect(code).To(Equal(http.StatusOK))
-		Expect(roles(person)).To(ContainElement(policy.RoleGuest))
+		Expect(roles(person)).To(HaveEach(teams["invite-sre"].ID.String()))
+	})
+
+	ginkgo.It("refuses an invite that gives a role", func() {
+		_, err := (&KratosHandler{}).createInvite(DefaultContext, InviteUserRequest{Email: "invitee-with-role@example.com", Role: "viewer"})
+		Expect(dutyAPI.ErrorCode(err)).To(Equal(dutyAPI.EINVALID))
+
+		var count int64
+		Expect(DefaultContext.DB().Model(&models.Invite{}).Where("email = ?", "invitee-with-role@example.com").Count(&count).Error).To(Succeed())
+		Expect(count).To(BeZero())
 	})
 
 	ginkgo.It("refuses a payload whose identity wasn't registered with the invited email", func() {
@@ -177,18 +187,14 @@ var _ = ginkgo.Describe("Kratos invites", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.Describe("stored grants", func() {
-		ginkgo.It("stores an invite without teams as its role's name, as before", func() {
-			encoded, err := inviteGrants{Role: "viewer"}.encode()
-			Expect(err).ToNot(HaveOccurred())
-			Expect(encoded).To(Equal("viewer"))
-
+		ginkgo.It("reads a built-in role an earlier version stored as no grants", func() {
 			decoded, err := decodeInviteGrants("viewer")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(decoded).To(Equal(inviteGrants{Role: "viewer"}))
+			Expect(decoded).To(Equal(inviteGrants{}))
 		})
 
-		ginkgo.It("round-trips teams and a role", func() {
-			grants := inviteGrants{Role: "viewer", Teams: []string{"a", "b"}}
+		ginkgo.It("round-trips teams", func() {
+			grants := inviteGrants{Teams: []string{"a", "b"}}
 			encoded, err := grants.encode()
 			Expect(err).ToNot(HaveOccurred())
 

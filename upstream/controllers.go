@@ -33,11 +33,8 @@ func RegisterRoutes(e *echo.Echo) {
 
 	e.POST("/push/topology", push.PushTopology, rbac.Topology(policy.ActionUpdate))
 
-	upstreamGroup := e.Group(
-		"/upstream",
-		rbac.Authorization(policy.ObjectAgentPush, policy.ActionUpdate),
-		upstream.AgentAuthMiddleware(),
-	)
+	// An agent acts on its own data by its token's identity, with no Role or RoleBinding (specs/authorization/roles.md, Section 4.6)
+	upstreamGroup := e.Group("/upstream", upstream.AgentAuthMiddleware())
 	upstreamGroup.POST("/plugin/register", gateway.RegisterProxiedPlugin)
 	upstreamGroup.GET("/ping", upstream.PingHandler)
 	upstreamGroup.GET(fmt.Sprintf("/%s", tunnel.SessionCreateHTTPEndpoint), tunnel.YamuxSessionCreate)

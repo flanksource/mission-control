@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
@@ -19,7 +20,9 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac/rbactest"
 )
 
 var _ = Describe("View Database Table", func() {
@@ -142,6 +145,15 @@ var _ = Describe("ReadOrPopulateViewTable", func() {
 		var namespaceView, namespaceWithDefaultTemplateVars *v1.View
 
 		BeforeAll(func() {
+			// The variables' options are listed under row-level security
+			Expect(rbactest.BindWholeType(DefaultContext, "views-request-variables", "read-configs",
+				[]string{dummy.JohnDoe.Email}, []string{policy.ResourceConfig}, []string{policy.ActionRead})).To(Succeed())
+			auth.FlushTokenCache()
+			DeferCleanup(func() {
+				Expect(rbactest.DeleteNamespace(DefaultContext, "views-request-variables")).To(Succeed())
+				auth.FlushTokenCache()
+			})
+
 			var err error
 			namespaceView, err = loadViewFromYAML("namespace.yaml")
 			Expect(err).ToNot(HaveOccurred())

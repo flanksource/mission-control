@@ -11,7 +11,6 @@ import (
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
-	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
@@ -75,8 +74,8 @@ func DbMiddleware() MiddlewareFunc {
 
 			ctx := c.Request().Context().(context.Context)
 
-			// Subjects without built-in access are only granted checks through their own object
-			if resource == "checks" && !rbac.HasImplicitGrants(ctx.Subject()) {
+			// Checks are granted on their own object, not on the canaries object duty's /db map gives the table
+			if resource == "checks" {
 				object = adapter.ObjectChecks
 			}
 
@@ -96,21 +95,17 @@ func DbMiddleware() MiddlewareFunc {
 			}
 
 			if _, ok := accountTables[resource]; ok && action != policy.ActionRead {
-				if CanManagePeople(ctx, object, action) {
-					return next(c)
-				}
 				object, action = policy.ObjectPeople, adapter.ActionPersonManage
 			}
 
 			allowed := false
 			if typeObject, ok := typeTables[resource]; ok {
-				typeAction := action
 				// A team's members are part of the team, so changing them takes update on teams
 				if resource == "team_members" && action != policy.ActionRead {
-					typeAction = policy.ActionUpdate
+					action = policy.ActionUpdate
 				}
-				allowed = CheckType(ctx, Grant{typeObject, typeAction}, Grant{object, action})
-				object, action = typeObject, typeAction
+				object = typeObject
+				allowed = CheckContext(ctx, object, action)
 			} else {
 				allowed = CheckContext(ctx, object, action) || canListFilteredRows(ctx, resource, action) || readsConnections(ctx, resource, action) ||
 					scraperGrants(ctx, resource, object, action)
@@ -154,8 +149,7 @@ var readOnlyObjects = map[string]string{
 }
 
 // typeTables are the tables of a type whose object differs from the one duty's /db map gives the table,
-// with the type's object (rbac/adapter's objectForType). duty's object for the table is still granted by
-// the built-in roles, so it's checked as the legacy grant (see CheckType).
+// with the type's object (rbac/adapter's objectForType), which they're checked on instead.
 var typeTables = map[string]string{
 	"notification_silences": adapter.ObjectNotificationSilences,
 	"notifications_summary": policy.ObjectNotification,
@@ -188,7 +182,7 @@ func scraperGrants(ctx context.Context, table, object, action string) bool {
 	if user == nil {
 		return false
 	}
-	owner := rbac.CheckContext(ctx, adapter.ObjectScrapers, action) || rbac.CheckContext(ctx, object, action)
+	owner := rbac.Check(ctx, ctx.Subject(), adapter.ObjectScrapers, action) || rbac.Check(ctx, ctx.Subject(), object, action)
 	return owner && TokenAllowsObject(ctx, user.ID.String(), adapter.ObjectScrapers, action)
 }
 
@@ -234,37 +228,15 @@ var rowFilteredTables = map[string]string{
 // The auth package sets it, since it builds the row filters.
 var ReadGrantsCover func(ctx context.Context, resourceType string) bool
 
-// canListFilteredRows reports whether a guest, a subject without built-in access or a request made with a token
-// limited by Roles can list a table because its read grants cover some rows of it. Postgres then filters the rows.
-// Its read grants on whole types pass the object check instead.
+// canListFilteredRows reports whether the subject can list a table because its read grants cover some rows of it.
+// Postgres then filters the rows. Its read grants on whole types pass the object check instead.
 func canListFilteredRows(ctx context.Context, table, action string) bool {
 	if action != policy.ActionRead || ReadGrantsCover == nil || ctx.User() == nil {
 		return false
 	}
-	if rbac.HasImplicitGrants(ctx.Subject()) && !isGuest(ctx) {
-		if _, limited := TokenLimit(ctx, ctx.User().ID.String()); !limited {
-			return false
-		}
-	}
 
 	resourceType, ok := rowFilteredTables[table]
 	return ok && ReadGrantsCover(ctx, resourceType)
-}
-
-// isGuest reports whether the subject is a person with the guest role.
-// When the roles can't be read, it reports false, so that a non-guest isn't let through.
-func isGuest(ctx context.Context) bool {
-	user := ctx.User()
-	if user == nil {
-		return false
-	}
-
-	roles, err := rbac.RolesForUser(user.ID.String())
-	if err != nil {
-		ctx.Warnf("failed to get roles of %s: %v", user.ID, err)
-		return false
-	}
-	return lo.Contains(roles, policy.RoleGuest)
 }
 
 // PlaybookRead authorizes reading playbooks and their runs through a read of the whole type,

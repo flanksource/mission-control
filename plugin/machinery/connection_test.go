@@ -4,6 +4,8 @@ import (
 	gocontext "context"
 	"fmt"
 
+	icrbac "github.com/flanksource/incident-commander/rbac"
+
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
@@ -89,7 +91,7 @@ var _ = ginkgo.Describe("Plugin connection lookups", ginkgo.Ordered, func() {
 	}
 
 	ginkgo.BeforeAll(func() {
-		Expect(dutyRBAC.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(icrbac.Init(DefaultContext)).To(Succeed())
 		svc = NewGRPCService(DefaultContext)
 
 		conn = models.Connection{

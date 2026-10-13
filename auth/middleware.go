@@ -13,14 +13,10 @@ import (
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	dutyRBAC "github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
 
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth/oidc"
 	pluginapi "github.com/flanksource/incident-commander/plugin/api"
-	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/rbac/shipped"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
@@ -157,12 +153,8 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 	}
 
 	// Initiate RBAC
-	if err := dutyRBAC.Init(ctx, []string{adminUserID}, adapter.NewPermissionAdapter); err != nil {
+	if err := rbac.Init(ctx); err != nil {
 		return fmt.Errorf("failed to initialize rbac: %w", err)
-	}
-
-	if err := revokeSystemAdmin(); err != nil {
-		return err
 	}
 
 	// After RBAC is initialised, so admin@local's team membership reaches the policy
@@ -173,29 +165,17 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 	return nil
 }
 
-// revokeSystemAdmin removes the admin role earlier versions gave the System person. Init persisted it, so it
-// outlives its removal from Init's admin list (specs/authorization/overview.md, "Access").
-func revokeSystemAdmin() error {
-	if api.SystemUserID == nil {
-		return nil
-	}
-	if err := dutyRBAC.DeleteRoleForUser(api.SystemUserID.String(), policy.RoleAdmin); err != nil {
-		return fmt.Errorf("failed to revoke the System person's admin role: %w", err)
-	}
-	return nil
-}
-
 // RegisterKratosRoutes registers the invite and registration routes of the Kratos auth mode.
 func RegisterKratosRoutes(e *echo.Echo, k *KratosHandler) {
-	e.POST("/auth/invite_user", k.InviteUser, rbac.PersonManage(policy.ObjectAuth, policy.ActionUpdate))
+	e.POST("/auth/invite_user", k.InviteUser, rbac.PersonManage())
 	e.GET("/auth/kratos/error", KratosErrorRedirect)
 	e.POST("/auth/kratos/hooks/registration/before", k.BeforeRegistrationWebhook)
 	e.POST("/auth/kratos/hooks/registration/after", k.AfterRegistrationWebhook)
 }
 
 // joinAdmins adds admin@local to the shipped admins team, which is bound to the shipped admin Role.
-// It's logged rather than returned: failing to start would lock everyone out, while admin@local keeps its
-// built-in admin role and the next start tries again.
+// It's how admins keep access, since built-in roles grant nothing. It's logged rather than returned: failing to
+// start would lock everyone out, and the next start tries again.
 func joinAdmins(ctx context.Context, adminUserID string) {
 	adminID, err := uuid.Parse(adminUserID)
 	if err == nil {
@@ -286,9 +266,9 @@ func isPluginUIPath(requestPath string) bool {
 
 const pluginAPIPathPrefix = "/api/plugins/"
 
-// mapIDsToRoles runs the Kratos team mapper on the person's identity. It runs again on a new session,
+// mapIDsToTeams runs the Kratos team mapper on the person's identity. It runs again on a new session,
 // i.e. after they sign in, and whenever their identity changes.
-func mapIDsToRoles(ctx context.Context, session *client.Session, person models.Person) error {
+func mapIDsToTeams(ctx context.Context, session *client.Session, person models.Person) error {
 	input := map[string]any{"session": session.GetId(), "identity": session.Identity}
 	env := map[string]any{"identity": session.Identity}
 	return mapTeams(ctx, person.ID, IdentityRoleMapper, env, input)

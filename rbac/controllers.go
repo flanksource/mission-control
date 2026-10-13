@@ -14,37 +14,12 @@ import (
 )
 
 func RegisterRoutes(e *echo.Echo) {
-	e.POST("/rbac/:id/update_role", UpdateRoleForUser, PersonManage(policy.ObjectRBAC, policy.ActionUpdate))
 	e.GET("/rbac/dump", Dump, Authorization(policy.ObjectRBAC, policy.ActionRead))
 	e.GET("/rbac/:id/roles", GetRolesForUser, Authorization(policy.ObjectRBAC, policy.ActionRead))
 	e.GET("/rbac/token/:id/permissions", GetPermissionsForToken, Authorization(policy.ObjectRBAC, policy.ActionRead))
 	e.POST("/rbac/subject-access-reviews", SubjectAccessReviews, Authorization(policy.ObjectRBAC, policy.ActionRead))
 	e.POST("/rbac/subject-access-search", SubjectAccessSearch, Authorization(policy.ObjectRBAC, policy.ActionRead))
 	registerManagedKinds(e)
-}
-
-func UpdateRoleForUser(c echo.Context) error {
-	userID := c.Param("id")
-	reqData := struct {
-		Roles []string `json:"roles"`
-	}{}
-	if err := c.Bind(&reqData); err != nil {
-		return c.JSON(http.StatusBadRequest, api.HTTPError{
-			Err:     err.Error(),
-			Message: "Invalid request body",
-		})
-	}
-
-	if err := rbac.AddRoleForUser(userID, reqData.Roles...); err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{
-			Err:     err.Error(),
-			Message: "Error updating roles",
-		})
-	}
-
-	return c.JSON(http.StatusOK, api.HTTPSuccess{
-		Message: "Role updated successfully",
-	})
 }
 
 func GetRolesForUser(c echo.Context) error {

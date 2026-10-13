@@ -7,8 +7,9 @@ import (
 	"net/http/httptest"
 	"strings"
 
+	dutyRBAC "github.com/flanksource/duty/rbac"
+
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/google/uuid"
@@ -57,10 +58,10 @@ var _ = Describe("Scope, Role and RoleBinding API", Ordered, func() {
 	}
 
 	BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
 
-		admin = setup.CreateUserWithRole(DefaultContext, "RBAC API Admin", "rbac-api-admin@test.com", policy.RoleAdmin)
-		guest = setup.CreateUserWithRole(DefaultContext, "RBAC API Guest", "rbac-api-guest@test.com", policy.RoleGuest)
+		admin = newAdmin("RBAC API Admin", "rbac-api-admin@test.com")
+		guest = setup.CreateUserWithRole(DefaultContext, "RBAC API Guest", "rbac-api-guest@test.com")
 
 		e = echo.New()
 		mcRBAC.RegisterRoutes(e)
@@ -146,11 +147,14 @@ var _ = Describe("Scope, Role and RoleBinding API", Ordered, func() {
 		{"a binding without subjects", "/rbac/role-bindings", object("no-subjects", map[string]any{
 			"role": "runner", "subjects": map[string]any{},
 		})},
-		{"a binding to admins", "/rbac/role-bindings", object("admins", map[string]any{
+		{"a binding to the built-in admin role", "/rbac/role-bindings", object("admins", map[string]any{
 			"role": "runner", "subjects": map[string]any{"roles": []string{policy.RoleAdmin}},
 		})},
-		{"a binding to viewers", "/rbac/role-bindings", object("viewers", map[string]any{
-			"role": "runner", "subjects": map[string]any{"roles": []string{policy.RoleViewer}},
+		{"a binding to everyone", "/rbac/role-bindings", object("everyone", map[string]any{
+			"role": "runner", "subjects": map[string]any{"roles": []string{policy.RoleEveryone}},
+		})},
+		{"a binding to guests, beside a team", "/rbac/role-bindings", object("guests", map[string]any{
+			"role": "runner", "subjects": map[string]any{"roles": []string{policy.RoleGuest}, "teams": []string{"rbac-api-team"}},
 		})},
 		{"a binding with a match that doesn't compile", "/rbac/role-bindings", object("bad-match", map[string]any{
 			"role": "runner", "subjects": map[string]any{"oidc": []any{map[string]any{"provider": "oipa", "match": "claims.tenant =="}}},
@@ -188,6 +192,15 @@ var _ = Describe("Scope, Role and RoleBinding API", Ordered, func() {
 	})
 
 	It("rejects deny on a permission written through /db as an unknown field", func() {
+		// No Role grants database.system, which permissions are filed under
+		for _, action := range []string{policy.ActionCreate, policy.ActionUpdate} {
+			_, err := dutyRBAC.Enforcer().AddPolicy(admin.ID.String(), policy.ObjectDatabaseSystem, action, "allow", "", "test")
+			Expect(err).ToNot(HaveOccurred())
+		}
+		DeferCleanup(func() {
+			_, err := dutyRBAC.Enforcer().DeletePermissionsForUser(admin.ID.String())
+			Expect(err).ToNot(HaveOccurred())
+		})
 		permission := map[string]any{"name": "deny-run", "namespace": namespace, "action": policy.ActionPlaybookRun, "subject": guest.ID.String()}
 		for _, body := range []any{
 			lo.Assign(permission, map[string]any{"deny": true}),
@@ -206,7 +219,7 @@ var _ = Describe("Scope, Role and RoleBinding API", Ordered, func() {
 
 	It("stores a binding whose role doesn't exist, and responds with why it isn't in effect", func() {
 		rec := request(admin, http.MethodPost, "/rbac/role-bindings", object("orphan", map[string]any{
-			"role": "missing", "subjects": map[string]any{"roles": []string{policy.RoleEveryone}},
+			"role": "missing", "subjects": map[string]any{"teams": []string{"rbac-api-team"}},
 		}))
 		Expect(rec.Code).To(Equal(http.StatusCreated), rec.Body.String())
 

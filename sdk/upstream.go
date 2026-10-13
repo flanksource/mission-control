@@ -13,11 +13,9 @@ import (
 // server-side ingestion path for config items, changes and analyses (what the
 // UI calls insights).
 //
-// agentName names the pushing agent and is created on first use, so a caller
-// only has to choose a stable name. The endpoint is guarded by
-// agent-push:update, which duty's policies grant to the `admin` and `agent`
-// roles and to nobody else — a token belonging to an editor or viewer is
-// rejected, and the error says so rather than reading as a generic 403.
+// agentName names the pushing agent. The endpoint only accepts an agent's own
+// access token, and agentName must be that agent: any other token is rejected,
+// and the error says so rather than reading as a generic 403.
 func (c *Client) PushUpstream(ctx context.Context, agentName string, data *upstream.PushData) error {
 	if agentName == "" {
 		return fmt.Errorf("agent name is required to push upstream")
@@ -44,8 +42,8 @@ func (c *Client) PushUpstream(ctx context.Context, agentName string, data *upstr
 		return fmt.Errorf("POST /upstream/push returned HTML with status %d: %w", r.StatusCode, ErrHTMLResponse)
 	}
 	if r.StatusCode == http.StatusForbidden || r.StatusCode == http.StatusUnauthorized {
-		return fmt.Errorf("not permitted to push upstream as agent %q: /upstream/push requires the agent-push permission, "+
-			"which only the admin and agent roles hold (%s)", agentName, body)
+		return fmt.Errorf("not permitted to push upstream as agent %q: /upstream/push only accepts the access token "+
+			"of the agent it names (%s)", agentName, body)
 	}
 	return newServerError(r.StatusCode, []byte(body))
 }

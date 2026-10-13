@@ -217,9 +217,9 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		mappingCtx := ctx.WithObject(person)
 
 		if IdentityRoleMapper != "" && !isAccessTokenRequest(c.Request()) {
-			if err := mapIDsToRoles(mappingCtx, session, person); err != nil {
+			if err := mapIDsToTeams(mappingCtx, session, person); err != nil {
 				ctx.GetSpan().RecordError(err)
-				mappingCtx.Error(err, "error mapping ids to roles")
+				mappingCtx.Error(err, "error mapping ids to teams")
 			}
 		}
 

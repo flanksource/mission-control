@@ -13,6 +13,7 @@ import (
 	"github.com/labstack/echo/v4"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
 
@@ -22,25 +23,29 @@ import (
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
+	"github.com/flanksource/incident-commander/vars"
 )
 
 var _ = Describe("person:manage", Ordered, func() {
 	const namespace = "person-manage-test"
 
-	var manager, reader, admin, guest *models.Person
+	var manager, reader, legacyAdmin, guest *models.Person
 	var e *echo.Echo
 
 	uid := func() k8sTypes.UID { return k8sTypes.UID(uuid.NewString()) }
 
-	// Every route that invites, disables, re-enables, changes or deletes an account
+	// Every route that invites, disables, re-enables, changes or deletes an account, with what it checked before
+	// person:manage existed
 	target := uuid.NewString()
-	routes := []struct{ method, path, body string }{
-		{http.MethodPost, "/auth/invite_user", `{"email":"person-manage-invitee@test.com","teams":["person-manage-team"]}`},
-		{http.MethodPost, "/auth/" + target + "/update_state", `{"id":"` + target + `","state":"inactive"}`},
-		{http.MethodPost, "/auth/" + target + "/properties", `{}`},
-		{http.MethodPost, "/people/update", `{"id":"` + target + `"}`},
-		{http.MethodDelete, "/people/" + target, ``},
-		{http.MethodPost, "/rbac/" + target + "/update_role", `{"roles":[]}`},
+	routes := []struct {
+		method, path, body string
+		legacy             objectAction
+	}{
+		{http.MethodPost, "/auth/invite_user", `{"email":"person-manage-invitee@test.com","teams":["person-manage-team"]}`, objectAction{Object: policy.ObjectAuth, Action: policy.ActionUpdate}},
+		{http.MethodPost, "/auth/" + target + "/update_state", `{"id":"` + target + `","state":"inactive"}`, objectAction{Object: policy.ObjectAuth, Action: policy.ActionUpdate}},
+		{http.MethodPost, "/auth/" + target + "/properties", `{}`, objectAction{Object: policy.ObjectAuth, Action: policy.ActionUpdate}},
+		{http.MethodPost, "/people/update", `{"id":"` + target + `"}`, objectAction{Object: policy.ObjectPeople, Action: policy.ActionUpdate}},
+		{http.MethodDelete, "/people/" + target, ``, objectAction{Object: policy.ObjectPeople, Action: policy.ActionDelete}},
 	}
 
 	// request makes the request as the person, and returns the response
@@ -66,12 +71,30 @@ var _ = Describe("person:manage", Ordered, func() {
 	}
 
 	BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
 
-		manager = setup.CreateUserWithRole(DefaultContext, "Person Manager", "person-manage-manager@test.com", policy.RoleGuest)
-		reader = setup.CreateUserWithRole(DefaultContext, "Person Reader", "person-manage-reader@test.com", policy.RoleGuest)
-		guest = setup.CreateUserWithRole(DefaultContext, "Person Guest", "person-manage-guest@test.com", policy.RoleGuest)
-		admin = setup.CreateUserWithRole(DefaultContext, "Person Admin", "person-manage-admin@test.com", policy.RoleAdmin)
+		manager = setup.CreateUserWithRole(DefaultContext, "Person Manager", "person-manage-manager@test.com")
+		reader = setup.CreateUserWithRole(DefaultContext, "Person Reader", "person-manage-reader@test.com")
+		guest = setup.CreateUserWithRole(DefaultContext, "Person Guest", "person-manage-guest@test.com")
+
+		// Assigned the built-in admin role, and holding what each route checked before person:manage, directly
+		legacyAdmin = setup.CreateUserWithRole(DefaultContext, "Person Legacy Admin", "person-manage-legacy-admin@test.com", policy.RoleAdmin)
+		for _, grant := range append(lo.Map(routes, func(r struct {
+			method, path, body string
+			legacy             objectAction
+		}, _ int) objectAction {
+			return r.legacy
+		}), objectAction{Object: policy.ObjectRBAC, Action: policy.ActionUpdate}) {
+			_, err := rbac.Enforcer().AddPolicy(legacyAdmin.ID.String(), grant.Object, grant.Action, "allow", "", "legacy")
+			Expect(err).ToNot(HaveOccurred())
+		}
+		// and what /db checked on the account tables
+		for _, object := range []string{policy.ObjectPeople, policy.ObjectDatabasePublic, policy.ObjectAuth} {
+			for _, action := range []string{policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete} {
+				_, err := rbac.Enforcer().AddPolicy(legacyAdmin.ID.String(), object, action, "allow", "", "legacy")
+				Expect(err).ToNot(HaveOccurred())
+			}
+		}
 
 		Expect(db.PersistScopeFromCRD(DefaultContext, &v1.Scope{
 			ObjectMeta: metav1.ObjectMeta{Name: "all-people", Namespace: namespace, UID: uid()},
@@ -111,7 +134,9 @@ var _ = Describe("person:manage", Ordered, func() {
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Role{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Scope{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("email = ?", "person-manage-invitee@test.com").Delete(&models.Invite{}).Error).To(Succeed())
-		for _, p := range []*models.Person{manager, reader, guest, admin} {
+		_, err := rbac.Enforcer().DeletePermissionsForUser(legacyAdmin.ID.String())
+		Expect(err).ToNot(HaveOccurred())
+		for _, p := range []*models.Person{manager, reader, guest, legacyAdmin} {
 			Expect(DefaultContext.DB().Delete(p).Error).To(Succeed())
 		}
 		Expect(rbac.ReloadPolicy()).To(Succeed())
@@ -126,10 +151,11 @@ var _ = Describe("person:manage", Ordered, func() {
 			Expect(rec.Header().Get("X-Rbac-Action")).To(BeEmpty())
 		})
 
-		It("lets the built-in admin call "+name, func() {
-			rec := request(admin, route.method, route.path, route.body)
-			Expect(rec.Code).ToNot(Equal(http.StatusForbidden), rec.Body.String())
-			Expect(rec.Header().Get("X-Rbac-Action")).To(BeEmpty())
+		It("refuses "+name+" to a subject with only what it checked before person:manage, and the built-in admin role", func() {
+			Expect(rbac.Check(DefaultContext, legacyAdmin.ID.String(), route.legacy.Object, route.legacy.Action)).To(BeTrue())
+			rec := request(legacyAdmin, route.method, route.path, route.body)
+			Expect(rec.Code).To(Equal(http.StatusForbidden))
+			Expect(rec.Header().Get("X-Rbac-Action")).To(Equal(adapter.ActionPersonManage))
 		})
 
 		It("refuses "+name+" to a subject with read on people", func() {
@@ -153,9 +179,9 @@ var _ = Describe("person:manage", Ordered, func() {
 				}
 			})
 
-			It("lets the built-in admin write "+table, func() {
+			It("refuses writing "+table+" to a subject with only the built-in admin role, and the table's own object", func() {
 				for _, method := range writes {
-					Expect(dbWrite(admin, method, table)).To(Equal(http.StatusOK), method)
+					Expect(dbWrite(legacyAdmin, method, table)).To(Equal(http.StatusForbidden), method)
 				}
 			})
 
@@ -169,6 +195,17 @@ var _ = Describe("person:manage", Ordered, func() {
 		It("still lets a subject with read on people read them", func() {
 			Expect(dbWrite(reader, http.MethodGet, "people")).To(Equal(http.StatusOK))
 		})
+	})
+
+	It("no longer assigns roles through POST /rbac/:id/update_role", func() {
+		Expect(request(manager, http.MethodPost, "/rbac/"+target+"/update_role", `{"roles":["admin"]}`).Code).To(Equal(http.StatusNotFound))
+	})
+
+	It("refuses a role through POST /people/update", func() {
+		previous := vars.AuthMode
+		vars.AuthMode = auth.Kratos
+		DeferCleanup(func() { vars.AuthMode = previous })
+		Expect(request(manager, http.MethodPost, "/people/update", `{"id":"`+target+`","role":"admin"}`).Code).To(Equal(http.StatusBadRequest))
 	})
 
 	It("doesn't grant read on people", func() {

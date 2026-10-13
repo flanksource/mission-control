@@ -17,6 +17,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
 
@@ -27,6 +28,7 @@ import (
 	mcpServer "github.com/flanksource/incident-commander/mcp"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
+	"github.com/flanksource/incident-commander/rbac/rbactest"
 )
 
 var _ = Describe("Reading and using a connection", Ordered, func() {
@@ -71,7 +73,7 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 	}
 
 	BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
 
 		conn = models.Connection{
 			ID:        uuid.New(),
@@ -90,11 +92,12 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 		}
 		Expect(DefaultContext.DB().Create(&conn).Error).To(Succeed())
 
-		guest = setup.CreateUserWithRole(DefaultContext, "Connection Guest", "connection-use-guest@test.com", policy.RoleGuest)
-		reader = setup.CreateUserWithRole(DefaultContext, "Connection Reader", "connection-use-reader@test.com", policy.RoleGuest)
-		user = setup.CreateUserWithRole(DefaultContext, "Connection User", "connection-use-user@test.com", policy.RoleGuest)
-		editor = setup.CreateUserWithRole(DefaultContext, "Connection Editor", "connection-use-editor@test.com", policy.RoleEditor)
-		admin = setup.CreateUserWithRole(DefaultContext, "Connection Admin", "connection-use-admin@test.com", policy.RoleAdmin)
+		guest = setup.CreateUserWithRole(DefaultContext, "Connection Guest", "connection-use-guest@test.com")
+		reader = setup.CreateUserWithRole(DefaultContext, "Connection Reader", "connection-use-reader@test.com")
+		user = setup.CreateUserWithRole(DefaultContext, "Connection User", "connection-use-user@test.com")
+		editor = setup.CreateUserWithRole(DefaultContext, "Connection Editor", "connection-use-editor@test.com")
+		admin = setup.CreateUserWithRole(DefaultContext, "Connection Admin", "connection-use-admin@test.com")
+		Expect(rbactest.MakeAdmins(DefaultContext, admin.ID)).To(Succeed())
 
 		// Checks read stored membership, so the connection must exist before the Scopes are built.
 		// Reads of connections can only select them all; connection:use selects the one connection.
@@ -109,6 +112,20 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 		}
 		bindRole("read-connections", policy.ActionRead, "all-connections", reader)
 		bindRole("use-connection", adapter.ActionConnectionUse, "test-connection", user)
+
+		// The editor reads and writes connections, but can't use them: what the built-in editor role granted
+		Expect(db.PersistRoleFromCRD(DefaultContext, &v1.Role{
+			ObjectMeta: metav1.ObjectMeta{Name: "edit-connections", Namespace: namespace, UID: uid()},
+			Spec: v1.RoleSpec{Rules: lo.Map([]string{policy.ActionRead, policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete}, func(action string, _ int) v1.RoleRule {
+				return v1.RoleRule{Name: action, Action: action, Resource: &v1.ScopeReference{ScopeRef: "all-connections"}}
+			})},
+		})).To(Succeed())
+		Expect(db.PersistRoleBindingFromCRD(DefaultContext, &v1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{Name: "edit-connections", Namespace: namespace, UID: uid()},
+			Spec: v1.RoleBindingSpec{Role: "edit-connections", Subjects: v1.RoleBindingSubjects{
+				PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{editor.Email}},
+			}},
+		})).To(Succeed())
 		Expect(rbac.ReloadPolicy()).To(Succeed())
 
 		previousDefaultLLMConnection = api.DefaultLLMConnection
@@ -221,16 +238,19 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 				Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
 			})
 
-			It("is allowed for admin, and transitionally for editor through update on connections", func() {
-				for _, p := range []*models.Person{admin, editor} {
-					rec := do(p, tt.method, path())
-					Expect(rec.Code).To(Equal(http.StatusOK), "%s: %s", p.Email, rec.Body.String())
-				}
+			It("is allowed for a member of the shipped admins team", func() {
+				rec := do(admin, tt.method, path())
+				Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
 			})
 
-			It("is refused, even with update, when the request is limited to Scopes the connection isn't in", func() {
+			It("is refused with update on connections, which transitionally allowed it", func() {
+				Expect(mcRBAC.CheckContext(DefaultContext.WithUser(editor), policy.ObjectConnection, policy.ActionUpdate)).To(BeTrue())
+				Expect(do(editor, tt.method, path()).Code).To(Equal(http.StatusForbidden))
+			})
+
+			It("is refused when the request is limited to Scopes the connection isn't in", func() {
 				req := httptest.NewRequest(tt.method, path(), nil)
-				req = req.WithContext(rbac.LimitToScopes(DefaultContext.WithUser(editor), []string{uuid.NewString()}))
+				req = req.WithContext(rbac.LimitToScopes(DefaultContext.WithUser(admin), []string{uuid.NewString()}))
 				rec := httptest.NewRecorder()
 				e.ServeHTTP(rec, req)
 				Expect(rec.Code).To(Equal(http.StatusForbidden))

@@ -12,8 +12,6 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -27,8 +25,11 @@ func (k *KratosHandler) createInvite(ctx context.Context, req InviteUserRequest)
 		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "email is required")
 	}
 
+	if strings.TrimSpace(req.Role) != "" {
+		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "invites can't give a role: built-in roles were removed, name teams instead")
+	}
+
 	grants := inviteGrants{
-		Role:  strings.TrimSpace(req.Role),
 		Teams: lo.Uniq(lo.Compact(lo.Map(req.Teams, func(t string, _ int) string { return strings.TrimSpace(t) }))),
 	}
 
@@ -122,13 +123,6 @@ func (k *KratosHandler) AfterRegistrationWebhook(c echo.Context) error {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "failed to read invite %s", invite.ID))
 		}
 
-		// A person with no built-in role isn't a guest, so their scoped read grants wouldn't filter listings
-		if grants.Role == "" {
-			grants.Role = policy.RoleGuest
-		}
-		if err := rbac.AddRoleForUser(identityID, grants.Role); err != nil {
-			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "failed to assign invited role"))
-		}
 		if err := joinInvitedTeams(ctx, identityID, grants.Teams); err != nil {
 			return dutyAPI.WriteError(c, err)
 		}
@@ -159,26 +153,24 @@ func verifyInvitedIdentity(ctx context.Context, identityID, email string) error 
 // inviteGrants are what an invite gives the person when they accept it.
 //
 // duty's invites table has no column for teams yet, so they're stored as JSON in its role column.
-// An invite with no teams stores its role's name as before, so older invites and readers of the column still work.
-// Move Teams to a column of its own, and drop Role, once duty has one.
+// Move Teams to a column of its own once duty has one.
 type inviteGrants struct {
-	// Deprecated: see InviteUserRequest.Role.
-	Role  string   `json:"role,omitempty"`
 	Teams []string `json:"teams,omitempty"`
 }
 
 func (g inviteGrants) encode() (string, error) {
 	if len(g.Teams) == 0 {
-		return g.Role, nil
+		return "", nil
 	}
 	b, err := json.Marshal(g)
 	return string(b), err
 }
 
 // decodeInviteGrants reads an invite's role column, written by inviteGrants.encode.
+// An invite of an earlier version may hold a built-in role's name there, which grants nothing.
 func decodeInviteGrants(column string) (inviteGrants, error) {
 	if !strings.HasPrefix(column, "{") {
-		return inviteGrants{Role: column}, nil
+		return inviteGrants{}, nil
 	}
 	var g inviteGrants
 	err := json.Unmarshal([]byte(column), &g)

@@ -61,11 +61,7 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 
 	limits := dutyRBAC.ScopeLimits(ctx)
 
-	// Federated identities have no implicit grants: their row filters come from their own grants
-	subject := user.ID.String()
-	if s := ctx.Subject(); !dutyRBAC.HasImplicitGrants(s) {
-		subject = s
-	}
+	subject := ctx.Subject()
 
 	cacheKey := getRLSCacheKey(subject)
 	for _, limit := range limits {
@@ -86,30 +82,12 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		if payload, err = limitToTokenRoles(ctx, payload, tokenRoles); err != nil {
 			return nil, ctx.Oops().Wrap(err)
 		}
-	} else if payload, err = ownRLSPayload(ctx, subject); err != nil {
-		return nil, err
+	} else if payload, err = buildRLSPayload(ctx, subject); err != nil {
+		return nil, ctx.Oops().Wrap(err)
 	}
 
 	payload = applyScopeLimits(payload, limits)
 	tokenCache.SetDefault(cacheKey, payload)
-	return payload, nil
-}
-
-// ownRLSPayload returns the subject's row filters, from its own grants.
-// RLS is disabled for everyone but guests. Subjects without implicit grants are always filtered.
-func ownRLSPayload(ctx context.Context, subject string) (*rls.Payload, error) {
-	if dutyRBAC.HasImplicitGrants(subject) {
-		if roles, err := dutyRBAC.RolesForUser(ctx.User().ID.String()); err != nil {
-			return nil, err
-		} else if !lo.Contains(roles, policy.RoleGuest) {
-			return &rls.Payload{Disable: true}, nil
-		}
-	}
-
-	payload, err := buildRLSPayload(ctx, subject)
-	if err != nil {
-		return nil, ctx.Oops().Wrap(err)
-	}
 	return payload, nil
 }
 

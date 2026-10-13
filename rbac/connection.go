@@ -29,13 +29,8 @@ func CanReadConnection(ctx context.Context, subject string, conn models.Connecti
 
 // AuthorizeConnectionUse returns an EFORBIDDEN error unless the person making the request may act with the
 // connection's credentials.
-//
-// Transitionally, update on all connections is accepted as well: built-in roles don't grant connection:use yet, and
-// editor, which can update connections, could test them and fill in their credentials before connection:use existed.
-// Either way, a request limited to Scopes the connection isn't in is refused.
 func AuthorizeConnectionUse(ctx context.Context, conn models.Connection) error {
-	if CanUseConnection(ctx, ctx.Subject(), conn) ||
-		(CheckContext(ctx, policy.ObjectConnection, policy.ActionUpdate) && withinScopeLimits(ctx, conn)) {
+	if CanUseConnection(ctx, ctx.Subject(), conn) {
 		return nil
 	}
 
@@ -83,7 +78,7 @@ func withinScopeLimits(ctx context.Context, conn models.Connection) bool {
 // GetConnectionForUse finds the connection a reference names, by id or connection://<namespace>/<name>, and returns
 // it with its credentials filled in, if the subject doing the work may use it (connection:use, checked as
 // ctx.Subject()), and every connection its properties name. It's for work done as a resource, e.g. a playbook's
-// actions or a notification's send, so there's no transitional fallback for people.
+// actions or a notification's send.
 func GetConnectionForUse(ctx context.Context, ref string) (*models.Connection, error) {
 	conn, err := findStoredConnection(ctx, ref)
 	if err != nil {

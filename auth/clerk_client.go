@@ -13,8 +13,6 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth/accesstoken"
 	"github.com/flanksource/incident-commander/auth/oidc"
@@ -233,12 +231,6 @@ func (h *ClerkHandler) getUserFromSessionClaims(ctx context.Context, claims jwt.
 		return AuthResult{}, err
 	}
 
-	// If session expires, and clerk role is different from our rbac
-	// we update the rbac
-	if err := h.updateRole(dbUser.ID.String(), clerkRole(claims)); err != nil {
-		return AuthResult{}, ctx.Oops().Wrapf(err, "update Clerk role for user %s", dbUser.ID.String())
-	}
-
 	h.mapTeams(ctx, dbUser.ID, claims)
 
 	h.userCache.Set(cacheKey, &dbUser, clerkUserCacheTTL)
@@ -317,19 +309,6 @@ func clerkUserID(claims jwt.MapClaims) string {
 	return clerkClaimString(claims, "sub")
 }
 
-func clerkRole(claims jwt.MapClaims) string {
-	if role := clerkClaimString(claims, "role"); role != "" {
-		return role
-	}
-	if role := clerkClaimString(claims, "org_role"); role != "" {
-		return role
-	}
-	if org := clerkClaimMap(claims, "o"); org != nil {
-		return clerkMapString(org, "rol")
-	}
-	return ""
-}
-
 func clerkUserCacheKey(orgID, externalID string) string {
 	return fmt.Sprintf("clerk:%s:%s", orgID, externalID)
 }
@@ -352,36 +331,6 @@ func (h *ClerkHandler) createDBUserIfNotExists(ctx context.Context, user models.
 	}
 
 	return dbUser, nil
-}
-
-func (ClerkHandler) updateRole(userID, clerkRole string) error {
-	// Clerk roles map to one of these 3 roles
-	roles := []string{policy.RoleAdmin, policy.RoleViewer, policy.RoleGuest}
-
-	var role string
-	switch clerkRole {
-	case "admin":
-		role = policy.RoleAdmin
-	case "org:guest":
-		role = policy.RoleGuest
-	default:
-		role = policy.RoleViewer
-	}
-
-	if err := rbac.AddRoleForUser(userID, role); err != nil {
-		return fmt.Errorf("failed to add role %s to user %s: %w", role, userID, err)
-	}
-
-	// Delete other roles
-	for _, r := range roles {
-		if r != role {
-			if err := rbac.DeleteRoleForUser(userID, r); err != nil {
-				return fmt.Errorf("failed to delete role %s: %w", r, err)
-			}
-		}
-	}
-
-	return nil
 }
 
 // authenticateRequest handles all authentication methods and returns the authenticated user

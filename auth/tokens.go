@@ -113,7 +113,7 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 
 func jwtTokenCacheKey(ctx context.Context, user *models.Person, sessionID, rlsFingerprint string) string {
 	key := sessionID + user.ID.String() + rlsFingerprint
-	if subject := ctx.Subject(); !rbac.HasImplicitGrants(subject) {
+	if subject := ctx.Subject(); subject != user.ID.String() {
 		key += subject
 	}
 	return key

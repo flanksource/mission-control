@@ -112,7 +112,11 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 		}
 	}
 
-	return a.loadRoleBindings(model)
+	if err := a.loadRoleBindings(model); err != nil {
+		return err
+	}
+
+	return dropBuiltInRoleRules(model)
 }
 
 // loadRoleBindings validates every Scope, Role and RoleBinding, records why each invalid one isn't in effect,
@@ -299,12 +303,16 @@ func (a *PermissionAdapter) SavePolicy(m model.Model) error {
 	var lines []gormadapter.CasbinRule
 	for ptype, ast := range m["p"] {
 		for _, rule := range ast.Policy {
-			lines = append(lines, casbinRuleFromPolicy(ptype, rule))
+			if !namesBuiltInRole("p", rule) {
+				lines = append(lines, casbinRuleFromPolicy(ptype, rule))
+			}
 		}
 	}
 	for ptype, ast := range m["g"] {
 		for _, rule := range ast.Policy {
-			lines = append(lines, casbinRuleFromPolicy(ptype, rule))
+			if !namesBuiltInRole("g", rule) {
+				lines = append(lines, casbinRuleFromPolicy(ptype, rule))
+			}
 		}
 	}
 
@@ -572,7 +580,6 @@ func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding,
 	allSubjects = append(allSubjects, people...)
 	allSubjects = append(allSubjects, teams...)
 	allSubjects = append(allSubjects, plugins...)
-	allSubjects = append(allSubjects, subjects.Roles...)
 
 	for _, subject := range lo.Uniq(allSubjects) {
 		policies = append(policies, []string{"g", subject, principal, "", "", ""})
@@ -675,8 +682,8 @@ func (a *PermissionAdapter) resolveNamespacedSubjects(subject v1.PermissionGroup
 	return allSubjects, nil
 }
 
-// resolveSubjects resolves the subjects of a PermissionGroup to casbin subjects (ids or roles).
-// People are matched by email or name, and ["*"] selects everyone.
+// resolveSubjects resolves the subjects of a PermissionGroup to casbin subjects (ids).
+// People are matched by email or name. ["*"] selected everyone through the built-in everyone role, so it selects no one.
 func (a *PermissionAdapter) resolveSubjects(subject v1.PermissionGroupSubjects) ([]string, error) {
 	allSubjects, err := a.resolveNamespacedSubjects(subject)
 	if err != nil {
@@ -684,22 +691,17 @@ func (a *PermissionAdapter) resolveSubjects(subject v1.PermissionGroupSubjects) 
 	}
 
 	if len(subject.People) > 0 {
-		wildcard := len(subject.People) == 1 && subject.People[0] == "*"
-		if wildcard {
-			allSubjects = append(allSubjects, pkgPolicy.RoleEveryone)
-		} else {
-			var personIDs []string
-			query := a.ctx.DB().Select("id").Model(&models.Person{}).
-				Where("deleted_at IS NULL").
-				Where("type IS DISTINCT FROM 'agent'").
-				Where("email IS NOT NULL"). // Excludes system user
-				Where("email IN ? OR name IN ?", subject.People, subject.People)
-			if err := query.Find(&personIDs).Error; err != nil {
-				return nil, err
-			}
-
-			allSubjects = append(allSubjects, personIDs...)
+		var personIDs []string
+		query := a.ctx.DB().Select("id").Model(&models.Person{}).
+			Where("deleted_at IS NULL").
+			Where("type IS DISTINCT FROM 'agent'").
+			Where("email IS NOT NULL"). // Excludes system user
+			Where("email IN ? OR name IN ?", subject.People, subject.People)
+		if err := query.Find(&personIDs).Error; err != nil {
+			return nil, err
 		}
+
+		allSubjects = append(allSubjects, personIDs...)
 	}
 
 	if len(subject.Teams) > 0 {

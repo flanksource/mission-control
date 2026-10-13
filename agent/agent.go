@@ -6,7 +6,6 @@ import (
 
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/rbac"
 	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
@@ -29,10 +28,6 @@ func generateAgent(ctx context.Context, body api.GenerateAgentRequest) (*api.Gen
 	token, _, err := db.CreateAccessToken(ctx, person.ID, "default", lo.ToPtr(time.Hour*24*365), nil, body.AutoRenew)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new access token: %w", err)
-	}
-
-	if err := rbac.AddRoleForUser(person.ID.String(), "agent"); err != nil {
-		return nil, fmt.Errorf("failed to add 'agent' role to the new person: %w", err)
 	}
 
 	if err := db.CreateAgent(ctx, body.Name, &person.ID, body.Properties); err != nil {

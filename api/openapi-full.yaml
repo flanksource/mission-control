@@ -275,33 +275,6 @@ paths:
           $ref: '#/components/responses/Forbidden'
 
   # RBAC endpoints
-  /rbac/{id}/update_role:
-    post:
-      tags: [RBAC]
-      summary: Update roles for user
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [roles]
-              properties:
-                roles:
-                  type: array
-                  items:
-                    type: string
-      responses:
-        '200':
-          $ref: '#/components/responses/HTTPSuccess'
-
   /rbac/dump:
     get:
       tags: [RBAC]

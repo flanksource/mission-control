@@ -233,7 +233,7 @@
             "type": "string"
           },
           "type": "array",
-          "description": "List of ids and email of people.\nTo select all users, use the wildcard selector: [\"*\"]"
+          "description": "List of ids and email of people.\nThe wildcard [\"*\"] selected everyone through a built-in role, which was removed: it selects no one."
         },
         "teams": {
           "items": {
