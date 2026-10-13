@@ -332,37 +332,13 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(canRunOn(erin.ID.String(), dummy.EchoConfig, &tenantA)).To(BeFalse())
 		})
 
-		It("are deleted with their role from the database at startup", func() {
-			denying := models.Role{
-				ID: uuid.New(), Name: "stored-deny", Namespace: namespace, Source: models.SourceUI,
-				Rules: []byte(`[{"name":"no-runs","action":"playbook:run","resource":{"scopeRef":"all-playbooks"},"deny":true}]`),
-			}
-			allowing := models.Role{
-				ID: uuid.New(), Name: "stored-deny-false", Namespace: namespace, Source: models.SourceUI,
-				Rules: []byte(`[{"name":"runs","action":"playbook:run","resource":{"scopeRef":"all-playbooks"},"deny":false}]`),
-			}
-			Expect(DefaultContext.DB().Create([]*models.Role{&denying, &allowing}).Error).To(Succeed())
-			DeferCleanup(func() {
-				Expect(DefaultContext.DB().Delete([]*models.Role{&denying, &allowing}).Error).To(Succeed())
-			})
-
-			Expect(db.DeleteDenyRules(DefaultContext)).To(Succeed())
-
-			Expect(storedRole(k8sTypes.UID(denying.ID.String())).DeletedAt).ToNot(BeNil())
-			Expect(storedRole(k8sTypes.UID(allowing.ID.String())).DeletedAt).To(BeNil())
-		})
-
 		It("never load as casbin deny policies", func() {
 			Expect(rbac.ReloadPolicy()).To(Succeed())
 			policies, err := rbac.Enforcer().GetPolicy()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(policies).ToNot(BeEmpty())
 			for _, p := range policies {
-				// duty's built-in policies (id "na") still deny everyone the Kratos tables, until they're removed from duty
-				if p[3] == "deny" {
-					Expect(p[1]).To(Equal(policy.ObjectAuthConfidential), "%v", p)
-					Expect(p[5]).To(Equal("na"), "%v", p)
-				}
+				Expect(p[3]).To(Equal("allow"), "%v", p)
 			}
 		})
 	})

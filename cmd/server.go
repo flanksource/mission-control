@@ -257,14 +257,6 @@ var Serve = &cobra.Command{
 			shutdown.ShutdownAndExit(1, fmt.Sprintf("error building scope membership: %v", err))
 		}
 
-		if err := db.RevokeScopedAccessTokens(ctx); err != nil {
-			shutdown.ShutdownAndExit(1, fmt.Sprintf("error revoking scoped access tokens: %v", err))
-		}
-
-		if err := db.DeleteDenyRules(ctx); err != nil {
-			shutdown.ShutdownAndExit(1, fmt.Sprintf("error deleting deny rules: %v", err))
-		}
-
 		if echo.UIEnabled && dev {
 			devServer, err := ui.StartDevServer(cmd.Context(), ui.DevServerOptions{
 				Port:       devGuiPort,

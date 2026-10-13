@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"time"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
@@ -19,7 +18,6 @@ import (
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm"
 
-	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
@@ -189,57 +187,5 @@ var _ = Describe("CreateToken", Ordered, func() {
 			Expect(err).To(BeNil())
 			Expect(perms).To(HaveLen(0), "Token should have no permissions")
 		})
-	})
-})
-
-var _ = Describe("RevokeScopedAccessTokens", Ordered, func() {
-	var owner *models.Person
-
-	casbinRows := func(personID uuid.UUID) int64 {
-		var count int64
-		Expect(DefaultContext.DB().Table("casbin_rule").Where("v0 = ?", personID.String()).Count(&count).Error).To(Succeed())
-		return count
-	}
-
-	createToken := func(name string) db.CreateAccessTokenForPersonResult {
-		result, err := db.CreateAccessTokenForPerson(DefaultContext, owner, name, time.Hour, false, nil)
-		Expect(err).To(BeNil())
-		_, err = rbac.Enforcer().AddGroupingPolicy(result.Person.ID.String(), owner.ID.String())
-		Expect(err).To(BeNil())
-		return result
-	}
-
-	BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
-		owner = &dummy.JohnDoe
-	})
-
-	It("revokes tokens scoped by deny rows and leaves unscoped tokens alone", func() {
-		scoped := createToken("scoped-before-roles")
-		// How a scoped token was limited before tokens were limited by Roles
-		_, err := rbac.Enforcer().AddPermissionsForUser(scoped.Person.ID.String(),
-			policy.Permission{Object: policy.ObjectPlaybooks, Action: policy.ActionPlaybookRun, Deny: true}.ToArgsWithoutSubject())
-		Expect(err).To(BeNil())
-		Expect(casbinRows(scoped.Person.ID)).To(BeNumerically("==", 2))
-
-		unscoped := createToken("unscoped-before-roles")
-
-		Expect(db.RevokeScopedAccessTokens(DefaultContext)).To(Succeed())
-
-		_, err = gorm.G[models.AccessToken](DefaultContext.DB()).Where("person_id = ?", scoped.Person.ID).First(DefaultContext)
-		Expect(err).To(MatchError(gorm.ErrRecordNotFound))
-		Expect(casbinRows(scoped.Person.ID)).To(BeZero())
-
-		var deleted int64
-		Expect(DefaultContext.DB().Table("people").Where("id = ? AND deleted_at IS NOT NULL", scoped.Person.ID).Count(&deleted).Error).To(Succeed())
-		Expect(deleted).To(BeNumerically("==", 1))
-
-		kept := findTokenByName(DefaultContext, "unscoped-before-roles")
-		Expect(kept.PersonID).To(Equal(unscoped.Person.ID))
-		Expect(casbinRows(unscoped.Person.ID)).To(BeNumerically("==", 1))
-
-		Expect(rbac.ReloadPolicy()).To(Succeed())
-		Expect(canEnforce(unscoped.Person.ID.String(), policy.ObjectCatalog, policy.ActionRead)).
-			To(Equal(canEnforce(owner.ID.String(), policy.ObjectCatalog, policy.ActionRead)))
 	})
 })

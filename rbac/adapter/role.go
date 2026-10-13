@@ -631,7 +631,7 @@ func (r CompiledRule) condition() (string, error) {
 		return lo.Map(scopes, func(scope ScopeSelection, _ int) string { return scope.ID })
 	}
 
-	condition, err := dutyRBAC.RuleCondition(ids(r.Resource), ids(r.Target), false)
+	condition, err := dutyRBAC.RuleCondition(ids(r.Resource), ids(r.Target))
 	if err != nil {
 		return "", fmt.Errorf("rule %s: %w", r.Name, err)
 	}

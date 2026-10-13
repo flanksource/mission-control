@@ -83,31 +83,6 @@ var _ = ginkgo.Describe("Permissions that deny", ginkgo.Ordered, func() {
 		Expect(canUpdateCatalog()).To(BeFalse())
 	})
 
-	ginkgo.It("deletes Permissions stored with deny at startup", func() {
-		denying := models.Permission{
-			ID: uuid.New(), Name: "stored-deny", Namespace: namespace, Action: policy.ActionUpdate, Object: policy.ObjectCatalog,
-			Subject: guest.ID.String(), SubjectType: models.PermissionSubjectTypePerson, Deny: true,
-		}
-		allowing := models.Permission{
-			ID: uuid.New(), Name: "stored-allow", Namespace: namespace, Action: policy.ActionDelete, Object: policy.ObjectCatalog,
-			Subject: guest.ID.String(), SubjectType: models.PermissionSubjectTypePerson,
-		}
-		Expect(DefaultContext.DB().Create([]*models.Permission{&denying, &allowing}).Error).To(Succeed())
-		ginkgo.DeferCleanup(func() {
-			Expect(DefaultContext.DB().Delete([]*models.Permission{&denying, &allowing}).Error).To(Succeed())
-		})
-
-		Expect(db.DeleteDenyRules(DefaultContext)).To(Succeed())
-
-		var stored []models.Permission
-		Expect(DefaultContext.DB().Where("id IN ? AND deleted_at IS NULL", []uuid.UUID{denying.ID, allowing.ID}).Find(&stored).Error).To(Succeed())
-		Expect(stored).To(HaveLen(1))
-		Expect(stored[0].ID).To(Equal(allowing.ID))
-
-		Expect(canUpdateCatalog()).To(BeFalse())
-		Expect(rbac.Check(DefaultContext, guest.ID.String(), policy.ObjectCatalog, policy.ActionDelete)).To(BeTrue())
-	})
-
 	ginkgo.It("loads no casbin deny policy from Permissions", func() {
 		permission := updateCatalog("loaded", false)
 		Expect(db.PersistPermissionFromCRD(DefaultContext, permission)).To(Succeed())
@@ -120,11 +95,7 @@ var _ = ginkgo.Describe("Permissions that deny", ginkgo.Ordered, func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(policies).To(ContainElement(HaveExactElements(guest.ID.String(), policy.ObjectCatalog, policy.ActionUpdate, "allow", "", string(permission.UID))))
 		for _, p := range policies {
-			// duty's built-in policies (id "na") still deny everyone the Kratos tables, until they're removed from duty
-			if p[3] == "deny" {
-				Expect(p[1]).To(Equal(policy.ObjectAuthConfidential), "%v", p)
-				Expect(p[5]).To(Equal("na"), "%v", p)
-			}
+			Expect(p[3]).To(Equal("allow"), "%v", p)
 		}
 	})
 })
