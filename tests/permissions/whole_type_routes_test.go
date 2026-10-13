@@ -133,6 +133,7 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 		{v1.ResourceAgent, http.MethodPost, "/agent/token", true, grant(policy.ObjectAgent, policy.ActionUpdate)},
 
 		{v1.ResourcePerson, http.MethodGet, "/db/people", false, read(policy.ObjectPeople)},
+		{v1.ResourcePerson, http.MethodGet, "/db/person_analytics", false, read(policy.ObjectPeople)},
 
 		{v1.ResourceTeam, http.MethodGet, "/db/teams", false, read(policy.ObjectDatabasePublic)},
 		{v1.ResourceTeam, http.MethodGet, "/db/team_members", false, read(policy.ObjectDatabasePublic)},
@@ -264,7 +265,7 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 
 	It("lets a built-in viewer read applications, agents, people and teams, and nothing that configures access", func() {
 		allowed := map[string]bool{"/application/default/missing": true, "/db/applications": true, "/db/agents": true,
-			"/db/people": true, "/db/teams": true, "/db/team_members": true}
+			"/db/people": true, "/db/person_analytics": true, "/db/teams": true, "/db/team_members": true}
 		for _, r := range routes {
 			Expect(passes(viewer, r)).To(Equal(allowed[r.path] && r.method == http.MethodGet), r.method+" "+r.path)
 		}
