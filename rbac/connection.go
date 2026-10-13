@@ -16,12 +16,12 @@ import (
 // CanUseConnection reports whether subject may act with the connection's credentials (connection:use, see
 // specs/authorization/roles.md, Section 2.2). It's checked on the connection, by its stored Scope membership.
 func CanUseConnection(ctx context.Context, subject string, conn models.Connection) bool {
-	return rbac.HasPermission(ctx, subject, &models.ABACAttribute{Connection: conn}, adapter.ActionConnectionUse)
+	return HasPermission(ctx, subject, &models.ABACAttribute{Connection: conn}, adapter.ActionConnectionUse)
 }
 
 // CanReadConnection reports whether subject may see the connection's name, type and settings, without its credentials.
 func CanReadConnection(ctx context.Context, subject string, conn models.Connection) bool {
-	return rbac.HasPermission(ctx, subject, &models.ABACAttribute{Connection: conn}, policy.ActionRead)
+	return HasPermission(ctx, subject, &models.ABACAttribute{Connection: conn}, policy.ActionRead)
 }
 
 // AuthorizeConnectionUse returns an EFORBIDDEN error unless the person making the request may act with the
@@ -32,7 +32,7 @@ func CanReadConnection(ctx context.Context, subject string, conn models.Connecti
 // Either way, a request limited to Scopes the connection isn't in is refused.
 func AuthorizeConnectionUse(ctx context.Context, conn models.Connection) error {
 	if CanUseConnection(ctx, ctx.Subject(), conn) ||
-		(rbac.CheckContext(ctx, policy.ObjectConnection, policy.ActionUpdate) && withinScopeLimits(ctx, conn)) {
+		(CheckContext(ctx, policy.ObjectConnection, policy.ActionUpdate) && withinScopeLimits(ctx, conn)) {
 		return nil
 	}
 

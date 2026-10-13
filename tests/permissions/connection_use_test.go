@@ -24,6 +24,7 @@ import (
 	"github.com/flanksource/incident-commander/connection"
 	"github.com/flanksource/incident-commander/db"
 	mcpServer "github.com/flanksource/incident-commander/mcp"
+	mcRBAC "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
@@ -114,6 +115,7 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 
 		e = echo.New()
 		connection.RegisterRoutes(e)
+		e.Any("/db/*", func(c echo.Context) error { return c.NoContent(http.StatusOK) }, mcRBAC.DbMiddleware())
 	})
 
 	AfterAll(func() {
@@ -152,6 +154,14 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 			Expect(masked.Certificate).To(Equal(db.MaskedValue))
 			Expect(masked.Properties).To(HaveKeyWithValue("clientSecret", "configmap://oauth/secret"))
 			Expect(masked.Properties).To(HaveKeyWithValue("session_token", db.MaskedValue))
+		})
+
+		It("is reading connection_details through /db", func() {
+			for _, p := range []*models.Person{reader, editor, admin} {
+				Expect(do(p, http.MethodGet, "/db/connection_details").Code).To(Equal(http.StatusOK), p.Email)
+			}
+			Expect(do(guest, http.MethodGet, "/db/connection_details").Code).To(Equal(http.StatusForbidden))
+			Expect(do(user, http.MethodGet, "/db/connection_details").Code).To(Equal(http.StatusForbidden), "connection:use alone doesn't read")
 		})
 
 		It("masks credentials in the MCP list_connections tool", func() {

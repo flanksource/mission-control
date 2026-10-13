@@ -7,7 +7,7 @@ import (
 )
 
 // MaskedValue replaces a credential that reading a connection doesn't reveal.
-// It's the value duty's connection_details view masks with, and that its update trigger keeps the stored value for.
+// It's the value duty's connection_details view masks with.
 const MaskedValue = "***"
 
 // credentialProperties are the connection properties, normalized by normalizePropertyKey, that hold credentials.
@@ -103,52 +103,4 @@ func MaskConnection(conn models.Connection) models.Connection {
 	}
 
 	return conn
-}
-
-// MaskConnectionRow masks the credentials of a connection row as decoded from JSON, e.g. a row PostgREST returns.
-func MaskConnectionRow(row map[string]any) {
-	for _, field := range []string{"username", "password", "certificate"} {
-		if v, ok := row[field].(string); ok {
-			row[field] = MaskCredential(v)
-		}
-	}
-
-	if v, ok := row["url"].(string); ok {
-		row["url"] = MaskConnectionURL(v)
-	}
-
-	if properties, ok := row["properties"].(map[string]any); ok {
-		for k, v := range properties {
-			if !IsCredentialProperty(k) {
-				continue
-			}
-			if s, ok := v.(string); ok {
-				properties[k] = MaskCredential(s)
-			} else if v != nil {
-				properties[k] = MaskedValue
-			}
-		}
-	}
-}
-
-// UnmaskConnectionRow puts back the stored credentials a write of a connection row sends masked, as read.
-// A client that reads a connection and saves it back would otherwise overwrite its credentials with the mask.
-func UnmaskConnectionRow(row map[string]any, stored models.Connection) {
-	for field, value := range map[string]string{"username": stored.Username, "password": stored.Password, "certificate": stored.Certificate} {
-		if row[field] == MaskedValue {
-			row[field] = value
-		}
-	}
-
-	if v, ok := row["url"].(string); ok && v != stored.URL && v == MaskConnectionURL(stored.URL) {
-		row["url"] = stored.URL
-	}
-
-	if properties, ok := row["properties"].(map[string]any); ok {
-		for k, v := range properties {
-			if stored, exists := stored.Properties[k]; exists && v == MaskedValue {
-				properties[k] = stored
-			}
-		}
-	}
 }

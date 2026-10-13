@@ -174,16 +174,10 @@ func New(ctx context.Context) *echov4.Echo {
 
 	if dutyApi.DefaultConfig.Postgrest.URL != "" {
 		Forward(ctx, e, "/db", dutyApi.DefaultConfig.Postgrest.URL, &ForwardOptions{
-			ModifyResponse: func(resp *http.Response) error {
-				if err := stripUpstreamCORS(resp); err != nil {
-					return err
-				}
-				return maskConnectionCredentials(resp)
-			},
+			ModifyResponse: stripUpstreamCORS,
 			Middlewares: []echov4.MiddlewareFunc{
 				rbac.DbMiddleware(),
 				db.SearchQueryTransformMiddleware(),
-				connectionCredentialsInterceptor,
 				postgrestInterceptor,
 				postgrestTraceMiddleware,
 			},
