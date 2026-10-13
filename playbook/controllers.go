@@ -284,8 +284,17 @@ func HandlePlaybookRunCancel(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
-	if !rbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionPlaybookCancel) {
+	checkCtx, err := membership.ForOperation(ctx, dutyRBAC.MembershipRefs(attr)...)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	}
+	if !rbac.HasPermission(checkCtx, ctx.Subject(), attr, policy.ActionPlaybookCancel) {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("you do not have permission to cancel this playbook run"))
+	}
+
+	target := &models.ABACAttribute{Config: attr.Config, Component: attr.Component, Check: attr.Check}
+	if (run.ConfigID != nil || run.ComponentID != nil || run.CheckID != nil) && !rbac.HasPermission(checkCtx, ctx.Subject(), target, policy.ActionRead) {
+		return dutyAPI.WriteError(c, ctx.Oops().With("permission", policy.ActionRead, "objects", target).Code(dutyAPI.EFORBIDDEN).Errorf("access denied: read access to the playbook run resource required"))
 	}
 
 	if lo.Contains(models.PlaybookRunStatusFinalStates, run.Status) {

@@ -9,6 +9,8 @@ import (
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/membership"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -59,10 +61,21 @@ func approveRun(ctx context.Context, run *models.PlaybookRun) error {
 		return api.Errorf(api.EUNAUTHORIZED, "Not logged in")
 	}
 
-	if objects, err := run.GetABACAttributes(ctx.DB()); err != nil {
+	objects, err := run.GetABACAttributes(ctx.DB())
+	if err != nil {
 		return ctx.Oops().Wrap(err)
-	} else if !icrbac.HasPermission(ctx, ctx.Subject(), objects, policy.ActionPlaybookApprove) {
+	}
+	checkCtx, err := membership.ForOperation(ctx, rbac.MembershipRefs(objects)...)
+	if err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+	if !icrbac.HasPermission(checkCtx, ctx.Subject(), objects, policy.ActionPlaybookApprove) {
 		return ctx.Oops().With("permission", policy.ActionPlaybookApprove, "objects", objects).Code(api.EFORBIDDEN).Wrap(errors.New("access denied: approval permission required"))
+	}
+
+	target := &models.ABACAttribute{Config: objects.Config, Component: objects.Component, Check: objects.Check}
+	if (run.ConfigID != nil || run.ComponentID != nil || run.CheckID != nil) && !icrbac.HasPermission(checkCtx, ctx.Subject(), target, policy.ActionRead) {
+		return ctx.Oops().With("permission", policy.ActionRead, "objects", target).Code(api.EFORBIDDEN).Errorf("access denied: read access to the playbook run resource required")
 	}
 
 	var spec v1.PlaybookSpec
