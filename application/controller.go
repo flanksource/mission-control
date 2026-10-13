@@ -24,7 +24,12 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /application routes")
 
-	g := e.Group(fmt.Sprintf("/%s", "application"), rbac.Authorization(policy.ObjectCatalog, policy.ActionRead), echoSrv.RLSMiddleware)
+	// The route checked catalog before applications had an object of their own
+	read := rbac.TypeAuthorization(
+		rbac.Grant{Object: policy.ObjectApplication, Action: policy.ActionRead},
+		rbac.Grant{Object: policy.ObjectCatalog, Action: policy.ActionRead},
+	)
+	g := e.Group(fmt.Sprintf("/%s", "application"), read, echoSrv.RLSMiddleware)
 	g.GET("/:namespace/:name", ApplicationSpec)
 	g.GET("/:namespace/:name/export", ExportApplication)
 }

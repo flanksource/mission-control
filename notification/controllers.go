@@ -19,6 +19,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 func init() {
@@ -35,9 +36,17 @@ func RegisterRoutes(e *echo.Echo) {
 		return c.JSON(http.StatusOK, EventRing.Get())
 	}, rbac.Authorization(policy.ObjectEvents, policy.ActionEventRead))
 
-	g.POST("/silence", handleCreateSilence, rbac.Authorization(policy.ObjectNotification, policy.ActionCreate))
+	g.POST("/silence", handleCreateSilence, silences(policy.ActionCreate))
 
-	g.GET("/silence_preview", NotificationSilencePreview, rbac.Authorization(policy.ObjectNotification, policy.ActionRead))
+	g.GET("/silence_preview", NotificationSilencePreview, silences(policy.ActionRead))
+}
+
+// silences checks the action on notification silences. Built-in roles grant it on notifications.
+func silences(action string) rbac.MiddlewareFunc {
+	return rbac.TypeAuthorization(
+		rbac.Grant{Object: adapter.ObjectNotificationSilences, Action: action},
+		rbac.Grant{Object: policy.ObjectNotification, Action: action},
+	)
 }
 
 func handleCreateSilence(c echo.Context) error {

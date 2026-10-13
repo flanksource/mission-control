@@ -7,9 +7,21 @@ import (
 	"github.com/flanksource/commons/logger"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
+
+	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/rbac"
 )
+
+// RegisterRoutes registers the agent routes.
+func RegisterRoutes(e *echo.Echo) {
+	e.POST("/agent/generate", GenerateAgent, rbac.TypeAuthorization(
+		rbac.Grant{Object: policy.ObjectAgent, Action: policy.ActionCreate},
+		rbac.Grant{Object: policy.ObjectAgent, Action: policy.ActionUpdate},
+	))
+	e.POST("/agent/token", GenerateToken, rbac.Authorization(policy.ObjectAgent, policy.ActionUpdate))
+}
 
 // GenerateAgent creates a new person and a new agent and associates them.
 func GenerateAgent(c echo.Context) error {

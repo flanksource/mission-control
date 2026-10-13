@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/notification"
+	icrbac "github.com/flanksource/incident-commander/rbac"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/timberio/go-datemath"
@@ -43,6 +46,9 @@ func getNotificationDetailHandler(goctx gocontext.Context, req mcp.CallToolReque
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+	if err := requireNotificationRead(ctx); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 
 	sendID, err := req.RequireString("send_id")
 	if err != nil {
@@ -69,6 +75,9 @@ func getNotificationDetailHandler(goctx gocontext.Context, req mcp.CallToolReque
 func getNotificationsForResourceHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := requireNotificationRead(ctx); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -120,6 +129,15 @@ func getNotificationsForResourceHandler(goctx gocontext.Context, req mcp.CallToo
 	}
 
 	return structToMCPResponse(req, notifications), nil
+}
+
+// requireNotificationRead checks read on notifications, whose send history the notification tools return.
+// It's checked as the request's own subject, like the HTTP routes, so an access token's Roles apply.
+func requireNotificationRead(ctx context.Context) error {
+	if !icrbac.CheckContext(ctx, policy.ObjectNotification, policy.ActionRead) {
+		return fmt.Errorf("forbidden: %s does not have %s permission on %s", ctx.Subject(), policy.ActionRead, policy.ObjectNotification)
+	}
+	return nil
 }
 
 // parseDateMath parses a datemath expression and returns the corresponding time
