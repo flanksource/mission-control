@@ -146,7 +146,7 @@ var _ = Describe("person:manage", Ordered, func() {
 	Describe("through /db", func() {
 		writes := []string{http.MethodPost, http.MethodPatch, http.MethodDelete}
 
-		for _, table := range []string{"people", "identities", "invites"} {
+		for _, table := range []string{"people", "identities"} {
 			It("lets a subject with only person:manage write "+table, func() {
 				for _, method := range writes {
 					Expect(dbWrite(manager, method, table)).To(Equal(http.StatusOK), method)

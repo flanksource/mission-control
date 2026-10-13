@@ -159,7 +159,7 @@ var _ = Describe("Actions without a resource", Ordered, func() {
 
 		readOnly := map[string][]string{
 			policy.ActionJobRead:   {"job_history", "job_histories", "job_history_names", "job_history_summary", "job_history_latest_status"},
-			policy.ActionEventRead: {"event_queue"},
+			policy.ActionEventRead: {"event_queue", "event_queue_summary", "failed_events"},
 		}
 
 		for action, tables := range readOnly {
