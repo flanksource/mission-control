@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac/rbactest"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -95,6 +96,24 @@ var _ = ginkgo.Describe("Application Sections", ginkgo.Ordered, func() {
 		Expect(generated.AccessControl.Users).To(HaveLen(2))
 		names := []string{generated.AccessControl.Users[0].Name, generated.AccessControl.Users[1].Name}
 		Expect(names).To(ConsistOf("Alice", "Bob"))
+	})
+
+	ginkgo.It("exports as the person it's given, never as the System person", func() {
+		person, err := db.FindPerson(DefaultContext, dummy.JohnDoe.Email)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(person.ID).To(Equal(dummy.JohnDoe.ID))
+
+		var system models.Person
+		Expect(DefaultContext.DB().Where("name = 'System'").First(&system).Error).To(Succeed())
+
+		recorder, stop := rbactest.RecordSubjects()
+		ginkgo.DeferCleanup(stop)
+
+		// As "mission-control application export --as" does
+		data, err := Export(DefaultContext.WithUser(person), app.Namespace, app.Name, "json")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(data).ToNot(BeEmpty())
+		Expect(recorder.Subjects()).ToNot(ContainElement(system.ID.String()))
 	})
 
 	ginkgo.It("should export application as PDF", func() {

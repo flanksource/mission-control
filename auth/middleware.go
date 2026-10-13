@@ -157,8 +157,12 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 	}
 
 	// Initiate RBAC
-	if err := dutyRBAC.Init(ctx, []string{adminUserID, api.SystemUserID.String()}, adapter.NewPermissionAdapter); err != nil {
+	if err := dutyRBAC.Init(ctx, []string{adminUserID}, adapter.NewPermissionAdapter); err != nil {
 		return fmt.Errorf("failed to initialize rbac: %w", err)
+	}
+
+	if err := revokeSystemAdmin(); err != nil {
+		return err
 	}
 
 	// After RBAC is initialised, so admin@local's team membership reaches the policy
@@ -166,6 +170,18 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 		joinAdmins(ctx, adminUserID)
 	}
 
+	return nil
+}
+
+// revokeSystemAdmin removes the admin role earlier versions gave the System person. Init persisted it, so it
+// outlives its removal from Init's admin list (specs/authorization/overview.md, "Access").
+func revokeSystemAdmin() error {
+	if api.SystemUserID == nil {
+		return nil
+	}
+	if err := dutyRBAC.DeleteRoleForUser(api.SystemUserID.String(), policy.RoleAdmin); err != nil {
+		return fmt.Errorf("failed to revoke the System person's admin role: %w", err)
+	}
 	return nil
 }
 

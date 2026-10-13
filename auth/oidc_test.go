@@ -684,7 +684,6 @@ var _ = ginkgo.Describe("OIDC", func() {
 		oldHtpasswdFile := HtpasswdFile
 		oldFrontendURL := api.FrontendURL
 		oldPublicURL := api.PublicURL
-		oldSystemUserID := api.SystemUserID
 		oldLocalhostOnly := localhostOnly
 		oldChecker := checker
 		defer func() {
@@ -693,7 +692,6 @@ var _ = ginkgo.Describe("OIDC", func() {
 			HtpasswdFile = oldHtpasswdFile
 			api.FrontendURL = oldFrontendURL
 			api.PublicURL = oldPublicURL
-			api.SystemUserID = oldSystemUserID
 			localhostOnly = oldLocalhostOnly
 			checker = oldChecker
 		}()
@@ -708,8 +706,6 @@ var _ = ginkgo.Describe("OIDC", func() {
 		HtpasswdFile = htpasswdPath
 		api.FrontendURL = "http://localhost:3000"
 		api.PublicURL = "http://localhost:8080"
-		systemUserID := uuid.New()
-		api.SystemUserID = &systemUserID
 
 		e := newEchoInstance(DefaultContext)
 		Expect(Middleware(DefaultContext, e)).To(Succeed())

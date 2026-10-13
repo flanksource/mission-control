@@ -53,7 +53,7 @@ func HandleWebhook(c echo.Context) error {
 	}
 
 	// The webhook authenticates the request, but isn't a subject: the run is started as the playbook itself.
-	ctx = runAsPlaybook(ctx.WithNamespace(playbook.Namespace), playbook)
+	ctx = RunAsPlaybook(ctx.WithNamespace(playbook.Namespace), playbook)
 
 	if spec.On.Webhook.Authentication != nil {
 		if err := authenticateWebhook(ctx, c.Request(), spec.On.Webhook.Authentication); err != nil {

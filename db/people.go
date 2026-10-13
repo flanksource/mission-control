@@ -93,6 +93,22 @@ func GetUserByID(ctx context.Context, id string) (models.Person, error) {
 	return user, err
 }
 
+// FindPerson returns the person, not deleted, with the given ID or email.
+func FindPerson(ctx context.Context, idOrEmail string) (*models.Person, error) {
+	query := ctx.DB().Where("deleted_at IS NULL")
+	if id, err := uuid.Parse(idOrEmail); err == nil {
+		query = query.Where("id = ?", id)
+	} else {
+		query = query.Where("email = ?", idOrEmail)
+	}
+
+	var person models.Person
+	if err := query.First(&person).Error; err != nil {
+		return nil, ctx.Oops().Wrap(err)
+	}
+	return &person, nil
+}
+
 func GetTeamsForUser(ctx context.Context, id string) ([]models.Team, error) {
 	var teams []models.Team
 	err := ctx.DB().Raw("SELECT teams.* FROM teams LEFT JOIN team_members ON teams.id = team_members.team_id WHERE team_members.person_id = ?", id).Scan(&teams).Error

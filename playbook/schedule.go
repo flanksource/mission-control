@@ -134,7 +134,7 @@ func triggerScheduledRun(ctx context.Context, playbookID uuid.UUID, scheduleInde
 	}
 
 	// No person started the run, so it's started as the playbook itself.
-	ctx = runAsPlaybook(ctx.WithNamespace(pb.Namespace), &pb)
+	ctx = RunAsPlaybook(ctx.WithNamespace(pb.Namespace), &pb)
 
 	params, err := getScheduledRunParams(&pb, scheduleIndex, schedule)
 	if err != nil {

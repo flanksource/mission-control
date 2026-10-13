@@ -17,7 +17,6 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/clientapi"
 	"github.com/flanksource/incident-commander/clientcmd"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/playbook/runner"
@@ -121,11 +120,7 @@ func runLocalPlaybook(cmd *cobra.Command, args []string) error {
 		shutdown.ShutdownAndExit(1, err.Error())
 	}
 
-	sysUser, err := db.GetSystemUser(ctx)
-	if err != nil {
-		shutdown.ShutdownAndExit(1, err.Error())
-	}
-	ctx = ctx.WithUser(sysUser)
+	ctx = playbook.RunAsPlaybook(ctx, p)
 	run, err := playbook.Run(ctx, p, *params)
 	if err != nil {
 		logger.Errorf("%+v", err)
@@ -256,14 +251,7 @@ var Submit = &cobra.Command{
 			shutdown.ShutdownAndExit(1, err.Error())
 		}
 
-		sysUser, err := db.GetSystemUser(ctx)
-		if err != nil {
-			logger.Fatalf(err.Error())
-			os.Exit(1)
-		}
-		ctx = ctx.WithUser(sysUser)
-
-		run, err := playbook.Run(ctx, p, *params)
+		run, err := playbook.Run(playbook.RunAsPlaybook(ctx, p), p, *params)
 		if err != nil {
 			return err
 		}

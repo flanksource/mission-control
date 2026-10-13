@@ -23,6 +23,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/rbac/adapter"
+	"github.com/flanksource/incident-commander/rbac/rbactest"
 )
 
 var _ = Describe("Sending a notification through a connection", Ordered, func() {
@@ -173,7 +174,18 @@ var _ = Describe("Sending a notification through a connection", Ordered, func() 
 		})).To(Succeed())
 		Expect(rbac.ReloadPolicy()).To(Succeed())
 
+		var system models.Person
+		Expect(DefaultContext.DB().Where("name = 'System'").First(&system).Error).To(Succeed())
+
+		recorder, stop := rbactest.RecordSubjects()
+		DeferCleanup(stop)
+
+		// As "mission-control notification send" does, with no person
 		Expect(notification.SendEventPayload(DefaultContext, payload())).To(Succeed())
+
+		Expect(recorder.Subjects()).ToNot(BeEmpty())
+		Expect(recorder.Subjects()).ToNot(ContainElement(system.ID.String()))
+		Expect(recorder.Subjects()).To(HaveEach(notif.ID.String()))
 
 		history := latestHistory()
 		Expect(history.Status).To(Equal(models.NotificationStatusSent), lo.FromPtr(history.Error))

@@ -16,7 +16,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/notification"
 )
@@ -64,13 +63,6 @@ func runNotificationSend(cmd *cobra.Command, args []string) error {
 	if err := validateSendFlags(&sendFlagsValues); err != nil {
 		return err
 	}
-
-	// Use system user for authorization
-	sysUser, err := db.GetSystemUser(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get system user: %w", err)
-	}
-	ctx = ctx.WithUser(sysUser)
 
 	return triggerExistingNotification(ctx, &sendFlagsValues)
 }

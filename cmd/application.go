@@ -28,6 +28,7 @@ var ApplicationCmd = &cobra.Command{
 
 var exportFormat string
 var exportOutfile string
+var exportAs string
 
 var ExportApplication = &cobra.Command{
 	Use:              "export <application.yaml>",
@@ -47,14 +48,14 @@ var ExportApplication = &cobra.Command{
 		shutdown.WaitForSignal()
 		applyFacetFlags(ctx)
 
-		sysUser, err := db.GetSystemUser(ctx)
+		person, err := db.FindPerson(ctx, exportAs)
 		if err != nil {
-			return fmt.Errorf("failed to get system user: %w", err)
+			return fmt.Errorf("failed to find person %q: %w", exportAs, err)
 		}
-		if err := dutyRBAC.Init(ctx, []string{sysUser.ID.String()}, adapter.NewPermissionAdapter); err != nil {
+		if err := dutyRBAC.Init(ctx, nil, adapter.NewPermissionAdapter); err != nil {
 			return fmt.Errorf("failed to initialize rbac: %w", err)
 		}
-		ctx = ctx.WithUser(sysUser)
+		ctx = ctx.WithUser(person)
 
 		manifest, err := os.ReadFile(args[0])
 		if err != nil {
@@ -103,6 +104,8 @@ var ExportApplication = &cobra.Command{
 func init() {
 	ExportApplication.Flags().StringVarP(&exportFormat, "format", "f", "json", "Output format: json, html, pdf, facet-html, facet-pdf")
 	ExportApplication.Flags().StringVarP(&exportOutfile, "out-file", "o", "", "Write output to file instead of stdout")
+	ExportApplication.Flags().StringVar(&exportAs, "as", "", "Email or ID of the person to export as. The export only includes what they may read")
+	_ = ExportApplication.MarkFlagRequired("as")
 	ExportApplication.Flags().StringVar(&report.SourceDir, "report-source", "", "Local directory or TSX file for report rendering (overrides embedded reports)")
 	addFacetFlags(ExportApplication)
 	ApplicationCmd.AddCommand(ExportApplication)

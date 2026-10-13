@@ -309,9 +309,9 @@ func authorizeRunStart(ctx context.Context, run models.PlaybookRun, templateEnv 
 	return nil
 }
 
-// runAsPlaybook returns a context that checks as the playbook itself, for a run no person started
+// RunAsPlaybook returns a context that checks as the playbook itself, for a run no person started
 // (specs/authorization/roles.md, Section 4.4).
-func runAsPlaybook(ctx context.Context, playbook *models.Playbook) context.Context {
+func RunAsPlaybook(ctx context.Context, playbook *models.Playbook) context.Context {
 	return ctx.WithSubject(playbook.ID.String())
 }
 
