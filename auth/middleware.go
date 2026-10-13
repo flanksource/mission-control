@@ -2,52 +2,33 @@ package auth
 
 import (
 	gocontext "context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/query"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
-	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth/oidc"
-	"github.com/flanksource/incident-commander/db"
 	pluginapi "github.com/flanksource/incident-commander/plugin/api"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/rbac/shipped"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
-	"github.com/patrickmn/go-cache"
 	slogecho "github.com/samber/slog-echo"
 
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/vars"
 )
-
-var (
-	IdentityRoleMapper string
-
-	// identityMapperLoginCache is used to keep track of whether a new login session
-	// has been checked for mapping to a team or not.
-	identityMapperLoginCache = cache.New(1*time.Hour, 1*time.Hour)
-)
-
-type IdentityMapperExprResult struct {
-	Teams []string `json:"teams"`
-	Role  string   `json:"role"`
-}
 
 var (
 	errTokenExpired = errors.New("access token has expired")
@@ -284,69 +265,12 @@ func isPluginUIPath(requestPath string) bool {
 
 const pluginAPIPathPrefix = "/api/plugins/"
 
+// mapIDsToRoles runs the Kratos team mapper on the person's identity. It runs again on a new session,
+// i.e. after they sign in, and whenever their identity changes.
 func mapIDsToRoles(ctx context.Context, session *client.Session, person models.Person) error {
-	log := logger.GetLogger("auth")
-	name := person.GetName()
-	if _, exists := identityMapperLoginCache.Get(session.GetId()); exists {
-		log.V(6).Infof("[%s] skipping identity mapping for session %s, already mapped", name, session.GetId())
-		return nil
-	}
-
-	env := map[string]any{
-		"identity": session.Identity,
-	}
-
-	if log.IsLevelEnabled(6) {
-		log.V(6).Infof("[%s] mapping identity to roles/teams using %s", name, IdentityRoleMapper)
-	} else if log.IsLevelEnabled(4) {
-		log.V(4).Infof("[%s] mapping identity to roles/teams", name)
-	}
-
-	res, err := ctx.RunTemplate(gomplate.Template{Expression: IdentityRoleMapper}, env)
-	if err != nil {
-		return fmt.Errorf("error running IdentityRoleMapper template: %w", err)
-	}
-
-	log.V(3).Infof("[%s] identity mapper returned %s", name, res)
-
-	if res == "" {
-		return nil
-	}
-
-	var result IdentityMapperExprResult
-	if err := json.Unmarshal([]byte(res), &result); err != nil {
-		return ctx.Oops().
-			With("result", res).
-			Hint("https://docs.flanksource.com/reference/helm/mission-control/#identity-mapper").
-			Wrapf(err, "identity role mapper did not produce a valid JSON encoded result")
-	}
-
-	if result.Role != "" {
-		log.V(3).Infof("[%s] adding role: %s", name, res)
-		if err := dutyRBAC.AddRoleForUser(person.ID.String(), result.Role); err != nil {
-			return ctx.Oops().Wrapf(err, "error adding role %s to user %s", result.Role, name)
-		}
-	}
-
-	for _, teamName := range result.Teams {
-		team, err := query.FindTeam(ctx, teamName)
-		if err != nil {
-			log.Warnf("error finding team %s %v", team, err)
-			continue
-		}
-		log.V(3).Infof("[%s] adding team: %s", name, team.Name)
-
-		if err := db.AddPersonToTeam(ctx, person.ID, team.ID); err != nil {
-			return ctx.Oops().Wrapf(err, "error adding team %s to user %s", team.ID, name)
-		}
-	}
-
-	if session.ExpiresAt != nil {
-		identityMapperLoginCache.Set(session.GetId(), nil, time.Until(*session.ExpiresAt))
-	} else {
-		identityMapperLoginCache.SetDefault(session.GetId(), nil)
-	}
-	return nil
+	input := map[string]any{"session": session.GetId(), "identity": session.Identity}
+	env := map[string]any{"identity": session.Identity}
+	return mapTeams(ctx, person.ID, IdentityRoleMapper, env, input)
 }
 
 // sessionCache is used to cache the response of a login attempt.

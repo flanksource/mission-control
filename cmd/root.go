@@ -49,16 +49,16 @@ func PreRun(cmd *cobra.Command, args []string) {
 		telemetry.OtelAttributes = append(telemetry.OtelAttributes, attribute.String("org.id", auth.ClerkOrgID))
 	}
 
-	if strings.HasPrefix(auth.IdentityRoleMapper, "file://") {
-		path := strings.TrimPrefix(auth.IdentityRoleMapper, "file://")
-		content, err := os.ReadFile(path)
+	for name, mapper := range map[string]*string{
+		"identity-role-mapper": &auth.IdentityRoleMapper,
+		"clerk-team-mapper":    &auth.ClerkTeamMapper,
+	} {
+		expr, err := auth.LoadTeamMapper(*mapper)
 		if err != nil {
-			logger.Fatalf("failed to read identity role mapper script file(%s): %v", path, err)
-			shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to read identity role mapper script file(%s): %v", path, err))
+			logger.Fatalf("failed to load %s: %v", name, err)
+			shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to load %s: %v", name, err))
 		}
-
-		auth.IdentityRoleMapper = string(content)
-		logger.Debugf("successfully loaded identity-role-mapper from file: %s", auth.IdentityRoleMapper)
+		*mapper = expr
 	}
 }
 
@@ -149,7 +149,8 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&emailFromName, "email-from-name", "Mission Control", "Email name of the sender")
 	flags.StringSliceVar(&echo.AllowedCORS, "allowed-cors", []string{"https://app.flanksource.com", "https://beta.flanksource.com"}, "Allowed CORS credential origins")
 	flags.BoolVar(&echo.UIEnabled, "ui", false, "Serve the catalog explorer UI at /ui")
-	flags.StringVar(&auth.IdentityRoleMapper, "identity-role-mapper", "", "CEL-Go expression to map identity to a role & a team (return: {role: string, teams: []string}). Supports file path (prefixed with 'file://').")
+	flags.StringVar(&auth.IdentityRoleMapper, "identity-role-mapper", "", "CEL-Go expression to map a Kratos identity to teams (input: identity, return: {teams: []string}). Supports file path (prefixed with 'file://').")
+	flags.StringVar(&auth.ClerkTeamMapper, "clerk-team-mapper", "", "CEL-Go expression to map Clerk session claims to teams (input: claims, return: {teams: []string}). Supports file path (prefixed with 'file://'). Defaults to org admins in 'admins', guests in no team, everyone else in 'viewers'.")
 	flags.StringVar(&api.DefaultArtifactConnection, "artifact-connection", "", "Specify the default connection to use for artifacts (can be the connection string or the connection id)")
 	flags.StringVar(&api.DefaultLLMConnection, "llm-connection", "", "Specify the default connection to use for LLM provider (can be the connection string or the connection id)")
 	flags.StringVar(&secret.KMSConnection, "secret-keeper-connection", "", "Specify the connection to use for secret keepers (can be the connection string or the connection id)")
