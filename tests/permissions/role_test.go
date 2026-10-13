@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
@@ -23,6 +25,7 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/catalog"
 	"github.com/flanksource/incident-commander/db"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
@@ -872,15 +875,76 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 				Expect(handler(e.NewContext(req, rec))).To(Succeed())
 				return rec.Code
 			}
+			visibleNames := func(person *models.Person, subject string) []uuid.UUID {
+				GinkgoHelper()
+				var ids []uuid.UUID
+				Expect(auth.WithRLS(DefaultContext.WithUser(person).WithSubject(subject), func(ctx context.Context) error {
+					return ctx.DB().Table("config_names").Where("id IN ?", []uuid.UUID{tenantA.ID, tenantB.ID}).Pluck("id", &ids).Error
+				})).To(Succeed())
+				return ids
+			}
+			configViews := []string{
+				"catalog_changes", "config_class_summary", "config_classes", "config_detail", "config_labels", "config_names",
+				"config_statuses", "config_summary", "config_tags", "config_tags_labels_keys", "config_types",
+			}
+
 			Expect(listStatus(reader, readerSubject, "config_items")).To(Equal(http.StatusOK), "its read grants cover some configs, filtered by row")
 			Expect(listStatus(reader, readerSubject, "components")).To(Equal(http.StatusForbidden), "no read grant covers components")
+			for _, view := range configViews {
+				Expect(listStatus(reader, readerSubject, view)).To(Equal(http.StatusOK), "views of configs are filtered by row: %s", view)
+			}
+			Expect(visibleNames(reader, readerSubject)).To(Equal([]uuid.UUID{tenantA.ID}))
+
+			admin := setup.CreateUserWithRole(DefaultContext, "Role RLS Admin", "role-rls-admin@test.com", policy.RoleAdmin)
+			DeferCleanup(func() { Expect(DefaultContext.DB().Delete(admin).Error).To(Succeed()) })
+			for _, view := range configViews {
+				Expect(listStatus(admin, admin.ID.String(), view)).To(Equal(http.StatusOK), "a whole-type reader reads %s", view)
+			}
+			Expect(visibleNames(admin, admin.ID.String())).To(ConsistOf([]uuid.UUID{tenantA.ID, tenantB.ID}))
 
 			nobody, nobodySubject := federatedUser("rls-nobody")
 			Expect(listStatus(nobody, nobodySubject, "config_items")).To(Equal(http.StatusForbidden))
+			for _, view := range configViews {
+				Expect(listStatus(nobody, nobodySubject, view)).To(Equal(http.StatusForbidden), "no read grant covers %s", view)
+			}
 			payload, err = auth.GetRLSPayload(DefaultContext.WithUser(nobody).WithSubject(nobodySubject))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(payload.Disable).To(BeFalse())
 			Expect(payload).To(Equal(&rls.Payload{}))
+		})
+
+		It("summarizes the catalog for a guest whose only read of configs is a Scope", func() {
+			e := echo.New()
+			catalog.RegisterRoutes(e)
+			summary := func(person *models.Person) (int, []string) {
+				GinkgoHelper()
+				req := httptest.NewRequest(http.MethodPost, "/catalog/summary", strings.NewReader(`{}`))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				req = req.WithContext(DefaultContext.WithUser(person))
+				rec := httptest.NewRecorder()
+				e.ServeHTTP(rec, req)
+				if rec.Code != http.StatusOK {
+					return rec.Code, nil
+				}
+				var rows []map[string]any
+				Expect(json.Unmarshal(rec.Body.Bytes(), &rows)).To(Succeed())
+				return rec.Code, lo.Map(rows, func(row map[string]any, _ int) string { return row["type"].(string) })
+			}
+
+			status, types := summary(rlsGuest)
+			Expect(status).To(Equal(http.StatusOK))
+			Expect(types).To(ConsistOf("Role::Test"), "only the configs its Scope selects are summarized")
+
+			admin := setup.CreateUserWithRole(DefaultContext, "Role Summary Admin", "role-summary-admin@test.com", policy.RoleAdmin)
+			DeferCleanup(func() { Expect(DefaultContext.DB().Delete(admin).Error).To(Succeed()) })
+			status, types = summary(admin)
+			Expect(status).To(Equal(http.StatusOK))
+			Expect(types).To(ContainElement("Role::Test"))
+			Expect(len(types)).To(BeNumerically(">", 1), "a whole-type reader summarizes every config")
+
+			stranger := setup.CreateUserWithRole(DefaultContext, "Role Summary Stranger", "role-summary-stranger@test.com", policy.RoleGuest)
+			DeferCleanup(func() { Expect(DefaultContext.DB().Delete(stranger).Error).To(Succeed()) })
+			Expect(summary(stranger)).To(Equal(http.StatusForbidden), "a guest without read grants on configs")
 		})
 
 		It("lists checks only through a read of checks, not of canaries", func() {

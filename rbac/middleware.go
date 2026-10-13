@@ -208,6 +208,19 @@ var rowFilteredTables = map[string]string{
 	"canaries":       policy.ResourceCanary,
 	"playbooks":      policy.ResourcePlaybook,
 
+	// Lookup views of configs, which duty makes security_invoker so that config_items' policy filters them.
+	"catalog_changes":         policy.ResourceConfig,
+	"config_class_summary":    policy.ResourceConfig,
+	"config_classes":          policy.ResourceConfig,
+	"config_detail":           policy.ResourceConfig,
+	"config_labels":           policy.ResourceConfig,
+	"config_names":            policy.ResourceConfig,
+	"config_statuses":         policy.ResourceConfig,
+	"config_summary":          policy.ResourceConfig,
+	"config_tags":             policy.ResourceConfig,
+	"config_tags_labels_keys": policy.ResourceConfig,
+	"config_types":            policy.ResourceConfig,
+
 	"config_scrapers":             policy.ResourceScraper,
 	"config_scrapers_with_status": policy.ResourceScraper,
 }
@@ -255,6 +268,15 @@ func isGuest(ctx context.Context) bool {
 func PlaybookList() MiddlewareFunc {
 	return authorize(policy.ObjectPlaybooks, policy.ActionRead, func(ctx context.Context) bool {
 		return canListFilteredRows(ctx, "playbooks", policy.ActionRead)
+	})
+}
+
+// CatalogRead authorizes reading the catalog through a read of the whole type,
+// or through read grants that cover some configs.
+// Its handlers must query under row-level security, so that Postgres filters the rows.
+func CatalogRead() MiddlewareFunc {
+	return authorize(policy.ObjectCatalog, policy.ActionRead, func(ctx context.Context) bool {
+		return canListFilteredRows(ctx, "config_items", policy.ActionRead)
 	})
 }
 

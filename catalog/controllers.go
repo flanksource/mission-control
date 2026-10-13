@@ -23,15 +23,19 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /catalog routes")
 
-	apiGroup := e.Group("/catalog", rbac.Catalog(policy.ActionRead))
-	apiGroup.POST("/summary", SearchConfigSummary, echoSrv.RLSMiddleware)
-
-	apiGroup.POST("/changes", SearchCatalogChanges, echoSrv.RLSMiddleware)
+	readGroup := e.Group("/catalog", rbac.CatalogRead())
+	readGroup.POST("/summary", SearchConfigSummary, echoSrv.RLSMiddleware)
+	readGroup.POST("/changes", SearchCatalogChanges, echoSrv.RLSMiddleware)
 	// Deprecated. Use POST
-	apiGroup.GET("/changes", SearchCatalogChanges, echoSrv.RLSMiddleware)
-	apiGroup.POST("/report/preview", PreviewCatalogReport, echoSrv.RLSMiddleware)
-	apiGroup.POST("/report", GenerateCatalogReport, echoSrv.RLSMiddleware)
-	apiGroup.GET("/:id/relationships", GetConfigRelationships, echoSrv.RLSMiddleware)
+	readGroup.GET("/changes", SearchCatalogChanges, echoSrv.RLSMiddleware)
+
+	// These read configs outside row-level security, so they need a read of the whole catalog:
+	// reports read access rows and access logs and render through facet,
+	// and duty's ConfigTree loads the config and its parents from a cache.
+	wholeReadGroup := e.Group("/catalog", rbac.Catalog(policy.ActionRead))
+	wholeReadGroup.POST("/report/preview", PreviewCatalogReport, echoSrv.RLSMiddleware)
+	wholeReadGroup.POST("/report", GenerateCatalogReport, echoSrv.RLSMiddleware)
+	wholeReadGroup.GET("/:id/relationships", GetConfigRelationships, echoSrv.RLSMiddleware)
 
 	deleteGroup := e.Group("/catalog", rbac.Catalog(policy.ActionDelete))
 	deleteGroup.POST("/config-items/bulk-delete", BulkDeleteConfigItems, echoSrv.RLSMiddleware)
