@@ -125,16 +125,23 @@ func init() {
 	for _, kind := range managedKinds {
 		managedTables[kind.table] = "/rbac/" + kind.path
 	}
+	// A Scope's targets are stored with it, and derived from it
+	managedTables["scope_targets"] = "/rbac/scopes"
 }
 
 func registerManagedKinds(e *echo.Echo) {
 	for _, kind := range managedKinds {
+		// Built-in roles grant the kinds on the rbac object
+		check := func(action string) MiddlewareFunc {
+			return TypeAuthorization(Grant{kind.object, action}, Grant{policy.ObjectRBAC, action})
+		}
+
 		group := e.Group("/rbac/" + kind.path)
-		group.GET("", kind.list, Authorization(kind.object, policy.ActionRead))
-		group.GET("/:namespace/:name", kind.get, Authorization(kind.object, policy.ActionRead))
-		group.POST("", kind.create, Authorization(kind.object, policy.ActionCreate))
-		group.PUT("/:namespace/:name", kind.update, Authorization(kind.object, policy.ActionUpdate))
-		group.DELETE("/:namespace/:name", kind.remove, Authorization(kind.object, policy.ActionDelete))
+		group.GET("", kind.list, check(policy.ActionRead))
+		group.GET("/:namespace/:name", kind.get, check(policy.ActionRead))
+		group.POST("", kind.create, check(policy.ActionCreate))
+		group.PUT("/:namespace/:name", kind.update, check(policy.ActionUpdate))
+		group.DELETE("/:namespace/:name", kind.remove, check(policy.ActionDelete))
 	}
 }
 

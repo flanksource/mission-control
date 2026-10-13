@@ -86,7 +86,20 @@ func DbMiddleware() MiddlewareFunc {
 				object, action = policy.ObjectProperties, policy.ActionPropertyManage
 			}
 
-			if !CheckContext(ctx, object, action) && !canListFilteredRows(ctx, resource, action) && !teamGrants(ctx, resource, action) && !readsConnections(ctx, resource, action) {
+			allowed := false
+			if typeObject, ok := typeTables[resource]; ok {
+				typeAction := action
+				// A team's members are part of the team, so changing them takes update on teams
+				if resource == "team_members" && action != policy.ActionRead {
+					typeAction = policy.ActionUpdate
+				}
+				allowed = CheckType(ctx, Grant{typeObject, typeAction}, Grant{object, action})
+				object, action = typeObject, typeAction
+			} else {
+				allowed = CheckContext(ctx, object, action) || canListFilteredRows(ctx, resource, action) || readsConnections(ctx, resource, action)
+			}
+
+			if !allowed {
 				c.Response().Header().Add("X-Rbac-Subject", ctx.Subject())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)
@@ -117,20 +130,20 @@ var readOnlyObjects = map[string]string{
 	policy.ObjectEvents: policy.ActionEventRead,
 }
 
-// teamGrants reports whether the subject's grants on teams allow the action on teams or their members.
-// Both tables are database.public to the built-in roles, which no Role can grant. A team's members are part of the
-// team, so changing them takes update on teams.
-func teamGrants(ctx context.Context, table, action string) bool {
-	switch table {
-	case "teams":
-		return CheckContext(ctx, adapter.ObjectTeams, action)
-	case "team_members":
-		if action != policy.ActionRead {
-			action = policy.ActionUpdate
-		}
-		return CheckContext(ctx, adapter.ObjectTeams, action)
-	}
-	return false
+// typeTables are the tables of a type whose object differs from the one duty's /db map gives the table,
+// with the type's object (rbac/adapter's objectForType). duty's object for the table is still granted by
+// the built-in roles, so it's checked as the legacy grant (see CheckType).
+var typeTables = map[string]string{
+	"notification_silences": adapter.ObjectNotificationSilences,
+	"notifications_summary": policy.ObjectNotification,
+	"agents":                policy.ObjectAgent,
+	"agents_summary":        policy.ObjectAgent,
+	"teams":                 adapter.ObjectTeams,
+	"team_members":          adapter.ObjectTeams,
+	"scopes":                adapter.ObjectScopes,
+	"scope_targets":         adapter.ObjectScopes,
+	"roles":                 adapter.ObjectRoles,
+	"role_bindings":         adapter.ObjectRoleBindings,
 }
 
 // rowFilteredTables are the tables whose rows are filtered by a subject's read grants of their resource type.
@@ -196,6 +209,13 @@ func Authorization(object, action string) MiddlewareFunc {
 
 // authorize checks the action on the whole object type. A subject that fails the check still passes when orElse allows it.
 func authorize(object, action string, orElse func(ctx context.Context) bool) MiddlewareFunc {
+	return authorizeWith(object, action, func(ctx context.Context, action string) bool {
+		return CheckContext(ctx, object, action) || (orElse != nil && orElse(ctx))
+	})
+}
+
+// authorizeWith authorizes a request when check allows the action. object and action are reported when it doesn't.
+func authorizeWith(object, action string, check func(ctx context.Context, action string) bool) MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Skip auth if Enforcer is not initialized
@@ -218,7 +238,7 @@ func authorize(object, action string, orElse func(ctx context.Context) bool) Mid
 				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
 			}
 
-			if !CheckContext(ctx, object, action) && (orElse == nil || !orElse(ctx)) {
+			if !check(ctx, action) {
 				c.Response().Header().Add("X-Rbac-Subject", ctx.Subject())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)

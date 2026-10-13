@@ -221,8 +221,7 @@ func New(ctx context.Context) *echov4.Echo {
 		fn(e)
 	}
 
-	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(policy.ObjectAgent, policy.ActionUpdate))
-	e.POST("/agent/token", agent.GenerateToken, rbac.Authorization(policy.ObjectAgent, policy.ActionUpdate))
+	agent.RegisterRoutes(e)
 	e.POST("/logs", logs.LogsHandler, rbac.Authorization(policy.ObjectLogs, policy.ActionRead))
 	return e
 }
