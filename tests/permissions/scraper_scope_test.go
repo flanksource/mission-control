@@ -112,14 +112,19 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 		auth.FlushTokenCache()
 	}
 
-	dbStatus := func(person *models.Person, method string) int {
+	dbStatusOf := func(person *models.Person, method, table string) int {
 		ginkgo.GinkgoHelper()
-		req := httptest.NewRequest(method, "/db/config_scrapers", nil)
+		req := httptest.NewRequest(method, "/db/"+table, nil)
 		req = req.WithContext(DefaultContext.WithUser(person))
 		rec := httptest.NewRecorder()
 		handler := mcRBAC.DbMiddleware()(func(c echo.Context) error { return c.NoContent(http.StatusOK) })
 		Expect(handler(echo.New().NewContext(req, rec))).To(Succeed())
 		return rec.Code
+	}
+
+	dbStatus := func(person *models.Person, method string) int {
+		ginkgo.GinkgoHelper()
+		return dbStatusOf(person, method, "config_scrapers")
 	}
 
 	payload := func(person *models.Person) *rls.Payload {
@@ -361,6 +366,13 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 		ginkgo.It("refuses it under a deny Permission on database.config_scrapers", func() {
 			newPermission(writer, policy.ActionUpdate, policy.ObjectDatabaseSettings, "", true)
 			Expect(dbStatus(writer, http.MethodPatch)).To(Equal(http.StatusForbidden))
+		})
+
+		ginkgo.It("refuses reads of either scraper table under a deny Permission on database.config_scrapers", func() {
+			Expect(dbStatusOf(writer, http.MethodGet, "config_scrapers_with_status")).To(Equal(http.StatusOK))
+			newPermission(writer, policy.ActionRead, policy.ObjectDatabaseSettings, "", true)
+			Expect(dbStatusOf(writer, http.MethodGet, "config_scrapers")).To(Equal(http.StatusForbidden))
+			Expect(dbStatusOf(writer, http.MethodGet, "config_scrapers_with_status")).To(Equal(http.StatusForbidden))
 		})
 
 		ginkgo.It("refuses an allow Permission on database.config_scrapers under a deny rule on scrapers", func() {

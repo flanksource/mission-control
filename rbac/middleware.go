@@ -160,14 +160,20 @@ func scraperGrants(ctx context.Context, table, action string) bool {
 	return false
 }
 
-// scraperDenied reports whether a deny on either object a scraper table is granted through applies to the action,
-// so that a grant on one object can't bypass a deny on the other.
+// scraperDenied reports whether a deny on any object a scraper table is granted through applies to the action: the
+// table's own object (database.monitor for the status view), database.config_scrapers and scrapers. A grant on one
+// of them can't bypass a deny on another.
 func scraperDenied(ctx context.Context, table, object, action string) bool {
 	if (table != "config_scrapers" && table != "config_scrapers_with_status") || ctx.User() == nil || rbac.Enforcer() == nil {
 		return false
 	}
 	subject := checkedSubject(ctx)
-	return deniedExplicitly(ctx, subject, Grant{object, action}) || deniedExplicitly(ctx, subject, Grant{adapter.ObjectScrapers, action})
+	for _, o := range lo.Uniq([]string{object, policy.ObjectDatabaseSettings, adapter.ObjectScrapers}) {
+		if deniedExplicitly(ctx, subject, Grant{o, action}) {
+			return true
+		}
+	}
+	return false
 }
 
 // rowFilteredTables are the tables whose rows are filtered by a subject's read grants of their resource type.
