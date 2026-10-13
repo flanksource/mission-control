@@ -379,7 +379,7 @@ func CompileBinding(ctx context.Context, cache *gocache.Cache, binding models.Ro
 }
 
 // pluginActions are the actions a plugin can be granted, on connections only.
-var pluginActions = []string{policy.ActionRead}
+var pluginActions = []string{policy.ActionRead, ActionConnectionUse}
 
 // bindingSelectsPlugins reports whether a stored binding has plugin subjects.
 func bindingSelectsPlugins(binding models.RoleBinding) (bool, error) {

@@ -47,6 +47,11 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
 	}
 
+	smtp, err := mail.GetDefaultSMTPForRequest(ctx)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error getting SMTP config"))
+	}
+
 	invite, err := k.createInvite(ctx, reqData)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
@@ -60,11 +65,6 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 	var body bytes.Buffer
 	if err := inviteUserTemplate.Execute(&body, data); err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
-	}
-
-	smtp, err := mail.GetDefaultSMTP(ctx)
-	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error getting SMTP config"))
 	}
 
 	inviteMail := mail.New([]string{reqData.Email}, "Invitation to join Mission Control", body.String(), "text/html")

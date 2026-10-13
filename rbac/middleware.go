@@ -86,7 +86,7 @@ func DbMiddleware() MiddlewareFunc {
 				object, action = policy.ObjectProperties, policy.ActionPropertyManage
 			}
 
-			if !CheckContext(ctx, object, action) && !canListFilteredRows(ctx, resource, action) && !teamGrants(ctx, resource, action) {
+			if !CheckContext(ctx, object, action) && !canListFilteredRows(ctx, resource, action) && !teamGrants(ctx, resource, action) && !readsConnections(ctx, resource, action) {
 				c.Response().Header().Add("X-Rbac-Subject", ctx.Subject())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)
@@ -103,6 +103,12 @@ func DbMiddleware() MiddlewareFunc {
 			return next(c)
 		}
 	}
+}
+
+// readsConnections reports whether the request reads connection_details, which reading connections allows: it's how
+// connections are read, with their credentials masked (specs/authorization/roles.md, Section 2.2).
+func readsConnections(ctx context.Context, table, action string) bool {
+	return table == "connection_details" && action == policy.ActionRead && CheckContext(ctx, policy.ObjectConnection, policy.ActionRead)
 }
 
 // readOnlyObjects are the objects only read through /db, with the action each read is checked with.

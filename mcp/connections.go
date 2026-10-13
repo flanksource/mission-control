@@ -47,7 +47,7 @@ func ConnectionResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 		return nil, fmt.Errorf("connection not found")
 	}
 
-	jsonData, err := json.Marshal(conn)
+	jsonData, err := json.Marshal(db.MaskConnection(*conn))
 	if err != nil {
 		return nil, err
 	}
@@ -68,6 +68,6 @@ func registerConnections(s *server.MCPServer) {
 		ConnectionResourceHandler)
 
 	s.AddTool(mcp.NewTool(toolListConnections,
-		mcp.WithDescription("List all connection endpoints and credentials. Returns empty array if no connections configured. Use for discovering available data sources."),
+		mcp.WithDescription("List all connection endpoints, with their credentials masked. Returns empty array if no connections configured. Use for discovering available data sources."),
 		mcp.WithReadOnlyHintAnnotation(true)), ConnectionListHandler)
 }

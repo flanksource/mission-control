@@ -9,7 +9,6 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 
@@ -22,11 +21,13 @@ func RegisterRoutes(e *echo.Echo) {
 
 	prefix := "connection"
 	connectionGroup := e.Group(fmt.Sprintf("/%s", prefix))
-	connectionGroup.POST("/test/:id", TestConnection, rbac.Authorization(policy.ObjectConnection, policy.ActionUpdate))
-	connectionGroup.GET("/llm", GetDefaultLLMProviderConnection, rbac.Authorization(policy.ObjectConnection, policy.ActionRead))
+	// Both act with a connection's credentials, so they check connection:use on it, not on the whole connection type
+	connectionGroup.POST("/test/:id", TestConnection)
+	connectionGroup.GET("/llm", GetDefaultLLMProviderConnection)
 }
 
 // GetDefaultLLMProviderConnection returns the hydrated connection for the default LLM Provider connection.
+// It requires connection:use on it.
 //
 // It must only be used by the Next Backend for the AI Chat
 func GetDefaultLLMProviderConnection(c echo.Context) error {
@@ -34,6 +35,10 @@ func GetDefaultLLMProviderConnection(c echo.Context) error {
 
 	conn, err := db.FindDefaultLLMProviderConnection(ctx)
 	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	if err := rbac.AuthorizeConnectionUse(ctx, *conn); err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
 
@@ -45,6 +50,7 @@ func GetDefaultLLMProviderConnection(c echo.Context) error {
 	return c.JSON(http.StatusOK, hydratedConn)
 }
 
+// TestConnection makes an authenticated call with the connection's credentials, so it requires connection:use on it.
 func TestConnection(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
@@ -56,6 +62,10 @@ func TestConnection(c echo.Context) error {
 			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "connection was not found"))
 		}
 
+		return dutyAPI.WriteError(c, err)
+	}
+
+	if err := rbac.AuthorizeConnectionUse(ctx, connection); err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
 

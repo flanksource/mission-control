@@ -4,22 +4,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"os"
-	"path/filepath"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyConn "github.com/flanksource/duty/connection"
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	dutyRBAC "github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
+	"github.com/google/uuid"
+	"google.golang.org/protobuf/proto"
+
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
 	pluginpb "github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/api"
-	"google.golang.org/protobuf/proto"
+	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
+// getConnectionByRef resolves a connection for a plugin, by its connection://<namespace>/<name> URL or its id.
+//
+// It's checked as the plugin (specs/authorization/roles.md, Section 4.4): connection:use returns the connection with its
+// credentials, read returns it with them masked, and neither refuses it.
 func (s *Service) getConnectionByRef(ctx dutyContext.Context, ref string) (*api.ResolvedConnection, error) {
 	conn, err := dutyContext.FindConnectionByURL(ctx, ref)
 	if err != nil {
@@ -28,9 +33,12 @@ func (s *Service) getConnectionByRef(ctx dutyContext.Context, ref string) (*api.
 		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("connection %q not found", ref)
 	}
 
-	attr := models.ABACAttribute{Connection: *conn}
-	if !dutyRBAC.HasPermission(ctx, ctx.Subject(), &attr, policy.ActionRead) {
-		return nil, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("access denied to %s, `read` permission required on %s", ctx.Subject(), ref)
+	if !rbac.CanUseConnection(ctx, ctx.Subject(), *conn) {
+		if rbac.CanReadConnection(ctx, ctx.Subject(), *conn) {
+			masked := db.MaskConnection(*conn)
+			return pluginpb.ConnectionToProto(&masked), nil
+		}
+		return nil, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("access denied to %s, `read` or `%s` permission required on %s", ctx.Subject(), adapter.ActionConnectionUse, ref)
 	}
 
 	key := connKey{connectionID: conn.ID.String()}
@@ -51,13 +59,11 @@ func (s *Service) getConnectionByRef(ctx dutyContext.Context, ref string) (*api.
 func (s *Service) getConnectionByID(ctx dutyContext.Context, connectionID string) (*api.ResolvedConnection, error) {
 	if connectionID == "" {
 		return nil, fmt.Errorf("connection id is required")
+	} else if _, err := uuid.Parse(connectionID); err != nil {
+		return nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("invalid connection id %q", connectionID)
 	}
 
-	conn, err := dutyConn.Get(ctx, connectionID)
-	if err != nil {
-		return nil, fmt.Errorf("get connection %s: %w", connectionID, err)
-	}
-	return pluginpb.ConnectionToProto(conn), nil
+	return s.getConnectionByRef(ctx, connectionID)
 }
 
 func (s *Service) getConnectionForConfig(ctx dutyContext.Context, configItemID string) (*api.ResolvedConnection, error) {
@@ -100,28 +106,7 @@ func (s *Service) connectionFromKubernetesScraper(ctx dutyContext.Context, specJ
 		return resolved, true, err
 	}
 
-	kubeconfig := ""
-	if conn.Kubeconfig != nil && !conn.Kubeconfig.IsEmpty() {
-		var err error
-		kubeconfig, err = ctx.GetEnvValueFromCache(*conn.Kubeconfig, ctx.GetNamespace())
-		if err != nil {
-			return nil, true, fmt.Errorf("hydrate kubernetes connection: %w", err)
-		}
-	}
-
-	if kubeconfig == "" {
-		var err error
-		kubeconfig, err = readDefaultKubeconfig()
-		if err != nil {
-			return nil, true, fmt.Errorf("resolve kubeconfig: %w", err)
-		}
-	}
-
-	return pluginpb.ConnectionToProto(&models.Connection{
-		Name:        "scraper-kubernetes",
-		Type:        models.ConnectionTypeKubernetes,
-		Certificate: kubeconfig,
-	}), true, nil
+	return nil, true, errInlineCredentials(ctx, "kubeconfig")
 }
 
 func (s *Service) connectionFromSQLScraper(ctx dutyContext.Context, specJSON string) (*api.ResolvedConnection, bool, error) {
@@ -155,16 +140,8 @@ func (s *Service) connectionFromSQLScraper(ctx dutyContext.Context, specJSON str
 		}
 
 		conn := parseRawSQLConnection(sql.Connection)
-		if username, err := ctx.GetEnvValueFromCache(sql.Authentication.Username, ctx.GetNamespace()); err != nil {
-			return nil, true, fmt.Errorf("hydrate sql username: %w", err)
-		} else if username != "" {
-			conn.Username = username
-		}
-
-		if password, err := ctx.GetEnvValueFromCache(sql.Authentication.Password, ctx.GetNamespace()); err != nil {
-			return nil, true, fmt.Errorf("hydrate sql password: %w", err)
-		} else if password != "" {
-			conn.Password = password
+		if conn.Username != "" || conn.Password != "" || !sql.Authentication.Username.IsEmpty() || !sql.Authentication.Password.IsEmpty() {
+			return nil, true, errInlineCredentials(ctx, "sql credentials")
 		}
 
 		return pluginpb.ConnectionToProto(conn), true, nil
@@ -194,24 +171,12 @@ func parseRawSQLConnection(connection string) *models.Connection {
 	return conn
 }
 
-func readDefaultKubeconfig() (string, error) {
-	var candidates []string
-	if v := os.Getenv("KUBECONFIG"); v != "" {
-		candidates = append(candidates, filepath.SplitList(v)...)
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		candidates = append(candidates, filepath.Join(home, ".kube", "config"))
-	}
-	for _, p := range candidates {
-		b, err := os.ReadFile(p)
-		if err == nil {
-			return string(b), nil
-		}
-		if !os.IsNotExist(err) {
-			return "", fmt.Errorf("read %s: %w", p, err)
-		}
-	}
-	return "", fmt.Errorf("no default kubeconfig found")
+// errInlineCredentials refuses credentials a scraper holds itself, instead of referencing a connection.
+// A plugin is only granted credentials by connection:use on a connection (specs/authorization/roles.md, Section 4.4),
+// so nothing can grant it these.
+func errInlineCredentials(ctx dutyContext.Context, what string) error {
+	return ctx.Oops().Code(dutyAPI.EFORBIDDEN).
+		Errorf("access denied to %s: the scraper's %s aren't held by a connection, so they can't be granted to a plugin. Reference a connection from the scraper and grant the plugin `%s` on it", ctx.Subject(), what, adapter.ActionConnectionUse)
 }
 
 func pluginRBACSubject(entry *pluginpb.Entry) string {

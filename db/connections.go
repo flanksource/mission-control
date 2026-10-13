@@ -7,7 +7,6 @@ import (
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/api"
-	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
@@ -95,10 +94,13 @@ func DeleteStaleConnection(ctx context.Context, newer *v1.Connection) error {
 		Update("deleted_at", duty.Now()).Error
 }
 
+// ListConnections lists connections with their credentials masked.
 func ListConnections(ctx context.Context) ([]models.Connection, error) {
 	var c []models.Connection
-	err := ctx.DB().Omit("password", "certificate").Where("deleted_at IS NULL").Find(&c).Error
-	return c, err
+	if err := ctx.DB().Omit("password", "certificate").Where("deleted_at IS NULL").Find(&c).Error; err != nil {
+		return nil, err
+	}
+	return lo.Map(c, func(conn models.Connection, _ int) models.Connection { return MaskConnection(conn) }), nil
 }
 
 func FindDefaultLLMProviderConnection(ctx context.Context) (*models.Connection, error) {
@@ -106,5 +108,11 @@ func FindDefaultLLMProviderConnection(ctx context.Context) (*models.Connection, 
 		return nil, api.Errorf(api.ENOTFOUND, "no default LLM connection configured. Use --llm-connection flag to specify one")
 	}
 
-	return connection.Get(ctx, localAPI.DefaultLLMConnection)
+	conn, err := context.FindConnectionByURL(ctx, localAPI.DefaultLLMConnection)
+	if err != nil {
+		return nil, err
+	} else if conn == nil {
+		return nil, api.Errorf(api.ENOTFOUND, "connection (%s) not found", localAPI.DefaultLLMConnection)
+	}
+	return conn, nil
 }
