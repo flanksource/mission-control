@@ -16,6 +16,9 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
+// noSingleResourceMatch is the condition of a policy that matches no single-resource check.
+const noSingleResourceMatch = "false"
+
 // Permission expansion error codes
 const (
 	ErrScopeExpansionInvalidObjectSelector = "ErrScopeExpansionInvalidObjectSelector"
@@ -89,6 +92,7 @@ func withReason(err error, reason string) error {
 // cachedScope is a valid stored Scope, with its agents resolved to ids.
 type cachedScope struct {
 	id      string
+	shipped bool
 	targets []v1.ScopeTarget
 }
 
@@ -121,7 +125,7 @@ func getScope(ctx context.Context, cache *gocache.Cache, namespace, name string)
 		return nil, withContext(withReason(err, ReasonScopeInvalid), "scope %s/%s is invalid", namespace, name)
 	}
 
-	result := &cachedScope{id: scope.ID.String(), targets: resolved}
+	result := &cachedScope{id: scope.ID.String(), shipped: IsShipped(scope.Namespace, scope.Source), targets: resolved}
 	if cache != nil {
 		cache.Set(cacheKey, result, gocache.DefaultExpiration)
 	}
@@ -142,7 +146,9 @@ func LoadScope(ctx context.Context, cache *gocache.Cache, namespace, name string
 // PermissionScopeConditions returns the casbin conditions of a permission that names Scopes in its object_selector:
 // one per Scope and resource type, each holding when the request has a resource of the type that's in the Scope.
 // Membership is stored for every type but views, whose targets are still matched by their selectors,
-// and the types Scopes only select entirely, and scrapers, which Permissions can't match through a Scope.
+// and the types Scopes only select entirely, which Permissions can't match through a Scope.
+// Scraper targets get noSingleResourceMatch: duty can't check a single scraper against a Scope yet (NOTES.md),
+// but the Permission must still be loaded, so that its grants and denies filter scraper listings.
 // It returns nil when the permission names no Scopes.
 func PermissionScopeConditions(ctx context.Context, cache *gocache.Cache, perm models.Permission) ([]string, error) {
 	if len(perm.ObjectSelector) == 0 {
@@ -171,8 +177,13 @@ func PermissionScopeConditions(ctx context.Context, cache *gocache.Cache, perm m
 
 		for _, target := range scope.targets {
 			kind, _ := target.Selector()
-			// duty can't check a single scraper against a Scope yet (NOTES.md), so no Permission matches one
-			if slices.Contains(v1.WholeTypeResources, kind) || kind == policy.ResourceScraper {
+			if slices.Contains(v1.WholeTypeResources, kind) {
+				continue
+			}
+			if kind == policy.ResourceScraper {
+				if !slices.Contains(conditions, noSingleResourceMatch) {
+					conditions = append(conditions, noSingleResourceMatch)
+				}
 				continue
 			}
 			if target.View != nil {

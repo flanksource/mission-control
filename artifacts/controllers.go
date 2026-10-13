@@ -15,6 +15,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/incident-commander/auth"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
 )
@@ -44,30 +45,33 @@ func ListArtifacts(c echo.Context) error {
 	}
 
 	var artifacts []models.Artifact
+	err = auth.WithRLS(ctx, func(ctx context.Context) error {
+		var err error
+		artifacts, err = listArtifacts(ctx, c, id)
+		return err
+	})
+	if err != nil {
+		return api.WriteError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, artifacts)
+}
+
+// listArtifacts returns the artifacts of the check, config change or playbook run the request names.
+func listArtifacts(ctx context.Context, c echo.Context, id uuid.UUID) ([]models.Artifact, error) {
 	switch {
 	case strings.Contains(c.Path(), "/list/check/"):
 		_checkTime := c.Param("check_time")
 		checkTime, err := time.Parse(time.RFC3339, _checkTime)
 		if err != nil {
-			return api.WriteError(c, api.Errorf(api.EINVALID, "invalid check_time(%s). must be in RFC3339", _checkTime))
+			return nil, api.Errorf(api.EINVALID, "invalid check_time(%s). must be in RFC3339", _checkTime)
 		}
-		artifacts, err = query.ArtifactsByCheck(ctx, id, checkTime)
-		if err != nil {
-			return api.WriteError(c, err)
-		}
+		return query.ArtifactsByCheck(ctx, id, checkTime)
 	case strings.Contains(c.Path(), "/list/config_change/"):
-		artifacts, err = query.ArtifactsByConfigChange(ctx, id)
-		if err != nil {
-			return api.WriteError(c, err)
-		}
+		return query.ArtifactsByConfigChange(ctx, id)
 	default:
-		artifacts, err = query.ArtifactsByPlaybookRun(ctx, id)
-		if err != nil {
-			return api.WriteError(c, err)
-		}
+		return query.ArtifactsByPlaybookRun(ctx, id)
 	}
-
-	return c.JSON(http.StatusOK, artifacts)
 }
 
 func DownloadArtifact(c echo.Context) error {
@@ -76,6 +80,12 @@ func DownloadArtifact(c echo.Context) error {
 	artifactID, err := uuid.Parse(c.Param("id"))
 	if err != nil {
 		return api.WriteError(c, api.Errorf(api.EINVALID, "invalid id: %v", err))
+	}
+
+	if visible, err := auth.CanReadArtifact(ctx, artifactID); err != nil {
+		return api.WriteError(c, err)
+	} else if !visible {
+		return api.WriteError(c, api.Errorf(api.ENOTFOUND, "artifact %s not found", artifactID))
 	}
 
 	blobs, err := ctx.Blobs()

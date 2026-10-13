@@ -7,9 +7,9 @@ Single-resource (Casbin) checks on a scraper aren't possible yet, and Mission Co
   `r.obj.Membership`. No request carries a scraper, so the condition never holds for one: it fails closed.
 - Whole-type rules (`scraper: {name: "*"}`) also compile to the `scrapers` object, which `/db/config_scrapers`
   accepts. That's how `create`, `update` and `delete` on scrapers are enforced.
-- A Permission naming a Scope gets no condition for the Scope's scraper targets
-  (`adapter.PermissionScopeConditions`). Its other types still match, and its scraper targets still filter
-  listings through the claim.
+- A Permission naming a Scope gets the condition `false` for the Scope's scraper targets
+  (`adapter.PermissionScopeConditions`), which matches no single-resource check. It keeps the Permission loaded,
+  even when its Scopes select only scrapers, so its grants and denies still filter listings through the claim.
 
 ## What duty needs
 
@@ -19,8 +19,8 @@ Single-resource (Casbin) checks on a scraper aren't possible yet, and Mission Co
 3. **`models.ABACMembership.Scraper []any`** and a `policy.ResourceScraper` case in `rbac.membershipOf`, so the
    Scopes the scraper is in are filled in.
 4. **`rbac.ScopeCondition`**: map `policy.ResourceScraper` to `"Scraper"`, so a Permission naming a Scope can match
-   a scraper (`'scope:<id>' in r.obj.Membership.Scraper`). Once it's there, remove the scraper skip in
-   `rbac/adapter/scope_expansion.go`.
+   a scraper (`'scope:<id>' in r.obj.Membership.Scraper`). Once it's there, use it in place of the `false`
+   condition in `rbac/adapter/scope_expansion.go`.
 5. **Optional: an RBAC object of its own for scrapers in duty** (`policy.ObjectScrapers = "scrapers"`), with
    `config_scrapers` and `config_scrapers_with_status` mapped to it in `rbac/objects.go`. Today `config_scrapers` is
    filed under `database.config_scrapers`, which `logging_backends` shares, and the view under `database.monitor`.

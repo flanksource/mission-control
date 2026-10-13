@@ -669,6 +669,12 @@ func (r CompiledRule) wholeTypeObjects() []string {
 	return objects
 }
 
+// GrantsAllOf reports whether the rule grants every resource of the type through Scopes that never change: every
+// Scope of its resource is shipped and selects the whole type. Such a grant needn't name its Scopes.
+func (r CompiledRule) GrantsAllOf(kind string) bool {
+	return r.SelectsEntirely(kind) && lo.EveryBy(r.Resource, func(scope ScopeSelection) bool { return scope.Shipped })
+}
+
 // SelectsEntirely reports whether every Scope of the rule's resource selects every resource of the type.
 func (r CompiledRule) SelectsEntirely(kind string) bool {
 	return len(r.Resource) > 0 && lo.EveryBy(r.Resource, func(scope ScopeSelection) bool {

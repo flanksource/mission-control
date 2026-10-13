@@ -19,6 +19,7 @@ import (
 	k8sTypes "k8s.io/apimachinery/pkg/types"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
@@ -30,11 +31,11 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 	const namespace = "scraper-scopes"
 
 	var (
-		homelabA, homelabB, gcp                           models.ConfigScraper
-		gcpArtifact, homelabArtifact                      uuid.UUID
+		homelabA, homelabB, gcp                          models.ConfigScraper
+		gcpArtifact, homelabArtifact                     uuid.UUID
 		homelabReader, everyReader, configReader, nobody *models.Person
 		builtinAdmin, builtinEditor, adminsMember        *models.Person
-		scopeIDs                                          = map[string]string{}
+		scopeIDs                                         = map[string]string{}
 	)
 
 	scraperIDs := func() []uuid.UUID { return []uuid.UUID{homelabA.ID, homelabB.ID, gcp.ID} }
@@ -84,6 +85,41 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 			}},
 		}
 		Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).To(Succeed())
+	}
+
+	newPermission := func(person *models.Person, action, object, scope string, deny bool) {
+		ginkgo.GinkgoHelper()
+		permission := models.Permission{
+			ID:          uuid.New(),
+			Name:        "scraper-scopes-" + uuid.NewString(),
+			Namespace:   namespace,
+			Action:      action,
+			Deny:        deny,
+			Object:      object,
+			Subject:     person.ID.String(),
+			SubjectType: models.PermissionSubjectTypePerson,
+		}
+		if scope != "" {
+			permission.ObjectSelector = []byte(`{"scopes":[{"namespace":"` + namespace + `","name":"` + scope + `"}]}`)
+		}
+		Expect(DefaultContext.DB().Create(&permission).Error).To(Succeed())
+		ginkgo.DeferCleanup(func() {
+			Expect(DefaultContext.DB().Delete(&permission).Error).To(Succeed())
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+			auth.FlushTokenCache()
+		})
+		Expect(rbac.ReloadPolicy()).To(Succeed())
+		auth.FlushTokenCache()
+	}
+
+	dbStatus := func(person *models.Person, method string) int {
+		ginkgo.GinkgoHelper()
+		req := httptest.NewRequest(method, "/db/config_scrapers", nil)
+		req = req.WithContext(DefaultContext.WithUser(person))
+		rec := httptest.NewRecorder()
+		handler := mcRBAC.DbMiddleware()(func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+		Expect(handler(echo.New().NewContext(req, rec))).To(Succeed())
+		return rec.Code
 	}
 
 	payload := func(person *models.Person) *rls.Payload {
@@ -149,12 +185,15 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.AfterAll(func() {
-		Expect(DefaultContext.DB().Exec(`DELETE FROM team_members WHERE person_id = ?`, adminsMember.ID).Error).To(Succeed())
+		Expect(DefaultContext.DB().Exec(`DELETE FROM team_members WHERE team_id IN (SELECT id FROM teams WHERE source = ?)`, adapter.SourceShipped).Error).To(Succeed())
+		for _, ns := range []string{namespace, adapter.ShippedNamespace} {
+			Expect(DefaultContext.DB().Where("namespace = ?", ns).Delete(&models.RoleBinding{}).Error).To(Succeed())
+			Expect(DefaultContext.DB().Where("namespace = ?", ns).Delete(&models.Role{}).Error).To(Succeed())
+			Expect(DefaultContext.DB().Where("namespace = ?", ns).Delete(&models.Scope{}).Error).To(Succeed())
+		}
+		Expect(DefaultContext.DB().Where("source = ?", adapter.SourceShipped).Delete(&models.Team{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Exec(`DELETE FROM artifacts WHERE id IN ?`, []uuid.UUID{gcpArtifact, homelabArtifact}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("id IN ?", scraperIDs()).Delete(&models.ConfigScraper{}).Error).To(Succeed())
-		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.RoleBinding{}).Error).To(Succeed())
-		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Role{}).Error).To(Succeed())
-		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Scope{}).Error).To(Succeed())
 		for _, p := range []*models.Person{homelabReader, everyReader, configReader, nobody, builtinAdmin, builtinEditor, adminsMember} {
 			Expect(DefaultContext.DB().Delete(p).Error).To(Succeed())
 		}
@@ -188,9 +227,10 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 		Expect(withStatus).To(ConsistOf(homelabA.ID, homelabB.ID))
 	})
 
-	ginkgo.It("lists every scraper through a whole-type read, sent as all", func() {
-		Expect(payload(everyReader).Scraper).To(Equal(rls.AllRows()))
-		Expect(payload(everyReader).JWTClaims()).To(HaveKeyWithValue("scraper", rls.AllRows()))
+	ginkgo.It("lists every scraper through a whole-type read, naming its Scope so the claim follows Scope changes", func() {
+		grant := &rls.Grants{Any: []rls.Grant{{Scope: scopeIDs["every-scraper"]}}}
+		Expect(payload(everyReader).Scraper).To(Equal(grant))
+		Expect(payload(everyReader).JWTClaims()).To(HaveKeyWithValue("scraper", grant))
 
 		status, scrapers, artifacts := list(everyReader)
 		Expect(status).To(Equal(http.StatusOK))
@@ -230,7 +270,8 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 
 	ginkgo.It("lists every scraper for members of the shipped admins team, through the admin Role", func() {
 		Expect(payload(adminsMember).Disable).To(BeFalse(), "a guest's rows are filtered")
-		Expect(payload(adminsMember).Scraper).To(Equal(rls.AllRows()))
+		Expect(payload(adminsMember).Scraper).To(Equal(rls.AllRows()), "all-scrapers is shipped, so it never changes")
+		Expect(payload(adminsMember).JWTClaims()).To(HaveKeyWithValue("scraper", rls.AllRows()))
 
 		status, scrapers, artifacts := list(adminsMember)
 		Expect(status).To(Equal(http.StatusOK))
@@ -262,10 +303,106 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 
 		conditions, err := adapter.PermissionScopeConditions(DefaultContext, nil, permission)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(conditions).To(Equal([]string{"'scope:" + scopeIDs["configs-and-homelab-scrapers"] + "' in r.obj.Membership.Config"}))
+		Expect(conditions).To(ConsistOf("'scope:"+scopeIDs["configs-and-homelab-scrapers"]+"' in r.obj.Membership.Config", "false"))
 
 		Expect(payload(nobody).Scraper).To(Equal(&rls.Grants{Any: []rls.Grant{{Scope: scopeIDs["configs-and-homelab-scrapers"]}}}))
 		_, scrapers, _ := list(nobody)
 		Expect(scrapers).To(ConsistOf(homelabA.ID, homelabB.ID))
+	})
+
+	ginkgo.It("keeps a Permission naming only scrapers in effect for listings", func() {
+		newPermission(nobody, policy.ActionRead, "", "homelab-scrapers", false)
+
+		conditions, err := adapter.PermissionScopeConditions(DefaultContext, nil, models.Permission{
+			ObjectSelector: []byte(`{"scopes":[{"namespace":"` + namespace + `","name":"homelab-scrapers"}]}`),
+		})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(conditions).To(Equal([]string{"false"}), "matches no single-resource check")
+
+		Expect(payload(nobody).Scraper).To(Equal(&rls.Grants{Any: []rls.Grant{{Scope: scopeIDs["homelab-scrapers"]}}}))
+		_, scrapers, artifacts := list(nobody)
+		Expect(scrapers).To(ConsistOf(homelabA.ID, homelabB.ID))
+		Expect(artifacts).To(Equal([]uuid.UUID{homelabArtifact}))
+	})
+
+	ginkgo.It("hides a scraper Scope's rows through a deny Permission naming only that Scope", func() {
+		newPermission(everyReader, policy.ActionRead, "", "homelab-scrapers", true)
+
+		Expect(payload(everyReader).Scraper.IsEmpty()).To(BeTrue())
+		_, scrapers, artifacts := list(everyReader)
+		Expect(scrapers).To(BeEmpty())
+		Expect(artifacts).To(BeEmpty())
+	})
+
+	ginkgo.Describe("writes through /db", func() {
+		var writer *models.Person
+
+		ginkgo.BeforeAll(func() {
+			writer = setup.CreateUserWithRole(DefaultContext, "Scraper Writer", "scraper-writer@test.com", policy.RoleGuest)
+			role := &v1.Role{
+				ObjectMeta: metav1.ObjectMeta{Name: "write-every-scraper", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
+				Spec: v1.RoleSpec{Rules: []v1.RoleRule{
+					{Name: "read", Action: policy.ActionRead, Resource: &v1.ScopeReference{ScopeRef: "every-scraper"}},
+					{Name: "update", Action: policy.ActionUpdate, Resource: &v1.ScopeReference{ScopeRef: "every-scraper"}},
+				}},
+			}
+			Expect(db.PersistRoleFromCRD(DefaultContext, role)).To(Succeed())
+			bind("write-every-scraper", writer)
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+			auth.FlushTokenCache()
+			ginkgo.DeferCleanup(func() { Expect(DefaultContext.DB().Delete(writer).Error).To(Succeed()) })
+		})
+
+		ginkgo.It("allows a whole-type update rule on scrapers", func() {
+			Expect(dbStatus(writer, http.MethodPatch)).To(Equal(http.StatusOK))
+			Expect(dbStatus(writer, http.MethodDelete)).To(Equal(http.StatusForbidden))
+		})
+
+		ginkgo.It("refuses it under a deny Permission on database.config_scrapers", func() {
+			newPermission(writer, policy.ActionUpdate, policy.ObjectDatabaseSettings, "", true)
+			Expect(dbStatus(writer, http.MethodPatch)).To(Equal(http.StatusForbidden))
+		})
+
+		ginkgo.It("refuses an allow Permission on database.config_scrapers under a deny rule on scrapers", func() {
+			newPermission(configReader, policy.ActionDelete, policy.ObjectDatabaseSettings, "", false)
+			Expect(dbStatus(configReader, http.MethodDelete)).To(Equal(http.StatusOK))
+
+			role := &v1.Role{
+				ObjectMeta: metav1.ObjectMeta{Name: "no-scraper-deletes", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
+				Spec: v1.RoleSpec{Rules: []v1.RoleRule{
+					{Name: "delete", Action: policy.ActionDelete, Deny: true, Resource: &v1.ScopeReference{ScopeRef: "every-scraper"}},
+				}},
+			}
+			Expect(db.PersistRoleFromCRD(DefaultContext, role)).To(Succeed())
+			bind("no-scraper-deletes", configReader)
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+			Expect(dbStatus(configReader, http.MethodDelete)).To(Equal(http.StatusForbidden))
+		})
+	})
+
+	ginkgo.Describe("artifact endpoints", func() {
+		var e *echo.Echo
+
+		ginkgo.BeforeAll(func() {
+			e = echo.New()
+			artifacts.RegisterRoutes(e)
+		})
+
+		ginkgo.It("only finds the artifacts of scrapers the caller can list", func() {
+			for id, visible := range map[uuid.UUID]bool{homelabArtifact: true, gcpArtifact: false} {
+				Expect(auth.CanReadArtifact(DefaultContext.WithUser(homelabReader), id)).To(Equal(visible))
+				Expect(auth.CanReadArtifact(DefaultContext.WithUser(builtinAdmin), id)).To(BeTrue())
+			}
+		})
+
+		ginkgo.It("doesn't download an artifact of a scraper the caller can't list", func() {
+			newPermission(homelabReader, policy.ActionRead, policy.ObjectArtifact, "", false)
+
+			req := httptest.NewRequest(http.MethodGet, "/artifacts/download/"+gcpArtifact.String(), nil)
+			req = req.WithContext(DefaultContext.WithUser(homelabReader))
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			Expect(rec.Code).To(Equal(http.StatusNotFound), rec.Body.String())
+		})
 	})
 })

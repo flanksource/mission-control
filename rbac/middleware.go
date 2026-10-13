@@ -100,7 +100,7 @@ func DbMiddleware() MiddlewareFunc {
 					scraperGrants(ctx, resource, action)
 			}
 
-			if !allowed {
+			if !allowed || scraperDenied(ctx, resource, object, action) {
 				c.Response().Header().Add("X-Rbac-Subject", ctx.Subject())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)
@@ -158,6 +158,16 @@ func scraperGrants(ctx context.Context, table, action string) bool {
 		return action == policy.ActionRead && CheckContext(ctx, adapter.ObjectScrapers, action)
 	}
 	return false
+}
+
+// scraperDenied reports whether a deny on either object a scraper table is granted through applies to the action,
+// so that a grant on one object can't bypass a deny on the other.
+func scraperDenied(ctx context.Context, table, object, action string) bool {
+	if (table != "config_scrapers" && table != "config_scrapers_with_status") || ctx.User() == nil || rbac.Enforcer() == nil {
+		return false
+	}
+	subject := checkedSubject(ctx)
+	return deniedExplicitly(ctx, subject, Grant{object, action}) || deniedExplicitly(ctx, subject, Grant{adapter.ObjectScrapers, action})
 }
 
 // rowFilteredTables are the tables whose rows are filtered by a subject's read grants of their resource type.

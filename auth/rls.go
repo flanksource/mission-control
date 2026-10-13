@@ -192,6 +192,16 @@ func WithRLS(ctx context.Context, fn func(context.Context) error) error {
 	})
 }
 
+// CanReadArtifact reports whether the artifact exists and is visible under the subject's row filters, e.g. an
+// artifact a scraper produced only when the subject can list the scraper.
+func CanReadArtifact(ctx context.Context, id uuid.UUID) (bool, error) {
+	var count int64
+	err := WithRLS(ctx, func(ctx context.Context) error {
+		return ctx.DB().Table("artifacts").Where("id = ? AND deleted_at IS NULL", id).Count(&count).Error
+	})
+	return count > 0, err
+}
+
 // buildRLSPayload converts the subject's read grants into the claim Postgres filters listings by,
 // since casbin can't filter rows returned by /db.
 //
@@ -268,10 +278,11 @@ func (c *claim) grantAll(kind string) {
 	}
 }
 
-// grantRule lists the rows a read rule grants. A rule over all scrapers lists every scraper as "all".
+// grantRule lists the rows a read rule grants. A rule over all scrapers through shipped Scopes lists every scraper
+// as "all". Other grants name their Scopes, so a cached claim follows changes to the Scopes' membership.
 func (c *claim) grantRule(rule adapter.CompiledRule) {
 	for kind, grant := range rule.ReadGrants() {
-		if kind == policy.ResourceScraper && rule.SelectsEntirely(kind) {
+		if kind == policy.ResourceScraper && rule.GrantsAllOf(kind) {
 			c.grantAll(kind)
 		} else {
 			c.grant(kind, grant)
@@ -450,8 +461,6 @@ func addScopeGrants(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSe
 				addViewFilter(claim, viewRefToFilter(dutyRBAC.ViewRef{ID: selector.ID, Name: selector.Name, Namespace: selector.Namespace}), deny)
 			} else if deny {
 				claim.deny(kind)
-			} else if kind == policy.ResourceScraper && selector.Wildcard() {
-				claim.grantAll(kind)
 			} else {
 				claim.grant(kind, rls.Grant{Scope: scopeID})
 			}
