@@ -329,13 +329,13 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Use connection C, e.g. to send        | `connection:use`                            | C               | None                              |
 | Test connection C                     | `connection:use`                            | C               | None                              |
 
-The plugin's own checks during the operation, e.g. on the connections it uses, are made as the plugin (Section 4.4). Approving or cancelling a run checks `read` on its resource for the same reason running it does: the run, its parameters and its results are about that resource, and are only readable with it (`scopes.md`, Section 3.2).
+The plugin's checks during the operation are made as the caller, except looking up a connection, which is checked as the plugin (Section 4.4). Approving or cancelling a run checks `read` on its resource for the same reason running it does: the run, its parameters and its results are about that resource, and are only readable with it (`scopes.md`, Section 3.2).
 
 Each check is made as the subject performing the operation: the caller, or, where there's none, the resource doing the work (Section 4.4).
 
 ### 4.4 Operations without a caller
 
-Some work isn't done by the person who started it: a playbook running on its schedule, from a webhook or from an event it's triggered by, a notification being sent, a playbook started by a notification or by another playbook, a plugin carrying out an operation someone invoked. Mission Control has no identity of its own to run it as (`overview.md`, "Access"). It's checked as the resource doing it, which a RoleBinding selects like any subject (`rolebindings.md`, Section 2.5):
+Some work isn't done by the person who started it: a playbook running on its schedule, from a webhook or from an event it's triggered by, a notification being sent, a playbook started by a notification or by another playbook. Mission Control has no identity of its own to run it as (`overview.md`, "Access"). It's checked as the resource doing it, which a RoleBinding selects like any subject (`rolebindings.md`, Section 2.5):
 
 | Work                                              | Starting it is checked as             | Checks made during it are made as |
 | ------------------------------------------------- | ------------------------------------- | --------------------------------- |
@@ -345,7 +345,7 @@ Some work isn't done by the person who started it: a playbook running on its sch
 | Playbook Q's run starts playbook P                | Q                                     | P                                 |
 | N is evaluated against an event                   | Not checked                           | Not checked                       |
 | N is sent                                         | Not checked: no one asks for the send | N                                 |
-| A person invokes operation O of plugin X on config C | The person: `invoke:X:O`, then `read` on C | X                          |
+| A person invokes operation O of plugin X on config C | The person: `invoke:X:O`, then `read` on C | The person, except connection lookups: X |
 
 - A run no person started is created only if the playbook passes the checks a person starting it would (Section 4.3): `playbook:run` on itself, with the run's target if it has one, then `read` on the target. A playbook refused either check gets no run, and the refusal is recorded in its job history. _Why:_ starting a run makes the same checks whoever starts it, with no exception for the playbook. The `read` check also matters on its own: a run's templates are filled with its target's data before any step runs, so without it, a playbook could be triggered on configs it may not read and send their data anywhere.
 - A run's actions are checked as its playbook, whoever started it. A playbook with no binding can do nothing that's checked: it can't read a config, use a connection or run another playbook.
@@ -356,10 +356,13 @@ Some work isn't done by the person who started it: a playbook running on its sch
 - Sending checks `connection:use` on that connection as the notification. If the check fails, the send fails, and the failure is recorded on the notification's send history and status. It's never retried as another subject.
 - No one's access is checked when a notification or playbook is created or changed against the connections and resources it names. What it may do comes only from the bindings that select it. A notification created from a custom resource has no author to check, so an author check would treat the same notification differently depending on where it was written.
 
-- A plugin's checks are made as the plugin, selected by `plugins` in a RoleBinding (`rolebindings.md`, Section 2.5). Every connection it resolves is checked this way, by whatever path it resolves it: `read` lets it see a connection's name, type and settings, and `connection:use` lets it act with the credentials (Section 2.2). The rule's `resource` Scope selects the connections.
-- A plugin can only be granted two actions, `read` and `connection:use`, on Scopes that select connections and nothing else. A RoleBinding that selects a plugin and binds a Role with any other rule, or with a rule whose Scope selects another type, is `Ready=False` and grants nothing, to any of its subjects, until the Role or the binding is changed. _Why:_ a plugin only needs Mission Control's authorization to reach connections. Keeping its grants to connections keeps what a plugin can touch small and readable from one kind of rule.
+A plugin is different: its work always has a caller, and it acts for them, except with connections.
+
+- Every check a plugin's work makes is made as the caller, with the caller's grants: reading a config, listing configs, and starting another plugin's operation (`invoke:<plugin>:<operation>`, then `read` on the config). If the caller used an access token, its Roles limit these checks (Section 4.5).
+- Looking up a connection is the one exception. It's checked as the plugin, selected by `plugins` in a RoleBinding (`rolebindings.md`, Section 2.5), by whatever path the plugin resolves it: `read` lets it see a connection's name, type and settings, and `connection:use` lets it act with the credentials (Section 2.2). The caller's access to the connection is never checked: a caller needs no grant on the plugin's connections, and their grants give the plugin none. A plugin without a grant that matches is refused, and the call fails. It's never retried as the caller or as any other subject.
+- A plugin can only be granted two actions, `read` and `connection:use`, on Scopes that select connections and nothing else. A RoleBinding that selects a plugin and binds a Role with any other rule, or with a rule whose Scope selects another type, is `Ready=False` and grants nothing, to any of its subjects, until the Role or the binding is changed. _Why:_ connection lookups are the only checks made as the plugin, so no other grant could take effect.
+- So whoever may invoke operation O of plugin X may have X act with X's connections, on any config they may read that X's selector matches. `invoke:X:O` is as sensitive as what O does with them: grant it with that in mind.
 - Plugins are upgraded by Mission Control itself, on a schedule. No person or Role can trigger an upgrade.
-- The caller's `invoke:<plugin>:<operation>` only lets the caller start the operation. It gives the plugin no access to any connection or resource. A plugin without a grant that matches is refused, and the operation fails. It's never retried as the caller or as any other subject.
 
   ```yaml
   kind: Role
@@ -385,9 +388,9 @@ Some work isn't done by the person who started it: a playbook running on its sch
           name: kubernetes-logs
   ```
 
-  The `kubernetes-logs` plugin can use the connections in `loki-connections`, whoever invokes it, and no others.
+  The `kubernetes-logs` plugin can use the connections in `loki-connections`, whoever invokes it, and no others. A person with `invoke:kubernetes-logs:get-pod-logs` and `read` on a pod gets that pod's logs through them, without any grant on the connections.
 
-_Why the plugin and not its caller:_ the plugin's code decides what it does with a connection's credentials, not the caller. Borrowing the caller's access would let anyone allowed to invoke an operation have the plugin act with any credentials the caller can use. Checking the plugin as itself keeps what it may touch readable from its own bindings, and the same whoever invokes it.
+_Why the caller:_ a plugin does work someone asked for, so it reads with their access, and no one reaches more data through a plugin than they could directly. _Why connections are the plugin's:_ a plugin often needs credentials its callers shouldn't hold, e.g. a cluster's credentials to fetch one pod's logs, and its code, not the caller, decides what it does with them. Borrowing the caller's access would let anyone allowed to invoke an operation have the plugin act with any credentials they can use. Granting connections to the plugin keeps them readable from its own bindings, and the same whoever invokes it.
 
 _Why the resource and not its author:_ a resource's author can change, and resources come from Git, the UI and other tools. Granting the resource itself makes what it may do one question, answered by its bindings, whoever wrote it last. Who can change a resource with a grant is covered by `rolebindings.md`, Section 2.5.
 
