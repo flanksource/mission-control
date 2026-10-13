@@ -2,6 +2,7 @@ package permissions_test
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -175,7 +176,6 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 				on(allow("run", policy.ActionPlaybookRun, "kubernetes-playbooks"), "all-configs")),
 			newRole("tenant-a-runner", namespace, on(allow("run", policy.ActionPlaybookRun, "kubernetes-playbooks"), "tenant-a")),
 			newRole("tenant-b-runner", namespace, on(allow("run", policy.ActionPlaybookRun, "all-playbooks"), "tenant-b")),
-			newRole("no-tenant-b", namespace, deny(on(allow("no-runs", policy.ActionPlaybookRun, "all-playbooks"), "tenant-b"))),
 			newRole("only-in-other-namespace", otherNamespace, allow("run", policy.ActionPlaybookRun, "all-playbooks")),
 		} {
 			persistRole(role)
@@ -189,7 +189,6 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			newBinding("pairings-a", "tenant-a-runner", people(bob)),
 			newBinding("pairings-b", "tenant-b-runner", people(bob)),
 			newBinding("run-anywhere", "run-anywhere", people(carol)),
-			newBinding("no-tenant-b", "no-tenant-b", people(carol)),
 			constrained(newBinding("tenant-a-operators", "read-configs", people(dave, rlsTenantGuest)), "tenant-a-boundary", "tenant-a-boundary"),
 			newBinding("rls", "read-configs", people(rlsGuest)),
 		} {
@@ -289,10 +288,82 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 	})
 
 	Describe("deny rules", func() {
-		It("override allow rules of other roles", func() {
-			subject := carol.ID.String()
-			Expect(canRunOn(subject, dummy.EchoConfig, &tenantA)).To(BeTrue())
-			Expect(canRunOn(subject, dummy.EchoConfig, &tenantB)).To(BeFalse())
+		It("make a stored role Invalid, granting nothing", func() {
+			role := newRole("no-tenant-b", namespace,
+				on(allow("run", policy.ActionPlaybookRun, "all-playbooks"), "all-configs"),
+				deny(on(allow("no-runs", policy.ActionPlaybookRun, "all-playbooks"), "tenant-b")))
+			err := db.PersistRoleFromCRD(DefaultContext, role)
+			var notReady *kopper.NotReadyError
+			Expect(errors.As(err, &notReady)).To(BeTrue(), "%v", err)
+			Expect(notReady.Reason).To(Equal(kopper.ReasonInvalid))
+			Expect(notReady.Message).To(ContainSubstring("deny isn't supported"))
+
+			binding := newBinding("no-tenant-b", role.Name, people(erin))
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).ToNot(Succeed())
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Where("id = ?", binding.UID).Delete(&models.RoleBinding{}).Error).To(Succeed())
+				Expect(DefaultContext.DB().Where("id = ?", role.UID).Delete(&models.Role{}).Error).To(Succeed())
+				Expect(rbac.ReloadPolicy()).To(Succeed())
+			})
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			Expect(*storedRole(role.UID).ErrorReason).To(Equal(adapter.ReasonInvalid))
+			Expect(*storedBinding(namespace, binding.Name).ErrorReason).To(Equal(adapter.ReasonRoleInvalid))
+			Expect(canRunOn(erin.ID.String(), dummy.EchoConfig, &tenantA)).To(BeFalse(), "the role's allow rule doesn't apply either")
+			Expect(canRunOn(erin.ID.String(), dummy.EchoConfig, &tenantB)).To(BeFalse())
+		})
+
+		It("apply a role whose rules set deny: false", func() {
+			rule := on(allow("run", policy.ActionPlaybookRun, "all-playbooks"), "tenant-b")
+			rule.Deny = false
+			role := newRole("deny-false", namespace, rule)
+			persistRole(role)
+
+			binding := newBinding("deny-false", role.Name, people(erin))
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).To(Succeed())
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Where("id = ?", binding.UID).Delete(&models.RoleBinding{}).Error).To(Succeed())
+				Expect(DefaultContext.DB().Where("id = ?", role.UID).Delete(&models.Role{}).Error).To(Succeed())
+				Expect(rbac.ReloadPolicy()).To(Succeed())
+			})
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			Expect(canRunOn(erin.ID.String(), dummy.EchoConfig, &tenantB)).To(BeTrue())
+			Expect(canRunOn(erin.ID.String(), dummy.EchoConfig, &tenantA)).To(BeFalse())
+		})
+
+		It("are deleted with their role from the database at startup", func() {
+			denying := models.Role{
+				ID: uuid.New(), Name: "stored-deny", Namespace: namespace, Source: models.SourceUI,
+				Rules: []byte(`[{"name":"no-runs","action":"playbook:run","resource":{"scopeRef":"all-playbooks"},"deny":true}]`),
+			}
+			allowing := models.Role{
+				ID: uuid.New(), Name: "stored-deny-false", Namespace: namespace, Source: models.SourceUI,
+				Rules: []byte(`[{"name":"runs","action":"playbook:run","resource":{"scopeRef":"all-playbooks"},"deny":false}]`),
+			}
+			Expect(DefaultContext.DB().Create([]*models.Role{&denying, &allowing}).Error).To(Succeed())
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Delete([]*models.Role{&denying, &allowing}).Error).To(Succeed())
+			})
+
+			Expect(db.DeleteDenyRules(DefaultContext)).To(Succeed())
+
+			Expect(storedRole(k8sTypes.UID(denying.ID.String())).DeletedAt).ToNot(BeNil())
+			Expect(storedRole(k8sTypes.UID(allowing.ID.String())).DeletedAt).To(BeNil())
+		})
+
+		It("never load as casbin deny policies", func() {
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+			policies, err := rbac.Enforcer().GetPolicy()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(policies).ToNot(BeEmpty())
+			for _, p := range policies {
+				// duty's built-in policies (id "na") still deny everyone the Kratos tables, until they're removed from duty
+				if p[3] == "deny" {
+					Expect(p[1]).To(Equal(policy.ObjectAuthConfidential), "%v", p)
+					Expect(p[5]).To(Equal("na"), "%v", p)
+				}
+			}
 		})
 	})
 
@@ -319,8 +390,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		It("grant the whole role, and don't apply an allow rule they can't narrow", func() {
 			role := newRole("whole-role", namespace,
 				allow("read", policy.ActionRead, "role-configs"),
-				on(allow("run", policy.ActionPlaybookRun, "all-playbooks"), "all-configs"),
-				deny(on(allow("no-tenant-b", policy.ActionPlaybookRun, "all-playbooks"), "tenant-b")))
+				on(allow("run", policy.ActionPlaybookRun, "all-playbooks"), "all-configs"))
 			persistRole(role)
 
 			binding := constrained(newBinding("whole-role", role.Name, people(erin)), "", "tenant-a")
@@ -365,27 +435,6 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 
 		It("ignore types of the constraint's scope an input can't carry", func() {
 			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue(), "tenant-a-boundary's playbooks are ignored on the target side")
-		})
-
-		It("keep deny rules in effect when a scope of the constraint is missing", func() {
-			role := newRole("guarded", namespace,
-				on(allow("run", policy.ActionPlaybookRun, "all-playbooks"), "all-configs"),
-				deny(on(allow("no-tenant-b", policy.ActionPlaybookRun, "all-playbooks"), "tenant-b")))
-			persistRole(role)
-
-			anywhere := newBinding("erin-run-anywhere", "run-anywhere", people(erin))
-			guarded := constrained(newBinding("guarded", role.Name, people(erin)), "", "does-not-exist")
-			Expect(db.PersistRoleBindingFromCRD(DefaultContext, anywhere)).To(Succeed())
-			Expect(db.PersistRoleBindingFromCRD(DefaultContext, guarded)).ToNot(Succeed())
-			DeferCleanup(func() {
-				Expect(DefaultContext.DB().Where("id IN ?", []k8sTypes.UID{anywhere.UID, guarded.UID}).Delete(&models.RoleBinding{}).Error).To(Succeed())
-				Expect(rbac.ReloadPolicy()).To(Succeed())
-			})
-			Expect(rbac.ReloadPolicy()).To(Succeed())
-
-			Expect(*storedBinding(namespace, guarded.Name).ErrorReason).To(Equal(adapter.ReasonScopeNotFound))
-			Expect(canRunOn(erin.ID.String(), dummy.EchoConfig, &tenantA)).To(BeTrue())
-			Expect(canRunOn(erin.ID.String(), dummy.EchoConfig, &tenantB)).To(BeFalse(), "a constraint failure never lowers a guardrail")
 		})
 	})
 
@@ -466,8 +515,9 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			rejectRole(allow("aws-connections", policy.ActionRead, "aws-connections"))
 		})
 
-		It("rejects denying reads", func() {
+		It("rejects deny rules", func() {
 			rejectRole(deny(allow("no-read", policy.ActionRead, "role-configs")))
+			rejectRole(deny(on(allow("no-runs", policy.ActionPlaybookRun, "all-playbooks"), "tenant-b")))
 		})
 
 		It("rejects create, update and delete on anything but whole types", func() {
@@ -759,13 +809,13 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(canRunOn(dave.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue())
 		})
 
-		It("applies none of an invalid role's rules, deny rules included", func() {
+		It("applies none of an invalid role's rules", func() {
 			broken := models.Role{
 				ID:        uuid.New(),
 				Name:      "broken",
 				Namespace: namespace,
 				Source:    models.SourceCRD,
-				Rules:     []byte(`[{"name":"no-runs","action":"playbook:run","resource":{"scopeRef":"does-not-exist"},"deny":true}]`),
+				Rules:     []byte(`[{"name":"no-runs","action":"playbook:run","resource":{"scopeRef":"does-not-exist"}}]`),
 			}
 			Expect(DefaultContext.DB().Create(&broken).Error).To(Succeed())
 
@@ -783,7 +833,6 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			})
 			Expect(rbac.ReloadPolicy()).To(Succeed())
 
-			Expect(canRunOn(alice.ID.String(), dummy.EchoConfig, nil)).To(BeTrue(), "the invalid role's deny rule doesn't apply")
 			Expect(*storedRole(k8sTypes.UID(broken.ID.String())).ErrorReason).To(Equal(adapter.ReasonScopeNotFound))
 			Expect(*storedBinding(namespace, "broken").ErrorReason).To(Equal(adapter.ReasonRoleInvalid))
 		})
@@ -1149,20 +1198,6 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(summaryOf(viewer, policy.ActionUpdate)).To(Equal(only(policy.ResourceConfig, mcRBAC.AccessAll)))
 		})
 
-		It("lowers all to some under a deny on part of the type", func() {
-			viewer := createUser("partly-denied", policy.RoleViewer)
-			createPermission(&models.Permission{
-				Name:           "summary-deny-production-configs",
-				Action:         policy.ActionRead,
-				Subject:        viewer.ID.String(),
-				Deny:           true,
-				ObjectSelector: []byte(`{"configs":[{"tagSelector":"namespace=production"}]}`),
-			})
-
-			Expect(readSummaryOf(viewer)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessSome))
-			Expect(readSummaryOf(viewer)[policy.ResourceComponent]).To(Equal(mcRBAC.AccessAll))
-		})
-
 		It("doesn't count a Permission that names several types towards any of them", func() {
 			viewer := createUser("multi-type", policy.RoleViewer)
 			createPermission(&models.Permission{
@@ -1171,56 +1206,20 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 				Subject:        viewer.ID.String(),
 				ObjectSelector: []byte(`{"configs":[{"name":"*"}],"playbooks":[{"name":"echo-config"}]}`),
 			})
-			createPermission(&models.Permission{
-				Name:           "summary-deny-configs-with-playbook",
-				Action:         policy.ActionRead,
-				Subject:        viewer.ID.String(),
-				Deny:           true,
-				ObjectSelector: []byte(`{"configs":[{"name":"*"}],"playbooks":[{"name":"echo-config"}]}`),
-			})
 
 			Expect(summaryOf(viewer, policy.ActionUpdate)).To(HaveEach(mcRBAC.AccessNone))
-			Expect(readSummaryOf(viewer)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessAll))
 		})
 
 		It("reads a selector whatever its text contains", func() {
-			viewer := createUser("search-deny", policy.RoleViewer)
+			viewer := createUser("search-writer", policy.RoleViewer)
 			createPermission(&models.Permission{
-				Name:           "summary-deny-search",
-				Action:         policy.ActionRead,
+				Name:           "summary-update-search",
+				Action:         policy.ActionUpdate,
 				Subject:        viewer.ID.String(),
-				Deny:           true,
 				ObjectSelector: []byte(`{"configs":[{"search":"a && b"}]}`),
 			})
 
-			Expect(readSummaryOf(viewer)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessSome))
-		})
-
-		It("gives none under a deny whose selector matches every resource", func() {
-			viewer := createUser("empty-selector-deny", policy.RoleViewer)
-			createPermission(&models.Permission{
-				Name:           "summary-deny-empty-selector",
-				Action:         policy.ActionRead,
-				Subject:        viewer.ID.String(),
-				Deny:           true,
-				ObjectSelector: []byte(`{"configs":[{}]}`),
-			})
-
-			Expect(readSummaryOf(viewer)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessNone))
-		})
-
-		It("gives none under a deny on the whole type", func() {
-			viewer := createUser("wholly-denied", policy.RoleViewer)
-			createPermission(&models.Permission{
-				Name:    "summary-deny-topology",
-				Action:  policy.ActionRead,
-				Subject: viewer.ID.String(),
-				Deny:    true,
-				Object:  policy.ObjectTopology,
-			})
-
-			Expect(readSummaryOf(viewer)[policy.ResourceComponent]).To(Equal(mcRBAC.AccessNone))
-			Expect(readSummaryOf(viewer)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessAll))
+			Expect(summaryOf(viewer, policy.ActionUpdate)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessSome))
 		})
 	})
 })

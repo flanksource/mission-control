@@ -57,7 +57,7 @@ func wholeTypeRoutes() *echo.Echo {
 
 // bindWholeType creates a Scope of all resources of the type, and a Role with a rule per action on it,
 // and binds the subjects to the Role.
-func bindWholeType(namespace, name, resource string, deny bool, subjects v1.RoleBindingSubjects, actions ...string) {
+func bindWholeType(namespace, name, resource string, subjects v1.RoleBindingSubjects, actions ...string) {
 	GinkgoHelper()
 	uid := func() k8sTypes.UID { return k8sTypes.UID(uuid.NewString()) }
 
@@ -69,7 +69,7 @@ func bindWholeType(namespace, name, resource string, deny bool, subjects v1.Role
 	})).To(Succeed())
 
 	rules := lo.Map(actions, func(action string, _ int) v1.RoleRule {
-		return v1.RoleRule{Name: action, Action: action, Resource: &v1.ScopeReference{ScopeRef: name}, Deny: deny}
+		return v1.RoleRule{Name: action, Action: action, Resource: &v1.ScopeReference{ScopeRef: name}}
 	})
 	Expect(db.PersistRoleFromCRD(DefaultContext, &v1.Role{
 		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, UID: uid()},
@@ -168,7 +168,7 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 
 	bind := func(person *models.Person, name, resource string, actions ...string) {
 		GinkgoHelper()
-		bindWholeType(namespace, name, resource, false, boundPeople(person), actions...)
+		bindWholeType(namespace, name, resource, boundPeople(person), actions...)
 	}
 
 	person := func(name, role string) *models.Person {

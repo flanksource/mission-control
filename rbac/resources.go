@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -39,6 +40,9 @@ type managedKind struct {
 
 	// newObject returns an empty object to decode a request into.
 	newObject func() client.Object
+
+	// decodeRequest decodes a request into an object, when the request's shape differs from the object's. Optional.
+	decodeRequest func(decoder *json.Decoder) (client.Object, error)
 
 	// newModel returns a pointer to an empty model of the kind, and newList to an empty slice of them.
 	newModel func() any
@@ -72,12 +76,13 @@ var managedKinds = []managedKind{
 		delete: db.DeleteScope,
 	},
 	{
-		path:      "roles",
-		table:     "roles",
-		object:    adapter.ObjectRoles,
-		newObject: func() client.Object { return &v1.Role{} },
-		newModel:  func() any { return &models.Role{} },
-		newList:   func() any { return &[]models.Role{} },
+		path:          "roles",
+		table:         "roles",
+		object:        adapter.ObjectRoles,
+		newObject:     func() client.Object { return &v1.Role{} },
+		decodeRequest: decodeRoleRequest,
+		newModel:      func() any { return &models.Role{} },
+		newList:       func() any { return &[]models.Role{} },
 		validate: func(obj client.Object) error {
 			role := obj.(*v1.Role)
 			return adapter.ValidateRoleSpec(role.GetName(), role.Spec.Rules)
@@ -288,10 +293,18 @@ func (k managedKind) remove(c echo.Context) error {
 // Unknown fields are rejected rather than ignored. When namespace and name are given (from the route),
 // the body must match them or leave them out.
 func (k managedKind) decode(c echo.Context, namespace, name string) (client.Object, error) {
-	obj := k.newObject()
 	decoder := json.NewDecoder(c.Request().Body)
 	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(obj); err != nil {
+
+	var obj client.Object
+	var err error
+	if k.decodeRequest != nil {
+		obj, err = k.decodeRequest(decoder)
+	} else {
+		obj = k.newObject()
+		err = decoder.Decode(obj)
+	}
+	if err != nil {
 		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err)
 	}
 
@@ -351,4 +364,44 @@ func (k managedKind) respond(c echo.Context, ctx context.Context, status int, id
 	}
 	maps.Copy(body, report)
 	return c.JSON(status, body)
+}
+
+// roleRequest is a Role as the API takes it. Its rules have no deny: rules only allow.
+type roleRequest struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec struct {
+		Description string            `json:"description,omitempty"`
+		Rules       []roleRequestRule `json:"rules"`
+	} `json:"spec,omitempty"`
+	Status v1.RoleStatus `json:"status,omitempty"`
+}
+
+type roleRequestRule struct {
+	Name        string             `json:"name"`
+	Description string             `json:"description,omitempty"`
+	Action      string             `json:"action"`
+	Resource    *v1.ScopeReference `json:"resource,omitempty"`
+	Target      *v1.ScopeReference `json:"target,omitempty"`
+}
+
+func decodeRoleRequest(decoder *json.Decoder) (client.Object, error) {
+	var request roleRequest
+	if err := decoder.Decode(&request); err != nil {
+		return nil, err
+	}
+
+	role := &v1.Role{TypeMeta: request.TypeMeta, ObjectMeta: request.ObjectMeta, Status: request.Status}
+	role.Spec.Description = request.Spec.Description
+	for _, rule := range request.Spec.Rules {
+		role.Spec.Rules = append(role.Spec.Rules, v1.RoleRule{
+			Name:        rule.Name,
+			Description: rule.Description,
+			Action:      rule.Action,
+			Resource:    rule.Resource,
+			Target:      rule.Target,
+		})
+	}
+	return role, nil
 }

@@ -25,10 +25,10 @@ var _ = Describe("Legacy grants of whole-type routes", Ordered, func() {
 	const namespace = "whole-type-legacy"
 
 	var (
-		e                                                   *echo.Echo
-		guest, viewer, editor, deniedEditor, silenceCreator *models.Person
-		scopeWriter                                         *models.Person
-		persons                                             []*models.Person
+		e                                     *echo.Echo
+		guest, viewer, editor, silenceCreator *models.Person
+		scopeWriter                           *models.Person
+		persons                               []*models.Person
 	)
 
 	person := func(name, role string) *models.Person {
@@ -72,21 +72,18 @@ var _ = Describe("Legacy grants of whole-type routes", Ordered, func() {
 		guest = person("guest", policy.RoleGuest)
 		viewer = person("viewer", policy.RoleViewer)
 		editor = person("editor", policy.RoleEditor)
-		deniedEditor = person("denied-editor", policy.RoleEditor)
 		silenceCreator = person("silence-creator", policy.RoleGuest)
 		scopeWriter = person("scope-writer", policy.RoleGuest)
 
 		// A binding may select subjects by built-in role. What it grants them isn't the built-in role's own grant.
 		guests := v1.RoleBindingSubjects{Roles: []string{policy.RoleGuest}}
-		bindWholeType(namespace, "guests-notifications", v1.ResourceNotification, false, guests,
+		bindWholeType(namespace, "guests-notifications", v1.ResourceNotification, guests,
 			policy.ActionRead, policy.ActionCreate, policy.ActionUpdate)
-		bindWholeType(namespace, "guests-configs", policy.ResourceConfig, false, guests, policy.ActionRead)
+		bindWholeType(namespace, "guests-configs", policy.ResourceConfig, guests, policy.ActionRead)
 
-		bindWholeType(namespace, "deny-silences", v1.ResourceNotificationSilence, true, boundPeople(deniedEditor),
-			policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete)
-		bindWholeType(namespace, "create-silences", v1.ResourceNotificationSilence, false, boundPeople(silenceCreator),
+		bindWholeType(namespace, "create-silences", v1.ResourceNotificationSilence, boundPeople(silenceCreator),
 			policy.ActionCreate)
-		bindWholeType(namespace, "write-scopes", v1.ResourceScope, false, boundPeople(scopeWriter),
+		bindWholeType(namespace, "write-scopes", v1.ResourceScope, boundPeople(scopeWriter),
 			policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete)
 
 		Expect(rbac.ReloadPolicy()).To(Succeed())
@@ -111,15 +108,6 @@ var _ = Describe("Legacy grants of whole-type routes", Ordered, func() {
 		Expect(status(guest, http.MethodGet, "/notification/silence_preview")).To(Equal(http.StatusForbidden))
 		Expect(status(guest, http.MethodPatch, "/db/notification_silences")).To(Equal(http.StatusForbidden))
 		Expect(status(guest, http.MethodGet, "/application/default/missing")).To(Equal(http.StatusForbidden))
-	})
-
-	It("doesn't let a built-in role override a deny of the type", func() {
-		Expect(authorized(status(editor, http.MethodPost, "/notification/silence"))).To(BeTrue())
-
-		Expect(status(deniedEditor, http.MethodPost, "/notification/silence")).To(Equal(http.StatusForbidden))
-		Expect(status(deniedEditor, http.MethodPatch, "/db/notification_silences")).To(Equal(http.StatusForbidden))
-		Expect(status(deniedEditor, http.MethodDelete, "/db/notification_silences")).To(Equal(http.StatusForbidden))
-		Expect(authorized(status(deniedEditor, http.MethodGet, "/notification/silence_preview"))).To(BeTrue(), "read isn't denied")
 	})
 
 	It("grants each action on a type on its own", func() {
@@ -147,38 +135,5 @@ var _ = Describe("Legacy grants of whole-type routes", Ordered, func() {
 		for _, method := range []string{http.MethodPost, http.MethodPatch, http.MethodDelete} {
 			Expect(status(scopeWriter, method, "/db/scope_targets")).To(Equal(http.StatusMethodNotAllowed), method)
 		}
-	})
-})
-
-var _ = Describe("Denies of whole-type objects bound to everyone", Ordered, func() {
-	const namespace = "whole-type-everyone-denies"
-
-	var (
-		e      *echo.Echo
-		editor *models.Person
-	)
-
-	BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
-
-		// The editor isn't in everyone until their first check adds them
-		editor = setup.CreateUserWithRole(DefaultContext, "Everyone Deny Editor", "whole-type-everyone-deny@test.com", policy.RoleEditor)
-		bindWholeType(namespace, "deny-silences", v1.ResourceNotificationSilence, true,
-			v1.RoleBindingSubjects{Roles: []string{policy.RoleEveryone}}, policy.ActionCreate)
-
-		Expect(rbac.ReloadPolicy()).To(Succeed())
-		e = wholeTypeRoutes()
-	})
-
-	AfterAll(func() {
-		deleteNamespace(namespace)
-		_, err := rbac.Enforcer().DeleteRolesForUser(editor.ID.String())
-		Expect(err).ToNot(HaveOccurred())
-		Expect(DefaultContext.DB().Delete(editor).Error).To(Succeed())
-	})
-
-	It("doesn't let a built-in role override it, from the first request", func() {
-		Expect(serveAs(e, editor, http.MethodPost, "/notification/silence")).To(Equal(http.StatusForbidden))
-		Expect(serveAs(e, editor, http.MethodPost, "/notification/silence")).To(Equal(http.StatusForbidden))
 	})
 })

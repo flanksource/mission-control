@@ -56,8 +56,7 @@ var viewerGrants = []Grant{
 // a subject keeps what its built-in role gave it:
 //   - Only built-in roles count: a RoleBinding's grant on a legacy object is a grant on another type,
 //     e.g. catalog for configs, and never opens this type's routes.
-//   - It never overrides a deny of the type's own object.
-//   - The subject must still pass the legacy check itself, so its denies there still apply.
+//   - The subject must still pass the legacy check itself.
 //   - An access token's Roles must allow the type's own object: they're Roles, so they grant types, not legacy objects.
 //
 // Remove this, builtInGrants, and the legacy grants passed to it, with the built-in roles.
@@ -67,7 +66,7 @@ func legacyGrant(ctx context.Context, grant, legacy Grant) bool {
 	}
 
 	subject := checkedSubject(ctx)
-	if subject == "" || deniedExplicitly(ctx, subject, grant) {
+	if subject == "" {
 		return false
 	}
 	if !rbac.CheckContext(ctx, legacy.Object, legacy.Action) {
@@ -100,15 +99,4 @@ func checkedSubject(ctx context.Context) string {
 		return user.ID.String()
 	}
 	return ""
-}
-
-// deniedExplicitly reports whether a deny rule matches the grant for the subject.
-// Without a matching rule, enforcement explains no rule.
-func deniedExplicitly(ctx context.Context, subject string, grant Grant) bool {
-	allowed, rules, err := rbac.Enforcer().EnforceEx(subject, grant.Object, grant.Action)
-	if err != nil {
-		ctx.Warnf("failed to check %s:%s for %s: %v", grant.Object, grant.Action, subject, err)
-		return true
-	}
-	return !allowed && len(rules) > 0
 }

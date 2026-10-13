@@ -39,8 +39,7 @@ spec:
           spec:
             properties:
               actions:
-                description: Actions specify the operation that the permission allows
-                  or denies.
+                description: Actions specify the operation that the permission allows.
                 items:
                   type: string
                 minItems: 1
@@ -54,9 +53,8 @@ spec:
                 type: array
               deny:
                 description: |-
-                  Deny indicates whether the permission should explicitly deny the specified action.
-
-                  Default: false
+                  Deny is refused: permissions only allow. It's kept so that a Permission setting it is rejected rather than
+                  stored without it, which would allow what it was written to deny. false is accepted and ignored.
                 type: boolean
               description:
                 description: Description provides a brief explanation of the permission.
@@ -383,6 +381,9 @@ spec:
             - object
             - subject
             type: object
+            x-kubernetes-validations:
+            - message: 'deny isn''t supported: permissions only allow'
+              rule: '!has(self.deny) || self.deny != true'
           status:
             properties:
               conditions:

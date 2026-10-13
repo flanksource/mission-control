@@ -26,7 +26,6 @@ func init() {
 }
 
 // readGrantsCover reports whether the subject's claim filters the rows of the resource type.
-// A deny Permission on read leaves a type with no grants, which still filters it: its listing is empty, not refused.
 func readGrantsCover(ctx context.Context, resourceType string) bool {
 	payload, err := GetRLSPayload(ctx)
 	if err != nil {
@@ -208,7 +207,6 @@ func CanReadArtifact(ctx context.Context, id uuid.UUID) (bool, error) {
 // Each type's grants name Scopes only: a row is listed when it's in every Scope of one of them,
 // which Postgres reads from stored membership. Role rules grant rows through their Scopes, narrowed by their
 // binding's constraint. Permissions grant rows only through the Scopes they name: inline selectors grant none.
-// A deny Permission on read can't be enforced row by row, so the types it covers list no rows.
 //
 // Casbin knows every grant that applies to the subject, directly or through roles, teams and bindings,
 // and has already split each grant into one policy per action. Each policy carries the id of the
@@ -249,13 +247,12 @@ func buildRLSPayload(ctx context.Context, subject string) (*rls.Payload, error) 
 // claim accumulates a subject's grants by resource type.
 type claim struct {
 	grants map[string]*rls.Grants
-	denied map[string]bool
 	view   []rls.Scope
 	scopes []string
 }
 
 func newClaim() *claim {
-	return &claim{grants: map[string]*rls.Grants{}, denied: map[string]bool{}}
+	return &claim{grants: map[string]*rls.Grants{}}
 }
 
 // grant lists the rows of the type that the grant admits.
@@ -290,37 +287,17 @@ func (c *claim) grantRule(rule adapter.CompiledRule) {
 	}
 }
 
-// deny lists no rows of the type, whatever else grants them.
-func (c *claim) deny(kind string) {
-	if lo.Contains(rls.GrantTypes, kind) {
-		c.denied[kind] = true
-	}
-}
-
 func (c *claim) payload() *rls.Payload {
 	payload := &rls.Payload{View: c.view}
 	if len(c.scopes) > 0 {
 		payload.Scopes = lo.Uniq(c.scopes)
 	}
 	for _, kind := range rls.GrantTypes {
-		if c.denied[kind] {
-			payload.SetGrants(kind, rls.NoRows())
-		} else if grants := c.grants[kind]; grants != nil {
+		if grants := c.grants[kind]; grants != nil {
 			payload.SetGrants(kind, grants)
 		}
 	}
 	return payload
-}
-
-// typesOfObject are the resource types a Permission on a global object covers.
-var typesOfObject = map[string][]string{
-	policy.ObjectCatalog:   {policy.ResourceConfig},
-	policy.ObjectTopology:  {policy.ResourceComponent},
-	policy.ObjectCanary:    {policy.ResourceCanary, policy.ResourceCheck},
-	policy.ObjectPlaybooks: {policy.ResourcePlaybook},
-
-	policy.ObjectDatabaseSettings: {policy.ResourceScraper},
-	adapter.ObjectScrapers:        {policy.ResourceScraper},
 }
 
 func addPermissionGrants(ctx context.Context, claim *claim, ids []string) error {
@@ -338,24 +315,6 @@ func addPermissionGrants(ctx context.Context, claim *claim, ids []string) error 
 	}
 
 	for _, perm := range permissions {
-		if perm.Deny {
-			for _, kind := range typesOfObject[perm.Object] {
-				claim.deny(kind)
-			}
-			if perm.ConfigID != nil {
-				claim.deny(policy.ResourceConfig)
-			}
-			if perm.ComponentID != nil {
-				claim.deny(policy.ResourceComponent)
-			}
-			if perm.PlaybookID != nil {
-				claim.deny(policy.ResourcePlaybook)
-			}
-			if perm.CanaryID != nil {
-				claim.deny(policy.ResourceCanary)
-			}
-		}
-
 		if len(perm.ObjectSelector) == 0 {
 			continue
 		}
@@ -366,7 +325,7 @@ func addPermissionGrants(ctx context.Context, claim *claim, ids []string) error 
 			continue
 		}
 
-		if err := addObjectGrants(ctx, claim, selectors, perm.Deny); err != nil {
+		if err := addObjectGrants(ctx, claim, selectors); err != nil {
 			return err
 		}
 	}
@@ -402,41 +361,23 @@ func addBindingRuleGrants(ctx context.Context, claim *claim, bindingRules map[uu
 
 // addObjectGrants adds what a Permission's object grants on listings: the rows of the Scopes it names.
 // Its inline selectors grant no rows, except of views, which are still filtered by their selectors.
-// A deny covers every type its selectors or Scopes select.
-func addObjectGrants(ctx context.Context, claim *claim, selectors v1.PermissionObject, deny bool) error {
+func addObjectGrants(ctx context.Context, claim *claim, selectors v1.PermissionObject) error {
 	if len(selectors.Scopes) > 0 {
-		if err := addScopeGrants(ctx, selectors.Scopes, claim, deny); err != nil {
+		if err := addScopeGrants(ctx, selectors.Scopes, claim); err != nil {
 			return err
 		}
 	}
 
-	if deny {
-		if len(selectors.Configs) > 0 {
-			claim.deny(policy.ResourceConfig)
-		}
-		if len(selectors.Components) > 0 {
-			claim.deny(policy.ResourceComponent)
-		}
-		if len(selectors.Playbooks) > 0 {
-			claim.deny(policy.ResourcePlaybook)
-		}
-	}
-
 	for _, viewRef := range selectors.Views {
-		addViewFilter(claim, viewRefToFilter(viewRef), deny)
+		claim.view = append(claim.view, viewRefToFilter(viewRef))
 	}
 
 	return nil
 }
 
-func addViewFilter(claim *claim, filter rls.Scope, deny bool) {
-	filter.Deny = deny
-	claim.view = append(claim.view, filter)
-}
-
 // addScopeGrants grants the rows of the referenced Scopes, of each type they select.
 // A missing or invalid Scope selects nothing.
-func addScopeGrants(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSelector, claim *claim, deny bool) error {
+func addScopeGrants(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSelector, claim *claim) error {
 	for _, ref := range scopeRefs {
 		scopeID, targets, err := adapter.LoadScope(ctx, nil, ref.Namespace, ref.Name)
 		if err != nil {
@@ -451,16 +392,12 @@ func addScopeGrants(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSe
 		}
 
 		// Add scope UUID for view row-level grants
-		if !deny {
-			claim.scopes = append(claim.scopes, scopeID)
-		}
+		claim.scopes = append(claim.scopes, scopeID)
 
 		for _, target := range targets {
 			kind, selector := target.Selector()
 			if target.View != nil {
-				addViewFilter(claim, viewRefToFilter(dutyRBAC.ViewRef{ID: selector.ID, Name: selector.Name, Namespace: selector.Namespace}), deny)
-			} else if deny {
-				claim.deny(kind)
+				claim.view = append(claim.view, viewRefToFilter(dutyRBAC.ViewRef{ID: selector.ID, Name: selector.Name, Namespace: selector.Namespace}))
 			} else {
 				claim.grant(kind, rls.Grant{Scope: scopeID})
 			}

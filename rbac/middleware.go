@@ -112,7 +112,7 @@ func DbMiddleware() MiddlewareFunc {
 					scraperGrants(ctx, resource, object, action)
 			}
 
-			if !allowed || scraperDenied(ctx, resource, object, action) {
+			if !allowed {
 				c.Response().Header().Add("X-Rbac-Subject", ctx.Subject())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)
@@ -122,6 +122,12 @@ func DbMiddleware() MiddlewareFunc {
 
 			if resource == "teams" && action != policy.ActionRead {
 				if err := guardShippedTeams(c, ctx); err != nil {
+					return dutyAPI.WriteError(c, err)
+				}
+			}
+
+			if resource == "permissions" {
+				if err := refusePermissionDeny(c); err != nil {
 					return dutyAPI.WriteError(c, err)
 				}
 			}
@@ -180,22 +186,6 @@ func scraperGrants(ctx context.Context, table, object, action string) bool {
 	}
 	owner := rbac.CheckContext(ctx, adapter.ObjectScrapers, action) || rbac.CheckContext(ctx, object, action)
 	return owner && TokenAllowsObject(ctx, user.ID.String(), adapter.ObjectScrapers, action)
-}
-
-// scraperDenied reports whether a deny on any object a scraper table is granted through applies to the action: the
-// table's own object (database.monitor for the status view), database.config_scrapers and scrapers. A grant on one
-// of them can't bypass a deny on another.
-func scraperDenied(ctx context.Context, table, object, action string) bool {
-	if (table != "config_scrapers" && table != "config_scrapers_with_status") || ctx.User() == nil || rbac.Enforcer() == nil {
-		return false
-	}
-	subject := checkedSubject(ctx)
-	for _, o := range lo.Uniq([]string{object, policy.ObjectDatabaseSettings, adapter.ObjectScrapers}) {
-		if deniedExplicitly(ctx, subject, Grant{o, action}) {
-			return true
-		}
-	}
-	return false
 }
 
 // rowFilteredTables are the tables whose rows are filtered by a subject's read grants of their resource type.

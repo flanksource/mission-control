@@ -410,31 +410,6 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 				Expect(DefaultContext.DB().Delete(&models.Permission{}, "id = ?", string(perm.GetUID())).Error).To(Succeed())
 			})
 
-			denyPerm := &v1.Permission{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "mcp-view-runner-deny-" + uuid.NewString(),
-					Namespace: "default",
-					UID:       k8sTypes.UID(uuid.NewString()),
-				},
-				Spec: v1.PermissionSpec{
-					Subject: v1.PermissionSubject{Person: testUser.Email},
-					Actions: []string{policy.ActionMCPRun},
-					Deny:    true,
-					Object: v1.PermissionObject{
-						Selectors: dutyRBAC.Selectors{
-							Views: []dutyRBAC.ViewRef{{
-								Namespace: deniedView.Namespace,
-								Name:      deniedView.Name,
-							}},
-						},
-					},
-				},
-			}
-			Expect(db.PersistPermissionFromCRD(DefaultContext, denyPerm)).To(Succeed())
-			ginkgo.DeferCleanup(func() {
-				Expect(DefaultContext.DB().Delete(&models.Permission{}, "id = ?", string(denyPerm.GetUID())).Error).To(Succeed())
-			})
-
 			Expect(dutyRBAC.ReloadPolicy()).To(Succeed())
 			ginkgo.DeferCleanup(func() {
 				Expect(dutyRBAC.ReloadPolicy()).To(Succeed())

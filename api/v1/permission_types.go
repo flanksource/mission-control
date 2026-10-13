@@ -324,12 +324,13 @@ func (t *PermissionObject) isViewWildcardOnly() bool {
 }
 
 // +kubebuilder:object:generate=true
+// +kubebuilder:validation:XValidation:rule="!has(self.deny) || self.deny != true",message="deny isn't supported: permissions only allow"
 type PermissionSpec struct {
 	// Description provides a brief explanation of the permission.
 	Description string `json:"description,omitempty"`
 
 	//+kubebuilder:validation:MinItems=1
-	// Actions specify the operation that the permission allows or denies.
+	// Actions specify the operation that the permission allows.
 	Actions []string `json:"actions"`
 
 	// Subject defines the entity (e.g., user, group) to which the permission applies.
@@ -338,9 +339,8 @@ type PermissionSpec struct {
 	// Object identifies the resource or object that the permission is associated with.
 	Object PermissionObject `json:"object"`
 
-	// Deny indicates whether the permission should explicitly deny the specified action.
-	//
-	// Default: false
+	// Deny is refused: permissions only allow. It's kept so that a Permission setting it is rejected rather than
+	// stored without it, which would allow what it was written to deny. false is accepted and ignored.
 	Deny bool `json:"deny,omitempty"`
 
 	// List of agent ids whose configs/components are accessible to a person when RLS is enabled

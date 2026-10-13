@@ -53,9 +53,6 @@ type ActionContract struct {
 	// Empty when the action doesn't take a target.
 	Targets []string
 
-	// AllowsDeny reports whether deny rules on the action can be enforced.
-	AllowsDeny bool
-
 	// Requires describes what else an operation checks, e.g. read on the target.
 	Requires string
 
@@ -120,25 +117,24 @@ var (
 )
 
 var contracts = map[string]ActionContract{
-	// Denying reads isn't supported yet: the viewer shortcut, and row filters being off for anyone who isn't a guest, would bypass it.
 	policy.ActionRead: {Resources: readableResources, enforcement: enforcedWithRows},
 
-	policy.ActionCreate: {Resources: genericResources, AllowsDeny: true, enforcement: enforcedOnObjects},
-	policy.ActionUpdate: {Resources: genericResources, AllowsDeny: true, enforcement: enforcedOnObjects},
-	policy.ActionDelete: {Resources: genericResources, AllowsDeny: true, enforcement: enforcedOnObjects},
+	policy.ActionCreate: {Resources: genericResources, enforcement: enforcedOnObjects},
+	policy.ActionUpdate: {Resources: genericResources, enforcement: enforcedOnObjects},
+	policy.ActionDelete: {Resources: genericResources, enforcement: enforcedOnObjects},
 
 	policy.ActionPlaybookRun: {
-		Resources: []string{policy.ResourcePlaybook}, Targets: playbookTargets, AllowsDeny: true, enforcement: enforcedPerRequest,
+		Resources: []string{policy.ResourcePlaybook}, Targets: playbookTargets, enforcement: enforcedPerRequest,
 		Requires: "read on the target, when there is one",
 	},
 	policy.ActionPlaybookApprove: {
-		Resources: []string{policy.ResourcePlaybook}, Targets: playbookTargets, AllowsDeny: true, enforcement: enforcedPerRequest,
+		Resources: []string{policy.ResourcePlaybook}, Targets: playbookTargets, enforcement: enforcedPerRequest,
 	},
 	policy.ActionPlaybookCancel: {
-		Resources: []string{policy.ResourcePlaybook}, Targets: playbookTargets, AllowsDeny: true, enforcement: enforcedPerRequest,
+		Resources: []string{policy.ResourcePlaybook}, Targets: playbookTargets, enforcement: enforcedPerRequest,
 	},
 	policy.ActionMCPRun: {
-		Resources: []string{policy.ResourcePlaybook}, AllowsDeny: true, enforcement: enforcedPerRequest,
+		Resources: []string{policy.ResourcePlaybook}, enforcement: enforcedPerRequest,
 		Requires: "mcp:use; the run itself also needs playbook:run",
 	},
 
@@ -174,7 +170,7 @@ func ContractFor(action string) (ActionContract, error) {
 		}
 
 		return ActionContract{
-			Action: action, Resources: []string{policy.ResourceConfig}, AllowsDeny: true, enforcement: enforcedPerRequest,
+			Action: action, Resources: []string{policy.ResourceConfig}, enforcement: enforcedPerRequest,
 			Requires: "read on the config",
 		}, nil
 	}
