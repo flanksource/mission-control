@@ -27,8 +27,9 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 	}
 
 	ginkgo.BeforeEach(func() {
-		shippedScopes, shippedRoles, err := Build(operations)
+		objects, err := Build(operations)
 		Expect(err).ToNot(HaveOccurred())
+		shippedScopes, shippedRoles := objects.Scopes, objects.Roles
 
 		scopes = map[string]adapter.ScopeSelection{}
 		for _, scope := range shippedScopes {
@@ -146,9 +147,9 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 	})
 
 	ginkgo.It("keeps admin as written, whatever plugins are installed", func() {
-		_, without, err := Build(nil)
+		without, err := Build(nil)
 		Expect(err).ToNot(HaveOccurred())
-		withoutAdmin, _ := lo.Find(without, func(r v1.Role) bool { return r.Name == RoleAdmin })
+		withoutAdmin, _ := lo.Find(without.Roles, func(r v1.Role) bool { return r.Name == RoleAdmin })
 		Expect(roles[RoleAdmin]).To(Equal(withoutAdmin))
 
 		for _, rule := range roles[RoleAdmin].Spec.Rules {
@@ -156,10 +157,15 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 		}
 	})
 
-	ginkgo.It("ships no plugin-admin without a plugin operation", func() {
-		_, without, err := Build(map[string][]string{"bad": {"has space"}, "empty": nil})
+	ginkgo.It("ships no plugin-admin, nor a binding to it, without a plugin operation", func() {
+		without, err := Build(map[string][]string{"bad": {"has space"}, "empty": nil})
 		Expect(err).ToNot(HaveOccurred())
-		Expect(lo.Map(without, func(r v1.Role, _ int) string { return r.Name })).To(ConsistOf(RoleViewer, RoleAdmin))
+		Expect(lo.Map(without.Roles, func(r v1.Role, _ int) string { return r.Name })).To(ConsistOf(RoleViewer, RoleAdmin))
+		Expect(lo.Map(without.RoleBindings, func(b v1.RoleBinding, _ int) string { return b.Name })).To(ConsistOf(BindingAdmins))
+
+		with, err := Build(operations)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(lo.Map(with.RoleBindings, func(b v1.RoleBinding, _ int) string { return b.Name })).To(ConsistOf(BindingAdmins, BindingPluginAdmins))
 	})
 
 	ginkgo.It("gives plugin-admin one rule per valid plugin operation, and nothing else", func() {
@@ -200,6 +206,28 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 			Expect(len(rule.Name)).To(BeNumerically("<=", 63), rule.Name)
 		}
 		Expect(adapter.ValidateRoleSpec(RolePluginAdmin, rules)).To(Succeed())
+	})
+
+	ginkgo.It("binds admin and plugin-admin to the admins team, and only that", func() {
+		objects, err := Load()
+		Expect(err).ToNot(HaveOccurred())
+
+		Expect(objects.Teams).To(HaveLen(1))
+		Expect(objects.Teams[0].Name).To(Equal(TeamAdmins))
+		Expect(objects.Teams[0].Spec.Members).To(BeEmpty())
+
+		bindings := lo.KeyBy(objects.RoleBindings, func(b v1.RoleBinding) string { return b.Name })
+		Expect(lo.Keys(bindings)).To(ConsistOf(BindingAdmins, BindingPluginAdmins))
+		Expect(bindings[BindingAdmins].Spec.Role).To(Equal(RoleAdmin))
+		Expect(bindings[BindingPluginAdmins].Spec.Role).To(Equal(RolePluginAdmin))
+		for _, binding := range bindings {
+			Expect(binding.Namespace).To(Equal(adapter.ShippedNamespace))
+			Expect(binding.Spec.Validate()).To(Succeed())
+			Expect(binding.Spec.Constraint).To(BeNil())
+			Expect(binding.Spec.Subjects).To(Equal(v1.RoleBindingSubjects{
+				PermissionGroupSubjects: v1.PermissionGroupSubjects{Teams: []string{TeamAdmins}},
+			}))
+		}
 	})
 
 	ginkgo.It("names plugin rules uniquely, within the length of a rule name", func() {

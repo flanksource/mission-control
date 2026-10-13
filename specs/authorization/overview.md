@@ -109,7 +109,7 @@ _Why no deny rules:_ with nothing allowed by default, every restriction can be w
 
 ### Shipped Roles
 
-Mission Control ships these Roles in the `mission-control-builtin` namespace. They're ordinary Roles, bound by ordinary RoleBindings; Mission Control ships no bindings to them.
+Mission Control ships these Roles in the `mission-control-builtin` namespace. They're ordinary Roles, bound by ordinary RoleBindings. The only bindings Mission Control ships are `admins` and `plugin-admins`, which bind `admin` and `plugin-admin` to the `admins` team ("Configured bindings").
 
 | Role     | Allows                                                                                       |
 | -------- | -------------------------------------------------------------------------------------------- |
@@ -133,11 +133,50 @@ _Why one namespace:_ references never cross namespaces, and keeping the shipped 
 
 ### Configured bindings
 
-Mission Control's configuration MAY declare RoleBindings, e.g. the first admins. Mission Control writes them when it starts, so they're back in place after a restart even if they were deleted.
+Mission Control ships one team, and RoleBindings of it to `admin` and `plugin-admin`, with the shipped Roles, so an install has a first admin without built-in roles and without any email in its configuration:
 
-_Why:_ someone has to be able to create the first RoleBinding, and a deleted admin binding has to come back without going through Mission Control's API. Configured bindings are RoleBindings like any other.
+```yaml
+kind: Team
+metadata:
+  name: admins
+---
+kind: RoleBinding
+metadata:
+  name: admins
+  namespace: mission-control-builtin
+spec:
+  role: admin
+  subjects:
+    teams: [admins]
+---
+kind: RoleBinding
+metadata:
+  name: plugin-admins
+  namespace: mission-control-builtin
+spec:
+  role: plugin-admin
+  subjects:
+    teams: [admins]
+```
 
-Where they're declared, and what an install declares by default, is left to the design (`design/bootstrap.md`).
+They're written like the shipped Roles, when Mission Control starts and whenever a plugin's operations change ("Shipped Roles"). `plugin-admins` is shipped only while `plugin-admin` is, i.e. while some plugin has an operation, and its name is reserved like `plugin-admin`'s ("Shipped Roles"). They can't be changed or deleted through the API, and a Team or RoleBinding applied through Kubernetes under the same name (and, for the binding, namespace) is overwritten. If either is missing, e.g. deleted directly in the database, it's recreated.
+
+Only the team itself and the bindings are protected. The team's members are managed like any team's, through the UI or API, and a member removed from it stops being an admin. Managing teams and their members takes grants on `team`, which `admin` has: changing a team's members takes `update` on it.
+
+How the team gets its first members depends on how people sign in:
+
+| Auth mode      | Members of `admins`                                                                                                      |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Kratos, basic  | `admin@local`, the local admin account Mission Control creates. It's added on every start, as a direct member, so a team mapper never removes it (`rolebindings.md`, Section 2.2). Its password comes from Mission Control's configuration. |
+| Clerk          | Organisation admins, through Clerk's default team mapper (`rolebindings.md`, Section 2.2). There's no `admin@local`.      |
+
+Anyone else becomes an admin by joining the team, or through a RoleBinding of their own, e.g. one binding `admin` to the `oidc` subjects of an external identity provider.
+
+_Why a team:_ the binding never changes, so it can be shipped and protected, and who's an admin is managed as team membership, where people already manage it. Configuration lists no emails, so an install is the same everywhere and nothing in it has to be kept up to date.
+
+_Why restored at startup:_ someone has to be able to create the first RoleBinding without going through the API, and a deleted admin binding has to come back without it. In the worst case, e.g. every member removed from `admins` or the team deleted in the database, a restart puts `admin@local` back in it (Kratos, basic), and the team mapper puts organisation admins back on their next request (Clerk). It never takes more than a restart, so admins are never locked out.
+
+The design is in `design/bootstrap.md`.
 
 ## Who may manage these resources
 

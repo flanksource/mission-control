@@ -150,6 +150,8 @@ var _ = Describe("Shipped roles", Ordered, func() {
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.RoleBinding{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Role{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Scope{}).Error).To(Succeed())
+		Expect(DefaultContext.DB().Exec(`DELETE FROM team_members WHERE team_id IN (SELECT id FROM teams WHERE source = ?)`, adapter.SourceShipped).Error).To(Succeed())
+		Expect(DefaultContext.DB().Where("source = ?", adapter.SourceShipped).Delete(&models.Team{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Delete(&connection).Error).To(Succeed())
 		Expect(DefaultContext.DB().Delete(&config).Error).To(Succeed())
 		for _, p := range []*models.Person{viewerPerson, adminPerson, builtinAdmin, outsider} {

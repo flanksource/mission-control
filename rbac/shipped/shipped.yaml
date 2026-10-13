@@ -1,6 +1,7 @@
-# Roles and Scopes shipped with Mission Control (specs/authorization/overview.md, "Shipped Roles").
+# Objects shipped with Mission Control (specs/authorization/overview.md, "Shipped Roles" and "Configured bindings").
 # Mission Control writes them to its database on startup. plugin-admin isn't here: it's built from the operations of the
 # installed plugins, and written again whenever they change. They can't be changed through the API or Kubernetes.
+# The admins team's members are managed as usual; only the team itself and its bindings are shipped.
 #
 # There's one Scope per resource type, all-<type>, with a single whole-type target. Roles anyone creates in this
 # namespace may use them, so each always selects exactly its type: a new type gets a new Scope, never a wider one.
@@ -519,3 +520,34 @@ spec:
       action: event:read
     - name: read-jobs
       action: job:read
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Team
+metadata:
+  name: admins
+  namespace: mission-control-builtin
+spec: {}
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: RoleBinding
+metadata:
+  name: admins
+  namespace: mission-control-builtin
+spec:
+  description: Members of the admins team are admins
+  role: admin
+  subjects:
+    teams:
+      - admins
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: RoleBinding
+metadata:
+  name: plugin-admins
+  namespace: mission-control-builtin
+spec:
+  description: Members of the admins team may invoke every plugin operation. Shipped only while plugin-admin is.
+  role: plugin-admin
+  subjects:
+    teams:
+      - admins

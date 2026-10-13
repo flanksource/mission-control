@@ -99,7 +99,7 @@ The expression returns `{"teams": [...]}`, a list of team names:
   }
   ```
 
-  _Why:_ it keeps the grouping Clerk installs had with built-in roles, so only the teams and their bindings need creating. The teams grant nothing until an admin creates them and binds Roles to them.
+  _Why:_ it keeps the grouping Clerk installs had with built-in roles. `admins` is shipped and bound to `admin` (`overview.md`, "Configured bindings"). `viewers` grants nothing until an admin creates it and binds a Role to it.
 - **Invites** name teams instead of a role. The person joins them when they accept.
 
 A mapper that reads attributes a person can change themselves, e.g. Kratos traits the settings flow lets them edit, lets them choose their own teams. Map from attributes only admins can set, e.g. Kratos `metadata_public` or the Clerk organisation role.
