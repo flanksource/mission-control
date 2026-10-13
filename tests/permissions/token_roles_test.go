@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"time"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
@@ -38,7 +37,7 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		inA, inB, outside    models.ConfigItem
 		runbook              models.Playbook
 		roleIDs, bindingIDs  = map[string]string{}, map[string]string{}
-		readonly, unscoped   *models.Person
+		readonly             *models.Person
 		tenantToken, missing *models.Person
 		carolToken           *models.Person
 	)
@@ -111,16 +110,6 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		var person models.Person
 		Expect(DefaultContext.DB().Where("id = ?", token.PersonID).First(&person).Error).To(Succeed())
 		return &person
-	}
-
-	// createTokenWithoutRoles creates a token the way tokens were created before they had to list Roles.
-	createTokenWithoutRoles := func(owner *models.Person, name string) *models.Person {
-		ginkgo.GinkgoHelper()
-		result, err := db.CreateAccessTokenForPerson(DefaultContext, owner, name, time.Hour, false, nil)
-		Expect(err).ToNot(HaveOccurred())
-		_, err = rbac.Enforcer().AddGroupingPolicy(result.Person.ID.String(), owner.ID.String())
-		Expect(err).ToNot(HaveOccurred())
-		return result.Person
 	}
 
 	canRead := func(subject *models.Person, config models.ConfigItem) bool {
@@ -203,7 +192,6 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		e.DELETE("/test/catalog", func(c echo.Context) error { return c.NoContent(http.StatusOK) }, mcRBAC.Authorization(policy.ObjectCatalog, policy.ActionDelete))
 
 		readonly = createToken(alice, "readonly", "readonly")
-		unscoped = createTokenWithoutRoles(alice, "unscoped")
 		tenantToken = createToken(bob, "tenant-a", "tenant-a-reader")
 		carolToken = createToken(carol, "carol-tenant-a", "tenant-a-reader")
 		missing = createToken(alice, "missing-role", "does-not-exist")
@@ -218,7 +206,7 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.RoleBinding{})
 		DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Role{})
 		DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Scope{})
-		for _, token := range []*models.Person{readonly, unscoped, tenantToken, missing, carolToken} {
+		for _, token := range []*models.Person{readonly, tenantToken, missing, carolToken} {
 			DefaultContext.DB().Where("person_id = ?", token.ID).Delete(&models.AccessToken{})
 		}
 		Expect(rbac.ReloadPolicy()).To(Succeed())
@@ -305,16 +293,6 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 	ginkgo.It("refuses a new token without Roles", func() {
 		rec := do(alice, http.MethodPost, "/auth/create_token", auth.CreateTokenRequest{Name: "no-roles"})
 		Expect(rec.Code).To(Equal(http.StatusBadRequest), rec.Body.String())
-	})
-
-	ginkgo.It("leaves tokens without Roles unaffected", func() {
-		Expect(do(unscoped, http.MethodDelete, "/test/catalog", nil).Code).To(Equal(http.StatusOK))
-		Expect(canRun(unscoped, inA)).To(BeTrue())
-
-		rec := do(unscoped, http.MethodPost, "/playbook/run", map[string]any{"id": runbook.ID, "config_id": inA.ID})
-		Expect(rec.Code).To(Equal(http.StatusCreated), rec.Body.String())
-
-		Expect(listed(unscoped)).To(ConsistOf(listed(alice)))
 	})
 
 	ginkgo.It("lists only the rows a non-guest owner's read grants select", func() {

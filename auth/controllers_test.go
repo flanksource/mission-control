@@ -232,12 +232,12 @@ var _ = Describe("Managing access tokens", Ordered, func() {
 		_, err = rbac.Enforcer().AddPolicy(agentAdmin.ID.String(), policy.ObjectAgent, policy.ActionUpdate, "allow", "", "test")
 		Expect(err).ToNot(HaveOccurred())
 
-		_, ownToken, err = db.CreateAccessToken(DefaultContext, owner.ID, "owned", nil, &owner.ID, false)
+		_, ownToken, err = db.CreateAccessToken(DefaultContext, owner.ID, "owned", nil, &owner.ID, false, viewerRole)
 		Expect(err).ToNot(HaveOccurred())
 
 		agent, err := db.CreatePerson(DefaultContext, "agent-"+uuid.NewString()[:8], uuid.NewString()[:8]+"@local", db.PersonTypeAgent)
 		Expect(err).ToNot(HaveOccurred())
-		_, agentToken, err = db.CreateAccessToken(DefaultContext, agent.ID, "default", nil, nil, false)
+		_, agentToken, err = db.CreateAccessToken(DefaultContext, agent.ID, "default", nil, nil, false, nil)
 		Expect(err).ToNot(HaveOccurred())
 	})
 

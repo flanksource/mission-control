@@ -280,6 +280,11 @@ var Serve = &cobra.Command{
 			logger.Fatalf("failed to sync shipped roles: %v", err)
 		}
 
+		// A person's token without Roles can't be used anyway, so a failure doesn't stop startup
+		if err := auth.DeleteTokensWithoutRoles(ctx); err != nil {
+			logger.Errorf("failed to delete access tokens without roles: %v", err)
+		}
+
 		// This is outside echo pkg to prevent import cycle
 		// Cannot be registered because we need to pass ctx for
 		// context injection middleware
