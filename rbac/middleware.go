@@ -59,6 +59,11 @@ func DbMiddleware() MiddlewareFunc {
 				return c.String(http.StatusNotFound, "")
 			}
 
+			// The PostgREST roles can't read connections' credentials (flanksource/duty#2114)
+			if resource == "connections" {
+				return c.String(http.StatusMethodNotAllowed, "connections can't be read or written through /db; read connection_details or connections_list, and write through /connection")
+			}
+
 			// Scopes, Roles and RoleBindings are validated when they're written, so they're only written through their API
 			if route, ok := managedTables[resource]; ok && action != policy.ActionRead {
 				return c.String(http.StatusMethodNotAllowed, fmt.Sprintf("%s can't be written through /db; use %s", resource, route))

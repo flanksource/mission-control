@@ -1,6 +1,7 @@
 package permissions_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -237,6 +238,73 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 
 		})
 	}
+
+	Describe("writing", func() {
+		send := func(person *models.Person, method, path string, body any) *httptest.ResponseRecorder {
+			GinkgoHelper()
+			data, err := json.Marshal(body)
+			Expect(err).ToNot(HaveOccurred())
+			req := httptest.NewRequest(method, path, bytes.NewReader(data))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			req = req.WithContext(DefaultContext.WithUser(person))
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+			return rec
+		}
+
+		It("returns a connection masked to readers", func() {
+			Expect(do(guest, http.MethodGet, "/connection/"+conn.ID.String()).Code).To(Equal(http.StatusForbidden))
+
+			rec := do(editor, http.MethodGet, "/connection/"+conn.ID.String())
+			Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+			Expect(rec.Body.String()).ToNot(ContainSubstring(password))
+			Expect(rec.Body.String()).ToNot(ContainSubstring("connection-use-bearer"))
+		})
+
+		It("keeps credentials sent back masked, and changes the rest", func() {
+			rec := do(editor, http.MethodGet, "/connection/"+conn.ID.String())
+			Expect(rec.Code).To(Equal(http.StatusOK))
+			var masked models.Connection
+			Expect(json.Unmarshal(rec.Body.Bytes(), &masked)).To(Succeed())
+			masked.Properties["region"] = "us-east-1"
+
+			Expect(send(reader, http.MethodPut, "/connection/"+conn.ID.String(), masked).Code).To(Equal(http.StatusForbidden))
+			rec = send(editor, http.MethodPut, "/connection/"+conn.ID.String(), masked)
+			Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+
+			stored, err := db.GetConnection(DefaultContext, conn.ID)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(stored.Username).To(Equal(conn.Username))
+			Expect(stored.Password).To(Equal(password))
+			Expect(stored.URL).To(Equal(conn.URL))
+			Expect(stored.Properties).To(HaveKeyWithValue("bearer", "connection-use-bearer"))
+			Expect(stored.Properties).To(HaveKeyWithValue("region", "us-east-1"))
+		})
+
+		It("creates and deletes a connection with create and delete on connections", func() {
+			body := models.Connection{Name: "connection-write", Namespace: namespace, Type: models.ConnectionTypeHTTP, Password: "write-password"}
+			Expect(send(reader, http.MethodPost, "/connection", body).Code).To(Equal(http.StatusForbidden))
+
+			rec := send(editor, http.MethodPost, "/connection", body)
+			Expect(rec.Code).To(Equal(http.StatusCreated), rec.Body.String())
+			Expect(rec.Body.String()).ToNot(ContainSubstring("write-password"))
+			var created models.Connection
+			Expect(json.Unmarshal(rec.Body.Bytes(), &created)).To(Succeed())
+
+			Expect(send(editor, http.MethodPost, "/connection", body).Code).To(Equal(http.StatusConflict))
+
+			stored, err := db.GetConnection(DefaultContext, created.ID)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(stored.Password).To(Equal("write-password"))
+			Expect(stored.Source).To(Equal(models.SourceUI))
+			Expect(stored.CreatedBy).To(Equal(&editor.ID))
+
+			Expect(do(reader, http.MethodDelete, "/connection/"+created.ID.String()).Code).To(Equal(http.StatusForbidden))
+			Expect(do(editor, http.MethodDelete, "/connection/"+created.ID.String()).Code).To(Equal(http.StatusNoContent))
+			Expect(do(editor, http.MethodGet, "/connection/"+created.ID.String()).Code).To(Equal(http.StatusNotFound))
+			Expect(DefaultContext.DB().Delete(&models.Connection{}, "id = ?", created.ID).Error).To(Succeed())
+		})
+	})
 
 	It("returns the hydrated default LLM connection to those who may use it", func() {
 		rec := do(user, http.MethodGet, "/connection/llm")

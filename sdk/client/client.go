@@ -272,9 +272,8 @@ func (c *Client) GetConnection(name, namespace string) (*clientapi.Connection, e
 	r, err := c.R(context.Background()).
 		QueryParam("name", "eq."+name).
 		QueryParam("namespace", "eq."+namespace).
-		QueryParam("deleted_at", "is.null").
 		QueryParam("limit", "1").
-		Get("/db/connections")
+		Get("/db/connection_details")
 	if err != nil {
 		return nil, err
 	}
@@ -290,10 +289,13 @@ func (c *Client) GetConnection(name, namespace string) (*clientapi.Connection, e
 	return &connections[0], nil
 }
 
+// SaveConnection updates the connection with conn's ID, or creates it when there's none.
 func (c *Client) SaveConnection(conn *clientapi.Connection) error {
+	if conn.ID == uuid.Nil {
+		conn.ID = uuid.New()
+	}
 	r, err := c.R(context.Background()).
-		Header("Prefer", "resolution=merge-duplicates,return=representation").
-		Post("/db/connections", conn)
+		Put("/connection/"+conn.ID.String(), conn)
 	if err != nil {
 		return err
 	}
