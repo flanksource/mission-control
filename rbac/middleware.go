@@ -59,6 +59,12 @@ func DbMiddleware() MiddlewareFunc {
 				return c.String(http.StatusNotFound, "")
 			}
 
+			// Kratos's tables and access tokens hold credentials. They aren't a type, so no Role grants them,
+			// not even admin's (specs/authorization/scopes.md, Section 3.1).
+			if object == policy.ObjectAuthConfidential {
+				return c.String(http.StatusForbidden, ErrAccessDenied.Error())
+			}
+
 			// The PostgREST roles can't read connections' credentials (flanksource/duty#2114)
 			if resource == "connections" {
 				return c.String(http.StatusMethodNotAllowed, "connections can't be read or written through /db; read connection_details or connections_list, and write through /connection")
