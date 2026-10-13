@@ -99,7 +99,7 @@ The word appears twice, with different meanings:
 - **Listings follow the same grants.** A subject lists every resource of a type their `read` rules cover whole, the resources their `read` rules select where they cover part of it, and is refused where none applies (`collection-access.md`).
 - **Rules only allow.** There are no deny rules. Adding a binding never removes access, and removing one never adds any. To keep something from a subject, don't grant it: bind the narrower Role to the narrower group.
 - **Admins are subjects like any other.** An admin is a subject bound to the `admin` Role. With no deny rules, nothing can take an admin's access away except removing their binding.
-- **Mission Control has no identity of its own.** There's no system user or service subject that checks run as. Work no person started, such as a scheduled playbook run or a notification being sent, is checked as the playbook or notification doing it, with that resource's own grants (`roles.md`, Section 4.4).
+- **Mission Control has no identity of its own.** There's no system user or service subject that checks run as. Work no person started, such as a scheduled playbook run or a notification being sent, is checked as the playbook or notification doing it, with that resource's own grants. A plugin is never checked as itself: it acts for whoever invoked it, with their grants (`roles.md`, Section 4.4).
 
 _Why:_ every exception is something a reader of a Role or RoleBinding can't see. One rule, with no kinds of subject, no access outside the resources and no denies, means what's written is what's granted, and an access review only has to read the allow rules RoleBindings grant.
 
@@ -211,7 +211,7 @@ Where the specs say an object "is rejected", this is what they mean.
 - **Component logs. Deliberately skipped.** Fetching a component's logs through its log selectors is behind a disabled feature flag and is expected to be removed. It gets no action, so no one can fetch them.
 - **Views.** No rule can select Views, and Roles grant no rows of the tables Views generate.
 - **Permissions and PermissionGroups** are deprecated, and not specified here (`permissions.md`). They have no type, so no Role can grant managing them. **TODO.**
-- **Plugins. TODO.** Plugins have no type, so no Role can grant installing, changing or removing them. They're also the one subject whose kind limits what it may be granted: only `read` and `connection:use` on connections (`roles.md`, Section 4.4). Both are to be revisited.
+- **Plugins. TODO.** Plugins have no type, so no Role can grant installing, changing or removing them. Installing one trusts its code with the access of everyone who may invoke it (`roles.md`, Section 4.4).
 - **Access reviews. TODO.** No action grants reviewing another subject's access (`/rbac/subject-access-reviews`).
 - **Reading checks. TODO.** Whether a check is read through its canary, through its own membership, or both, is for flanksource/mission-control#3520. Until it's decided, `read` accepts checks (`roles.md`, Section 2).
 - **The Kubernetes proxy. TODO, deliberately postponed.** The kubeconfig download and the requests made through Mission Control's Kubernetes proxy have no action under these specs, so no Role or RoleBinding can grant them, and they don't work under this model. That's a known gap, accepted for now: the feature is rarely used and isn't worth holding the rest of this design back, though some installations may rely on it. A proposed design is recorded in `design/kubernetes-proxy.md`, and is not adopted.

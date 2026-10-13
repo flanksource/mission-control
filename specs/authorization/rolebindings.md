@@ -39,9 +39,9 @@ A RoleBinding MUST have a namespace, and its Role and constraint Scopes must be 
 | `people`                                                           | list of strings | Humans who sign in to Mission Control, by email or `*`              |
 | `teams`                                                            | list of strings | Every member of the teams, by team name                              |
 | `oidc`                                                             | list of objects | Users of an external identity provider, by the claims in their token |
-| `playbooks`, `notifications`, `topologies`, `scrapers`, `canaries`, `plugins` | list of objects | Those resources, when they act on their own               |
+| `playbooks`, `notifications`, `topologies`, `scrapers`, `canaries` | list of objects | Those resources, when they act on their own               |
 
-A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either, and no subject selects them (Section 2.3). An access token isn't a subject at all: a request made with one is checked as its owner (`roles.md`, Section 4.5). `people` selects humans only, whether by email or by `*`, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
+A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either, and no subject selects them (Section 2.3). Nor does any subject select plugins: a plugin acts as whoever invoked it (`roles.md`, Section 4.4). An access token isn't a subject at all: a request made with one is checked as its owner (`roles.md`, Section 4.5). `people` selects humans only, whether by email or by `*`, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
 
 ### 2.1 People
 
@@ -154,7 +154,7 @@ See `external-identity-providers.md`.
 
 ### 2.5 Resources
 
-Some resources act on their own and need permissions too, e.g. a playbook calling Mission Control while it runs, a notification reading the resources it reports on, or a plugin using a connection's credentials. These can be subjects:
+Some resources act on their own and need permissions too, e.g. a playbook calling Mission Control while it runs, or a notification sending through a connection. These can be subjects:
 
 | Field | Selects |
 |---|---|
@@ -163,7 +163,6 @@ Some resources act on their own and need permissions too, e.g. a playbook callin
 | `topologies` | Topologies |
 | `scrapers` | Config scrapers |
 | `canaries` | Canaries |
-| `plugins` | Plugins, by the namespace and name of their Plugin resource. They can only be granted `read` and `connection:use` on connections (`roles.md`, Section 4.4) |
 
 ```yaml
 subjects:
@@ -174,9 +173,6 @@ subjects:
     - namespace: monitoring
   scrapers:
     - name: "*"
-  plugins:
-    - namespace: mission-control
-      name: kubernetes-logs
 ```
 
 Each entry is an object with `namespace` and `name`, and MUST set at least one of them; an empty entry is rejected. The values follow the same rules as in a Scope (`scopes.md`, Section 5.2):
@@ -185,7 +181,7 @@ Each entry is an object with `namespace` and `name`, and MUST set at least one o
 - `namespace` is one exact value. To match any namespace, omit it. `namespace: "*"` is rejected.
 - Prefixes, suffixes, lists and exclusions are rejected in both.
 
-So `name: "*"` alone selects every resource of that kind, and `namespace: monitoring` alone selects every resource of that kind in `monitoring`. Here: the `cleanup-pods` playbook, every notification in `monitoring`, every scraper, and the `kubernetes-logs` plugin in `mission-control`.
+So `name: "*"` alone selects every resource of that kind, and `namespace: monitoring` alone selects every resource of that kind in `monitoring`. Here: the `cleanup-pods` playbook, every notification in `monitoring`, and every scraper.
 
 Subjects are matched by namespace and name, not by reference to a specific object, so they can match resources in any namespace, not only the binding's.
 
