@@ -52,7 +52,7 @@ func PersistRoleFromCRD(ctx context.Context, obj *v1.Role) error {
 	return PersistRole(ctx, obj, models.SourceCRD, nil)
 }
 
-// ReasonShipped is the reason a Kubernetes Scope, Role or RoleBinding isn't in effect when Mission Control ships one of the same
+// ReasonShipped is the reason a Kubernetes Scope, Role, RoleBinding or Team isn't in effect when Mission Control ships one of the same
 // namespace and name.
 const ReasonShipped = "Shipped"
 
@@ -237,6 +237,7 @@ func DeleteStaleRoleBinding(ctx context.Context, newer *v1.RoleBinding) error {
 	if err := ctx.DB().Model(&models.RoleBinding{}).
 		Where("namespace = ? AND name = ?", newer.Namespace, newer.Name).
 		Where("id != ?", newer.UID).
+		Where("source != ?", adapter.SourceShipped).
 		Where("deleted_at IS NULL").
 		Update("deleted_at", duty.Now()).Error; err != nil {
 		return err

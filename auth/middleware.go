@@ -19,11 +19,14 @@ import (
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/gomplate/v3"
+	"github.com/google/uuid"
+
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/flanksource/incident-commander/db"
 	pluginapi "github.com/flanksource/incident-commander/plugin/api"
 	"github.com/flanksource/incident-commander/rbac/adapter"
+	"github.com/flanksource/incident-commander/rbac/shipped"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
 	"github.com/patrickmn/go-cache"
@@ -96,6 +99,9 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 	var (
 		adminUserID string
 		err         error
+
+		// joinsAdmins is set when admin@local is the first admin, i.e. in the basic and kratos auth modes
+		joinsAdmins bool
 	)
 
 	switch vars.AuthMode {
@@ -105,6 +111,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 			return fmt.Errorf("failed to created admin user: %v", err)
 		} else if admin != nil {
 			adminUserID = admin.ID.String()
+			joinsAdmins = true
 		}
 		if OIDCEnabled {
 			if localhostOnly {
@@ -126,6 +133,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 		if err != nil {
 			return fmt.Errorf("failed to created admin user: %v", err)
 		}
+		joinsAdmins = true
 
 		kratosMiddleware, err := kratosHandler.KratosMiddleware(ctx)
 		if err != nil {
@@ -175,7 +183,25 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 		return fmt.Errorf("failed to initialize rbac: %w", err)
 	}
 
+	// After RBAC is initialised, so admin@local's team membership reaches the policy
+	if joinsAdmins {
+		joinAdmins(ctx, adminUserID)
+	}
+
 	return nil
+}
+
+// joinAdmins adds admin@local to the shipped admins team, which is bound to the shipped admin Role.
+// It's logged rather than returned: failing to start would lock everyone out, while admin@local keeps its
+// built-in admin role and the next start tries again.
+func joinAdmins(ctx context.Context, adminUserID string) {
+	adminID, err := uuid.Parse(adminUserID)
+	if err == nil {
+		err = shipped.AddToAdmins(ctx, adminID)
+	}
+	if err != nil {
+		logger.Errorf("failed to add %s to the %s team: %v", AdminEmail, shipped.TeamAdmins, err)
+	}
 }
 
 type trustedUpstreamContextKey struct{}

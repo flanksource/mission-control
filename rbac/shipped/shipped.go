@@ -1,5 +1,6 @@
-// Package shipped writes the Roles and Scopes Mission Control ships: viewer, admin and plugin-admin, in the
-// mission-control-builtin namespace, with the Scopes they use (see specs/authorization/overview.md, "Shipped Roles").
+// Package shipped writes the objects Mission Control ships: the viewer, admin and plugin-admin Roles, in the
+// mission-control-builtin namespace, with the Scopes they use, and the admins team bound to admin and plugin-admin
+// (see specs/authorization/overview.md, "Shipped Roles" and "Configured bindings").
 package shipped
 
 import (
@@ -50,6 +51,11 @@ const (
 	// them, apart from admin, so a plugin can only ever change or invalidate this Role.
 	RolePluginAdmin = adapter.RolePluginAdmin
 
+	// TeamAdmins is the shipped team. BindingAdmins binds admin to it, and BindingPluginAdmins plugin-admin.
+	TeamAdmins          = "admins"
+	BindingAdmins       = "admins"
+	BindingPluginAdmins = adapter.BindingPluginAdmins
+
 	// allConfigs is the Scope plugin-admin's rules are on.
 	allConfigs = "all-configs"
 
@@ -59,10 +65,17 @@ const (
 // idNamespace derives the ids of shipped objects from their kind, namespace and name, so every Sync writes the same rows.
 var idNamespace = uuid.MustParse("6f1d4c8e-5a0b-4e8f-9c3d-2b7a1e6f9d40")
 
-// Objects returns the shipped Scopes and Roles as written in shipped.yaml, i.e. without plugin-admin.
-func Objects() ([]v1.Scope, []v1.Role, error) {
-	var scopes []v1.Scope
-	var roles []v1.Role
+// Objects are the shipped objects, of each kind.
+type Objects struct {
+	Scopes       []v1.Scope
+	Roles        []v1.Role
+	Teams        []v1.Team
+	RoleBindings []v1.RoleBinding
+}
+
+// Load returns the shipped objects as written in shipped.yaml, i.e. without plugin-admin.
+func Load() (Objects, error) {
+	var objects Objects
 
 	reader := utilyaml.NewYAMLReader(bufio.NewReader(bytes.NewReader(manifests)))
 	for {
@@ -70,50 +83,59 @@ func Objects() ([]v1.Scope, []v1.Role, error) {
 		if errors.Is(err, io.EOF) {
 			break
 		} else if err != nil {
-			return nil, nil, fmt.Errorf("failed to read shipped.yaml: %w", err)
+			return Objects{}, fmt.Errorf("failed to read shipped.yaml: %w", err)
 		} else if len(bytes.TrimSpace(doc)) == 0 {
 			continue
 		}
 
 		var typeMeta metav1.TypeMeta
 		if err := yaml.Unmarshal(doc, &typeMeta); err != nil {
-			return nil, nil, fmt.Errorf("failed to read shipped.yaml: %w", err)
+			return Objects{}, fmt.Errorf("failed to read shipped.yaml: %w", err)
 		} else if typeMeta.APIVersion != apiVersion {
-			return nil, nil, fmt.Errorf("shipped.yaml: unexpected apiVersion %q", typeMeta.APIVersion)
+			return Objects{}, fmt.Errorf("shipped.yaml: unexpected apiVersion %q", typeMeta.APIVersion)
 		}
 
 		switch typeMeta.Kind {
 		case "Scope":
-			var scope v1.Scope
-			if err := yaml.UnmarshalStrict(doc, &scope); err != nil {
-				return nil, nil, fmt.Errorf("shipped.yaml: invalid scope: %w", err)
-			}
-			scopes = append(scopes, scope)
+			err = decode(doc, &objects.Scopes)
 		case "Role":
-			var role v1.Role
-			if err := yaml.UnmarshalStrict(doc, &role); err != nil {
-				return nil, nil, fmt.Errorf("shipped.yaml: invalid role: %w", err)
-			}
-			roles = append(roles, role)
+			err = decode(doc, &objects.Roles)
+		case "Team":
+			err = decode(doc, &objects.Teams)
+		case "RoleBinding":
+			err = decode(doc, &objects.RoleBindings)
 		default:
-			return nil, nil, fmt.Errorf("shipped.yaml: unexpected kind %q", typeMeta.Kind)
+			err = fmt.Errorf("unexpected kind %q", typeMeta.Kind)
+		}
+		if err != nil {
+			return Objects{}, fmt.Errorf("shipped.yaml: %w", err)
 		}
 	}
 
-	return scopes, roles, nil
+	return objects, nil
 }
 
-// Build returns the shipped Scopes and Roles, and plugin-admin with one rule for each of the plugin operations,
-// by plugin name. An operation whose action isn't valid, e.g. one with a space in its name, gets no rule.
-// Without any operation there's no plugin-admin, since a Role needs a rule.
-func Build(operations map[string][]string) ([]v1.Scope, []v1.Role, error) {
-	scopes, roles, err := Objects()
+// decode strictly decodes a document and appends it to the list.
+func decode[T any](doc []byte, list *[]T) error {
+	var obj T
+	if err := yaml.UnmarshalStrict(doc, &obj); err != nil {
+		return err
+	}
+	*list = append(*list, obj)
+	return nil
+}
+
+// Build returns the shipped objects, and plugin-admin with one rule for each of the plugin operations, by plugin
+// name. An operation whose action isn't valid, e.g. one with a space in its name, gets no rule.
+// Without any operation there's no plugin-admin, since a Role needs a rule, nor any binding to it.
+func Build(operations map[string][]string) (Objects, error) {
+	objects, err := Load()
 	if err != nil {
-		return nil, nil, err
+		return Objects{}, err
 	}
 
 	if rules := invokeRules(operations); len(rules) > 0 {
-		roles = append(roles, v1.Role{
+		objects.Roles = append(objects.Roles, v1.Role{
 			ObjectMeta: metav1.ObjectMeta{Name: RolePluginAdmin, Namespace: adapter.ShippedNamespace},
 			Spec: v1.RoleSpec{
 				Description: "Invokes every operation of the installed plugins, on any config",
@@ -121,7 +143,10 @@ func Build(operations map[string][]string) ([]v1.Scope, []v1.Role, error) {
 			},
 		})
 	}
-	return scopes, roles, nil
+
+	roles := lo.SliceToMap(objects.Roles, func(r v1.Role) (string, bool) { return r.Name, true })
+	objects.RoleBindings = lo.Filter(objects.RoleBindings, func(b v1.RoleBinding, _ int) bool { return roles[b.Spec.Role] })
+	return objects, nil
 }
 
 // invokeRules returns one rule for each plugin operation, each with a name of its own.
@@ -179,9 +204,11 @@ func invokeRuleName(action string, used map[string]bool) string {
 
 var syncLock sync.Mutex
 
-// Sync writes the shipped Scopes and Roles, with plugin-admin's rules for the operations of the installed plugins.
-// It replaces any other Scope or Role of the same namespace and name, and deletes shipped ones that are no longer
-// shipped, e.g. plugin-admin's rule for an operation that's gone, or plugin-admin once no plugin has an operation. It's idempotent, and writes everything or nothing.
+// Sync writes the shipped objects, with plugin-admin's rules for the operations of the installed plugins.
+// It replaces any other object of the same namespace and name (a team's name alone), recreates shipped ones that were
+// deleted, and deletes shipped ones that are no longer shipped, e.g. plugin-admin's rule for an operation that's gone,
+// or plugin-admin and its binding once no plugin has an operation.
+// It never changes a team's members. It's idempotent, and writes everything or nothing.
 // The policy is reloaded whenever Sync may have changed something, even when it fails.
 // A shipped object that's stored but not in effect is a bug, and is returned as an error.
 func Sync(ctx context.Context) error {
@@ -195,14 +222,14 @@ func Sync(ctx context.Context) error {
 			return err
 		}
 
-		scopes, roles, err := Build(operations)
+		objects, err := Build(operations)
 		if err != nil {
 			return err
 		}
 
-		var scopeIDs, roleIDs []string
-		for i := range scopes {
-			scope := &scopes[i]
+		var scopeIDs, roleIDs, teamIDs, bindingIDs []string
+		for i := range objects.Scopes {
+			scope := &objects.Scopes[i]
 			scope.UID = objectID("scopes", scope.Namespace, scope.Name)
 			scopeIDs = append(scopeIDs, string(scope.UID))
 			if err := replaceOthers(txCtx, "scopes", scope.ObjectMeta); err != nil {
@@ -213,8 +240,8 @@ func Sync(ctx context.Context) error {
 			}
 		}
 
-		for i := range roles {
-			role := &roles[i]
+		for i := range objects.Roles {
+			role := &objects.Roles[i]
 			role.UID = objectID("roles", role.Namespace, role.Name)
 			roleIDs = append(roleIDs, string(role.UID))
 			if err := replaceOthers(txCtx, "roles", role.ObjectMeta); err != nil {
@@ -225,10 +252,35 @@ func Sync(ctx context.Context) error {
 			}
 		}
 
-		if err := deleteUnshipped(txCtx, "roles", roleIDs); err != nil {
-			return err
+		for i := range objects.Teams {
+			team := &objects.Teams[i]
+			if err := syncTeam(txCtx, team); err != nil {
+				return err
+			}
+			teamIDs = append(teamIDs, string(team.UID))
 		}
-		return deleteUnshipped(txCtx, "scopes", scopeIDs)
+
+		for i := range objects.RoleBindings {
+			binding := &objects.RoleBindings[i]
+			binding.UID = objectID("role_bindings", binding.Namespace, binding.Name)
+			bindingIDs = append(bindingIDs, string(binding.UID))
+			if err := replaceOthers(txCtx, "role_bindings", binding.ObjectMeta); err != nil {
+				return err
+			}
+			if err := persisted(db.PersistRoleBinding(txCtx, binding, adapter.SourceShipped, nil), &notReady); err != nil {
+				return fmt.Errorf("role binding %s/%s: %w", binding.Namespace, binding.Name, err)
+			}
+		}
+
+		for _, table := range []struct {
+			name string
+			ids  []string
+		}{{"role_bindings", bindingIDs}, {"roles", roleIDs}, {"scopes", scopeIDs}, {"teams", teamIDs}} {
+			if err := deleteUnshipped(txCtx, table.name, table.ids); err != nil {
+				return err
+			}
+		}
+		return nil
 	})
 
 	errs := append([]error{err}, notReady...)
@@ -236,6 +288,57 @@ func Sync(ctx context.Context) error {
 		errs = append(errs, fmt.Errorf("failed to reload policy: %w", err))
 	}
 	return errors.Join(errs...)
+}
+
+// syncTeam writes a shipped team, replacing any other team of the same name, and sets its UID.
+// Teams have no namespace, so a team's name is unique on its own.
+func syncTeam(ctx context.Context, team *v1.Team) error {
+	team.UID = objectID("teams", team.Namespace, team.Name)
+	err := ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
+		if err := softDelete(txCtx, "teams", "name = ? AND id != ?", team.Name, team.UID); err != nil {
+			return err
+		}
+		return db.PersistTeam(txCtx, team, adapter.SourceShipped)
+	})
+	if err != nil {
+		return ctx.Oops().Wrapf(err, "failed to sync team %s", team.Name)
+	}
+	return nil
+}
+
+// AddToAdmins makes the person a direct member of the shipped admins team, creating the team if it doesn't exist yet.
+// Mission Control calls it for admin@local on every start, after RBAC is initialised, so the first admin is never
+// locked out.
+// The membership's source is SourceShipped, so a team mapper, which only removes the memberships it added, leaves it.
+func AddToAdmins(ctx context.Context, personID uuid.UUID) error {
+	objects, err := Load()
+	if err != nil {
+		return err
+	}
+
+	team, ok := lo.Find(objects.Teams, func(t v1.Team) bool { return t.Name == TeamAdmins })
+	if !ok {
+		return fmt.Errorf("shipped.yaml has no %s team", TeamAdmins)
+	}
+
+	syncLock.Lock()
+	defer syncLock.Unlock()
+	if err := syncTeam(ctx, &team); err != nil {
+		return err
+	}
+
+	if err := ctx.DB().Exec(`INSERT INTO team_members (team_id, person_id, source) VALUES (?, ?, ?)
+		ON CONFLICT (team_id, person_id) DO NOTHING`, team.UID, personID, adapter.SourceShipped).Error; err != nil {
+		return ctx.Oops().Wrapf(err, "failed to add %s to team %s", personID, TeamAdmins)
+	}
+
+	// Memberships reach the policy through notifications on team_members, which aren't handled yet during startup
+	if dutyRBAC.Enforcer() != nil {
+		if err := dutyRBAC.AddRoleForUser(personID.String(), string(team.UID)); err != nil {
+			return ctx.Oops().Wrapf(err, "failed to add %s to team %s", personID, TeamAdmins)
+		}
+	}
+	return nil
 }
 
 // persisted returns the error of a persist that failed, and adds one that stored an object that isn't in effect

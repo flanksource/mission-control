@@ -1,42 +1,77 @@
 package db
 
 import (
+	"fmt"
+
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/kopper"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"gorm.io/gorm/clause"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	dbModels "github.com/flanksource/incident-commander/db/models"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
-// PersistTeamFromCRD saves a Team CRD to the database
+// PersistTeamFromCRD saves a Team CRD to the database, with its members.
+// A team with the name of a shipped one isn't stored: the shipped one stays.
 func PersistTeamFromCRD(ctx context.Context, obj *v1.Team) error {
-	uid, err := uuid.Parse(string(obj.GetUID()))
-	if err != nil {
-		return ctx.Oops().Wrapf(err, "failed to parse UID")
+	name := teamName(obj)
+	var count int64
+	if err := ctx.DB().Model(&models.Team{}).
+		Where("name = ? AND source = ? AND deleted_at IS NULL", name, adapter.SourceShipped).
+		Count(&count).Error; err != nil {
+		return ctx.Oops().Wrap(err)
+	} else if count > 0 {
+		return &kopper.NotReadyError{
+			Reason:  ReasonShipped,
+			Message: fmt.Sprintf("team %s is shipped with Mission Control and can't be overwritten", name),
+		}
 	}
 
-	team := models.Team{
-		ID:        uid,
-		Name:      lo.CoalesceOrEmpty(obj.Spec.DisplayName, obj.GetName()),
-		Icon:      obj.Spec.Icon,
-		Source:    models.SourceCRD,
-		CreatedBy: SystemUser.ID,
+	if err := PersistTeam(ctx, obj, models.SourceCRD); err != nil {
+		return err
 	}
 
-	if err := ctx.DB().Save(&team).Error; err != nil {
-		return ctx.Oops().Wrapf(err, "failed to save team")
-	}
-
-	// Sync team members
+	uid, _ := uuid.Parse(string(obj.GetUID()))
 	if err := syncTeamMembers(ctx, uid, obj.Spec.Members); err != nil {
 		return ctx.Oops().Wrapf(err, "failed to sync team members")
 	}
 
 	return nil
+}
+
+// PersistTeam saves a team, without its members.
+func PersistTeam(ctx context.Context, obj *v1.Team, source string) error {
+	uid, err := uuid.Parse(string(obj.GetUID()))
+	if err != nil {
+		return ctx.Oops().Wrapf(err, "failed to parse UID")
+	}
+
+	systemUser, err := GetSystemUser(ctx)
+	if err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+
+	team := models.Team{
+		ID:        uid,
+		Name:      teamName(obj),
+		Icon:      obj.Spec.Icon,
+		Source:    source,
+		CreatedBy: systemUser.ID,
+	}
+
+	if err := ctx.DB().Save(&team).Error; err != nil {
+		return ctx.Oops().Wrapf(err, "failed to save team")
+	}
+	return nil
+}
+
+func teamName(obj *v1.Team) string {
+	return lo.CoalesceOrEmpty(obj.Spec.DisplayName, obj.GetName())
 }
 
 // syncTeamMembers syncs the team members from the CRD spec
@@ -117,6 +152,7 @@ func DeleteStaleTeam(ctx context.Context, newer *v1.Team) error {
 	return ctx.DB().Model(&dbModels.Team{}).
 		Where("name = ?", newer.Spec.DisplayName).
 		Where("id != ?", newer.UID).
+		Where("source IS DISTINCT FROM ?", adapter.SourceShipped).
 		Where("deleted_at IS NULL").
 		Update("deleted_at", duty.Now()).Error
 }

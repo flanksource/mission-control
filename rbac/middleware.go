@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
@@ -85,12 +86,18 @@ func DbMiddleware() MiddlewareFunc {
 				object, action = policy.ObjectProperties, policy.ActionPropertyManage
 			}
 
-			if !rbac.CheckContext(ctx, object, action) && !canListFilteredRows(ctx, resource, action) {
+			if !rbac.CheckContext(ctx, object, action) && !canListFilteredRows(ctx, resource, action) && !teamGrants(ctx, resource, action) {
 				c.Response().Header().Add("X-Rbac-Subject", ctx.Subject())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)
 
 				return c.String(http.StatusForbidden, ErrAccessDenied.Error())
+			}
+
+			if resource == "teams" && action != policy.ActionRead {
+				if err := guardShippedTeams(c, ctx); err != nil {
+					return dutyAPI.WriteError(c, err)
+				}
 			}
 
 			return next(c)
@@ -102,6 +109,22 @@ func DbMiddleware() MiddlewareFunc {
 var readOnlyObjects = map[string]string{
 	policy.ObjectJobs:   policy.ActionJobRead,
 	policy.ObjectEvents: policy.ActionEventRead,
+}
+
+// teamGrants reports whether the subject's grants on teams allow the action on teams or their members.
+// Both tables are database.public to the built-in roles, which no Role can grant. A team's members are part of the
+// team, so changing them takes update on teams.
+func teamGrants(ctx context.Context, table, action string) bool {
+	switch table {
+	case "teams":
+		return rbac.CheckContext(ctx, adapter.ObjectTeams, action)
+	case "team_members":
+		if action != policy.ActionRead {
+			action = policy.ActionUpdate
+		}
+		return rbac.CheckContext(ctx, adapter.ObjectTeams, action)
+	}
+	return false
 }
 
 // rowFilteredTables are the tables whose rows are filtered by a subject's read grants of their resource type.

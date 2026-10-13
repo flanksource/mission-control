@@ -77,11 +77,15 @@ func IsShipped(namespace, source string) bool {
 // some plugin has an operation.
 const RolePluginAdmin = "plugin-admin"
 
+// BindingPluginAdmins is the shipped RoleBinding of the admins team to plugin-admin, written only while plugin-admin is.
+const BindingPluginAdmins = "plugin-admins"
+
 // reservedShippedNames are the names, by table, of shipped objects that aren't always written. Only Mission Control
 // may write an object with one of them in the shipped namespace, whether or not it exists yet. Otherwise someone could
 // create one before it's shipped, and their bindings to it would widen when the shipped one replaces it.
 var reservedShippedNames = map[string][]string{
-	"roles": {RolePluginAdmin},
+	"roles":         {RolePluginAdmin},
+	"role_bindings": {BindingPluginAdmins},
 }
 
 // IsReservedShippedName reports whether only a shipped object may have the namespace and name in the table.
