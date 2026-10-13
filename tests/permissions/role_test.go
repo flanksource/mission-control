@@ -1059,15 +1059,46 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		}
 
 		only := func(resourceType string, access mcRBAC.Access) map[string]mcRBAC.Access {
-			summary := map[string]mcRBAC.Access{
-				policy.ResourceConfig:     mcRBAC.AccessNone,
-				policy.ResourceComponent:  mcRBAC.AccessNone,
-				policy.ResourceCanary:     mcRBAC.AccessNone,
-				policy.ResourcePlaybook:   mcRBAC.AccessNone,
-				policy.ResourceConnection: mcRBAC.AccessNone,
+			summary := map[string]mcRBAC.Access{}
+			contract, err := adapter.ContractFor(policy.ActionRead)
+			Expect(err).ToNot(HaveOccurred())
+			for _, kind := range contract.Resources {
+				summary[kind] = mcRBAC.AccessNone
 			}
 			summary[resourceType] = access
 			return summary
+		}
+
+		whoami := func(person *models.Person) (map[string]map[string]mcRBAC.Access, map[string]bool) {
+			GinkgoHelper()
+			mcRBAC.FlushAccessSummaries()
+			e := echo.New()
+			req := httptest.NewRequest(http.MethodGet, "/auth/whoami", nil).WithContext(DefaultContext.WithUser(person))
+			rec := httptest.NewRecorder()
+			Expect(auth.WhoAmI(e.NewContext(req, rec))).To(Succeed())
+			Expect(rec.Code).To(Equal(http.StatusOK))
+			var response struct {
+				Payload struct {
+					Access      map[string]map[string]mcRBAC.Access `json:"access"`
+					Actions     map[string]bool                     `json:"access_actions"`
+					Roles       []string                            `json:"roles"`
+					Permissions []policy.Permission                 `json:"permissions"`
+				} `json:"payload"`
+			}
+			Expect(json.Unmarshal(rec.Body.Bytes(), &response)).To(Succeed())
+			Expect(response.Payload.Roles).ToNot(BeNil())
+			Expect(response.Payload.Permissions).ToNot(BeNil())
+			Expect(lo.Keys(response.Payload.Access)).To(ConsistOf(
+				policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck, policy.ResourceCanary,
+				policy.ResourcePlaybook, policy.ResourceConnection, policy.ResourceScraper,
+				v1.ResourceApplication, v1.ResourceNotification, v1.ResourceNotificationSilence,
+				v1.ResourceAgent, v1.ResourcePerson, v1.ResourceTeam, v1.ResourceScope, v1.ResourceRole, v1.ResourceRoleBinding))
+			for _, actions := range response.Payload.Access {
+				Expect(lo.Keys(actions)).To(ConsistOf(policy.ActionRead, policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete))
+			}
+			Expect(lo.Keys(response.Payload.Actions)).To(ConsistOf(adapter.ActionPersonManage, policy.ActionMCPUse,
+				policy.ActionPropertyManage, policy.ActionEventRead, policy.ActionJobRead))
+			return response.Payload.Access, response.Payload.Actions
 		}
 
 		createPermission := func(permission *models.Permission) {
@@ -1102,6 +1133,12 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 
 		It("gives a guest some of a type its read grants filter by row", func() {
 			Expect(readSummaryOf(rlsGuest)).To(Equal(only(policy.ResourceConfig, mcRBAC.AccessSome)))
+			access, actions := whoami(rlsGuest)
+			Expect(access[policy.ResourceConfig][policy.ActionRead]).To(Equal(mcRBAC.AccessSome))
+			for _, action := range []string{policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete} {
+				Expect(summaryOf(rlsGuest, action)).To(HaveEach(mcRBAC.AccessNone))
+			}
+			Expect(actions).To(HaveEach(false))
 		})
 
 		It("gives some for grants on a Scope that matches nothing", func() {
@@ -1132,18 +1169,31 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			viewer := newViewer("Role Summary viewer", "role-summary-viewer@test.com")
 			admin := newAdmin("Role Summary admin", "role-summary-admin@test.com")
 
-			Expect(readSummaryOf(viewer)).To(Equal(map[string]mcRBAC.Access{
-				policy.ResourceConfig:     mcRBAC.AccessAll,
-				policy.ResourceComponent:  mcRBAC.AccessAll,
-				policy.ResourceCanary:     mcRBAC.AccessAll,
-				policy.ResourcePlaybook:   mcRBAC.AccessAll,
-				policy.ResourceConnection: mcRBAC.AccessNone,
-			}))
-			Expect(summaryOf(viewer, policy.ActionUpdate)).To(HaveEach(mcRBAC.AccessNone))
+			expected := only(policy.ResourceConfig, mcRBAC.AccessAll)
+			for _, kind := range []string{policy.ResourceComponent, policy.ResourceCheck, policy.ResourceCanary,
+				policy.ResourcePlaybook, v1.ResourceApplication, v1.ResourcePerson, v1.ResourceTeam} {
+				expected[kind] = mcRBAC.AccessAll
+			}
+			Expect(readSummaryOf(viewer)).To(Equal(expected))
+			viewerAccess, viewerActions := whoami(viewer)
+			Expect(viewerActions).To(HaveEach(false))
+			for _, actions := range viewerAccess {
+				for _, action := range []string{policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete} {
+					Expect(actions[action]).To(Equal(mcRBAC.AccessNone))
+				}
+			}
 
-			mcRBAC.FlushAccessSummaries()
-			for _, actions := range mcRBAC.AccessSummary(DefaultContext.WithUser(admin)) {
-				Expect(actions).To(HaveEach(mcRBAC.AccessAll))
+			adminAccess, adminActions := whoami(admin)
+			Expect(adminActions).To(HaveEach(true))
+			for kind, actions := range adminAccess {
+				Expect(actions[policy.ActionRead]).To(Equal(mcRBAC.AccessAll))
+				for _, action := range []string{policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete} {
+					expected := mcRBAC.AccessAll
+					if kind == policy.ResourceCheck || kind == v1.ResourcePerson {
+						expected = mcRBAC.AccessNone
+					}
+					Expect(actions[action]).To(Equal(expected), "%s %s", kind, action)
+				}
 			}
 		})
 
