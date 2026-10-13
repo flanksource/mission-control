@@ -3,6 +3,7 @@ package permissions_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"time"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -366,6 +367,29 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 		ginkgo.It("refuses it under a deny Permission on database.config_scrapers", func() {
 			newPermission(writer, policy.ActionUpdate, policy.ObjectDatabaseSettings, "", true)
 			Expect(dbStatus(writer, http.MethodPatch)).To(Equal(http.StatusForbidden))
+		})
+
+		ginkgo.It("lets a token whose Roles allow scrapers use its owner's write Permission on database.config_scrapers", func() {
+			newPermission(everyReader, policy.ActionUpdate, policy.ObjectDatabaseSettings, "", false)
+			Expect(dbStatus(everyReader, http.MethodPatch)).To(Equal(http.StatusOK))
+
+			token := func(role string) *models.Person {
+				ginkgo.GinkgoHelper()
+				result, err := db.CreateAccessTokenForPerson(DefaultContext, everyReader, "scraper-scopes-"+role, time.Hour, false,
+					models.AccessTokenRoles{{Namespace: namespace, Name: role}})
+				Expect(err).ToNot(HaveOccurred())
+				_, err = rbac.Enforcer().AddGroupingPolicy(result.Person.ID.String(), everyReader.ID.String())
+				Expect(err).ToNot(HaveOccurred())
+				ginkgo.DeferCleanup(func() {
+					Expect(DefaultContext.DB().Where("person_id = ?", result.Person.ID).Delete(&models.AccessToken{}).Error).To(Succeed())
+				})
+				return result.Person
+			}
+			writes, reads := token("write-every-scraper"), token("read-every-scraper")
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+
+			Expect(dbStatus(writes, http.MethodPatch)).To(Equal(http.StatusOK))
+			Expect(dbStatus(reads, http.MethodPatch)).To(Equal(http.StatusForbidden), "its Roles don't allow updating scrapers")
 		})
 
 		ginkgo.It("refuses reads of either scraper table under a deny Permission on database.config_scrapers", func() {

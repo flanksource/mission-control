@@ -97,7 +97,7 @@ func DbMiddleware() MiddlewareFunc {
 				object, action = typeObject, typeAction
 			} else {
 				allowed = CheckContext(ctx, object, action) || canListFilteredRows(ctx, resource, action) || readsConnections(ctx, resource, action) ||
-					scraperGrants(ctx, resource, action)
+					scraperGrants(ctx, resource, object, action)
 			}
 
 			if !allowed || scraperDenied(ctx, resource, object, action) {
@@ -149,15 +149,25 @@ var typeTables = map[string]string{
 
 // scraperGrants reports whether the subject's grants on scrapers allow the action on config scrapers. duty files the
 // table under database.config_scrapers, which logging backends share, and its view under database.monitor, so
-// Role rules on scrapers are granted on an object of their own.
-func scraperGrants(ctx context.Context, table, action string) bool {
+// Role rules on scrapers are granted on an object of their own. The subject may hold either object, but an access
+// token's Roles must allow scrapers: they're Roles, so they grant types, not the table's object.
+func scraperGrants(ctx context.Context, table, object, action string) bool {
 	switch table {
 	case "config_scrapers":
-		return CheckContext(ctx, adapter.ObjectScrapers, action)
 	case "config_scrapers_with_status":
-		return action == policy.ActionRead && CheckContext(ctx, adapter.ObjectScrapers, action)
+		if action != policy.ActionRead {
+			return false
+		}
+	default:
+		return false
 	}
-	return false
+
+	user := ctx.User()
+	if user == nil {
+		return false
+	}
+	owner := rbac.CheckContext(ctx, adapter.ObjectScrapers, action) || rbac.CheckContext(ctx, object, action)
+	return owner && TokenAllowsObject(ctx, user.ID.String(), adapter.ObjectScrapers, action)
 }
 
 // scraperDenied reports whether a deny on any object a scraper table is granted through applies to the action: the
