@@ -105,6 +105,16 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 	return session, nil
 }
 
+// isAccessTokenRequest reports whether the request authenticates with an access token, which basicAuthLogin
+// turns into a session without the person's Kratos identity. The team mapper mustn't run on it.
+func isAccessTokenRequest(r *http.Request) bool {
+	if username, _, ok := r.BasicAuth(); ok {
+		return strings.ToLower(username) == "token"
+	}
+	_, ok := extractBearerAuthToken(r.Header)
+	return ok
+}
+
 func (k *kratosMiddleware) basicAuthLogin(ctx context.Context, username, password string) (*client.Session, error) {
 	if strings.ToLower(username) == "token" {
 		accessToken, err := getAccessToken(ctx, password)
@@ -206,7 +216,7 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 
 		mappingCtx := ctx.WithObject(person)
 
-		if IdentityRoleMapper != "" {
+		if IdentityRoleMapper != "" && !isAccessTokenRequest(c.Request()) {
 			if err := mapIDsToRoles(mappingCtx, session, person); err != nil {
 				ctx.GetSpan().RecordError(err)
 				mappingCtx.Error(err, "error mapping ids to roles")

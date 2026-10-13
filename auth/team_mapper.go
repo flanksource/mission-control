@@ -7,6 +7,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/flanksource/commons/hash"
@@ -45,6 +46,10 @@ var (
 	// teamMapperInputs holds, per person, a hash of the input the team mapper last ran on,
 	// so it only runs again when that input changes.
 	teamMapperInputs = cache.New(24*time.Hour, time.Hour)
+
+	// teamMapperLocks serialises the syncs of each person, so concurrent requests with different input
+	// can't each keep the teams they added.
+	teamMapperLocks sync.Map
 )
 
 // clerkVolatileClaims change on every token refresh without saying anything about the person.
@@ -74,6 +79,10 @@ func mapTeams(ctx context.Context, personID uuid.UUID, expr string, env map[stri
 	}
 
 	cacheKey := personID.String()
+	lock, _ := teamMapperLocks.LoadOrStore(cacheKey, &sync.Mutex{})
+	lock.(*sync.Mutex).Lock()
+	defer lock.(*sync.Mutex).Unlock()
+
 	if last, ok := teamMapperInputs.Get(cacheKey); ok && last == inputHash {
 		return nil
 	}
@@ -184,9 +193,13 @@ func syncMappedTeams(ctx context.Context, personID uuid.UUID, teamNames []string
 			continue
 		}
 
-		if err := ctx.DB().Where("team_id = ? AND person_id = ? AND source = ?", m.TeamID, personID, SourceTeamMapper).
-			Delete(&dbModels.TeamMember{}).Error; err != nil {
-			return ctx.Oops().Wrapf(err, "failed to remove person %s from team %s", personID, m.TeamID)
+		result := ctx.DB().Where("team_id = ? AND person_id = ? AND source = ?", m.TeamID, personID, SourceTeamMapper).
+			Delete(&dbModels.TeamMember{})
+		if result.Error != nil {
+			return ctx.Oops().Wrapf(result.Error, "failed to remove person %s from team %s", personID, m.TeamID)
+		} else if result.RowsAffected == 0 {
+			// An admin made it a direct membership in the meantime
+			continue
 		}
 		ctx.Logger.V(3).Infof("team mapper removed person %s from team %s", personID, m.TeamID)
 		if err := applyMembership(personID, m.TeamID, false); err != nil {
@@ -204,9 +217,12 @@ func applyMembership(personID, teamID uuid.UUID, member bool) error {
 		return nil
 	}
 
-	InvalidateRLSCacheForUser(personID.String())
+	var err error
 	if member {
-		return dutyRBAC.AddRoleForUser(personID.String(), teamID.String())
+		err = dutyRBAC.AddRoleForUser(personID.String(), teamID.String())
+	} else {
+		err = dutyRBAC.DeleteRoleForUser(personID.String(), teamID.String())
 	}
-	return dutyRBAC.DeleteRoleForUser(personID.String(), teamID.String())
+	InvalidateRLSCacheForUser(personID.String())
+	return err
 }

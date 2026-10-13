@@ -1,6 +1,9 @@
 package auth
 
 import (
+	"net/http"
+	"net/http/httptest"
+
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/golang-jwt/jwt/v4"
@@ -151,5 +154,25 @@ var _ = ginkgo.Describe("Team mapper", ginkgo.Ordered, func() {
 		Expect(memberships()).To(Equal(map[string]string{"mapper-a": SourceTeamMapper}))
 
 		Expect(mapIDsToRoles(DefaultContext, kratosSession("s1"), person)).To(Succeed())
+	})
+})
+
+var _ = ginkgo.Describe("isAccessTokenRequest", func() {
+	request := func(set func(r *http.Request)) *http.Request {
+		r := httptest.NewRequest(http.MethodGet, "/", nil)
+		set(r)
+		return r
+	}
+
+	ginkgo.It("is true for access tokens, so the Kratos team mapper skips them", func() {
+		Expect(isAccessTokenRequest(request(func(r *http.Request) { r.SetBasicAuth("token", "secret") }))).To(BeTrue())
+		Expect(isAccessTokenRequest(request(func(r *http.Request) { r.Header.Set("Authorization", "Bearer secret") }))).To(BeTrue())
+	})
+
+	ginkgo.It("is false for a Kratos login or session cookie", func() {
+		Expect(isAccessTokenRequest(request(func(r *http.Request) { r.SetBasicAuth("alice@example.com", "pw") }))).To(BeFalse())
+		Expect(isAccessTokenRequest(request(func(r *http.Request) {
+			r.AddCookie(&http.Cookie{Name: "ory_kratos_session", Value: "x"})
+		}))).To(BeFalse())
 	})
 })
