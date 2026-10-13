@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	icrbac "github.com/flanksource/incident-commander/rbac"
+
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
@@ -25,7 +27,6 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 var _ = ginkgo.Describe("External identity providers", ginkgo.Ordered, func() {
@@ -98,7 +99,7 @@ var _ = ginkgo.Describe("External identity providers", ginkgo.Ordered, func() {
 	}
 
 	ginkgo.BeforeAll(func() {
-		Expect(dutyRBAC.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(icrbac.Init(DefaultContext)).To(Succeed())
 
 		var err error
 		signingKey, err = rsa.GenerateKey(rand.Reader, 2048)

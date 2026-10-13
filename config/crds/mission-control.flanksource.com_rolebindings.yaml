@@ -126,7 +126,7 @@ spec:
                   people:
                     description: |-
                       List of ids and email of people.
-                      To select all users, use the wildcard selector: ["*"]
+                      The wildcard ["*"] selected everyone through a built-in role, which was removed: it selects no one.
                     items:
                       type: string
                     type: array
@@ -152,14 +152,11 @@ spec:
                       type: object
                     type: array
                   roles:
-                    description: 'Roles selects subjects by built-in role: everyone,
-                      guest or agent.'
+                    description: 'Deprecated: built-in roles were removed, so a binding
+                      that sets roles is rejected. Select teams instead.'
                     items:
-                      enum:
-                      - everyone
-                      - guest
-                      - agent
                       type: string
+                    maxItems: 0
                     type: array
                   scrapers:
                     items:
@@ -188,12 +185,12 @@ spec:
                 x-kubernetes-validations:
                 - message: at least one subject is required
                   rule: '[has(self.people) && size(self.people) > 0, has(self.teams)
-                    && size(self.teams) > 0, has(self.roles) && size(self.roles) >
-                    0, has(self.oidc) && size(self.oidc) > 0, has(self.notifications)
-                    && size(self.notifications) > 0, has(self.playbooks) && size(self.playbooks)
-                    > 0, has(self.topologies) && size(self.topologies) > 0, has(self.scrapers)
-                    && size(self.scrapers) > 0, has(self.canaries) && size(self.canaries)
-                    > 0, has(self.plugins) && size(self.plugins) > 0].exists(x, x)'
+                    && size(self.teams) > 0, has(self.oidc) && size(self.oidc) > 0,
+                    has(self.notifications) && size(self.notifications) > 0, has(self.playbooks)
+                    && size(self.playbooks) > 0, has(self.topologies) && size(self.topologies)
+                    > 0, has(self.scrapers) && size(self.scrapers) > 0, has(self.canaries)
+                    && size(self.canaries) > 0, has(self.plugins) && size(self.plugins)
+                    > 0].exists(x, x)'
             required:
             - role
             - subjects

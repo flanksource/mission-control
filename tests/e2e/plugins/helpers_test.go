@@ -14,7 +14,6 @@ import (
 	dutyRBAC "github.com/flanksource/duty/rbac"
 
 	"github.com/flanksource/duty/rbac/policy"
-	"github.com/flanksource/duty/types"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
@@ -38,7 +37,20 @@ func applyHasherPlugin() {
 	Expect(k8sClient.Create(context.Background(), plugin)).To(Succeed())
 }
 
+// configScope is the Scope of the config the plugin is invoked on. Permissions name it, rather than selecting the config
+// inline, so that it's also listed under row-level security, which the plugin's config lookups run under.
+const configScope = "plugin-config"
+
 func applyUserPermissions(configID string) {
+	scope := &v1.Scope{
+		TypeMeta:   metav1.TypeMeta{APIVersion: "mission-control.flanksource.com/v1", Kind: "Scope"},
+		ObjectMeta: metav1.ObjectMeta{Name: configScope, Namespace: pluginNamespace},
+		Spec: v1.ScopeSpec{Targets: []v1.ScopeTarget{{
+			Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{ID: configID}},
+		}}},
+	}
+	Expect(k8sClient.Create(context.Background(), scope)).To(Succeed())
+
 	permissions := []*v1.Permission{
 		permissionCRD("good-config-read", goodUser.Email, []string{policy.ActionRead}, configID),
 		permissionCRD("good-plugin-invoke", goodUser.Email, []string{policy.NewPluginInvokeAction(pluginName, pluginOperation)}, configID),
@@ -61,9 +73,7 @@ func permissionCRD(name, email string, actions []string, configID string) *v1.Pe
 		Spec: v1.PermissionSpec{
 			Subject: v1.PermissionSubject{Person: email},
 			Actions: actions,
-			Object: v1.PermissionObject{Selectors: dutyRBAC.Selectors{
-				Configs: []types.ResourceSelector{{ID: configID}},
-			}},
+			Object:  v1.PermissionObject{Scopes: []dutyRBAC.NamespacedNameIDSelector{{Namespace: pluginNamespace, Name: configScope}}},
 		},
 	}
 }

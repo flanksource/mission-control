@@ -3,6 +3,8 @@ package upstream
 import (
 	"fmt"
 
+	icrbac "github.com/flanksource/incident-commander/rbac"
+
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
@@ -15,8 +17,6 @@ import (
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm"
-
-	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 var _ = ginkgo.Describe("Upstream Push", ginkgo.Ordered, func() {
@@ -32,7 +32,7 @@ var _ = ginkgo.Describe("Upstream Push", ginkgo.Ordered, func() {
 
 		var system models.Person
 		Expect(pushUpstream.DB().Where("name = ?", "System").First(&system).Error).To(Succeed())
-		Expect(dutyRBAC.Init(DefaultContext, []string{system.ID.String()}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(icrbac.Init(DefaultContext)).To(Succeed())
 
 		DefaultContext.ClearCache()
 		properties.Global.Set("upstream.reconcile.pre-check", "false")

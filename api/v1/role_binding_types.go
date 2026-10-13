@@ -3,11 +3,9 @@ package v1
 import (
 	"fmt"
 	"net/mail"
-	"slices"
 	"strings"
 	"sync"
 
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/kopper"
 	"github.com/google/cel-go/cel"
 	"github.com/google/go-cmp/cmp"
@@ -15,16 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-// BindableRoles are the built-in roles a RoleBinding can select subjects by.
-// Only roles no other subject field can select are allowed: viewer, editor,
-// commander and responder are left out since teams select the same people,
-// and binding to one would also reach every role that inherits it.
-var BindableRoles = []string{
-	policy.RoleEveryone,
-	policy.RoleGuest,
-	policy.RoleAgent,
-}
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
@@ -49,7 +37,7 @@ type RoleBindingSpec struct {
 	Role string `json:"role" yaml:"role"`
 
 	// Subjects the role is granted to. At least one is required.
-	// +kubebuilder:validation:XValidation:rule="[has(self.people) && size(self.people) > 0, has(self.teams) && size(self.teams) > 0, has(self.roles) && size(self.roles) > 0, has(self.oidc) && size(self.oidc) > 0, has(self.notifications) && size(self.notifications) > 0, has(self.playbooks) && size(self.playbooks) > 0, has(self.topologies) && size(self.topologies) > 0, has(self.scrapers) && size(self.scrapers) > 0, has(self.canaries) && size(self.canaries) > 0, has(self.plugins) && size(self.plugins) > 0].exists(x, x)",message="at least one subject is required"
+	// +kubebuilder:validation:XValidation:rule="[has(self.people) && size(self.people) > 0, has(self.teams) && size(self.teams) > 0, has(self.oidc) && size(self.oidc) > 0, has(self.notifications) && size(self.notifications) > 0, has(self.playbooks) && size(self.playbooks) > 0, has(self.topologies) && size(self.topologies) > 0, has(self.scrapers) && size(self.scrapers) > 0, has(self.canaries) && size(self.canaries) > 0, has(self.plugins) && size(self.plugins) > 0].exists(x, x)",message="at least one subject is required"
 	Subjects RoleBindingSubjects `json:"subjects" yaml:"subjects"`
 
 	// Constraint narrows every rule of the role for this binding's subjects.
@@ -74,8 +62,8 @@ type RoleBindingConstraint struct {
 type RoleBindingSubjects struct {
 	PermissionGroupSubjects `json:",inline" yaml:",inline"`
 
-	// Roles selects subjects by built-in role: everyone, guest or agent.
-	// +kubebuilder:validation:items:Enum=everyone;guest;agent
+	// Deprecated: built-in roles were removed, so a binding that sets roles is rejected. Select teams instead.
+	// +kubebuilder:validation:MaxItems=0
 	Roles []string `json:"roles,omitempty" yaml:"roles,omitempty"`
 
 	// OIDC selects users of external identity providers by the claims of their tokens.
@@ -88,7 +76,7 @@ type RoleBindingSubjects struct {
 
 func (t RoleBindingSubjects) Empty() bool {
 	s := t.PermissionGroupSubjects
-	return len(t.Roles) == 0 && len(t.OIDC) == 0 && len(t.Plugins) == 0 && len(s.People) == 0 && len(s.Teams) == 0 &&
+	return len(t.OIDC) == 0 && len(t.Plugins) == 0 && len(s.People) == 0 && len(s.Teams) == 0 &&
 		len(s.Notifications) == 0 && len(s.Playbooks) == 0 && len(s.Topologies) == 0 &&
 		len(s.Scrapers) == 0 && len(s.Canaries) == 0
 }
@@ -160,6 +148,10 @@ func (t RoleBindingSpec) Validate() error {
 		}
 	}
 
+	if len(t.Subjects.Roles) > 0 {
+		return fmt.Errorf("subjects.roles is no longer supported: built-in roles were removed, select teams instead")
+	}
+
 	if t.Subjects.Empty() {
 		return fmt.Errorf("at least one subject is required")
 	}
@@ -182,12 +174,6 @@ func (t RoleBindingSpec) Validate() error {
 			if err := validateResourceSubject(selector); err != nil {
 				return fmt.Errorf("%s subject %d: %w", kind, i, err)
 			}
-		}
-	}
-
-	for _, role := range t.Subjects.Roles {
-		if !slices.Contains(BindableRoles, role) {
-			return fmt.Errorf("role %q cannot be bound. Must be one of %v", role, BindableRoles)
 		}
 	}
 

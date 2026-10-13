@@ -44,11 +44,11 @@ var _ = Describe("Actions without a resource", Ordered, func() {
 	var binding, constrainedBinding *v1.RoleBinding
 
 	BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
 
-		operator = setup.CreateUserWithRole(DefaultContext, "Resourceless Operator", "resourceless-operator@test.com", policy.RoleGuest)
-		constrainedOperator = setup.CreateUserWithRole(DefaultContext, "Resourceless Constrained", "resourceless-constrained@test.com", policy.RoleGuest)
-		guest = setup.CreateUserWithRole(DefaultContext, "Resourceless Guest", "resourceless-guest@test.com", policy.RoleGuest)
+		operator = setup.CreateUserWithRole(DefaultContext, "Resourceless Operator", "resourceless-operator@test.com")
+		constrainedOperator = setup.CreateUserWithRole(DefaultContext, "Resourceless Constrained", "resourceless-constrained@test.com")
+		guest = setup.CreateUserWithRole(DefaultContext, "Resourceless Guest", "resourceless-guest@test.com")
 
 		Expect(db.PersistScopeFromCRD(DefaultContext, &v1.Scope{
 			ObjectMeta: metav1.ObjectMeta{Name: "all-configs", Namespace: namespace, UID: uid()},
@@ -86,7 +86,7 @@ var _ = Describe("Actions without a resource", Ordered, func() {
 		Expect(db.PersistRoleBindingFromCRD(DefaultContext, constrainedBinding)).To(Succeed())
 
 		for action, object := range actions {
-			holder := setup.CreateUserWithRole(DefaultContext, "Resourceless "+object, "resourceless-"+object+"@test.com", policy.RoleGuest)
+			holder := setup.CreateUserWithRole(DefaultContext, "Resourceless "+object, "resourceless-"+object+"@test.com")
 			holders[action] = holder
 			Expect(db.PersistRoleFromCRD(DefaultContext, &v1.Role{
 				ObjectMeta: metav1.ObjectMeta{Name: "only-" + object, Namespace: namespace, UID: uid()},
@@ -131,8 +131,8 @@ var _ = Describe("Actions without a resource", Ordered, func() {
 			Expect(rbac.Check(DefaultContext, constrainedOperator.ID.String(), object, action)).To(BeFalse())
 		})
 
-		It("grants "+action+" to admins", func() {
-			Expect(rbac.Check(DefaultContext, "admin", object, action)).To(BeTrue())
+		It("doesn't grant "+action+" through the built-in admin role", func() {
+			Expect(rbac.Check(DefaultContext, policy.RoleAdmin, object, action)).To(BeFalse())
 		})
 	}
 

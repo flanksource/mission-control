@@ -307,7 +307,7 @@
             "type": "string"
           },
           "type": "array",
-          "description": "List of ids and email of people.\nTo select all users, use the wildcard selector: [\"*\"]"
+          "description": "List of ids and email of people.\nThe wildcard [\"*\"] selected everyone through a built-in role, which was removed: it selects no one."
         },
         "teams": {
           "items": {
@@ -321,7 +321,7 @@
             "type": "string"
           },
           "type": "array",
-          "description": "Roles selects subjects by built-in role: everyone, guest or agent."
+          "description": "Deprecated: built-in roles were removed, so a binding that sets roles is rejected. Select teams instead."
         },
         "oidc": {
           "items": {

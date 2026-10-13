@@ -24,11 +24,11 @@ import (
 
 func RegisterRoutes(e *echo.Echo) {
 	// Cannot register this routes in auth/rbac package as it would create a cyclic import
-	e.POST("/auth/:id/update_state", UpdateAccountState, icrbac.PersonManage(policy.ObjectAuth, policy.ActionUpdate))
-	e.POST("/auth/:id/properties", UpdateAccountProperties, icrbac.PersonManage(policy.ObjectAuth, policy.ActionUpdate))
+	e.POST("/auth/:id/update_state", UpdateAccountState, icrbac.PersonManage())
+	e.POST("/auth/:id/properties", UpdateAccountProperties, icrbac.PersonManage())
 	e.GET("/auth/whoami", WhoAmI)
 	e.POST("/auth/create_token", CreateToken)
-	e.GET("/auth/tokens", ListTokens, icrbac.Authorization(policy.ObjectAuth, policy.ActionRead))
+	e.GET("/auth/tokens", ListTokens)
 	e.DELETE("/auth/token/:id", DeleteToken)
 }
 
@@ -40,8 +40,8 @@ type InviteUserRequest struct {
 	// Teams are the names of the teams the person joins when they accept the invite.
 	Teams []string `json:"teams,omitempty"`
 
-	// Deprecated: invites name teams instead (specs/authorization/rolebindings.md, Section 2.2).
-	// Still accepted so existing clients keep working, and assigned as a built-in role on acceptance.
+	// Deprecated: built-in roles were removed, so an invite with a role is rejected.
+	// Invites name teams instead (specs/authorization/rolebindings.md, Section 2.2).
 	Role string `json:"role,omitempty"`
 }
 
@@ -174,7 +174,7 @@ func CreateToken(c echo.Context) error {
 	}
 
 	// An access token authenticates as the person, without the grants the subject is limited to
-	if !rbac.HasImplicitGrants(ctx.Subject()) {
+	if !icrbac.ActsAsPerson(ctx) {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "access tokens can't be created by users of external identity providers"))
 	}
 
@@ -220,7 +220,14 @@ func CreateToken(c echo.Context) error {
 
 func ListTokens(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
-	payload, err := db.ListAccessTokens(ctx)
+	user := ctx.User()
+	if user == nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "error fetching user"))
+	}
+
+	// A person lists their own tokens without a grant, and agents' tokens when they may rotate or revoke them
+	// (specs/authorization/roles.md, Section 4.5)
+	payload, err := db.ListAccessTokens(ctx, user.ID, icrbac.CheckContext(ctx, policy.ObjectAgent, policy.ActionUpdate))
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "unable to list tokens"))
 	}
@@ -242,13 +249,19 @@ func DeleteToken(c echo.Context) error {
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error fetching token"))
 	}
-	roles, err := rbac.RolesForUser(ctx.User().ID.String())
+	personType, err := db.GetPersonType(ctx, token.PersonID.String())
 	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error fetching existing roles for user"))
+		return dutyAPI.WriteError(c, err)
 	}
 
-	if lo.FromPtr(token.CreatedBy) != ctx.User().ID && !slices.Contains(roles, policy.RoleAdmin) {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "only the creator or admins can delete access tokens"))
+	// Revoking an agent's token takes update on agent. No action grants managing another person's tokens
+	// (specs/authorization/roles.md, Section 4.5).
+	if personType == db.PersonTypeAgent {
+		if !icrbac.CheckContext(ctx, policy.ObjectAgent, policy.ActionUpdate) {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "revoking an agent's token takes update on agent"))
+		}
+	} else if lo.FromPtr(token.CreatedBy) != ctx.User().ID {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "only the creator can delete an access token"))
 	}
 
 	if err := DeleteAccessToken(ctx, tokenID); err != nil {

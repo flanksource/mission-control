@@ -25,7 +25,6 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 // Access tokens limited by Roles (specs/authorization/roles.md, Section 4.5).
@@ -147,11 +146,11 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 	}
 
 	ginkgo.BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
 
-		alice = setup.CreateUserWithRole(DefaultContext, "Token Alice", "token-alice@test.com", policy.RoleGuest)
-		bob = setup.CreateUserWithRole(DefaultContext, "Token Bob", "token-bob@test.com", policy.RoleGuest)
-		carol = setup.CreateUserWithRole(DefaultContext, "Token Carol", "token-carol@test.com", policy.RoleViewer)
+		alice = setup.CreateUserWithRole(DefaultContext, "Token Alice", "token-alice@test.com")
+		bob = setup.CreateUserWithRole(DefaultContext, "Token Bob", "token-bob@test.com")
+		carol = setup.CreateUserWithRole(DefaultContext, "Token Carol", "token-carol@test.com")
 
 		config := func(name string, tags types.JSONStringMap) models.ConfigItem {
 			return models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr(name), ConfigClass: "Pod", Type: lo.ToPtr("Kubernetes::Pod"), Tags: tags}

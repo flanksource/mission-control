@@ -63,9 +63,14 @@ func withinTokenLimit(ctx context.Context, subject string, allowed func(principa
 	})
 }
 
-// CheckContext is rbac.CheckContext for a check on a whole object, limited by the Roles of the request's access token.
+// CheckContext checks the action on a whole object as ctx.Subject(), limited by the Roles of the request's access
+// token. Every subject is checked the same way, whatever kind it is (specs/authorization/overview.md, "Access").
 func CheckContext(ctx context.Context, object, action string) bool {
-	return rbac.CheckContext(ctx, object, action) && TokenAllowsObject(ctx, ctx.User().ID.String(), object, action)
+	user := ctx.User()
+	if user == nil {
+		return false
+	}
+	return rbac.Check(ctx, ctx.Subject(), object, action) && TokenAllowsObject(ctx, user.ID.String(), object, action)
 }
 
 // HasPermission is rbac.HasPermission, limited by the Roles of the subject's access token when it's the person
@@ -92,4 +97,12 @@ func TokenAllows(ctx context.Context, subject string, attr *models.ABACAttribute
 	return withinTokenLimit(ctx, subject, func(principal string) bool {
 		return rbac.HasPermission(ctx, principal, attr, action)
 	})
+}
+
+// ActsAsPerson reports whether the request is checked as its person. A user of an external identity provider is
+// checked as the bindings their token's claims match instead, so a credential that authenticates as the person,
+// e.g. an access token, would give them grants they don't have.
+func ActsAsPerson(ctx context.Context) bool {
+	user := ctx.User()
+	return user != nil && ctx.Subject() == user.ID.String()
 }

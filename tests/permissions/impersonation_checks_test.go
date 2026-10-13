@@ -27,7 +27,6 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 // The X-Flanksource-Scope header limits the checks made through rbac.HasPermission by the same rule as listings:
@@ -43,10 +42,10 @@ var _ = ginkgo.Describe("Scope impersonation of resource checks", ginkgo.Ordered
 	)
 
 	ginkgo.BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
 
-		admin = setup.CreateUserWithRole(DefaultContext, "Impersonated Checks Admin", "impersonated-checks-admin@test.com", policy.RoleAdmin)
-		guest = setup.CreateUserWithRole(DefaultContext, "Impersonated Checks Guest", "impersonated-checks-guest@test.com", policy.RoleGuest)
+		admin = newAdmin("Impersonated Checks Admin", "impersonated-checks-admin@test.com")
+		guest = setup.CreateUserWithRole(DefaultContext, "Impersonated Checks Guest", "impersonated-checks-guest@test.com")
 
 		for _, cfg := range []*models.ConfigItem{&cfgIn, &cfgOut} {
 			side := lo.Ternary(cfg == &cfgIn, "in", "out")
@@ -287,6 +286,14 @@ var _ = ginkgo.Describe("Scope impersonation of resource checks", ginkgo.Ordered
 		}
 
 		ginkgo.It("answers by the reviewed subject's own access, whatever the requester's header", func() {
+			// No action grants access reviews yet (specs/authorization/overview.md, "Not covered yet")
+			_, err := rbac.Enforcer().AddPolicy(admin.ID.String(), policy.ObjectRBAC, policy.ActionRead, "allow", "", "access-review")
+			Expect(err).ToNot(HaveOccurred())
+			ginkgo.DeferCleanup(func() {
+				_, err := rbac.Enforcer().RemovePolicy(admin.ID.String(), policy.ObjectRBAC, policy.ActionRead, "allow", "", "access-review")
+				Expect(err).ToNot(HaveOccurred())
+			})
+
 			Expect(review(cfgIn)).To(BeTrue())
 			Expect(review(cfgIn, scopes["out"])).To(BeTrue())
 			Expect(review(cfgOut, scopes["out"])).To(BeFalse(), "the guest has no grant through out")

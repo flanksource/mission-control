@@ -7,10 +7,8 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
-	"github.com/flanksource/duty/tests/setup"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -25,7 +23,6 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 var _ = ginkgo.Describe("Playbook list", ginkgo.Ordered, func() {
@@ -37,9 +34,9 @@ var _ = ginkgo.Describe("Playbook list", ginkgo.Ordered, func() {
 	)
 
 	ginkgo.BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
 
-		admin = setup.CreateUserWithRole(DefaultContext, "Playbook List Admin", "playbook-list-admin@test.com", policy.RoleAdmin)
+		admin = newAdmin("Playbook List Admin", "playbook-list-admin@test.com")
 
 		other = models.Playbook{
 			ID:        uuid.New(),

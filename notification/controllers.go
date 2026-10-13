@@ -41,12 +41,9 @@ func RegisterRoutes(e *echo.Echo) {
 	g.GET("/silence_preview", NotificationSilencePreview, silences(policy.ActionRead))
 }
 
-// silences checks the action on notification silences. Built-in roles grant it on notifications.
+// silences checks the action on notification silences.
 func silences(action string) rbac.MiddlewareFunc {
-	return rbac.TypeAuthorization(
-		rbac.Grant{Object: adapter.ObjectNotificationSilences, Action: action},
-		rbac.Grant{Object: policy.ObjectNotification, Action: action},
-	)
+	return rbac.Authorization(adapter.ObjectNotificationSilences, action)
 }
 
 func handleCreateSilence(c echo.Context) error {

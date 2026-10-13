@@ -6,8 +6,8 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
-	"github.com/flanksource/duty/types"
 	"github.com/flanksource/duty/tests/setup"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/kopper"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -17,7 +17,7 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/rbac/adapter"
+	mcRBAC "github.com/flanksource/incident-commander/rbac"
 )
 
 var _ = ginkgo.Describe("Permissions that deny", ginkgo.Ordered, func() {
@@ -26,8 +26,8 @@ var _ = ginkgo.Describe("Permissions that deny", ginkgo.Ordered, func() {
 	var guest *models.Person
 
 	ginkgo.BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
-		guest = setup.CreateUserWithRole(DefaultContext, "Permission Deny Guest", "permission-deny-guest@test.com", policy.RoleGuest)
+		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
+		guest = setup.CreateUserWithRole(DefaultContext, "Permission Deny Guest", "permission-deny-guest@test.com")
 	})
 
 	ginkgo.AfterAll(func() {

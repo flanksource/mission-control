@@ -31,7 +31,8 @@ const SourceTeamMapper = "team-mapper"
 const DefaultClerkTeamMapper = `{
   "teams":
     (has(claims.role) && claims.role == "admin") ||
-    (has(claims.org_role) && claims.org_role == "org:admin") ? ["admins"] :
+    (has(claims.org_role) && claims.org_role == "org:admin") ||
+    (has(claims.o) && has(claims.o.rol) && claims.o.rol == "admin") ? ["admins"] :
     (has(claims.org_role) && claims.org_role == "org:guest") ? [] :
     ["viewers"]
 }`

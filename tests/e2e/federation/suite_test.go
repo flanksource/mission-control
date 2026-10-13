@@ -12,6 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flanksource/incident-commander/rbac/shipped"
+
 	"github.com/flanksource/deps"
 	"github.com/flanksource/duty"
 	dutyApi "github.com/flanksource/duty/api"
@@ -101,6 +103,8 @@ var _ = ginkgo.BeforeSuite(func() {
 	vars.AuthMode = auth.Basic
 
 	e := echoSrv.New(DefaultContext)
+	// As the server does after RBAC starts: admin@local is an admin through the shipped admins binding
+	Expect(shipped.Sync(DefaultContext)).To(Succeed())
 	events.StartConsumers(DefaultContext)
 	Expect(playbook.StartPlaybookConsumers(DefaultContext)).To(Succeed())
 

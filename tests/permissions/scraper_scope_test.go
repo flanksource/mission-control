@@ -35,7 +35,7 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 		homelabA, homelabB, gcp                          models.ConfigScraper
 		gcpArtifact, homelabArtifact                     uuid.UUID
 		homelabReader, everyReader, configReader, nobody *models.Person
-		builtinAdmin, builtinEditor, adminsMember        *models.Person
+		scraperAdmin, builtinEditor, adminsMember        *models.Person
 		scopeIDs                                         = map[string]string{}
 	)
 
@@ -156,7 +156,7 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 	}
 
 	ginkgo.BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
 
 		homelabA = newScraper("scraper-scopes-homelab-a", dummy.HomelabAgent)
 		homelabB = newScraper("scraper-scopes-homelab-b", dummy.HomelabAgent)
@@ -171,13 +171,13 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 		newRole("read-every-scraper", "every-scraper")
 		newRole("read-every-config", "every-config")
 
-		homelabReader = setup.CreateUserWithRole(DefaultContext, "Scraper Homelab Reader", "scraper-homelab@test.com", policy.RoleGuest)
-		everyReader = setup.CreateUserWithRole(DefaultContext, "Scraper Every Reader", "scraper-every@test.com", policy.RoleGuest)
-		configReader = setup.CreateUserWithRole(DefaultContext, "Scraper Config Reader", "scraper-config@test.com", policy.RoleGuest)
-		nobody = setup.CreateUserWithRole(DefaultContext, "Scraper Nobody", "scraper-nobody@test.com", policy.RoleGuest)
-		builtinAdmin = setup.CreateUserWithRole(DefaultContext, "Scraper Admin", "scraper-admin@test.com", policy.RoleAdmin)
+		homelabReader = setup.CreateUserWithRole(DefaultContext, "Scraper Homelab Reader", "scraper-homelab@test.com")
+		everyReader = setup.CreateUserWithRole(DefaultContext, "Scraper Every Reader", "scraper-every@test.com")
+		configReader = setup.CreateUserWithRole(DefaultContext, "Scraper Config Reader", "scraper-config@test.com")
+		nobody = setup.CreateUserWithRole(DefaultContext, "Scraper Nobody", "scraper-nobody@test.com")
+		scraperAdmin = newAdmin("Scraper Admin", "scraper-admin@test.com")
 		builtinEditor = setup.CreateUserWithRole(DefaultContext, "Scraper Editor", "scraper-editor@test.com", policy.RoleEditor)
-		adminsMember = setup.CreateUserWithRole(DefaultContext, "Scraper Admins Member", "scraper-admins-member@test.com", policy.RoleGuest)
+		adminsMember = setup.CreateUserWithRole(DefaultContext, "Scraper Admins Member", "scraper-admins-member@test.com")
 
 		bind("read-homelab-scrapers", homelabReader)
 		bind("read-every-scraper", everyReader)
@@ -199,7 +199,7 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 		Expect(DefaultContext.DB().Where("source = ?", adapter.SourceShipped).Delete(&models.Team{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Exec(`DELETE FROM artifacts WHERE id IN ?`, []uuid.UUID{gcpArtifact, homelabArtifact}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("id IN ?", scraperIDs()).Delete(&models.ConfigScraper{}).Error).To(Succeed())
-		for _, p := range []*models.Person{homelabReader, everyReader, configReader, nobody, builtinAdmin, builtinEditor, adminsMember} {
+		for _, p := range []*models.Person{homelabReader, everyReader, configReader, nobody, scraperAdmin, builtinEditor, adminsMember} {
 			Expect(DefaultContext.DB().Delete(p).Error).To(Succeed())
 		}
 		Expect(rbac.ReloadPolicy()).To(Succeed())
@@ -260,17 +260,11 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 		})
 	}
 
-	ginkgo.It("lists every scraper for built-in admins and editors, whose rows aren't filtered", func() {
-		for _, person := range []*models.Person{builtinAdmin, builtinEditor} {
-			Expect(payload(person).Disable).To(BeTrue(), person.Email)
-
-			_, scrapers, artifacts := list(person)
-			Expect(scrapers).To(ConsistOf(scraperIDs()), person.Email)
-			Expect(artifacts).To(ConsistOf(homelabArtifact, gcpArtifact), person.Email)
-		}
-
-		status, _, _ := list(builtinAdmin)
-		Expect(status).To(Equal(http.StatusOK))
+	ginkgo.It("lists no scraper for a subject assigned only the built-in editor role", func() {
+		Expect(payload(builtinEditor).Disable).To(BeFalse())
+		_, scrapers, artifacts := list(builtinEditor)
+		Expect(scrapers).To(BeEmpty())
+		Expect(artifacts).To(BeEmpty())
 	})
 
 	ginkgo.It("lists every scraper for members of the shipped admins team, through the admin Role", func() {
@@ -334,7 +328,7 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 		var writer *models.Person
 
 		ginkgo.BeforeAll(func() {
-			writer = setup.CreateUserWithRole(DefaultContext, "Scraper Writer", "scraper-writer@test.com", policy.RoleGuest)
+			writer = setup.CreateUserWithRole(DefaultContext, "Scraper Writer", "scraper-writer@test.com")
 			role := &v1.Role{
 				ObjectMeta: metav1.ObjectMeta{Name: "write-every-scraper", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
 				Spec: v1.RoleSpec{Rules: []v1.RoleRule{
@@ -390,7 +384,7 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 		ginkgo.It("only finds the artifacts of scrapers the caller can list", func() {
 			for id, visible := range map[uuid.UUID]bool{homelabArtifact: true, gcpArtifact: false} {
 				Expect(auth.CanReadArtifact(DefaultContext.WithUser(homelabReader), id)).To(Equal(visible))
-				Expect(auth.CanReadArtifact(DefaultContext.WithUser(builtinAdmin), id)).To(BeTrue())
+				Expect(auth.CanReadArtifact(DefaultContext.WithUser(scraperAdmin), id)).To(BeTrue())
 			}
 		})
 

@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 
+	icrbac "github.com/flanksource/incident-commander/rbac"
+
 	httpClient "github.com/flanksource/commons/http"
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty/context"
@@ -51,11 +53,11 @@ var _ = Describe("Scope Impersonation E2E", Ordered, func() {
 
 	BeforeAll(func() {
 		oldAuthMode = vars.AuthMode
-		err := rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)
+		err := icrbac.Init(DefaultContext)
 		Expect(err).ToNot(HaveOccurred())
 
-		adminUser = setup.CreateUserWithRole(DefaultContext, "Impersonation Admin", "impersonation-admin@test.com", policy.RoleAdmin)
-		guestUser = setup.CreateUserWithRole(DefaultContext, "Impersonation Guest", "impersonation-guest@test.com", policy.RoleGuest)
+		adminUser = newAdmin("Impersonation Admin", "impersonation-admin@test.com")
+		guestUser = setup.CreateUserWithRole(DefaultContext, "Impersonation Guest", "impersonation-guest@test.com")
 
 		// Give the guest user read on the backend and frontend Scopes
 		for _, ns := range []string{"backend", "frontend"} {
@@ -126,10 +128,12 @@ var _ = Describe("Scope Impersonation E2E", Ordered, func() {
 	}
 
 	Context("without impersonation header", func() {
-		It("admin should have RLS disabled", func() {
+		It("admin should list rows through their grants, like any subject", func() {
 			payload, status := getRLSPayload(adminUser.Email)
 			Expect(status).To(Equal(http.StatusOK))
-			Expect(payload.Disable).To(BeTrue())
+			Expect(payload.Disable).To(BeFalse())
+			Expect(payload.Config).ToNot(BeNil())
+			Expect(payload.Config.Any).ToNot(BeEmpty())
 		})
 
 		It("guest should have their real RLS payload", func() {
@@ -146,21 +150,29 @@ var _ = Describe("Scope Impersonation E2E", Ordered, func() {
 		return string(raw)
 	}
 
+	// shippedScope is the id of the shipped Scope the admin Role reads a type through
+	shippedScope := func(name string) string {
+		GinkgoHelper()
+		var scope models.Scope
+		Expect(DefaultContext.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", adapter.ShippedNamespace, name).First(&scope).Error).To(Succeed())
+		return scope.ID.String()
+	}
+
 	Context("admin with impersonation header", func() {
-		It("should only grant the named Scopes", func() {
+		It("should narrow the admin's grants to the named Scopes", func() {
 			payload, status := getRLSPayload(adminUser.Email, header(scopeIDs["backend"]))
 			Expect(status).To(Equal(http.StatusOK))
 			Expect(payload.Disable).To(BeFalse())
-			Expect(payload.Config.Any).To(Equal([]rls.Grant{{Impersonated: []string{scopeIDs["backend"]}}}))
-			Expect(payload.Component.Any).To(Equal([]rls.Grant{{Impersonated: []string{scopeIDs["backend"]}}}))
+			Expect(payload.Config.Any).To(Equal([]rls.Grant{{Scope: shippedScope("all-configs"), Impersonated: []string{scopeIDs["backend"]}}}))
+			Expect(payload.Component.Any).To(Equal([]rls.Grant{{Scope: shippedScope("all-components"), Impersonated: []string{scopeIDs["backend"]}}}))
 		})
 
 		It("should grant the rows of any of several named Scopes", func() {
 			payload, status := getRLSPayload(adminUser.Email, header(scopeIDs["backend"], scopeIDs["frontend"]))
 			Expect(status).To(Equal(http.StatusOK))
 			Expect(payload.Config.Any).To(ConsistOf(
-				rls.Grant{Impersonated: []string{scopeIDs["backend"]}},
-				rls.Grant{Impersonated: []string{scopeIDs["frontend"]}},
+				rls.Grant{Scope: shippedScope("all-configs"), Impersonated: []string{scopeIDs["backend"]}},
+				rls.Grant{Scope: shippedScope("all-configs"), Impersonated: []string{scopeIDs["frontend"]}},
 			))
 		})
 
@@ -192,8 +204,9 @@ var _ = Describe("Scope Impersonation E2E", Ordered, func() {
 
 			payload, status := getRLSPayload(adminUser.Email, header(scopeIDs["backend"]))
 			Expect(status).To(Equal(http.StatusOK))
-			// Should return the real payload (admin = disabled), not the impersonated one
-			Expect(payload.Disable).To(BeTrue())
+			// Should return the real payload, not the impersonated one
+			Expect(payload.Disable).To(BeFalse())
+			Expect(payload.Config.Any).To(Equal([]rls.Grant{{Scope: shippedScope("all-configs")}}))
 		})
 	})
 

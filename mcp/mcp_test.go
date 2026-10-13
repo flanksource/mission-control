@@ -8,13 +8,14 @@ import (
 	"strings"
 	"time"
 
+	icrbac "github.com/flanksource/incident-commander/rbac"
+
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -368,7 +369,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 		})
 
 		ginkgo.It("should allow running only permitted view tools for an authenticated user", func() {
-			Expect(dutyRBAC.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+			Expect(icrbac.Init(DefaultContext)).To(Succeed())
 
 			var allowedView models.View
 			Expect(DefaultContext.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", dummy.PodView.Namespace, dummy.PodView.Name).First(&allowedView).Error).To(Succeed())
@@ -408,6 +409,22 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 			Expect(db.PersistPermissionFromCRD(DefaultContext, perm)).To(Succeed())
 			ginkgo.DeferCleanup(func() {
 				Expect(DefaultContext.DB().Delete(&models.Permission{}, "id = ?", string(perm.GetUID())).Error).To(Succeed())
+			})
+
+			// The user reads the denied view too, so it's refused for mcp:run rather than not found
+			readDenied := &v1.Permission{
+				ObjectMeta: metav1.ObjectMeta{Name: "mcp-view-runner-read-" + uuid.NewString(), Namespace: "default", UID: k8sTypes.UID(uuid.NewString())},
+				Spec: v1.PermissionSpec{
+					Subject: v1.PermissionSubject{Person: testUser.Email},
+					Actions: []string{policy.ActionRead},
+					Object: v1.PermissionObject{Selectors: dutyRBAC.Selectors{
+						Views: []dutyRBAC.ViewRef{{Namespace: deniedView.Namespace, Name: deniedView.Name}},
+					}},
+				},
+			}
+			Expect(db.PersistPermissionFromCRD(DefaultContext, readDenied)).To(Succeed())
+			ginkgo.DeferCleanup(func() {
+				Expect(DefaultContext.DB().Delete(&models.Permission{}, "id = ?", string(readDenied.GetUID())).Error).To(Succeed())
 			})
 
 			Expect(dutyRBAC.ReloadPolicy()).To(Succeed())

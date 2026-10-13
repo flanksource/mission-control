@@ -43,7 +43,7 @@ var summaryObjects = map[string]string{
 // summaryActions are the actions the access summary reports for each resource type.
 var summaryActions = []string{policy.ActionRead, policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete}
 
-// summaryCache holds summaries by subject and built-in roles. It's flushed whenever grants change.
+// summaryCache holds summaries by subject and the roles, e.g. teams and bindings, it's assigned to. It's flushed whenever grants change.
 var summaryCache = gocache.New(10*time.Minute, 10*time.Minute)
 
 // summaryGeneration counts flushes, so a summary computed across a flush isn't cached.
@@ -71,14 +71,13 @@ func AccessSummary(ctx context.Context) map[string]map[string]Access {
 		return noAccess()
 	}
 
-	roles := builtInRoles(ctx)
+	roles := subjectRoles(ctx)
 	cacheKey := fmt.Sprintf("%s:%s", ctx.Subject(), strings.Join(roles, ","))
 	if cached, ok := summaryCache.Get(cacheKey); ok {
 		return cached.(map[string]map[string]Access)
 	}
 	generation := summaryGeneration.Load()
 
-	guest := lo.Contains(roles, policy.RoleGuest)
 	grants, err := selectorGrantsOf(ctx)
 	if err != nil {
 		ctx.Warnf("failed to load the grants of %s: %v", ctx.Subject(), err)
@@ -89,7 +88,7 @@ func AccessSummary(ctx context.Context) map[string]map[string]Access {
 	for resourceType, object := range summaryObjects {
 		summary[resourceType] = make(map[string]Access, len(summaryActions))
 		for _, action := range summaryActions {
-			summary[resourceType][action] = accessTo(ctx, grants, resourceType, object, action, guest)
+			summary[resourceType][action] = accessTo(ctx, grants, resourceType, object, action)
 		}
 	}
 
@@ -158,9 +157,9 @@ func noAccess() map[string]map[string]Access {
 	return summary
 }
 
-func accessTo(ctx context.Context, grants []selectorGrant, resourceType, object, action string, guest bool) Access {
+func accessTo(ctx context.Context, grants []selectorGrant, resourceType, object, action string) Access {
 	applicable := lo.Filter(grants, func(g selectorGrant, _ int) bool { return g.action == action || g.action == "*" })
-	if wholeType(ctx, object, action, guest) {
+	if rbac.Check(ctx, ctx.Subject(), object, action) {
 		return AccessAll
 	}
 
@@ -168,16 +167,6 @@ func accessTo(ctx context.Context, grants []selectorGrant, resourceType, object,
 		return AccessSome
 	}
 	return AccessNone
-}
-
-// wholeType reports whether the subject may act on every resource of the object.
-// A guest passes whole-type read checks as a viewer only for its listings to be filtered by row,
-// so only its own grants count.
-func wholeType(ctx context.Context, object, action string, guest bool) bool {
-	if guest {
-		return rbac.Check(ctx, ctx.User().ID.String(), object, action)
-	}
-	return rbac.CheckContext(ctx, object, action)
 }
 
 // hasSomeGrant reports whether the subject has a grant that selects some resources of the type.
@@ -207,23 +196,9 @@ func (g selectorGrant) selects(resourceType string) bool {
 // selectorGrantsOf returns the grants of the subject that the enforcer checks against the resources of each request.
 // Grants of whole objects aren't included: the enforcer answers for them directly.
 func selectorGrantsOf(ctx context.Context) ([]selectorGrant, error) {
-	subject := ctx.User().ID.String()
-	if s := ctx.Subject(); !rbac.HasImplicitGrants(s) {
-		subject = s
-	}
-
-	perms, err := rbac.PermsForUser(subject)
+	perms, err := rbac.PermsForUser(ctx.Subject())
 	if err != nil {
 		return nil, err
-	}
-
-	// A person joins everyone on their first check, which may not have happened yet
-	if rbac.HasImplicitGrants(subject) {
-		everyone, err := rbac.PermsForUser(policy.RoleEveryone)
-		if err != nil {
-			return nil, err
-		}
-		perms = append(perms, everyone...)
 	}
 
 	permissionActions := map[uuid.UUID][]policy.Permission{}
@@ -351,18 +326,12 @@ func selectsAll(selector types.ResourceSelector) bool {
 	return selector.Wildcard() || selector.IsEmpty()
 }
 
-// builtInRoles returns the sorted roles of the subject when it's a person.
-// When the roles can't be read, it reports guest, so that only the subject's own grants count.
-func builtInRoles(ctx context.Context) []string {
-	user := ctx.User()
-	if user == nil || !rbac.HasImplicitGrants(ctx.Subject()) {
-		return nil
-	}
-
-	roles, err := rbac.RolesForUser(user.ID.String())
+// subjectRoles returns the sorted roles, e.g. teams and bindings, the subject is assigned to.
+func subjectRoles(ctx context.Context) []string {
+	roles, err := rbac.RolesForUser(ctx.Subject())
 	if err != nil {
-		ctx.Warnf("failed to get roles of %s: %v", user.ID, err)
-		return []string{policy.RoleGuest}
+		ctx.Warnf("failed to get roles of %s: %v", ctx.Subject(), err)
+		return nil
 	}
 	roles = lo.Uniq(roles)
 	slices.Sort(roles)

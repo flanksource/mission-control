@@ -12,7 +12,6 @@ import (
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/rbac"
 	"github.com/labstack/echo/v4"
 
 	"github.com/flanksource/duty/rbac/policy"
@@ -51,7 +50,7 @@ func DownloadKubeConfig(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
 	// The kubeconfig embeds an access token, which authenticates as the person without the grants the subject is limited to
-	if !rbac.HasImplicitGrants(ctx.Subject()) {
+	if !icrbac.ActsAsPerson(ctx) {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "kubeconfigs can't be downloaded by users of external identity providers"))
 	}
 

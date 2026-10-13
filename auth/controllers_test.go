@@ -6,6 +6,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 
+	"github.com/flanksource/incident-commander/db"
+	icrbac "github.com/flanksource/incident-commander/rbac"
+	"github.com/samber/lo"
+
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -17,8 +21,6 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm"
-
-	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 func postCreateToken(ctx context.Context, e *echo.Echo, reqData CreateTokenRequest, expectedStatus int) dutyAPI.HTTPSuccess {
@@ -71,7 +73,7 @@ var _ = Describe("CreateToken", Ordered, func() {
 
 	BeforeAll(func() {
 		// Initialize RBAC with admin user
-		if err := rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter); err != nil {
+		if err := icrbac.Init(DefaultContext); err != nil {
 			Fail("Failed to initialize RBAC: " + err.Error())
 		}
 
@@ -187,5 +189,78 @@ var _ = Describe("CreateToken", Ordered, func() {
 			Expect(err).To(BeNil())
 			Expect(perms).To(HaveLen(0), "Token should have no permissions")
 		})
+	})
+})
+
+var _ = Describe("Managing access tokens", Ordered, func() {
+	var (
+		e                        *echo.Echo
+		owner, other, agentAdmin *models.Person
+		ownToken, agentToken     *models.AccessToken
+	)
+
+	as := func(person *models.Person, method, path string) *httptest.ResponseRecorder {
+		GinkgoHelper()
+		req := httptest.NewRequest(method, path, nil)
+		req = req.WithContext(DefaultContext.WithUser(person))
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		return rec
+	}
+
+	listed := func(person *models.Person) []uuid.UUID {
+		GinkgoHelper()
+		rec := as(person, http.MethodGet, "/auth/tokens")
+		Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+		var body struct {
+			Payload []models.AccessToken `json:"payload"`
+		}
+		Expect(json.Unmarshal(rec.Body.Bytes(), &body)).To(Succeed())
+		return lo.Map(body.Payload, func(t models.AccessToken, _ int) uuid.UUID { return t.ID })
+	}
+
+	BeforeAll(func() {
+		Expect(icrbac.Init(DefaultContext)).To(Succeed())
+		e = echo.New()
+		RegisterRoutes(e)
+
+		var err error
+		for _, p := range []**models.Person{&owner, &other, &agentAdmin} {
+			*p, err = db.CreatePerson(DefaultContext, "Token Manager "+uuid.NewString()[:8], uuid.NewString()[:8]+"@tokens.test", "")
+			Expect(err).ToNot(HaveOccurred())
+		}
+		_, err = rbac.Enforcer().AddPolicy(agentAdmin.ID.String(), policy.ObjectAgent, policy.ActionUpdate, "allow", "", "test")
+		Expect(err).ToNot(HaveOccurred())
+
+		_, ownToken, err = db.CreateAccessToken(DefaultContext, owner.ID, "owned", nil, &owner.ID, false)
+		Expect(err).ToNot(HaveOccurred())
+
+		agent, err := db.CreatePerson(DefaultContext, "agent-"+uuid.NewString()[:8], uuid.NewString()[:8]+"@local", db.PersonTypeAgent)
+		Expect(err).ToNot(HaveOccurred())
+		_, agentToken, err = db.CreateAccessToken(DefaultContext, agent.ID, "default", nil, nil, false)
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	AfterAll(func() {
+		_, err := rbac.Enforcer().DeletePermissionsForUser(agentAdmin.ID.String())
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	It("lists a person's own tokens without a grant, and agents' tokens to those who may update agents", func() {
+		Expect(listed(owner)).To(Equal([]uuid.UUID{ownToken.ID}))
+		Expect(listed(other)).To(BeEmpty())
+		Expect(listed(agentAdmin)).To(ContainElement(agentToken.ID))
+		Expect(listed(agentAdmin)).ToNot(ContainElement(ownToken.ID))
+	})
+
+	It("lets only the creator delete a person's token", func() {
+		Expect(as(other, http.MethodDelete, "/auth/token/"+ownToken.ID.String()).Code).To(Equal(http.StatusForbidden))
+		Expect(as(agentAdmin, http.MethodDelete, "/auth/token/"+ownToken.ID.String()).Code).To(Equal(http.StatusForbidden))
+		Expect(as(owner, http.MethodDelete, "/auth/token/"+ownToken.ID.String()).Code).To(Equal(http.StatusOK))
+	})
+
+	It("revokes an agent's token with update on agent", func() {
+		Expect(as(other, http.MethodDelete, "/auth/token/"+agentToken.ID.String()).Code).To(Equal(http.StatusForbidden))
+		Expect(as(agentAdmin, http.MethodDelete, "/auth/token/"+agentToken.ID.String()).Code).To(Equal(http.StatusOK))
 	})
 })

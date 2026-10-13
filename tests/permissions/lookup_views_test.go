@@ -23,7 +23,6 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 var _ = ginkgo.Describe("Lookup views of components, checks and playbooks", ginkgo.Ordered, func() {
@@ -40,7 +39,7 @@ var _ = ginkgo.Describe("Lookup views of components, checks and playbooks", gink
 	)
 
 	ginkgo.BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
 
 		componentA = models.Component{ID: uuid.New(), Name: "lookup-component-a", Type: "Lookup", Status: types.ComponentStatusHealthy, Labels: types.JSONStringMap{"lookup-a": "x"}}
 		componentB = models.Component{ID: uuid.New(), Name: "lookup-component-b", Type: "Lookup", Status: types.ComponentStatusHealthy, Labels: types.JSONStringMap{"lookup-b": "x"}}
@@ -59,11 +58,11 @@ var _ = ginkgo.Describe("Lookup views of components, checks and playbooks", gink
 		}
 
 		ref := func(name string) v1.ScopeResourceRef { return v1.ScopeResourceRef{Name: name} }
-		componentReader = setup.CreateUserWithRole(DefaultContext, "Lookup Component Reader", "lookup-component-reader@test.com", policy.RoleGuest)
-		canaryReader = setup.CreateUserWithRole(DefaultContext, "Lookup Canary Reader", "lookup-canary-reader@test.com", policy.RoleGuest)
-		playbookReader = setup.CreateUserWithRole(DefaultContext, "Lookup Playbook Reader", "lookup-playbook-reader@test.com", policy.RoleGuest)
-		stranger = setup.CreateUserWithRole(DefaultContext, "Lookup Stranger", "lookup-stranger@test.com", policy.RoleGuest)
-		admin = setup.CreateUserWithRole(DefaultContext, "Lookup Admin", "lookup-admin@test.com", policy.RoleAdmin)
+		componentReader = setup.CreateUserWithRole(DefaultContext, "Lookup Component Reader", "lookup-component-reader@test.com")
+		canaryReader = setup.CreateUserWithRole(DefaultContext, "Lookup Canary Reader", "lookup-canary-reader@test.com")
+		playbookReader = setup.CreateUserWithRole(DefaultContext, "Lookup Playbook Reader", "lookup-playbook-reader@test.com")
+		stranger = setup.CreateUserWithRole(DefaultContext, "Lookup Stranger", "lookup-stranger@test.com")
+		admin = newAdmin("Lookup Admin", "lookup-admin@test.com")
 
 		for _, b := range []struct {
 			name    string

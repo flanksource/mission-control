@@ -36,9 +36,9 @@ var _ = Describe("Shipped admins team", Ordered, func() {
 	const namespace = adapter.ShippedNamespace
 
 	var (
-		adminLocal, member, outsider, builtinAdmin *models.Person
-		otherTeam                                  *models.Team
-		e                                          *echo.Echo
+		adminLocal, member, outsider, teamAdmin *models.Person
+		otherTeam                               *models.Team
+		e                                       *echo.Echo
 	)
 
 	storedTeam := func() *models.Team {
@@ -101,26 +101,27 @@ var _ = Describe("Shipped admins team", Ordered, func() {
 
 	request := func(method, path string, body any) *httptest.ResponseRecorder {
 		GinkgoHelper()
-		return requestAs(builtinAdmin, method, path, echo.MIMEApplicationJSON, body)
+		return requestAs(teamAdmin, method, path, echo.MIMEApplicationJSON, body)
 	}
 
 	BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
 
 		var err error
 		adminLocal, err = auth.GetOrCreateAdminUser(DefaultContext)
 		Expect(err).ToNot(HaveOccurred())
 
-		member = setup.CreateUserWithRole(DefaultContext, "Admins Member", "admins-member@test.com", policy.RoleGuest)
-		outsider = setup.CreateUserWithRole(DefaultContext, "Admins Outsider", "admins-outsider@test.com", policy.RoleGuest)
-		builtinAdmin = setup.CreateUserWithRole(DefaultContext, "Admins Builtin Admin", "admins-builtin-admin@test.com", policy.RoleAdmin)
+		member = setup.CreateUserWithRole(DefaultContext, "Admins Member", "admins-member@test.com")
+		outsider = setup.CreateUserWithRole(DefaultContext, "Admins Outsider", "admins-outsider@test.com")
+		teamAdmin = setup.CreateUserWithRole(DefaultContext, "Admins Team Admin", "admins-team-admin@test.com")
 
-		otherTeam = &models.Team{Name: "not-shipped", CreatedBy: builtinAdmin.ID}
+		otherTeam = &models.Team{Name: "not-shipped", CreatedBy: teamAdmin.ID}
 		Expect(DefaultContext.DB().Create(otherTeam).Error).To(Succeed())
 
 		// As on the first start: admin@local joins the team before the first Sync
 		Expect(shipped.AddToAdmins(DefaultContext, adminLocal.ID)).To(Succeed())
 		Expect(shipped.Sync(DefaultContext)).To(Succeed())
+		Expect(shipped.AddToAdmins(DefaultContext, teamAdmin.ID)).To(Succeed())
 
 		e = echo.New()
 		mcRBAC.RegisterRoutes(e)
@@ -134,7 +135,7 @@ var _ = Describe("Shipped admins team", Ordered, func() {
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Role{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Scope{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("source = ? OR id = ?", adapter.SourceShipped, otherTeam.ID).Delete(&models.Team{}).Error).To(Succeed())
-		for _, p := range []*models.Person{member, outsider, builtinAdmin} {
+		for _, p := range []*models.Person{member, outsider, teamAdmin} {
 			Expect(DefaultContext.DB().Delete(p).Error).To(Succeed())
 		}
 		Expect(rbac.ReloadPolicy()).To(Succeed())
@@ -289,7 +290,7 @@ var _ = Describe("Shipped admins team", Ordered, func() {
 		} {
 			Expect(rec.Code).To(Equal(http.StatusConflict), rec.Body.String())
 		}
-		csv := requestAs(builtinAdmin, http.MethodPost, "/db/teams", "text/csv", "id,name\n"+teamID+",renamed\n")
+		csv := requestAs(teamAdmin, http.MethodPost, "/db/teams", "text/csv", "id,name\n"+teamID+",renamed\n")
 		Expect(csv.Code).To(Equal(http.StatusBadRequest), csv.Body.String())
 		Expect(request(http.MethodDelete, "/db/teams?id=eq.not-a-uuid", nil).Code).To(Equal(http.StatusBadRequest))
 
@@ -329,7 +330,13 @@ var _ = Describe("Shipped admins team", Ordered, func() {
 		Expect(DefaultContext.DB().Where("namespace = ? AND name = ?", namespace, shipped.BindingAdmins).Delete(&models.RoleBinding{}).Error).To(Succeed())
 		Expect(rbac.ReloadPolicy()).To(Succeed())
 		Expect(storedTeam()).To(BeNil())
+
+		// Without the binding, admin@local isn't an admin, even assigned the built-in admin role as earlier versions did
+		Expect(rbac.AddRoleForUser(adminLocal.ID.String(), policy.RoleAdmin)).To(Succeed())
+		DeferCleanup(func() { Expect(rbac.DeleteRoleForUser(adminLocal.ID.String(), policy.RoleAdmin)).To(Succeed()) })
 		Expect(canManagePeople(adminLocal)).To(BeFalse())
+		Expect(mcRBAC.CheckContext(DefaultContext.WithUser(adminLocal), policy.ObjectCatalog, policy.ActionRead)).To(BeFalse())
+		Expect(mcRBAC.CheckContext(DefaultContext.WithUser(adminLocal), "*", "*")).To(BeFalse())
 
 		// A restart: the auth middleware adds admin@local, and Sync runs
 		Expect(shipped.AddToAdmins(DefaultContext, adminLocal.ID)).To(Succeed())

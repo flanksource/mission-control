@@ -1,10 +1,12 @@
 package permissions_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
@@ -21,11 +23,20 @@ import (
 	"github.com/flanksource/incident-commander/agent"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/application"
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/notification"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
+	"github.com/flanksource/incident-commander/rbac/rbactest"
+	"github.com/flanksource/incident-commander/rbac/shipped"
 )
+
+// objectAction is an action on an RBAC object.
+type objectAction struct {
+	Object string
+	Action string
+}
 
 // serveAs serves a request made by the person, and returns its status.
 func serveAs(e *echo.Echo, person *models.Person, method, path string) int {
@@ -82,6 +93,34 @@ func bindWholeType(namespace, name, resource string, subjects v1.RoleBindingSubj
 	})).To(Succeed())
 }
 
+// newAdmin creates a person in the shipped admins team, which is bound to the shipped admin Role.
+func newAdmin(name, email string) *models.Person {
+	GinkgoHelper()
+	p := setup.CreateUserWithRole(DefaultContext, name, email)
+	Expect(rbactest.MakeAdmins(DefaultContext, p.ID)).To(Succeed())
+	auth.FlushTokenCache()
+	return p
+}
+
+// newViewer creates a person bound to the shipped viewer Role.
+func newViewer(name, email string) *models.Person {
+	GinkgoHelper()
+	p := setup.CreateUserWithRole(DefaultContext, name, email)
+	Expect(shipped.Sync(DefaultContext)).To(Succeed())
+	binding := &v1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: "viewer-" + p.ID.String(), Namespace: adapter.ShippedNamespace, UID: k8sTypes.UID(uuid.NewString())},
+		Spec:       v1.RoleBindingSpec{Role: shipped.RoleViewer, Subjects: boundPeople(p)},
+	}
+	Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).To(Succeed())
+	Expect(rbac.ReloadPolicy()).To(Succeed())
+	auth.FlushTokenCache()
+	DeferCleanup(func() {
+		Expect(DefaultContext.DB().Where("id = ?", binding.UID).Delete(&models.RoleBinding{}).Error).To(Succeed())
+		Expect(rbac.ReloadPolicy()).To(Succeed())
+	})
+	return p
+}
+
 // boundPeople selects the people by email.
 func boundPeople(people ...*models.Person) v1.RoleBindingSubjects {
 	return v1.RoleBindingSubjects{PermissionGroupSubjects: v1.PermissionGroupSubjects{
@@ -106,12 +145,25 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 		method, path string
 		write        bool
 
-		// legacy is what the route checked before its type had an object of its own
-		legacy mcRBAC.Grant
+		// legacy is what the route checked before its type had an object of its own, which built-in roles granted
+		legacy objectAction
 	}
 
-	read := func(object string) mcRBAC.Grant { return mcRBAC.Grant{Object: object, Action: policy.ActionRead} }
-	grant := func(object, action string) mcRBAC.Grant { return mcRBAC.Grant{Object: object, Action: action} }
+	// objects are the objects each type is checked on
+	objects := map[string]string{
+		v1.ResourceApplication:         policy.ObjectApplication,
+		v1.ResourceNotification:        policy.ObjectNotification,
+		v1.ResourceNotificationSilence: adapter.ObjectNotificationSilences,
+		v1.ResourceAgent:               policy.ObjectAgent,
+		v1.ResourcePerson:              policy.ObjectPeople,
+		v1.ResourceTeam:                adapter.ObjectTeams,
+		v1.ResourceScope:               adapter.ObjectScopes,
+		v1.ResourceRole:                adapter.ObjectRoles,
+		v1.ResourceRoleBinding:         adapter.ObjectRoleBindings,
+	}
+
+	read := func(object string) objectAction { return objectAction{Object: object, Action: policy.ActionRead} }
+	grant := func(object, action string) objectAction { return objectAction{Object: object, Action: action} }
 
 	routes := []route{
 		{v1.ResourceApplication, http.MethodGet, "/application/default/missing", false, read(policy.ObjectCatalog)},
@@ -155,11 +207,11 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 	}
 
 	var (
-		e                                    *echo.Echo
-		configReader, viewer, editor, nobody *models.Person
-		readers                              = map[string]*models.Person{}
-		writers                              = map[string]*models.Person{}
-		persons                              []*models.Person
+		e                    *echo.Echo
+		configReader, nobody *models.Person
+		readers              = map[string]*models.Person{}
+		writers              = map[string]*models.Person{}
+		persons              []*models.Person
 	)
 
 	passes := func(person *models.Person, r route) bool {
@@ -172,32 +224,30 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 		bindWholeType(namespace, name, resource, boundPeople(person), actions...)
 	}
 
-	person := func(name, role string) *models.Person {
+	person := func(name string, roles ...string) *models.Person {
 		GinkgoHelper()
-		p := setup.CreateUserWithRole(DefaultContext, "Whole Type "+name, "whole-type-"+name+"@test.com", role)
+		p := setup.CreateUserWithRole(DefaultContext, "Whole Type "+name, "whole-type-"+name+"@test.com", roles...)
 		persons = append(persons, p)
 		return p
 	}
 
 	BeforeAll(func() {
-		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
 
 		for _, resource := range v1.WholeTypeResources {
-			readers[resource] = person("reader-"+resource, policy.RoleGuest)
+			readers[resource] = person("reader-" + resource)
 			bind(readers[resource], "read-"+lo.KebabCase(resource), resource, policy.ActionRead)
 
 			if resource != v1.ResourcePerson {
-				writers[resource] = person("writer-"+resource, policy.RoleGuest)
+				writers[resource] = person("writer-" + resource)
 				bind(writers[resource], "write-"+lo.KebabCase(resource), resource, policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete)
 			}
 		}
 
-		configReader = person("config-reader", policy.RoleGuest)
+		configReader = person("config-reader")
 		bind(configReader, "read-configs", policy.ResourceConfig, policy.ActionRead)
 
-		viewer = person("viewer", policy.RoleViewer)
-		editor = person("editor", policy.RoleEditor)
-		nobody = person("nobody", policy.RoleGuest)
+		nobody = person("nobody")
 
 		Expect(rbac.ReloadPolicy()).To(Succeed())
 
@@ -251,34 +301,80 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 		}
 	})
 
-	for _, builtIn := range []string{policy.RoleViewer, policy.RoleEditor} {
-		It("keeps the access a built-in "+builtIn+" had", func() {
-			p := lo.Ternary(builtIn == policy.RoleViewer, viewer, editor)
-			for _, r := range routes {
-				before := rbac.Check(DefaultContext, p.ID.String(), r.legacy.Object, r.legacy.Action)
-				if before {
-					Expect(passes(p, r)).To(BeTrue(), r.method+" "+r.path)
-				}
-			}
+	// checked is the object and action a route checks now
+	checked := func(r route) objectAction {
+		switch {
+		case r.path == "/agent/token":
+			return objectAction{objects[r.resource], policy.ActionUpdate}
+		case strings.HasSuffix(strings.Split(r.path, "?")[0], "/team_members") && r.write:
+			return objectAction{objects[r.resource], policy.ActionUpdate}
+		}
+		return objectAction{objects[r.resource], map[string]string{
+			http.MethodGet: policy.ActionRead, http.MethodPost: policy.ActionCreate,
+			http.MethodPatch: policy.ActionUpdate, http.MethodDelete: policy.ActionDelete,
+		}[r.method]}
+	}
+
+	for _, r := range routes {
+		if r.legacy == checked(r) {
+			continue
+		}
+
+		It("refuses "+r.method+" "+r.path+" to a subject with only "+r.legacy.Object+":"+r.legacy.Action+" and the built-in roles", func() {
+			holder := person("legacy-"+uuid.NewString()[:8], adapter.BuiltInRoles...)
+			_, err := rbac.Enforcer().AddPolicy(holder.ID.String(), r.legacy.Object, r.legacy.Action, "allow", "", "legacy")
+			Expect(err).ToNot(HaveOccurred())
+			DeferCleanup(func() {
+				_, err := rbac.Enforcer().DeletePermissionsForUser(holder.ID.String())
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			Expect(rbac.Check(DefaultContext, holder.ID.String(), r.legacy.Object, r.legacy.Action)).To(BeTrue())
+			Expect(passes(holder, r)).To(BeFalse())
 		})
 	}
 
-	It("lets a built-in viewer read applications, agents, people and teams, and nothing that configures access", func() {
-		allowed := map[string]bool{"/application/default/missing": true, "/db/applications": true, "/db/agents": true,
-			"/db/people": true, "/db/person_analytics": true, "/db/teams": true, "/db/team_members": true}
-		for _, r := range routes {
-			Expect(passes(viewer, r)).To(Equal(allowed[r.path] && r.method == http.MethodGet), r.method+" "+r.path)
-		}
+	It("grants each action on a type on its own", func() {
+		creator := person("silence-creator")
+		bind(creator, "create-silences", v1.ResourceNotificationSilence, policy.ActionCreate)
+		Expect(rbac.ReloadPolicy()).To(Succeed())
+
+		Expect(authorized(serveAs(e, creator, http.MethodPost, "/notification/silence"))).To(BeTrue())
+		Expect(serveAs(e, creator, http.MethodPatch, "/db/notification_silences")).To(Equal(http.StatusForbidden))
+		Expect(serveAs(e, creator, http.MethodDelete, "/db/notification_silences")).To(Equal(http.StatusForbidden))
+		Expect(serveAs(e, creator, http.MethodGet, "/notification/silence_preview")).To(Equal(http.StatusForbidden))
 	})
 
-	It("lets a built-in editor also change notifications, their silences and applications", func() {
-		for _, r := range routes {
-			switch r.resource {
-			case v1.ResourceNotification, v1.ResourceNotificationSilence, v1.ResourceApplication:
-				Expect(passes(editor, r)).To(BeTrue(), r.method+" "+r.path)
-			case v1.ResourceScope, v1.ResourceRole, v1.ResourceRoleBinding:
-				Expect(passes(editor, r)).To(BeFalse(), r.method+" "+r.path)
-			}
+	It("limits a token by its Roles on each type's own object", func() {
+		owner := writers[v1.ResourceNotificationSilence]
+		bind(owner, "write-notifications-too", v1.ResourceNotification, policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete)
+		Expect(rbac.ReloadPolicy()).To(Succeed())
+		Expect(authorized(serveAs(e, owner, http.MethodPost, "/notification/silence"))).To(BeTrue())
+
+		body, err := json.Marshal(auth.CreateTokenRequest{Name: "notifications-only", Roles: models.AccessTokenRoles{{Namespace: namespace, Name: "write-notifications-too"}}})
+		Expect(err).ToNot(HaveOccurred())
+		req := httptest.NewRequest(http.MethodPost, "/auth/create_token", bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		Expect(auth.CreateToken(echo.New().NewContext(req.WithContext(DefaultContext.WithUser(owner)), rec))).To(Succeed())
+		Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+
+		var token models.AccessToken
+		Expect(DefaultContext.DB().Where("name = ? AND created_by = ?", "notifications-only", owner.ID).First(&token).Error).To(Succeed())
+		var tokenPerson models.Person
+		Expect(DefaultContext.DB().Where("id = ?", token.PersonID).First(&tokenPerson).Error).To(Succeed())
+		persons = append(persons, &tokenPerson)
+		DeferCleanup(func() { Expect(DefaultContext.DB().Delete(&token).Error).To(Succeed()) })
+
+		Expect(authorized(serveAs(e, &tokenPerson, http.MethodPatch, "/db/notifications"))).To(BeTrue())
+		Expect(serveAs(e, &tokenPerson, http.MethodPost, "/notification/silence")).To(Equal(http.StatusForbidden),
+			"a Role granting notifications doesn't grant their silences")
+	})
+
+	It("refuses writes to a Scope's targets through /db", func() {
+		Expect(authorized(serveAs(e, writers[v1.ResourceScope], http.MethodPost, "/rbac/scopes"))).To(BeTrue())
+		for _, method := range []string{http.MethodPost, http.MethodPatch, http.MethodDelete} {
+			Expect(serveAs(e, writers[v1.ResourceScope], method, "/db/scope_targets")).To(Equal(http.StatusMethodNotAllowed), method)
 		}
 	})
 })

@@ -5,6 +5,8 @@ import (
 	"os"
 	"time"
 
+	icrbac "github.com/flanksource/incident-commander/rbac"
+
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
@@ -43,20 +45,20 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 	var directPermissions []*models.Permission
 
 	BeforeAll(func() {
-		err := rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)
+		err := icrbac.Init(DefaultContext)
 		Expect(err).ToNot(HaveOccurred())
 
-		guestUser = setup.CreateUserWithRole(DefaultContext, "Guest User", "guest@test.com", policy.RoleGuest)
-		guestUserNoPerms = setup.CreateUserWithRole(DefaultContext, "Guest User No Permissions", "guest-noperms@test.com", policy.RoleGuest)
-		guestUserDirectPerms = setup.CreateUserWithRole(DefaultContext, "Guest User Direct Permissions", "guest-direct@test.com", policy.RoleGuest)
-		guestUserMultiTarget = setup.CreateUserWithRole(DefaultContext, "Guest User Multi Target", "guest-multi@test.com", policy.RoleGuest)
-		homelabManager = setup.CreateUserWithRole(DefaultContext, "Homelab Manager", "manager@homelab.com", policy.RoleGuest)
-		homelabDefaultManager = setup.CreateUserWithRole(DefaultContext, "Homelab Default Manager", "homelab-default@manager.com", policy.RoleGuest)
-		multiScopeUser = setup.CreateUserWithRole(DefaultContext, "Multi Scope User", "multi-scope@test.com", policy.RoleGuest)
-		wildcardManager = setup.CreateUserWithRole(DefaultContext, "Wildcard Manager", "wildcard@manager.com", policy.RoleGuest)
-		userMetrics = setup.CreateUserWithRole(DefaultContext, "User Metrics", "user-metrics@test.com", policy.RoleGuest)
-		userMultiViews = setup.CreateUserWithRole(DefaultContext, "User Multi Views", "user-b@test.com", policy.RoleGuest)
-		adminUser = setup.CreateUserWithRole(DefaultContext, "Admin User", "admin@test.com", policy.RoleAdmin)
+		guestUser = setup.CreateUserWithRole(DefaultContext, "Guest User", "guest@test.com")
+		guestUserNoPerms = setup.CreateUserWithRole(DefaultContext, "Guest User No Permissions", "guest-noperms@test.com")
+		guestUserDirectPerms = setup.CreateUserWithRole(DefaultContext, "Guest User Direct Permissions", "guest-direct@test.com")
+		guestUserMultiTarget = setup.CreateUserWithRole(DefaultContext, "Guest User Multi Target", "guest-multi@test.com")
+		homelabManager = setup.CreateUserWithRole(DefaultContext, "Homelab Manager", "manager@homelab.com")
+		homelabDefaultManager = setup.CreateUserWithRole(DefaultContext, "Homelab Default Manager", "homelab-default@manager.com")
+		multiScopeUser = setup.CreateUserWithRole(DefaultContext, "Multi Scope User", "multi-scope@test.com")
+		wildcardManager = setup.CreateUserWithRole(DefaultContext, "Wildcard Manager", "wildcard@manager.com")
+		userMetrics = setup.CreateUserWithRole(DefaultContext, "User Metrics", "user-metrics@test.com")
+		userMultiViews = setup.CreateUserWithRole(DefaultContext, "User Multi Views", "user-b@test.com")
+		adminUser = newAdmin("Admin User", "admin@test.com")
 
 		// Load fixtures
 		loadScopes()
@@ -167,10 +169,12 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload.View).To(BeEmpty())
 		})
 
-		It("should disable RLS for non-guest users", func() {
+		It("should filter an admin's rows by their grants, like any subject's", func() {
 			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(adminUser))
 			Expect(err).ToNot(HaveOccurred())
-			Expect(payload.Disable).To(BeTrue(), "RLS should be disabled for admin users")
+			Expect(payload.Disable).To(BeFalse())
+			Expect(payload.Config).ToNot(BeNil())
+			Expect(payload.Config.Any).ToNot(BeEmpty())
 		})
 
 		It("should grant no rows to a guest user with no permissions", func() {
@@ -932,22 +936,10 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 		// View RLS tests
 		It("should filter views based on RLS for users with view permissions", func() {
-			// Admin should see all views
-			ctx := DefaultContext.WithUser(adminUser)
+			// Guest user with no permissions should see no views
+			ctx := DefaultContext.WithUser(guestUserNoPerms)
 
 			payload, err := auth.GetRLSPayload(ctx)
-			Expect(err).ToNot(HaveOccurred())
-
-			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
-
-			var adminViewCount int64
-			Expect(tx.Model(&models.View{}).Where("deleted_at IS NULL").Count(&adminViewCount).Error).To(BeNil())
-			Expect(adminViewCount).To(BeNumerically(">", 0), "admin user should see all views")
-
-			// Guest user with no permissions should see no views
-			ctx = DefaultContext.WithUser(guestUserNoPerms)
-
-			payload, err = auth.GetRLSPayload(ctx)
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
@@ -959,20 +951,22 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 	})
 
 	Describe("View ABAC Permissions", func() {
-		DescribeTable("admin user with view permissions",
+		// No Role rule can select Views yet (specs/authorization/overview.md, "Not covered yet"), so the admin Role doesn't
+		// read them: only a Permission does
+		DescribeTable("admin user",
 			func(view models.View, description string) {
 				attr := &models.ABACAttribute{
 					View: view,
 				}
 				allowed := rbac.HasPermission(DefaultContext, adminUser.ID.String(), attr, policy.ActionRead)
-				Expect(allowed).To(BeTrue(), description)
+				Expect(allowed).To(BeFalse(), description)
 			},
-			Entry("should have access to pods view",
+			Entry("should NOT have access to pods view",
 				dummy.PodView,
-				"admin user should have read access to pods view"),
-			Entry("should have access to dev dashboard view",
+				"the admin Role doesn't grant views"),
+			Entry("should NOT have access to dev dashboard view",
 				dummy.ViewDev,
-				"admin user should have read access to dev dashboard view"),
+				"the admin Role doesn't grant views"),
 		)
 
 		DescribeTable("guest user with no permissions",

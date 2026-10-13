@@ -91,12 +91,6 @@ type ResolvedRule struct {
 	Target   *ScopeSelection
 }
 
-// reservedRoleNames are the built-in roles. A Role can't be named after one, so a binding's role never reads as a built-in role.
-var reservedRoleNames = []string{
-	policy.RoleAdmin, policy.RoleEveryone, policy.RoleGuest, policy.RoleViewer,
-	policy.RoleEditor, policy.RoleCommander, policy.RoleResponder, policy.RoleAgent,
-}
-
 // Shipped Roles and Scopes are written by Mission Control itself, in this namespace and with this source
 // (see specs/authorization/overview.md, "Shipped Roles").
 const (
@@ -131,7 +125,7 @@ func IsReservedShippedName(table, namespace, name string) bool {
 
 // ValidateRoleName checks that a Role isn't named after a built-in role.
 func ValidateRoleName(name string) error {
-	if slices.Contains(reservedRoleNames, name) {
+	if slices.Contains(BuiltInRoles, name) {
 		return NewValidationError("a role can't be named after the built-in role %q", name)
 	}
 	return nil

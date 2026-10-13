@@ -7,9 +7,10 @@ import (
 	"strings"
 	"time"
 
+	icrbac "github.com/flanksource/incident-commander/rbac"
+
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
-	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -37,7 +38,6 @@ var _ = ginkgo.Describe("Clerk session claims", func() {
 
 		Expect(clerkUserID(claims)).To(Equal("user_123"))
 		Expect(clerkOrgID(claims)).To(Equal("org_123"))
-		Expect(clerkRole(claims)).To(Equal("admin"))
 	})
 
 	ginkgo.It("prefers the relayed callback token over ambient session credentials", func() {
@@ -61,7 +61,7 @@ var _ = ginkgo.Describe("Clerk session claims", func() {
 
 	ginkgo.It("does not reuse a Clerk user cache entry for another user", func() {
 		if dutyRBAC.Enforcer() == nil {
-			Expect(dutyRBAC.Init(DefaultContext, []string{}, adapter.NewPermissionAdapter)).To(Succeed())
+			Expect(icrbac.Init(DefaultContext)).To(Succeed())
 		}
 
 		var first, second AuthResult

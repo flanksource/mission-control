@@ -66,9 +66,9 @@ var _ = ginkgo.Describe("upstream push", func() {
 		Expect(err).To(MatchError(ContainSubstring("agent name is required")))
 	})
 
-	// A 403 here means the token's role lacks agent-push, which is a
-	// permissions problem the operator has to fix — not a transport failure.
-	ginkgo.It("names the missing permission on a forbidden response", func() {
+	// A 403 here means the token isn't the named agent's, which is a
+	// credentials problem the operator has to fix — not a transport failure.
+	ginkgo.It("explains a forbidden response", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			w.WriteHeader(http.StatusForbidden)
 			_, _ = w.Write([]byte(`{"error":"access denied"}`))
@@ -78,7 +78,7 @@ var _ = ginkgo.Describe("upstream push", func() {
 		err := New(server.URL, "tok").PushUpstream(context.Background(), "recon",
 			&upstream.PushData{ConfigAnalysis: analyses(1)})
 
-		Expect(err).To(MatchError(ContainSubstring("agent-push")))
+		Expect(err).To(MatchError(ContainSubstring("access token")))
 		Expect(err).To(MatchError(ContainSubstring("recon")))
 		Expect(err).To(MatchError(ContainSubstring("access denied")))
 	})

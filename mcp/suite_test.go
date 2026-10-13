@@ -4,8 +4,10 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	icrbac "github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/rbactest"
+
 	"github.com/flanksource/duty/context"
-	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 	echov4 "github.com/labstack/echo/v4"
@@ -16,7 +18,6 @@ import (
 	. "github.com/onsi/gomega"
 
 	echoSrv "github.com/flanksource/incident-commander/echo"
-	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 func TestMCP(t *testing.T) {
@@ -37,7 +38,8 @@ var _ = ginkgo.BeforeSuite(func() {
 	DefaultContext.Logger.SetLogLevel(DefaultContext.Properties().String("log.level", "info"))
 	DefaultContext.Infof("%s", DefaultContext.String())
 
-	Expect(dutyRBAC.Init(DefaultContext, []string{dummy.JohnDoe.ID.String()}, adapter.NewPermissionAdapter)).To(Succeed())
+	Expect(icrbac.Init(DefaultContext)).To(Succeed())
+	Expect(rbactest.MakeAdmins(DefaultContext, dummy.JohnDoe.ID)).To(Succeed())
 
 	// Create a test server with the MCP handler
 	e := echoSrv.New(DefaultContext)

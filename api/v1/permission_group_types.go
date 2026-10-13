@@ -78,7 +78,7 @@ type PermissionGroupSubjects struct {
 	Canaries      []PermissionGroupSelector `json:"canaries,omitempty"`
 
 	// List of ids and email of people.
-	// To select all users, use the wildcard selector: ["*"]
+	// The wildcard ["*"] selected everyone through a built-in role, which was removed: it selects no one.
 	People []string `json:"people,omitempty"`
 
 	// Teams is a list of team names

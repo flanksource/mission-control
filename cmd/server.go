@@ -274,9 +274,10 @@ var Serve = &cobra.Command{
 		e := echo.New(ctx)
 
 		// After RBAC is initialised by echo.New, and before Kubernetes objects are reconciled, so the shipped
-		// Roles and Scopes are in place before anything can take their names.
+		// Roles and Scopes are in place before anything can take their names. Without the admins binding no one
+		// may be an admin, so a failure stops startup.
 		if err := shipped.Sync(ctx); err != nil {
-			logger.Errorf("failed to sync shipped roles: %v", err)
+			logger.Fatalf("failed to sync shipped roles: %v", err)
 		}
 
 		// This is outside echo pkg to prevent import cycle

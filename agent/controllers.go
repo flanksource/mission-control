@@ -16,10 +16,7 @@ import (
 
 // RegisterRoutes registers the agent routes.
 func RegisterRoutes(e *echo.Echo) {
-	e.POST("/agent/generate", GenerateAgent, rbac.TypeAuthorization(
-		rbac.Grant{Object: policy.ObjectAgent, Action: policy.ActionCreate},
-		rbac.Grant{Object: policy.ObjectAgent, Action: policy.ActionUpdate},
-	))
+	e.POST("/agent/generate", GenerateAgent, rbac.Authorization(policy.ObjectAgent, policy.ActionCreate))
 	e.POST("/agent/token", GenerateToken, rbac.Authorization(policy.ObjectAgent, policy.ActionUpdate))
 }
 
