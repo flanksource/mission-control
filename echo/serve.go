@@ -168,9 +168,7 @@ func New(ctx context.Context) *echov4.Echo {
 		})
 	})
 
-	personController := PersonController{kratos: auth.NewAPIClient(auth.KratosAPI)}
-	e.POST("/people/update", personController.UpdatePerson, rbac.Authorization(policy.ObjectPeople, policy.ActionUpdate))
-	e.DELETE("/people/:id", personController.DeletePerson, rbac.Authorization(policy.ObjectPeople, policy.ActionDelete))
+	RegisterPeopleRoutes(e, auth.NewAPIClient(auth.KratosAPI))
 
 	if dutyApi.DefaultConfig.Postgrest.URL != "" {
 		Forward(ctx, e, "/db", dutyApi.DefaultConfig.Postgrest.URL, &ForwardOptions{

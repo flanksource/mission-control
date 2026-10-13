@@ -86,6 +86,13 @@ func DbMiddleware() MiddlewareFunc {
 				object, action = policy.ObjectProperties, policy.ActionPropertyManage
 			}
 
+			if _, ok := accountTables[resource]; ok && action != policy.ActionRead {
+				if CanManagePeople(ctx, object, action) {
+					return next(c)
+				}
+				object, action = policy.ObjectPeople, adapter.ActionPersonManage
+			}
+
 			allowed := false
 			if typeObject, ok := typeTables[resource]; ok {
 				typeAction := action
