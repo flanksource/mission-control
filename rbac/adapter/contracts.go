@@ -155,6 +155,11 @@ func Actions() []string {
 	return actions
 }
 
+// ObjectForType returns the object used to enforce whole-type grants, or empty for an unknown type.
+func ObjectForType(resourceType string) string {
+	return objectForType[resourceType]
+}
+
 // ContractFor returns the contract of an action.
 // Unknown actions and patterns have none.
 func ContractFor(action string) (ActionContract, error) {

@@ -32,13 +32,14 @@ const (
 )
 
 // summaryObjects are the resource types the access summary reports, with the RBAC object an action on the whole type is granted on.
-var summaryObjects = map[string]string{
-	policy.ResourceConfig:     policy.ObjectCatalog,
-	policy.ResourceComponent:  policy.ObjectTopology,
-	policy.ResourceCanary:     policy.ObjectCanary,
-	policy.ResourcePlaybook:   policy.ObjectPlaybooks,
-	policy.ResourceConnection: policy.ObjectConnection,
-}
+var summaryObjects = func() map[string]string {
+	contract, _ := adapter.ContractFor(policy.ActionRead)
+	objects := make(map[string]string, len(contract.Resources))
+	for _, resourceType := range contract.Resources {
+		objects[resourceType] = adapter.ObjectForType(resourceType)
+	}
+	return objects
+}()
 
 // summaryActions are the actions the access summary reports for each resource type.
 var summaryActions = []string{policy.ActionRead, policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete}
@@ -158,6 +159,10 @@ func noAccess() map[string]map[string]Access {
 }
 
 func accessTo(ctx context.Context, grants []selectorGrant, resourceType, object, action string) Access {
+	contract, err := adapter.ContractFor(action)
+	if err != nil || !slices.Contains(contract.Resources, resourceType) {
+		return AccessNone
+	}
 	applicable := lo.Filter(grants, func(g selectorGrant, _ int) bool { return g.action == action || g.action == "*" })
 	if rbac.Check(ctx, ctx.Subject(), object, action) {
 		return AccessAll
@@ -167,6 +172,18 @@ func accessTo(ctx context.Context, grants []selectorGrant, resourceType, object,
 		return AccessSome
 	}
 	return AccessNone
+}
+
+// AccessActions reports resource-free actions as the caller, intersected with its token's Roles.
+func AccessActions(ctx context.Context) map[string]bool {
+	actions := map[string]bool{}
+	for _, action := range adapter.Actions() {
+		contract, _ := adapter.ContractFor(action)
+		if !contract.TakesResource() {
+			actions[action] = CheckContext(ctx, contract.Object, action)
+		}
+	}
+	return actions
 }
 
 // hasSomeGrant reports whether the subject has a grant that selects some resources of the type.

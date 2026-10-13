@@ -148,11 +148,12 @@ func WhoAmI(c echo.Context) error {
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{
 		Message: "success",
 		Payload: map[string]any{
-			"user":        user,
-			"roles":       roles,
-			"permissions": permissions,
-			"access":      icrbac.AccessSummary(ctx),
-			"hostname":    hostname,
+			"user":           user,
+			"roles":          roles,
+			"permissions":    permissions,
+			"access":         icrbac.AccessSummary(ctx),
+			"access_actions": icrbac.AccessActions(ctx),
+			"hostname":       hostname,
 		},
 	})
 }

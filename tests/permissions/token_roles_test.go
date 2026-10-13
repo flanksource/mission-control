@@ -25,6 +25,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 // Access tokens limited by Roles (specs/authorization/roles.md, Section 4.5).
@@ -246,6 +247,59 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		Expect(do(readonly, http.MethodPost, "/playbook/run", run).Code).To(Equal(http.StatusForbidden))
 		rec := do(alice, http.MethodPost, "/playbook/run", run)
 		Expect(rec.Code).To(Equal(http.StatusCreated), rec.Body.String())
+	})
+
+	ginkgo.It("summarizes whoami access for token-limited admins and subjects as an intersection", func() {
+		newRole("summary-limit", allow("read", policy.ActionRead, "token-configs"),
+			v1.RoleRule{Name: "events", Action: policy.ActionEventRead},
+			v1.RoleRule{Name: "jobs", Action: policy.ActionJobRead})
+		newRole("summary-owner", v1.RoleRule{Name: "events", Action: policy.ActionEventRead})
+		bind("summary-owner", "summary-owner", carol)
+		admin := newAdmin("Token Summary Admin", "token-summary-admin@test.com")
+		reload()
+		adminToken := createToken(admin, "summary-admin", "summary-limit")
+		subjectToken := createToken(carol, "summary-subject", "summary-limit")
+		ginkgo.DeferCleanup(func() {
+			for _, token := range []*models.Person{adminToken, subjectToken} {
+				Expect(DefaultContext.DB().Where("person_id = ?", token.ID).Delete(&models.AccessToken{}).Error).To(Succeed())
+				Expect(DefaultContext.DB().Delete(token).Error).To(Succeed())
+			}
+			Expect(DefaultContext.DB().Delete(admin).Error).To(Succeed())
+		})
+
+		for _, tt := range []struct {
+			person *models.Person
+			jobs   bool
+		}{{adminToken, true}, {subjectToken, false}} {
+			mcRBAC.FlushAccessSummaries()
+			rec := do(tt.person, http.MethodGet, "/auth/whoami", nil)
+			Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+			var response struct {
+				Payload struct {
+					Access  map[string]map[string]mcRBAC.Access `json:"access"`
+					Actions map[string]bool                     `json:"access_actions"`
+				} `json:"payload"`
+			}
+			Expect(json.Unmarshal(rec.Body.Bytes(), &response)).To(Succeed())
+			read, err := adapter.ContractFor(policy.ActionRead)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(lo.Keys(response.Payload.Access)).To(ConsistOf(read.Resources))
+			Expect(response.Payload.Access).To(HaveLen(16))
+			for kind, actions := range response.Payload.Access {
+				Expect(lo.Keys(actions)).To(ConsistOf(policy.ActionRead, policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete))
+				for action, access := range actions {
+					expected := mcRBAC.AccessNone
+					if kind == policy.ResourceConfig && action == policy.ActionRead {
+						expected = mcRBAC.AccessSome
+					}
+					Expect(access).To(Equal(expected), "%s %s", kind, action)
+				}
+			}
+			Expect(response.Payload.Actions).To(Equal(map[string]bool{
+				adapter.ActionPersonManage: false, policy.ActionMCPUse: false,
+				policy.ActionPropertyManage: false, policy.ActionEventRead: true, policy.ActionJobRead: tt.jobs,
+			}))
+		}
 	})
 
 	ginkgo.It("refuses a new token without Roles", func() {

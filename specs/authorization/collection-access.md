@@ -84,7 +84,7 @@ The answer decides every collection-level operation on the type:
 
 ### 3.1 The event queue and job history
 
-The event queue and job history aren't types: they're reached through `event:read` and `job:read`, actions without a resource ([roles.md, Section 2.3](roles.md#23-actions-without-a-resource)). So they have no answer of their own, and the access summary doesn't list them. Their listings are decided by the actions:
+The event queue and job history aren't types: they're reached through `event:read` and `job:read`, actions without a resource ([roles.md, Section 2.3](roles.md#23-actions-without-a-resource)). The access summary reports these actions as booleans, not as type answers. Their listings are decided by the actions:
 
 | Listing                       | Returns                                                                                                   |
 | ----------------------------- | --------------------------------------------------------------------------------------------------------- |
@@ -98,7 +98,16 @@ The event queue and job history aren't types: they're reached through `event:rea
 
 Mission Control computes the answer. Clients MUST NOT derive it themselves from the subject's rules or roles.
 
-Every authenticated subject can obtain their **access summary**, a user of an external identity provider included, for whom it's derived from the token of the request. A request made with an access token gets the summary of what the token may do, its Roles' limit included (`roles.md`, Section 4.5): for each resource type, the answer for `read`, `create`, `update` and `delete`, each one of `all`, `some` or `none`. The UI uses the summary, and nothing else, to decide which resource pages to show, which to mark as showing some resources only, and which write controls to offer. Listings and searches apply the same derivation on the server. So, evaluated against the same grants, a page the summary shows never answers its listing with `403 Forbidden`, and a listing that succeeds is never behind a page the summary hides. Grants change between requests: a Scope or binding is edited, a Role becomes `Ready=False`, an external identity provider user's next token matches differently. So the summary is computed on every request, never kept for a session, and a client that gets `403 Forbidden` from a listing fetches the summary again rather than treating it as a fault.
+Every authenticated subject MUST receive their **access summary** from `GET /auth/whoami`, users of external identity providers included. It MUST report:
+
+- Every type accepted by `read`, `create`, `update` or `delete` ([roles.md, Section 2](roles.md#2-actions)), with an answer for each of those actions: `all`, `some` or `none`. An action that doesn't accept the type is `none`.
+- A boolean for each action without a resource: `person:manage`, `mcp:use`, `property:manage`, `event:read` and `job:read`. It is true exactly when the subject may perform that action.
+
+A request made with an access token MUST receive the summary of what the token may do, its Roles' limit included ([roles.md, Section 4.5](roles.md#45-access-tokens)), for both type answers and action booleans.
+
+The UI MUST use the summary alone for page, route and write-control gates, including Settings. Role names, team membership and legacy permissions MUST NOT be client-side gates. Listings and searches MUST use the same grants on the server: a page the summary shows MUST NOT have its listing refused for lack of its gate, and a permitted listing MUST NOT be hidden behind a refused page. The summary MUST reflect the grants of each request, not be kept for a session. A client receiving `403 Forbidden` from a listing MUST fetch the summary again.
+
+**Why.** A page and its listing ask the same access question, whether it is about resources or an action without a resource. Role names say nothing about the rules a subject holds.
 
 For `create`, `update` and `delete`, the answer is derived as in [Section 2](#2-all-some-or-none), from the subject's rules for that action instead of `read`. Their rules, and the constraints that narrow them, select whole types only ([roles.md, Section 2](roles.md#2-actions); [rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)), so the answer is `all` or `none`, never `some`. Under `all`, the UI offers the write control. Under `none`, it MUST NOT.
 
@@ -106,19 +115,62 @@ For `create`, `update` and `delete`, the answer is derived as in [Section 2](#2-
 
 ## 5. Pages and types
 
-| Page        | Resource types |
-| ----------- | -------------- |
-| Catalog     | Config         |
-| Topology    | Component      |
-| Health      | Canary         |
-| Playbooks   | Playbook       |
-| Connections | Connection     |
+Each page MUST have exactly one gate. Its sidebar entry and route MUST use the same gate. A type's `read` gate allows both `all` and `some`; an action gate requires true. A container such as Settings MUST be shown when it has a visible child, without a separate grant.
 
-Pages that show no resource type, such as settings, have no such answer. How they're gated is out of scope here.
+**Why.** Navigating to a page and opening its URL must give the same result. A navigation container grants no access of its own.
+
+| Page                                      | Gate                         |
+| ----------------------------------------- | ---------------------------- |
+| Catalog, Changes, Insights, Config Access  | `read` on `config`           |
+| Topology                                  | `read` on `component`        |
+| Health, Health Check settings              | `read` on `canary`           |
+| Playbooks, Playbook Runs                   | `read` on `playbook`         |
+| Applications                              | `read` on `application`      |
+| Connections                               | `read` on `connection`       |
+| Notifications, Notification send history  | `read` on `notification`     |
+| Notification Silences                     | `read` on `notificationSilence` |
+| Config Scrapers                           | `read` on `scraper`          |
+| Users                                     | `read` on `person`           |
+| Teams                                     | `read` on `team`             |
+| Agents                                    | `read` on `agent`            |
+| Permissions (Roles)                       | `read` on `role`             |
+| Role Bindings                             | `read` on `roleBinding`      |
+| Scopes                                    | `read` on `scope`            |
+| Jobs History, including resource job tabs | `job:read`                   |
+| Event Queue, including recent event tabs  | `event:read`                 |
+| MCP                                       | `mcp:use`                    |
+| Feature Flags                             | Authentication only         |
+| Tokens                                    | Authentication only         |
+| Artifacts                                 | Authentication only         |
+
+The Permissions entry MUST open Roles. Role Bindings and Scopes MUST use their own gates, not also require `read` on `role`.
+
+**Why.** Roles, bindings and Scopes are separate types. Reading one doesn't grant reading another.
+
+Tokens and Artifacts MUST NOT require a page-level grant. Token operations MUST follow the ownership and credential restrictions in [roles.md, Section 4.5](roles.md#45-access-tokens). Artifact listings and fetches MUST allow only artifacts whose producers the subject may read ([scopes.md, Section 3.2](scopes.md#32-records)).
+
+**Why.** Own tokens need no grant, and artifacts inherit their producers' access. Opening either page grants no additional access.
+
+Users' write controls MUST require `person:manage`. Feature Flags' write controls MUST require `property:manage`; reading properties needs no grant ([roles.md, Section 3.1](roles.md#31-the-read-action)). Other type write controls MUST use that type's `create`, `update` or `delete` answer (Section 4). Page gates MUST NOT replace checks on the resources shown or actions performed within them.
+
+**Why.** Reading a page doesn't grant its writes or access to every resource it shows.
 
 Checks are read through their canary (flanksource/mission-control#3520), so Health shows one type.
 
 Views and dashboards aren't covered: no rule can select Views yet ([overview.md, "Not covered yet"](overview.md#not-covered-yet)).
+
+Integrations and Log Backends are deprecated and aren't covered here.
+
+### 5.1 Open questions
+
+These pages have no single gate in the model. Their gates need a decision; no new action is specified here.
+
+| Page | Question |
+| ---- | -------- |
+| Plugins, including Catalog Plugins | What permits opening the plugin listing? Plugin invocation actions don't grant administration of plugins. |
+| Logs | Should the page use `read` on `component`, or is a different gate needed for logs? There is no log type or action. |
+| Incidents, Rules | What permits opening these pages? There is no incident or incident-rule type or action. |
+| Legacy Permissions, Subjects | How should these pages be exposed? Neither legacy permissions nor subject-access inspection has a type or action. |
 
 ## 6. What a subject may learn
 
