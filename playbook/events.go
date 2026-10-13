@@ -158,7 +158,7 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 // the playbook passes, as itself, the checks a person starting it would. A refusal creates no run and is recorded in
 // the playbook's job history.
 func startEventRun(ctx context.Context, playbook *models.Playbook, run models.PlaybookRun) error {
-	playbookCtx := runAsPlaybook(ctx, playbook)
+	playbookCtx := RunAsPlaybook(ctx, playbook)
 
 	templateEnv, err := runner.CreateTemplateEnv(playbookCtx, playbook, run, nil)
 	if err != nil {

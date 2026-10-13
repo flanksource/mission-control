@@ -25,6 +25,7 @@ import (
 	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
+	"github.com/flanksource/incident-commander/rbac/rbactest"
 )
 
 var _ = ginkgo.Describe("Work no person started", func() {
@@ -61,6 +62,39 @@ var _ = ginkgo.Describe("Work no person started", func() {
 			var run models.PlaybookRun
 			Expect(DefaultContext.DB().Where("playbook_id = ?", playbook.ID).First(&run).Error).To(Succeed())
 			Expect(run.CreatedBy).To(BeNil(), "no person, and not the System user, started the run")
+		})
+	})
+
+	ginkgo.Describe("a run started from the command line", func() {
+		spec := v1.PlaybookSpec{
+			Actions: []v1.PlaybookAction{{Name: "echo", Exec: &v1.ExecAction{Script: "echo hi"}}},
+		}
+
+		ginkgo.It("is checked as the playbook, never as the System person", func() {
+			playbook := saveScheduledPlaybookForTest("cli-bound", spec)
+			ginkgo.DeferCleanup(bindPlaybook(playbook, runOnItself(playbook, nil)))
+
+			var system models.Person
+			Expect(DefaultContext.DB().Where("name = 'System'").First(&system).Error).To(Succeed())
+
+			recorder, stop := rbactest.RecordSubjects()
+			ginkgo.DeferCleanup(stop)
+
+			run, err := Run(RunAsPlaybook(DefaultContext, &playbook), &playbook, RunParams{})
+			Expect(err).To(Succeed())
+			Expect(run.CreatedBy).To(BeNil())
+
+			Expect(recorder.Subjects()).ToNot(BeEmpty())
+			Expect(recorder.Subjects()).ToNot(ContainElement(system.ID.String()))
+			Expect(recorder.Subjects()).To(HaveEach(playbook.ID.String()))
+		})
+
+		ginkgo.It("isn't created without the playbook's own binding", func() {
+			playbook := saveScheduledPlaybookForTest("cli-unbound", spec)
+
+			_, err := Run(RunAsPlaybook(DefaultContext, &playbook), &playbook, RunParams{})
+			Expect(err).To(MatchError(ContainSubstring(fmt.Sprintf("access denied to subject(%s): cannot run playbook", playbook.ID))))
+			Expect(countRuns(playbook.ID)).To(BeZero())
 		})
 	})
 
