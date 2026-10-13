@@ -76,8 +76,8 @@ func main() {
 	api.BuildCommit = build.Commit
 
 	root := &cobra.Command{
-		Use:          "faro",
-		Short:        "Slim Mission Control client",
+		Use:   "faro",
+		Short: "Slim Mission Control client",
 		Long: `Faro is a slim client for inspecting and operating a remote Mission Control server.
 
 When troubleshooting a failed or unhealthy catalog config, start with its
