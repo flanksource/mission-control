@@ -36,5 +36,4 @@ func legacyPersonManage(ctx context.Context, legacyObject, legacyAction string) 
 var accountTables = map[string]struct{}{
 	"people":     {},
 	"identities": {},
-	"invites":    {},
 }

@@ -108,6 +108,8 @@ var _ = Describe("Authorization", func() {
 
 	tests := []TC{}
 
+	// Tables that are neither a type, a record of one, a lookup view of one, nor read whole through an action
+	// aren't served, even to admin
 	var never = []string{
 		"/db/courier_messages",
 		"/db/access_token",
@@ -116,14 +118,40 @@ var _ = Describe("Authorization", func() {
 		"/db/identity_recovery_tokens",
 		"/db/identity_verifiable_addresses",
 		"/db/identity_verification_tokens",
+		"/db/casbin_rule",
+		"/db/migration_logs",
+		"/db/scope_members",
+		"/db/rpc/uuid_to_ulid",
+		"/db/no_such_table",
 	}
 
 	for _, t := range never {
 		tests = append(tests, TC{
-			method:       "POST|GET|PUT|DELETE",
+			method:       "POST|GET|PATCH|DELETE",
 			user:         "admin",
 			path:         t,
-			expectedCode: http.StatusForbidden,
+			expectedCode: http.StatusNotFound,
+		})
+	}
+
+	// One table of each kind /db serves
+	var served = []string{
+		"GET /db/config_items",
+		"GET /db/config_changes",
+		"GET /db/config_types",
+		"GET /db/job_history",
+		"GET /db/event_queue",
+		"GET /db/properties",
+		"PATCH /db/properties",
+		"GET /db/view_default_pods",
+		"GET /db/incidents",
+	}
+
+	for _, t := range served {
+		tests = append(tests, TC{
+			user:         "admin",
+			path:         t,
+			expectedCode: http.StatusOK,
 		})
 	}
 
