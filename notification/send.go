@@ -10,7 +10,6 @@ import (
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/commons/utils"
-	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
@@ -23,6 +22,7 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/mail"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/teams"
 )
 
@@ -410,7 +410,7 @@ func SendRawNotification(ctx *Context, connectionName, shoutrrrURL string, celEn
 		return "", err
 	}
 	if connectionName != "" {
-		connection, err = pkgConnection.Get(ctx.Context, connectionName)
+		connection, err = rbac.GetConnectionForUse(ctx.Context, connectionName)
 		if err != nil {
 			return "", err
 		}
@@ -468,7 +468,7 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, payload 
 		return "", err
 	}
 	if connectionName != "" {
-		connection, err = pkgConnection.Get(ctx.Context, connectionName)
+		connection, err = rbac.GetConnectionForUse(ctx.Context, connectionName)
 		if err != nil {
 			return "", err
 		}
@@ -686,10 +686,14 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			GroupID:                   groupID,
 		}
 
+		// Evaluation records the connection to send through by id only. It makes no check and fills in no
+		// credentials: sending checks connection:use (specs/authorization/roles.md, Section 4.4).
 		if cn.Connection != "" {
-			c, err := pkgConnection.Get(ctx, cn.Connection)
+			c, err := context.FindConnectionByURL(ctx, cn.Connection)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get connection: %w", err)
+			} else if c == nil {
+				return nil, fmt.Errorf("connection %s not found", cn.Connection)
 			}
 			celEnvMap["channel"] = c.Type
 			payload.Connection = &c.ID

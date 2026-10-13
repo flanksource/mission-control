@@ -10,6 +10,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 // WebhookPayload is the structured JSON payload sent to webhook endpoints.
@@ -22,6 +23,11 @@ type WebhookPayload struct {
 
 func sendWebhookNotification(ctx *Context, celVars *celVariables, payload NotificationEventPayload, webhook *api.NotificationWebhookReceiver, notification *NotificationWithSpec) error {
 	start := time.Now()
+
+	if err := rbac.AuthorizeConnectionRefUse(ctx.Context, webhook.HTTPConnection.ConnectionName); err != nil {
+		notificationSendFailureCounter.WithLabelValues("webhook", string(RecipientTypeWebhook), ctx.notificationID.String()).Inc()
+		return err
+	}
 
 	hydrated, err := webhook.HTTPConnection.Hydrate(ctx, ctx.GetNamespace())
 	if err != nil {

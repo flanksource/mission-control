@@ -7,13 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/gomplate/v3"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/mail"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 	"github.com/slack-go/slack"
@@ -208,7 +208,7 @@ func resolveDelivery(ctx context.Context, receipt *models.NotificationDelivery) 
 	}
 	var conn *models.Connection
 	if receipt.ConnectionID != nil {
-		conn, err = connection.Get(ctx, receipt.ConnectionID.String())
+		conn, err = rbac.GetConnectionForUse(ctx, receipt.ConnectionID.String())
 		if err != nil {
 			return err
 		}
