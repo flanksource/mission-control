@@ -146,7 +146,7 @@ var ReadGrantsCover func(ctx context.Context, resourceType string) bool
 // limited by Roles can list a table because its read grants cover some rows of it. Postgres then filters the rows.
 // Its read grants on whole types pass the object check instead.
 func canListFilteredRows(ctx context.Context, table, action string) bool {
-	if action != policy.ActionRead || ReadGrantsCover == nil {
+	if action != policy.ActionRead || ReadGrantsCover == nil || ctx.User() == nil {
 		return false
 	}
 	if rbac.HasImplicitGrants(ctx.Subject()) && !isGuest(ctx) {
