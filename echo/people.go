@@ -8,12 +8,14 @@ import (
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/ory/client-go"
 	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/auth"
+	icrbac "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/vars"
 )
 
@@ -64,6 +66,13 @@ func (t *UpdatePersonRequest) ToUpdateIdentityBody(traits map[string]any) client
 
 type PersonController struct {
 	kratos *client.APIClient
+}
+
+// RegisterPeopleRoutes registers the routes that change or delete a person's account.
+func RegisterPeopleRoutes(e *echov4.Echo, kratos *client.APIClient) {
+	controller := PersonController{kratos: kratos}
+	e.POST("/people/update", controller.UpdatePerson, icrbac.PersonManage(policy.ObjectPeople, policy.ActionUpdate))
+	e.DELETE("/people/:id", controller.DeletePerson, icrbac.PersonManage(policy.ObjectPeople, policy.ActionDelete))
 }
 
 func (t *PersonController) UpdatePerson(c echov4.Context) error {

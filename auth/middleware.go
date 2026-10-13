@@ -121,10 +121,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 			return fmt.Errorf("failed to initialize kratos middleware: %v", err)
 		}
 		e.Use(withFederatedAuth(kratosMiddleware.Session))
-		e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(policy.ObjectAuth, policy.ActionUpdate))
-		e.GET("/auth/kratos/error", KratosErrorRedirect)
-		e.POST("/auth/kratos/hooks/registration/before", kratosHandler.BeforeRegistrationWebhook)
-		e.POST("/auth/kratos/hooks/registration/after", kratosHandler.AfterRegistrationWebhook)
+		RegisterKratosRoutes(e, kratosHandler)
 
 		if OIDCEnabled {
 			kratosChecker := NewKratosCredentialChecker(kratosMiddleware)
@@ -170,6 +167,14 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 	}
 
 	return nil
+}
+
+// RegisterKratosRoutes registers the invite and registration routes of the Kratos auth mode.
+func RegisterKratosRoutes(e *echo.Echo, k *KratosHandler) {
+	e.POST("/auth/invite_user", k.InviteUser, rbac.PersonManage(policy.ObjectAuth, policy.ActionUpdate))
+	e.GET("/auth/kratos/error", KratosErrorRedirect)
+	e.POST("/auth/kratos/hooks/registration/before", k.BeforeRegistrationWebhook)
+	e.POST("/auth/kratos/hooks/registration/after", k.AfterRegistrationWebhook)
 }
 
 // joinAdmins adds admin@local to the shipped admins team, which is bound to the shipped admin Role.

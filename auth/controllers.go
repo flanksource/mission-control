@@ -24,8 +24,8 @@ import (
 
 func RegisterRoutes(e *echo.Echo) {
 	// Cannot register this routes in auth/rbac package as it would create a cyclic import
-	e.POST("/auth/:id/update_state", UpdateAccountState, icrbac.Authorization(policy.ObjectAuth, policy.ActionUpdate))
-	e.POST("/auth/:id/properties", UpdateAccountProperties, icrbac.Authorization(policy.ObjectAuth, policy.ActionUpdate))
+	e.POST("/auth/:id/update_state", UpdateAccountState, icrbac.PersonManage(policy.ObjectAuth, policy.ActionUpdate))
+	e.POST("/auth/:id/properties", UpdateAccountProperties, icrbac.PersonManage(policy.ObjectAuth, policy.ActionUpdate))
 	e.GET("/auth/whoami", WhoAmI)
 	e.POST("/auth/create_token", CreateToken)
 	e.GET("/auth/tokens", ListTokens, icrbac.Authorization(policy.ObjectAuth, policy.ActionRead))
@@ -36,7 +36,13 @@ type InviteUserRequest struct {
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
 	Email     string `json:"email"`
-	Role      string `json:"role"`
+
+	// Teams are the names of the teams the person joins when they accept the invite.
+	Teams []string `json:"teams,omitempty"`
+
+	// Deprecated: invites name teams instead (specs/authorization/rolebindings.md, Section 2.2).
+	// Still accepted so existing clients keep working, and assigned as a built-in role on acceptance.
+	Role string `json:"role,omitempty"`
 }
 
 func (k *KratosHandler) InviteUser(c echo.Context) error {

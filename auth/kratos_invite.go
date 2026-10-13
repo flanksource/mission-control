@@ -1,18 +1,23 @@
 package auth
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 	"gorm.io/gorm"
 )
 
@@ -22,9 +27,9 @@ func (k *KratosHandler) createInvite(ctx context.Context, req InviteUserRequest)
 		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "email is required")
 	}
 
-	role := strings.TrimSpace(req.Role)
-	if role == "" {
-		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "role is required")
+	grants := inviteGrants{
+		Role:  strings.TrimSpace(req.Role),
+		Teams: lo.Uniq(lo.Compact(lo.Map(req.Teams, func(t string, _ int) string { return strings.TrimSpace(t) }))),
 	}
 
 	var existingID string
@@ -35,7 +40,12 @@ func (k *KratosHandler) createInvite(ctx context.Context, req InviteUserRequest)
 		return nil, dutyAPI.Errorf(dutyAPI.ECONFLICT, "user already exists")
 	}
 
-	invite := &models.Invite{Email: email, Role: role}
+	encoded, err := grants.encode()
+	if err != nil {
+		return nil, ctx.Oops().Wrapf(err, "error encoding invite")
+	}
+
+	invite := &models.Invite{Email: email, Role: encoded}
 	if user := ctx.User(); user != nil {
 		invite.InvitedBy = &user.ID
 	}
@@ -102,8 +112,25 @@ func (k *KratosHandler) AfterRegistrationWebhook(c echo.Context) error {
 	}
 
 	if identityID != "" {
-		if err := rbac.AddRoleForUser(identityID, invite.Role); err != nil {
+		// The webhook isn't authenticated, so the payload's identity is only trusted when Kratos stored it with the invite's email
+		if err := verifyInvitedIdentity(ctx, identityID, email); err != nil {
+			return dutyAPI.WriteError(c, err)
+		}
+
+		grants, err := decodeInviteGrants(invite.Role)
+		if err != nil {
+			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "failed to read invite %s", invite.ID))
+		}
+
+		// A person with no built-in role isn't a guest, so their scoped read grants wouldn't filter listings
+		if grants.Role == "" {
+			grants.Role = policy.RoleGuest
+		}
+		if err := rbac.AddRoleForUser(identityID, grants.Role); err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "failed to assign invited role"))
+		}
+		if err := joinInvitedTeams(ctx, identityID, grants.Teams); err != nil {
+			return dutyAPI.WriteError(c, err)
 		}
 		if err := acceptKratosInvite(ctx, invite.ID.String()); err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "failed to accept invite"))
@@ -111,6 +138,93 @@ func (k *KratosHandler) AfterRegistrationWebhook(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// verifyInvitedIdentity returns an error unless Kratos has stored the identity with the invited email.
+func verifyInvitedIdentity(ctx context.Context, identityID, email string) error {
+	if _, err := uuid.Parse(identityID); err != nil {
+		return dutyAPI.Errorf(dutyAPI.EINVALID, "invalid identity id %q", identityID)
+	}
+
+	var stored string
+	if err := ctx.DB().Raw(`SELECT traits->>'email' FROM identities WHERE id = ?`, identityID).Scan(&stored).Error; err != nil {
+		return ctx.Oops().Wrapf(err, "error looking up identity %s", identityID)
+	}
+	if normalizeEmail(stored) != email {
+		return dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "identity %s wasn't registered with the invited email", identityID)
+	}
+	return nil
+}
+
+// inviteGrants are what an invite gives the person when they accept it.
+//
+// duty's invites table has no column for teams yet, so they're stored as JSON in its role column.
+// An invite with no teams stores its role's name as before, so older invites and readers of the column still work.
+// Move Teams to a column of its own, and drop Role, once duty has one.
+type inviteGrants struct {
+	// Deprecated: see InviteUserRequest.Role.
+	Role  string   `json:"role,omitempty"`
+	Teams []string `json:"teams,omitempty"`
+}
+
+func (g inviteGrants) encode() (string, error) {
+	if len(g.Teams) == 0 {
+		return g.Role, nil
+	}
+	b, err := json.Marshal(g)
+	return string(b), err
+}
+
+// decodeInviteGrants reads an invite's role column, written by inviteGrants.encode.
+func decodeInviteGrants(column string) (inviteGrants, error) {
+	if !strings.HasPrefix(column, "{") {
+		return inviteGrants{Role: column}, nil
+	}
+	var g inviteGrants
+	err := json.Unmarshal([]byte(column), &g)
+	return g, err
+}
+
+// SourceInvite is the source of the team memberships a person gets by accepting an invite.
+// Like memberships an admin adds, team mappers never touch them.
+const SourceInvite = "invite"
+
+// joinInvitedTeams adds the person to the teams their invite names. A team that doesn't exist is skipped and logged.
+func joinInvitedTeams(ctx context.Context, identityID string, teamNames []string) error {
+	if len(teamNames) == 0 {
+		return nil
+	}
+
+	personID, err := uuid.Parse(identityID)
+	if err != nil {
+		return dutyAPI.Errorf(dutyAPI.EINVALID, "invalid identity id %q", identityID)
+	}
+
+	var teams []models.Team
+	if err := ctx.DB().Where("name IN ? AND deleted_at IS NULL", teamNames).Find(&teams).Error; err != nil {
+		return ctx.Oops().Wrapf(err, "failed to find teams %v", teamNames)
+	}
+
+	for _, name := range teamNames {
+		if !slices.ContainsFunc(teams, func(t models.Team) bool { return t.Name == name }) {
+			ctx.Logger.Warnf("invite of person %s names team %q, which doesn't exist", personID, name)
+		}
+	}
+
+	for _, team := range teams {
+		result := ctx.DB().Exec(`INSERT INTO team_members (team_id, person_id, source) VALUES (?, ?, ?)
+			ON CONFLICT (team_id, person_id) DO NOTHING`, team.ID, personID, SourceInvite)
+		if result.Error != nil {
+			return ctx.Oops().Wrapf(result.Error, "failed to add person %s to team %s", personID, team.Name)
+		}
+		if result.RowsAffected > 0 {
+			if err := applyMembership(personID, team.ID, true); err != nil {
+				return ctx.Oops().Wrapf(err, "failed to add person %s to team %s", personID, team.Name)
+			}
+		}
+	}
+
+	return nil
 }
 
 func getKratosInvite(ctx context.Context, email string) (*models.Invite, error) {
