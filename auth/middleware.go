@@ -159,7 +159,9 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 
 	// After RBAC is initialised, so admin@local's team membership reaches the policy
 	if joinsAdmins {
-		joinAdmins(ctx, adminUserID)
+		if err := joinAdmins(ctx, adminUserID); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -174,16 +176,16 @@ func RegisterKratosRoutes(e *echo.Echo, k *KratosHandler) {
 }
 
 // joinAdmins adds admin@local to the shipped admins team, which is bound to the shipped admin Role.
-// It's how admins keep access, since built-in roles grant nothing. It's logged rather than returned: failing to
-// start would lock everyone out, and the next start tries again.
-func joinAdmins(ctx context.Context, adminUserID string) {
+// Built-in roles grant nothing, so it may be the only way in: a failure stops startup, and the next start tries again.
+func joinAdmins(ctx context.Context, adminUserID string) error {
 	adminID, err := uuid.Parse(adminUserID)
 	if err == nil {
 		err = shipped.AddToAdmins(ctx, adminID)
 	}
 	if err != nil {
-		logger.Errorf("failed to add %s to the %s team: %v", AdminEmail, shipped.TeamAdmins, err)
+		return fmt.Errorf("failed to add %s to the %s team: %w", AdminEmail, shipped.TeamAdmins, err)
 	}
+	return nil
 }
 
 type trustedUpstreamContextKey struct{}

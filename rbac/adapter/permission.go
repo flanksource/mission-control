@@ -692,11 +692,12 @@ func (a *PermissionAdapter) resolveSubjects(subject v1.PermissionGroupSubjects) 
 
 	if len(subject.People) > 0 {
 		var personIDs []string
+		people := lo.Without(subject.People, "*")
 		query := a.ctx.DB().Select("id").Model(&models.Person{}).
 			Where("deleted_at IS NULL").
 			Where("type IS DISTINCT FROM 'agent'").
 			Where("email IS NOT NULL"). // Excludes system user
-			Where("email IN ? OR name IN ?", subject.People, subject.People)
+			Where("email IN ? OR name IN ?", people, people)
 		if err := query.Find(&personIDs).Error; err != nil {
 			return nil, err
 		}

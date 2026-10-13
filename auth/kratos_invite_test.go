@@ -8,11 +8,11 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 )
 
 var _ = ginkgo.Describe("Kratos invites", ginkgo.Ordered, func() {
@@ -130,13 +130,16 @@ var _ = ginkgo.Describe("Kratos invites", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("assigns nothing for the built-in role an earlier version's invite stored", func() {
-		for _, column := range []string{"editor", `{"role":"admin","teams":["invite-sre"]}`} {
+		for column, teamIDs := range map[string][]string{
+			"editor": nil,
+			`{"role":"admin","teams":["invite-sre"]}`: {teams["invite-sre"].ID.String()},
+		} {
 			email := "invitee-role-" + uuid.NewString()[:8] + "@example.com"
 			Expect(DefaultContext.DB().Create(&models.Invite{Email: email, Role: column}).Error).To(Succeed())
 
 			person, code := accept(email)
 			Expect(code).To(Equal(http.StatusOK))
-			Expect(roles(person)).ToNot(ContainElements("editor", "admin", policy.RoleGuest))
+			Expect(lo.Uniq(roles(person))).To(ConsistOf(teamIDs), column)
 		}
 	})
 

@@ -154,9 +154,15 @@ type AccessTokenWithUser struct {
 	Person models.Person `json:"person" gorm:"foreignKey:PersonID"`
 }
 
-func ListAccessTokens(ctx context.Context) ([]AccessTokenWithUser, error) {
+// ListAccessTokens lists the tokens the person created and, when withAgents is set, every agent's token.
+func ListAccessTokens(ctx context.Context, creator uuid.UUID, withAgents bool) ([]AccessTokenWithUser, error) {
+	query := ctx.DB().Where("created_by = ?", creator)
+	if withAgents {
+		query = query.Or("person_id IN (?)", ctx.DB().Table("people").Select("id").Where("type = ?", PersonTypeAgent))
+	}
 	return gorm.G[AccessTokenWithUser](ctx.DB()).
 		Select("id", "name", "person_id", "created_at", "roles").
+		Where(query).
 		Preload("Person", nil).
 		Find(ctx)
 }

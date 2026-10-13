@@ -1,10 +1,12 @@
 package permissions_test
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
@@ -205,11 +207,11 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 	}
 
 	var (
-		e                                  *echo.Echo
-		configReader, legacyHolder, nobody *models.Person
-		readers                            = map[string]*models.Person{}
-		writers                            = map[string]*models.Person{}
-		persons                            []*models.Person
+		e                    *echo.Echo
+		configReader, nobody *models.Person
+		readers              = map[string]*models.Person{}
+		writers              = map[string]*models.Person{}
+		persons              []*models.Person
 	)
 
 	passes := func(person *models.Person, r route) bool {
@@ -247,24 +249,12 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 
 		nobody = person("nobody")
 
-		// Holds every route's legacy object directly, and the built-in roles that granted them
-		legacyHolder = person("legacy-holder", adapter.BuiltInRoles...)
-		for _, r := range routes {
-			if r.legacy.Object == objects[r.resource] {
-				continue
-			}
-			_, err := rbac.Enforcer().AddPolicy(legacyHolder.ID.String(), r.legacy.Object, r.legacy.Action, "allow", "", "legacy")
-			Expect(err).ToNot(HaveOccurred())
-		}
-
 		Expect(rbac.ReloadPolicy()).To(Succeed())
 
 		e = wholeTypeRoutes()
 	})
 
 	AfterAll(func() {
-		_, err := rbac.Enforcer().DeletePermissionsForUser(legacyHolder.ID.String())
-		Expect(err).ToNot(HaveOccurred())
 		for _, p := range persons {
 			Expect(DefaultContext.DB().Delete(p).Error).To(Succeed())
 		}
@@ -311,18 +301,74 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 		}
 	})
 
-	It("refuses a subject that only holds a route's legacy object, or a built-in role", func() {
-		refused := 0
-		for _, r := range routes {
-			// Notifications are the legacy object of their silences, so the holder reads notifications in their own right
-			if r.legacy.Object == objects[r.resource] || rbac.Check(DefaultContext, legacyHolder.ID.String(), objects[r.resource], r.legacy.Action) {
-				continue
-			}
-			Expect(rbac.Check(DefaultContext, legacyHolder.ID.String(), r.legacy.Object, r.legacy.Action)).To(BeTrue())
-			Expect(passes(legacyHolder, r)).To(BeFalse(), r.method+" "+r.path)
-			refused++
+	// checked is the object and action a route checks now
+	checked := func(r route) objectAction {
+		switch {
+		case r.path == "/agent/token":
+			return objectAction{objects[r.resource], policy.ActionUpdate}
+		case strings.HasSuffix(strings.Split(r.path, "?")[0], "/team_members") && r.write:
+			return objectAction{objects[r.resource], policy.ActionUpdate}
 		}
-		Expect(refused).To(BeNumerically(">=", 15))
+		return objectAction{objects[r.resource], map[string]string{
+			http.MethodGet: policy.ActionRead, http.MethodPost: policy.ActionCreate,
+			http.MethodPatch: policy.ActionUpdate, http.MethodDelete: policy.ActionDelete,
+		}[r.method]}
+	}
+
+	for _, r := range routes {
+		if r.legacy == checked(r) {
+			continue
+		}
+
+		It("refuses "+r.method+" "+r.path+" to a subject with only "+r.legacy.Object+":"+r.legacy.Action+" and the built-in roles", func() {
+			holder := person("legacy-"+uuid.NewString()[:8], adapter.BuiltInRoles...)
+			_, err := rbac.Enforcer().AddPolicy(holder.ID.String(), r.legacy.Object, r.legacy.Action, "allow", "", "legacy")
+			Expect(err).ToNot(HaveOccurred())
+			DeferCleanup(func() {
+				_, err := rbac.Enforcer().DeletePermissionsForUser(holder.ID.String())
+				Expect(err).ToNot(HaveOccurred())
+			})
+
+			Expect(rbac.Check(DefaultContext, holder.ID.String(), r.legacy.Object, r.legacy.Action)).To(BeTrue())
+			Expect(passes(holder, r)).To(BeFalse())
+		})
+	}
+
+	It("grants each action on a type on its own", func() {
+		creator := person("silence-creator")
+		bind(creator, "create-silences", v1.ResourceNotificationSilence, policy.ActionCreate)
+		Expect(rbac.ReloadPolicy()).To(Succeed())
+
+		Expect(authorized(serveAs(e, creator, http.MethodPost, "/notification/silence"))).To(BeTrue())
+		Expect(serveAs(e, creator, http.MethodPatch, "/db/notification_silences")).To(Equal(http.StatusForbidden))
+		Expect(serveAs(e, creator, http.MethodDelete, "/db/notification_silences")).To(Equal(http.StatusForbidden))
+		Expect(serveAs(e, creator, http.MethodGet, "/notification/silence_preview")).To(Equal(http.StatusForbidden))
+	})
+
+	It("limits a token by its Roles on each type's own object", func() {
+		owner := writers[v1.ResourceNotificationSilence]
+		bind(owner, "write-notifications-too", v1.ResourceNotification, policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete)
+		Expect(rbac.ReloadPolicy()).To(Succeed())
+		Expect(authorized(serveAs(e, owner, http.MethodPost, "/notification/silence"))).To(BeTrue())
+
+		body, err := json.Marshal(auth.CreateTokenRequest{Name: "notifications-only", Roles: models.AccessTokenRoles{{Namespace: namespace, Name: "write-notifications-too"}}})
+		Expect(err).ToNot(HaveOccurred())
+		req := httptest.NewRequest(http.MethodPost, "/auth/create_token", bytes.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		rec := httptest.NewRecorder()
+		Expect(auth.CreateToken(echo.New().NewContext(req.WithContext(DefaultContext.WithUser(owner)), rec))).To(Succeed())
+		Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+
+		var token models.AccessToken
+		Expect(DefaultContext.DB().Where("name = ? AND created_by = ?", "notifications-only", owner.ID).First(&token).Error).To(Succeed())
+		var tokenPerson models.Person
+		Expect(DefaultContext.DB().Where("id = ?", token.PersonID).First(&tokenPerson).Error).To(Succeed())
+		persons = append(persons, &tokenPerson)
+		DeferCleanup(func() { Expect(DefaultContext.DB().Delete(&token).Error).To(Succeed()) })
+
+		Expect(authorized(serveAs(e, &tokenPerson, http.MethodPatch, "/db/notifications"))).To(BeTrue())
+		Expect(serveAs(e, &tokenPerson, http.MethodPost, "/notification/silence")).To(Equal(http.StatusForbidden),
+			"a Role granting notifications doesn't grant their silences")
 	})
 
 	It("refuses writes to a Scope's targets through /db", func() {

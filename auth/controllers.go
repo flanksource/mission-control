@@ -28,7 +28,7 @@ func RegisterRoutes(e *echo.Echo) {
 	e.POST("/auth/:id/properties", UpdateAccountProperties, icrbac.PersonManage())
 	e.GET("/auth/whoami", WhoAmI)
 	e.POST("/auth/create_token", CreateToken)
-	e.GET("/auth/tokens", ListTokens, icrbac.Authorization(policy.ObjectAuth, policy.ActionRead))
+	e.GET("/auth/tokens", ListTokens)
 	e.DELETE("/auth/token/:id", DeleteToken)
 }
 
@@ -220,7 +220,14 @@ func CreateToken(c echo.Context) error {
 
 func ListTokens(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
-	payload, err := db.ListAccessTokens(ctx)
+	user := ctx.User()
+	if user == nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "error fetching user"))
+	}
+
+	// A person lists their own tokens without a grant, and agents' tokens when they may rotate or revoke them
+	// (specs/authorization/roles.md, Section 4.5)
+	payload, err := db.ListAccessTokens(ctx, user.ID, icrbac.CheckContext(ctx, policy.ObjectAgent, policy.ActionUpdate))
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "unable to list tokens"))
 	}
@@ -242,8 +249,18 @@ func DeleteToken(c echo.Context) error {
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error fetching token"))
 	}
-	// No action grants managing another person's tokens (specs/authorization/roles.md, Section 4.5)
-	if lo.FromPtr(token.CreatedBy) != ctx.User().ID {
+	personType, err := db.GetPersonType(ctx, token.PersonID.String())
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	// Revoking an agent's token takes update on agent. No action grants managing another person's tokens
+	// (specs/authorization/roles.md, Section 4.5).
+	if personType == db.PersonTypeAgent {
+		if !icrbac.CheckContext(ctx, policy.ObjectAgent, policy.ActionUpdate) {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "revoking an agent's token takes update on agent"))
+		}
+	} else if lo.FromPtr(token.CreatedBy) != ctx.User().ID {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "only the creator can delete an access token"))
 	}
 
