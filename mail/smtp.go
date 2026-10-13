@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 var fallbackSMTP v1.ConnectionSMTP
@@ -22,7 +23,17 @@ func SetFallbackSMTP(fromAddress, fromName string) {
 // GetDefaultSMTP returns the system SMTP configuration.
 // Priority: DB connection named "system" with type email, then env vars, then CLI flags.
 func GetDefaultSMTP(ctx context.Context) (v1.ConnectionSMTP, error) {
-	smtp, err := loadSMTPFromDB(ctx)
+	return getDefaultSMTP(ctx, nil)
+}
+
+// GetDefaultSMTPForRequest returns the system SMTP configuration to send a person's request with.
+// Filling in the system SMTP connection's credentials requires connection:use on it, as that person.
+func GetDefaultSMTPForRequest(ctx context.Context) (v1.ConnectionSMTP, error) {
+	return getDefaultSMTP(ctx, rbac.AuthorizeConnectionUse)
+}
+
+func getDefaultSMTP(ctx context.Context, authorize func(context.Context, models.Connection) error) (v1.ConnectionSMTP, error) {
+	smtp, err := loadSMTPFromDB(ctx, authorize)
 	if err != nil {
 		return v1.ConnectionSMTP{}, err
 	} else if smtp != nil {
@@ -32,7 +43,7 @@ func GetDefaultSMTP(ctx context.Context) (v1.ConnectionSMTP, error) {
 	return buildFallbackSMTP(), nil
 }
 
-func loadSMTPFromDB(ctx context.Context) (*v1.ConnectionSMTP, error) {
+func loadSMTPFromDB(ctx context.Context, authorize func(context.Context, models.Connection) error) (*v1.ConnectionSMTP, error) {
 	var conn models.Connection
 	err := ctx.DB().
 		Where("name = ? AND type = ? AND deleted_at IS NULL", "system", models.ConnectionTypeEmail).
@@ -42,6 +53,12 @@ func loadSMTPFromDB(ctx context.Context) (*v1.ConnectionSMTP, error) {
 		return nil, err
 	} else if conn.ID == uuid.Nil {
 		return nil, nil
+	}
+
+	if authorize != nil {
+		if err := authorize(ctx, conn); err != nil {
+			return nil, err
+		}
 	}
 
 	hydrated, err := ctx.HydrateConnection(&conn)
