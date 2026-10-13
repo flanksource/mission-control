@@ -1,6 +1,8 @@
-on: pull_request
+on:
+  workflow_call:
 name: Build
-permissions: read-all
+permissions:
+  contents: read
 jobs:
   build:
     runs-on: ubuntu-latest

@@ -1,0 +1,72 @@
+name: CI
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    uses: ./.github/workflows/lint.yml
+    secrets: inherit
+
+  test:
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    uses: ./.github/workflows/test.yml
+    secrets: inherit
+
+  build-binaries:
+    uses: ./.github/workflows/build-binaries.yml
+
+  build:
+    uses: ./.github/workflows/build.yml
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Free up disk space
+        run: |
+          rm -rf /usr/share/dotnet
+          rm -rf /opt/ghc
+          rm -rf /usr/local/share/boost
+          rm -rf $AGENT_TOOLSDIRECTORY
+          rm -rf /opt/hostedtoolcache
+
+      - name: Install Go
+        id: go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c
+        with:
+          go-version: 1.26.x
+          cache: false
+
+      - name: Checkout code
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Restore Go cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: cache-go-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            cache-go-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}-
+            cache-go-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
+
+      - name: E2E Test
+        run: make ginkgo e2e
+
+  passed:
+    if: always()
+    needs: [lint, test, build-binaries, build, e2e]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every CI job to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          jq -e '[.lint.result, .test.result, ."build-binaries".result, .build.result, .e2e.result] |
+            all(. == "success")' <<< "$RESULTS"

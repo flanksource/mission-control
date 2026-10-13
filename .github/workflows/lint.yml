@@ -1,7 +1,12 @@
 name: Lint
 on:
   pull_request:
-permissions: read-all
+  workflow_call:
+permissions:
+  contents: read
+concurrency:
+  group: lint-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 jobs:
   golangci:
     name: lint
@@ -16,15 +21,37 @@ jobs:
           rm -rf /opt/hostedtoolcache
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Install Go
+        id: go
         uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version: 1.26.x
           cache: false
+      - name: Restore Go cache
+        uses: actions/cache/restore@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: cache-go-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}-${{ github.sha }}
+          restore-keys: |
+            cache-go-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}-
+            cache-go-${{ runner.os }}-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
+      - name: Check Go formatting
+        run: |
+          unformatted=$(git ls-files -z '*.go' | xargs -0 gofmt -l)
+          if [ -n "$unformatted" ]; then
+            printf 'Run gofmt on:\n%s\n' "$unformatted"
+            exit 1
+          fi
       - name: Check clientapi dependencies
         run: make check-clientapi-dependencies
       - run: make -B manifests
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # For deps
+      - name: Check generated files
+        run: |
+          git diff --exit-code -- api logs config/crds config/schemas
+          test -z "$(git ls-files --others --exclude-standard -- api logs config/crds config/schemas)"
       - run: make auth/oidc/static/tailwind.min.js
       - run: make ui
         env:

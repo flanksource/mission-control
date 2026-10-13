@@ -7,7 +7,38 @@ on:
 permissions: {} # start with no permission
 
 jobs:
+  ci:
+    permissions:
+      contents: read
+      checks: write
+      pull-requests: write
+    uses: ./.github/workflows/ci.yml
+    secrets: inherit
+
+  notify-ci-failure:
+    needs: ci
+    if: always() && needs.ci.result != 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify Slack
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          REPOSITORY: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          RESULT: ${{ needs.ci.result }}
+        run: |
+          if [ -z "$SLACK_WEBHOOK_URL" ]; then
+            echo '::error::Set SLACK_WEBHOOK_URL to receive main CI failure notifications.'
+            exit 1
+          fi
+          jq -n --arg text "$REPOSITORY: main CI for $SHA ended with $RESULT. Release blocked. $RUN_URL" '{text: $text}' |
+            curl --fail --silent --show-error --retry 3 --connect-timeout 10 --max-time 30 \
+              -H 'Content-Type: application/json' --data-binary @- "$SLACK_WEBHOOK_URL"
+
   create-release:
+    needs: ci
+    if: needs.ci.result == 'success'
     permissions:
       contents: write
       issues: write
