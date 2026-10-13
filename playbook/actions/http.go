@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 type HTTPResult = api.PlaybookHTTPResult
@@ -17,8 +18,8 @@ type HTTP struct {
 
 func (c *HTTP) Run(ctx context.Context, action v1.HTTPAction) (*HTTPResult, error) {
 	if action.HTTPConnection.ConnectionName != "" {
-		if _, err := connection.Get(ctx, action.HTTPConnection.ConnectionName); err != nil {
-			return nil, fmt.Errorf("failed to hydrate connection: %w", err)
+		if err := rbac.AuthorizeConnectionRefUse(ctx, action.HTTPConnection.ConnectionName); err != nil {
+			return nil, err
 		}
 	}
 

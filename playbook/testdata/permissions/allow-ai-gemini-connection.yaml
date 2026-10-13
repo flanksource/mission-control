@@ -3,11 +3,11 @@ kind: Permission
 metadata:
   name: allow-playbook-artifacts
 spec:
-  description: allow playbook default/diagnose-resource to read connection default/gemini
+  description: allow playbook default/diagnose-resource to use connection default/gemini
   subject:
     playbook: default/diagnose-resource
   actions:
-    - read
+    - connection:use
   object:
     connections:
       - name: gemini

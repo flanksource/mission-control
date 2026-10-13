@@ -299,7 +299,7 @@ var _ = Describe("Playbook", Ordered, func() {
 
 			Expect(actions).To(HaveLen(1))
 			Expect(actions[0].Status).To(Equal(models.PlaybookActionStatusFailed))
-			Expect(*actions[0].Error).To(ContainSubstring("permission required on connection://mc/httpbin"))
+			Expect(*actions[0].Error).To(ContainSubstring("connection:use required on connection mc/httpbin"))
 		})
 
 		It("should allow access to the connection", func() {

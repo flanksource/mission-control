@@ -12,7 +12,6 @@ import (
 
 	"github.com/flanksource/artifacts"
 	"github.com/flanksource/commons/duration"
-	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -24,6 +23,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/pkg/clients/git"
 	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/report"
 	"github.com/flanksource/incident-commander/report/catalog"
 	"github.com/flanksource/incident-commander/views"
@@ -91,7 +91,8 @@ func (r *Report) RunWithConfigs(ctx context.Context, action v1.ReportAction, con
 }
 
 func (r *Report) runWithConfigs(ctx context.Context, action v1.ReportAction, configs []models.ConfigItem) (*ReportResult, error) {
-	result, err := r.run(ctx, action, configs)
+	// The facet connection, named by the action or Mission Control's default, is used as the playbook
+	result, err := r.run(report.WithConnectionUse(ctx), action, configs)
 	if result == nil {
 		result = &ReportResult{}
 	}
@@ -137,6 +138,10 @@ func (r *Report) runView(ctx context.Context, action v1.ReportAction, format str
 		return nil, fmt.Errorf("view %s not found", action.View)
 	}
 
+	if err := authorizeViewConnections(ctx, v, action.Variables); err != nil {
+		return nil, err
+	}
+
 	r.logf(ctx, "exporting view %s as %s", action.View, format)
 	rendered, err := views.Export(ctx, v, action.Variables, format, action.Facet)
 	if err != nil {
@@ -145,6 +150,21 @@ func (r *Report) runView(ctx context.Context, action v1.ReportAction, format str
 	r.logf(ctx, "view exported (%d bytes)", len(rendered))
 
 	return reportResult(format, rendered), nil
+}
+
+// authorizeViewConnections checks connection:use, as the playbook, on the connections the view's queries fill in, as
+// they'll be run: templated with the variables, in the view's namespace.
+func authorizeViewConnections(ctx context.Context, view *v1.View, variables map[string]string) error {
+	ctx = ctx.WithNamespace(view.GetNamespace())
+
+	queries := view.DeepCopy().Spec.Queries
+	if len(variables) > 0 {
+		if err := ctx.NewStructTemplater(map[string]any{"var": variables}, "", nil).Walk(&queries); err != nil {
+			return fmt.Errorf("failed to template queries: %w", err)
+		}
+	}
+
+	return rbac.AuthorizeConnectionRefsUse(ctx, queries)
 }
 
 func (r *Report) runCatalog(ctx context.Context, action v1.ReportAction, format string, configs []models.ConfigItem) (*ReportResult, error) {
@@ -387,7 +407,7 @@ func resolveGitReportSource(ctx context.Context, src *v1.ReportGitFile) (srcDir,
 	}
 
 	if src.Connection != "" {
-		conn, err := pkgConnection.Get(ctx, src.Connection)
+		conn, err := rbac.GetConnectionForUse(ctx, src.Connection)
 		if err != nil {
 			return "", "", ctx.Oops().Wrap(err)
 		}

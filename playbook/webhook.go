@@ -20,18 +20,16 @@ import (
 	"github.com/MicahParks/keyfunc/v2"
 	durationutils "github.com/flanksource/commons/duration"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/commons/utils"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
 
-	mcApi "github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/actions"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 const svixWebhookSecretPrefix = "whsec_"
@@ -39,7 +37,7 @@ const svixWebhookSecretPrefix = "whsec_"
 var jwksCache = cache.New(10*time.Minute, time.Hour)
 
 func HandleWebhook(c echo.Context) error {
-	ctx := c.Request().Context().(context.Context).WithUser(&models.Person{ID: utils.Deref(mcApi.SystemUserID)})
+	ctx := c.Request().Context().(context.Context)
 
 	var path = c.Param("webhook_path")
 	playbook, err := db.FindPlaybookByWebhookPath(ctx, path)
@@ -54,7 +52,8 @@ func HandleWebhook(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "playbook has an invalid spec"))
 	}
 
-	ctx = ctx.WithNamespace(playbook.Namespace)
+	// The webhook authenticates the request, but isn't a subject: the run is started as the playbook itself.
+	ctx = runAsPlaybook(ctx.WithNamespace(playbook.Namespace), playbook)
 
 	if spec.On.Webhook.Authentication != nil {
 		if err := authenticateWebhook(ctx, c.Request(), spec.On.Webhook.Authentication); err != nil {
@@ -72,6 +71,10 @@ func HandleWebhook(c echo.Context) error {
 	runRequest.Request = whr
 
 	if _, err = Run(ctx, playbook, runRequest); err != nil {
+		if utils.MatchOopsErrCode(err, dutyAPI.EFORBIDDEN) {
+			logToJobHistory(ctx, playbook.ID.String(), err.Error())
+			return dutyAPI.WriteError(c, err)
+		}
 		return dutyAPI.WriteError(c, fmt.Errorf("failed to save playbook run: %w", err))
 	}
 

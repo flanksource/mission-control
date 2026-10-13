@@ -26,6 +26,7 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/llm"
 	llmContext "github.com/flanksource/incident-commander/llm/context"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/utils"
 )
 
@@ -125,6 +126,11 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	knowledgebase, prompt, err := buildPrompt(ctx, spec.Prompt, spec.LLMContextRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to form prompt: %w", err)
+	}
+
+	// The LLM, output schema and skill connections the action names
+	if err := rbac.AuthorizeConnectionRefsUse(ctx, spec); err != nil {
+		return nil, err
 	}
 
 	if err := spec.AIActionClient.Populate(ctx); err != nil {

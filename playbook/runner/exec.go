@@ -15,6 +15,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	pkgArtifacts "github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/playbook/actions"
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 type ArtifactAccessor interface {
@@ -82,6 +83,10 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 			ctx.Debugf("skipping %s", actionSpec.Name)
 			return executeActionResult{skipped: true}, nil
 		}
+	}
+
+	if err := rbac.AuthorizeConnectionRefsUse(ctx, actionSpec); err != nil {
+		return executeActionResult{}, err
 	}
 
 	ctx.Debugf("executing %s", actionSpec.Name)

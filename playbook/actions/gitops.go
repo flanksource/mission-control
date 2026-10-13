@@ -11,7 +11,6 @@ import (
 
 	"github.com/flanksource/commons/files"
 	"github.com/flanksource/commons/logger"
-	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -23,6 +22,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/pkg/clients/git"
 	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/utils"
 )
 
@@ -167,7 +167,7 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 	}
 
 	if action.Repo.Connection != "" {
-		conn, err := pkgConnection.Get(ctx, action.Repo.Connection)
+		conn, err := rbac.GetConnectionForUse(ctx, action.Repo.Connection)
 		if err != nil {
 			return ctx.Oops().Wrap(err)
 		} else if conn == nil {

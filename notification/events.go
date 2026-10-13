@@ -12,6 +12,7 @@ import (
 
 	sw "github.com/RussellLuo/slidingwindow"
 	"github.com/flanksource/duty"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/pkg/tokenizer"
@@ -27,6 +28,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 const DefaultGroupByInterval = time.Hour * 24
@@ -139,9 +141,6 @@ func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, groupID *u
 // If a notification is found for the given event and passes all the filters, then
 // a new `notification.send` event is created.
 func (t *notificationHandler) addNotificationEvent(ctx context.Context, event models.Event) error {
-	// We need an authorized RBAC subject to read connections.
-	// So we use the system user as the subject.
-	ctx = ctx.WithSubject(api.SystemUserID.String())
 	if event.Name == "config.healthy" || event.Name == "component.healthy" || event.Name == "check.passed" {
 		if err := wakeNotificationResource(ctx, strings.SplitN(event.Name, ".", 2)[0], event.EventID); err != nil {
 			ctx.Errorf("notification recovery wake-up: %v", err)
@@ -661,6 +660,7 @@ func sendPendingNotification(ctx context.Context, history models.NotificationSen
 	if IsStaleResourceEventError(err) {
 		return nil
 	}
+	recordRefusedSend(ctx, payload.NotificationID.String(), err)
 	return err
 }
 
@@ -779,8 +779,18 @@ func sendNotification(ctx context.Context, payload NotificationEventPayload) err
 				return errors.Join(err, fallbackErr)
 			}
 		}
+		recordRefusedSend(ctx, n.ID.String(), err)
 	}
 	return err
+}
+
+// recordRefusedSend records on the notification's status a send it was refused, e.g. for lacking connection:use on
+// the connection it sends through. The send history already holds the error. A refused send is only ever retried as
+// the notification, never as another subject (specs/authorization/roles.md, Section 4.4).
+func recordRefusedSend(ctx context.Context, notificationID string, err error) {
+	if utils.MatchOopsErrCode(err, dutyAPI.EFORBIDDEN) {
+		logs.IfError(db.SetNotificationError(ctx, notificationID, err.Error()), "failed to update notification")
+	}
 }
 
 func logNotificationEndLogError(ctx *Context, sendErr, endLogErr error) {

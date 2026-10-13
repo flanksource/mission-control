@@ -4,10 +4,10 @@ metadata:
   name: allow-artifacts
   namespace: default
 spec:
-  description: allow playbook to read artifacts connection
+  description: allow playbook to use the artifacts connection
   subject:
     playbook: "{{playbookRef}}"
-  actions: ["read"]
+  actions: ["connection:use"]
   object:
     selectors:
       connections:

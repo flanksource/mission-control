@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/robfig/cron/v3"
 
-	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/playbook/runner"
 )
@@ -134,10 +133,8 @@ func triggerScheduledRun(ctx context.Context, playbookID uuid.UUID, scheduleInde
 		return
 	}
 
-	ctx = ctx.WithNamespace(pb.Namespace)
-	if api.SystemUserID != nil {
-		ctx = ctx.WithUser(&models.Person{ID: *api.SystemUserID})
-	}
+	// No person started the run, so it's started as the playbook itself.
+	ctx = runAsPlaybook(ctx.WithNamespace(pb.Namespace), &pb)
 
 	params, err := getScheduledRunParams(&pb, scheduleIndex, schedule)
 	if err != nil {
@@ -157,7 +154,7 @@ func triggerScheduledRun(ctx context.Context, playbookID uuid.UUID, scheduleInde
 		ID:     pb.ID,
 		Params: templatedParams,
 	}
-	if _, err := createPlaybookRun(ctx.WithObject(&pb, req), &pb, req, playbookRunOptions{}); err != nil {
+	if _, err := createPlaybookRun(ctx.WithObject(&pb, req), &pb, req, playbookRunOptions{CheckPermissions: true}); err != nil {
 		ctx.Errorf("failed to create scheduled run for playbook %s: %v", playbookID, err)
 		logToJobHistory(ctx, playbookID.String(), err.Error())
 	}

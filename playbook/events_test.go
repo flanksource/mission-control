@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
@@ -48,13 +49,19 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			playbook = models.Playbook{
-				Name:   "new config writer",
-				Spec:   spec,
-				Source: models.SourceConfigFile,
+				Name:      "new config writer",
+				Namespace: "default",
+				Spec:      spec,
+				Source:    models.SourceConfigFile,
 			}
 
 			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&playbook).Error
 			Expect(err).NotTo(HaveOccurred())
+
+			ginkgo.DeferCleanup(bindPlaybook(playbook,
+				runOnItself(playbook, &allConfigs),
+				playbookGrant{Action: policy.ActionRead, Resource: allConfigs},
+			))
 		})
 
 		ginkgo.AfterAll(func() {
@@ -146,13 +153,20 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			playbook = models.Playbook{
-				Name:   "unhealthy component writer",
-				Spec:   spec,
-				Source: models.SourceConfigFile,
+				Name:      "unhealthy component writer",
+				Namespace: "default",
+				Spec:      spec,
+				Source:    models.SourceConfigFile,
 			}
 
 			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&playbook).Error
 			Expect(err).NotTo(HaveOccurred())
+
+			allComponents := v1.ScopeTarget{Component: &v1.ScopeLabelledSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}
+			ginkgo.DeferCleanup(bindPlaybook(playbook,
+				runOnItself(playbook, &allComponents),
+				playbookGrant{Action: policy.ActionRead, Resource: allComponents},
+			))
 		})
 
 		ginkgo.It("update health to something else other than unhealthy", func() {

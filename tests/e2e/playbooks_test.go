@@ -190,9 +190,9 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 				UID:       types.UID(uuid.NewString()),
 			},
 			Spec: v1.PermissionSpec{
-				Description: fmt.Sprintf("allow %s to read artifacts connection", playbookRef),
+				Description: fmt.Sprintf("allow %s to use the artifacts connection", playbookRef),
 				Subject:     v1.PermissionSubject{Playbook: playbookRef},
-				Actions:     []string{"read"},
+				Actions:     []string{"connection:use"},
 				Object: v1.PermissionObject{
 					Selectors: dutyRBAC.Selectors{
 						Connections: []dutyTypes.ResourceSelector{{Name: "artifacts", Namespace: "default"}},
@@ -201,6 +201,25 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 			},
 		}
 		Expect(db.PersistPermissionFromCRD(DefaultContext, perm)).To(Succeed())
+
+		// No person starts a scheduled run: the playbook needs playbook:run on itself
+		Expect(db.PersistPermissionFromCRD(DefaultContext, &v1.Permission{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("allow-%s-run-itself", pb.Name),
+				Namespace: pb.Namespace,
+				UID:       types.UID(uuid.NewString()),
+			},
+			Spec: v1.PermissionSpec{
+				Description: fmt.Sprintf("allow %s to run on its schedule", playbookRef),
+				Subject:     v1.PermissionSubject{Playbook: playbookRef},
+				Actions:     []string{"playbook:run"},
+				Object: v1.PermissionObject{
+					Selectors: dutyRBAC.Selectors{
+						Playbooks: []dutyTypes.ResourceSelector{{Name: pb.Name, Namespace: pb.Namespace}},
+					},
+				},
+			},
+		})).To(Succeed())
 		Expect(dutyRBAC.ReloadPolicy()).To(Succeed())
 
 		playbookModel, err := pb.ToModel()

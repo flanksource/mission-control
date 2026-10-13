@@ -17,12 +17,12 @@ import (
 	"github.com/emersion/go-smtp"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -96,7 +96,7 @@ func newRecoverySMTP(n NotificationWithSpec) (*recoverySMTP, models.Connection) 
 }
 
 func grantRecoveryConnection(n NotificationWithSpec, conn models.Connection) {
-	_, err := rbac.Enforcer().AddPolicy(n.ID.String(), "*", policy.ActionRead, "allow", fmt.Sprintf("r.obj.Connection.Name == %q", conn.Name), conn.ID.String())
+	_, err := rbac.Enforcer().AddPolicy(n.ID.String(), "*", adapter.ActionConnectionUse, "allow", fmt.Sprintf("r.obj.Connection.Name == %q", conn.Name), conn.ID.String())
 	Expect(err).NotTo(HaveOccurred())
 }
 

@@ -1,6 +1,9 @@
 package rbac
 
 import (
+	"encoding/json"
+	"strings"
+
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -75,4 +78,165 @@ func withinScopeLimits(ctx context.Context, conn models.Connection) bool {
 		}
 	}
 	return true
+}
+
+// GetConnectionForUse finds the connection a reference names, by id or connection://<namespace>/<name>, and returns
+// it with its credentials filled in, if the subject doing the work may use it (connection:use, checked as
+// ctx.Subject()), and every connection its properties name. It's for work done as a resource, e.g. a playbook's
+// actions or a notification's send, so there's no transitional fallback for people.
+func GetConnectionForUse(ctx context.Context, ref string) (*models.Connection, error) {
+	conn, err := findStoredConnection(ctx, ref)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := authorizeSubjectConnectionUse(ctx, *conn); err != nil {
+		return nil, err
+	}
+
+	hydrated, err := context.HydrateConnection(ctx, conn)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := authorizeNestedConnectionsUse(ctx, *hydrated, map[uuid.UUID]bool{hydrated.ID: true}); err != nil {
+		return nil, err
+	}
+	return hydrated, nil
+}
+
+// AuthorizeConnectionRefUse checks connection:use as ctx.Subject() on the connection a reference names, and on every
+// connection its properties name, before something else fills in their credentials. A reference that isn't a
+// connection id or connection://<namespace>/<name> names no stored connection, e.g. a URL, and passes. One that names
+// no existing connection is refused.
+//
+// The reference is resolved as duty resolves it when it fills the credentials in, through its connection cache and in
+// ctx's namespace, so the connection checked is the one whose credentials are used, even while duty still has a
+// connection deleted or replaced under the same name cached.
+func AuthorizeConnectionRefUse(ctx context.Context, ref string) error {
+	return authorizeConnectionRefUse(ctx, ref, map[uuid.UUID]bool{})
+}
+
+// AuthorizeConnectionRefsUse checks connection:use as ctx.Subject() on every connection a spec names, i.e. every
+// "connection" field holding a connection id or connection://<namespace>/<name>, at any depth of its JSON form.
+func AuthorizeConnectionRefsUse(ctx context.Context, spec any) error {
+	b, err := json.Marshal(spec)
+	if err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+
+	var doc any
+	if err := json.Unmarshal(b, &doc); err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+
+	seen := map[uuid.UUID]bool{}
+	for _, ref := range lo.Uniq(connectionRefs(doc)) {
+		if err := authorizeConnectionRefUse(ctx, ref, seen); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func isStoredConnectionRef(ref string) bool {
+	_, err := uuid.Parse(ref)
+	return err == nil || strings.HasPrefix(ref, "connection://")
+}
+
+func findStoredConnection(ctx context.Context, ref string) (*models.Connection, error) {
+	conn, err := context.FindConnectionByURL(ctx, ref)
+	if err != nil {
+		return nil, err
+	} else if conn == nil {
+		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("connection (%s) not found", ref)
+	}
+	return conn, nil
+}
+
+func authorizeConnectionRefUse(ctx context.Context, ref string, seen map[uuid.UUID]bool) error {
+	ref = strings.TrimSpace(ref)
+	if !isStoredConnectionRef(ref) {
+		return nil
+	}
+
+	conn, err := ctx.HydrateConnectionByURL(ref)
+	if err != nil {
+		return err
+	} else if conn == nil {
+		return ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("connection (%s) not found", ref)
+	}
+
+	if seen[conn.ID] {
+		return nil
+	}
+	seen[conn.ID] = true
+
+	if err := authorizeSubjectConnectionUse(ctx, *conn); err != nil {
+		return err
+	}
+	return authorizeNestedConnectionsUse(ctx, *conn, seen)
+}
+
+// authorizeNestedConnectionsUse checks connection:use on the connections a hydrated connection's properties name, e.g.
+// an HTTP connection's awsSigV4 connection, whose credentials are filled in along with its own. The properties must
+// already be resolved, since one can be read from a secret or configmap, and the references are resolved in ctx's
+// namespace, not the connection's, as duty resolves them.
+func authorizeNestedConnectionsUse(ctx context.Context, conn models.Connection, seen map[uuid.UUID]bool) error {
+	for _, value := range conn.Properties {
+		var doc any
+		if err := json.Unmarshal([]byte(value), &doc); err != nil {
+			continue
+		}
+		for _, ref := range lo.Uniq(connectionRefs(doc)) {
+			if err := authorizeConnectionRefUse(ctx, ref, seen); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func connectionRefs(doc any) []string {
+	var refs []string
+	switch v := doc.(type) {
+	case map[string]any:
+		for key, value := range v {
+			if s, ok := value.(string); ok && key == "connection" && s != "" {
+				refs = append(refs, s)
+			} else {
+				refs = append(refs, connectionRefs(value)...)
+			}
+		}
+	case []any:
+		for _, item := range v {
+			refs = append(refs, connectionRefs(item)...)
+		}
+	}
+	return refs
+}
+
+type upstreamDispatchKey struct{}
+
+// WithUpstreamDispatch marks the work an agent does for a playbook action upstream dispatched to it. Upstream already
+// authorized the run as its playbook, and an agent only fetches the actions assigned to it, by its own identity
+// (specs/authorization/roles.md, Section 4.6). So the agent doesn't check connection:use again against its own
+// bindings, which select no upstream playbook.
+func WithUpstreamDispatch(ctx context.Context) context.Context {
+	return ctx.WithValue(upstreamDispatchKey{}, true)
+}
+
+func dispatchedFromUpstream(ctx context.Context) bool {
+	dispatched, _ := ctx.Value(upstreamDispatchKey{}).(bool)
+	return dispatched
+}
+
+func authorizeSubjectConnectionUse(ctx context.Context, conn models.Connection) error {
+	if dispatchedFromUpstream(ctx) || CanUseConnection(ctx, ctx.Subject(), conn) {
+		return nil
+	}
+
+	return ctx.Oops().Code(dutyAPI.EFORBIDDEN).
+		With("permission", adapter.ActionConnectionUse, "connection", conn.ID).
+		Errorf("access denied to %s: %s required on connection %s/%s", ctx.Subject(), adapter.ActionConnectionUse, conn.Namespace, conn.Name)
 }

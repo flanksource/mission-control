@@ -22,6 +22,7 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/notification"
+	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/flanksource/incident-commander/utils"
 )
 
@@ -123,7 +124,7 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue
 			} else if ok {
-				if err := ctx.DB().Create(&run).Error; err != nil {
+				if err := startEventRun(ctx, &p, run); err != nil {
 					return err
 				}
 			}
@@ -133,7 +134,7 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue
 			} else if ok {
-				if err := ctx.DB().Create(&run).Error; err != nil {
+				if err := startEventRun(ctx, &p, run); err != nil {
 					return err
 				}
 			}
@@ -143,7 +144,7 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue
 			} else if ok {
-				if err := ctx.DB().Create(&run).Error; err != nil {
+				if err := startEventRun(ctx, &p, run); err != nil {
 					return err
 				}
 			}
@@ -151,6 +152,27 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 	}
 
 	return nil
+}
+
+// startEventRun creates the run of a playbook triggered by an event. No person started it, so it's created only if
+// the playbook passes, as itself, the checks a person starting it would. A refusal creates no run and is recorded in
+// the playbook's job history.
+func startEventRun(ctx context.Context, playbook *models.Playbook, run models.PlaybookRun) error {
+	playbookCtx := runAsPlaybook(ctx, playbook)
+
+	templateEnv, err := runner.CreateTemplateEnv(playbookCtx, playbook, run, nil)
+	if err != nil {
+		logToJobHistory(ctx, playbook.ID.String(), err.Error())
+		return nil
+	}
+
+	if err := authorizeRunStart(playbookCtx, run, templateEnv); err != nil {
+		ctx.Warnf("playbook %s/%s was refused an event-triggered run: %v", playbook.Namespace, playbook.Name, err)
+		logToJobHistory(ctx, playbook.ID.String(), err.Error())
+		return nil
+	}
+
+	return ctx.DB().Create(&run).Error
 }
 
 // logToJobHistory logs any failures in saving a playbook run to the job history.

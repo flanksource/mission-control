@@ -3,6 +3,8 @@ package actions
 import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/dataquery"
+
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 type Prometheus struct{}
@@ -15,6 +17,10 @@ type PrometheusResult struct {
 }
 
 func (p *Prometheus) Run(ctx context.Context, query dataquery.PrometheusQuery) (*PrometheusResult, error) {
+	if err := rbac.AuthorizeConnectionRefsUse(ctx, query); err != nil {
+		return nil, err
+	}
+
 	rows, err := dataquery.ExecuteQuery(ctx, dataquery.Query{Prometheus: &query})
 	if err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to execute prometheus query")

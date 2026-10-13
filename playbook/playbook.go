@@ -29,6 +29,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/flanksource/incident-commander/vars"
 
@@ -195,30 +196,8 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 	}
 
 	if opts.CheckPermissions {
-		attr, err := run.GetABACAttributes(ctx.DB())
-		if err != nil {
-			return nil, ctx.Oops().Wrap(err)
-		}
-
-		// Every check of the run sees the Scope membership of one moment
-		checkCtx, err := membership.ForOperation(ctx, rbac.MembershipRefs(attr, templateEnv.ABACAttributes())...)
-		if err != nil {
-			return nil, ctx.Oops().Wrap(err)
-		}
-
-		// Must have read access on the target, if any (required to prevent guests from accessing unauthorized resources)
-		if templateEnv.SelectableResource() != nil && !icrbac.HasPermission(checkCtx, ctx.Subject(), templateEnv.ABACAttributes(), policy.ActionRead) {
-			return nil, ctx.Oops().
-				Code(dutyAPI.EFORBIDDEN).
-				With("permission", policy.ActionRead, "objects", templateEnv.ABACAttributes()).
-				Wrap(fmt.Errorf("access denied: read access to resource not allowed for subject: %s", ctx.Subject()))
-		}
-
-		if !icrbac.HasPermission(checkCtx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
-			return nil, ctx.Oops().
-				Code(dutyAPI.EFORBIDDEN).
-				With("permission", policy.ActionPlaybookRun, "objects", attr).
-				Wrap(fmt.Errorf("access denied to subject(%s): cannot run playbook on this resource", ctx.Subject()))
+		if err := authorizeRunStart(ctx, run, templateEnv); err != nil {
+			return nil, err
 		}
 	}
 
@@ -296,6 +275,44 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 	}
 
 	return &run, nil
+}
+
+// authorizeRunStart checks that ctx.Subject() may start the run: playbook:run on its playbook, with its target if it
+// has one, then read on the target (specs/authorization/roles.md, Section 4.3).
+func authorizeRunStart(ctx context.Context, run models.PlaybookRun, templateEnv actions.TemplateEnv) error {
+	attr, err := run.GetABACAttributes(ctx.DB())
+	if err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+
+	// Every check of the run sees the Scope membership of one moment
+	checkCtx, err := membership.ForOperation(ctx, rbac.MembershipRefs(attr, templateEnv.ABACAttributes())...)
+	if err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+
+	if !icrbac.HasPermission(checkCtx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
+		return ctx.Oops().
+			Code(dutyAPI.EFORBIDDEN).
+			With("permission", policy.ActionPlaybookRun, "objects", attr).
+			Wrap(fmt.Errorf("access denied to subject(%s): cannot run playbook on this resource", ctx.Subject()))
+	}
+
+	// Must have read access on the target, if any (required to prevent guests from accessing unauthorized resources)
+	if templateEnv.SelectableResource() != nil && !icrbac.HasPermission(checkCtx, ctx.Subject(), templateEnv.ABACAttributes(), policy.ActionRead) {
+		return ctx.Oops().
+			Code(dutyAPI.EFORBIDDEN).
+			With("permission", policy.ActionRead, "objects", templateEnv.ABACAttributes()).
+			Wrap(fmt.Errorf("access denied: read access to resource not allowed for subject: %s", ctx.Subject()))
+	}
+
+	return nil
+}
+
+// runAsPlaybook returns a context that checks as the playbook itself, for a run no person started
+// (specs/authorization/roles.md, Section 4.4).
+func runAsPlaybook(ctx context.Context, playbook *models.Playbook) context.Context {
+	return ctx.WithSubject(playbook.ID.String())
 }
 
 func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run models.PlaybookRun, parameters any) error {
