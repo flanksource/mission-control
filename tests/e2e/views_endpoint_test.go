@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// viewReader creates a person allowed to read the pods view through a Permission: no Role rule selects views yet.
+// viewReader creates a person allowed to read views through a Permission: no Role rule selects views yet.
 func viewReader(name, email string) *models.Person {
 	ginkgo.GinkgoHelper()
 	person := setup.CreateUserWithRole(DefaultContext, name, email)
@@ -32,7 +32,7 @@ func viewReader(name, email string) *models.Person {
 			Subject: v1.PermissionSubject{Person: person.Email},
 			Actions: []string{policy.ActionRead},
 			Object: v1.PermissionObject{Selectors: dutyRBAC.Selectors{
-				Views: []dutyRBAC.ViewRef{{Namespace: dummy.PodView.Namespace, Name: dummy.PodView.Name}},
+				Views: []dutyRBAC.ViewRef{{Name: "*"}},
 			}},
 		},
 	}

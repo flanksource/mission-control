@@ -10,6 +10,7 @@ import (
 	"time"
 
 	icrbac "github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 
 	"github.com/flanksource/commons-test/container"
 	"github.com/labstack/echo/v4"
@@ -22,6 +23,8 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 
@@ -164,6 +167,9 @@ func stopContainers() {
 	}
 }
 
+// artifactReader is the subject artifacts are read as in fixtures
+const artifactReader = "e2e-artifact-reader"
+
 var _ = ginkgo.BeforeSuite(func() {
 	startContainers()
 
@@ -238,6 +244,17 @@ var _ = ginkgo.BeforeSuite(func() {
 	if err := testdata.LoadPermissions(DefaultContext); err != nil {
 		ginkgo.Fail(err.Error())
 	}
+
+	// artifactReader reads artifacts through their connections: built-in roles grant nothing
+	Expect(DefaultContext.DB().Create(&models.Permission{
+		Name:           "e2e-artifact-reader",
+		Namespace:      "default",
+		Action:         policy.ActionRead + "," + adapter.ActionConnectionUse,
+		Subject:        artifactReader,
+		SubjectType:    models.PermissionSubjectTypePerson,
+		ObjectSelector: []byte(`{"connections":[{"name":"*"}]}`),
+	}).Error).To(Succeed())
+	Expect(dutyRBAC.ReloadPolicy()).To(Succeed())
 })
 
 var _ = ginkgo.AfterSuite(func() {

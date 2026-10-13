@@ -204,7 +204,7 @@ func compareOutput(expected expectedOutput, run *models.PlaybookRun, actions []m
 			}
 
 			if len(ea.Artifacts) == 1 && len(ea.Artifacts[0].Contains) > 0 {
-				contents, err := artifacts.GetArtifactContents(DefaultContext.WithSubject("admin"), actual.ID.String())
+				contents, err := artifacts.GetArtifactContents(DefaultContext.WithSubject(artifactReader), actual.ID.String())
 				Expect(err).NotTo(HaveOccurred(), "action[%d] artifact contents", i)
 				Expect(contents).To(HaveLen(1), "action[%d] expected 1 artifact for content comparison", i)
 				for _, expected := range ea.Artifacts[0].Contains {
@@ -214,7 +214,7 @@ func compareOutput(expected expectedOutput, run *models.PlaybookRun, actions []m
 		}
 
 		if ea.ArtifactLogs != "" {
-			contents, err := artifacts.GetArtifactContents(DefaultContext.WithSubject("admin"), actual.ID.String())
+			contents, err := artifacts.GetArtifactContents(DefaultContext.WithSubject(artifactReader), actual.ID.String())
 			Expect(err).ToNot(HaveOccurred(), "action[%d] artifact contents", i)
 			Expect(contents).To(HaveLen(1), "action[%d] expected 1 artifact for log comparison", i)
 
