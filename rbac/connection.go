@@ -41,6 +41,18 @@ func AuthorizeConnectionUse(ctx context.Context, conn models.Connection) error {
 		Errorf("access denied to %s: %s required on connection %s/%s", ctx.Subject(), adapter.ActionConnectionUse, conn.Namespace, conn.Name)
 }
 
+// AuthorizeConnection returns an EFORBIDDEN error unless the person making the request may perform the action on
+// connections, and the connection is within the request's Scope limits.
+func AuthorizeConnection(ctx context.Context, conn models.Connection, action string) error {
+	if CheckContext(ctx, policy.ObjectConnection, action) && withinScopeLimits(ctx, conn) {
+		return nil
+	}
+
+	return ctx.Oops().Code(dutyAPI.EFORBIDDEN).
+		With("permission", action, "connection", conn.ID).
+		Errorf("access denied to %s: %s required on connection %s/%s", ctx.Subject(), action, conn.Namespace, conn.Name)
+}
+
 // withinScopeLimits reports whether the connection is in a Scope of each of the request's Scope limits, as
 // HasPermission requires of the resources it checks. Checks on whole object types don't apply the limits themselves.
 func withinScopeLimits(ctx context.Context, conn models.Connection) bool {

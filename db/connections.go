@@ -116,3 +116,41 @@ func FindDefaultLLMProviderConnection(ctx context.Context) (*models.Connection, 
 	}
 	return conn, nil
 }
+
+// GetConnection returns the connection with the id, or an ENOTFOUND error when there's none or it's deleted.
+func GetConnection(ctx context.Context, id uuid.UUID) (*models.Connection, error) {
+	var conn models.Connection
+	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", id).Limit(1).Find(&conn).Error; err != nil {
+		return nil, ctx.Oops().Wrap(err)
+	} else if conn.ID == uuid.Nil {
+		return nil, api.Errorf(api.ENOTFOUND, "connection %s not found", id)
+	}
+	return &conn, nil
+}
+
+// UnmaskConnection returns the connection with each credential that's still masked, as reading stored shows it,
+// replaced by stored's value: a credential sent back masked is left unchanged.
+func UnmaskConnection(conn, stored models.Connection) models.Connection {
+	if conn.Username == MaskedValue {
+		conn.Username = stored.Username
+	}
+	if conn.Password == MaskedValue {
+		conn.Password = stored.Password
+	}
+	if conn.Certificate == MaskedValue {
+		conn.Certificate = stored.Certificate
+	}
+	if conn.URL != stored.URL && conn.URL == MaskConnectionURL(stored.URL) {
+		conn.URL = stored.URL
+	}
+
+	for k, v := range conn.Properties {
+		if v == MaskedValue && IsCredentialProperty(k) {
+			if storedValue, ok := stored.Properties[k]; ok {
+				conn.Properties[k] = storedValue
+			}
+		}
+	}
+
+	return conn
+}

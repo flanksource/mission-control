@@ -129,7 +129,6 @@ var _ = Describe("Authorization", func() {
 
 	var privileged = []string{
 		// "/auth/invite_user",
-		"/db/connections",
 		"/db/config_scrapers",
 		"GET /db/job_history_names",
 		"POST|PUT|DELETE /db/topology",
@@ -154,6 +153,16 @@ var _ = Describe("Authorization", func() {
 			user:         "viewer",
 			path:         t,
 			expectedCode: http.StatusForbidden,
+		})
+	}
+
+	// Connections are only read through connection_details and written through /connection
+	for _, user := range []string{"admin", "viewer"} {
+		tests = append(tests, TC{
+			method:       "POST|GET|PATCH|DELETE",
+			user:         user,
+			path:         "/db/connections",
+			expectedCode: http.StatusMethodNotAllowed,
 		})
 	}
 

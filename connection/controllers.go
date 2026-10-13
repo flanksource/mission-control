@@ -9,6 +9,7 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 
@@ -24,6 +25,12 @@ func RegisterRoutes(e *echo.Echo) {
 	// Both act with a connection's credentials, so they check connection:use on it, not on the whole connection type
 	connectionGroup.POST("/test/:id", TestConnection)
 	connectionGroup.GET("/llm", GetDefaultLLMProviderConnection)
+
+	// The PostgREST roles can't read or write connections, so they're only written through these routes
+	connectionGroup.POST("", CreateConnection, rbac.Authorization(policy.ObjectConnection, policy.ActionCreate))
+	connectionGroup.GET("/:id", GetConnection)
+	connectionGroup.PUT("/:id", SaveConnection)
+	connectionGroup.DELETE("/:id", DeleteConnection)
 }
 
 // GetDefaultLLMProviderConnection returns the hydrated connection for the default LLM Provider connection.
