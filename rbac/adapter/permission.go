@@ -325,6 +325,11 @@ func (a *PermissionAdapter) loadBasePolicy(m model.Model) error {
 	}
 
 	for _, line := range lines {
+		// A Role's limit principal only holds the Role's own rules (loadRoleLimit). A stored row for it,
+		// e.g. a grouping into everyone written by a check made as it, would widen every token it limits.
+		if strings.HasPrefix(line.V0, RoleLimitPrincipalPrefix) {
+			continue
+		}
 		if err := loadCasbinRule(line, m); err != nil {
 			return err
 		}
