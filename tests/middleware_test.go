@@ -147,8 +147,6 @@ var _ = Describe("Authorization", func() {
 		"GET /db/event_queue",
 		"GET /db/properties",
 		"PATCH /db/properties",
-		"GET /db/view_default_pods",
-		"GET /db/incidents",
 	}
 
 	for _, t := range served {
@@ -156,6 +154,16 @@ var _ = Describe("Authorization", func() {
 			user:         "admin",
 			path:         t,
 			expectedCode: http.StatusOK,
+		})
+	}
+
+	// No Role rule selects views or incidents yet (specs/authorization/overview.md, "Not covered yet"), so the admin
+	// Role doesn't read them
+	for _, t := range []string{"GET /db/view_default_pods", "GET /db/incidents"} {
+		tests = append(tests, TC{
+			user:         "admin",
+			path:         t,
+			expectedCode: http.StatusForbidden,
 		})
 	}
 
@@ -184,7 +192,6 @@ var _ = Describe("Authorization", func() {
 		// No Role grants database.public, which lookup tables aren't mapped from to their types yet
 		"GET /db/identities",
 		"GET /db/people_roles",
-		"GET /db/playbook_names",
 	}
 
 	for _, t := range privileged {
@@ -208,6 +215,7 @@ var _ = Describe("Authorization", func() {
 
 	var unprivileged = []string{
 		"GET /db/playbooks",
+		"GET /db/playbook_names",
 		"GET /db/people",
 
 		"GET /db/config_statuses",
