@@ -22,6 +22,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/flanksource/incident-commander/playbook/runner"
+	icrbac "github.com/flanksource/incident-commander/rbac"
 )
 
 type playbookRunError struct {
@@ -248,8 +249,10 @@ func ActionAgentConsumer(ctx context.Context) (int, error) {
 			return ctx.Oops().Wrap(err)
 		}
 
-		// Like on Mission Control itself, the action's checks are made as its playbook
-		return runner.ExecuteAndSaveAction(ctx.WithSubject(spec.PlaybookID), spec.PlaybookID, run, *spec, templateEnv)
+		// Upstream authorized the run as its playbook and assigned this action to this agent: it isn't checked again
+		// against the agent's own bindings.
+		ctx = icrbac.WithUpstreamDispatch(ctx.WithSubject(spec.PlaybookID))
+		return runner.ExecuteAndSaveAction(ctx, spec.PlaybookID, run, *spec, templateEnv)
 	})
 
 	if err == nil {

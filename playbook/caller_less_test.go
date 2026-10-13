@@ -1,9 +1,11 @@
 package playbook
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"time"
 
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
@@ -209,6 +211,44 @@ var _ = ginkgo.Describe("Work no person started", func() {
 
 			_, err := (&actions.HTTP{}).Run(asPlaybook(), v1.HTTPAction{HTTPConnection: connection.HTTPConnection{ConnectionName: "connection://default/caller-less-signed"}})
 			Expect(err).To(MatchError(ContainSubstring("connection:use required on connection default/caller-less-aws")))
+		})
+
+		ginkgo.It("isn't checked again on an agent, for an action upstream dispatched to it", func() {
+			// The agent has no binding for, and no record of, the upstream playbook
+			upstreamPlaybookID := uuid.New()
+
+			run := models.PlaybookRun{PlaybookID: playbook.ID, Status: models.PlaybookRunStatusRunning, Spec: playbook.Spec}
+			Expect(DefaultContext.DB().Create(&run).Error).To(Succeed())
+			action := models.PlaybookRunAction{
+				Name: "fetch", PlaybookRunID: run.ID, Status: models.PlaybookActionStatusWaiting,
+				ScheduledTime: time.Now().Add(-time.Second),
+			}
+			Expect(DefaultContext.DB().Create(&action).Error).To(Succeed())
+			ginkgo.DeferCleanup(func() {
+				Expect(DefaultContext.DB().Where("action_id = ?", action.ID).Delete(&models.PlaybookActionAgentData{}).Error).To(Succeed())
+				Expect(DefaultContext.DB().Delete(&action).Error).To(Succeed())
+				Expect(DefaultContext.DB().Delete(&run).Error).To(Succeed())
+			})
+
+			spec, err := json.Marshal(v1.PlaybookAction{
+				Name: "fetch",
+				HTTP: &v1.HTTPAction{HTTPConnection: connection.HTTPConnection{ConnectionName: ref}},
+			})
+			Expect(err).To(Succeed())
+			Expect(DefaultContext.DB().Create(&models.PlaybookActionAgentData{
+				ActionID: action.ID, RunID: run.ID, PlaybookID: upstreamPlaybookID, Spec: spec, Env: []byte(`{}`),
+			}).Error).To(Succeed())
+
+			Eventually(func() models.PlaybookActionStatus {
+				_, _ = ActionAgentConsumer(DefaultContext)
+				var current models.PlaybookRunAction
+				Expect(DefaultContext.DB().Where("id = ?", action.ID).First(&current).Error).To(Succeed())
+				return current.Status
+			}, "10s", "200ms").Should(Equal(models.PlaybookActionStatusCompleted))
+
+			var completed models.PlaybookRunAction
+			Expect(DefaultContext.DB().Where("id = ?", action.ID).First(&completed).Error).To(Succeed())
+			Expect(completed.Result).To(HaveKeyWithValue("code", BeNumerically("==", http.StatusOK)), "the connection's credentials were filled in")
 		})
 
 		ginkgo.It("succeeds with connection:use on the connection", func() {

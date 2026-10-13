@@ -202,8 +202,23 @@ func connectionRefs(doc any) []string {
 	return refs
 }
 
+type upstreamDispatchKey struct{}
+
+// WithUpstreamDispatch marks the work an agent does for a playbook action upstream dispatched to it. Upstream already
+// authorized the run as its playbook, and an agent only fetches the actions assigned to it, by its own identity
+// (specs/authorization/roles.md, Section 4.6). So the agent doesn't check connection:use again against its own
+// bindings, which select no upstream playbook.
+func WithUpstreamDispatch(ctx context.Context) context.Context {
+	return ctx.WithValue(upstreamDispatchKey{}, true)
+}
+
+func dispatchedFromUpstream(ctx context.Context) bool {
+	dispatched, _ := ctx.Value(upstreamDispatchKey{}).(bool)
+	return dispatched
+}
+
 func authorizeSubjectConnectionUse(ctx context.Context, conn models.Connection) error {
-	if CanUseConnection(ctx, ctx.Subject(), conn) {
+	if dispatchedFromUpstream(ctx) || CanUseConnection(ctx, ctx.Subject(), conn) {
 		return nil
 	}
 
