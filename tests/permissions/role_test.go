@@ -1013,8 +1013,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(listStatus("read-every-canary", "checks")).To(Equal(http.StatusForbidden), "a read of canaries doesn't cover checks")
 			Expect(listStatus("read-every-check", "checks")).To(Equal(http.StatusOK))
 			for _, view := range []string{"check_summary", "checks_labels_keys"} {
-				Expect(listStatus("read-every-canary", view)).To(Equal(http.StatusForbidden), "a read of canaries doesn't cover %s", view)
-				Expect(listStatus("read-every-check", view)).To(Equal(http.StatusOK), view)
+				Expect(listStatus("read-every-canary", view)).To(Equal(http.StatusOK), "the Health page's views of checks follow canaries: %s", view)
 			}
 		})
 

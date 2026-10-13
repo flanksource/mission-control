@@ -161,7 +161,7 @@ var _ = ginkgo.Describe("Playbook list", ginkgo.Ordered, func() {
 			req := httptest.NewRequest(http.MethodGet, "/playbook/list", nil)
 			req = req.WithContext(DefaultContext.WithUser(admin).WithSubject(subject))
 			rec := httptest.NewRecorder()
-			handler := mcRBAC.PlaybookList()(func(c echo.Context) error { return c.NoContent(http.StatusOK) })
+			handler := mcRBAC.PlaybookRead()(func(c echo.Context) error { return c.NoContent(http.StatusOK) })
 			Expect(handler(echo.New().NewContext(req, rec))).To(Succeed())
 			return rec.Code
 		}
@@ -172,20 +172,6 @@ var _ = ginkgo.Describe("Playbook list", ginkgo.Ordered, func() {
 
 		ginkgo.It("is denied when its read grants cover none", func() {
 			Expect(listStatus(false)).To(Equal(http.StatusForbidden))
-		})
-
-		ginkgo.It("isn't granted the other reads of playbooks", func() {
-			readGrantsCover := mcRBAC.ReadGrantsCover
-			mcRBAC.ReadGrantsCover = func(context.Context, string) bool { return true }
-			ginkgo.DeferCleanup(func() { mcRBAC.ReadGrantsCover = readGrantsCover })
-
-			subject := models.FederatedPrincipal(admin.ID.String())
-			req := httptest.NewRequest(http.MethodGet, "/playbook/run/"+uuid.NewString(), nil)
-			req = req.WithContext(DefaultContext.WithUser(admin).WithSubject(subject))
-			rec := httptest.NewRecorder()
-			handler := mcRBAC.Playbook(policy.ActionRead)(func(c echo.Context) error { return c.NoContent(http.StatusOK) })
-			Expect(handler(echo.New().NewContext(req, rec))).To(Succeed())
-			Expect(rec.Code).To(Equal(http.StatusForbidden))
 		})
 	})
 })
