@@ -145,7 +145,7 @@ func sendPluginRequest(req *http.Request) pluginHTTPResponse {
 	return pluginHTTPResponse{StatusCode: resp.StatusCode, Body: string(respBody)}
 }
 
-func expectedHash(name string) string {
-	sum := sha256.Sum256([]byte(name))
+func expectedHash(value string) string {
+	sum := sha256.Sum256([]byte(value))
 	return hex.EncodeToString(sum[:])
 }

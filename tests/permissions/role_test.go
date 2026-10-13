@@ -601,6 +601,10 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 					allow("read", policy.ActionRead, "all-connections"),
 					allow("run", policy.ActionPlaybookRun, "all-playbooks")),
 				newRole("read-connections-and-configs", namespace, allow("read", policy.ActionRead, "connections-and-configs")),
+				newRole("use-connections", namespace,
+					allow("read", policy.ActionRead, "all-connections"),
+					allow("use", adapter.ActionConnectionUse, "all-connections")),
+				newRole("update-connections", namespace, allow("update", policy.ActionUpdate, "all-connections")),
 			} {
 				persistRole(role)
 			}
@@ -633,6 +637,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 
 		for _, tt := range []struct{ name, role string }{
 			{"a rule with another action", "read-connections-and-run"},
+			{"a rule with another action on connections", "update-connections"},
 			{"a rule whose scope selects another type", "read-connections-and-configs"},
 		} {
 			It("grants nothing, to any subject, when a plugin is bound to a role with "+tt.name, func() {
@@ -653,6 +658,23 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 				}
 			})
 		}
+
+		It("accepts connection:use in a plugin binding", func() {
+			binding := newBinding("logs-plugin-use", "use-connections", v1.RoleBindingSubjects{
+				Plugins: []v1.PermissionGroupSelector{{Namespace: pluginNamespace, Name: logsPlugin.Name}},
+			})
+			Expect(bind(binding)).To(Succeed())
+			Expect(storedBinding(namespace, binding.Name).Error).To(BeNil())
+
+			subject := v1.PluginSubject(pluginNamespace, logsPlugin.Name)
+			hasRole, err := rbac.Enforcer().HasRoleForUser(subject, models.BindingPrincipal(namespace, binding.Name))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(hasRole).To(BeTrue())
+
+			perms, err := rbac.PermsForUser(subject)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(lo.Map(perms, func(p policy.Permission, _ int) string { return p.Action })).To(ContainElement(adapter.ActionConnectionUse))
+		})
 
 		It("applies the same role when no plugin is selected", func() {
 			Expect(bind(newBinding("run-without-plugins", "read-connections-and-run", people(human)))).To(Succeed())

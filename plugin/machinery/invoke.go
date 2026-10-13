@@ -76,26 +76,22 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*api.InvokeResponse,
 		}
 	}
 
-	subject := req.Subject
 	token := req.InvocationToken
 	if token != "" {
-		claims, err := AuthorizeInvocationToken(ctx, token, entry, req.Operation, req.ConfigItemID)
-		if err != nil {
+		if _, err := AuthorizeInvocationToken(ctx, token, entry, req.Operation, req.ConfigItemID); err != nil {
 			return nil, entry, err
 		}
-		subject = claims.Subject
-		req.Roles = claims.Roles
 	} else {
 		// No invocation token was supplied, so authorize locally before minting one.
-		// Plugins always act on behalf of the user, so the same subject threads
-		// unchanged down the chain: it is both the RBAC principal (must hold
-		// invoke:<plugin>:<op>) and the JWT sub.
-		if err := EnforceInvokePermission(ctx, subject, entry, req.Operation, req.ConfigItemID); err != nil {
+		// The caller must hold invoke:<plugin>:<op> and read on the config. That only
+		// lets them start the operation: the token's sub records who started it, and
+		// the plugin's own checks are made as the plugin.
+		if err := EnforceInvokePermission(ctx, req.Subject, entry, req.Operation, req.ConfigItemID); err != nil {
 			return nil, entry, err
 		}
 
 		var err error
-		token, err = plugin.MintInvocationToken(subject, req.User, entry.ID, req.Depth, req.Roles...)
+		token, err = plugin.MintInvocationToken(req.Subject, req.User, entry.ID, req.Depth, req.Roles...)
 		if err != nil {
 			return nil, entry, ctx.Oops().Wrapf(err, "mint plugin invocation token")
 		}
@@ -115,9 +111,11 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*api.InvokeResponse,
 		defer cancel()
 	}
 
+	// The caller only starts the operation. What the plugin does during it is checked as the plugin.
 	invokeCtx = invokeCtx.
 		Wrap(metadata.AppendToOutgoingContext(invokeCtx, api.InvocationTokenGRPCMetadataKey, token)).
-		WithSubject(subject)
+		WithNamespace(entry.Namespace).
+		WithSubject(pluginRBACSubject(entry))
 
 	resp, err := Invoke(invokeCtx, entry.ID, &api.InvokeRequest{
 		Operation:    req.Operation,

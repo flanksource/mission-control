@@ -17,8 +17,8 @@ const (
 )
 
 type hashResponse struct {
-	Name   string `json:"name"`
-	SHA256 string `json:"sha256"`
+	ConfigID string `json:"config_id"`
+	SHA256   string `json:"sha256"`
 }
 
 var _ = ginkgo.Describe("Plugins E2E", ginkgo.Ordered, func() {
@@ -32,7 +32,7 @@ var _ = ginkgo.Describe("Plugins E2E", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("authorizes /invoke and /proxy plugin operations", func() {
-		expected := expectedHash(*config.Name)
+		expected := expectedHash(config.ID.String())
 
 		for _, endpoint := range []struct {
 			name   string
@@ -48,7 +48,7 @@ var _ = ginkgo.Describe("Plugins E2E", ginkgo.Ordered, func() {
 			Expect(resp.StatusCode).To(Equal(http.StatusOK), resp.Body)
 			var payload hashResponse
 			Expect(json.Unmarshal([]byte(resp.Body), &payload)).To(Succeed())
-			Expect(payload).To(Equal(hashResponse{Name: *config.Name, SHA256: expected}))
+			Expect(payload).To(Equal(hashResponse{ConfigID: config.ID.String(), SHA256: expected}))
 
 			ginkgo.By(endpoint.name + " rejects user without plugin invoke")
 			resp = doPluginRequest(endpoint.method, endpoint.path, endpoint.body, noInvokeUser.Email, "test-password")

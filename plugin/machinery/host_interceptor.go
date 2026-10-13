@@ -5,8 +5,7 @@ import (
 	"errors"
 
 	dutyAPI "github.com/flanksource/duty/api"
-	"github.com/flanksource/duty/models"
-	commanderAPI "github.com/flanksource/incident-commander/api"
+	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/plugin"
 	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
 	"github.com/google/uuid"
@@ -15,7 +14,6 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
-	"gorm.io/gorm"
 )
 
 func (s *Service) UnaryServerInterceptor() grpc.UnaryServerInterceptor {
@@ -114,30 +112,25 @@ func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, e
 		return nil, status.Error(codes.Unauthenticated, "plugin invocation token is required")
 	}
 
-	invocationToken := values[0]
-
-	claims, err := plugin.ValidateHostInvocationToken(invocationToken)
+	claims, err := plugin.ValidateHostInvocationToken(values[0])
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "invalid plugin invocation token: %v", err)
 	}
 
-	baseCtx := s.ctx.Wrap(ctx).WithSubject(claims.Subject).WithValue(invocationClaimsContextKey{}, claims)
-	if commanderAPI.UpstreamConf.Valid() {
-		return baseCtx, nil
-	}
-	if claims.User == "" {
-		return nil, status.Error(codes.Unauthenticated, "plugin invocation user is required")
+	return pluginInvocationContext(s.ctx.Wrap(ctx), claims)
+}
+
+// pluginInvocationContext returns the context a plugin's host callback runs in. Its checks are made as the plugin
+// that made the callback, never as the caller who invoked the operation, so the caller isn't carried as its user.
+func pluginInvocationContext(ctx dutyContext.Context, claims *plugin.InvocationTokenClaims) (dutyContext.Context, error) {
+	entry := plugin.DefaultRegistry.Get(claims.Plugin)
+	if entry == nil {
+		return ctx, status.Errorf(codes.NotFound, "plugin %s is not registered", claims.Plugin)
 	}
 
-	var person models.Person
-	if err := baseCtx.DB().WithContext(ctx).Where("id = ?", claims.User).First(&person).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, status.Errorf(codes.Unauthenticated, "plugin invocation user %s not found", claims.User)
-		}
-		return nil, status.Errorf(codes.Unauthenticated, "plugin invocation user %s: %v", claims.User, err)
-	}
-
-	return baseCtx.WithUser(&person), nil
+	return ctx.WithNamespace(entry.Namespace).
+		WithSubject(pluginRBACSubject(entry)).
+		WithValue(invocationClaimsContextKey{}, claims), nil
 }
 
 func requiresInvocation(method string) bool {

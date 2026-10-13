@@ -127,9 +127,17 @@ func pluginSubject(selector string) (string, models.PermissionSubjectType, error
 	return PluginSubject(strings.TrimSpace(splits[0]), strings.TrimSpace(splits[1])), models.PermissionSubjectTypePlugin, nil
 }
 
+// pluginSubjectPrefix prefixes the casbin subject of every plugin.
+const pluginSubjectPrefix = "plugin:"
+
 // PluginSubject is the casbin subject a plugin's checks are made as.
 func PluginSubject(namespace, name string) string {
-	return "plugin:" + namespace + "/" + name
+	return pluginSubjectPrefix + namespace + "/" + name
+}
+
+// IsPluginSubject reports whether a casbin subject is a plugin's.
+func IsPluginSubject(subject string) bool {
+	return strings.HasPrefix(subject, pluginSubjectPrefix)
 }
 
 func findNamespacedResource(ctx context.Context, table string, selector string, subjectType models.PermissionSubjectType) (string, models.PermissionSubjectType, error) {

@@ -9,7 +9,6 @@ import (
 	"os"
 
 	dutyContext "github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
 	dutyUpstream "github.com/flanksource/duty/upstream"
 	commanderAPI "github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/plugin"
@@ -29,8 +28,8 @@ import (
 //     GetConnection — locally, using the same invocation-token trust model as
 //     in-process (broker) plugins.
 //   - Proxied plugins (agent-owned) keep the existing agent flow: GetConnection
-//     must be resolved by the owning agent, everything else is authorized
-//     against the agent that owns the plugin.
+//     must be resolved by the owning agent. Everything else is served only to
+//     the agent that owns the plugin, and checked as the plugin.
 func StartUpstreamHostGRPCServer(ctx dutyContext.Context, port int) (*grpc.Server, error) {
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
@@ -159,13 +158,11 @@ func upstreamHostContextWithInvocation(base dutyContext.Context, ctx context.Con
 		return nil, status.Errorf(codes.Unauthenticated, "invalid plugin invocation token: %v", err)
 	}
 
-	dutyCtx := base.Wrap(ctx).WithSubject(claims.Subject).WithValue(invocationClaimsContextKey{}, claims)
-
 	agentName := firstMetadataValue(md, dutyUpstream.AgentNameQueryParam)
 	if agentName == "" {
 		return nil, status.Error(codes.Unauthenticated, "agent name is required")
 	}
-	agent, err := dutyUpstream.GetOrCreateAgent(dutyCtx, agentName)
+	agent, err := dutyUpstream.GetOrCreateAgent(base.Wrap(ctx), agentName)
 	if err != nil {
 		return nil, status.Errorf(codes.Unauthenticated, "agent %s: %v", agentName, err)
 	}
@@ -174,16 +171,12 @@ func upstreamHostContextWithInvocation(base dutyContext.Context, ctx context.Con
 	if entry == nil || entry.AgentID == nil || *entry.AgentID != agent.ID {
 		return nil, status.Error(codes.PermissionDenied, "agent does not own proxied plugin")
 	}
-	if claims.User == "" {
-		return nil, status.Error(codes.Unauthenticated, "plugin invocation user is required")
-	}
 
-	var person models.Person
-	if err := dutyCtx.DB().WithContext(ctx).Where("id = ?", claims.User).First(&person).Error; err != nil {
-		return nil, status.Errorf(codes.Unauthenticated, "plugin invocation user %s: %v", claims.User, err)
+	dutyCtx, err := pluginInvocationContext(base.Wrap(ctx), claims)
+	if err != nil {
+		return nil, err
 	}
-
-	return dutyCtx.WithAgent(*agent).WithUser(&person), nil
+	return dutyCtx.WithAgent(*agent), nil
 }
 
 func firstMetadataValue(md metadata.MD, key string) string {

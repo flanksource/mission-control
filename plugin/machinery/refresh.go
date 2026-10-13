@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 
-	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/google/uuid"
 
@@ -51,19 +50,6 @@ func defaultRefreshOps() refreshOps {
 // others; all failures are joined into the returned error.
 func RefreshLatestPlugins(ctx dutyContext.Context) error {
 	return refreshLatestPlugins(ctx, defaultRefreshOps())
-}
-
-func RefreshLatestPlugin(ctx dutyContext.Context, entry *plugin.Entry) (*LatestPluginRefreshResult, error) {
-	if entry == nil {
-		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "plugin is required")
-	}
-	if entry.Kind != "" && entry.Kind != api.PluginKindLocal {
-		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "plugin %s has unsupported connection kind %q", entry.Name, entry.Kind)
-	}
-	if !local.IsLatest(entry.Spec.Version) {
-		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "plugin %s is pinned to version %q", entry.Name, entry.Spec.Version)
-	}
-	return defaultRefreshOps().refreshPlugin(ctx, entry)
 }
 
 func refreshLatestPlugins(ctx dutyContext.Context, ops refreshOps) error {

@@ -49,22 +49,31 @@ func (s *Service) Register(g *grpc.Server) {
 	pluginAPI.RegisterHostServiceServer(g, s)
 }
 
+// pluginContext returns the context of a host callback: checked as the plugin that made it, in its namespace.
+func (s *Service) pluginContext(ctx context.Context) (dutyContext.Context, *plugin.Entry, error) {
+	entry, err := pluginEntryFromInvocation(ctx)
+	if err != nil {
+		return dutyContext.Context{}, nil, err
+	}
+
+	return s.ctx.Wrap(ctx).WithNamespace(entry.Namespace).WithSubject(pluginRBACSubject(entry)), entry, nil
+}
+
 func (s *Service) GetConfigItem(ctx context.Context, req *pluginAPI.GetConfigItemRequest) (*pluginAPI.ConfigItem, error) {
 	if req.Id == "" {
 		return nil, fmt.Errorf("id is required")
 	}
 
-	var out *pluginAPI.ConfigItem
-	err := auth.WithRLS(s.ctx.Wrap(ctx), func(rlsCtx dutyContext.Context) error {
-		var err error
-		out, err = getConfigItem(rlsCtx, ctx, req.Id)
-		return err
-	})
+	pluginCtx, _, err := s.pluginContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	return out, nil
+	if _, _, err := authorizeConfigRead(pluginCtx, pluginCtx.Subject(), req.Id); err != nil {
+		return nil, err
+	}
+
+	return getConfigItem(pluginCtx, ctx, req.Id)
 }
 
 func getConfigItem(ctx dutyContext.Context, queryCtx context.Context, id string) (*pluginAPI.ConfigItem, error) {
@@ -96,8 +105,12 @@ func (s *Service) ListConfigs(ctx context.Context, req *pluginAPI.ListConfigsReq
 		return nil
 	}
 
-	err := auth.WithRLS(s.ctx.Wrap(ctx), list)
+	pluginCtx, _, err := s.pluginContext(ctx)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := auth.WithRLS(pluginCtx, list); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -108,12 +121,10 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginAPI.GetConnectio
 		return nil, fmt.Errorf("connection lookup is required")
 	}
 
-	entry, err := pluginEntryFromInvocation(ctx)
+	pluginCtx, entry, err := s.pluginContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-
-	pluginCtx := s.ctx.Wrap(ctx).WithNamespace(entry.Namespace).WithSubject(pluginRBACSubject(entry))
 
 	switch lookup := req.GetLookup().(type) {
 	case *pluginAPI.GetConnectionRequest_Type:
@@ -141,47 +152,33 @@ func (s *Service) GetConnection(ctx context.Context, req *pluginAPI.GetConnectio
 	}
 }
 
+// InvokePlugin starts another plugin's operation as the calling plugin, never as the person who invoked the caller.
 func (s *Service) InvokePlugin(ctx context.Context, req *pluginAPI.InvokePluginRequest) (*pluginAPI.InvokeResponse, error) {
-	dutyCtx := invocationDutyContext(s.ctx, ctx)
-	if _, err := pluginEntryFromInvocation(ctx); err != nil {
+	pluginCtx, entry, err := s.pluginContext(ctx)
+	if err != nil {
 		return nil, err
 	}
 
 	depth := 1
-	// Plugins always act on behalf of the originating user, so thread the
-	// user's subject (from the calling plugin's invocation token) down the
-	// chain. The same subject authorizes the invoke and becomes the next
-	// token's sub — no plugin-scoped invoke permission is required.
-	userSubject := ""
 	user := ""
 	if claims, ok := invocationClaimsFromContext(ctx); ok {
 		depth = claims.Depth + 1
-		userSubject = claims.Subject
 		user = claims.User
 	}
 
-	configID := req.ConfigItemId
-
-	resp, _, err := InvokeOperation(dutyCtx, Request{
+	resp, _, err := InvokeOperation(pluginCtx, Request{
 		Context:    ctx,
 		PluginRef:  req.Plugin,
 		Operation:  req.Operation,
 		ParamsJSON: req.ParamsJson,
-		Subject:    userSubject,
+		Subject:    pluginRBACSubject(entry),
 		User:       user,
 		Depth:      depth,
 		Deadline:   req.Deadline,
 
-		ConfigItemID: configID,
+		ConfigItemID: req.ConfigItemId,
 	})
 	return resp, err
-}
-
-func invocationDutyContext(base dutyContext.Context, ctx context.Context) dutyContext.Context {
-	if dutyCtx, ok := ctx.(dutyContext.Context); ok {
-		return dutyCtx
-	}
-	return base.Wrap(ctx)
 }
 
 func (s *Service) Log(ctx context.Context, e *pluginAPI.LogEntry) (*pluginAPI.Empty, error) {
