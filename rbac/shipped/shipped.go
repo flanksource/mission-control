@@ -36,6 +36,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/plugin"
+	icrbac "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
@@ -284,7 +285,7 @@ func Sync(ctx context.Context) error {
 	})
 
 	errs := append([]error{err}, notReady...)
-	if err := dutyRBAC.ReloadPolicy(); err != nil {
+	if err := icrbac.ReloadPolicy(); err != nil {
 		errs = append(errs, fmt.Errorf("failed to reload policy: %w", err))
 	}
 	return errors.Join(errs...)

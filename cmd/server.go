@@ -35,6 +35,7 @@ import (
 	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/plugin/machinery"
 	pluginReconciler "github.com/flanksource/incident-commander/plugin/reconciler"
+	icrbac "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/rbac/shipped"
 	"github.com/flanksource/incident-commander/upstream/tunnel"
@@ -386,6 +387,10 @@ func tableUpdatesHandler(ctx context.Context) {
 	// so the policy is reloaded once per window, not once per notification.
 	policyReloadTimer := time.NewTimer(policyReloadWindow)
 	policyReloadTimer.Stop()
+	// Neither Kratos's address table nor Clerk emits duty table-activity events.
+	// Reconcile their authoritative verification state and RLS caches even without a binding edit.
+	emailVerificationTicker := time.NewTicker(time.Minute)
+	defer emailVerificationTicker.Stop()
 	policyReloadPending := false
 	schedulePolicyReload := func(table string) {
 		ctx.Logger.Debugf("reloading rbac policy due to %s updates", table)
@@ -405,7 +410,7 @@ func tableUpdatesHandler(ctx context.Context) {
 			// Only updates to the "deleted_at" column should trigger a reload
 			// but the emitted event doesn't include that information.
 			if tgOperation == TGOPUpdate {
-				if err := rbac.ReloadPolicy(); err != nil {
+				if err := icrbac.ReloadPolicy(); err != nil {
 					ctx.Errorf("failed to reload rbac policy due to notification updates: %v", err)
 				} else {
 					ctx.Logger.Debugf("reloading rbac policy due to notification updates")
@@ -417,7 +422,7 @@ func tableUpdatesHandler(ctx context.Context) {
 			query.InvalidateCacheByID[models.Playbook](id)
 
 			if tgOperation == TGOPUpdate {
-				if err := rbac.ReloadPolicy(); err != nil {
+				if err := icrbac.ReloadPolicy(); err != nil {
 					ctx.Errorf("failed to reload rbac policy due to playbook updates: %v", err)
 				} else {
 					ctx.Logger.Debugf("reloading rbac policy due to playbook updates")
@@ -441,7 +446,7 @@ func tableUpdatesHandler(ctx context.Context) {
 				if ok, err := rbac.DeleteRole(id); err != nil {
 					ctx.Errorf("failed to delete rbac policy for team(%s): %v", id, err)
 				} else if ok {
-					if err := rbac.ReloadPolicy(); err != nil {
+					if err := icrbac.ReloadPolicy(); err != nil {
 						ctx.Errorf("failed to reload rbac policy due to team updates: %v", err)
 					}
 				}
@@ -464,7 +469,7 @@ func tableUpdatesHandler(ctx context.Context) {
 				auth.InvalidateRLSCacheForUser(personID)
 				if err := rbac.DeleteRoleForUser(personID, teamID); err != nil {
 					ctx.Errorf("failed to delete team(%s)->user(%s) rbac policy: %v", teamID, personID, err)
-				} else if err := rbac.ReloadPolicy(); err != nil {
+				} else if err := icrbac.ReloadPolicy(); err != nil {
 					ctx.Errorf("failed to reload rbac policy due to team_members updates: %v", err)
 				}
 
@@ -475,7 +480,7 @@ func tableUpdatesHandler(ctx context.Context) {
 				auth.InvalidateRLSCacheForUser(personID)
 				if err := rbac.AddRoleForUser(personID, teamID); err != nil {
 					ctx.Errorf("failed to add team(%s)->user(%s) rbac policy: %v", teamID, personID, err)
-				} else if err := rbac.ReloadPolicy(); err != nil {
+				} else if err := icrbac.ReloadPolicy(); err != nil {
 					ctx.Errorf("failed to reload rbac policy due to team_members updates: %v", err)
 				}
 			}
@@ -501,15 +506,14 @@ func tableUpdatesHandler(ctx context.Context) {
 		case <-agentUpdateChan:
 			schedulePolicyReload("agent")
 
+		case <-emailVerificationTicker.C:
+			schedulePolicyReload("email verification")
+
 		case <-policyReloadTimer.C:
 			policyReloadPending = false
 			if err := auth.RebuildOIDCBindings(ctx); err != nil {
 				ctx.Logger.Errorf("error rebuilding authorization policy: %v", err)
 			}
-
-			// permissions and scopes affect RLS so we need to invalidate the postgrest JWT
-			// TODO: only invalidate tokens for the affected users
-			auth.FlushTokenCache()
 		}
 	}
 }

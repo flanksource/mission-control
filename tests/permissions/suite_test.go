@@ -6,6 +6,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/incident-commander/auth/signing"
+	"github.com/flanksource/incident-commander/rbac/rbactest"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -21,6 +22,7 @@ var (
 
 var _ = ginkgo.BeforeSuite(func() {
 	DefaultContext = setup.BeforeSuiteFn()
+	Expect(rbactest.SetupVerifiedPeople(DefaultContext)).To(Succeed())
 	if _, _, err := signing.Initialize("/tmp/dummy"); err != nil {
 		ginkgo.Fail(err.Error())
 	}

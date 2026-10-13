@@ -30,6 +30,7 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+	icrbac "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/vars"
 )
 
@@ -554,7 +555,7 @@ func rebuildOIDCBindings(ctx context.Context, onlyIfStale bool) error {
 	oidcBindings.loaded = false
 	oidcBindings.Unlock()
 
-	if err := dutyRBAC.ReloadPolicy(); err != nil {
+	if err := icrbac.ReloadPolicy(); err != nil {
 		return fmt.Errorf("failed to reload rbac policy: %w", err)
 	}
 

@@ -24,7 +24,6 @@ import (
 	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/rbac/rbactest"
 	"github.com/flanksource/incident-commander/rbac/shipped"
-	"github.com/flanksource/incident-commander/vars"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	. "github.com/onsi/ginkgo/v2"
@@ -52,9 +51,9 @@ var _ = BeforeSuite(func() {
 		Fail(err.Error())
 	}
 
-	vars.AuthMode = ""
 	e = echoSrv.New(DefaultContext)
 	e.Use(auth.MockAuthMiddleware)
+	Expect(rbactest.SetupVerifiedPeople(DefaultContext)).To(Succeed())
 
 	Expect(DefaultContext.DB().Exec("TRUNCATE casbin_rule").Error).To(BeNil())
 	if err := rbac.Init(DefaultContext); err != nil {

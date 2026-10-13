@@ -125,7 +125,7 @@ var _ = Describe("person:manage", Ordered, func() {
 		e = echo.New()
 		auth.RegisterRoutes(e)
 		auth.RegisterKratosRoutes(e, auth.NewKratosHandler())
-		echoSrv.RegisterPeopleRoutes(e, nil)
+		echoSrv.RegisterPeopleRoutes(e, auth.NewAPIClient(auth.KratosAPI))
 		mcRBAC.RegisterRoutes(e)
 	})
 

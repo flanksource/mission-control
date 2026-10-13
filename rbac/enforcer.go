@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac"
@@ -21,7 +22,32 @@ func Init(ctx context.Context) error {
 		return err
 	}
 
+	// Mission Control reloads policy with its RLS caches. Duty's automatic reload doesn't,
+	// and Casbin's decision cache can retain allows computed during a policy swap.
+	rbac.Enforcer().StopAutoLoadPolicy()
+	rbac.Enforcer().EnableCache(false)
+
 	// duty's Init adds its built-in roles' rules to the loaded policy. The adapter doesn't store them, so loading
 	// the policy again leaves them out.
-	return rbac.ReloadPolicy()
+	return ReloadPolicy()
+}
+
+// FlushPolicyCaches includes authentication-owned RLS caches when auth is initialized.
+var FlushPolicyCaches = FlushAccessSummaries
+
+var policyReload sync.Mutex
+
+// ReloadPolicy revokes stale grants even when loading fails, and invalidates derived authorization caches.
+func ReloadPolicy() error {
+	policyReload.Lock()
+	defer policyReload.Unlock()
+	defer FlushPolicyCaches()
+	if err := rbac.ReloadPolicy(); err != nil {
+		// Casbin preserves the old model on load errors, including revoked email grants.
+		if enforcer := rbac.Enforcer(); enforcer != nil {
+			enforcer.ClearPolicy()
+		}
+		return err
+	}
+	return nil
 }

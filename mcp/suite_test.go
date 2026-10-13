@@ -43,6 +43,7 @@ var _ = ginkgo.BeforeSuite(func() {
 
 	// Create a test server with the MCP handler
 	e := echoSrv.New(DefaultContext)
+	Expect(rbactest.SetupVerifiedPeople(DefaultContext)).To(Succeed())
 	e.Use(func(next echov4.HandlerFunc) echov4.HandlerFunc {
 		return func(c echov4.Context) error {
 			ctx := c.Request().Context().(context.Context).WithUser(&dummy.JohnDoe)

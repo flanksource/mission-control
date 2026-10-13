@@ -7,7 +7,6 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query/grammar"
-	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -17,6 +16,7 @@ import (
 	"github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/machinery"
 	"github.com/flanksource/incident-commander/plugin/manifestcache"
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 func PersistPluginFromCRD(ctx context.Context, p *v1.Plugin) error {
@@ -144,7 +144,7 @@ func DeletePlugin(ctx context.Context, id string) error {
 // reloadPluginSubjects reloads the authorization policy when a plugin is created or deleted, so RoleBindings
 // that select plugins by namespace or "*" reach it, or stop reaching it.
 func reloadPluginSubjects(ctx context.Context) {
-	if err := dutyRBAC.ReloadPolicy(); err != nil {
+	if err := rbac.ReloadPolicy(); err != nil {
 		ctx.Logger.Errorf("failed to reload rbac policy after a plugin change: %v", err)
 	}
 }

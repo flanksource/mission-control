@@ -22,13 +22,16 @@ import (
 	"gorm.io/gorm/clause"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/vars"
 )
 
 type PermissionAdapter struct {
 	*gormadapter.Adapter // gorm adapter for `casbin_rules` table
 
-	ctx   context.Context
-	cache *gocache.Cache
+	ctx                 context.Context
+	cache               *gocache.Cache
+	verifiedClerkPeople map[string][]string
+	load                sync.Mutex
 }
 
 var _ persist.BatchAdapter = &PermissionAdapter{}
@@ -45,6 +48,8 @@ func NewPermissionAdapter(ctx context.Context, main *gormadapter.Adapter) persis
 }
 
 func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
+	a.load.Lock()
+	defer a.load.Unlock()
 	// The cache only spares lookups of the same scope within a load, so scope changes apply on the next load
 	a.cache.Flush()
 
@@ -160,6 +165,22 @@ func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
 	var bindings []models.RoleBinding
 	if err := a.ctx.DB().Where("deleted_at IS NULL").Find(&bindings).Error; err != nil {
 		return fmt.Errorf("failed to load role bindings: %w", err)
+	}
+
+	a.verifiedClerkPeople = nil
+	if vars.AuthMode == "clerk" && ClerkVerifiedPeople != nil {
+		var emails []string
+		for _, binding := range bindings {
+			if spec, err := RoleBindingSpec(binding); err == nil {
+				emails = append(emails, spec.Subjects.People...)
+			}
+		}
+		var err error
+		a.verifiedClerkPeople, err = ClerkVerifiedPeople(a.ctx, lo.Uniq(emails))
+		if err != nil {
+			a.ctx.Warnf("failed to resolve verified Clerk emails")
+			a.verifiedClerkPeople = nil
+		}
 	}
 
 	reports := map[uuid.UUID]unappliedReport{}
@@ -610,19 +631,39 @@ func RoleBindingSpec(binding models.RoleBinding) (v1.RoleBindingSpec, error) {
 	return spec, nil
 }
 
-// resolvePeopleByEmail returns the ids of the Mission Control users with the given emails.
-// Agents and users of external identity providers aren't people.
+// ClerkVerifiedPeople resolves verified addresses using Clerk's authoritative user records.
+// Without a resolver, Clerk email bindings select nobody.
+var ClerkVerifiedPeople func(context.Context, []string) (map[string][]string, error)
+
+// resolvePeopleByEmail selects only addresses verified by the active authentication provider.
+// Basic auth has no email verification; its users can still receive bindings through teams.
 func (a *PermissionAdapter) resolvePeopleByEmail(emails []string) ([]string, error) {
 	if len(emails) == 0 {
 		return nil, nil
 	}
 
+	if vars.AuthMode == "clerk" {
+		var ids []string
+		for _, email := range emails {
+			ids = append(ids, a.verifiedClerkPeople[email]...)
+		}
+		return lo.Uniq(ids), nil
+	}
+	if vars.AuthMode != "kratos" || !a.ctx.DB().Migrator().HasTable("identity_verifiable_addresses") {
+		return nil, nil
+	}
+
 	var ids []string
-	err := a.ctx.DB().Select("id").Model(&models.Person{}).
-		Where("deleted_at IS NULL").
-		Where("(type IS NULL OR type NOT IN ?)", []string{"agent", "federated"}).
-		Where("email IN ?", emails).
+	err := a.ctx.DB().Distinct("people.id").Model(&models.Person{}).
+		Joins("JOIN identity_verifiable_addresses AS addresses ON addresses.identity_id = people.id").
+		Where("people.deleted_at IS NULL").
+		Where("(people.type IS NULL OR people.type NOT IN ?)", []string{"agent", "federated", "access_token"}).
+		Where("addresses.via = ? AND addresses.verified = ? AND addresses.value IN ?", "email", true, emails).
 		Find(&ids).Error
+	if err != nil {
+		a.ctx.Errorf("failed to resolve verified Kratos emails: %v", err)
+		return nil, nil
+	}
 	return ids, err
 }
 

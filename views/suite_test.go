@@ -15,6 +15,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	icrbac "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
+	"github.com/flanksource/incident-commander/rbac/rbactest"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -37,6 +38,7 @@ var (
 
 var _ = ginkgo.BeforeSuite(func() {
 	DefaultContext = setup.BeforeSuiteFn()
+	Expect(rbactest.SetupVerifiedPeople(DefaultContext)).To(Succeed())
 	Expect(icrbac.Init(DefaultContext)).To(Succeed())
 	DefaultContext = DefaultContext.WithUser(&dummy.JohnDoe)
 

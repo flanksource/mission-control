@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/MicahParks/keyfunc"
@@ -28,10 +30,21 @@ import (
 	icrbac "github.com/flanksource/incident-commander/rbac"
 )
 
+func init() {
+	icrbac.FlushPolicyCaches = FlushTokenCache
+}
+
 func FlushTokenCache() {
+	tokenCacheFlush.Lock()
+	defer tokenCacheFlush.Unlock()
+	tokenCacheGeneration.Add(1)
 	tokenCache.Flush()
 	icrbac.FlushAccessSummaries()
 }
+
+// A payload computed across a revocation must not repopulate the flushed cache.
+var tokenCacheGeneration atomic.Uint64
+var tokenCacheFlush sync.RWMutex
 
 // tokenCache caches
 // - JWT for postgREST
