@@ -74,6 +74,17 @@ spec:
 apiVersion: mission-control.flanksource.com/v1
 kind: Scope
 metadata:
+  name: all-scrapers
+  namespace: mission-control-builtin
+spec:
+  description: Every config scraper
+  targets:
+    - scraper:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
   name: all-applications
   namespace: mission-control-builtin
 spec:
@@ -243,6 +254,10 @@ spec:
       action: read
       resource:
         scopeRef: all-connections
+    - name: read-scrapers
+      action: read
+      resource:
+        scopeRef: all-scrapers
     - name: read-applications
       action: read
       resource:
@@ -299,6 +314,10 @@ spec:
       action: create
       resource:
         scopeRef: all-connections
+    - name: create-scrapers
+      action: create
+      resource:
+        scopeRef: all-scrapers
     - name: create-applications
       action: create
       resource:
@@ -351,6 +370,10 @@ spec:
       action: update
       resource:
         scopeRef: all-connections
+    - name: update-scrapers
+      action: update
+      resource:
+        scopeRef: all-scrapers
     - name: update-applications
       action: update
       resource:
@@ -403,6 +426,10 @@ spec:
       action: delete
       resource:
         scopeRef: all-connections
+    - name: delete-scrapers
+      action: delete
+      resource:
+        scopeRef: all-scrapers
     - name: delete-applications
       action: delete
       resource:

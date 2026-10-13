@@ -661,20 +661,19 @@ func (r CompiledRule) wholeTypeObjects() []string {
 
 	var objects []string
 	for _, kind := range r.Resource[0].DeclaredTypes() {
-		object, ok := objectForType[kind]
-		if !ok {
-			continue
-		}
-
-		whole := lo.EveryBy(r.Resource, func(scope ScopeSelection) bool {
-			return lo.SomeBy(scope.Selectors[kind], func(s types.ResourceSelector) bool { return s.Wildcard() })
-		})
-		if whole {
+		if object, ok := objectForType[kind]; ok && r.SelectsEntirely(kind) {
 			objects = append(objects, object)
 		}
 	}
 
 	return objects
+}
+
+// SelectsEntirely reports whether every Scope of the rule's resource selects every resource of the type.
+func (r CompiledRule) SelectsEntirely(kind string) bool {
+	return len(r.Resource) > 0 && lo.EveryBy(r.Resource, func(scope ScopeSelection) bool {
+		return lo.SomeBy(scope.Selectors[kind], func(s types.ResourceSelector) bool { return s.Wildcard() })
+	})
 }
 
 // compiledRuleToCasbinRules compiles a rule granted by a binding into casbin policies filed under the binding's principal.

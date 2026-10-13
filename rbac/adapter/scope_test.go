@@ -12,7 +12,7 @@ import (
 )
 
 var _ = ginkgo.Describe("Scope selectors", func() {
-	for _, kind := range []string{"config", "component", "check", "canary", "playbook", "view", "connection"} {
+	for _, kind := range []string{"config", "component", "check", "canary", "playbook", "view", "connection", "scraper"} {
 		for field, value := range map[string]string{
 			"health": `"unhealthy"`, "statuses": `["failed"]`, "fieldSelector": `"health=unhealthy"`,
 			"scope": `"all"`, "search": `"type=Pod"`, "cache": `"1m"`, "limit": `10`, "includeDeleted": `true`,
@@ -32,6 +32,9 @@ var _ = ginkgo.Describe("Scope selectors", func() {
 		`{"playbook":{"name":"*","labelSelector":"team=payments"}}`,
 		`{"canary":{"name":"*","types":["http"]}}`,
 		`{"connection":{"name":"*","agent":"cluster-a"}}`,
+		`{"scraper":{"name":"*","types":["Kubernetes"]}}`,
+		`{"scraper":{"name":"*","tagSelector":"team=payments"}}`,
+		`{"scraper":{"name":"*","labelSelector":"team=payments"}}`,
 	} {
 		ginkgo.It("rejects unsupported fields in "+raw, func() {
 			decoder := json.NewDecoder(strings.NewReader(raw))
@@ -53,6 +56,7 @@ var _ = ginkgo.Describe("Scope selectors", func() {
 		{"playbook", "", types.ResourceSelector{}},
 		{"view", "", types.ResourceSelector{}},
 		{"connection", `"types":["AWS"]`, types.ResourceSelector{Types: []string{"AWS"}}},
+		{"scraper", `"agent":"cluster-e"`, types.ResourceSelector{Agent: "cluster-e"}},
 	} {
 		ginkgo.It("converts every supported "+tt.kind+" field without query options", func() {
 			fields := `"id":"3c3e0b2a-9f1e-4d2b-8c5a-1e2f3a4b5c6d","name":"api","namespace":"production"`

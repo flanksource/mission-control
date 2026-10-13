@@ -68,6 +68,14 @@ type ScopeCanarySelector struct {
 	LabelSelector string `json:"labelSelector,omitempty"`
 }
 
+// ScopeScraperSelector selects config scrapers by identity and ownership. Scrapers have no tags or labels.
+// +kubebuilder:validation:MinProperties=1
+type ScopeScraperSelector struct {
+	ScopeResourceRef `json:",inline"`
+	// +kubebuilder:validation:MinLength=1
+	Agent string `json:"agent,omitempty"`
+}
+
 // ScopeConnectionSelector selects connections by identity and type.
 // +kubebuilder:validation:MinProperties=1
 type ScopeConnectionSelector struct {
@@ -108,7 +116,7 @@ type ScopeWholeTypeSelector struct {
 // ScopeTarget selects resources of exactly one type. Scope owns the authoring fields;
 // duty's query options and state filters must not enter the authorization language.
 // +kubebuilder:object:generate=true
-// +kubebuilder:validation:XValidation:rule="[has(self.config), has(self.component), has(self.check), has(self.playbook), has(self.canary), has(self.view), has(self.connection), has(self.application), has(self.notification), has(self.notificationSilence), has(self.agent), has(self.person), has(self.team), has(self.scope), has(self.role), has(self.roleBinding)].filter(x, x).size() == 1",message="exactly one of config, component, check, playbook, canary, view, connection, application, notification, notificationSilence, agent, person, team, scope, role, or roleBinding must be specified"
+// +kubebuilder:validation:XValidation:rule="[has(self.config), has(self.component), has(self.check), has(self.playbook), has(self.canary), has(self.view), has(self.connection), has(self.scraper), has(self.application), has(self.notification), has(self.notificationSilence), has(self.agent), has(self.person), has(self.team), has(self.scope), has(self.role), has(self.roleBinding)].filter(x, x).size() == 1",message="exactly one of config, component, check, playbook, canary, view, connection, scraper, application, notification, notificationSilence, agent, person, team, scope, role, or roleBinding must be specified"
 type ScopeTarget struct {
 	Config     *ScopeConfigSelector     `json:"config,omitempty"`
 	Component  *ScopeLabelledSelector   `json:"component,omitempty"`
@@ -117,6 +125,7 @@ type ScopeTarget struct {
 	Canary     *ScopeCanarySelector     `json:"canary,omitempty"`
 	View       *ScopeViewRef            `json:"view,omitempty"`
 	Connection *ScopeConnectionSelector `json:"connection,omitempty"`
+	Scraper    *ScopeScraperSelector    `json:"scraper,omitempty"`
 
 	Application         *ScopeWholeTypeSelector `json:"application,omitempty"`
 	Notification        *ScopeWholeTypeSelector `json:"notification,omitempty"`
@@ -149,7 +158,7 @@ func (t ScopeTarget) TypeCount() int {
 	n := 0
 	for _, set := range []bool{
 		t.Config != nil, t.Component != nil, t.Check != nil, t.Canary != nil,
-		t.Playbook != nil, t.View != nil, t.Connection != nil,
+		t.Playbook != nil, t.View != nil, t.Connection != nil, t.Scraper != nil,
 	} {
 		if set {
 			n++
@@ -195,6 +204,12 @@ func (t ScopeTarget) Selector() (string, types.ResourceSelector) {
 		s := t.Connection
 		return policy.ResourceConnection, types.ResourceSelector{
 			ID: s.ID, Name: s.Name, Namespace: s.Namespace, Types: s.Types,
+		}
+
+	case t.Scraper != nil:
+		s := t.Scraper
+		return policy.ResourceScraper, types.ResourceSelector{
+			ID: s.ID, Name: s.Name, Namespace: s.Namespace, Agent: s.Agent,
 		}
 	}
 

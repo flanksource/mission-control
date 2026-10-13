@@ -84,6 +84,8 @@ func ValidateScope(ctx context.Context, targets []v1.ScopeTarget) ([]v1.ScopeTar
 				target.Check.Agent = id
 			case target.Canary != nil:
 				target.Canary.Agent = id
+			case target.Scraper != nil:
+				target.Scraper.Agent = id
 			}
 		}
 		resolved = append(resolved, target)

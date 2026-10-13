@@ -96,7 +96,8 @@ func DbMiddleware() MiddlewareFunc {
 				allowed = CheckType(ctx, Grant{typeObject, typeAction}, Grant{object, action})
 				object, action = typeObject, typeAction
 			} else {
-				allowed = CheckContext(ctx, object, action) || canListFilteredRows(ctx, resource, action) || readsConnections(ctx, resource, action)
+				allowed = CheckContext(ctx, object, action) || canListFilteredRows(ctx, resource, action) || readsConnections(ctx, resource, action) ||
+					scraperGrants(ctx, resource, action)
 			}
 
 			if !allowed {
@@ -146,6 +147,19 @@ var typeTables = map[string]string{
 	"role_bindings":         adapter.ObjectRoleBindings,
 }
 
+// scraperGrants reports whether the subject's grants on scrapers allow the action on config scrapers. duty files the
+// table under database.config_scrapers, which logging backends share, and its view under database.monitor, so
+// Role rules on scrapers are granted on an object of their own.
+func scraperGrants(ctx context.Context, table, action string) bool {
+	switch table {
+	case "config_scrapers":
+		return CheckContext(ctx, adapter.ObjectScrapers, action)
+	case "config_scrapers_with_status":
+		return action == policy.ActionRead && CheckContext(ctx, adapter.ObjectScrapers, action)
+	}
+	return false
+}
+
 // rowFilteredTables are the tables whose rows are filtered by a subject's read grants of their resource type.
 var rowFilteredTables = map[string]string{
 	"config_items":   policy.ResourceConfig,
@@ -155,6 +169,9 @@ var rowFilteredTables = map[string]string{
 	"checks":         policy.ResourceCheck,
 	"canaries":       policy.ResourceCanary,
 	"playbooks":      policy.ResourcePlaybook,
+
+	"config_scrapers":             policy.ResourceScraper,
+	"config_scrapers_with_status": policy.ResourceScraper,
 }
 
 // ReadGrantsCover reports whether the subject's read grants filter rows of the resource type.

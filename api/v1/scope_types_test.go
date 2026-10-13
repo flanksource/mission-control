@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/flanksource/duty/types"
 	"github.com/google/cel-go/cel"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -93,6 +94,38 @@ var _ = ginkgo.Describe("Scope CRD", func() {
 	ginkgo.It("rejects a target with no type", func() {
 		Expect(valid(`{}`)).To(BeFalse())
 	})
+
+	ginkgo.Describe("scraper", func() {
+		// Kubernetes rejects fields a CRD's schema doesn't declare under strict field validation, kubectl's default
+		properties := items["properties"].(map[string]any)["scraper"].(map[string]any)["properties"].(map[string]any)
+
+		for _, selector := range []string{
+			`{"id":"3c3e0b2a-9f1e-4d2b-8c5a-1e2f3a4b5c6d"}`,
+			`{"name":"kubernetes"}`,
+			`{"name":"*"}`,
+			`{"name":"kubernetes-*"}`,
+			`{"namespace":"mc"}`,
+			`{"agent":"homelab"}`,
+			`{"name":"kubernetes-*","namespace":"mc","agent":"homelab"}`,
+		} {
+			ginkgo.It("accepts "+selector, func() {
+				Expect(valid(`{"scraper":` + selector + `}`)).To(BeTrue())
+			})
+		}
+
+		for _, field := range []string{"types", "tagSelector", "labelSelector"} {
+			ginkgo.It("has no "+field, func() {
+				Expect(properties).ToNot(HaveKey(field))
+				Expect(properties).To(HaveKey("agent"))
+			})
+		}
+
+		ginkgo.It("rejects an empty selector, an invalid id and another type alongside", func() {
+			Expect(valid(`{"scraper":{}}`)).To(BeFalse())
+			Expect(valid(`{"scraper":{"id":"not-a-uuid"}}`)).To(BeFalse())
+			Expect(valid(`{"scraper":{"name":"*"},"config":{"name":"*"}}`)).To(BeFalse())
+		})
+	})
 })
 
 var _ = ginkgo.Describe("ScopeTarget", func() {
@@ -107,4 +140,16 @@ var _ = ginkgo.Describe("ScopeTarget", func() {
 			Expect(selector.Wildcard()).To(BeTrue())
 		})
 	}
+})
+
+var _ = ginkgo.Describe("ScopeTarget scraper", func() {
+	ginkgo.It("converts every scraper field", func() {
+		var target ScopeTarget
+		Expect(json.Unmarshal([]byte(`{"scraper":{"id":"3c3e0b2a-9f1e-4d2b-8c5a-1e2f3a4b5c6d","name":"kubernetes-*","namespace":"mc","agent":"homelab"}}`), &target)).To(Succeed())
+		Expect(target.TypeCount()).To(Equal(1))
+
+		kind, selector := target.Selector()
+		Expect(kind).To(Equal("scraper"))
+		Expect(selector).To(Equal(types.ResourceSelector{ID: "3c3e0b2a-9f1e-4d2b-8c5a-1e2f3a4b5c6d", Name: "kubernetes-*", Namespace: "mc", Agent: "homelab"}))
+	})
 })
