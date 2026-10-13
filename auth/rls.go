@@ -77,15 +77,18 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		return cached.(*rls.Payload), nil
 	}
 
-	payload, err := ownRLSPayload(ctx, subject)
-	if err != nil {
-		return nil, err
-	}
-
+	var payload *rls.Payload
+	var err error
 	if tokenRoles, limited := rbac.TokenLimit(ctx, user.ID.String()); limited {
+		// A token lists the rows both its owner's read grants and its Roles select (roles.md, Section 4.5)
+		if payload, err = buildRLSPayload(ctx, subject); err != nil {
+			return nil, ctx.Oops().Wrap(err)
+		}
 		if payload, err = limitToTokenRoles(ctx, payload, tokenRoles); err != nil {
 			return nil, ctx.Oops().Wrap(err)
 		}
+	} else if payload, err = ownRLSPayload(ctx, subject); err != nil {
+		return nil, err
 	}
 
 	payload = applyScopeLimits(payload, limits)
@@ -111,9 +114,9 @@ func ownRLSPayload(ctx context.Context, subject string) (*rls.Payload, error) {
 	return payload, nil
 }
 
-// limitToTokenRoles narrows the owner's row filters to the rows the read rules of the token's Roles list:
-// a row is listed when a grant of the owner and a grant of a Role both admit it. Roles list no view rows,
-// as Role rules don't for bindings. A Role that's missing or invalid lists nothing.
+// limitToTokenRoles narrows the owner's row filters, built from the owner's read grants, to the rows the read rules
+// of the token's Roles list: a row is listed when a grant of the owner and a grant of a Role both admit it. Roles list
+// no view rows, as Role rules don't for bindings. A Role that's missing or invalid lists nothing.
 func limitToTokenRoles(ctx context.Context, owner *rls.Payload, roles models.AccessTokenRoles) (*rls.Payload, error) {
 	limit := newClaim()
 	for _, role := range roles {
@@ -131,9 +134,6 @@ func limitToTokenRoles(ctx context.Context, owner *rls.Payload, roles models.Acc
 	result := &rls.Payload{}
 	for _, kind := range rls.GrantTypes {
 		ownerGrants := owner.GrantsFor(kind)
-		if owner.Disable {
-			ownerGrants = rls.AllRows()
-		}
 		if ownerGrants == nil || limit.grants[kind] == nil {
 			continue
 		}

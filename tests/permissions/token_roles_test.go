@@ -34,12 +34,13 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 
 	var (
 		e                    *echo.Echo
-		alice, bob           *models.Person
+		alice, bob, carol    *models.Person
 		inA, inB, outside    models.ConfigItem
 		runbook              models.Playbook
 		roleIDs, bindingIDs  = map[string]string{}, map[string]string{}
 		readonly, unscoped   *models.Person
 		tenantToken, missing *models.Person
+		carolToken           *models.Person
 	)
 
 	newScope := func(name string, targets ...v1.ScopeTarget) {
@@ -150,6 +151,7 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 
 		alice = setup.CreateUserWithRole(DefaultContext, "Token Alice", "token-alice@test.com", policy.RoleGuest)
 		bob = setup.CreateUserWithRole(DefaultContext, "Token Bob", "token-bob@test.com", policy.RoleGuest)
+		carol = setup.CreateUserWithRole(DefaultContext, "Token Carol", "token-carol@test.com", policy.RoleViewer)
 
 		config := func(name string, tags types.JSONStringMap) models.ConfigItem {
 			return models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr(name), ConfigClass: "Pod", Type: lo.ToPtr("Kubernetes::Pod"), Tags: tags}
@@ -191,6 +193,7 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 
 		bind("alice-operator", "operator", alice)
 		bind("bob-token-configs", "token-configs-reader", bob)
+		bind("carol-token-configs", "token-configs-reader", carol)
 		reload()
 
 		e = echo.New()
@@ -202,6 +205,7 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		readonly = createToken(alice, "readonly", "readonly")
 		unscoped = createTokenWithoutRoles(alice, "unscoped")
 		tenantToken = createToken(bob, "tenant-a", "tenant-a-reader")
+		carolToken = createToken(carol, "carol-tenant-a", "tenant-a-reader")
 		missing = createToken(alice, "missing-role", "does-not-exist")
 	})
 
@@ -214,7 +218,7 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.RoleBinding{})
 		DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Role{})
 		DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Scope{})
-		for _, token := range []*models.Person{readonly, unscoped, tenantToken, missing} {
+		for _, token := range []*models.Person{readonly, unscoped, tenantToken, missing, carolToken} {
 			DefaultContext.DB().Where("person_id = ?", token.ID).Delete(&models.AccessToken{})
 		}
 		Expect(rbac.ReloadPolicy()).To(Succeed())
@@ -258,6 +262,10 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		Expect(rec.Code).To(Equal(http.StatusCreated), rec.Body.String())
 
 		Expect(listed(unscoped)).To(ConsistOf(listed(alice)))
+	})
+
+	ginkgo.It("lists only the rows a non-guest owner's read grants select", func() {
+		Expect(listed(carolToken)).To(Equal([]uuid.UUID{inA.ID}), "tenant-a-reader allows inA and outside, carol's grants select inA and inB")
 	})
 
 	ginkgo.It("lists the rows both the owner and the token's Roles allow", func() {
