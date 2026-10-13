@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -144,6 +145,13 @@ var contracts = map[string]ActionContract{
 	policy.ActionPropertyManage: {Object: policy.ObjectProperties, enforcement: enforcedWithoutResource},
 	policy.ActionEventRead:      {Object: policy.ObjectEvents, enforcement: enforcedWithoutResource},
 	policy.ActionJobRead:        {Object: policy.ObjectJobs, enforcement: enforcedWithoutResource},
+}
+
+// Actions returns every action with a contract, sorted. Plugin actions aren't listed: there's one per plugin operation.
+func Actions() []string {
+	actions := slices.Collect(maps.Keys(contracts))
+	slices.Sort(actions)
+	return actions
 }
 
 // ContractFor returns the contract of an action.

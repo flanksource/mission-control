@@ -16,7 +16,11 @@ import (
 )
 
 // PersistScopeFromCRD stores a Scope CRD. See PersistScope.
+// A Scope with the namespace and name of a shipped one isn't stored: the shipped one stays.
 func PersistScopeFromCRD(ctx context.Context, obj *v1.Scope) error {
+	if err := notShipped(ctx, "scopes", obj.GetNamespace(), obj.GetName()); err != nil {
+		return err
+	}
 	return PersistScope(ctx, obj, models.SourceCRD, nil)
 }
 
@@ -90,8 +94,8 @@ func DeleteStaleScope(ctx context.Context, newer *v1.Scope) error {
 	err := ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
 		var stale []uuid.UUID
 		if err := txCtx.DB().Raw(`UPDATE scopes SET deleted_at = NOW()
-			WHERE name = ? AND namespace = ? AND id != ? AND deleted_at IS NULL
-			RETURNING id`, newer.Name, newer.Namespace, newer.UID).Scan(&stale).Error; err != nil {
+			WHERE name = ? AND namespace = ? AND id != ? AND source != ? AND deleted_at IS NULL
+			RETURNING id`, newer.Name, newer.Namespace, newer.UID, adapter.SourceShipped).Scan(&stale).Error; err != nil {
 			return err
 		}
 

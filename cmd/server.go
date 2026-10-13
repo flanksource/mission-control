@@ -36,6 +36,7 @@ import (
 	"github.com/flanksource/incident-commander/plugin/machinery"
 	pluginReconciler "github.com/flanksource/incident-commander/plugin/reconciler"
 	"github.com/flanksource/incident-commander/rbac/adapter"
+	"github.com/flanksource/incident-commander/rbac/shipped"
 	"github.com/flanksource/incident-commander/upstream/tunnel"
 	echov4 "github.com/labstack/echo/v4"
 
@@ -271,6 +272,13 @@ var Serve = &cobra.Command{
 		}
 
 		e := echo.New(ctx)
+
+		// After RBAC is initialised by echo.New, and before Kubernetes objects are reconciled, so the shipped
+		// Roles and Scopes are in place before anything can take their names.
+		if err := shipped.Sync(ctx); err != nil {
+			logger.Errorf("failed to sync shipped roles: %v", err)
+		}
+
 		// This is outside echo pkg to prevent import cycle
 		// Cannot be registered because we need to pass ctx for
 		// context injection middleware
@@ -307,6 +315,9 @@ var Serve = &cobra.Command{
 		// consumers, kopper) stop before the database pool is closed.
 		ctx, cancel := ctx.WithCancel()
 		shutdown.AddHookWithPriority("workers", shutdown.PriorityJobs, func() { cancel() })
+
+		// Before plugins are replayed, so their operations reach the shipped admin Role
+		shipped.Start(ctx)
 
 		if api.UpstreamConf.Valid() {
 			go tunnel.StartAgentTunnel(ctx, api.UpstreamConf, e)

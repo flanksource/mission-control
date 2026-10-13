@@ -109,22 +109,27 @@ _Why no deny rules:_ with nothing allowed by default, every restriction can be w
 
 ### Shipped Roles
 
-Mission Control ships these Roles in the `mission-control` namespace. They're ordinary Roles, bound by ordinary RoleBindings; Mission Control ships no bindings to them.
+Mission Control ships these Roles in the `mission-control-builtin` namespace. They're ordinary Roles, bound by ordinary RoleBindings; Mission Control ships no bindings to them.
 
 | Role     | Allows                                                                                       |
 | -------- | -------------------------------------------------------------------------------------------- |
 | `viewer` | `read` on `config`, `component`, `check`, `canary`, `playbook`, `application`, `person` and `team` |
-| `admin`  | Every action on every type (`scopes.md`, Section 3.1), every plugin operation included, and every action without a resource (`roles.md`, Section 2.3) |
+| `admin`  | Every action on every type (`scopes.md`, Section 3.1) and every action without a resource (`roles.md`, Section 2.3), except plugin operations |
+| `plugin-admin` | Every operation of the installed plugins (`invoke:<plugin>:<operation>`), on any config |
 
 `viewer` reads the resources people operate on, and nothing that configures access, holds credentials or exposes Mission Control's internals: no connections, notifications, notification silences, scrapers, agents, Scopes, Roles or RoleBindings, and neither `event:read` nor `job:read`. _Why:_ `viewer` is the Role most often bound to everyone, so it grants only what everyone may see. Each of the excluded types takes an explicit grant, e.g. `read` on `scope`, `role` and `roleBinding` for an auditor, and so do the event queue and job history.
 
-Each rule of a shipped Role, apart from those on actions without a resource, needs a Scope (`roles.md`, Section 1), so the Scopes they use ship with them, in the same namespace: whole-type targets of every type (`scopes.md`, Section 5.2), split across as many Scopes as the ten-target limit requires.
+Each rule of a shipped Role, apart from those on actions without a resource, needs a Scope (`roles.md`, Section 1), so the Scopes they use ship with them, in the same namespace. There's one per type, named `all-<type>` in the plural, e.g. `all-configs`, `all-notification-silences`, with a single whole-type target (`scopes.md`, Section 5.2), so a rule takes one Scope for each type it covers. No action accepts views, so no shipped Scope selects them.
 
-A RoleBinding to a shipped Role MUST be created in `mission-control`, through the API or Kubernetes, since a binding's `role` only names a Role in its own namespace ("Namespaces"). The subjects it selects can be anyone.
+The shipped Scopes are part of Mission Control's interface: Roles anyone creates in `mission-control-builtin` MAY use them. So a shipped Scope MUST select exactly its one type, and MUST NOT be renamed, regrouped or widened. A new type MUST get a new Scope. _Why one per type:_ a Scope grouping several types would grant more to every Role using it as soon as a release added a type to it, and could make those Roles invalid, since a rule's Scope may only select types its action accepts (`roles.md`, Section 3).
 
-Mission Control writes the shipped Roles and their Scopes when it starts, and again whenever the set of actions changes, e.g. when a plugin with a new operation is installed. They aren't Kubernetes objects. They can't be changed or deleted through the API, and a Role or Scope applied through Kubernetes under the same namespace and name is overwritten. _Why:_ `admin` has to hold every action, including ones added after it was written, and Role rules name actions exactly (`roles.md`, Section 2). Keeping shipped Roles up to date is cheaper than a pattern that would have to mean something different in them than in every other Role.
+A RoleBinding to a shipped Role MUST be created in `mission-control-builtin`, through the API or Kubernetes, since a binding's `role` only names a Role in its own namespace ("Namespaces"), and so must the Scopes of its constraint. The subjects it selects can be anyone. Roles and RoleBindings created there may use the shipped Scopes.
 
-_Why one namespace:_ references never cross namespaces, and keeping the shipped Roles, their Scopes and the bindings to them together keeps that rule without an exception. The namespace exists on every install, with or without Kubernetes, because Mission Control writes these objects to its database itself.
+Mission Control writes the shipped Roles and their Scopes when it starts, and writes `plugin-admin` again whenever a plugin is installed, upgraded or removed and its operations change. `viewer` and `admin` are exactly as shipped, and only change with Mission Control itself. `plugin-admin` exists only while some plugin has an operation, since a Role needs a rule; a binding to it has no effect in between. Its name is reserved all the same: the API and Kubernetes reconciliation MUST refuse a Role `plugin-admin` in `mission-control-builtin` from any source but Mission Control, so a binding meant for someone else's Role can't come to grant every plugin operation once the shipped one is written. The shipped objects aren't Kubernetes objects. They can't be changed or deleted through the API, and a Role or Scope applied through Kubernetes under the same namespace and name is overwritten.
+
+_Why `plugin-admin` is kept up to date:_ it has to hold every plugin operation, including ones added after it was written, and Role rules name actions exactly (`roles.md`, Section 2). Keeping it up to date is cheaper than a pattern that would have to mean something different in it than in every other Role. _Why apart from `admin`:_ its rules come from plugins, whose operation names Mission Control doesn't control. Keeping them out of `admin` means no plugin can change what `admin` grants, or make it invalid; at worst it affects `plugin-admin`. An admin who should run plugin operations is bound to both.
+
+_Why one namespace:_ references never cross namespaces, and keeping the shipped Roles, their Scopes and the bindings to them together keeps that rule without an exception. The namespace exists on every install, with or without Kubernetes, because Mission Control writes these objects to its database itself. It's a namespace of its own, apart from the one Mission Control is installed in, so the shipped objects don't share a namespace with everything else applied there. A Scope, Role or RoleBinding created in it under the name of a shipped one, e.g. before a release ships that name, is replaced by the shipped one.
 
 ### Configured bindings
 
