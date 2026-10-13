@@ -1,7 +1,6 @@
 NAME=incident-commander
 OS   = $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH = $(shell uname -m | sed 's/x86_64/amd64/')
-DATE = $(shell date  "+%Y-%m-%d %H:%M:%S")
 GIT_COMMIT = $(shell git rev-parse HEAD 2>/dev/null || echo none)
 BUILD_DATE = $(shell date -u "+%Y-%m-%dT%H:%M:%SZ")
 ifeq ($(VERSION),)
@@ -158,7 +157,7 @@ compress-binary: .bin/upx
 # incident-commander-binary builds incident-commander for $GOOS/$GOARCH.
 .PHONY: incident-commander-binary
 incident-commander-binary: $(TAILWIND_JS)
-	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o ./.bin/$(NAME)_$(GOOS)_$(GOARCH)$(EXE) -ldflags "-X \"main.version=$(VERSION_TAG)\"" main.go
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build -o ./.bin/$(NAME)_$(GOOS)_$(GOARCH)$(EXE) -ldflags '-X "main.version=$(VERSION_TAG)" -X "main.commit=$(GIT_COMMIT)" -X "main.date=$(BUILD_DATE)"' main.go
 
 # faro-binary builds faro, a slim Mission Control client (remote-only surfaces), for $GOOS/$GOARCH.
 .PHONY: faro-binary
@@ -255,7 +254,7 @@ build: static
 	$(MAKE) go-build
 
 go-build: | $(LOCALBIN)
-	go build -o ./.bin/$(NAME) -ldflags "-X \"main.version=$(VERSION_TAG) built at $(DATE)\"" main.go
+	go build -o ./.bin/$(NAME) -ldflags '-X "main.version=$(VERSION_TAG)" -X "main.commit=$(GIT_COMMIT)" -X "main.date=$(BUILD_DATE)"' main.go
 
 .PHONY: dev
 dev:

@@ -164,6 +164,8 @@ func New(ctx context.Context) *echov4.Echo {
 	e.GET("/about", func(c echov4.Context) error {
 		return c.JSON(http.StatusOK, map[string]string{
 			"appVersion":   api.BuildVersion,
+			"commit":       api.BuildCommit,
+			"buildDate":    api.BuildDate,
 			"chartVersion": os.Getenv("FLANKSOURCE_CHART_VERSION"),
 		})
 	})
