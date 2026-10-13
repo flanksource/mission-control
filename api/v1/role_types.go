@@ -15,7 +15,7 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 //
-// Role is a named set of rules, each allowing or denying an action on the resources selected by a Scope,
+// Role is a named set of rules, each allowing an action on the resources selected by a Scope,
 // optionally on the targets selected by another Scope.
 // A role grants nothing on its own: a RoleBinding grants it to subjects.
 // +kubebuilder:validation:XValidation:rule="!(self.metadata.name in ['admin','everyone','guest','viewer','editor','commander','responder','agent'])",message="a Role can't be named after a built-in role"
@@ -35,7 +35,7 @@ type RoleSpec struct {
 	// +listType=map
 	// +listMapKey=name
 
-	// Rules of the role. A matching deny rule overrides every allow rule.
+	// Rules of the role. Rules only allow.
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=50
 	Rules []RoleRule `json:"rules" yaml:"rules"`
@@ -44,8 +44,7 @@ type RoleSpec struct {
 // +kubebuilder:object:generate=true
 // +kubebuilder:validation:XValidation:rule="self.action in ['read','create','update','delete','playbook:run','playbook:approve','playbook:cancel','mcp:run','connection:use','person:manage','mcp:use','property:manage','event:read','job:read'] || self.action.matches('^invoke:[^:*!, ]+:[^:*!, ]+$')",message="action must be a known action or invoke:<plugin>:<operation>, without patterns"
 // +kubebuilder:validation:XValidation:rule="has(self.resource) != (self.action in ['person:manage','mcp:use','property:manage','event:read','job:read'])",message="person:manage, mcp:use, property:manage, event:read and job:read take no resource; every other action needs one"
-// +kubebuilder:validation:XValidation:rule="!(has(self.deny) && self.deny && self.action in ['connection:use','person:manage','mcp:use','property:manage','event:read','job:read'])",message="deny rules on connection:use, person:manage, mcp:use, property:manage, event:read and job:read aren't supported"
-// +kubebuilder:validation:XValidation:rule="!(has(self.deny) && self.deny && self.action == 'read')",message="deny rules on read aren't supported"
+// +kubebuilder:validation:XValidation:rule="!has(self.deny) || self.deny != true",message="deny isn't supported: rules only allow"
 // +kubebuilder:validation:XValidation:rule="!has(self.target) || self.action in ['playbook:run','playbook:approve','playbook:cancel']",message="only playbook:run, playbook:approve and playbook:cancel take a target"
 type RoleRule struct {
 	// Name identifies the rule within the role.
@@ -56,7 +55,7 @@ type RoleRule struct {
 	// Description provides a brief explanation of the rule.
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 
-	// Action is the action the rule allows or denies, e.g. read or playbook:run.
+	// Action is the action the rule allows, e.g. read or playbook:run.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=253
 	Action string `json:"action" yaml:"action"`
@@ -70,7 +69,8 @@ type RoleRule struct {
 	// Without a target, the rule only matches operations without one.
 	Target *ScopeReference `json:"target,omitempty" yaml:"target,omitempty"`
 
-	// Deny makes the rule deny the action instead of allowing it.
+	// Deny is refused: rules only allow. It's kept so that a Role setting it is rejected rather than
+	// stored without it, which would allow what it was written to deny. false is accepted and ignored.
 	Deny bool `json:"deny,omitempty" yaml:"deny,omitempty"`
 }
 

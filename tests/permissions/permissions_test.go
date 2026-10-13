@@ -181,52 +181,6 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload).To(Equal(&rls.Payload{}))
 		})
 
-		It("should list no rows of a type a deny permission on read covers", func() {
-			denyOnlyUser := setup.CreateUserWithRole(DefaultContext, "Deny Only User", "deny-only@test.com", policy.RoleGuest)
-			DeferCleanup(func() {
-				auth.InvalidateRLSCacheForUser(denyOnlyUser.ID.String())
-				Expect(DefaultContext.DB().Delete(denyOnlyUser).Error).ToNot(HaveOccurred())
-			})
-
-			permissions := []*models.Permission{
-				{
-					ID:             uuid.New(),
-					Name:           "deny-only-echo-config-playbook-read",
-					Namespace:      "default",
-					Action:         policy.ActionRead,
-					Subject:        denyOnlyUser.ID.String(),
-					SubjectType:    models.PermissionSubjectTypePerson,
-					Deny:           true,
-					ObjectSelector: []byte(`{"playbooks":[{"name":"echo-config","namespace":"mc"}]}`),
-				},
-				{
-					ID:             uuid.New(),
-					Name:           "deny-only-restart-pod-allowed",
-					Namespace:      "default",
-					Action:         policy.ActionRead,
-					Subject:        denyOnlyUser.ID.String(),
-					SubjectType:    models.PermissionSubjectTypePerson,
-					ObjectSelector: []byte(`{"scopes":[{"namespace":"default","name":"restart-pod-playbook"}]}`),
-				},
-			}
-			for _, permission := range permissions {
-				Expect(DefaultContext.DB().Create(permission).Error).ToNot(HaveOccurred())
-			}
-			Expect(rbac.ReloadPolicy()).To(Succeed())
-			DeferCleanup(func() {
-				for _, permission := range permissions {
-					Expect(DefaultContext.DB().Delete(permission).Error).ToNot(HaveOccurred())
-				}
-				Expect(rbac.ReloadPolicy()).To(Succeed())
-			})
-
-			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(denyOnlyUser))
-			Expect(err).ToNot(HaveOccurred())
-			Expect(payload.Disable).To(BeFalse())
-			Expect(payload.Playbook).ToNot(BeNil(), "the type is still filtered, so its listing is empty rather than refused")
-			Expect(payload.Playbook.IsEmpty()).To(BeTrue(), "a deny that can't be enforced row by row must refuse rather than allow")
-		})
-
 		It("should grant no rows through direct ID-based permissions", func() {
 			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(guestUserDirectPerms))
 			Expect(err).ToNot(HaveOccurred())
@@ -834,49 +788,6 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			var count int64
 			Expect(tx.Model(&models.Playbook{}).Count(&count).Error).To(BeNil())
 			Expect(count).To(Equal(totalPlaybooks), "admin user should see all playbooks")
-		})
-
-		It("should list no playbooks when a deny permission on read covers them", func() {
-			user := setup.CreateUserWithRole(DefaultContext, "Allow All Deny Echo User", "allow-all-deny-echo@test.com", policy.RoleGuest)
-			DeferCleanup(func() {
-				auth.InvalidateRLSCacheForUser(user.ID.String())
-				Expect(DefaultContext.DB().Delete(user).Error).ToNot(HaveOccurred())
-			})
-
-			allowAll := &models.Permission{
-				ID:             uuid.New(),
-				Name:           "allow-all-playbooks-read",
-				Namespace:      "default",
-				Action:         policy.ActionRead,
-				Subject:        user.ID.String(),
-				SubjectType:    models.PermissionSubjectTypePerson,
-				ObjectSelector: []byte(`{"playbooks":[{"name":"*"}]}`),
-			}
-			denyEcho := &models.Permission{
-				ID:             uuid.New(),
-				Name:           "deny-echo-config-playbook-read",
-				Namespace:      "default",
-				Action:         policy.ActionRead,
-				Subject:        user.ID.String(),
-				SubjectType:    models.PermissionSubjectTypePerson,
-				Deny:           true,
-				ObjectSelector: []byte(`{"playbooks":[{"name":"echo-config","namespace":"mc"}]}`),
-			}
-			Expect(DefaultContext.DB().Create([]*models.Permission{allowAll, denyEcho}).Error).ToNot(HaveOccurred())
-			Expect(rbac.ReloadPolicy()).To(Succeed())
-			DeferCleanup(func() {
-				Expect(DefaultContext.DB().Delete([]*models.Permission{allowAll, denyEcho}).Error).ToNot(HaveOccurred())
-				Expect(rbac.ReloadPolicy()).To(Succeed())
-			})
-
-			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(user))
-			Expect(err).ToNot(HaveOccurred())
-			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
-
-			// A deny can't be enforced row by row, so it refuses the whole type rather than allow what it denies
-			var count int64
-			Expect(tx.Model(&models.Playbook{}).Count(&count).Error).To(BeNil())
-			Expect(count).To(BeZero())
 		})
 
 		// Direct ID permissions tests

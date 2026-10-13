@@ -177,18 +177,15 @@ func ValidateRoleSpec(name string, rules []v1.RoleRule) error {
 }
 
 // ruleContract returns the contract of the rule's action, and checks the rule fits it on its own:
-// a deny the action can enforce, a resource exactly when the action takes one, and a target only on an action that takes one.
+// no deny, a resource exactly when the action takes one, and a target only on an action that takes one.
 func ruleContract(rule v1.RoleRule) (ActionContract, error) {
+	if rule.Deny {
+		return ActionContract{}, NewValidationError("deny isn't supported: rules only allow")
+	}
+
 	contract, err := ContractFor(rule.Action)
 	if err != nil {
 		return ActionContract{}, NewValidationError("%v", err)
-	}
-
-	if rule.Deny && !contract.AllowsDeny {
-		if rule.Action == policy.ActionRead {
-			return ActionContract{}, NewValidationError("%s can't be denied yet: built-in read access, and listings not being filtered by row for Mission Control's own users, would bypass the deny", rule.Action)
-		}
-		return ActionContract{}, NewValidationError("%s can't be denied: its rules only allow", rule.Action)
 	}
 
 	if contract.TakesResource() && rule.Resource == nil {
@@ -258,7 +255,6 @@ func withContext(err error, format string, args ...any) error {
 type CompiledRule struct {
 	ID       string
 	Name     string
-	Deny     bool
 	Contract ActionContract
 
 	// Resource are the Scopes the primary resource must belong to: the rule's, then the constraint's narrowed to the
@@ -286,7 +282,7 @@ func ValidateRole(ctx context.Context, cache *gocache.Cache, role models.Role) (
 	return ResolveRoleRules(ctx, cache, role.Namespace, rules)
 }
 
-// UnappliedRule is an allow rule of a role that doesn't apply through a binding, because its constraint can't narrow it.
+// UnappliedRule is a rule of a role that doesn't apply through a binding, because its constraint can't narrow it.
 type UnappliedRule struct {
 	Rule    string `json:"rule"`
 	Reason  string `json:"reason"`
@@ -297,7 +293,7 @@ func (u UnappliedRule) String() string {
 	return fmt.Sprintf("rule %s: %s", u.Rule, u.Message)
 }
 
-// CompiledBinding is what a binding grants: the rules that apply through it, and the allow rules that don't.
+// CompiledBinding is what a binding grants: the rules that apply through it, and the rules that don't.
 type CompiledBinding struct {
 	Rules     []CompiledRule
 	Unapplied []UnappliedRule
@@ -311,12 +307,11 @@ type constraintScopes struct {
 
 // CompileBinding returns what a binding grants.
 //
-// A binding grants its whole role. Without a constraint, its rules apply as written. With one, every allow rule is
-// narrowed by it, one side at a time, and an allow rule it can't narrow doesn't apply (see narrowRule).
-// Deny rules are never narrowed: they apply whenever the role is valid, whatever happens to the constraint.
+// A binding grants its whole role. Without a constraint, its rules apply as written. With one, every rule is
+// narrowed by it, one side at a time, and a rule it can't narrow doesn't apply (see narrowRule).
 //
 // The error says why the binding isn't Ready: its role is invalid, a Scope of its constraint is missing or invalid,
-// or none of the role's allow rules applies through it. The rules returned still apply.
+// or none of the role's rules applies through it. The rules returned still apply.
 func CompileBinding(ctx context.Context, cache *gocache.Cache, binding models.RoleBinding, role models.Role) (CompiledBinding, error) {
 	constraint, err := bindingConstraint(binding)
 	if err != nil {
@@ -337,27 +332,19 @@ func CompileBinding(ctx context.Context, cache *gocache.Cache, binding models.Ro
 	}
 
 	var compiled CompiledBinding
-	var allows []ResolvedRule
-	for _, rule := range resolvedRules {
-		if rule.Deny || constraint == nil {
-			compiled.Rules = append(compiled.Rules, compileRule(binding, rule))
-		} else {
-			allows = append(allows, rule)
-		}
-	}
-
 	if constraint == nil {
+		for _, rule := range resolvedRules {
+			compiled.Rules = append(compiled.Rules, compileRule(binding, rule))
+		}
 		return compiled, nil
 	}
 
 	scopes, err := resolveConstraintScopes(ctx, cache, binding.Namespace, *constraint)
 	if err != nil {
 		return compiled, withContext(err, "constraint")
-	} else if len(allows) == 0 {
-		return compiled, nil
 	}
 
-	for _, rule := range allows {
+	for _, rule := range resolvedRules {
 		c, err := narrowRule(ctx, compileRule(binding, rule), rule, scopes)
 		if err != nil {
 			if !IsValidationError(err) {
@@ -370,8 +357,8 @@ func CompileBinding(ctx context.Context, cache *gocache.Cache, binding models.Ro
 		compiled.Rules = append(compiled.Rules, c)
 	}
 
-	if len(compiled.Unapplied) == len(allows) {
-		return compiled, NewInvalid(ReasonNoRulesApply, "none of the role's allow rules applies through the binding: %s",
+	if len(compiled.Unapplied) == len(resolvedRules) {
+		return compiled, NewInvalid(ReasonNoRulesApply, "none of the role's rules applies through the binding: %s",
 			strings.Join(lo.Map(compiled.Unapplied, func(u UnappliedRule, _ int) string { return u.String() }), "; "))
 	}
 
@@ -440,7 +427,6 @@ func compileResolvedRule(id string, rule ResolvedRule) CompiledRule {
 	c := CompiledRule{
 		ID:       id,
 		Name:     rule.Name,
-		Deny:     rule.Deny,
 		Contract: rule.Contract,
 	}
 	if rule.Resource != nil {
@@ -620,7 +606,7 @@ func LoadBindingRules(ctx context.Context, bindingID uuid.UUID) ([]CompiledRule,
 // constraint's when it has one, for each type they all select.
 func (r CompiledRule) ReadGrants() map[string]rls.Grant {
 	grants := map[string]rls.Grant{}
-	if r.Deny || r.Contract.Action != policy.ActionRead || len(r.Resource) == 0 {
+	if r.Contract.Action != policy.ActionRead || len(r.Resource) == 0 {
 		return grants
 	}
 
@@ -645,7 +631,7 @@ func (r CompiledRule) condition() (string, error) {
 		return lo.Map(scopes, func(scope ScopeSelection, _ int) string { return scope.ID })
 	}
 
-	condition, err := dutyRBAC.RuleCondition(ids(r.Resource), ids(r.Target), r.Deny)
+	condition, err := dutyRBAC.RuleCondition(ids(r.Resource), ids(r.Target), false)
 	if err != nil {
 		return "", fmt.Errorf("rule %s: %w", r.Name, err)
 	}
@@ -686,17 +672,14 @@ func (r CompiledRule) SelectsEntirely(kind string) bool {
 //
 // A rule checked on the resources of each request is matched by the Scopes the request's resources are in:
 //
-//	p, binding:<ns>/<name>, *, <action>, <allow|deny>, <condition over r.obj.Membership>, binding:<binding id>/<rule>
+//	p, binding:<ns>/<name>, *, <action>, allow, <condition over r.obj.Membership>, binding:<binding id>/<rule>
 //
 // A rule checked on whole object types is granted on the object of each type it selects entirely, e.g. catalog.
 // So is a read rule, for endpoints that check reads on whole object types.
 //
 // A rule whose action takes no resource is granted on the action's object, e.g. events for event:read.
 func compiledRuleToCasbinRules(principal string, rule CompiledRule) ([][]string, error) {
-	effect := "allow"
-	if rule.Deny {
-		effect = "deny"
-	}
+	const effect = "allow"
 
 	if !rule.Contract.TakesResource() {
 		return [][]string{{"p", principal, rule.Contract.Object, rule.Contract.Action, effect, "", rule.ID}}, nil

@@ -204,7 +204,7 @@
       },
       "additionalProperties": false,
       "type": "object",
-      "description": "Role is a named set of rules, each allowing or denying an action on the resources selected by a Scope,\noptionally on the targets selected by another Scope.\nA role grants nothing on its own: a RoleBinding grants it to subjects."
+      "description": "Role is a named set of rules, each allowing an action on the resources selected by a Scope,\noptionally on the targets selected by another Scope.\nA role grants nothing on its own: a RoleBinding grants it to subjects."
     },
     "RoleRule": {
       "properties": {
@@ -218,7 +218,7 @@
         },
         "action": {
           "type": "string",
-          "description": "Action is the action the rule allows or denies, e.g. read or playbook:run."
+          "description": "Action is the action the rule allows, e.g. read or playbook:run."
         },
         "resource": {
           "$ref": "#/$defs/ScopeReference",
@@ -230,7 +230,7 @@
         },
         "deny": {
           "type": "boolean",
-          "description": "Deny makes the rule deny the action instead of allowing it."
+          "description": "Deny is refused: rules only allow. It's kept so that a Role setting it is rejected rather than\nstored without it, which would allow what it was written to deny. false is accepted and ignored."
         }
       },
       "additionalProperties": false,
@@ -251,7 +251,7 @@
             "$ref": "#/$defs/RoleRule"
           },
           "type": "array",
-          "description": "Rules of the role. A matching deny rule overrides every allow rule."
+          "description": "Rules of the role. Rules only allow."
         }
       },
       "additionalProperties": false,

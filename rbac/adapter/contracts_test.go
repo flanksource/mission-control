@@ -22,7 +22,6 @@ var _ = ginkgo.Describe("ContractFor", func() {
 		read, err := ContractFor(policy.ActionRead)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(read.Targets).To(BeEmpty())
-		Expect(read.AllowsDeny).To(BeFalse())
 
 		invoke, err := ContractFor("invoke:kubernetes-logs:tail")
 		Expect(err).ToNot(HaveOccurred())
@@ -168,12 +167,6 @@ var _ = ginkgo.Describe("CompiledRule", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(condition).To(Equal("r.obj.Membership.Fits && !r.obj.Membership.HasTarget && " +
 			"'scope:" + production.ID + "' in r.obj.Membership.Resource && 'scope:" + tenantA.ID + "' in r.obj.Membership.Resource"))
-
-		deny := CompiledRule{Name: "deny", Contract: run, Deny: true, Resource: []ScopeSelection{production}, Target: []ScopeSelection{tenantA}}
-		condition, err = deny.condition()
-		Expect(err).ToNot(HaveOccurred())
-		Expect(condition).To(Equal("!r.obj.Membership.Fits || (r.obj.Membership.HasTarget && " +
-			"'scope:" + production.ID + "' in r.obj.Membership.Resource && 'scope:" + tenantA.ID + "' in r.obj.Membership.Target)"))
 	})
 })
 
@@ -197,7 +190,6 @@ var _ = ginkgo.Describe("Actions without a resource", func() {
 			Expect(contract.TakesResource()).To(BeFalse())
 			Expect(contract.Resources).To(BeEmpty())
 			Expect(contract.Targets).To(BeEmpty())
-			Expect(contract.AllowsDeny).To(BeFalse())
 			Expect(contract.Object).To(Equal(object))
 		})
 
@@ -287,7 +279,6 @@ var _ = ginkgo.Describe("connection:use", func() {
 		Expect(use.TakesResource()).To(BeTrue())
 		Expect(use.Resources).To(ConsistOf(policy.ResourceConnection))
 		Expect(use.Targets).To(BeEmpty())
-		Expect(use.AllowsDeny).To(BeFalse())
 		Expect(use.Object).To(BeEmpty())
 	})
 
@@ -320,7 +311,7 @@ var _ = ginkgo.Describe("connection:use", func() {
 		deny.Deny = true
 		err = ValidateRoleSpec("ops", []v1.RoleRule{deny})
 		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("can't be denied"))
+		Expect(err.Error()).To(ContainSubstring("deny isn't supported"))
 
 		Expect(ValidateRoleSpec("ops", []v1.RoleRule{rule("ops", &v1.ScopeReference{ScopeRef: "aws"})})).To(Succeed())
 	})
@@ -428,4 +419,26 @@ var _ = ginkgo.Describe("Whole-type resources", func() {
 			Expect(policies).To(ContainElement([]string{"p", "binding:default/ops", ObjectScrapers, policy.ActionUpdate, "allow", "", "binding:1/update"}))
 		})
 	})
+})
+
+var _ = ginkgo.Describe("Deny rules", func() {
+	for _, action := range Actions() {
+		ginkgo.It("are refused on "+action, func() {
+			contract, err := ContractFor(action)
+			Expect(err).ToNot(HaveOccurred())
+
+			rule := v1.RoleRule{Name: "ops", Action: action, Deny: true}
+			if contract.TakesResource() {
+				rule.Resource = &v1.ScopeReference{ScopeRef: "everything"}
+			}
+
+			err = ValidateRoleSpec("ops", []v1.RoleRule{rule})
+			Expect(err).To(HaveOccurred())
+			Expect(InvalidReason(err)).To(Equal(ReasonInvalid))
+			Expect(err.Error()).To(ContainSubstring("deny isn't supported"))
+
+			rule.Deny = false
+			Expect(ValidateRoleSpec("ops", []v1.RoleRule{rule})).To(Succeed())
+		})
+	}
 })

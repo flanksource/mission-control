@@ -263,7 +263,7 @@
             "type": "string"
           },
           "type": "array",
-          "description": "Actions specify the operation that the permission allows or denies."
+          "description": "Actions specify the operation that the permission allows."
         },
         "subject": {
           "$ref": "#/$defs/PermissionSubject",
@@ -275,7 +275,7 @@
         },
         "deny": {
           "type": "boolean",
-          "description": "Deny indicates whether the permission should explicitly deny the specified action.\n\nDefault: false"
+          "description": "Deny is refused: permissions only allow. It's kept so that a Permission setting it is rejected rather than\nstored without it, which would allow what it was written to deny. false is accepted and ignored."
         },
         "agents": {
           "items": {

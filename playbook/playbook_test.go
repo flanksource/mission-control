@@ -1074,24 +1074,6 @@ var _ = Describe("Playbook", Ordered, func() {
 			oe, _ := oops.AsOops(err)
 			Expect(oe.Code()).To(Equal(dutyApi.EFORBIDDEN))
 		})
-
-		It("John can run any playbook but not this one specifically", func() {
-			_, err := createAndRunNoWait(DefaultContext.WithUser(&dummy.JohnDoe), "echo", RunParams{
-				ConfigID: lo.ToPtr(dummy.KubernetesNodeA.ID),
-			})
-			Expect(err).To(Not(BeNil()))
-			oe, _ := oops.AsOops(err)
-			Expect(oe.Code()).To(Equal(dutyApi.EFORBIDDEN))
-		})
-
-		It("John can run the playbook but not on this resource", func() {
-			_, err := createAndRunNoWait(DefaultContext.WithUser(&dummy.JohnDoe), "exec-powershell", RunParams{
-				ConfigID: lo.ToPtr(dummy.KubernetesNodeB.ID),
-			})
-			Expect(err).To(Not(BeNil()))
-			oe, _ := oops.AsOops(err)
-			Expect(oe.Code()).To(Equal(dutyApi.EFORBIDDEN))
-		})
 	})
 })
 

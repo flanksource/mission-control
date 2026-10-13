@@ -116,7 +116,7 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 }
 
 // loadRoleBindings validates every Scope, Role and RoleBinding, records why each invalid one isn't in effect,
-// and loads the policies of the valid bindings. An invalid object grants nothing, deny rules included.
+// and loads the policies of the valid bindings. An invalid object grants nothing.
 // Each Scope's membership is rebuilt when it changed, e.g. because an agent it names was re-registered,
 // and cleared when it's invalid.
 func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
@@ -392,7 +392,7 @@ func scopePermissionPolicies(permission models.Permission, conditions []string) 
 	var policies [][]string
 	for _, action := range expandActions(strings.Split(permission.Action, ",")) {
 		for _, condition := range conditions {
-			policies = append(policies, []string{"p", permission.Principal(), "*", action, permission.Effect(), condition, permission.ID.String()})
+			policies = append(policies, []string{"p", permission.Principal(), "*", action, "allow", condition, permission.ID.String()})
 		}
 	}
 	return policies
@@ -442,7 +442,7 @@ func createPolicy(permission models.Permission, action string) []string {
 		permission.Principal(),
 		permission.GetObject(),
 		action,
-		permission.Effect(),
+		"allow",
 		permission.Condition(),
 		permission.ID.String(),
 	}
@@ -519,7 +519,6 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 //
 // It also returns the allow rules that don't apply through the binding, and a validation error when the binding
 // isn't Ready. A binding that's invalid on its own, or whose role is missing or invalid, has no policies.
-// One whose constraint applies no allow rule still has the policies of its role's deny rules.
 func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding, role *models.Role) ([][]string, []UnappliedRule, error) {
 	spec, err := RoleBindingSpec(binding)
 	if err != nil {

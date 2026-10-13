@@ -245,7 +245,7 @@
         },
         "constraint": {
           "$ref": "#/$defs/RoleBindingConstraint",
-          "description": "Constraint narrows every allow rule of the role for this binding's subjects.\nWithout one, the binding grants the role's rules as written. Deny rules are never narrowed."
+          "description": "Constraint narrows every rule of the role for this binding's subjects.\nWithout one, the binding grants the role's rules as written."
         }
       },
       "additionalProperties": false,

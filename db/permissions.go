@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/kopper"
 	"github.com/google/uuid"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -18,6 +19,14 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 	uid, err := uuid.Parse(string(obj.GetUID()))
 	if err != nil {
 		return err
+	}
+
+	// Stored without it, a deny would allow what it was written to refuse, so the Permission grants nothing instead
+	if obj.Spec.Deny {
+		if err := DeletePermission(ctx, uid.String()); err != nil {
+			return err
+		}
+		return kopper.NotReady(kopper.ReasonInvalid, "deny isn't supported: permissions only allow")
 	}
 
 	subject, subjectType, err := obj.Spec.Subject.Populate(ctx)
@@ -46,7 +55,6 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 		Description: obj.Spec.Description,
 		Action:      action,
 		Source:      models.SourceCRD,
-		Deny:        obj.Spec.Deny,
 	}
 
 	if err := setPermissionObject(&p, obj.Spec.Object); err != nil {

@@ -48,7 +48,7 @@ For `/auth/create_token`:
 2. An access token is created for that token-person.
 3. `access_tokens.created_by` points back to the real user.
 4. The token-person is grouped to the creator in RBAC.
-5. Additional allow/deny permissions can be applied to the token-person.
+5. The token is limited by the Roles it was created with: it can do only what one of their rules also allows, within its owner's access.
 
 This allows delegated MCP tokens to have a subset of the user's permissions, or token-specific permissions, without changing the user's own permissions.
 

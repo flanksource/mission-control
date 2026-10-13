@@ -134,8 +134,11 @@ var _ = Describe("Scope, Role and RoleBinding API", Ordered, func() {
 		{"a role with an action pattern", "/rbac/roles", object("pattern", map[string]any{
 			"rules": []any{map[string]any{"name": "run", "action": "playbook:*", "resource": map[string]any{"scopeRef": "all-playbooks"}}},
 		})},
-		{"a role denying reads", "/rbac/roles", object("deny-read", map[string]any{
-			"rules": []any{map[string]any{"name": "read", "action": policy.ActionRead, "deny": true, "resource": map[string]any{"scopeRef": "all-playbooks"}}},
+		{"a role with a deny rule", "/rbac/roles", object("deny-run", map[string]any{
+			"rules": []any{map[string]any{"name": "run", "action": policy.ActionPlaybookRun, "deny": true, "resource": map[string]any{"scopeRef": "all-playbooks"}}},
+		})},
+		{"a role setting deny: false", "/rbac/roles", object("deny-false", map[string]any{
+			"rules": []any{map[string]any{"name": "run", "action": policy.ActionPlaybookRun, "deny": false, "resource": map[string]any{"scopeRef": "all-playbooks"}}},
 		})},
 		{"a role with a target on an action that takes none", "/rbac/roles", object("mcp-target", map[string]any{
 			"rules": []any{map[string]any{"name": "mcp", "action": policy.ActionMCPRun, "resource": map[string]any{"scopeRef": "all-playbooks"}, "target": map[string]any{"scopeRef": "all-playbooks"}}},
@@ -175,6 +178,31 @@ var _ = Describe("Scope, Role and RoleBinding API", Ordered, func() {
 			Expect(request(admin, http.MethodGet, tt.path+"/"+namespace+"/"+metadata["name"].(string), nil).Code).To(Equal(http.StatusNotFound))
 		})
 	}
+
+	It("rejects deny on a role as an unknown field", func() {
+		rec := request(admin, http.MethodPost, "/rbac/roles", object("deny-unknown", map[string]any{
+			"rules": []any{map[string]any{"name": "run", "action": policy.ActionPlaybookRun, "deny": true, "resource": map[string]any{"scopeRef": "all-playbooks"}}},
+		}))
+		Expect(rec.Code).To(Equal(http.StatusBadRequest), rec.Body.String())
+		Expect(rec.Body.String()).To(ContainSubstring(`unknown field \"deny\"`))
+	})
+
+	It("rejects deny on a permission written through /db as an unknown field", func() {
+		permission := map[string]any{"name": "deny-run", "namespace": namespace, "action": policy.ActionPlaybookRun, "subject": guest.ID.String()}
+		for _, body := range []any{
+			lo.Assign(permission, map[string]any{"deny": true}),
+			lo.Assign(permission, map[string]any{"deny": false}),
+			[]any{permission, lo.Assign(permission, map[string]any{"deny": true})},
+		} {
+			for _, method := range []string{http.MethodPost, http.MethodPatch} {
+				rec := request(admin, method, "/db/permissions", body)
+				Expect(rec.Code).To(Equal(http.StatusBadRequest), rec.Body.String())
+				Expect(rec.Body.String()).To(ContainSubstring(`unknown field \"deny\"`))
+			}
+		}
+
+		Expect(request(admin, http.MethodPost, "/db/permissions", permission).Code).To(Equal(http.StatusOK))
+	})
 
 	It("stores a binding whose role doesn't exist, and responds with why it isn't in effect", func() {
 		rec := request(admin, http.MethodPost, "/rbac/role-bindings", object("orphan", map[string]any{
