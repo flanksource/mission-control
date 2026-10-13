@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -95,14 +96,15 @@ var _ = ginkgo.Describe("Plugin connection lookups", ginkgo.Ordered, func() {
 		svc = NewGRPCService(DefaultContext)
 
 		conn = models.Connection{
-			ID:        uuid.New(),
-			Name:      "plugin-connection",
-			Namespace: namespace,
-			Source:    models.SourceUI,
-			Type:      models.ConnectionTypePostgres,
-			URL:       "postgres://$(username):$(password)@db.example.com/app",
-			Username:  "app",
-			Password:  password,
+			ID:         uuid.New(),
+			Name:       "plugin-connection",
+			Namespace:  namespace,
+			Source:     models.SourceUI,
+			Type:       models.ConnectionTypePostgres,
+			URL:        "postgres://$(username):$(password)@db.example.com/app",
+			Username:   "app",
+			Password:   password,
+			Properties: types.JSONStringMap{"token": "plugin-token", "bearer": "plugin-bearer", "personalAccessToken": "plugin-pat", "custom": "plugin-custom-secret"},
 		}
 		Expect(DefaultContext.DB().Create(&conn).Error).To(Succeed())
 
@@ -159,6 +161,7 @@ var _ = ginkgo.Describe("Plugin connection lookups", ginkgo.Ordered, func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(resolved.Username).To(Equal("app"))
 			Expect(resolved.Password).To(Equal(password))
+			Expect(resolved.Token).To(Equal("plugin-token"))
 		})
 	}
 
@@ -175,9 +178,14 @@ var _ = ginkgo.Describe("Plugin connection lookups", ginkgo.Ordered, func() {
 			resolved, err := lookup(reader, req())
 			Expect(err).ToNot(HaveOccurred())
 			Expect(resolved.Type).To(Equal(models.ConnectionTypePostgres))
-			Expect(resolved.Url).To(Equal(conn.URL))
+			Expect(resolved.Url).To(Equal(db.MaskedValue))
 			Expect(resolved.Username).To(Equal(db.MaskedValue))
 			Expect(resolved.Password).To(Equal(db.MaskedValue))
+			Expect(resolved.Token).To(Equal(db.MaskedValue))
+			for key := range conn.Properties {
+				Expect(resolved.Properties.AsMap()).To(HaveKeyWithValue(key, db.MaskedValue))
+			}
+			Expect(resolved.Properties.AsMap()).To(HaveKeyWithValue("endpoint", db.MaskedValue))
 		})
 	}
 
@@ -186,6 +194,24 @@ var _ = ginkgo.Describe("Plugin connection lookups", ginkgo.Ordered, func() {
 			_, err := lookup(entry, &pluginAPI.GetConnectionRequest{Lookup: &pluginAPI.GetConnectionRequest_ConfigItemId{ConfigItemId: inlineConfig.ID.String()}})
 			Expect(err).To(HaveOccurred(), entry.Name)
 			Expect(err.Error()).To(ContainSubstring("can't be granted to a plugin"))
+		}
+	})
+
+	ginkgo.It("refuses inline SQL query-string and DSN credentials without returning them", func() {
+		for _, raw := range []string{
+			"postgres://db/app?user=app&password=inline-secret",
+			"host=db user=app password=inline-secret",
+			"postgres://db/app",
+		} {
+			spec := fmt.Sprintf(`{"sql":[{"connection":%q}]}`, raw)
+			Expect(DefaultContext.DB().Model(&inlineScraper).Update("spec", spec).Error).To(Succeed())
+			for _, entry := range []*plugin.Entry{unbound, reader, user} {
+				resolved, err := lookup(entry, &pluginAPI.GetConnectionRequest{Lookup: &pluginAPI.GetConnectionRequest_ConfigItemId{ConfigItemId: inlineConfig.ID.String()}})
+				Expect(resolved).To(BeNil())
+				Expect(err).To(HaveOccurred(), entry.Name)
+				Expect(err.Error()).To(ContainSubstring("can't be granted to a plugin"))
+				Expect(err.Error()).ToNot(ContainSubstring("inline-secret"))
+			}
 		}
 	})
 })

@@ -6,7 +6,9 @@ import (
 	"fmt"
 
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
@@ -20,11 +22,20 @@ func ConnectionListHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 		return nil, err
 	}
 
+	if !rbac.CheckContext(ctx, policy.ObjectConnection, policy.ActionRead) {
+		return mcp.NewToolResultError("read permission required on connections"), nil
+	}
 	conns, err := db.ListConnections(ctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return structToMCPResponse(req, conns), nil
+	visible := conns[:0]
+	for _, conn := range conns {
+		if rbac.AuthorizeConnection(ctx, conn, policy.ActionRead) == nil {
+			visible = append(visible, conn)
+		}
+	}
+	return structToMCPResponse(req, visible), nil
 }
 
 func ConnectionResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
@@ -45,6 +56,9 @@ func ConnectionResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 
 	if conn == nil {
 		return nil, fmt.Errorf("connection not found")
+	}
+	if err := rbac.AuthorizeConnection(ctx, *conn, policy.ActionRead); err != nil {
+		return nil, err
 	}
 
 	jsonData, err := json.Marshal(db.MaskConnection(*conn))

@@ -3,13 +3,11 @@ package machinery
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyConn "github.com/flanksource/duty/connection"
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"google.golang.org/protobuf/proto"
 
@@ -112,11 +110,7 @@ func (s *Service) connectionFromKubernetesScraper(ctx dutyContext.Context, specJ
 func (s *Service) connectionFromSQLScraper(ctx dutyContext.Context, specJSON string) (*api.ResolvedConnection, bool, error) {
 	var spec struct {
 		SQL []struct {
-			Connection     string `json:"connection"`
-			Authentication struct {
-				Username types.EnvVar `json:"username"`
-				Password types.EnvVar `json:"password"`
-			} `json:"auth"`
+			Connection string `json:"connection"`
 		} `json:"sql"`
 	}
 	if err := json.Unmarshal([]byte(specJSON), &spec); err != nil {
@@ -139,12 +133,7 @@ func (s *Service) connectionFromSQLScraper(ctx dutyContext.Context, specJSON str
 			return conn, true, nil
 		}
 
-		conn := parseRawSQLConnection(sql.Connection)
-		if conn.Username != "" || conn.Password != "" || !sql.Authentication.Username.IsEmpty() || !sql.Authentication.Password.IsEmpty() {
-			return nil, true, errInlineCredentials(ctx, "sql credentials")
-		}
-
-		return pluginpb.ConnectionToProto(conn), true, nil
+		return nil, true, errInlineCredentials(ctx, "sql connection string")
 	}
 
 	return nil, true, fmt.Errorf("no sql.connection set")
@@ -155,20 +144,6 @@ func cloneResolvedConnection(conn *api.ResolvedConnection) *api.ResolvedConnecti
 		return nil
 	}
 	return proto.Clone(conn).(*api.ResolvedConnection)
-}
-
-func parseRawSQLConnection(connection string) *models.Connection {
-	conn := &models.Connection{URL: connection}
-	parsed, err := url.Parse(connection)
-	if err != nil || parsed.Scheme == "" || parsed.User == nil {
-		return conn
-	}
-
-	conn.Username = parsed.User.Username()
-	conn.Password, _ = parsed.User.Password()
-	parsed.User = nil
-	conn.URL = parsed.String()
-	return conn
 }
 
 // errInlineCredentials refuses credentials a scraper holds itself, instead of referencing a connection.

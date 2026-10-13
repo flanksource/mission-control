@@ -76,18 +76,24 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
 
 		conn = models.Connection{
-			ID:        uuid.New(),
-			Name:      "connection-use",
-			Namespace: namespace,
-			Source:    models.SourceUI,
-			Type:      models.ConnectionTypeFolder,
-			Username:  "connection-use-user",
-			Password:  password,
-			URL:       "http://connection-use-user:" + password + "@example.com/$(username)",
+			ID:          uuid.New(),
+			Name:        "connection-use",
+			Namespace:   namespace,
+			Source:      models.SourceUI,
+			Type:        models.ConnectionTypeFolder,
+			Username:    "connection-use-user",
+			Password:    password,
+			URL:         "http://connection-use-user:" + password + "@example.com/$(username)",
+			Certificate: "connection-use-certificate",
+			InsecureTLS: true,
 			Properties: types.JSONStringMap{
-				"path":   GinkgoT().TempDir(),
-				"bearer": "connection-use-bearer",
-				"region": "eu-west-1",
+				"path":                GinkgoT().TempDir(),
+				"bearer":              "connection-use-bearer",
+				"region":              "eu-west-1",
+				"personalAccessToken": "connection-use-pat",
+				"arbitrary":           "connection-use-custom-secret",
+				"oauth":               `{"clientSecret":{"value":"connection-use-oauth"}}`,
+				"tls":                 `{"key":{"value":"connection-use-private-key"}}`,
 			},
 		}
 		Expect(DefaultContext.DB().Create(&conn).Error).To(Succeed())
@@ -133,7 +139,13 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 
 		e = echo.New()
 		connection.RegisterRoutes(e)
-		e.Any("/db/*", func(c echo.Context) error { return c.NoContent(http.StatusOK) }, mcRBAC.DbMiddleware())
+		e.Any("/db/*", func(c echo.Context) error {
+			var rows []map[string]any
+			if err := DefaultContext.DB().Table(c.Param("*")).Where("id = ?", conn.ID).Find(&rows).Error; err != nil {
+				return err
+			}
+			return c.JSON(http.StatusOK, rows)
+		}, mcRBAC.DbMiddleware())
 	})
 
 	AfterAll(func() {
@@ -154,10 +166,14 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 			Expect(c.Name).To(Equal(conn.Name))
 			Expect(c.Type).To(Equal(conn.Type))
 			Expect(c.Username).To(Equal(db.MaskedValue))
-			Expect(c.Password).ToNot(ContainSubstring(password))
-			Expect(c.URL).To(Equal("http://connection-use-user:***@example.com/$(username)"))
+			Expect(c.Password).To(BeElementOf("", db.MaskedValue))
+			Expect(c.URL).To(Equal(db.MaskedValue))
+			Expect(c.Certificate).To(BeElementOf("", db.MaskedValue))
+			Expect(c.InsecureTLS).To(BeTrue())
 			Expect(c.Properties).To(HaveKeyWithValue("bearer", db.MaskedValue))
-			Expect(c.Properties).To(HaveKeyWithValue("region", "eu-west-1"))
+			for _, value := range c.Properties {
+				Expect(value).To(Equal(db.MaskedValue))
+			}
 		}
 
 		It("masks credentials, but keeps the secrets they reference", func() {
@@ -174,17 +190,53 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 			Expect(masked.Properties).To(HaveKeyWithValue("session_token", db.MaskedValue))
 		})
 
-		It("is reading connection_details through /db", func() {
+		It("reads the safe listing and refuses the pinned unsafe view through /db", func() {
 			for _, p := range []*models.Person{reader, editor, admin} {
-				Expect(do(p, http.MethodGet, "/db/connection_details").Code).To(Equal(http.StatusOK), p.Email)
+				Expect(do(p, http.MethodGet, "/db/connection_details?select=token:properties-%3E%3Ebearer").Code).To(Equal(http.StatusMethodNotAllowed), p.Email)
+				Expect(do(p, http.MethodGet, "/db/connections").Code).To(Equal(http.StatusMethodNotAllowed), p.Email)
+				rec := do(p, http.MethodGet, "/db/connections_list")
+				Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+				Expect(rec.Body.String()).To(ContainSubstring(conn.Name))
+				Expect(rec.Body.String()).ToNot(ContainSubstring("connection-use-bearer"))
 			}
-			Expect(do(guest, http.MethodGet, "/db/connection_details").Code).To(Equal(http.StatusForbidden))
-			Expect(do(user, http.MethodGet, "/db/connection_details").Code).To(Equal(http.StatusForbidden), "connection:use alone doesn't read")
+			Expect(do(guest, http.MethodGet, "/db/connections_list").Code).To(Equal(http.StatusForbidden))
+			Expect(do(user, http.MethodGet, "/db/connections_list").Code).To(Equal(http.StatusForbidden), "connection:use alone doesn't read")
+		})
+
+		It("refuses embedded connections even under aliases or FK names", func() {
+			for _, path := range []string{
+				"/db/connections_list?select=*,connection_details(*)",
+				"/db/connections_list?select=*,alias:%22connection_details%22(properties)",
+				"/db/connections_list?select=id,%22x:connections_list!%22:connection_details(properties)",
+				"/db/people?select=%22x:people!%22:connection_details(properties)",
+				"/db/connections_list?select=*,alias:connection_id(properties)",
+				"/db/connections_list?select=*,...connections!some_foreign_key(*)",
+				"/db/connections_list?select=*,permissions(connection_details(properties))",
+				"/db/connections_list?select=*&select=alias:connection_details(properties)",
+				"/db/connections_list?select=alias:connection_details(properties)%ZZ",
+			} {
+				Expect(do(reader, http.MethodGet, path).Code).To(Equal(http.StatusBadRequest), path)
+			}
+		})
+
+		It("still serves existing named UI relation selections", func() {
+			for _, path := range []string{
+				"/db/playbook_runs?select=*,playbooks(id,name),component:components(id,name),config:config_items(id,name)",
+				"/db/playbook_run_actions?select=id,error,result,artifacts:artifacts(*)",
+				"/db/config_access?select=*,external_users(name,user_email:email)",
+			} {
+				rec := do(admin, http.MethodGet, path)
+				Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+			}
 		})
 
 		It("masks credentials in the MCP list_connections tool", func() {
-			conns, err := db.ListConnections(DefaultContext)
+			req := mcp.CallToolRequest{Header: http.Header{echo.HeaderAccept: []string{echo.MIMEApplicationJSON}}}
+			result, err := mcpServer.ConnectionListHandler(DefaultContext.WithUser(reader), req)
 			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsError).To(BeFalse())
+			var conns []models.Connection
+			Expect(json.Unmarshal([]byte(result.Content[0].(mcp.TextContent).Text), &conns)).To(Succeed())
 			var found bool
 			for _, c := range conns {
 				if c.ID == conn.ID {
@@ -198,7 +250,7 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 		It("masks credentials in the MCP connection resource", func() {
 			var req mcp.ReadResourceRequest
 			req.Params.URI = fmt.Sprintf("connection://%s/%s", namespace, conn.Name)
-			contents, err := mcpServer.ConnectionResourceHandler(DefaultContext.WithUser(admin), req)
+			contents, err := mcpServer.ConnectionResourceHandler(DefaultContext.WithUser(reader), req)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(contents).To(HaveLen(1))
 
@@ -209,6 +261,53 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 			var c models.Connection
 			Expect(json.Unmarshal([]byte(text), &c)).To(Succeed())
 			expectMasked(c)
+		})
+
+		It("requires connection read permission for MCP discovery", func() {
+			for _, person := range []*models.Person{guest, user} {
+				result, err := mcpServer.ConnectionListHandler(DefaultContext.WithUser(person), mcp.CallToolRequest{})
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result.IsError).To(BeTrue())
+				var req mcp.ReadResourceRequest
+				req.Params.URI = fmt.Sprintf("connection://%s/%s", namespace, conn.Name)
+				_, err = mcpServer.ConnectionResourceHandler(DefaultContext.WithUser(person), req)
+				Expect(err).To(HaveOccurred())
+			}
+		})
+
+		It("returns a masked connection to a read-only HTTP caller", func() {
+			rec := do(reader, http.MethodGet, "/connection/"+conn.ID.String())
+			Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+			var c models.Connection
+			Expect(json.Unmarshal(rec.Body.Bytes(), &c)).To(Succeed())
+			expectMasked(c)
+		})
+
+		It("masks HTTP bearer tokens and credentials anywhere in a URL", func() {
+			for _, rawURL := range []string{
+				"https://user:url-password@host/path",
+				"https://host/webhook-secret",
+				"https://host/?api_key=query-secret#fragment-secret",
+				"postgres://user:$(password)-literal-secret@host/db",
+				"user=dsn-user password=dsn-secret host=db",
+			} {
+				httpConn := models.Connection{
+					ID: uuid.New(), Name: uuid.NewString(), Namespace: namespace, Type: models.ConnectionTypeHTTP,
+					Source: models.SourceUI,
+					URL:    rawURL, InsecureTLS: true, Properties: types.JSONStringMap{"bearer": "http-bearer-secret"},
+				}
+				Expect(DefaultContext.DB().Create(&httpConn).Error).To(Succeed())
+				DeferCleanup(func() { Expect(DefaultContext.DB().Delete(&httpConn).Error).To(Succeed()) })
+				rec := do(reader, http.MethodGet, "/connection/"+httpConn.ID.String())
+				Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+				var visible models.Connection
+				Expect(json.Unmarshal(rec.Body.Bytes(), &visible)).To(Succeed())
+				Expect(visible.Name).To(Equal(httpConn.Name))
+				Expect(visible.Type).To(Equal(models.ConnectionTypeHTTP))
+				Expect(visible.InsecureTLS).To(BeTrue())
+				Expect(visible.URL).To(Equal(db.MaskedValue))
+				Expect(visible.Properties).To(HaveKeyWithValue("bearer", db.MaskedValue))
+			}
 		})
 	})
 

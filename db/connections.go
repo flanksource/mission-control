@@ -140,12 +140,12 @@ func UnmaskConnection(conn, stored models.Connection) models.Connection {
 	if conn.Certificate == MaskedValue {
 		conn.Certificate = stored.Certificate
 	}
-	if conn.URL != stored.URL && conn.URL == MaskConnectionURL(stored.URL) {
+	if conn.URL == MaskedValue {
 		conn.URL = stored.URL
 	}
 
 	for k, v := range conn.Properties {
-		if v == MaskedValue && IsCredentialProperty(k) {
+		if v == MaskedValue {
 			if storedValue, ok := stored.Properties[k]; ok {
 				conn.Properties[k] = storedValue
 			}

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	dutyAPI "github.com/flanksource/duty/api"
@@ -62,9 +63,37 @@ func DbMiddleware() MiddlewareFunc {
 				object = table.of[0]
 			}
 
-			// The PostgREST roles can't read connections' credentials (flanksource/duty#2114)
-			if resource == "connections" {
-				return c.String(http.StatusMethodNotAllowed, "connections can't be read or written through /db; read connection_details or connections_list, and write through /connection")
+			// The pinned duty view exposes properties. Block it until duty masks at the SQL source;
+			// response masking cannot protect projections or filters.
+			if resource == "connections" || resource == "connection_details" {
+				return c.String(http.StatusMethodNotAllowed, "read connections_list or /connection/:id; write through /connection")
+			}
+			query, err := url.ParseQuery(c.Request().URL.RawQuery)
+			if err != nil {
+				return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid database query"))
+			}
+			for _, selectValue := range query["select"] {
+				// Quoted aliases can contain ':' and '!', so they can't be parsed with the restricted grammar below.
+				if strings.Contains(selectValue, `"`) {
+					return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "quoted database selections are not served"))
+				}
+				parts := strings.Split(selectValue, "(")
+				for _, prefix := range parts[:len(parts)-1] {
+					fields := strings.FieldsFunc(prefix, func(r rune) bool { return r == ',' || r == ')' })
+					if len(fields) == 0 {
+						return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid embedded resource"))
+					}
+					relation := fields[len(fields)-1]
+					if _, target, alias := strings.Cut(relation, ":"); alias {
+						relation = target
+					}
+					relation, _, _ = strings.Cut(relation, "!")
+					relation = strings.TrimSpace(relation)
+					// Only known relation names are allowed: FK names can resolve to connection_details too.
+					if _, known := dbTables[relation]; !known || relation == "connections" || relation == "connection_details" {
+						return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "embedded resource %q is not served", relation))
+					}
+				}
 			}
 
 			// Scopes, Roles and RoleBindings are validated when they're written, so they're only written through their API
@@ -136,10 +165,9 @@ func DbMiddleware() MiddlewareFunc {
 	}
 }
 
-// readsConnections reports whether the request reads connection_details, which reading connections allows: it's how
-// connections are read, with their credentials masked (specs/authorization/roles.md, Section 2.2).
+// readsConnections reports whether the request reads the credential-free connection listing.
 func readsConnections(ctx context.Context, table, action string) bool {
-	return table == "connection_details" && action == policy.ActionRead && CheckContext(ctx, policy.ObjectConnection, policy.ActionRead)
+	return table == "connections_list" && action == policy.ActionRead && CheckContext(ctx, policy.ObjectConnection, policy.ActionRead)
 }
 
 // readOnlyObjects are the objects only read through /db, with the action each read is checked with.

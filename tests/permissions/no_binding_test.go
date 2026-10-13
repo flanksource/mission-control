@@ -53,7 +53,7 @@ var _ = Describe("A person no RoleBinding selects", Ordered, func() {
 		Expect(serveAs(e, nobody, http.MethodGet, "/db/properties")).To(Equal(http.StatusOK))
 
 		for _, table := range []string{"config_items", "components", "checks", "canaries", "playbooks", "people", "teams",
-			"notifications", "agents", "connection_details", "scopes", "roles", "role_bindings", "config_types", "job_history"} {
+			"notifications", "agents", "connections_list", "scopes", "roles", "role_bindings", "config_types", "job_history"} {
 			Expect(serveAs(e, nobody, http.MethodGet, "/db/"+table)).To(Equal(http.StatusForbidden), table)
 		}
 	})
