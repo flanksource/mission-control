@@ -398,7 +398,7 @@ An access token is a credential, not a subject. A request made with a person's t
 A token is limited by Roles. It may do what its owner may do, and only what one of its Roles' rules also matches:
 
 ```yaml
-# POST /auth/tokens
+# POST /auth/create_token
 name: ci-readonly
 expiry: 720h
 roles:
@@ -414,7 +414,7 @@ Alice may read, change and delete every config, run playbooks and read connectio
 - **Every check of an operation.** An operation's checks are each limited (Section 4.3), so a Role meant to let a token run a playbook on a config needs `read` on the config too.
 - **Live.** Every check uses the owner's current grants and the Roles' current rules. A Role that's missing or invalid (Section 6) matches nothing, so a token limited only by it can do nothing until it's valid again. Nothing is granted to the token, so nothing is left behind: when the owner loses an action, every token of theirs loses it on the next request, whatever its Roles; when the owner gains one, a token gains it only where its Roles allow it.
 - **Roles are required.** A new token MUST list at least one Role. A request without one is refused, through the UI and the API alike. A token meant to do everything its owner may lists the shipped `admin` and `plugin-admin` Roles. _Why:_ what a token may do is chosen when it's created, never everything by default.
-- **Tokens without Roles.** A token that lists no Roles may do everything its owner may. Only agents' tokens (Section 4.6) and tokens created before Roles were required list none, and they stay valid until they expire or are deleted. The token list marks them as having their owner's full access.
+- **Tokens without Roles.** A token that lists no Roles may do everything its owner may. Only these list none: agents' tokens (Section 4.6), the token in a kubeconfig downloaded from Mission Control, tokens created on the server with the `auth token` CLI command, and tokens created before Roles were required. They stay valid until they expire or are deleted. The token list marks them as having their owner's full access. _Why the kubeconfig and CLI tokens:_ a kubeconfig token is used through the Kubernetes proxy, which no Role rule can match, so a Role would leave it unable to do anything; and the CLI writes to the database directly, so whoever runs it already has full access.
 - **Tokens don't manage tokens.** A request made with a token can't create, change or delete a token, whatever its Roles. _Why:_ otherwise a limited token could create one without its limit.
 - **The summary follows the token.** The access summary of a request made with a token is computed with the token's limit (`collection-access.md`, Section 4).
 
