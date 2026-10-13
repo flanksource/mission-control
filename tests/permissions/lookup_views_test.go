@@ -1,6 +1,7 @@
 package permissions_test
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 
@@ -20,6 +21,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/playbook"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
@@ -32,8 +34,9 @@ var _ = ginkgo.Describe("Lookup views of components, checks and playbooks", gink
 		canaryA, canaryB       models.Canary
 		checkA, checkB         models.Check
 		playbookA, playbookB   models.Playbook
+		runA, runB             models.PlaybookRun
 
-		componentReader, checkReader, playbookReader, stranger, admin *models.Person
+		componentReader, canaryReader, playbookReader, stranger, admin *models.Person
 	)
 
 	ginkgo.BeforeAll(func() {
@@ -47,15 +50,17 @@ var _ = ginkgo.Describe("Lookup views of components, checks and playbooks", gink
 		checkB = models.Check{ID: uuid.New(), CanaryID: canaryB.ID, Name: "lookup-check-b", Type: "http", Status: "healthy", Labels: map[string]string{"lookup-b": "x"}}
 		playbookA = models.Playbook{ID: uuid.New(), Name: "lookup-playbook-a", Namespace: namespace, Source: models.SourceUI, Spec: []byte(`{"actions":[]}`)}
 		playbookB = models.Playbook{ID: uuid.New(), Name: "lookup-playbook-b", Namespace: namespace, Source: models.SourceUI, Spec: []byte(`{"actions":[]}`)}
+		runA = models.PlaybookRun{ID: uuid.New(), PlaybookID: playbookA.ID, Status: models.PlaybookRunStatusCompleted, Spec: playbookA.Spec}
+		runB = models.PlaybookRun{ID: uuid.New(), PlaybookID: playbookB.ID, Status: models.PlaybookRunStatusCompleted, Spec: playbookB.Spec}
 
 		// Scopes read stored membership, so the resources they select must exist before they're built
-		for _, row := range []any{&componentA, &componentB, &canaryA, &canaryB, &checkA, &checkB, &playbookA, &playbookB} {
+		for _, row := range []any{&componentA, &componentB, &canaryA, &canaryB, &checkA, &checkB, &playbookA, &playbookB, &runA, &runB} {
 			Expect(DefaultContext.DB().Create(row).Error).To(Succeed())
 		}
 
 		ref := func(name string) v1.ScopeResourceRef { return v1.ScopeResourceRef{Name: name} }
 		componentReader = setup.CreateUserWithRole(DefaultContext, "Lookup Component Reader", "lookup-component-reader@test.com", policy.RoleGuest)
-		checkReader = setup.CreateUserWithRole(DefaultContext, "Lookup Check Reader", "lookup-check-reader@test.com", policy.RoleGuest)
+		canaryReader = setup.CreateUserWithRole(DefaultContext, "Lookup Canary Reader", "lookup-canary-reader@test.com", policy.RoleGuest)
 		playbookReader = setup.CreateUserWithRole(DefaultContext, "Lookup Playbook Reader", "lookup-playbook-reader@test.com", policy.RoleGuest)
 		stranger = setup.CreateUserWithRole(DefaultContext, "Lookup Stranger", "lookup-stranger@test.com", policy.RoleGuest)
 		admin = setup.CreateUserWithRole(DefaultContext, "Lookup Admin", "lookup-admin@test.com", policy.RoleAdmin)
@@ -66,11 +71,7 @@ var _ = ginkgo.Describe("Lookup views of components, checks and playbooks", gink
 			targets []v1.ScopeTarget
 		}{
 			{"components-a", componentReader, []v1.ScopeTarget{{Component: &v1.ScopeLabelledSelector{ScopeResourceRef: ref(componentA.Name)}}}},
-			// check_summary joins the check's canary, so the reader reads that too
-			{"checks-a", checkReader, []v1.ScopeTarget{
-				{Check: &v1.ScopeLabelledSelector{ScopeResourceRef: ref(checkA.Name)}},
-				{Canary: &v1.ScopeCanarySelector{ScopeResourceRef: ref(canaryA.Name)}},
-			}},
+			{"canaries-a", canaryReader, []v1.ScopeTarget{{Canary: &v1.ScopeCanarySelector{ScopeResourceRef: ref(canaryA.Name)}}}},
 			{"playbooks-a", playbookReader, []v1.ScopeTarget{{Playbook: &v1.ScopePlaybookRef{Name: playbookA.Name}}}},
 		} {
 			uid := func() k8sTypes.UID { return k8sTypes.UID(uuid.NewString()) }
@@ -91,10 +92,10 @@ var _ = ginkgo.Describe("Lookup views of components, checks and playbooks", gink
 
 	ginkgo.AfterAll(func() {
 		deleteNamespace(namespace)
-		for _, row := range []any{&playbookA, &playbookB, &checkA, &checkB, &canaryA, &canaryB, &componentA, &componentB} {
+		for _, row := range []any{&runA, &runB, &playbookA, &playbookB, &checkA, &checkB, &canaryA, &canaryB, &componentA, &componentB} {
 			Expect(DefaultContext.DB().Delete(row).Error).To(Succeed())
 		}
-		for _, p := range []*models.Person{componentReader, checkReader, playbookReader, stranger, admin} {
+		for _, p := range []*models.Person{componentReader, canaryReader, playbookReader, stranger, admin} {
 			Expect(DefaultContext.DB().Delete(p).Error).To(Succeed())
 		}
 	})
@@ -128,11 +129,14 @@ var _ = ginkgo.Describe("Lookup views of components, checks and playbooks", gink
 	viewsByReader := func() map[*models.Person][]lookupView {
 		return map[*models.Person][]lookupView{
 			componentReader: {{"component_labels_keys", "key", "label:lookup-a", "label:lookup-b"}},
-			checkReader: {
+			canaryReader: {
 				{"checks_labels_keys", "key", "label:lookup-a", "label:lookup-b"},
 				{"check_summary", "id", checkA.ID.String(), checkB.ID.String()},
 			},
-			playbookReader: {{"playbook_names", "id", playbookA.ID.String(), playbookB.ID.String()}},
+			playbookReader: {
+				{"playbook_names", "id", playbookA.ID.String(), playbookB.ID.String()},
+				{"playbook_runs", "id", runA.ID.String(), runB.ID.String()},
+			},
 		}
 	}
 
@@ -157,6 +161,17 @@ var _ = ginkgo.Describe("Lookup views of components, checks and playbooks", gink
 				}
 				Expect(listStatus(stranger, v.name)).To(Equal(http.StatusForbidden), "a guest without grants reads %s", v.name)
 			}
+		}
+	})
+
+	ginkgo.It("opens a run of a playbook a Scope-only reader reads, and refuses a subject without a grant on playbooks", func() {
+		e := echo.New()
+		playbook.RegisterRoutes(e)
+		for _, path := range []string{"/playbook/run/%s", "/playbook/run/%s/status"} {
+			Expect(serveAs(e, playbookReader, http.MethodGet, fmt.Sprintf(path, runA.ID))).To(Equal(http.StatusOK), "%s", path)
+			Expect(serveAs(e, playbookReader, http.MethodGet, fmt.Sprintf(path, runB.ID))).ToNot(Equal(http.StatusOK), "a run of a playbook outside its Scope: %s", path)
+			Expect(serveAs(e, componentReader, http.MethodGet, fmt.Sprintf(path, runA.ID))).To(Equal(http.StatusForbidden), "%s", path)
+			Expect(serveAs(e, stranger, http.MethodGet, fmt.Sprintf(path, runA.ID))).To(Equal(http.StatusForbidden), "%s", path)
 		}
 	})
 })

@@ -77,8 +77,8 @@ func DbMiddleware() MiddlewareFunc {
 
 			ctx := c.Request().Context().(context.Context)
 
-			// Subjects without built-in access are only granted checks, and the views of them, through their own object
-			if rowFilteredTables[resource] == policy.ResourceCheck && !rbac.HasImplicitGrants(ctx.Subject()) {
+			// Subjects without built-in access are only granted checks through their own object
+			if resource == "checks" && !rbac.HasImplicitGrants(ctx.Subject()) {
 				object = adapter.ObjectChecks
 			}
 
@@ -218,11 +218,15 @@ var rowFilteredTables = map[string]string{
 	"config_types":            policy.ResourceConfig,
 
 	// Lookup views of components, checks and playbooks, which duty makes security_invoker so that their base table's
-	// policy filters them. check_summary also joins the check's canary, so it only lists checks whose canary is readable.
+	// policy filters them. The Health page's views of checks follow canaries, which checks are read through
+	// (collection-access.md, Section 5): checks' policy admits a check with its canary, and check_summary joins it.
 	"component_labels_keys": policy.ResourceComponent,
-	"checks_labels_keys":    policy.ResourceCheck,
-	"check_summary":         policy.ResourceCheck,
+	"checks_labels_keys":    policy.ResourceCanary,
+	"check_summary":         policy.ResourceCanary,
 	"playbook_names":        policy.ResourcePlaybook,
+
+	// A playbook run is read with its playbook, and the config or check it ran on, which its policy checks.
+	"playbook_runs": policy.ResourcePlaybook,
 
 	"config_scrapers":             policy.ResourceScraper,
 	"config_scrapers_with_status": policy.ResourceScraper,
@@ -265,10 +269,10 @@ func isGuest(ctx context.Context) bool {
 	return lo.Contains(roles, policy.RoleGuest)
 }
 
-// PlaybookList authorizes listing playbooks through a read of the whole type,
+// PlaybookRead authorizes reading playbooks and their runs through a read of the whole type,
 // or through read grants that cover some playbooks.
-// Its handler must query under row-level security, so that Postgres filters the rows.
-func PlaybookList() MiddlewareFunc {
+// Its handlers must query under row-level security, so that Postgres filters the rows.
+func PlaybookRead() MiddlewareFunc {
 	return authorize(policy.ObjectPlaybooks, policy.ActionRead, func(ctx context.Context) bool {
 		return canListFilteredRows(ctx, "playbooks", policy.ActionRead)
 	})

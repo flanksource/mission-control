@@ -39,7 +39,7 @@ func RegisterRoutes(e *echo.Echo) {
 
 	prefix := "playbook"
 	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
-	playbookGroup.GET("/list", HandlePlaybookList, rbac.PlaybookList(), echoSrv.RLSMiddleware)
+	playbookGroup.GET("/list", HandlePlaybookList, rbac.PlaybookRead(), echoSrv.RLSMiddleware)
 	playbookGroup.POST("/webhook/:webhook_path", HandleWebhook)
 	playbookGroup.GET("/webhook/:webhook_path", HandleWebhook)
 
@@ -51,8 +51,8 @@ func RegisterRoutes(e *echo.Echo) {
 
 	runGroup := playbookGroup.Group("/run")
 	runGroup.POST("", HandlePlaybookRun)
-	runGroup.GET("/:id/status", HandleGetPlaybookRunStatus, rbac.Playbook(policy.ActionRead), echoSrv.RLSMiddleware)
-	runGroup.GET("/:id", HandleGetPlaybookRun, rbac.Playbook(policy.ActionRead), echoSrv.RLSMiddleware)
+	runGroup.GET("/:id/status", HandleGetPlaybookRunStatus, rbac.PlaybookRead(), echoSrv.RLSMiddleware)
+	runGroup.GET("/:id", HandleGetPlaybookRun, rbac.PlaybookRead(), echoSrv.RLSMiddleware)
 	runGroup.POST("/approve/:run_id", HandlePlaybookRunApproval)
 	runGroup.POST("/cancel/:run_id", HandlePlaybookRunCancel)
 }
