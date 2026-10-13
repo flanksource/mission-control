@@ -2,7 +2,11 @@ package playbook
 
 import (
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 
+	"github.com/flanksource/duty/connection"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
@@ -13,6 +17,8 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/events"
+	"github.com/flanksource/incident-commander/playbook/actions"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 var _ = ginkgo.Describe("Work no person started", func() {
@@ -109,6 +115,78 @@ var _ = ginkgo.Describe("Work no person started", func() {
 			Expect(DefaultContext.DB().Where("playbook_id = ?", playbook.ID).First(&run).Error).To(Succeed())
 			Expect(run.ConfigID).To(Equal(&config.ID))
 			Expect(run.CreatedBy).To(BeNil())
+		})
+	})
+
+	ginkgo.Describe("an action filling in a connection's credentials", ginkgo.Ordered, func() {
+		const password = "caller-less-password"
+
+		var (
+			playbook models.Playbook
+			conn     models.Connection
+			server   *httptest.Server
+			ref      string
+		)
+
+		ginkgo.BeforeAll(func() {
+			server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if _, p, ok := r.BasicAuth(); !ok || p != password {
+					w.WriteHeader(http.StatusUnauthorized)
+					return
+				}
+				w.WriteHeader(http.StatusOK)
+			}))
+
+			conn = models.Connection{
+				ID:        uuid.New(),
+				Name:      "caller-less-http",
+				Namespace: "default",
+				Source:    models.SourceUI,
+				Type:      models.ConnectionTypeHTTP,
+				URL:       server.URL,
+				Username:  "caller-less",
+				Password:  password,
+			}
+			Expect(DefaultContext.DB().Create(&conn).Error).To(Succeed())
+			ref = fmt.Sprintf("connection://%s/%s", conn.Namespace, conn.Name)
+
+			playbook = saveScheduledPlaybookForTest("connection-user", v1.PlaybookSpec{
+				Actions: []v1.PlaybookAction{{Name: "echo", Exec: &v1.ExecAction{Script: "echo hi"}}},
+			})
+		})
+
+		ginkgo.AfterAll(func() {
+			server.Close()
+			Expect(DefaultContext.DB().Delete(&conn).Error).To(Succeed())
+		})
+
+		asPlaybook := func() context.Context { return DefaultContext.WithSubject(playbook.ID.String()) }
+
+		ginkgo.It("fails without connection:use, even with read", func() {
+			ginkgo.DeferCleanup(bindPlaybook(playbook, playbookGrant{
+				Action:   policy.ActionRead,
+				Resource: v1.ScopeTarget{Connection: &v1.ScopeConnectionSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}},
+			}))
+
+			_, err := (&actions.HTTP{}).Run(asPlaybook(), v1.HTTPAction{HTTPConnection: connection.HTTPConnection{ConnectionName: ref}})
+			Expect(err).To(MatchError(ContainSubstring("connection:use required on connection default/caller-less-http")))
+
+			_, err = (&actions.ExecAction{}).Run(asPlaybook(), v1.ExecAction{
+				Script:      "echo hi",
+				Connections: connection.ExecConnections{AWS: &connection.AWSConnection{ConnectionName: ref}},
+			})
+			Expect(err).To(MatchError(ContainSubstring("connection:use required on connection default/caller-less-http")))
+		})
+
+		ginkgo.It("succeeds with connection:use on the connection", func() {
+			ginkgo.DeferCleanup(bindPlaybook(playbook, playbookGrant{
+				Action:   adapter.ActionConnectionUse,
+				Resource: v1.ScopeTarget{Connection: &v1.ScopeConnectionSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: conn.Name, Namespace: conn.Namespace}}},
+			}))
+
+			result, err := (&actions.HTTP{}).Run(asPlaybook(), v1.HTTPAction{HTTPConnection: connection.HTTPConnection{ConnectionName: ref}})
+			Expect(err).To(Succeed())
+			Expect(result.StatusCode).To(Equal(http.StatusOK), "the connection's credentials were filled in")
 		})
 	})
 })

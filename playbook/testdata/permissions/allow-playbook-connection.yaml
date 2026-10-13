@@ -3,11 +3,11 @@ kind: Permission
 metadata:
   name: allow-playbook-connection
 spec:
-  description: allow playbook mc/http-authorized to read connection mc/httpbin
+  description: allow playbook mc/http-authorized to use connection mc/httpbin
   subject:
     playbook: mc/http-authorized
   actions:
-    - read
+    - connection:use
   object:
     connections:
       - name: httpbin

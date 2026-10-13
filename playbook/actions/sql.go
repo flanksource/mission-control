@@ -4,11 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 
-	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 type SQLResult = api.PlaybookSQLResult
@@ -19,7 +19,7 @@ type SQL struct{}
 // Returns check result and metrics
 func (c *SQL) Run(ctx context.Context, action v1.SQLAction) (*SQLResult, error) {
 	if action.Connection != "" {
-		connection, err := pkgConnection.Get(ctx, action.Connection)
+		connection, err := rbac.GetConnectionForUse(ctx, action.Connection)
 		if err != nil {
 			return nil, fmt.Errorf("error getting connection: %w", err)
 		} else if connection == nil {

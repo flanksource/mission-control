@@ -18,6 +18,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 const defaultMaxReadSize = 50 * 1024 * 1024 // 50 MB
@@ -30,11 +31,21 @@ type ArtifactContent struct {
 
 // TODO: Memoize this
 func GetArtifactFS(ctx context.Context) (fs.FilesystemRW, *models.Connection, error) {
+	return getArtifactFS(ctx, pkgConnection.Get)
+}
+
+// getArtifactFSForUse returns the artifact store to write or read a playbook run's artifacts with, as the playbook.
+// It requires connection:use on the artifact connection, as ctx.Subject().
+func getArtifactFSForUse(ctx context.Context) (fs.FilesystemRW, *models.Connection, error) {
+	return getArtifactFS(ctx, rbac.GetConnectionForUse)
+}
+
+func getArtifactFS(ctx context.Context, getConnection func(context.Context, string) (*models.Connection, error)) (fs.FilesystemRW, *models.Connection, error) {
 	if api.DefaultArtifactConnection == "" {
 		return nil, nil, dutyAPI.Errorf(dutyAPI.ENOTIMPLEMENTED, "no artifact connection configured")
 	}
 
-	conn, err := pkgConnection.Get(ctx, api.DefaultArtifactConnection)
+	conn, err := getConnection(ctx, api.DefaultArtifactConnection)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get connection: %w", err)
 	} else if conn == nil {
@@ -59,7 +70,7 @@ func SaveArtifacts(ctx context.Context, playbookActionID uuid.UUID, generatedArt
 		return nil
 	}
 
-	fs, connection, err := GetArtifactFS(ctx)
+	fs, connection, err := getArtifactFSForUse(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get artifact fs: %w", err)
 	}
@@ -95,7 +106,7 @@ func GetArtifactContents(ctx context.Context, actionIDs ...string) ([]ArtifactCo
 		return nil, fmt.Errorf("failed to get playbook run action artifacts: %w", err)
 	}
 
-	fs, _, err := GetArtifactFS(ctx)
+	fs, _, err := getArtifactFSForUse(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get artifact fs: %w", err)
 	}

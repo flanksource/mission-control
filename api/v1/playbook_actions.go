@@ -307,7 +307,8 @@ type AIActionClient struct {
 
 func (t *AIActionClient) Populate(ctx context.Context) error {
 	if t.Connection != nil {
-		conn, err := connection.Get(ctx, *t.Connection)
+		// The caller checks connection:use on it, as the subject doing the work.
+		conn, err := ctx.HydrateConnectionByURL(*t.Connection)
 		if err != nil {
 			return err
 		} else if conn == nil {

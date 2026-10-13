@@ -1,6 +1,9 @@
 package rbac
 
 import (
+	"encoding/json"
+	"strings"
+
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -75,4 +78,96 @@ func withinScopeLimits(ctx context.Context, conn models.Connection) bool {
 		}
 	}
 	return true
+}
+
+// GetConnectionForUse finds the connection a reference names, by id or connection://<namespace>/<name>, and returns
+// it with its credentials filled in, if the subject doing the work may use it (connection:use, checked as
+// ctx.Subject()). It's for work done as a resource, e.g. a playbook's actions or a notification's send, so there's no
+// transitional fallback for people.
+func GetConnectionForUse(ctx context.Context, ref string) (*models.Connection, error) {
+	conn, err := context.FindConnectionByURL(ctx, ref)
+	if err != nil {
+		return nil, err
+	} else if conn == nil {
+		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("connection (%s) not found", ref)
+	}
+
+	if err := authorizeSubjectConnectionUse(ctx, *conn); err != nil {
+		return nil, err
+	}
+
+	return context.HydrateConnection(ctx, conn)
+}
+
+// AuthorizeConnectionRefUse checks connection:use as ctx.Subject() on the connection a reference names, before
+// something else fills in its credentials. A reference that isn't a connection id or connection://<namespace>/<name>
+// names no stored connection, e.g. a URL, and passes. So does one that names no existing connection: there are no
+// credentials to fill in, and the hydration fails on its own.
+func AuthorizeConnectionRefUse(ctx context.Context, ref string) error {
+	ref = strings.TrimSpace(ref)
+	if _, err := uuid.Parse(ref); err != nil && !strings.HasPrefix(ref, "connection://") {
+		return nil
+	}
+
+	conn, err := context.FindConnectionByURL(ctx, ref)
+	if err != nil {
+		if dutyAPI.ErrorCode(err) == dutyAPI.ENOTFOUND {
+			return nil
+		}
+		return err
+	} else if conn == nil {
+		return nil
+	}
+
+	return authorizeSubjectConnectionUse(ctx, *conn)
+}
+
+// AuthorizeConnectionRefsUse checks connection:use as ctx.Subject() on every connection a spec names, i.e. every
+// "connection" field holding a connection id or connection://<namespace>/<name>, at any depth of its JSON form.
+func AuthorizeConnectionRefsUse(ctx context.Context, spec any) error {
+	b, err := json.Marshal(spec)
+	if err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+
+	var doc any
+	if err := json.Unmarshal(b, &doc); err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+
+	for _, ref := range lo.Uniq(connectionRefs(doc)) {
+		if err := AuthorizeConnectionRefUse(ctx, ref); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func connectionRefs(doc any) []string {
+	var refs []string
+	switch v := doc.(type) {
+	case map[string]any:
+		for key, value := range v {
+			if s, ok := value.(string); ok && key == "connection" && s != "" {
+				refs = append(refs, s)
+			} else {
+				refs = append(refs, connectionRefs(value)...)
+			}
+		}
+	case []any:
+		for _, item := range v {
+			refs = append(refs, connectionRefs(item)...)
+		}
+	}
+	return refs
+}
+
+func authorizeSubjectConnectionUse(ctx context.Context, conn models.Connection) error {
+	if CanUseConnection(ctx, ctx.Subject(), conn) {
+		return nil
+	}
+
+	return ctx.Oops().Code(dutyAPI.EFORBIDDEN).
+		With("permission", adapter.ActionConnectionUse, "connection", conn.ID).
+		Errorf("access denied to %s: %s required on connection %s/%s", ctx.Subject(), adapter.ActionConnectionUse, conn.Namespace, conn.Name)
 }

@@ -12,7 +12,6 @@ import (
 
 	"github.com/flanksource/artifacts"
 	"github.com/flanksource/commons/duration"
-	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -24,6 +23,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/pkg/clients/git"
 	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/report"
 	"github.com/flanksource/incident-commander/report/catalog"
 	"github.com/flanksource/incident-commander/views"
@@ -135,6 +135,11 @@ func (r *Report) runView(ctx context.Context, action v1.ReportAction, format str
 	}
 	if v == nil {
 		return nil, fmt.Errorf("view %s not found", action.View)
+	}
+
+	// The view's queries fill in their connections' credentials as the playbook
+	if err := rbac.AuthorizeConnectionRefsUse(ctx, v.Spec); err != nil {
+		return nil, err
 	}
 
 	r.logf(ctx, "exporting view %s as %s", action.View, format)
@@ -387,7 +392,7 @@ func resolveGitReportSource(ctx context.Context, src *v1.ReportGitFile) (srcDir,
 	}
 
 	if src.Connection != "" {
-		conn, err := pkgConnection.Get(ctx, src.Connection)
+		conn, err := rbac.GetConnectionForUse(ctx, src.Connection)
 		if err != nil {
 			return "", "", ctx.Oops().Wrap(err)
 		}

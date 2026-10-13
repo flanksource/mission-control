@@ -6,7 +6,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/flanksource/commons/duration"
-	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/logs"
 	"github.com/flanksource/duty/logs/cloudwatch"
@@ -17,6 +16,8 @@ import (
 	"github.com/flanksource/gomplate/v3"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 type logsAction struct {
@@ -29,8 +30,8 @@ func NewLogsAction() *logsAction {
 func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logs.LogResult, error) {
 	if action.Loki != nil {
 		if action.Loki.ConnectionName != "" {
-			if _, err := connection.Get(ctx, action.Loki.ConnectionName); err != nil {
-				return nil, ctx.Oops().Wrapf(err, "failed to get loki connection")
+			if err := rbac.AuthorizeConnectionRefUse(ctx, action.Loki.ConnectionName); err != nil {
+				return nil, err
 			}
 		}
 
@@ -46,8 +47,8 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logs.LogR
 
 	if action.OpenSearch != nil {
 		if action.OpenSearch.ConnectionName != "" {
-			if _, err := connection.Get(ctx, action.OpenSearch.ConnectionName); err != nil {
-				return nil, ctx.Oops().Wrapf(err, "failed to get opensearch connection")
+			if err := rbac.AuthorizeConnectionRefUse(ctx, action.OpenSearch.ConnectionName); err != nil {
+				return nil, err
 			}
 		}
 
@@ -67,6 +68,10 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logs.LogR
 
 	if action.CloudWatch != nil {
 		cw := action.CloudWatch
+
+		if err := rbac.AuthorizeConnectionRefUse(ctx, cw.AWSConnection.ConnectionName); err != nil {
+			return nil, err
+		}
 
 		if err := cw.AWSConnection.Populate(ctx); err != nil {
 			return nil, ctx.Oops().Wrapf(err, "failed to populate aws config for cloudwatch")
@@ -91,8 +96,8 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logs.LogR
 
 	if action.Kubernetes != nil {
 		if action.Kubernetes.ConnectionName != "" {
-			if _, err := connection.Get(ctx, action.Kubernetes.ConnectionName); err != nil {
-				return nil, ctx.Oops().Wrapf(err, "failed to get kubernetes connection")
+			if err := rbac.AuthorizeConnectionRefUse(ctx, action.Kubernetes.ConnectionName); err != nil {
+				return nil, err
 			}
 		}
 

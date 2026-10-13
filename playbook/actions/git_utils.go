@@ -6,16 +6,16 @@ import (
 	"path/filepath"
 	"strings"
 
-	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/pkg/clients/git"
 	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 // cloneGitRepo resolves a git connection and clones the repo, returning the worktree root path.
 func cloneGitRepo(ctx context.Context, connectionRef, branch string) (string, error) {
-	conn, err := pkgConnection.Get(ctx, connectionRef)
+	conn, err := rbac.GetConnectionForUse(ctx, connectionRef)
 	if err != nil {
 		return "", fmt.Errorf("failed to get git connection %q: %w", connectionRef, err)
 	} else if conn == nil {
