@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"time"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
@@ -18,6 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm"
 
+	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
@@ -53,6 +55,8 @@ func findTokenByName(ctx context.Context, tokenName string) models.AccessToken {
 	Expect(err).To(BeNil())
 	return token
 }
+
+var testRoles = models.AccessTokenRoles{{Namespace: "mission-control-builtin", Name: "viewer"}}
 
 func canEnforce(sub, obj, act string) bool {
 	allowed, err := rbac.Enforcer().Enforce(sub, obj, act)
@@ -99,50 +103,55 @@ var _ = Describe("CreateToken", Ordered, func() {
 			Expect(err).To(BeNil())
 		})
 
-		It("should create token successfully with all user permissions", func() {
+		It("refuses a token without roles", func() {
 			ctx := DefaultContext.WithUser(testUser)
-			reqData := CreateTokenRequest{
-				Name:  "test-token",
-				Scope: []policy.Permission{},
-			}
-			_ = postCreateToken(ctx, e, reqData, http.StatusOK)
+			_ = postCreateToken(ctx, e, CreateTokenRequest{Name: "no-roles-token"}, http.StatusBadRequest)
+			_ = postCreateToken(ctx, e, CreateTokenRequest{Name: "no-roles-token", Roles: models.AccessTokenRoles{}}, http.StatusBadRequest)
 
-			token := findTokenByName(ctx, reqData.Name)
-			Expect(token.ID.String()).ToNot(Equal(uuid.Nil.String()))
-
-			Expect(canEnforce(token.PersonID.String(), policy.ObjectCatalog, policy.ActionRead)).To(BeTrue())
-			Expect(canEnforce(token.PersonID.String(), policy.ObjectPlaybooks, policy.ActionRead)).To(BeTrue())
-
-			Expect(canEnforce(token.PersonID.String(), policy.ObjectTopology, policy.ActionRead)).To(BeFalse())
-			Expect(canEnforce(token.PersonID.String(), policy.ObjectCatalog, policy.ActionCRUD)).To(BeFalse())
-			Expect(canEnforce(token.PersonID.String(), policy.ObjectCanary, policy.ActionAll)).To(BeFalse())
-
+			_, err := gorm.G[models.AccessToken](DefaultContext.DB()).Where("name = ?", "no-roles-token").First(DefaultContext)
+			Expect(err).To(MatchError(gorm.ErrRecordNotFound))
 		})
 
-		It("should create token with denied permissions filtered out", func() {
+		It("stores the token's roles without writing deny rows", func() {
 			reqData := CreateTokenRequest{
-				Name: "limited-token",
-				Scope: []policy.Permission{
-					{
-						Subject: testUser.ID.String(),
-						Object:  policy.ObjectCatalog,
-						Action:  policy.ActionRead,
-					},
-				},
+				Name:  "limited-token",
+				Roles: models.AccessTokenRoles{{Namespace: "anywhere", Name: "readonly"}},
 			}
 
 			ctx := DefaultContext.WithUser(testUser)
 			_ = postCreateToken(ctx, e, reqData, http.StatusOK)
 
-			// Get the created token person and verify permissions
 			token := findTokenByName(ctx, reqData.Name)
-			Expect(token.ID.String()).ToNot(Equal(uuid.Nil.String()))
+			Expect(token.Roles).To(Equal(reqData.Roles))
 
+			own, err := rbac.Enforcer().GetPermissionsForUser(token.PersonID.String())
+			Expect(err).To(BeNil())
+			Expect(own).To(BeEmpty(), "a token's limit is its roles, not deny rows")
 			Expect(canEnforce(token.PersonID.String(), policy.ObjectCatalog, policy.ActionRead)).To(BeTrue())
+		})
 
-			Expect(canEnforce(token.PersonID.String(), policy.ObjectPlaybooks, policy.ActionRead)).To(BeFalse())
-			Expect(canEnforce(token.PersonID.String(), policy.ObjectCatalog, policy.ActionCRUD)).To(BeFalse())
-			Expect(canEnforce(token.PersonID.String(), policy.ObjectCanary, policy.ActionAll)).To(BeFalse())
+		It("refuses to create or delete a token with a token", func() {
+			ctx := DefaultContext.WithUser(testUser)
+			_ = postCreateToken(ctx, e, CreateTokenRequest{Name: "first-token", Roles: testRoles}, http.StatusOK)
+			first := findTokenByName(ctx, "first-token")
+
+			var tokenPerson models.Person
+			Expect(DefaultContext.DB().Where("id = ?", first.PersonID).First(&tokenPerson).Error).To(Succeed())
+			tokenCtx := withAccessToken(DefaultContext.WithUser(&tokenPerson))
+
+			_ = postCreateToken(tokenCtx, e, CreateTokenRequest{Name: "second-token", Roles: testRoles}, http.StatusForbidden)
+			_, err := gorm.G[models.AccessToken](DefaultContext.DB()).Where("name = ?", "second-token").First(DefaultContext)
+			Expect(err).To(MatchError(gorm.ErrRecordNotFound))
+
+			req := httptest.NewRequest(http.MethodDelete, "/auth/token/"+first.ID.String(), nil)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+			c.SetRequest(req.WithContext(tokenCtx))
+			c.SetParamNames("id")
+			c.SetParamValues(first.ID.String())
+			Expect(DeleteToken(c)).To(Succeed())
+			Expect(rec.Code).To(Equal(http.StatusForbidden))
+			Expect(findTokenByName(ctx, "first-token").ID).To(Equal(first.ID))
 		})
 	})
 
@@ -167,7 +176,8 @@ var _ = Describe("CreateToken", Ordered, func() {
 			Expect(err).To(BeNil())
 
 			reqData := CreateTokenRequest{
-				Name: "no-perm-token",
+				Name:  "no-perm-token",
+				Roles: testRoles,
 			}
 
 			ctx := DefaultContext.WithUser(noPermUser)
@@ -179,5 +189,57 @@ var _ = Describe("CreateToken", Ordered, func() {
 			Expect(err).To(BeNil())
 			Expect(perms).To(HaveLen(0), "Token should have no permissions")
 		})
+	})
+})
+
+var _ = Describe("RevokeScopedAccessTokens", Ordered, func() {
+	var owner *models.Person
+
+	casbinRows := func(personID uuid.UUID) int64 {
+		var count int64
+		Expect(DefaultContext.DB().Table("casbin_rule").Where("v0 = ?", personID.String()).Count(&count).Error).To(Succeed())
+		return count
+	}
+
+	createToken := func(name string) db.CreateAccessTokenForPersonResult {
+		result, err := db.CreateAccessTokenForPerson(DefaultContext, owner, name, time.Hour, false, nil)
+		Expect(err).To(BeNil())
+		_, err = rbac.Enforcer().AddGroupingPolicy(result.Person.ID.String(), owner.ID.String())
+		Expect(err).To(BeNil())
+		return result
+	}
+
+	BeforeAll(func() {
+		Expect(rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+		owner = &dummy.JohnDoe
+	})
+
+	It("revokes tokens scoped by deny rows and leaves unscoped tokens alone", func() {
+		scoped := createToken("scoped-before-roles")
+		// How a scoped token was limited before tokens were limited by Roles
+		_, err := rbac.Enforcer().AddPermissionsForUser(scoped.Person.ID.String(),
+			policy.Permission{Object: policy.ObjectPlaybooks, Action: policy.ActionPlaybookRun, Deny: true}.ToArgsWithoutSubject())
+		Expect(err).To(BeNil())
+		Expect(casbinRows(scoped.Person.ID)).To(BeNumerically("==", 2))
+
+		unscoped := createToken("unscoped-before-roles")
+
+		Expect(db.RevokeScopedAccessTokens(DefaultContext)).To(Succeed())
+
+		_, err = gorm.G[models.AccessToken](DefaultContext.DB()).Where("person_id = ?", scoped.Person.ID).First(DefaultContext)
+		Expect(err).To(MatchError(gorm.ErrRecordNotFound))
+		Expect(casbinRows(scoped.Person.ID)).To(BeZero())
+
+		var deleted int64
+		Expect(DefaultContext.DB().Table("people").Where("id = ? AND deleted_at IS NOT NULL", scoped.Person.ID).Count(&deleted).Error).To(Succeed())
+		Expect(deleted).To(BeNumerically("==", 1))
+
+		kept := findTokenByName(DefaultContext, "unscoped-before-roles")
+		Expect(kept.PersonID).To(Equal(unscoped.Person.ID))
+		Expect(casbinRows(unscoped.Person.ID)).To(BeNumerically("==", 1))
+
+		Expect(rbac.ReloadPolicy()).To(Succeed())
+		Expect(canEnforce(unscoped.Person.ID.String(), policy.ObjectCatalog, policy.ActionRead)).
+			To(Equal(canEnforce(owner.ID.String(), policy.ObjectCatalog, policy.ActionRead)))
 	})
 })

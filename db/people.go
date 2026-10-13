@@ -140,7 +140,7 @@ type AccessTokenWithUser struct {
 
 func ListAccessTokens(ctx context.Context) ([]AccessTokenWithUser, error) {
 	return gorm.G[AccessTokenWithUser](ctx.DB()).
-		Select("id", "name", "person_id", "created_at").
+		Select("id", "name", "person_id", "created_at", "roles").
 		Preload("Person", nil).
 		Find(ctx)
 }

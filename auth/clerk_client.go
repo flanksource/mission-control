@@ -167,6 +167,9 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			ctx.GetSpan().RecordError(err)
 			return c.String(http.StatusInternalServerError, "Error fetching agent details from database")
 		}
+		if authResult.AccessToken != nil {
+			ctx = withAccessToken(ctx)
+		}
 		c.SetRequest(c.Request().WithContext(ctx))
 		return next(c)
 	}
@@ -175,7 +178,7 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 func (h *ClerkHandler) getUserFromAccessToken(ctx context.Context, accessToken *models.AccessToken) (AuthResult, error) {
 	sessionID := accessToken.ID.String()
 	if user, exists := h.userCache.Get(sessionID); exists {
-		return AuthResult{User: user.(*models.Person), SessionID: sessionID}, nil
+		return AuthResult{User: user.(*models.Person), SessionID: sessionID, AccessToken: accessToken}, nil
 	}
 
 	dbUser, err := db.GetUserByID(ctx, accessToken.PersonID.String())

@@ -18,6 +18,8 @@ import (
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
 	"github.com/flanksource/incident-commander/plugin/api"
+
+	icrbac "github.com/flanksource/incident-commander/rbac"
 )
 
 const MaxInvokeDepth = 5
@@ -233,12 +235,12 @@ func authorizeConfigRead(ctx dutyContext.Context, subject, configID string) (dut
 		return ctx, nil, ctx.Oops().Wrapf(err, "read scope membership of config %s", configID)
 	}
 
-	if !dutyRBAC.HasPermission(ctx, subject, attr, policy.ActionRead) {
+	if !icrbac.HasPermission(ctx, subject, attr, policy.ActionRead) {
 		return ctx, nil, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("not allowed to read config %s", configID)
 	}
 	return ctx, attr, nil
 }
 
 func CanInvokePluginOperation(ctx dutyContext.Context, subject string, attr *models.ABACAttribute, pluginName, op string) bool {
-	return dutyRBAC.HasPermission(ctx, subject, attr, policy.NewPluginInvokeAction(pluginName, op))
+	return icrbac.HasPermission(ctx, subject, attr, policy.NewPluginInvokeAction(pluginName, op))
 }

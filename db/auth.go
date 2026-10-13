@@ -53,7 +53,8 @@ type CreateAccessTokenForPersonResult struct {
 	Person *models.Person
 }
 
-func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenName string, expiry time.Duration, autoRenew bool) (CreateAccessTokenForPersonResult, error) {
+// CreateAccessTokenForPerson creates an access token of the user, limited by the given Roles when there are any.
+func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenName string, expiry time.Duration, autoRenew bool, roles models.AccessTokenRoles) (CreateAccessTokenForPersonResult, error) {
 	var output CreateAccessTokenForPersonResult
 	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
 		name := user.Name + " (Token)"
@@ -74,9 +75,15 @@ func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenN
 			expiry = properties.Duration(90*24*time.Hour, "access_token.default_expiry")
 		}
 
-		token, _, err := CreateAccessToken(ctx, person.ID, tokenName, &expiry, new(user.ID), autoRenew)
+		token, accessToken, err := CreateAccessToken(ctx, person.ID, tokenName, &expiry, new(user.ID), autoRenew)
 		if err != nil {
 			return ctx.Oops().Wrapf(err, "failed to create access token %q", tokenName)
+		}
+
+		if len(roles) > 0 {
+			if err := ctx.DB().Model(accessToken).Update("roles", roles).Error; err != nil {
+				return ctx.Oops().Wrapf(err, "failed to save the roles of access token %q", tokenName)
+			}
 		}
 
 		output = CreateAccessTokenForPersonResult{

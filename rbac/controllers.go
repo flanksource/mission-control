@@ -2,12 +2,14 @@ package rbac
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/labstack/echo/v4"
 )
 
@@ -98,6 +100,13 @@ func SubjectAccessReviews(c echo.Context) error {
 
 	if err := req.Validate(ctx); err != nil {
 		return api.WriteError(c, err)
+	}
+
+	// A Role's limit principal isn't a subject. Checking it would join it to everyone, widening every token it limits.
+	for _, subject := range req.Subjects {
+		if strings.HasPrefix(subject, adapter.RoleLimitPrincipalPrefix) {
+			return api.WriteError(c, api.Errorf(api.EINVALID, "%q isn't a subject", subject))
+		}
 	}
 
 	results, err := rbac.RunSubjectAccessReview(ctx, req)

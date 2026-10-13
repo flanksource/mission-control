@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/commons/duration"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
@@ -155,8 +156,8 @@ type CreateTokenRequest struct {
 	Expiry    string `json:"expiry"`
 	AutoRenew bool   `json:"auto_renew"`
 
-	// Empty scope means all permissions the user has
-	Scope []policy.Permission `json:"scope"`
+	// Roles limit the token to what one of their rules also matches, within its owner's access. At least one is required.
+	Roles models.AccessTokenRoles `json:"roles"`
 }
 
 func CreateToken(c echo.Context) error {
@@ -171,10 +172,24 @@ func CreateToken(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "access tokens can't be created by users of external identity providers"))
 	}
 
+	if madeWithAccessToken(ctx) {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "access tokens can't be created with an access token"))
+	}
+
 	var err error
 	var reqData CreateTokenRequest
 	if err := c.Bind(&reqData); err != nil {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
+	}
+
+	if len(reqData.Roles) == 0 {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "a token must list at least one role; list mission-control-builtin/admin and mission-control-builtin/plugin-admin for all of your access"))
+	}
+
+	for _, role := range reqData.Roles {
+		if role.Namespace == "" || role.Name == "" {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "role %q must have a namespace and a name", role.Namespace+"/"+role.Name))
+		}
 	}
 
 	var expiry duration.Duration = 0 // Default
@@ -185,33 +200,13 @@ func CreateToken(c echo.Context) error {
 		}
 	}
 
-	tokenResult, err := db.CreateAccessTokenForPerson(ctx, ctx.User(), reqData.Name, time.Duration(expiry), reqData.AutoRenew)
+	tokenResult, err := db.CreateAccessTokenForPerson(ctx, ctx.User(), reqData.Name, time.Duration(expiry), reqData.AutoRenew, reqData.Roles)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error creating access token"))
 	}
 
 	if _, err := rbac.Enforcer().AddGroupingPolicy(tokenResult.Person.ID.String(), user.ID.String()); err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error grouping token with user"))
-	}
-
-	if len(reqData.Scope) > 0 {
-		// Remove subject from scope if exists
-		for i := range reqData.Scope {
-			reqData.Scope[i].Subject = ""
-		}
-
-		var permsToDeny [][]string
-		diff, _ := lo.Difference(icrbac.AllPermissions, reqData.Scope)
-		for _, p := range diff {
-			p.Deny = true
-			permsToDeny = append(permsToDeny, p.ToArgsWithoutSubject())
-		}
-
-		if len(permsToDeny) > 0 {
-			if _, err := rbac.Enforcer().AddPermissionsForUser(tokenResult.Person.ID.String(), permsToDeny...); err != nil {
-				return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "unable to create token"))
-			}
-		}
 	}
 
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success", Payload: map[string]string{"token": tokenResult.Token.PlainText()}})
@@ -231,6 +226,10 @@ func DeleteToken(c echo.Context) error {
 	tokenID := c.Param("id")
 	if tokenID == "" {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "token id not provided"))
+	}
+
+	if madeWithAccessToken(ctx) {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "access tokens can't be deleted with an access token"))
 	}
 
 	token, err := db.GetAccessToken(ctx, tokenID)

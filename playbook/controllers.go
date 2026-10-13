@@ -149,14 +149,14 @@ func HandleGetPlaybookParams(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
-	if env.SelectableResource() != nil && !dutyRBAC.HasPermission(checkCtx, ctx.Subject(), env.ABACAttributes(), policy.ActionRead) {
+	if env.SelectableResource() != nil && !rbac.HasPermission(checkCtx, ctx.Subject(), env.ABACAttributes(), policy.ActionRead) {
 		return dutyAPI.WriteError(c, ctx.Oops().
 			Code(dutyAPI.EFORBIDDEN).
 			With("permission", policy.ActionRead, "objects", env.ABACAttributes()).
 			Wrap(errors.New("access denied: read access to resource not allowed")))
 	}
 
-	if !dutyRBAC.HasPermission(checkCtx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
+	if !rbac.HasPermission(checkCtx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
 		return dutyAPI.WriteError(c, ctx.Oops().
 			Code(dutyAPI.EFORBIDDEN).
 			With("permission", policy.ActionPlaybookRun, "objects", attr).
@@ -284,7 +284,7 @@ func HandlePlaybookRunCancel(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
-	if !dutyRBAC.HasPermission(ctx, ctx.Subject(), attr, policy.ActionPlaybookCancel) {
+	if !rbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionPlaybookCancel) {
 		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("you do not have permission to cancel this playbook run"))
 	}
 

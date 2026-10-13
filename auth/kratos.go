@@ -119,6 +119,7 @@ func (k *kratosMiddleware) basicAuthLogin(ctx context.Context, username, passwor
 				"first": accessToken.Name,
 				"last":  "",
 			},
+			accessTokenTrait: true,
 		}
 
 		s := &client.Session{
@@ -193,6 +194,9 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusInternalServerError, "Error fetching user details from database")
 		}
 		ctx = ctx.WithUser(&person)
+		if traits, ok := session.Identity.Traits.(map[string]any); ok && traits[accessTokenTrait] == true {
+			ctx = withAccessToken(ctx)
+		}
 
 		ctx, err = withPersonAgent(ctx, person.ID)
 		if err != nil {

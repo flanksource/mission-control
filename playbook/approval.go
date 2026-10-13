@@ -9,13 +9,14 @@ import (
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+
+	icrbac "github.com/flanksource/incident-commander/rbac"
 )
 
 func HandlePlaybookRunApproval(c echo.Context) error {
@@ -60,7 +61,7 @@ func approveRun(ctx context.Context, run *models.PlaybookRun) error {
 
 	if objects, err := run.GetABACAttributes(ctx.DB()); err != nil {
 		return ctx.Oops().Wrap(err)
-	} else if !rbac.HasPermission(ctx, ctx.Subject(), objects, policy.ActionPlaybookApprove) {
+	} else if !icrbac.HasPermission(ctx, ctx.Subject(), objects, policy.ActionPlaybookApprove) {
 		return ctx.Oops().With("permission", policy.ActionPlaybookApprove, "objects", objects).Code(api.EFORBIDDEN).Wrap(errors.New("access denied: approval permission required"))
 	}
 

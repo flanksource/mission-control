@@ -53,6 +53,9 @@ type agentWrapper struct {
 	datasetFunc func(*gorm.DB) dummy.DummyData
 	dataset     dummy.DummyData
 	port        int
+
+	// username is the person the agent authenticates as on the upstream
+	username string
 }
 
 func (t *agentWrapper) setup(context context.Context) {
@@ -76,7 +79,7 @@ func (t *agentWrapper) Reconcile(upstreamPort int) error {
 		upstreamConfig := upstream.UpstreamConfig{
 			AgentName: t.name,
 			Host:      fmt.Sprintf("http://localhost:%d", upstreamPort),
-			Username:  "System",
+			Username:  t.username,
 			Password:  "admin",
 			Labels:    []string{"test"},
 		}

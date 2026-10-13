@@ -141,9 +141,14 @@ func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
 	}
 
 	for _, role := range roles {
-		_, err := ValidateRole(a.ctx, a.cache, role)
+		rules, err := ValidateRole(a.ctx, a.cache, role)
 		if err := recordValidity(a.ctx, role.TableName(), role.ID, role.Namespace, role.Name, role.Source, role.Error, role.ErrorReason, err); err != nil {
 			return err
+		}
+		if err == nil {
+			if err := loadRoleLimit(a.ctx, m, role, rules); err != nil {
+				return err
+			}
 		}
 	}
 	rolesByName := lo.KeyBy(roles, func(r models.Role) string { return r.Namespace + "/" + r.Name })
@@ -179,6 +184,25 @@ func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
 	}
 
 	recordUnappliedReports(reports)
+	return nil
+}
+
+// loadRoleLimit files the rules of a valid Role under its limit principal, which access tokens limited by the Role
+// are checked against. A rule that can't be compiled is left out, so the limit matches less, never more.
+func loadRoleLimit(ctx context.Context, m model.Model, role models.Role, rules []ResolvedRule) error {
+	principal := RoleLimitPrincipal(role.Namespace, role.Name)
+	for _, rule := range RoleLimitRules(role, rules) {
+		policies, err := compiledRuleToCasbinRules(principal, rule)
+		if err != nil {
+			ctx.Warnf("role %s/%s: rule %s doesn't limit access tokens: %v", role.Namespace, role.Name, rule.Name, err)
+			continue
+		}
+		for _, policy := range policies {
+			if err := persist.LoadPolicyArray(policy, m); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
@@ -301,6 +325,11 @@ func (a *PermissionAdapter) loadBasePolicy(m model.Model) error {
 	}
 
 	for _, line := range lines {
+		// A Role's limit principal only holds the Role's own rules (loadRoleLimit). A stored row for it,
+		// e.g. a grouping into everyone written by a check made as it, would widen every token it limits.
+		if strings.HasPrefix(line.V0, RoleLimitPrincipalPrefix) {
+			continue
+		}
 		if err := loadCasbinRule(line, m); err != nil {
 			return err
 		}

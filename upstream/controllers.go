@@ -12,7 +12,6 @@ import (
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/upstream"
 	"github.com/labstack/echo/v4"
-	"github.com/patrickmn/go-cache"
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/flanksource/incident-commander/artifacts"
@@ -24,8 +23,6 @@ import (
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/upstream/tunnel"
 )
-
-var agentCache = cache.New(3*24*time.Hour, 12*time.Hour)
 
 func init() {
 	echoSrv.RegisterRoutes(RegisterRoutes)
@@ -39,7 +36,7 @@ func RegisterRoutes(e *echo.Echo) {
 	upstreamGroup := e.Group(
 		"/upstream",
 		rbac.Authorization(policy.ObjectAgentPush, policy.ActionUpdate),
-		upstream.AgentAuthMiddleware(agentCache),
+		upstream.AgentAuthMiddleware(),
 	)
 	upstreamGroup.POST("/plugin/register", gateway.RegisterProxiedPlugin)
 	upstreamGroup.GET("/ping", upstream.PingHandler)

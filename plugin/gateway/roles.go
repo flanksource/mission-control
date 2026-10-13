@@ -5,9 +5,10 @@ import (
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
-	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/plugin"
+
+	icrbac "github.com/flanksource/incident-commander/rbac"
 )
 
 func pluginRolesForUser(ctx dutyContext.Context, entry *plugin.Entry, configID string) ([]string, error) {
@@ -37,7 +38,7 @@ func pluginRolesForUser(ctx dutyContext.Context, entry *plugin.Entry, configID s
 }
 
 func canAssumePluginRole(ctx dutyContext.Context, subject string, attr *models.ABACAttribute, pluginName, role string) bool {
-	return dutyRBAC.HasPermission(ctx, subject, attr, policy.NewPluginRoleAction(pluginName, role))
+	return icrbac.HasPermission(ctx, subject, attr, policy.NewPluginRoleAction(pluginName, role))
 }
 
 func pluginABACAttribute(ctx dutyContext.Context, configID string) (*models.ABACAttribute, error) {

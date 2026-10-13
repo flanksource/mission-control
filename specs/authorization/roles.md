@@ -395,14 +395,14 @@ _Why the resource and not its author:_ a resource's author can change, and resou
 
 An access token is a credential, not a subject. A request made with a person's token is checked as that person, and RoleBindings select the person, never the token. Actions taken with it are recorded as the person's.
 
-A token can be limited by Roles. It may do what its owner may do, and, when it lists Roles, only what one of their rules also matches:
+A token is limited by Roles. It may do what its owner may do, and only what one of its Roles' rules also matches:
 
 ```yaml
-# POST /auth/tokens
+# POST /auth/create_token
 name: ci-readonly
 expiry: 720h
 roles:
-  - namespace: mission-control
+  - namespace: mission-control-builtin
     name: viewer
 ```
 
@@ -413,7 +413,8 @@ Alice may read, change and delete every config, run playbooks and read connectio
 - **Roles mean what they mean anywhere.** A Role's rules are matched against a token's checks exactly as against a binding's. A token names Roles by namespace and name, in any namespace, since a token has none. Naming one takes no grant on it: a Role in a token only removes access.
 - **Every check of an operation.** An operation's checks are each limited (Section 4.3), so a Role meant to let a token run a playbook on a config needs `read` on the config too.
 - **Live.** Every check uses the owner's current grants and the Roles' current rules. A Role that's missing or invalid (Section 6) matches nothing, so a token limited only by it can do nothing until it's valid again. Nothing is granted to the token, so nothing is left behind: when the owner loses an action, every token of theirs loses it on the next request, whatever its Roles; when the owner gains one, a token gains it only where its Roles allow it.
-- **No Roles, no limit.** A token that lists no Roles may do everything its owner may.
+- **Roles are required.** A new token MUST list at least one Role. A request without one is refused, through the UI and the API alike. A token meant to do everything its owner may lists the shipped `admin` and `plugin-admin` Roles. _Why:_ what a token may do is chosen when it's created, never everything by default.
+- **Tokens without Roles.** A token that lists no Roles may do everything its owner may. Only these list none: agents' tokens (Section 4.6), the token in a kubeconfig downloaded from Mission Control, tokens created on the server with the `auth token` CLI command, and tokens created before Roles were required. They stay valid until they expire or are deleted, except tokens limited by the scopes tokens had before Roles: those are revoked when Mission Control is upgraded, and each one is logged with its name and owner. _Why revoke them:_ a token with Roles can't express those scopes, and dropping them would widen each token to its owner's full access, which is worse than breaking it. The token list marks them as having their owner's full access. _Why the kubeconfig and CLI tokens:_ a kubeconfig token is used through the Kubernetes proxy, which no Role rule can match, so a Role would leave it unable to do anything; and the CLI writes to the database directly, so whoever runs it already has full access.
 - **Tokens don't manage tokens.** A request made with a token can't create, change or delete a token, whatever its Roles. _Why:_ otherwise a limited token could create one without its limit.
 - **The summary follows the token.** The access summary of a request made with a token is computed with the token's limit (`collection-access.md`, Section 4).
 
