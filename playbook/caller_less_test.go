@@ -16,6 +16,8 @@ import (
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -211,6 +213,99 @@ var _ = ginkgo.Describe("Work no person started", func() {
 
 			_, err := (&actions.HTTP{}).Run(asPlaybook(), v1.HTTPAction{HTTPConnection: connection.HTTPConnection{ConnectionName: "connection://default/caller-less-signed"}})
 			Expect(err).To(MatchError(ContainSubstring("connection:use required on connection default/caller-less-aws")))
+		})
+
+		useOn := func(conns ...models.Connection) func() {
+			ginkgo.GinkgoHelper()
+			grants := lo.Map(conns, func(c models.Connection, _ int) playbookGrant {
+				return playbookGrant{
+					Action:   adapter.ActionConnectionUse,
+					Resource: v1.ScopeTarget{Connection: &v1.ScopeConnectionSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: c.Name, Namespace: c.Namespace}}},
+				}
+			})
+			return bindPlaybook(playbook, grants...)
+		}
+
+		create := func(conns ...*models.Connection) {
+			ginkgo.GinkgoHelper()
+			for _, c := range conns {
+				c.ID, c.Source = uuid.New(), models.SourceUI
+				Expect(DefaultContext.DB().Create(c).Error).To(Succeed())
+				ginkgo.DeferCleanup(func() { Expect(DefaultContext.DB().Delete(c).Error).To(Succeed()) })
+			}
+		}
+
+		ginkgo.It("checks the connections a connection's properties name in the namespace duty resolves them in", func() {
+			callerAWS := models.Connection{Name: "caller-less-ns-aws", Namespace: "default", Type: models.ConnectionTypeAWS, Username: "caller-key", Password: "caller-secret"}
+			ownAWS := models.Connection{Name: "caller-less-ns-aws", Namespace: "caller-less-other", Type: models.ConnectionTypeAWS, Username: "own-key", Password: "own-secret"}
+			signed := models.Connection{
+				Name: "caller-less-ns-signed", Namespace: "caller-less-other", Type: models.ConnectionTypeHTTP, URL: server.URL,
+				Properties: types.JSONStringMap{"awsSigV4": `{"connection":"connection://caller-less-ns-aws","service":"es"}`},
+			}
+			create(&callerAWS, &ownAWS, &signed)
+			ginkgo.DeferCleanup(useOn(signed, ownAWS))
+
+			// duty fills in connection://caller-less-ns-aws from the namespace of the action, not of the HTTP connection
+			_, err := (&actions.HTTP{}).Run(asPlaybook().WithNamespace("default"), v1.HTTPAction{
+				HTTPConnection: connection.HTTPConnection{ConnectionName: "connection://caller-less-other/caller-less-ns-signed"},
+			})
+			Expect(err).To(MatchError(ContainSubstring("connection:use required on connection default/caller-less-ns-aws")))
+		})
+
+		ginkgo.It("checks the connections a property read from a configmap names", func() {
+			k8s, err := DefaultContext.LocalKubernetes()
+			Expect(err).To(Succeed())
+			signing := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{Name: "caller-less-signing", Namespace: "default"},
+				Data:       map[string]string{"awsSigV4": `{"connection":"connection://default/caller-less-cm-aws","service":"es"}`},
+			}
+			_, err = k8s.CoreV1().ConfigMaps(signing.Namespace).Create(DefaultContext, signing, metav1.CreateOptions{})
+			Expect(err).To(Succeed())
+			ginkgo.DeferCleanup(func() {
+				Expect(k8s.CoreV1().ConfigMaps(signing.Namespace).Delete(DefaultContext, signing.Name, metav1.DeleteOptions{})).To(Succeed())
+			})
+
+			aws := models.Connection{Name: "caller-less-cm-aws", Namespace: "default", Type: models.ConnectionTypeAWS, Username: "access-key", Password: "secret-key"}
+			signed := models.Connection{
+				Name: "caller-less-cm-signed", Namespace: "default", Type: models.ConnectionTypeHTTP, URL: server.URL,
+				Properties: types.JSONStringMap{"awsSigV4": "configmap://caller-less-signing/awsSigV4"},
+			}
+			create(&aws, &signed)
+			ginkgo.DeferCleanup(useOn(signed))
+
+			_, err = (&actions.HTTP{}).Run(asPlaybook(), v1.HTTPAction{
+				HTTPConnection: connection.HTTPConnection{ConnectionName: "connection://default/caller-less-cm-signed"},
+			})
+			Expect(err).To(MatchError(ContainSubstring("connection:use required on connection default/caller-less-cm-aws")))
+
+			_, err = rbac.GetConnectionForUse(asPlaybook(), "connection://default/caller-less-cm-signed")
+			Expect(err).To(MatchError(ContainSubstring("connection:use required on connection default/caller-less-cm-aws")))
+		})
+
+		ginkgo.It("checks the connection duty has cached, not one that replaced it under the same name", func() {
+			ref := "connection://default/caller-less-replaced"
+			previous := models.Connection{
+				ID: uuid.New(), Name: "caller-less-replaced", Namespace: "default", Source: models.SourceUI,
+				Type: models.ConnectionTypeHTTP, URL: server.URL, Password: "previous-password",
+			}
+			Expect(DefaultContext.DB().Create(&previous).Error).To(Succeed())
+			cached, err := DefaultContext.HydrateConnectionByURL(ref)
+			Expect(err).To(Succeed())
+			Expect(cached.ID).To(Equal(previous.ID))
+			Expect(DefaultContext.DB().Delete(&previous).Error).To(Succeed())
+
+			replacement := models.Connection{Name: previous.Name, Namespace: previous.Namespace, Type: models.ConnectionTypeHTTP, URL: server.URL, Password: "replacement-password"}
+			create(&replacement)
+			ginkgo.DeferCleanup(useOn(replacement))
+
+			// Duty would fill in the previous connection's credentials for this reference until its cache expires
+			err = rbac.AuthorizeConnectionRefUse(asPlaybook(), ref)
+			Expect(err).To(MatchError(ContainSubstring("connection:use required on connection default/caller-less-replaced")))
+
+			conn, err := rbac.GetConnectionForUse(asPlaybook(), ref)
+			Expect(err).To(Succeed())
+			Expect(conn.ID).To(Equal(replacement.ID))
+			Expect(conn.Password).To(Equal("replacement-password"))
 		})
 
 		ginkgo.It("isn't checked again on an agent, for an action upstream dispatched to it", func() {

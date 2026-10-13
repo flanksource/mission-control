@@ -126,6 +126,7 @@ A connection is read and used separately:
 
 - `read` MUST NOT return a connection's credentials, in plain text or decrypted from a secret. They're masked wherever a connection is shown.
 - Mission Control MUST check `connection:use` wherever it fills in a connection's credentials, as the subject doing the work (Section 4.4). Looking a connection up by name to record which one is meant, without its credentials, checks nothing.
+- The check is made on the connection whose credentials are filled in, found exactly as it's found to fill them in. That includes every connection a connection's settings name, e.g. an HTTP connection's AWS signing connection, after settings read from a secret or configmap are resolved.
 - A `connection:use` rule's Scope may select connections with any target. It's only checked on the connection being used, never on a listing, so unlike `read` (Section 3.1) it needs no row filtering.
 
 _Why two actions:_ seeing that a connection exists and acting with its credentials are different risks. With one action, letting someone see the connections a notification can use would let anything bound the same way send with them. _Why testing is a use:_ a test makes an authenticated call to the other system, and its result can show what the masked connection doesn't, e.g. whether the credentials work.

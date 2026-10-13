@@ -90,17 +90,29 @@ func GetConnectionForUse(ctx context.Context, ref string) (*models.Connection, e
 		return nil, err
 	}
 
-	if err := authorizeConnectionUse(ctx, *conn, map[uuid.UUID]bool{}); err != nil {
+	if err := authorizeSubjectConnectionUse(ctx, *conn); err != nil {
 		return nil, err
 	}
 
-	return context.HydrateConnection(ctx, conn)
+	hydrated, err := context.HydrateConnection(ctx, conn)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := authorizeNestedConnectionsUse(ctx, *hydrated, map[uuid.UUID]bool{hydrated.ID: true}); err != nil {
+		return nil, err
+	}
+	return hydrated, nil
 }
 
 // AuthorizeConnectionRefUse checks connection:use as ctx.Subject() on the connection a reference names, and on every
 // connection its properties name, before something else fills in their credentials. A reference that isn't a
 // connection id or connection://<namespace>/<name> names no stored connection, e.g. a URL, and passes. One that names
-// no existing connection is refused: duty's connection cache could still fill in the credentials it named before.
+// no existing connection is refused.
+//
+// The reference is resolved as duty resolves it when it fills the credentials in, through its connection cache and in
+// ctx's namespace, so the connection checked is the one whose credentials are used, even while duty still has a
+// connection deleted or replaced under the same name cached.
 func AuthorizeConnectionRefUse(ctx context.Context, ref string) error {
 	return authorizeConnectionRefUse(ctx, ref, map[uuid.UUID]bool{})
 }
@@ -148,34 +160,36 @@ func authorizeConnectionRefUse(ctx context.Context, ref string, seen map[uuid.UU
 		return nil
 	}
 
-	conn, err := findStoredConnection(ctx, ref)
+	conn, err := ctx.HydrateConnectionByURL(ref)
 	if err != nil {
 		return err
+	} else if conn == nil {
+		return ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("connection (%s) not found", ref)
 	}
 
-	return authorizeConnectionUse(ctx, *conn, seen)
-}
-
-// authorizeConnectionUse checks connection:use on the connection, then on the connections its properties name, e.g.
-// an HTTP connection's awsSigV4 connection, whose credentials are filled in along with its own.
-func authorizeConnectionUse(ctx context.Context, conn models.Connection, seen map[uuid.UUID]bool) error {
 	if seen[conn.ID] {
 		return nil
 	}
 	seen[conn.ID] = true
 
-	if err := authorizeSubjectConnectionUse(ctx, conn); err != nil {
+	if err := authorizeSubjectConnectionUse(ctx, *conn); err != nil {
 		return err
 	}
+	return authorizeNestedConnectionsUse(ctx, *conn, seen)
+}
 
-	nestedCtx := ctx.WithNamespace(conn.Namespace)
+// authorizeNestedConnectionsUse checks connection:use on the connections a hydrated connection's properties name, e.g.
+// an HTTP connection's awsSigV4 connection, whose credentials are filled in along with its own. The properties must
+// already be resolved, since one can be read from a secret or configmap, and the references are resolved in ctx's
+// namespace, not the connection's, as duty resolves them.
+func authorizeNestedConnectionsUse(ctx context.Context, conn models.Connection, seen map[uuid.UUID]bool) error {
 	for _, value := range conn.Properties {
 		var doc any
 		if err := json.Unmarshal([]byte(value), &doc); err != nil {
 			continue
 		}
 		for _, ref := range lo.Uniq(connectionRefs(doc)) {
-			if err := authorizeConnectionRefUse(nestedCtx, ref, seen); err != nil {
+			if err := authorizeConnectionRefUse(ctx, ref, seen); err != nil {
 				return err
 			}
 		}
