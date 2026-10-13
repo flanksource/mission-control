@@ -142,44 +142,75 @@ var _ = ginkgo.Describe("Connection credentials in /db", func() {
 		})
 	}
 
-	ginkgo.It("puts the stored credentials back into a write that sends them masked", func() {
-		stored := models.Connection{
-			ID:          uuid.New(),
-			Name:        "db-connection-write",
-			Namespace:   "default",
-			Source:      models.SourceUI,
-			Type:        models.ConnectionTypePostgres,
-			URL:         "postgres://app:" + password + "@db.example.com/app",
-			Password:    password,
-			Certificate: "certificate",
-			Properties:  types.JSONStringMap{"bearer": "token", "region": "eu-west-1"},
+	ginkgo.Describe("writes that send credentials masked", func() {
+		var stored models.Connection
+
+		ginkgo.BeforeEach(func() {
+			stored = models.Connection{
+				ID:          uuid.New(),
+				Name:        "db-connection-write",
+				Namespace:   "default",
+				Source:      models.SourceUI,
+				Type:        models.ConnectionTypePostgres,
+				URL:         "postgres://app:" + password + "@db.example.com/app",
+				Password:    password,
+				Certificate: "certificate",
+				Properties:  types.JSONStringMap{"bearer": "token", "region": "eu-west-1"},
+			}
+			Expect(DefaultContext.DB().Create(&stored).Error).To(Succeed())
+			ginkgo.DeferCleanup(func() { Expect(DefaultContext.DB().Delete(&stored).Error).To(Succeed()) })
+		})
+
+		forward := func(method, path string, body map[string]any) map[string]any {
+			ginkgo.GinkgoHelper()
+			raw, err := json.Marshal(body)
+			Expect(err).ToNot(HaveOccurred())
+
+			req := httptest.NewRequest(method, path, bytes.NewReader(raw))
+			req = req.WithContext(DefaultContext)
+			var forwarded map[string]any
+			handler := connectionCredentialsInterceptor(func(c echov4.Context) error {
+				return json.NewDecoder(c.Request().Body).Decode(&forwarded)
+			})
+			Expect(handler(echov4.New().NewContext(req, httptest.NewRecorder()))).To(Succeed())
+			return forwarded
 		}
-		Expect(DefaultContext.DB().Create(&stored).Error).To(Succeed())
-		ginkgo.DeferCleanup(func() { Expect(DefaultContext.DB().Delete(&stored).Error).To(Succeed()) })
 
-		masked := db.MaskConnection(stored)
-		body, err := json.Marshal(map[string]any{
-			"name":        "renamed",
-			"url":         masked.URL,
-			"password":    masked.Password,
-			"certificate": masked.Certificate,
-			"properties":  map[string]any{"bearer": db.MaskedValue, "region": "us-east-1"},
+		maskedBody := func() map[string]any {
+			masked := db.MaskConnection(stored)
+			return map[string]any{
+				"name":        "renamed",
+				"url":         masked.URL,
+				"password":    masked.Password,
+				"certificate": masked.Certificate,
+				"properties":  map[string]any{"bearer": db.MaskedValue, "region": "us-east-1"},
+			}
+		}
+
+		ginkgo.It("get the stored credentials back on an update of that connection", func() {
+			forwarded := forward(http.MethodPatch, "/db/connections?id=eq."+stored.ID.String(), maskedBody())
+
+			Expect(forwarded).To(HaveKeyWithValue("name", "renamed"))
+			Expect(forwarded).To(HaveKeyWithValue("url", stored.URL))
+			Expect(forwarded).To(HaveKeyWithValue("password", password))
+			Expect(forwarded).To(HaveKeyWithValue("certificate", "certificate"))
+			Expect(forwarded["properties"]).To(HaveKeyWithValue("bearer", "token"))
+			Expect(forwarded["properties"]).To(HaveKeyWithValue("region", "us-east-1"))
 		})
-		Expect(err).ToNot(HaveOccurred())
 
-		req := httptest.NewRequest(http.MethodPatch, "/db/connections?id=eq."+stored.ID.String(), bytes.NewReader(body))
-		req = req.WithContext(DefaultContext)
-		var forwarded map[string]any
-		handler := connectionCredentialsInterceptor(func(c echov4.Context) error {
-			return json.NewDecoder(c.Request().Body).Decode(&forwarded)
+		ginkgo.It("don't get another connection's credentials on a create that names it", func() {
+			body := maskedBody()
+			body["id"] = stored.ID.String()
+			forwarded := forward(http.MethodPost, "/db/connections", body)
+			Expect(forwarded).To(HaveKeyWithValue("password", db.MaskedValue))
+			Expect(forwarded).ToNot(HaveKeyWithValue("url", stored.URL))
 		})
-		Expect(handler(echov4.New().NewContext(req, httptest.NewRecorder()))).To(Succeed())
 
-		Expect(forwarded).To(HaveKeyWithValue("name", "renamed"))
-		Expect(forwarded).To(HaveKeyWithValue("url", stored.URL))
-		Expect(forwarded).To(HaveKeyWithValue("password", password))
-		Expect(forwarded).To(HaveKeyWithValue("certificate", "certificate"))
-		Expect(forwarded["properties"]).To(HaveKeyWithValue("bearer", "token"))
-		Expect(forwarded["properties"]).To(HaveKeyWithValue("region", "us-east-1"))
+		ginkgo.It("don't get another connection's credentials on an update that renames a row to it", func() {
+			body := maskedBody()
+			body["id"] = stored.ID.String()
+			forwarded := forward(http.MethodPatch, "/db/connections?id=eq."+uuid.NewString(), body)
+			Expect(forwarded).To(HaveKeyWithValue("password", db.MaskedValue))
+		})
 	})
 })

@@ -12,6 +12,7 @@ import (
 	dutyApi "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/google/uuid"
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 
@@ -183,7 +184,7 @@ func splitSelect(sel string) []string {
 
 // connectionCredentialsInterceptor guards /db requests that read or write connections. It refuses requests that could
 // reveal credentials past the masking of responses, asks PostgREST for responses it can mask, and puts the stored
-// credentials back into writes that send them masked, as read.
+// credentials back into updates that send them masked, as read.
 func connectionCredentialsInterceptor(next echov4.HandlerFunc) echov4.HandlerFunc {
 	return func(c echov4.Context) error {
 		q, err := parseConnectionQuery(postgrestTable(c.Request().URL.Path), c.Request().URL.Query())
@@ -195,7 +196,7 @@ func connectionCredentialsInterceptor(next echov4.HandlerFunc) echov4.HandlerFun
 
 		c.Request().Header.Del(echov4.HeaderAcceptEncoding)
 
-		if q.table == connectionsTable && lo.Contains([]string{http.MethodPost, http.MethodPatch, http.MethodPut}, c.Request().Method) {
+		if q.table == connectionsTable && c.Request().Method == http.MethodPatch {
 			if err := unmaskConnectionWrite(c); err != nil {
 				return dutyApi.WriteError(c, err)
 			}
@@ -205,7 +206,7 @@ func connectionCredentialsInterceptor(next echov4.HandlerFunc) echov4.HandlerFun
 	}
 }
 
-// unmaskConnectionWrite puts the stored credentials back into the connection rows of a write that sends them masked.
+// unmaskConnectionWrite puts the stored credentials back into an update of a connection that sends them masked.
 func unmaskConnectionWrite(c echov4.Context) error {
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
@@ -221,22 +222,23 @@ func unmaskConnectionWrite(c echov4.Context) error {
 		return nil
 	}
 
-	rows := jsonObjects(payload)
-	ctx := c.Request().Context().(context.Context)
-	filterID := strings.TrimPrefix(c.QueryParam("id"), "eq.")
-	for _, row := range rows {
-		id := filterID
-		if v, ok := row["id"].(string); ok && v != "" {
-			id = v
-		}
-		if id == "" {
-			continue
-		}
+	// Only an update of one existing connection, named by the request's filter, gets its own stored credentials back.
+	// A create gets none: it would copy another connection's credentials, and a failed insert reports the row it tried.
+	id, err := uuid.Parse(strings.TrimPrefix(c.QueryParam("id"), "eq."))
+	if err != nil {
+		return nil
+	}
 
-		var stored models.Connection
-		if tx := ctx.DB().Where("id = ?", id).Limit(1).Find(&stored); tx.Error != nil {
-			return ctx.Oops().Wrap(tx.Error)
-		} else if tx.RowsAffected == 0 {
+	ctx := c.Request().Context().(context.Context)
+	var stored models.Connection
+	if tx := ctx.DB().Where("id = ?", id).Limit(1).Find(&stored); tx.Error != nil {
+		return ctx.Oops().Wrap(tx.Error)
+	} else if tx.RowsAffected == 0 {
+		return nil
+	}
+
+	for _, row := range jsonObjects(payload) {
+		if v, ok := row["id"]; ok && v != id.String() {
 			continue
 		}
 		db.UnmaskConnectionRow(row, stored)
