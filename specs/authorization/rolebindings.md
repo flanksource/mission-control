@@ -22,13 +22,15 @@ spec:
 
 | Field         | Type   | Required                  | Meaning                                                  |
 | ------------- | ------ | ------------------------- | -------------------------------------------------------- |
-| `role`        | string | Yes                       | Name of a Role in the binding's namespace (`roles.md`).  |
+| `role`        | string | Yes                       | A Role in the binding's namespace, or `global:<name>` for a namespace-less Role (`overview.md`, "Namespaces"). |
 | `subjects`    | object | Yes, at least one subject | Who gets the Role (Section 2).                           |
 | `constraint`  | object | No                        | Narrows the Role's rules for these subjects (Section 3). |
 | `description` | string | No                        | Explanatory text; no effect.                             |
 
 
-A RoleBinding MUST have a namespace, and its Role and constraint Scopes must be in it (`overview.md`, "Namespaces"). Subjects can match resources in any namespace (Section 2.5).
+A RoleBinding MAY have no namespace through the API/UI; Kubernetes RoleBindings retain their Kubernetes namespace. Bare Role and constraint Scope references resolve in the binding's namespace, including no namespace; `global:<name>` explicitly selects a namespace-less object. The Role's own Scope references MUST resolve from the Role, not the binding (`overview.md`, "Namespaces"). Subjects can match resources in any namespace (Section 2.5).
+
+_Why:_ a binding can grant a shared Role while narrowing it with local Scopes, without changing what the Role itself means. A namespace-less binding needs no separate kind: a binding's namespace does not limit the access it grants.
 
 ## 2. Subjects
 
@@ -252,8 +254,8 @@ Tenant A's users can run and approve monitoring playbooks on the configs that ar
 
 | Field               | Type   | Required | Meaning                                                                                 |
 | ------------------- | ------ | -------- | --------------------------------------------------------------------------------------- |
-| `resource.scopeRef` | string | No       | A Scope, in the binding's namespace, the resource of every operation must also be in.   |
-| `target.scopeRef`   | string | No       | A Scope, in the binding's namespace, the target of every operation must also be in.     |
+| `resource.scopeRef` | string | No       | A Scope the resource of every operation must also be in; local or `global:<name>`. |
+| `target.scopeRef`   | string | No       | A Scope the target of every operation must also be in; local or `global:<name>`. |
 
 At least one of them MUST be set: a `constraint` that sets neither is rejected. A missing `constraint` and `null` both mean no constraint, and the binding grants the Role's rules as written.
 

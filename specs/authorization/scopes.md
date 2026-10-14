@@ -42,7 +42,7 @@ spec:
 | Field                | Requirement               | Meaning                                                                             |
 | -------------------- | ------------------------- | ----------------------------------------------------------------------------------- |
 | `metadata.name`      | Required                  | Name other objects reference the Scope by.                                          |
-| `metadata.namespace` | Required                  | Namespace of the Scope object. It is referenced from objects in the same namespace. |
+| `metadata.namespace` | Optional through the API/UI; required in Kubernetes | Namespace of the Scope object. Omitted or empty means namespace-less through the API/UI (`overview.md`, "Namespaces"). |
 | `spec.description`   | Optional                  | Explanatory text; no effect.                                                        |
 | `spec.targets`       | Required; 1 to 10 entries | The selectors. Each entry selects resources of exactly one type.                    |
 
@@ -133,7 +133,9 @@ A Scope whose `agent` no longer exists isn't an empty set. It's invalid (Section
 
 ### 4.2 Namespace
 
-`metadata.namespace` identifies the Scope object and is required however it's created. Roles and RoleBindings can only reference the Scope from the same namespace (`overview.md`, "Namespaces"). It does **not** restrict the resources the Scope selects. Only selectors do.
+`metadata.namespace` identifies the Scope object and MAY be omitted or empty through the API/UI. Kubernetes Scopes retain their Kubernetes namespace. A bare `scopeRef` names a Scope in the referencing object's namespace, including no namespace; `global:<name>` explicitly names a namespace-less Scope (`overview.md`, "Namespaces"). The Scope's namespace does **not** restrict the resources it selects. Only selectors do.
+
+_Why:_ a Scope can be shared across namespaces without duplicating it, and its selectors must mean the same thing wherever it is referenced.
 
 ### 4.3 Identity and ownership, not state
 
