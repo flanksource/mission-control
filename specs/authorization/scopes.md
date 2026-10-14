@@ -42,7 +42,7 @@ spec:
 | Field                | Requirement               | Meaning                                                                             |
 | -------------------- | ------------------------- | ----------------------------------------------------------------------------------- |
 | `metadata.name`      | Required                  | Name other objects reference the Scope by.                                          |
-| `metadata.namespace` | Required                  | Namespace of the Scope object; references from other namespaces use `namespace/name` (`overview.md`, "Namespaces"). |
+| `metadata.namespace` | Required                  | Namespace of the Scope object. Objects in other namespaces reference it as `namespace/name`. |
 | `spec.description`   | Optional                  | Explanatory text; no effect.                                                        |
 | `spec.targets`       | Required; 1 to 10 entries | The selectors. Each entry selects resources of exactly one type.                    |
 
@@ -133,9 +133,9 @@ A Scope whose `agent` no longer exists isn't an empty set. It's invalid (Section
 
 ### 4.2 Namespace
 
-`metadata.namespace` identifies the Scope object and MUST be set however it is created. A bare `scopeRef` names a Scope in the referencing object's namespace; `namespace/name` names a Scope in the specified namespace (`overview.md`, "Namespaces"). The Scope's namespace does **not** restrict the resources it selects. Only selectors do.
+`metadata.namespace` identifies the Scope object and is required however it's created. Objects in the same namespace reference the Scope by name, and objects in other namespaces as `namespace/name` (`overview.md`, "References"). It does **not** restrict the resources the Scope selects. Only selectors do.
 
-_Why:_ a Scope can be shared across namespaces without duplicating it, and its selectors must mean the same thing wherever it is referenced.
+_Why:_ one Scope can be used from many namespaces without copies, and it selects the same resources wherever it's used.
 
 ### 4.3 Identity and ownership, not state
 

@@ -42,9 +42,9 @@ roles:
 
 Alice may read, change and delete every config, run playbooks and read connections. With this token she can read configs, playbooks and components, but can't run a playbook, delete a config or read a connection: her own rules allow each of them, but no rule of `viewer` does.
 
-Token Role references through the API MUST supply separate, nonempty `namespace` and `name` fields. The `auth token --role` CLI option MUST use `namespace/name`, e.g. `mission-control-builtin/viewer`; a bare name MUST be rejected. Both forms identify the same Role, with no fallback.
+Through the API, a token names each Role with separate `namespace` and `name` fields, and both are required. `auth token --role` takes `namespace/name`, e.g. `mission-control-builtin/viewer`, and rejects a bare name.
 
-_Why:_ a token has no namespace of its own, so every Role reference must state one explicitly.
+_Why:_ a token has no namespace of its own, so a bare name has nowhere to resolve.
 
 - **A limit, not a grant.** Each check of an operation (`roles.md`, Section 4.3) passes when the owner's rules allow it and a rule of one of the token's Roles matches it (`roles.md`, Section 4). A listing returns the rows both allow. A rule the owner doesn't hold adds nothing, so a token never does more than its owner.
 - **Any Role, matched check by check.** A token's Roles needn't be the owner's, or bound to anyone. Each check is one action on one resource, with its target, and the owner's rules and the token's Roles must each have a rule matching that same check. Which Roles they come from doesn't matter, so neither side can pair a resource from one rule with a target from another (`roles.md`, Section 4.2).

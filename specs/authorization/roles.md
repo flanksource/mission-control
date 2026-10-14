@@ -36,9 +36,9 @@ spec:
 | `resource.scopeRef` | Depends on the action | The Scope of resources the action is performed on, e.g. the playbooks to run. Omitted for the few actions that take no resource (Section 2.3). |
 | `target.scopeRef`   | Depends on the action | The Scope of resources the action is performed against, e.g. the configs a playbook runs on. |
 
-A Scope is a named set of resources (see `scopes.md`). A rule references exactly one Scope per input. A Role MUST have a namespace. A bare `scopeRef` MUST resolve in the Role's namespace, never a binding's; `namespace/name` names a Scope in the specified namespace (`overview.md`, "Namespaces"). The resources a Scope selects can be in any namespace.
+A Scope is a named set of resources (see `scopes.md`). A rule references exactly one Scope per input. A Role MUST have a namespace. A bare `scopeRef` names a Scope in the Role's namespace, never the binding's, and `namespace/name` names one in any namespace (`overview.md`, "References"). The resources a Scope selects can be in any namespace.
 
-_Why:_ a shared Role must grant the same rules wherever it is bound, without requiring its Scopes to be copied into each binding's namespace.
+_Why:_ a Role grants the same rules wherever it's bound, and its Scopes don't have to be copied into each binding's namespace.
 
 A Role has at least one rule, and at most 200; the Roles Mission Control ships aren't limited, since `plugin-admin` has a rule per plugin operation. _Why 200:_ the number is arbitrary, and there's no technical reason for it. It's high because the shipped `admin` Role has a rule for every action on every type, 77 in all (`overview.md`, "Shipped Roles"), and a Role written by hand must be able to grant as much.
 
