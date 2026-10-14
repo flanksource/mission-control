@@ -17,8 +17,8 @@ var _ = ginkgo.Describe("RoleBindingSpec.Validate", func() {
 		{name: "an empty plugin", subjects: RoleBindingSubjects{Plugins: []PermissionGroupSelector{{}}}, err: "plugins subject 0: namespace or name is required"},
 		{name: "a plugin in every namespace", subjects: RoleBindingSubjects{Plugins: []PermissionGroupSelector{{Namespace: "*", Name: "kubernetes-logs"}}}, err: `namespace "*" must be an exact value`},
 		{name: "a plugin name prefix", subjects: RoleBindingSubjects{Plugins: []PermissionGroupSelector{{Name: "kubernetes-*"}}}, err: `name "kubernetes-*" must be an exact value`},
-		{name: "a plugin name list", subjects: RoleBindingSubjects{Plugins: []PermissionGroupSelector{{Name: "a,b"}}}, err: `name "a,b" must be an exact value`},
-		{name: "a plugin name exclusion", subjects: RoleBindingSubjects{Plugins: []PermissionGroupSelector{{Name: "!a"}}}, err: `name "!a" must be an exact value`},
+		{name: "a plugin name with a comma, which is literal", subjects: RoleBindingSubjects{Plugins: []PermissionGroupSelector{{Name: "a,b"}}}},
+		{name: "a plugin name starting with !, which is literal", subjects: RoleBindingSubjects{Plugins: []PermissionGroupSelector{{Name: "!a"}}}},
 	} {
 		ginkgo.It(tt.name, func() {
 			err := RoleBindingSpec{Role: "connections", Subjects: tt.subjects}.Validate()

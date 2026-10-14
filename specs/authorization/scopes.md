@@ -198,8 +198,9 @@ Every target is a selector over the fields its resource type has. A selector MUS
 A pattern has exactly one `*`, at the end, and at least one character before it. Everything else is rejected:
 
 - `*` at the start (`*-db`), in the middle (`prod-*-db`), at both ends (`*db*`), or more than once (`prod-*-*`).
-- Lists (`a,b`) and exclusions (`!a`). To select several names, use one target per name; targets combine with OR (Section 4).
 - `*` in `namespace` or `id`.
+
+There's no list or exclusion syntax. `name: "a,b"` selects a resource named `a,b`, and `name: "!a"` one named `!a`. To select several names, use one target per name; targets combine with OR (Section 4).
 
 Matching is case-sensitive: `prod-*` doesn't match `Prod-db`. Every character other than a trailing `*` is literal, including `,`, `!`, `%` and `_`. A resource whose name contains `*` can only be selected by `id`.
 
@@ -227,11 +228,11 @@ Every form a `name` can take has to mean exactly the same set in both, or a reso
 - **A prefix** is one comparison against the start of a name. It has one reading, and an index on the name can serve it.
 - **A suffix** (`*-db`) is one comparison too, but only an index on the reversed name can serve it, so building a Scope would scan every name of its type. Select by a tag instead, e.g. `tagSelector: role=db`.
 - **`*` in the middle or at both ends** (`*db*`) means searching inside every name, and a pattern with several wildcards has more than one reading. Neither is needed to select resources by name, which prefixes already do. A wider grammar would have to satisfy Section 4.3 and give each form one reading; it isn't ruled out.
-- **Lists** add nothing: targets already combine with OR (Section 4), so one target per name says the same thing without a second syntax.
+- **No lists**: targets already combine with OR (Section 4), so one target per name says the same thing without a second syntax.
 - **Tags and labels take `key=value` only.** `!=`, `notin` and `!key` are exclusions, ruled out below. `in` is a list, which one target per value already says. A bare `key` matches any value, a wildcard this language doesn't infer. What's left is an exact match, which has one reading and is one indexed lookup.
-- **Exclusions** (`!a`) make a selector match everything it doesn't name, including resources created later. A Scope grants access, so it names what's in, never what's out.
+- **No exclusions**: an exclusion makes a selector match everything it doesn't name, including resources created later. A Scope grants access, so it names what's in, never what's out.
 - **Case-sensitive** matching selects what was typed and nothing wider. Resource names from cloud providers can differ only by case, and a Scope must not quietly include both.
-- **Literal `,`, `!`, `%` and `_`** keep a name that contains them selectable exactly. Only `*` has a meaning.
+- **Literal `,`, `!`, `%` and `_`** keep a name that contains them selectable exactly. Only `*` has a meaning. A target is a plain value, not a selector language: `,` and `!` don't mean what they mean in other Mission Control selectors, e.g. a playbook's `configs`, and aren't rejected either. A name written as a list or an exclusion matches no resource, so it grants nothing.
 - **A pattern is not a whole type**, even one that happens to match every resource today, because what it matches changes as resources come and go. A whole-type grant must be decidable from the Scope alone.
 
 ### 5.3 Fields each type supports
@@ -296,11 +297,6 @@ targets:
 targets:
   - config:
       tagSelector: "env!=prod"
----
-# List of names: use one target per name instead
-targets:
-  - config:
-      name: "prod-db,prod-api"
 ---
 # Playbooks have no tags
 targets:

@@ -202,17 +202,17 @@ func (t RoleBindingSpec) Validate() error {
 }
 
 // validateResourceSubject checks a resource subject: at least one of namespace and name, where name is an exact value
-// or "*", and namespace an exact value. Patterns, lists and exclusions aren't supported.
+// or "*", and namespace an exact value. Patterns aren't supported; "," and "!" are ordinary characters.
 func validateResourceSubject(selector PermissionGroupSelector) error {
 	if selector.Empty() {
 		return fmt.Errorf("namespace or name is required")
 	}
 
-	if selector.Name != "*" && strings.ContainsAny(selector.Name, "*!,") {
+	if selector.Name != "*" && strings.Contains(selector.Name, "*") {
 		return fmt.Errorf(`name %q must be an exact value, or "*"`, selector.Name)
 	}
 
-	if strings.ContainsAny(selector.Namespace, "*!,") {
+	if strings.Contains(selector.Namespace, "*") {
 		return fmt.Errorf("namespace %q must be an exact value; omit it to match any namespace", selector.Namespace)
 	}
 

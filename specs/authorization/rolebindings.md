@@ -187,7 +187,7 @@ Each entry is an object with `namespace` and `name`, and MUST set at least one o
 
 - `name` is one exact value, or `*` as the whole value to match any name.
 - `namespace` is one exact value. To match any namespace, omit it. `namespace: "*"` is rejected.
-- Prefixes, suffixes, lists and exclusions are rejected in both.
+- Prefixes and suffixes are rejected in both. `,` and `!` are ordinary characters.
 
 So `name: "*"` alone selects every resource of that kind, and `namespace: monitoring` alone selects every resource of that kind in `monitoring`. Here: the `cleanup-pods` playbook, every notification in `monitoring`, every scraper, and the `kubernetes-logs` plugin in `mission-control`.
 
