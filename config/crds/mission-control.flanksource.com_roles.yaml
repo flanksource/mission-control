@@ -78,6 +78,7 @@ spec:
                             of the Role or RoleBinding, or namespace/name.
                           maxLength: 317
                           minLength: 1
+                          pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?/)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                           type: string
                       required:
                       - scopeRef
@@ -93,6 +94,7 @@ spec:
                             of the Role or RoleBinding, or namespace/name.
                           maxLength: 317
                           minLength: 1
+                          pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?/)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                           type: string
                       required:
                       - scopeRef

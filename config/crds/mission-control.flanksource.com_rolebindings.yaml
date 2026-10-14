@@ -54,6 +54,7 @@ spec:
                           of the Role or RoleBinding, or namespace/name.
                         maxLength: 317
                         minLength: 1
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?/)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                         type: string
                     required:
                     - scopeRef
@@ -67,6 +68,7 @@ spec:
                           of the Role or RoleBinding, or namespace/name.
                         maxLength: 317
                         minLength: 1
+                        pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?/)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                         type: string
                     required:
                     - scopeRef
@@ -82,6 +84,7 @@ spec:
                 description: Role is the name of the Role to grant, in the binding's
                   namespace, or namespace/name.
                 minLength: 1
+                pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?/)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                 type: string
               subjects:
                 description: Subjects the role is granted to. At least one is required.

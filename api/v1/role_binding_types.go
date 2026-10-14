@@ -34,6 +34,7 @@ type RoleBindingSpec struct {
 
 	// Role is the name of the Role to grant, in the binding's namespace, or namespace/name.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^([a-z0-9]([-a-z0-9]*[a-z0-9])?/)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	Role string `json:"role" yaml:"role"`
 
 	// Subjects the role is granted to. At least one is required.

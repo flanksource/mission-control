@@ -79,6 +79,7 @@ type ScopeReference struct {
 	// ScopeRef is the Scope's name, in the namespace of the Role or RoleBinding, or namespace/name.
 	// +kubebuilder:validation:MinLength=1
 	// +kubebuilder:validation:MaxLength=317
+	// +kubebuilder:validation:Pattern=`^([a-z0-9]([-a-z0-9]*[a-z0-9])?/)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	ScopeRef string `json:"scopeRef" yaml:"scopeRef"`
 }
 

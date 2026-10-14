@@ -247,8 +247,15 @@ func recordUnappliedReports(reports map[uuid.UUID]unappliedReport) {
 	}
 
 	for id, current := range reports {
-		if old := previous[id]; old.report != current.report {
+		old := previous[id]
+		if old.report != current.report {
 			ValidityChanged("role_bindings", current.binding.Namespace, current.binding.Name, current.binding.Source)
+			notifyRole(current)
+		}
+
+		// A binding that now grants another role leaves the old one's list, and joins the new one's
+		if old.role.ID != current.role.ID && (old.report != "" || current.report != "") {
+			notifyRole(old)
 			notifyRole(current)
 		}
 	}
