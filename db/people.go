@@ -164,6 +164,15 @@ func ListAccessTokens(ctx context.Context, creator uuid.UUID, withAgents bool) (
 		Find(ctx)
 }
 
+// ListPersonAccessTokens lists the access tokens of the person, e.g. an agent's, without their values.
+func ListPersonAccessTokens(ctx context.Context, personID uuid.UUID) ([]models.AccessToken, error) {
+	return gorm.G[models.AccessToken](ctx.DB()).
+		Select("id", "name", "person_id", "created_at", "expires_at", "auto_renew").
+		Where("person_id = ?", personID).
+		Order("created_at").
+		Find(ctx)
+}
+
 func GetAccessToken(ctx context.Context, id string) (models.AccessToken, error) {
 	return gorm.G[models.AccessToken](ctx.DB()).
 		Select("id", "name", "person_id", "created_at", "created_by").

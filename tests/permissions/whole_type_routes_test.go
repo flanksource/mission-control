@@ -189,6 +189,8 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 		{v1.ResourceAgent, http.MethodGet, "/db/agents_summary", false, read(policy.ObjectMonitor)},
 		{v1.ResourceAgent, http.MethodPost, "/agent/generate", true, grant(policy.ObjectAgent, policy.ActionUpdate)},
 		{v1.ResourceAgent, http.MethodPost, "/agent/token", true, grant(policy.ObjectAgent, policy.ActionUpdate)},
+		{v1.ResourceAgent, http.MethodGet, "/agent/" + uuid.NewString() + "/tokens", false, read(policy.ObjectAgent)},
+		{v1.ResourceAgent, http.MethodDelete, "/agent/" + uuid.NewString() + "/tokens/" + uuid.NewString(), true, grant(policy.ObjectAgent, policy.ActionUpdate)},
 
 		{v1.ResourcePerson, http.MethodGet, "/db/people", false, read(policy.ObjectPeople)},
 		{v1.ResourcePerson, http.MethodGet, "/db/person_analytics", false, read(policy.ObjectPeople)},
@@ -311,7 +313,7 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 	// checked is the object and action a route checks now
 	checked := func(r route) objectAction {
 		switch {
-		case r.path == "/agent/token":
+		case r.path == "/agent/token", strings.HasPrefix(r.path, "/agent/") && r.method == http.MethodDelete:
 			return objectAction{objects[r.resource], policy.ActionUpdate}
 		case strings.HasSuffix(strings.Split(r.path, "?")[0], "/team_members") && r.write:
 			return objectAction{objects[r.resource], policy.ActionUpdate}
