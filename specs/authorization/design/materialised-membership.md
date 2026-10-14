@@ -47,7 +47,7 @@ scope_members (scope_id, resource_type, resource_id)   -- no resource_id: every 
 
 ## Scrapers and the types granted whole
 
-Most types added to Scopes only take type-wide grants (`scopes.md` §5.3), so they're never filtered by row and need no membership rows beyond the whole-type one. Scrapers are the exception: they can be granted in part, by `id`, `name`, `namespace` and `agent`, so `config_scrapers` is filtered like configs.
+Most types added to Scopes only take type-wide grants (`scopes.md` §3.1), so they're never filtered by row and need no membership rows beyond the whole-type one. Scrapers are the exception: they can be granted in part, by `id`, `name`, `namespace` and `agent`, so `config_scrapers` is filtered like configs.
 
 - **Targets and predicate.** A scraper target is a `scope_targets` row with `resource_type = scraper`, using the `id`, `name`/`name_prefix`, `namespace` and `agent_id` columns. The scraper predicate tests those against `config_scrapers` columns of the same names.
 - **Trigger.** `config_scrapers` gets the membership trigger every resource table has. Its selectable fields are the four above, so other updates, e.g. to `spec`, change nothing.

@@ -105,7 +105,7 @@ For `playbook:run`, `target` is optional. A rule without it matches only runs wi
   - A pattern can cover actions that accept different resources. `*` covers both `read` (configs) and `playbook:run` (playbooks), and no single Scope fits both.
   - A pattern grants actions added later. If the `kubernetes-logs` plugin ships a new `exec-shell` operation, `invoke:kubernetes-logs:*` would grant it without anyone reviewing the Role.
 - A plugin action isn't checked against the installed plugins: plugins are installed and upgraded often, and a Role mustn't break when one is. A rule on an operation no plugin declares matches nothing until one does.
-- `create`, `update` and `delete` are only checked on all resources of a type, so their Scope MUST consist of whole-type targets only (`scopes.md`, Section 5.2).
+- `create`, `update` and `delete` MUST pick whole types (`scopes.md`, Section 3.1).
 
 An operation may make more than one check. For example, running a playbook on a config also checks `read` on that config. Section 4.3 lists every check each operation makes; a rule never grants the other checks implicitly.
 
@@ -127,7 +127,7 @@ A connection is read and used separately:
 - `read` MUST NOT return a connection's credentials, in plain text or decrypted from a secret. They're masked wherever a connection is shown.
 - Mission Control MUST check `connection:use` wherever it fills in a connection's credentials, as the subject doing the work (Section 4.4). Looking a connection up by name to record which one is meant, without its credentials, checks nothing.
 - The check is made on the connection whose credentials are filled in, found exactly as it's found to fill them in. That includes every connection a connection's settings name, e.g. an HTTP connection's AWS signing connection, after settings read from a secret or configmap are resolved.
-- A `connection:use` rule's Scope may select connections with any target. It's only checked on the connection being used, never on a listing, so unlike `read` (Section 3.1) it needs no row filtering.
+- A `connection:use` rule's Scope may pick some connections, unlike a `read` rule's (`scopes.md`, Section 3.1): it's only checked on the connection being used, never on a listing.
 
 _Why two actions:_ seeing that a connection exists and acting with its credentials are different risks. With one action, letting someone see the connections a notification can use would let anything bound the same way send with them. _Why testing is a use:_ a test makes an authenticated call to the other system, and its result can show what the masked connection doesn't, e.g. whether the credentials work.
 
@@ -240,9 +240,9 @@ A rule with `action: read` is checked in two places:
 
 Both MUST allow the same resources at every moment (`scopes.md`, Section 7.1): a resource a subject can open appears in their listings, and a resource in their listings can be opened. How Mission Control keeps the two in step is the design's business (`design/materialised-membership.md`).
 
-A `read` rule accepts any Scope whose membership is decided by the resource alone (`scopes.md`, Section 4.3), which every Scope is, with one exception: connections aren't filtered by row, so a `read` rule's Scope MUST select connections with a whole-type target only. The types that only take `name: "*"` (`scopes.md`, Section 5.3) can only be selected whole, so they need no row filtering either.
+A `read` rule accepts some or all of a type wherever its type allows it (`scopes.md`, Section 3.1). For connections, that's all of them only.
 
-Listings are filtered by row-level security, which is always on: there's no setting to turn it off. So a `read` rule whose Scope has a target that isn't a whole-type target (`scopes.md`, Section 5.2) filters listings to what it selects. A rule whose Scope consists of whole-type targets only doesn't need row filters: opening any resource and listing all of them allow the same resources. A binding's constraint can still narrow it, and then its listings are filtered by the constraint's Scope (`rolebindings.md`, Section 3.2).
+Listings are filtered by row-level security, which is always on: there's no setting to turn it off. So a `read` rule whose Scope picks some of a type (`scopes.md`, Section 3.1) filters listings to what it selects. A rule whose Scope consists of whole-type targets only doesn't need row filters: opening any resource and listing all of them allow the same resources. A binding's constraint can still narrow it, and then its listings are filtered by the constraint's Scope (`rolebindings.md`, Section 3.2).
 
 Records follow the resource they belong to (`scopes.md`, Section 3.2): a playbook run is listed and opened exactly when its playbook, and the config or check it ran on, can be read, and its steps exactly when the run can. Lookup views derived from a type, e.g. `config_types` or `config_tags`, which list the distinct values the UI's filters offer, are readable by anyone with a `read` grant on that type, and MUST only show values from rows the subject can read. A database table that's neither a type, a record of one, nor a lookup view derived from one isn't served through the database API.
 

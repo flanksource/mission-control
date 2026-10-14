@@ -49,29 +49,40 @@ spec:
 
 ### 3.1 Resource types
 
-Each entry under `targets` MUST set exactly one of these keys:
+Each entry under `targets` MUST set exactly one of these keys. The key decides which fields the selector may use, and whether it can pick some resources of the type or only all of them:
 
-| Key                   | Selects                                                  |
-| --------------------- | -------------------------------------------------------- |
-| `config`              | Config items                                             |
-| `component`           | Topology components                                      |
-| `check`               | Health checks                                            |
-| `canary`              | Canaries                                                 |
-| `playbook`            | Playbooks                                                |
-| `view`                | Views                                                    |
-| `connection`          | Connections                                              |
-| `application`         | Applications                                             |
-| `notification`        | Notifications                                            |
-| `notificationSilence` | Notification silences                                    |
-| `scraper`             | Config scrapers                                          |
-| `agent`               | Agents                                                   |
-| `person`              | People                                                   |
-| `team`                | Teams                                                    |
-| `scope`               | Scopes                                                   |
-| `role`                | Roles                                                    |
-| `roleBinding`         | RoleBindings                                             |
+| Key                   | Selects               | Fields                                                                      | Some or all                  |
+| --------------------- | --------------------- | --------------------------------------------------------------------------- | ---------------------------- |
+| `config`              | Config items          | `id`, `name`, `namespace`, `agent`, `types`, `tagSelector`, `labelSelector` | Some or all                  |
+| `component`           | Topology components   | `id`, `name`, `namespace`, `agent`, `types`, `labelSelector`                | Some or all                  |
+| `check`               | Health checks         | `id`, `name`, `namespace`, `agent`, `types`, `labelSelector`                | Some or all                  |
+| `canary`              | Canaries              | `id`, `name`, `namespace`, `agent`, `labelSelector`                         | Some or all                  |
+| `playbook`            | Playbooks             | `id`, `name`, `namespace`                                                   | Some or all                  |
+| `connection`          | Connections           | `id`, `name`, `namespace`, `types`                                          | Some or all, except `read`   |
+| `scraper`             | Config scrapers       | `id`, `name`, `namespace`, `agent`                                          | Some or all                  |
+| `view`                | Views                 | `id`, `name`, `namespace`                                                   | No action accepts views yet  |
+| `application`         | Applications          | `name: "*"` only                                                            | All only                     |
+| `notification`        | Notifications         | `name: "*"` only                                                            | All only                     |
+| `notificationSilence` | Notification silences | `name: "*"` only                                                            | All only                     |
+| `agent`               | Agents                | `name: "*"` only                                                            | All only                     |
+| `person`              | People                | `name: "*"` only                                                            | All only                     |
+| `team`                | Teams                 | `name: "*"` only                                                            | All only                     |
+| `scope`               | Scopes                | `name: "*"` only                                                            | All only                     |
+| `role`                | Roles                 | `name: "*"` only                                                            | All only                     |
+| `roleBinding`         | RoleBindings          | `name: "*"` only                                                            | All only                     |
 
-Everything Mission Control protects is one of these types, apart from what the few actions without a resource reach: accounts (`person:manage`), the MCP server (`mcp:use`), properties, the event queue and job history (`roles.md`, Section 2.3). There's no other kind of object a Role can grant, and no global switch: "all of a type" is a whole-type target (Section 5.2).
+"All" is a whole-type target: `name: "*"` and nothing else (Section 5.2). Any other target picks some.
+
+Whatever the type, two kinds of rule need all of it:
+
+- **`create`, `update` and `delete`.** Mission Control checks them once per API route, never on one resource, so their Scope MUST pick whole types.
+- **`read` on connections.** Connections aren't listed through the database API, so there are no row filters that could show only some of them.
+
+These are the only places a whole type is required. Roles (`roles.md`, Sections 2 and 3.1) and RoleBinding constraints (`rolebindings.md`, Section 3.2) refer to this table rather than restate it.
+
+_Why some types are all-only:_ picking some resources of a type needs Scope membership and row filtering for that type, which only the types marked "Some or all" have. For the others, `name: "*"` is the only valid target, and every other value is rejected. Each type can get the fields its resources have, and picking some, when it's needed, without breaking a Scope written today.
+
+Everything Mission Control protects is one of these types, apart from what the few actions without a resource reach: accounts (`person:manage`), the MCP server (`mcp:use`), properties, the event queue and job history (`roles.md`, Section 2.3). There's no other kind of object a Role can grant.
 
 Keys are exact. `playbooks`, `configs` or any other spelling is not a resource type. An entry with two keys, or none, is invalid.
 
@@ -225,27 +236,10 @@ Every form a `name` can take has to mean exactly the same set in both, or a reso
 
 ### 5.3 Fields each type supports
 
-A selector MUST only use fields its type has. Anything else is rejected, never ignored.
-
-| Type         | Supported fields                                                               |
-| ------------ | ------------------------------------------------------------------------------ |
-| `config`     | `id`, `name`, `namespace`, `agent`, `types`, `tagSelector`, `labelSelector`        |
-| `component`  | `id`, `name`, `namespace`, `agent`, `types`, `labelSelector`                       |
-| `check`      | `id`, `name`, `namespace`, `agent`, `types`, `labelSelector`                       |
-| `canary`     | `id`, `name`, `namespace`, `agent`, `labelSelector`                                |
-| `playbook`   | `id`, `name`, `namespace`                                                        |
-| `view`       | `id`, `name`, `namespace`                                                        |
-| `connection` | `id`, `name`, `namespace`, `types`                                               |
-| `scraper`    | `id`, `name`, `namespace`, `agent`                                               |
-| `application`, `notification`, `notificationSilence`, `agent`, `person`, `team`, `scope`, `role`, `roleBinding` | `name`, and only `*` |
-
-Notes:
+A selector MUST only use the fields Section 3.1 lists for its type. Anything else is rejected, never ignored.
 
 - A Config's namespace is its `namespace` tag. `namespace: staging` and `tagSelector: namespace=staging` select the same Configs.
-- Only Configs have tags. Components, checks and canaries have labels.
-- Playbooks have neither tags nor labels.
-- A target of a type whose only field is `name` is a whole-type target or nothing: `name: "*"` is its only valid form, and every other value is rejected. _Why:_ there's no technical reason. It's the simplest first step for types that are new to Scopes: a whole-type grant needs no selector fields, no Scope membership and no row filtering. Each type can get the fields its resources have, and partial grants, when they're needed, without breaking a Scope written today.
-- Scrapers have the selector fields their resources have, since grants on some scrapers, e.g. those of one agent or namespace, are needed from the start. They have no tags or labels.
+- Only Configs have tags. Components, checks and canaries have labels. Playbooks, connections and scrapers have neither.
 
 ### 5.4 Agents
 
@@ -260,7 +254,7 @@ A Scope is valid when:
 - It has at least one target, and at most ten.
 - Every target sets exactly one resource type.
 - Every selector has at least one condition.
-- Every selector only uses fields its type supports (Section 5.3), with valid values (Sections 5.1, 5.2).
+- Every selector only uses fields its type supports (Section 3.1), with valid values (Sections 5.1, 5.2).
 - Every `agent` resolves to an existing agent.
 
 Examples of invalid Scopes:
