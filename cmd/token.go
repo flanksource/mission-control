@@ -11,11 +11,13 @@ import (
 
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/flanksource/incident-commander/auth"
@@ -47,18 +49,25 @@ var Token = &cobra.Command{
 			return err
 		}
 
-		result, err := db.CreateAccessTokenForPerson(ctx, &user, tokenName, tokenExpiry, false, roles)
+		var result db.CreateAccessTokenForPersonResult
+		err = ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
+			if result, err = db.CreateAccessTokenForPerson(ctx, &user, tokenName, tokenExpiry, false, roles); err != nil {
+				return fmt.Errorf("failed to create a new access token: %w", err)
+			}
+
+			grouping := gormadapter.CasbinRule{Ptype: "g", V0: result.Person.ID.String(), V1: user.ID.String()}
+			if err := ctx.DB().Create(&grouping).Error; err != nil {
+				return fmt.Errorf("failed to group the access token with its owner: %w", err)
+			}
+			return nil
+		})
 		if err != nil {
-			return fmt.Errorf("failed to create a new access token: %w", err)
+			return err
 		}
 
-		// The server groups the token's person under its owner on its next policy reload
-		grouping := gormadapter.CasbinRule{Ptype: "g", V0: result.Person.ID.String(), V1: user.ID.String()}
-		if err := ctx.DB().Create(&grouping).Error; err != nil {
-			return fmt.Errorf("failed to group the access token with its owner: %w", err)
-		}
-
-		fmt.Println(result.Token)
+		// The token is this command's output. Sensitive's String() is redacted, so print its plain text.
+		fmt.Fprintln(cmd.OutOrStdout(), result.Token.PlainText())
+		fmt.Fprintln(cmd.ErrOrStderr(), "The token takes effect once the server reloads its policy, within 5 minutes.")
 		return nil
 	},
 }
