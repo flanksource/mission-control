@@ -20,6 +20,10 @@ type InvocationTokenClaims struct {
 	User   string    `json:"user,omitempty"`
 	Depth  int       `json:"depth,omitempty"`
 	Roles  []string  `json:"roles,omitempty"`
+
+	// AccessToken is the access token the invocation was made with. Its Roles limit what the invocation may do as
+	// the subject, the token's owner.
+	AccessToken *uuid.UUID `json:"accessToken,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -31,7 +35,7 @@ func (c *InvocationTokenClaims) VerifyExpiresAt(cmp int64, req bool) bool {
 }
 
 // MintInvocationToken creates a short-lived token for invoking a specific plugin.
-func MintInvocationToken(subject, user string, pluginID uuid.UUID, depth int, roles ...string) (string, error) {
+func MintInvocationToken(subject, user string, accessToken *uuid.UUID, pluginID uuid.UUID, depth int, roles ...string) (string, error) {
 	if subject == "" {
 		return "", fmt.Errorf("plugin invocation subject is required")
 	}
@@ -45,6 +49,8 @@ func MintInvocationToken(subject, user string, pluginID uuid.UUID, depth int, ro
 		User:   user,
 		Depth:  depth,
 		Roles:  append([]string(nil), roles...),
+
+		AccessToken: accessToken,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    signing.Issuer,
 			Subject:   subject,

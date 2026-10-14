@@ -218,12 +218,13 @@ func invokeProxiedOperation(c echo.Context, ctx dutyContext.Context, entry *plug
 
 	var subject, userID string
 	var roles []string
+	accessToken := rbac.RequestAccessTokenID(ctx)
 	if token := c.Request().Header.Get(api.InvocationTokenHTTPHeader); token != "" {
 		claims, err := machinery.AuthorizeInvocationToken(ctx, token, entry, op, configID)
 		if err != nil {
 			return dutyAPI.WriteError(c, err)
 		}
-		subject, userID, roles = claims.Subject, claims.User, claims.Roles
+		subject, userID, roles, accessToken = claims.Subject, claims.User, claims.Roles, claims.AccessToken
 	} else {
 		user := ctx.User()
 		if user == nil {
@@ -237,7 +238,7 @@ func invokeProxiedOperation(c echo.Context, ctx dutyContext.Context, entry *plug
 			return dutyAPI.WriteError(c, err)
 		}
 	}
-	invocationToken, err := plugin.MintInvocationToken(subject, userID, entry.ID, 0, roles...)
+	invocationToken, err := plugin.MintInvocationToken(subject, userID, accessToken, entry.ID, 0, roles...)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 	}

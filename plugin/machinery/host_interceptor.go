@@ -137,7 +137,7 @@ func (s *Service) contextWithInvocation(ctx context.Context) (context.Context, e
 		return nil, status.Errorf(codes.Unauthenticated, "plugin invocation user %s: %v", claims.User, err)
 	}
 
-	return baseCtx.WithUser(&person), nil
+	return WithInvocationAccessToken(baseCtx.WithUser(&person), claims)
 }
 
 func requiresInvocation(method string) bool {
