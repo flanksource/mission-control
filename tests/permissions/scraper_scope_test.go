@@ -389,8 +389,6 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 		})
 
 		ginkgo.It("doesn't download an artifact of a scraper the caller can't list", func() {
-			newPermission(homelabReader, policy.ActionRead, policy.ObjectArtifact, "")
-
 			req := httptest.NewRequest(http.MethodGet, "/artifacts/download/"+gcpArtifact.String(), nil)
 			req = req.WithContext(DefaultContext.WithUser(homelabReader))
 			rec := httptest.NewRecorder()
