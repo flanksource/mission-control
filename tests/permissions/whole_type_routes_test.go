@@ -188,6 +188,7 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 		{v1.ResourcePerson, http.MethodGet, "/db/person_analytics", false, read(policy.ObjectPeople)},
 
 		{v1.ResourceTeam, http.MethodGet, "/db/teams", false, read(policy.ObjectDatabasePublic)},
+		{v1.ResourceTeam, http.MethodGet, "/db/teams_with_status", false, read(policy.ObjectDatabasePublic)},
 		{v1.ResourceTeam, http.MethodGet, "/db/team_members", false, read(policy.ObjectDatabasePublic)},
 		{v1.ResourceTeam, http.MethodDelete, "/db/teams?id=eq." + uuid.NewString(), true, grant(policy.ObjectDatabasePublic, policy.ActionDelete)},
 		{v1.ResourceTeam, http.MethodPost, "/db/team_members", true, grant(policy.ObjectDatabasePublic, policy.ActionCreate)},
@@ -376,5 +377,50 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 		for _, method := range []string{http.MethodPost, http.MethodPatch, http.MethodDelete} {
 			Expect(serveAs(e, writers[v1.ResourceScope], method, "/db/scope_targets")).To(Equal(http.StatusMethodNotAllowed), method)
 		}
+	})
+})
+
+var _ = Describe("Records and lookup views of a type through /db", Ordered, func() {
+	const namespace = "records-of-types"
+
+	var (
+		e                           *echo.Echo
+		admin, peopleReader, nobody *models.Person
+	)
+
+	BeforeAll(func() {
+		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
+		admin = newAdmin("Records Admin", "records-admin@test.com")
+		peopleReader = setup.CreateUserWithRole(DefaultContext, "Records People Reader", "records-people-reader@test.com")
+		nobody = setup.CreateUserWithRole(DefaultContext, "Records Nobody", "records-nobody@test.com")
+		bindWholeType(namespace, "read-people", v1.ResourcePerson, boundPeople(peopleReader), policy.ActionRead)
+		Expect(rbac.ReloadPolicy()).To(Succeed())
+		e = wholeTypeRoutes()
+	})
+
+	AfterAll(func() {
+		for _, p := range []*models.Person{admin, peopleReader, nobody} {
+			Expect(DefaultContext.DB().Delete(p).Error).To(Succeed())
+		}
+		deleteNamespace(namespace)
+	})
+
+	It("lets the shipped admin read every one, but those of views", func() {
+		for table, types := range mcRBAC.TablesOfTypes() {
+			expected := http.StatusOK
+			if lo.Contains(types, policy.ResourceView) {
+				expected = http.StatusForbidden
+			}
+			Expect(serveAs(e, admin, http.MethodGet, "/db/"+table)).To(Equal(expected), table)
+		}
+	})
+
+	It("lets a subject read those of the types it may read entirely, and no others", func() {
+		Expect(serveAs(e, peopleReader, http.MethodGet, "/db/identities")).To(Equal(http.StatusOK))
+		Expect(serveAs(e, peopleReader, http.MethodGet, "/db/people_roles")).To(Equal(http.StatusOK))
+		Expect(serveAs(e, peopleReader, http.MethodGet, "/db/team_components")).To(Equal(http.StatusForbidden), "team_components takes read on teams and components too")
+		Expect(serveAs(e, peopleReader, http.MethodGet, "/db/notification_send_history")).To(Equal(http.StatusForbidden))
+		Expect(serveAs(e, peopleReader, http.MethodPatch, "/db/identities")).To(Equal(http.StatusForbidden))
+		Expect(serveAs(e, nobody, http.MethodGet, "/db/identities")).To(Equal(http.StatusForbidden))
 	})
 })

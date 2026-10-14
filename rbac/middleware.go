@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
@@ -108,7 +109,7 @@ func DbMiddleware() MiddlewareFunc {
 				allowed = CheckContext(ctx, object, action)
 			} else {
 				allowed = CheckContext(ctx, object, action) || canListFilteredRows(ctx, resource, action) || readsConnections(ctx, resource, action) ||
-					scraperGrants(ctx, resource, object, action)
+					scraperGrants(ctx, resource, object, action) || readsWholeTypes(ctx, table, action)
 			}
 
 			if !allowed {
@@ -142,6 +143,20 @@ func readsConnections(ctx context.Context, table, action string) bool {
 	return table == "connection_details" && action == policy.ActionRead && CheckContext(ctx, policy.ObjectConnection, policy.ActionRead)
 }
 
+// readsWholeTypes reports whether the request reads records or a lookup view of types the subject may read entirely.
+// They're readable with read on their types (specs/authorization/roles.md, Section 3), but duty's /db map files many
+// under legacy objects, e.g. database.public, that no Role grants. A table of several types takes read on each of them,
+// so it's never wider than a grant on one type. Types without an object of their own, i.e. views, are never read this way.
+func readsWholeTypes(ctx context.Context, table dbTable, action string) bool {
+	if action != policy.ActionRead || (table.kind != dbRecord && table.kind != dbLookup) {
+		return false
+	}
+	return lo.EveryBy(table.of, func(resourceType string) bool {
+		object := adapter.ObjectForType(resourceType)
+		return object != "" && CheckContext(ctx, object, policy.ActionRead)
+	})
+}
+
 // readOnlyObjects are the objects only read through /db, with the action each read is checked with.
 var readOnlyObjects = map[string]string{
 	policy.ObjectJobs:   policy.ActionJobRead,
@@ -156,7 +171,9 @@ var typeTables = map[string]string{
 	"agents":                policy.ObjectAgent,
 	"agents_summary":        policy.ObjectAgent,
 	"teams":                 adapter.ObjectTeams,
+	"teams_with_status":     adapter.ObjectTeams,
 	"team_members":          adapter.ObjectTeams,
+	"connections_list":      policy.ObjectConnection,
 	"scopes":                adapter.ObjectScopes,
 	"scope_targets":         adapter.ObjectScopes,
 	"roles":                 adapter.ObjectRoles,
