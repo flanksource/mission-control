@@ -383,6 +383,63 @@ paths:
         "500":
           $ref: "#/components/responses/InternalError"
 
+  /agent/{id}/tokens:
+    get:
+      tags: [Agents]
+      summary: List agent tokens
+      description: List an agent's access tokens, without their values. Requires read on agent.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: The agent's tokens
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/HTTPSuccess"
+                  - type: object
+                    properties:
+                      payload:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/AccessToken"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /agent/{id}/tokens/{tokenID}:
+    delete:
+      tags: [Agents]
+      summary: Delete agent token
+      description: Delete one of an agent's access tokens. It stops working at once. Requires update on agent, and can't be done with an access token.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: tokenID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          $ref: "#/components/responses/HTTPSuccess"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # Playbook endpoints
   /playbook/list:
     get:

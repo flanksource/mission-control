@@ -80,7 +80,7 @@ An access token is a credential, not a subject. A request made with a person's t
 
 A person may create, change and delete their own tokens, without any grant, but not through a token. No person can create, change or delete a token for another person, and no action grants it.
 
-An agent's token is different: it's created with the agent, by a subject with `create` on `agent`, and handed to them (Section 5). Rotating or revoking an agent's token takes `update` on `agent`. An agent's token lists no Roles.
+An agent's token is different: it's created with the agent, by a subject with `create` on `agent`, and handed to them (Section 5). Listing an agent's tokens takes `read` on `agent`; it shows when each was created and expires, never the token. Rotating or revoking an agent's token takes `update` on `agent`. An agent's token lists no Roles.
 
 _Why no grant:_ a token adds no access its owner doesn't already have, so there's nothing for a Role to decide.
 
