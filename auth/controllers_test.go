@@ -247,21 +247,21 @@ var _ = Describe("Managing access tokens", Ordered, func() {
 		Expect(err).ToNot(HaveOccurred())
 	})
 
-	It("lists a person's own tokens without a grant, and agents' tokens to those who may update agents", func() {
+	It("lists only a person's own tokens, even to those who may update agents", func() {
 		Expect(listed(owner)).To(Equal([]uuid.UUID{ownToken.ID}))
 		Expect(listed(other)).To(BeEmpty())
-		Expect(listed(agentAdmin)).To(ContainElement(agentToken.ID))
-		Expect(listed(agentAdmin)).ToNot(ContainElement(ownToken.ID))
+		Expect(listed(agentAdmin)).To(BeEmpty())
 	})
 
-	It("lets only the creator delete a person's token", func() {
+	It("lets only the owner delete a person's token", func() {
 		Expect(as(other, http.MethodDelete, "/auth/token/"+ownToken.ID.String()).Code).To(Equal(http.StatusForbidden))
 		Expect(as(agentAdmin, http.MethodDelete, "/auth/token/"+ownToken.ID.String()).Code).To(Equal(http.StatusForbidden))
 		Expect(as(owner, http.MethodDelete, "/auth/token/"+ownToken.ID.String()).Code).To(Equal(http.StatusOK))
 	})
 
-	It("revokes an agent's token with update on agent", func() {
-		Expect(as(other, http.MethodDelete, "/auth/token/"+agentToken.ID.String()).Code).To(Equal(http.StatusForbidden))
-		Expect(as(agentAdmin, http.MethodDelete, "/auth/token/"+agentToken.ID.String()).Code).To(Equal(http.StatusOK))
+	It("doesn't delete an agent's token, even for those who may update agents", func() {
+		Expect(as(agentAdmin, http.MethodDelete, "/auth/token/"+agentToken.ID.String()).Code).To(Equal(http.StatusForbidden))
+		_, err := db.GetAccessToken(DefaultContext, agentToken.ID.String())
+		Expect(err).ToNot(HaveOccurred())
 	})
 })
