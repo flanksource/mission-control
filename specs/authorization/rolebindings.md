@@ -30,7 +30,7 @@ spec:
 
 A RoleBinding MAY have no namespace through the API/UI; Kubernetes RoleBindings retain their Kubernetes namespace. Bare Role and constraint Scope references resolve in the binding's namespace, including no namespace; `global:<name>` explicitly selects a namespace-less object. The Role's own Scope references MUST resolve from the Role, not the binding (`overview.md`, "Namespaces"). Subjects can match resources in any namespace (Section 2.5).
 
-_Why:_ a binding can grant a shared Role while narrowing it with local Scopes, without changing what the Role itself means. A namespace-less binding needs no separate kind: a binding's namespace does not limit the access it grants.
+_Why:_ a binding can grant a shared Role while narrowing it with local Scopes, without changing what the Role itself means. A binding's namespace does not limit the access it grants.
 
 ## 2. Subjects
 

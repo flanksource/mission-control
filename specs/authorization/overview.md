@@ -75,11 +75,11 @@ The `platform` team can read staging configs, and run monitoring playbooks on th
 
 ## Namespaces
 
-Scopes, Roles and RoleBindings MAY have no namespace. Through Mission Control's API and UI, an omitted or empty `metadata.namespace` MUST mean namespace-less, not `default` or the namespace Mission Control is installed in. Objects created through Kubernetes MUST retain their Kubernetes namespace; `kubectl apply` fills in the current namespace when a manifest leaves it out. These remain namespaced CRDs: there are no new `ClusterRole`, `GlobalRole`, `ClusterScope` or binding kinds.
+Scopes, Roles and RoleBindings MAY have no namespace. Through Mission Control's API and UI, an omitted or empty `metadata.namespace` MUST mean namespace-less, not `default` or the namespace Mission Control is installed in. Objects created through Kubernetes MUST retain their Kubernetes namespace; `kubectl apply` fills in the current namespace when a manifest leaves it out.
 
 _Why:_ some access definitions belong to the whole installation, not to one team's namespace: the shipped `admin` Role, an organisation's `auditor` Role, or a Scope selecting production configs. Bindings in `payments` and `orders` should be able to use the same reviewed definition, each with its own subjects and constraints. If references can only name objects in their own namespace, operators must copy those definitions into every namespace or move the bindings and their constraint Scopes into a shared namespace. Copies can drift and require every policy change to be repeated; moving everything defeats keeping each team's bindings alongside its other configuration. Namespace-less definitions let teams share policy without either compromise.
 
-Roles, Scopes and bindings created through the UI or API also need no Kubernetes namespace merely to exist. A binding granting the shared `auditor` Role to the security team has no natural namespace: its subjects and access aren't limited by one. Requiring a namespace adds a placement decision that changes which definitions it can reference, not what access it grants. Keeping these objects namespace-less in Mission Control also means using shipped Roles needs neither a dedicated Kubernetes namespace nor cluster-scoped custom resources, so an operator restricted to one namespace can still bind them.
+Roles, Scopes and bindings created through the UI or API also need no Kubernetes namespace merely to exist. A binding granting the shared `auditor` Role to the security team has no natural namespace: its subjects and access aren't limited by one. Requiring a namespace adds a placement decision that changes which definitions it can reference, not what access it grants. An operator restricted to one Kubernetes namespace can reference shipped Roles from bindings in that namespace.
 
 ### Name uniqueness
 
@@ -96,7 +96,7 @@ A RoleBinding's `role`, a Role rule's `resource.scopeRef` and `target.scopeRef`,
 | `name` | The object named `name` in the referencing object's namespace | The namespace-less object named `name` |
 | `global:name` | The namespace-less object named `name` | The namespace-less object named `name` |
 
-`global:` is a reference qualifier, not part of the object's name or a resource kind. It applies equally to shipped and user-created objects. References MUST contain a valid object name, optionally preceded by exactly `global:`; an empty name, an unknown prefix or a namespace-qualified path such as `platform/auditor` MUST be rejected.
+`global:` is a reference qualifier, not part of the object's name. It applies equally to shipped and user-created objects. References MUST contain a valid object name, optionally preceded by exactly `global:`; an empty name, an unknown prefix or a namespace-qualified path such as `platform/auditor` MUST be rejected.
 
 _Why:_ the qualifier distinguishes two same-named objects without changing string references into structured objects. A colon cannot occur in a Kubernetes object name, so the two forms are unambiguous. Bare names retain one rule everywhere: the referencing object's own namespace, including no namespace.
 
