@@ -112,7 +112,7 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 }
 
 func jwtTokenCacheKey(ctx context.Context, user *models.Person, sessionID, rlsFingerprint string) string {
-	key := sessionID + user.ID.String() + rlsFingerprint
+	key := sessionID + user.ID.String() + rlsFingerprint + icrbac.AccessTokenCacheKey(ctx)
 	if subject := ctx.Subject(); subject != user.ID.String() {
 		key += subject
 	}
@@ -248,7 +248,35 @@ func DeleteTokensWithoutRoles(ctx context.Context) error {
 	return errors.Join(errs...)
 }
 
-// DeleteAccessToken deletes an access token and soft-deletes the associated person.
+// MigrateLegacyTokenPeople moves the access tokens created with a person of their own to their owners, and removes
+// those people's rules from the permission engine, logging each token. A token without an owner is deleted.
+func MigrateLegacyTokenPeople(ctx context.Context) error {
+	migrated, err := db.MigrateLegacyTokenPeople(ctx)
+	for _, m := range migrated {
+		person := m.Person.String()
+		if _, err := rbac.Enforcer().DeleteRolesForUser(person); err != nil {
+			ctx.Errorf("failed to delete the roles of token person %s: %v", person, err)
+		}
+		if _, err := rbac.Enforcer().DeletePermissionsForUser(person); err != nil {
+			ctx.Errorf("failed to delete the permissions of token person %s: %v", person, err)
+		}
+
+		if m.Deleted {
+			deletedTokensCache.Set(m.Token.ID.String(), true, cache.DefaultExpiration)
+			ctx.Logger.Infof("deleted access token %q (%s) of token person %s: it names no owner", m.Token.Name, m.Token.ID, person)
+		} else if m.Renamed != "" {
+			ctx.Logger.Infof("moved access token %q (%s) from token person %s to its owner %s as %q: the owner has a token of its name", m.Token.Name, m.Token.ID, person, m.Token.CreatedBy, m.Renamed)
+		} else {
+			ctx.Logger.Infof("moved access token %q (%s) from token person %s to its owner %s", m.Token.Name, m.Token.ID, person, m.Token.CreatedBy)
+		}
+	}
+	if len(migrated) > 0 {
+		FlushTokenCache()
+	}
+	return err
+}
+
+// DeleteAccessToken deletes an access token, and drops what's cached for requests made with it.
 // Uses deletedTokensCache blacklist for immediate invalidation since direct cache
 // eviction isn't possible (cache key vs token ID mismatch).
 func DeleteAccessToken(ctx context.Context, tokenID string) error {
@@ -260,25 +288,11 @@ func DeleteAccessToken(ctx context.Context, tokenID string) error {
 	// Add to blacklist immediately to prevent any further use
 	deletedTokensCache.Set(tokenID, true, cache.DefaultExpiration)
 
-	tokenPersonID := token.PersonID.String()
-	personType, err := db.GetPersonType(ctx, tokenPersonID)
-	if err != nil {
-		return ctx.Oops().Wrapf(err, "failed to get person type for %s", tokenPersonID)
-	}
-
-	if err := db.DeleteAccessToken(ctx, tokenID, tokenPersonID); err != nil {
+	if err := db.DeleteAccessToken(ctx, tokenID); err != nil {
 		return ctx.Oops().Wrapf(err, "failed to delete access token %s", tokenID)
 	}
 
-	if personType == db.PersonTypeAccessToken {
-		if _, err := rbac.Enforcer().DeleteRolesForUser(tokenPersonID); err != nil {
-			ctx.Errorf("failed to delete roles for token person %s: %v", tokenPersonID, err)
-		}
-
-		if _, err := rbac.Enforcer().DeletePermissionsForUser(tokenPersonID); err != nil {
-			ctx.Errorf("failed to delete permissions for token person %s: %v", tokenPersonID, err)
-		}
-	}
-
+	invalidateRLSCacheForToken(token.ID)
+	icrbac.ForgetAccessToken(token.ID)
 	return nil
 }

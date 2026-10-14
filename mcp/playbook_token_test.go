@@ -2,7 +2,6 @@ package mcp
 
 import (
 	"github.com/flanksource/duty/models"
-	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/google/uuid"
@@ -19,11 +18,15 @@ import (
 var _ = ginkgo.Describe("Running a playbook through MCP with an access token", ginkgo.Ordered, func() {
 	namespace := "mcp-token-" + uuid.NewString()[:8]
 	toolName := "mcp-token-run-" + uuid.NewString()[:8]
-	var owner, tokenPerson *models.Person
+	var owner *models.Person
+	var token *models.AccessToken
 
-	run := func(subject *models.Person) *mcp.CallToolResult {
+	run := func(withToken bool) *mcp.CallToolResult {
 		ginkgo.GinkgoHelper()
-		ctx := DefaultContext.WithUser(subject).WithSubject(subject.ID.String())
+		ctx := DefaultContext.WithUser(owner)
+		if withToken {
+			ctx = icrbac.WithAccessToken(ctx, token)
+		}
 		result, err := playbookRunHandler(ctx, mcp.CallToolRequest{Params: mcp.CallToolParams{Name: toolName, Arguments: map[string]any{}}})
 		Expect(err).ToNot(HaveOccurred())
 		return result
@@ -43,11 +46,8 @@ var _ = ginkgo.Describe("Running a playbook through MCP with an access token", g
 		Expect(rbactest.BindWholeType(DefaultContext, namespace, "mcp-only", []string{"nobody@test.com"}, []string{"playbook"},
 			[]string{policy.ActionRead, policy.ActionMCPRun})).To(Succeed())
 
-		result, err := db.CreateAccessTokenForPerson(DefaultContext, owner, "mcp-only", 0, false,
+		_, token, err = db.CreateAccessTokenForPerson(DefaultContext, owner, "mcp-only", 0, false,
 			models.AccessTokenRoles{{Namespace: namespace, Name: "mcp-only"}})
-		Expect(err).ToNot(HaveOccurred())
-		tokenPerson = result.Person
-		_, err = dutyRBAC.Enforcer().AddGroupingPolicy(tokenPerson.ID.String(), owner.ID.String())
 		Expect(err).ToNot(HaveOccurred())
 
 		playbookToolNameToID.Store(toolName, dummy.EchoConfig.ID.String())
@@ -55,18 +55,18 @@ var _ = ginkgo.Describe("Running a playbook through MCP with an access token", g
 
 	ginkgo.AfterAll(func() {
 		playbookToolNameToID.Delete(toolName)
-		DefaultContext.DB().Where("playbook_id = ?", dummy.EchoConfig.ID).Where("created_by IN ?", []uuid.UUID{owner.ID, tokenPerson.ID}).
+		DefaultContext.DB().Where("playbook_id = ?", dummy.EchoConfig.ID).Where("created_by = ?", owner.ID).
 			Delete(&models.PlaybookRun{})
 		Expect(rbactest.DeleteNamespace(DefaultContext, namespace)).To(Succeed())
 	})
 
 	ginkgo.It("starts the run for the owner", func() {
-		result := run(owner)
+		result := run(false)
 		Expect(result.IsError).To(BeFalse(), "%v", result.Content)
 	})
 
 	ginkgo.It("limits the run's own checks by the token's Roles", func() {
-		result := run(tokenPerson)
+		result := run(true)
 		Expect(result.IsError).To(BeTrue())
 		checkResultInMCPResponse(result.Content, []string{"cannot run playbook"})
 	})

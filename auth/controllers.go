@@ -11,7 +11,6 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
@@ -190,16 +189,12 @@ func CreateToken(c echo.Context) error {
 		}
 	}
 
-	tokenResult, err := db.CreateAccessTokenForPerson(ctx, ctx.User(), reqData.Name, time.Duration(expiry), reqData.AutoRenew, reqData.Roles)
+	token, _, err := db.CreateAccessTokenForPerson(ctx, user, reqData.Name, time.Duration(expiry), reqData.AutoRenew, reqData.Roles)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error creating access token"))
 	}
 
-	if _, err := rbac.Enforcer().AddGroupingPolicy(tokenResult.Person.ID.String(), user.ID.String()); err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error grouping token with user"))
-	}
-
-	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success", Payload: map[string]string{"token": tokenResult.Token.PlainText()}})
+	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success", Payload: map[string]string{"token": token.PlainText()}})
 }
 
 func ListTokens(c echo.Context) error {

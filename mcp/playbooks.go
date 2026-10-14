@@ -57,11 +57,6 @@ func addPlaybooksAsTool(goctx gocontext.Context, srv *server.MCPServer, session 
 		return ctx.Oops().Wrapf(err, "failed to get playbook tools for session %s", sessionID)
 	}
 
-	owner, err := resolveOwner(ctx)
-	if err != nil {
-		return ctx.Oops().Wrap(err)
-	}
-
 	// Read every playbook's Scope membership once, rather than once per check
 	checkCtx, err := membership.ForOperation(ctx, lo.Map(playbooks, func(pb models.Playbook, _ int) membership.Ref {
 		return membership.Ref{Type: policy.ResourcePlaybook, ID: pb.ID}
@@ -72,7 +67,7 @@ func addPlaybooksAsTool(goctx gocontext.Context, srv *server.MCPServer, session 
 
 	playbooks = lo.Filter(playbooks, func(pb models.Playbook, _ int) bool {
 		attr := &models.ABACAttribute{Playbook: pb}
-		return icrbac.HasPermission(checkCtx, owner, attr, policy.ActionMCPRun) && icrbac.TokenAllows(checkCtx, ctx.Subject(), attr, policy.ActionMCPRun)
+		return icrbac.HasPermission(checkCtx, ctx.Subject(), attr, policy.ActionMCPRun)
 	})
 
 	tools, err := getPlaybooksAsTools(playbooks)
@@ -180,13 +175,8 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	owner, err := resolveOwner(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
 	attr := &models.ABACAttribute{Playbook: *pb}
-	if !icrbac.HasPermission(ctx, owner, attr, policy.ActionMCPRun) || !icrbac.TokenAllows(ctx, ctx.Subject(), attr, policy.ActionMCPRun) {
+	if !icrbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionMCPRun) {
 		return mcp.NewToolResultError(fmt.Sprintf("forbidden: mcp:run not permitted on playbook %s", pb.NamespacedName())), nil
 	}
 

@@ -280,6 +280,11 @@ var Serve = &cobra.Command{
 			logger.Fatalf("failed to sync shipped roles: %v", err)
 		}
 
+		// Before deleting tokens without Roles, so a token of a person of its own is deleted with its owner's
+		if err := auth.MigrateLegacyTokenPeople(ctx); err != nil {
+			logger.Errorf("failed to move access tokens to their owners: %v", err)
+		}
+
 		// A person's token without Roles can't be used anyway, so a failure doesn't stop startup
 		if err := auth.DeleteTokensWithoutRoles(ctx); err != nil {
 			logger.Errorf("failed to delete access tokens without roles: %v", err)

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
@@ -41,9 +42,14 @@ type objectAction struct {
 // serveAs serves a request made by the person, and returns its status.
 func serveAs(e *echo.Echo, person *models.Person, method, path string) int {
 	GinkgoHelper()
+	return serveWith(e, DefaultContext.WithUser(person), method, path)
+}
+
+func serveWith(e *echo.Echo, ctx context.Context, method, path string) int {
+	GinkgoHelper()
 	req := httptest.NewRequest(method, path, nil)
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	req = req.WithContext(DefaultContext.WithUser(person))
+	req = req.WithContext(ctx)
 	rec := httptest.NewRecorder()
 	e.ServeHTTP(rec, req)
 	return rec.Code
@@ -362,13 +368,11 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 
 		var token models.AccessToken
 		Expect(DefaultContext.DB().Where("name = ? AND created_by = ?", "notifications-only", owner.ID).First(&token).Error).To(Succeed())
-		var tokenPerson models.Person
-		Expect(DefaultContext.DB().Where("id = ?", token.PersonID).First(&tokenPerson).Error).To(Succeed())
-		persons = append(persons, &tokenPerson)
 		DeferCleanup(func() { Expect(DefaultContext.DB().Delete(&token).Error).To(Succeed()) })
 
-		Expect(authorized(serveAs(e, &tokenPerson, http.MethodPatch, "/db/notifications"))).To(BeTrue())
-		Expect(serveAs(e, &tokenPerson, http.MethodPost, "/notification/silence")).To(Equal(http.StatusForbidden),
+		tokenCtx := mcRBAC.WithAccessToken(DefaultContext.WithUser(owner), &token)
+		Expect(authorized(serveWith(e, tokenCtx, http.MethodPatch, "/db/notifications"))).To(BeTrue())
+		Expect(serveWith(e, tokenCtx, http.MethodPost, "/notification/silence")).To(Equal(http.StatusForbidden),
 			"a Role granting notifications doesn't grant their silences")
 	})
 

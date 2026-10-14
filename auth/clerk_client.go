@@ -152,10 +152,6 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unable to authenticate user")
 		}
 
-		if err := InjectToken(ctx, c, user, sessID); err != nil {
-			return err
-		}
-
 		ctx.GetSpan().SetAttributes(
 			attribute.String("clerk-user-id", user.ExternalID),
 			attribute.String("clerk-org-id", h.orgID),
@@ -168,7 +164,12 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusInternalServerError, "Error fetching agent details from database")
 		}
 		if authResult.AccessToken != nil {
-			ctx = withAccessToken(ctx)
+			ctx = withAccessToken(ctx, authResult.AccessToken)
+		}
+
+		// After the token is on the context: its Roles limit the row filters of the PostgREST JWT
+		if err := InjectToken(ctx, c, user, sessID); err != nil {
+			return err
 		}
 		c.SetRequest(c.Request().WithContext(ctx))
 		return next(c)

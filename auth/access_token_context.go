@@ -2,20 +2,21 @@ package auth
 
 import (
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
+
+	"github.com/flanksource/incident-commander/rbac"
 )
 
-type accessTokenKey struct{}
-
-// accessTokenTrait marks a Kratos session built from an access token.
+// accessTokenTrait holds the access token a Kratos session was built from.
 const accessTokenTrait = "access_token"
 
-// withAccessToken marks the request as made with an access token.
-func withAccessToken(ctx context.Context) context.Context {
-	return ctx.WithValue(accessTokenKey{}, true)
+// withAccessToken marks the request as made with the access token, whose Roles then limit what the request's user,
+// the token's owner, may do (rbac.TokenLimit).
+func withAccessToken(ctx context.Context, token *models.AccessToken) context.Context {
+	return rbac.WithAccessToken(ctx, token)
 }
 
 // madeWithAccessToken reports whether the request was authenticated by an access token.
 func madeWithAccessToken(ctx context.Context) bool {
-	v, _ := ctx.Value(accessTokenKey{}).(bool)
-	return v
+	return rbac.MadeWithAccessToken(ctx)
 }

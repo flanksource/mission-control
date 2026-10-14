@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	incAPI "github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth/accesstoken"
 	"github.com/flanksource/incident-commander/auth/oidc"
@@ -129,7 +130,7 @@ func (k *kratosMiddleware) basicAuthLogin(ctx context.Context, username, passwor
 				"first": accessToken.Name,
 				"last":  "",
 			},
-			accessTokenTrait: true,
+			accessTokenTrait: accessToken,
 		}
 
 		s := &client.Session{
@@ -204,8 +205,10 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusInternalServerError, "Error fetching user details from database")
 		}
 		ctx = ctx.WithUser(&person)
-		if traits, ok := session.Identity.Traits.(map[string]any); ok && traits[accessTokenTrait] == true {
-			ctx = withAccessToken(ctx)
+		if traits, ok := session.Identity.Traits.(map[string]any); ok {
+			if accessToken, ok := traits[accessTokenTrait].(*models.AccessToken); ok {
+				ctx = withAccessToken(ctx, accessToken)
+			}
 		}
 
 		ctx, err = withPersonAgent(ctx, person.ID)

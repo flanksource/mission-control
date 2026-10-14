@@ -1,6 +1,7 @@
 package permissions_test
 
 import (
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
@@ -24,7 +25,7 @@ var _ = ginkgo.Describe("RoleBinding selecting every person", ginkgo.Ordered, fu
 
 	var (
 		human, federated, agent, lateHuman *models.Person
-		limitedToken, unlimitedToken       *models.Person
+		limitedToken, unlimitedToken       *models.AccessToken
 		tagged, other                      models.ConfigItem
 		everyoneID                         = uuid.NewString()
 	)
@@ -53,20 +54,26 @@ var _ = ginkgo.Describe("RoleBinding selecting every person", ginkgo.Ordered, fu
 		Expect(db.PersistRoleFromCRD(DefaultContext, role)).To(Succeed())
 	}
 
-	createToken := func(owner *models.Person, name string, roles ...string) *models.Person {
+	createToken := func(owner *models.Person, name string, roles ...string) *models.AccessToken {
 		ginkgo.GinkgoHelper()
 		tokenRoles := lo.Map(roles, func(role string, _ int) models.AccessTokenRole {
 			return models.AccessTokenRole{Namespace: namespace, Name: role}
 		})
-		result, err := db.CreateAccessTokenForPerson(DefaultContext, owner, name, 0, false, tokenRoles)
+		_, token, err := db.CreateAccessTokenForPerson(DefaultContext, owner, name, 0, false, tokenRoles)
 		Expect(err).ToNot(HaveOccurred())
-		_, err = rbac.Enforcer().AddGroupingPolicy(result.Person.ID.String(), owner.ID.String())
-		Expect(err).ToNot(HaveOccurred())
-		return result.Person
+		return token
+	}
+
+	canReadWith := func(ctx context.Context, subject *models.Person, config models.ConfigItem) bool {
+		return mcRBAC.HasPermission(ctx, subject.ID.String(), &models.ABACAttribute{Config: config}, policy.ActionRead)
 	}
 
 	canRead := func(subject *models.Person, config models.ConfigItem) bool {
-		return mcRBAC.HasPermission(DefaultContext, subject.ID.String(), &models.ABACAttribute{Config: config}, policy.ActionRead)
+		return canReadWith(DefaultContext, subject, config)
+	}
+
+	withToken := func(token *models.AccessToken) context.Context {
+		return mcRBAC.WithAccessToken(DefaultContext.WithUser(human), token)
 	}
 
 	assignedDirectly := func(subject *models.Person) bool {
@@ -108,9 +115,10 @@ var _ = ginkgo.Describe("RoleBinding selecting every person", ginkgo.Ordered, fu
 	})
 
 	ginkgo.AfterAll(func() {
-		for _, token := range []*models.Person{limitedToken, unlimitedToken} {
-			DefaultContext.DB().Where("person_id = ?", token.ID).Delete(&models.AccessToken{})
-			DefaultContext.DB().Delete(token)
+		for _, token := range []*models.AccessToken{limitedToken, unlimitedToken} {
+			if token != nil {
+				DefaultContext.DB().Where("id = ?", token.ID).Delete(&models.AccessToken{})
+			}
 		}
 		for _, cfg := range []models.ConfigItem{tagged, other} {
 			DefaultContext.DB().Delete(&cfg)
@@ -145,12 +153,10 @@ var _ = ginkgo.Describe("RoleBinding selecting every person", ginkgo.Ordered, fu
 	})
 
 	ginkgo.It("grants an access token the Role through its owner only, limited by the token's Roles", func() {
-		Expect(assignedDirectly(limitedToken)).To(BeFalse())
-		Expect(assignedDirectly(unlimitedToken)).To(BeFalse())
-
-		Expect(canRead(unlimitedToken, tagged)).To(BeTrue())
-		Expect(canRead(limitedToken, tagged)).To(BeFalse(), "its Roles don't allow it")
-		Expect(canRead(limitedToken, other)).To(BeFalse(), "its owner isn't granted it")
+		Expect(canReadWith(withToken(unlimitedToken), human, tagged)).To(BeTrue())
+		Expect(canReadWith(withToken(limitedToken), human, tagged)).To(BeFalse(), "its Roles don't allow it")
+		Expect(canReadWith(withToken(limitedToken), human, other)).To(BeFalse(), "its owner isn't granted it")
+		Expect(canRead(human, tagged)).To(BeTrue(), "the owner's session isn't limited")
 	})
 
 	ginkgo.It("grants the Role to a person created after the binding once the policy reloads", func() {

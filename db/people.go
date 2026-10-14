@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/collections"
-	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
@@ -20,8 +19,6 @@ import (
 )
 
 const (
-	PersonTypeAccessToken = "access_token"
-
 	// PersonTypeFederated is a user of an external application, authenticated by an ExternalIdentityProvider
 	PersonTypeFederated = "federated"
 )
@@ -196,29 +193,12 @@ func GetPersonType(ctx context.Context, id string) (string, error) {
 	return person.Type, nil
 }
 
-func DeleteAccessToken(ctx context.Context, id string, personID string) error {
-	return ctx.DB().Transaction(func(tx *gorm.DB) error {
-		// Delete the access token (hard delete)
-		if err := tx.Where("id = ?", id).Delete(&models.AccessToken{}).Error; err != nil {
-			return ctx.Oops().Wrapf(err, "failed to hard delete access token %s", id)
-		}
-
-		// Soft delete the associated person
-		result := tx.Model(&models.Person{}).
-			Where("id = ?", personID).
-			Where("type = ?", PersonTypeAccessToken).
-			UpdateColumn("deleted_at", duty.Now())
-
-		if result.Error != nil {
-			return ctx.Oops().Wrapf(result.Error, "failed to soft delete person %s for token %s", personID, id)
-		}
-
-		if result.RowsAffected == 0 {
-			ctx.Warnf("person %s for token %s was not soft-deleted (type=%s, already deleted, or doesn't exist)", personID, id, PersonTypeAccessToken)
-		}
-
-		return nil
-	})
+// DeleteAccessToken deletes the access token.
+func DeleteAccessToken(ctx context.Context, id string) error {
+	if err := ctx.DB().Where("id = ?", id).Delete(&models.AccessToken{}).Error; err != nil {
+		return ctx.Oops().Wrapf(err, "failed to delete access token %s", id)
+	}
+	return nil
 }
 
 func AddPersonToTeam(ctx context.Context, personID uuid.UUID, teamID uuid.UUID) error {

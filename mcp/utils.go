@@ -10,44 +10,9 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
-	gocache "github.com/patrickmn/go-cache"
 )
-
-// ownerCache maps subject (token person ID) → owner (real human ID).
-// Access token ownership doesn't change, so we cache indefinitely.
-var ownerCache = gocache.New(gocache.NoExpiration, 0)
-
-// resolveOwner returns the real human behind an RBAC subject.
-// It can be an access token or a user id.
-// If it's an access token, it returns the owner of the access token.
-// Note: Not to be confused with the new person created for the access token.
-func resolveOwner(ctx context.Context) (string, error) {
-	subject := ctx.Subject()
-	if v, ok := ownerCache.Get(subject); ok {
-		return v.(string), nil
-	}
-
-	owner := subject
-
-	// Only people can own access tokens. Other subjects, e.g. users of external identity providers, aren't person ids.
-	if uuid.Validate(subject) != nil {
-		return owner, nil
-	}
-
-	var accessToken models.AccessToken
-	if err := ctx.DB().Where("person_id = ?", subject).Find(&accessToken).Error; err != nil {
-		return "", fmt.Errorf("failed to lookup access token for subject %s: %w", subject, err)
-	} else if accessToken.CreatedBy != nil {
-		owner = accessToken.CreatedBy.String()
-	}
-
-	ownerCache.Set(subject, owner, gocache.NoExpiration)
-	return owner, nil
-}
 
 func getDutyCtx(ctx gocontext.Context) (context.Context, error) {
 	if dutyCtx, ok := ctx.(context.Context); ok {

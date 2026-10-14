@@ -200,7 +200,7 @@ func scraperGrants(ctx context.Context, table, object, action string) bool {
 		return false
 	}
 	owner := rbac.Check(ctx, ctx.Subject(), adapter.ObjectScrapers, action) || rbac.Check(ctx, ctx.Subject(), object, action)
-	return owner && TokenAllowsObject(ctx, user.ID.String(), adapter.ObjectScrapers, action)
+	return owner && TokenAllowsObject(ctx, ctx.Subject(), adapter.ObjectScrapers, action)
 }
 
 // rowFilteredTables are the tables whose rows are filtered by a subject's read grants of their resource type.
