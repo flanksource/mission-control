@@ -26,6 +26,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
+	icrbac "github.com/flanksource/incident-commander/rbac"
 )
 
 // A hard limit on the refresh timeout.
@@ -592,11 +593,10 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 		clonedCtx := ctx.Clone()
 		clonedCtx.Context = newCtx
 		refreshCtx := context.NewContext(clonedCtx).WithDB(ctx.DB(), ctx.Pool()).WithConnectionString(ctx.ConnectionString())
-		if ctx.User() != nil {
-			refreshCtx = refreshCtx.WithUser(ctx.User())
-		}
+		refreshCtx = icrbac.WithRequestIdentity(refreshCtx, ctx)
 
-		refreshKey := fmt.Sprintf("%s:%s", view.GetUID(), request.Fingerprint())
+		// The refresh reads as the caller, so only callers checked the same way may share one
+		refreshKey := fmt.Sprintf("%s:%s:%s%s", view.GetUID(), request.Fingerprint(), ctx.Subject(), icrbac.AccessTokenCacheKey(ctx))
 		res, refreshErr, _ := refreshGroup.Do(refreshKey, func() (any, error) {
 			return populateView(refreshCtx, view, request)
 		})

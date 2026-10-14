@@ -35,6 +35,23 @@ func RequestAccessTokenID(ctx context.Context) *uuid.UUID {
 	return nil
 }
 
+// WithRequestIdentity returns `to` checked as the request in `from` is: as its user and subject, and limited by its
+// access token. Use it whenever a request's work continues on a context that isn't derived from the request's,
+// e.g. in a goroutine with a context of its own. Setting only the user would drop the token's limit.
+func WithRequestIdentity(to, from context.Context) context.Context {
+	user := from.User()
+	if user != nil {
+		to = to.WithUser(user)
+	}
+	if subject := from.Subject(); subject != "" && (user == nil || subject != user.ID.String()) {
+		to = to.WithSubject(subject)
+	}
+	if token, ok := from.Value(accessTokenKey{}).(requestToken); ok {
+		to = to.WithValue(accessTokenKey{}, token)
+	}
+	return to
+}
+
 // MadeWithAccessToken reports whether the request was authenticated by an access token.
 func MadeWithAccessToken(ctx context.Context) bool {
 	_, ok := ctx.Value(accessTokenKey{}).(requestToken)
