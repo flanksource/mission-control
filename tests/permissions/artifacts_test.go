@@ -111,18 +111,21 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 			Expect(DefaultContext.DB().Create(record).Error).To(Succeed())
 		}
 
-		for _, name := range []string{"check", "config", "scraper", "playbook", "run-config", "run-check"} {
+		for _, name := range []string{"check", "canary", "config", "scraper", "playbook", "run-config", "run-check", "run-canary"} {
 			readers[name] = setup.CreateUserWithRole(DefaultContext, "Artifact "+name, "artifact-"+name+"@test.com")
 		}
 		checkTarget := v1.ScopeTarget{Check: &v1.ScopeLabelledSelector{ScopeResourceRef: v1.ScopeResourceRef{ID: check.ID.String()}}}
+		canaryTarget := v1.ScopeTarget{Canary: &v1.ScopeCanarySelector{ScopeResourceRef: v1.ScopeResourceRef{ID: check.CanaryID.String()}}}
 		configTarget := v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{ID: config.ID.String()}}}
 		playbookTarget := v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{ID: playbook.ID.String()}}
 		grant("check", readers["check"], checkTarget)
+		grant("canary", readers["canary"], canaryTarget)
 		grant("config", readers["config"], configTarget)
 		grant("scraper", readers["scraper"], v1.ScopeTarget{Scraper: &v1.ScopeScraperSelector{ScopeResourceRef: v1.ScopeResourceRef{ID: scraper.ID.String()}}})
 		grant("playbook", readers["playbook"], playbookTarget)
 		grant("run-config", readers["run-config"], playbookTarget, configTarget)
 		grant("run-check", readers["run-check"], playbookTarget, checkTarget)
+		grant("run-canary", readers["run-canary"], playbookTarget, canaryTarget)
 		grant("outside", nobody, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{ID: dummy.LogisticsAPI.ID.String()}}})
 
 		checkTime := time.Now().UTC().Truncate(time.Second)
@@ -132,13 +135,18 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 			artifactCase{"/artifacts/list/config_change/" + change.ID, saveArtifact(models.Artifact{ConfigChangeID: &changeID}), "config"},
 			artifactCase{"", saveArtifact(models.Artifact{ScraperID: &scraper.ID}), "scraper"},
 		)
-		for _, target := range []string{"playbook", "run-config", "run-check"} {
+		cases = append(cases, artifactCase{cases[0].list, cases[0].id, "canary"})
+		for _, target := range []string{"playbook", "run-config", "run-check", "run-canary", "run-component"} {
 			run := models.PlaybookRun{ID: uuid.New(), PlaybookID: playbook.ID, Status: models.PlaybookRunStatusCompleted, Spec: []byte(`{}`), CreatedBy: &nobody.ID}
 			if target == "run-config" {
 				run.ConfigID = &config.ID
 			}
-			if target == "run-check" {
+			if target == "run-check" || target == "run-canary" {
 				run.CheckID = &check.ID
+			}
+			if target == "run-component" {
+				run.ComponentID = &dummy.Logistics.ID
+				target = "playbook"
 			}
 			Expect(DefaultContext.DB().Create(&run).Error).To(Succeed())
 			runs = append(runs, run)
@@ -264,6 +272,69 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 		}
 	})
 
+	ginkgo.It("uses RLS for every producer link, including canary-based check access", func() {
+		changeID := uuid.MustParse(change.ID)
+		id := saveArtifact(models.Artifact{CheckID: &check.ID, CheckTime: lo.ToPtr(time.Now().UTC()), ConfigChangeID: &changeID})
+		grant("multiple", readers["canary"],
+			v1.ScopeTarget{Canary: &v1.ScopeCanarySelector{ScopeResourceRef: v1.ScopeResourceRef{ID: check.CanaryID.String()}}},
+			v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{ID: config.ID.String()}}},
+		)
+		Expect(rbac.ReloadPolicy()).To(Succeed())
+		auth.FlushTokenCache()
+		ginkgo.DeferCleanup(func() {
+			Expect(DefaultContext.DB().Where("id = ?", id).Delete(&models.Artifact{}).Error).To(Succeed())
+		})
+		for _, person := range []*models.Person{readers["canary"], readers["config"], tokens["canary-canary"], nobody} {
+			rec := request(person, cases[1].list)
+			if person == nobody || person == tokens["canary-canary"] {
+				Expect(rec.Code).To(Equal(http.StatusNotFound), rec.Body.String())
+			} else {
+				Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+				var listed []models.Artifact
+				Expect(json.Unmarshal(rec.Body.Bytes(), &listed)).To(Succeed())
+				ids := lo.Map(listed, func(a models.Artifact, _ int) uuid.UUID { return a.ID })
+				if person == readers["canary"] {
+					Expect(ids).To(ContainElement(id))
+				} else {
+					Expect(ids).ToNot(ContainElement(id))
+				}
+				for _, artifact := range listed {
+					Expect(request(person, "/artifacts/download/"+artifact.ID.String()).Body.String()).To(Equal(content))
+				}
+			}
+			download := request(person, "/artifacts/download/"+id.String())
+			if person == readers["canary"] {
+				Expect(download.Code).To(Equal(http.StatusOK), download.Body.String())
+				Expect(download.Body.String()).To(Equal(content))
+			} else {
+				Expect(download.Code).To(Equal(http.StatusNotFound), download.Body.String())
+			}
+		}
+	})
+
+	ginkgo.It("omits deleted artifacts from every list and refuses their downloads", func() {
+		missing := request(adminLocal, "/artifacts/download/"+uuid.NewString())
+		for _, tc := range cases {
+			var original models.Artifact
+			Expect(DefaultContext.DB().First(&original, tc.id).Error).To(Succeed())
+			original.DeletedAt = lo.ToPtr(time.Now())
+			id := saveArtifact(original)
+			for _, person := range []*models.Person{adminLocal, adminRole, readers[tc.reader], tokens[tc.reader+"-"+tc.reader]} {
+				download := request(person, "/artifacts/download/"+id.String())
+				Expect(download.Code).To(Equal(http.StatusNotFound))
+				Expect(download.Body.String()).To(Equal(missing.Body.String()))
+				if tc.list != "" {
+					rec := request(person, tc.list)
+					Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+					var listed []models.Artifact
+					Expect(json.Unmarshal(rec.Body.Bytes(), &listed)).To(Succeed())
+					Expect(listed).To(HaveLen(1))
+					Expect(listed[0].ID).To(Equal(tc.id))
+				}
+			}
+		}
+	})
+
 	ginkgo.It("refuses artifacts whose producer has been deleted", func() {
 		Expect(DefaultContext.DB().Model(&check).Update("deleted_at", time.Now()).Error).To(Succeed())
 		ginkgo.DeferCleanup(func() {
@@ -274,6 +345,24 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 			rec := request(adminLocal, path)
 			Expect(rec.Code).To(Equal(http.StatusNotFound))
 			Expect(rec.Body.String()).To(Equal(missing.Body.String()))
+		}
+	})
+
+	ginkgo.It("omits artifacts with a deleted secondary producer from a live producer's list", func() {
+		changeID := uuid.MustParse(change.ID)
+		id := saveArtifact(models.Artifact{CheckID: &check.ID, ConfigChangeID: &changeID})
+		Expect(DefaultContext.DB().Model(&check).Update("deleted_at", time.Now()).Error).To(Succeed())
+		ginkgo.DeferCleanup(func() {
+			Expect(DefaultContext.DB().Model(&check).Update("deleted_at", nil).Error).To(Succeed())
+		})
+		for _, person := range []*models.Person{adminLocal, adminRole} {
+			rec := request(person, cases[1].list)
+			Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+			var listed []models.Artifact
+			Expect(json.Unmarshal(rec.Body.Bytes(), &listed)).To(Succeed())
+			Expect(listed).To(HaveLen(1))
+			Expect(listed[0].ID).To(Equal(cases[1].id))
+			Expect(request(person, "/artifacts/download/"+id.String()).Code).To(Equal(http.StatusNotFound))
 		}
 	})
 })
