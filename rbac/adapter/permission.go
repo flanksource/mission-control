@@ -163,7 +163,6 @@ func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
 	}
 
 	reports := map[uuid.UUID]unappliedReport{}
-	allPeopleBound := false
 	for _, binding := range bindings {
 		var role *models.Role
 		if r, ok := rolesByName[binding.Namespace+"/"+binding.Role]; ok {
@@ -182,56 +181,14 @@ func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
 		reports[binding.ID] = report
 
 		for _, policy := range policies {
-			if policy[0] == "g" && policy[1] == AllPeoplePrincipal {
-				allPeopleBound = true
-			}
 			if err := persist.LoadPolicyArray(policy, m); err != nil {
 				return err
 			}
 		}
 	}
 
-	if allPeopleBound {
-		if err := a.loadAllPeople(m); err != nil {
-			return err
-		}
-	}
-
 	recordUnappliedReports(reports)
 	return nil
-}
-
-// AllPeoplePrincipal is the casbin subject every person is assigned to when a RoleBinding selects people: ["*"].
-// Each such binding assigns it to the binding, so a person is assigned once however many bindings select everyone.
-const AllPeoplePrincipal = "people:*"
-
-// loadAllPeople assigns every person to AllPeoplePrincipal.
-func (a *PermissionAdapter) loadAllPeople(m model.Model) error {
-	ids, err := a.resolveAllPeople()
-	if err != nil {
-		return fmt.Errorf("failed to resolve every person: %w", err)
-	}
-
-	for _, id := range ids {
-		if err := persist.LoadPolicyArray([]string{"g", id, AllPeoplePrincipal, "", "", ""}, m); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// resolveAllPeople returns the ids of every human user of Mission Control. Agents, users of external identity
-// providers, the people of access tokens and the system user aren't selected. An access token gets what its owner
-// is granted through its owner, still limited by the token's Roles.
-// It doesn't depend on email verification: it names no address.
-func (a *PermissionAdapter) resolveAllPeople() ([]string, error) {
-	var ids []string
-	err := a.ctx.DB().Select("id").Model(&models.Person{}).
-		Where("deleted_at IS NULL").
-		Where("(type IS NULL OR type NOT IN ?)", []string{"agent", "federated", "access_token"}).
-		Where("NOT (name = 'System' AND email IS NULL)").
-		Find(&ids).Error
-	return ids, err
 }
 
 // loadRoleLimit files the rules of a valid Role under its limit principal, which access tokens limited by the Role
@@ -566,7 +523,6 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 //   - the rules that apply through it, filed under binding:<ns>/<name> (see compiledRuleToCasbinRules)
 //   - an assignment of the binding to each of its static subjects: g, <subject>, binding:<ns>/<name>
 //
-// A binding that selects people: ["*"] is assigned to AllPeoplePrincipal, which every person is assigned to.
 // Users of external identity providers are assigned to the binding when their token's claims match (see auth/federation.go).
 //
 // It also returns the allow rules that don't apply through the binding, and a validation error when the binding
@@ -606,10 +562,8 @@ func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding,
 		return nil, nil, fmt.Errorf("failed to resolve subjects for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
 	}
 
-	var people []string
-	if subjects.AllPeople() {
-		people = []string{AllPeoplePrincipal}
-	} else if people, err = a.resolvePeopleByEmail(subjects.People); err != nil {
+	people, err := a.resolvePeople(subjects)
+	if err != nil {
 		return nil, nil, fmt.Errorf("failed to resolve people for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
 	}
 
@@ -654,6 +608,29 @@ func RoleBindingSpec(binding models.RoleBinding) (v1.RoleBindingSpec, error) {
 	}
 
 	return spec, nil
+}
+
+// resolvePeople returns the ids of the people a binding selects: every person for people: ["*"], otherwise those
+// with the listed emails.
+func (a *PermissionAdapter) resolvePeople(subjects v1.RoleBindingSubjects) ([]string, error) {
+	if subjects.AllPeople() {
+		return a.resolveAllPeople()
+	}
+	return a.resolvePeopleByEmail(subjects.People)
+}
+
+// resolveAllPeople returns the ids of every human user of Mission Control. Agents, users of external identity
+// providers, the people of access tokens and the system user aren't selected. An access token gets what its owner
+// is granted through its owner, still limited by the token's Roles.
+// It doesn't depend on email verification: it names no address.
+func (a *PermissionAdapter) resolveAllPeople() ([]string, error) {
+	var ids []string
+	err := a.ctx.DB().Select("id").Model(&models.Person{}).
+		Where("deleted_at IS NULL").
+		Where("(type IS NULL OR type NOT IN ?)", []string{"agent", "federated", "access_token"}).
+		Where("NOT (name = 'System' AND email IS NULL)").
+		Find(&ids).Error
+	return ids, err
 }
 
 // resolvePeopleByEmail returns the ids of the Mission Control users with the given emails.

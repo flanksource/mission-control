@@ -16,7 +16,6 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 // RoleBindings that select every person (specs/authorization/rolebindings.md, Section 2.1).
@@ -72,7 +71,7 @@ var _ = ginkgo.Describe("RoleBinding selecting every person", ginkgo.Ordered, fu
 
 	assignedDirectly := func(subject *models.Person) bool {
 		ginkgo.GinkgoHelper()
-		assigned, err := rbac.Enforcer().HasRoleForUser(subject.ID.String(), adapter.AllPeoplePrincipal)
+		assigned, err := rbac.Enforcer().HasRoleForUser(subject.ID.String(), models.BindingPrincipal(namespace, "everyone"))
 		Expect(err).ToNot(HaveOccurred())
 		return assigned
 	}
@@ -162,7 +161,7 @@ var _ = ginkgo.Describe("RoleBinding selecting every person", ginkgo.Ordered, fu
 
 	ginkgo.It("stores nothing in casbin_rule", func() {
 		var count int64
-		Expect(DefaultContext.DB().Table("casbin_rule").Where("v0 = ? OR v1 = ?", adapter.AllPeoplePrincipal, adapter.AllPeoplePrincipal).Count(&count).Error).To(Succeed())
+		Expect(DefaultContext.DB().Table("casbin_rule").Where("v1 = ?", models.BindingPrincipal(namespace, "everyone")).Count(&count).Error).To(Succeed())
 		Expect(count).To(BeZero())
 	})
 
@@ -170,6 +169,6 @@ var _ = ginkgo.Describe("RoleBinding selecting every person", ginkgo.Ordered, fu
 		Expect(db.DeleteRoleBinding(DefaultContext, everyoneID)).To(Succeed())
 		Expect(rbac.ReloadPolicy()).To(Succeed())
 		Expect(canRead(human, tagged)).To(BeFalse())
-		Expect(assignedDirectly(human)).To(BeFalse(), "no binding selects every person")
+		Expect(assignedDirectly(human)).To(BeFalse())
 	})
 })
