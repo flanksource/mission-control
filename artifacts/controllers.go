@@ -1,6 +1,7 @@
 package artifacts
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -11,8 +12,11 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/membership"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/auth"
@@ -27,7 +31,7 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /artifacts routes")
 
-	g := e.Group(fmt.Sprintf("/%s", "artifacts"), rbac.Authorization(policy.ObjectArtifact, policy.ActionRead))
+	g := e.Group("/artifacts")
 	g.GET("/list/check/:id/:check_time", ListArtifacts)
 	g.GET("/list/playbook_run/:id", ListArtifacts)
 	g.GET("/list/config_change/:id", ListArtifacts)
@@ -66,12 +70,118 @@ func listArtifacts(ctx context.Context, c echo.Context, id uuid.UUID) ([]models.
 		if err != nil {
 			return nil, api.Errorf(api.EINVALID, "invalid check_time(%s). must be in RFC3339", _checkTime)
 		}
+		if err := authorizeProducer(ctx, models.Artifact{CheckID: &id}); err != nil {
+			return nil, err
+		}
 		return query.ArtifactsByCheck(ctx, id, checkTime)
 	case strings.Contains(c.Path(), "/list/config_change/"):
+		if err := authorizeProducer(ctx, models.Artifact{ConfigChangeID: &id}); err != nil {
+			return nil, err
+		}
 		return query.ArtifactsByConfigChange(ctx, id)
 	default:
-		return query.ArtifactsByPlaybookRun(ctx, id)
+		if err := authorizeRun(ctx, id); err != nil {
+			return nil, err
+		}
+		var artifacts []models.Artifact
+		err := ctx.DB().Model(&models.Artifact{}).
+			Joins("JOIN playbook_run_actions ON playbook_run_actions.id = artifacts.playbook_run_action_id").
+			Where("playbook_run_actions.playbook_run_id = ?", id).Find(&artifacts).Error
+		return artifacts, err
 	}
+}
+
+// producerError hides whether a producer is missing or unreadable.
+func producerError(err error) error {
+	if err == nil || errors.Is(err, gorm.ErrRecordNotFound) {
+		return api.Errorf(api.ENOTFOUND, "artifact or producer not found")
+	}
+	return err
+}
+
+// authorizeProducer requires read on every producer an artifact names; unowned artifacts are never readable.
+func authorizeProducer(ctx context.Context, artifact models.Artifact) error {
+	var attrs []*models.ABACAttribute
+	if artifact.CheckID != nil {
+		var check models.Check
+		if err := ctx.DB().Where("deleted_at IS NULL").First(&check, artifact.CheckID).Error; err != nil {
+			return producerError(err)
+		}
+		attrs = append(attrs, &models.ABACAttribute{Check: check})
+	}
+	if artifact.ConfigChangeID != nil {
+		var change models.ConfigChange
+		if err := ctx.DB().First(&change, artifact.ConfigChangeID).Error; err != nil {
+			return producerError(err)
+		}
+		var config models.ConfigItem
+		if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", change.ConfigID).First(&config).Error; err != nil {
+			return producerError(err)
+		}
+		attrs = append(attrs, &models.ABACAttribute{Config: config})
+	}
+	if err := authorizeReads(ctx, attrs...); err != nil {
+		return err
+	}
+	if artifact.PlaybookRunActionID != nil {
+		var action models.PlaybookRunAction
+		if err := ctx.DB().First(&action, artifact.PlaybookRunActionID).Error; err != nil {
+			return producerError(err)
+		}
+		if err := authorizeRun(ctx, action.PlaybookRunID); err != nil {
+			return err
+		}
+	}
+	if artifact.ScraperID != nil {
+		// Scrapers have no ABAC attribute; their token-limited RLS rows decide scoped reads.
+		if err := auth.WithRLS(ctx, func(ctx context.Context) error {
+			var scraper models.ConfigScraper
+			return ctx.DB().Where("deleted_at IS NULL").First(&scraper, artifact.ScraperID).Error
+		}); err != nil {
+			return producerError(err)
+		}
+	}
+	if len(attrs) == 0 && artifact.PlaybookRunActionID == nil && artifact.ScraperID == nil {
+		return producerError(nil)
+	}
+	return nil
+}
+
+// authorizeRun follows playbook_runs RLS: read the playbook and each config/check target, not the component.
+func authorizeRun(ctx context.Context, id uuid.UUID) error {
+	var run models.PlaybookRun
+	if err := ctx.DB().First(&run, id).Error; err != nil {
+		return producerError(err)
+	}
+	run.ComponentID = nil
+	attr, err := run.GetABACAttributes(ctx.DB())
+	if err != nil {
+		return producerError(err)
+	}
+	if attr.Playbook.DeletedAt != nil || attr.Config.DeletedAt != nil || attr.Check.DeletedAt != nil {
+		return producerError(nil)
+	}
+	attrs := []*models.ABACAttribute{{Playbook: attr.Playbook}}
+	if run.ConfigID != nil {
+		attrs = append(attrs, &models.ABACAttribute{Config: attr.Config})
+	}
+	if run.CheckID != nil {
+		attrs = append(attrs, &models.ABACAttribute{Check: attr.Check})
+	}
+	return authorizeReads(ctx, attrs...)
+}
+
+func authorizeReads(ctx context.Context, attrs ...*models.ABACAttribute) error {
+	checkCtx, err := membership.ForOperation(ctx, dutyRBAC.MembershipRefs(attrs...)...)
+	if err != nil {
+		return err
+	}
+	for _, attr := range attrs {
+		if !rbac.HasPermission(checkCtx, ctx.Subject(), attr, policy.ActionRead) {
+			return producerError(nil)
+		}
+	}
+	return nil
 }
 
 func DownloadArtifact(c echo.Context) error {
@@ -85,7 +195,15 @@ func DownloadArtifact(c echo.Context) error {
 	if visible, err := auth.CanReadArtifact(ctx, artifactID); err != nil {
 		return api.WriteError(c, err)
 	} else if !visible {
-		return api.WriteError(c, api.Errorf(api.ENOTFOUND, "artifact %s not found", artifactID))
+		return api.WriteError(c, producerError(nil))
+	}
+
+	var artifact models.Artifact
+	if err := ctx.DB().Where("deleted_at IS NULL").First(&artifact, artifactID).Error; err != nil {
+		return api.WriteError(c, producerError(err))
+	}
+	if err := authorizeProducer(ctx, artifact); err != nil {
+		return api.WriteError(c, err)
 	}
 
 	blobs, err := ctx.Blobs()
