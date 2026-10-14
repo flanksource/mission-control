@@ -206,7 +206,11 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 		for _, rule := range rules {
 			Expect(len(rule.Name)).To(BeNumerically("<=", 63), rule.Name)
 		}
-		Expect(adapter.ValidateRoleSpec(RolePluginAdmin, rules)).To(Succeed())
+		// The shipped plugin-admin isn't limited to v1.MaxRoleRules, so its rules are checked one by one
+		Expect(v1.RoleSpec{Rules: rules}.Validate()).To(Succeed())
+		for _, rule := range rules {
+			Expect(adapter.ValidateRoleSpec(RolePluginAdmin, []v1.RoleRule{rule})).To(Succeed(), rule.Name)
+		}
 	})
 
 	ginkgo.It("binds admin and plugin-admin to the admins team, and only that", func() {

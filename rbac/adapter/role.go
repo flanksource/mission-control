@@ -159,6 +159,8 @@ func ValidateRoleSpec(name string, rules []v1.RoleRule) error {
 
 	if err := (v1.RoleSpec{Rules: rules}).Validate(); err != nil {
 		return NewValidationError("%v", err)
+	} else if len(rules) > v1.MaxRoleRules {
+		return NewValidationError("a role can have at most %d rules, not %d", v1.MaxRoleRules, len(rules))
 	}
 
 	for _, rule := range rules {

@@ -112,7 +112,7 @@ spec:
                   - message: only playbook:run, playbook:approve and playbook:cancel
                       take a target
                     rule: '!has(self.target) || self.action in [''playbook:run'',''playbook:approve'',''playbook:cancel'']'
-                maxItems: 50
+                maxItems: 200
                 minItems: 1
                 type: array
                 x-kubernetes-list-map-keys:

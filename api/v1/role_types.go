@@ -37,7 +37,7 @@ type RoleSpec struct {
 
 	// Rules of the role. Rules only allow.
 	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:MaxItems=50
+	// +kubebuilder:validation:MaxItems=200
 	Rules []RoleRule `json:"rules" yaml:"rules"`
 }
 
@@ -84,6 +84,10 @@ type ScopeReference struct {
 }
 
 var ruleNamePattern = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+
+// MaxRoleRules is the most rules a Role written through the API or Kubernetes can have. The number is arbitrary, and
+// high because the shipped admin Role has a rule per action and type (specs/authorization/roles.md, Section 1).
+const MaxRoleRules = 200
 
 func (t RoleSpec) Validate() error {
 	if len(t.Rules) == 0 {

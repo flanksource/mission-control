@@ -38,6 +38,8 @@ spec:
 
 A Scope is a named set of resources (see `scopes.md`). A rule references exactly one Scope per input, by name. A Role MUST have a namespace, and `scopeRef` only names Scopes in it (`overview.md`, "Namespaces"). The resources a Scope selects can be in any namespace.
 
+A Role has at least one rule, and at most 200; the Roles Mission Control ships aren't limited, since `plugin-admin` has a rule per plugin operation. _Why 200:_ the number is arbitrary, and there's no technical reason for it. It's high because the shipped `admin` Role has a rule for every action on every type, 77 in all (`overview.md`, "Shipped Roles"), and a Role written by hand must be able to grant as much.
+
 Mission Control ships a few Roles, e.g. `viewer` and `admin` (`overview.md`, "Shipped Roles"). They're Roles like any other.
 
 ### 1.1 Why one Scope per input
