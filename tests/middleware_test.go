@@ -188,10 +188,6 @@ var _ = Describe("Authorization", func() {
 
 		// The viewer Role reads nothing that configures access or exposes Mission Control's internals
 		"GET /db/agents",
-
-		// No Role grants database.public, which lookup tables aren't mapped from to their types yet
-		"GET /db/identities",
-		"GET /db/people_roles",
 	}
 
 	for _, t := range privileged {
@@ -217,6 +213,8 @@ var _ = Describe("Authorization", func() {
 		"GET /db/playbooks",
 		"GET /db/playbook_names",
 		"GET /db/people",
+		"GET /db/identities",
+		"GET /db/people_roles",
 
 		"GET /db/config_statuses",
 		"GET /db/rpc/related_configs_recursive",

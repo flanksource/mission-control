@@ -248,6 +248,17 @@ var dbTables = map[string]dbTable{
 	"scrape_plugins":                   unclassified(ofUnclassifiedPluginDefinitions),
 }
 
+// TablesOfTypes returns the record tables and lookup views /db serves, with the types each belongs to or is derived from.
+func TablesOfTypes() map[string][]string {
+	tables := map[string][]string{}
+	for name, t := range dbTables {
+		if t.kind == dbRecord || t.kind == dbLookup {
+			tables[name] = t.of
+		}
+	}
+	return tables
+}
+
 // servedTable returns why /db serves the table, if it does. A View's generated tables, view_<namespace>_<name>,
 // are its records.
 // A path with dot segments isn't served: the proxy resolves them, so view_x/../access_tokens would reach access_tokens.

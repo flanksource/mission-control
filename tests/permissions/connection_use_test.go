@@ -182,6 +182,13 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 			Expect(do(user, http.MethodGet, "/db/connection_details").Code).To(Equal(http.StatusForbidden), "connection:use alone doesn't read")
 		})
 
+		It("is listing connections through /db", func() {
+			for _, p := range []*models.Person{reader, editor, admin} {
+				Expect(do(p, http.MethodGet, "/db/connections_list").Code).To(Equal(http.StatusOK), p.Email)
+			}
+			Expect(do(guest, http.MethodGet, "/db/connections_list").Code).To(Equal(http.StatusForbidden))
+		})
+
 		It("masks credentials in the MCP list_connections tool", func() {
 			conns, err := db.ListConnections(DefaultContext)
 			Expect(err).ToNot(HaveOccurred())
