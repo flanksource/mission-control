@@ -16,9 +16,9 @@ import (
 )
 
 // PersistScopeFromCRD stores a Scope CRD. See PersistScope.
-// A Scope with the namespace and name of a shipped one isn't stored: the shipped one stays.
+// A Scope in the shipped namespace isn't stored.
 func PersistScopeFromCRD(ctx context.Context, obj *v1.Scope) error {
-	if err := notShipped(ctx, "scopes", obj.GetNamespace(), obj.GetName()); err != nil {
+	if err := notShipped(obj.GetNamespace()); err != nil {
 		return err
 	}
 	return PersistScope(ctx, obj, models.SourceCRD, nil)

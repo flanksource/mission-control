@@ -33,6 +33,7 @@ import (
 var _ = Describe("Shipped roles", Ordered, func() {
 	const (
 		namespace  = adapter.ShippedNamespace
+		bindings   = "shipped-roles-test"
 		pluginName = "shipped-roles-plugin"
 		operation  = "tail-logs"
 	)
@@ -96,8 +97,8 @@ var _ = Describe("Shipped roles", Ordered, func() {
 	bind := func(role string, person *models.Person) {
 		GinkgoHelper()
 		Expect(db.PersistRoleBindingFromCRD(DefaultContext, &v1.RoleBinding{
-			ObjectMeta: metav1.ObjectMeta{Name: role + "-binding", Namespace: namespace, UID: uid()},
-			Spec: v1.RoleBindingSpec{Role: role, Subjects: v1.RoleBindingSubjects{
+			ObjectMeta: metav1.ObjectMeta{Name: role + "-binding", Namespace: bindings, UID: uid()},
+			Spec: v1.RoleBindingSpec{Role: namespace + "/" + role, Subjects: v1.RoleBindingSubjects{
 				PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{person.Email}},
 			}},
 		})).To(Succeed())
@@ -127,12 +128,12 @@ var _ = Describe("Shipped roles", Ordered, func() {
 		// Other specs make admins, which writes the shipped objects
 		Expect(rbactest.DeleteNamespace(DefaultContext, namespace)).To(Succeed())
 
-		// A Scope applied through Kubernetes before Mission Control shipped one of the same name
+		// A Scope stored in the shipped namespace before Mission Control owned it
 		preexistingScope = &v1.Scope{
 			ObjectMeta: metav1.ObjectMeta{Name: "all-configs", Namespace: namespace, UID: uid()},
 			Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{TagSelector: "env=preexisting"}}}},
 		}
-		Expect(db.PersistScopeFromCRD(DefaultContext, preexistingScope)).To(Succeed())
+		Expect(db.PersistScope(DefaultContext, preexistingScope, models.SourceCRD, nil)).To(Succeed())
 
 		_, err := plugin.DefaultRegistry.Upsert(pluginID, "default", pluginName, v1.PluginSpec{Source: "test"})
 		Expect(err).ToNot(HaveOccurred())
@@ -153,7 +154,7 @@ var _ = Describe("Shipped roles", Ordered, func() {
 
 	AfterAll(func() {
 		plugin.DefaultRegistry.Remove(pluginID)
-		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.RoleBinding{}).Error).To(Succeed())
+		Expect(DefaultContext.DB().Where("namespace IN ?", []string{namespace, bindings}).Delete(&models.RoleBinding{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Role{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Scope{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Exec(`DELETE FROM team_members WHERE team_id IN (SELECT id FROM teams WHERE source = ?)`, adapter.SourceShipped).Error).To(Succeed())
@@ -400,15 +401,15 @@ var _ = Describe("Shipped roles", Ordered, func() {
 
 		It("lets a subject bound to admin manage RoleBindings, and not one bound to viewer", func() {
 			binding := map[string]any{
-				"metadata": map[string]any{"name": "api-viewers", "namespace": namespace},
-				"spec":     map[string]any{"role": shipped.RoleViewer, "subjects": map[string]any{"people": []string{outsider.Email}}},
+				"metadata": map[string]any{"name": "api-viewers", "namespace": bindings},
+				"spec":     map[string]any{"role": namespace + "/" + shipped.RoleViewer, "subjects": map[string]any{"people": []string{outsider.Email}}},
 			}
 			Expect(requestAs(viewerPerson, http.MethodPost, "/rbac/role-bindings", binding).Code).To(Equal(http.StatusForbidden))
 
 			rec := requestAs(adminPerson, http.MethodPost, "/rbac/role-bindings", binding)
 			Expect(rec.Code).To(Equal(http.StatusCreated), rec.Body.String())
-			Expect(requestAs(adminPerson, http.MethodGet, "/rbac/role-bindings/mission-control-builtin/api-viewers", nil).Code).To(Equal(http.StatusOK))
-			Expect(requestAs(adminPerson, http.MethodDelete, "/rbac/role-bindings/mission-control-builtin/api-viewers", nil).Code).To(Equal(http.StatusOK))
+			Expect(requestAs(adminPerson, http.MethodGet, "/rbac/role-bindings/shipped-roles-test/api-viewers", nil).Code).To(Equal(http.StatusOK))
+			Expect(requestAs(adminPerson, http.MethodDelete, "/rbac/role-bindings/shipped-roles-test/api-viewers", nil).Code).To(Equal(http.StatusOK))
 		})
 
 		It("refuses to create plugin-admin, shipped or not", func() {
@@ -419,7 +420,7 @@ var _ = Describe("Shipped roles", Ordered, func() {
 			Expect(rec.Body.String()).To(ContainSubstring("reserved"))
 		})
 
-		It("refuses changes, deletes and same-named creates of shipped Roles and Scopes", func() {
+		It("refuses every write in the shipped namespace", func() {
 			before, _ := stored()
 			viewerBefore := storedRole(shipped.RoleViewer)
 
@@ -433,6 +434,9 @@ var _ = Describe("Shipped roles", Ordered, func() {
 				}),
 				request(http.MethodPost, "/rbac/roles", map[string]any{
 					"metadata": map[string]any{"name": "viewer", "namespace": namespace}, "spec": readRole,
+				}),
+				request(http.MethodPost, "/rbac/roles", map[string]any{
+					"metadata": map[string]any{"name": "auditor", "namespace": namespace}, "spec": readRole,
 				}),
 			}
 			for _, rec := range conflicts {

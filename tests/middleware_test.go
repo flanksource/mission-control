@@ -70,8 +70,8 @@ var _ = BeforeSuite(func() {
 	// admin is in the shipped admins team, and viewer is bound to the shipped viewer Role
 	Expect(rbactest.MakeAdmins(DefaultContext, people["admin"].ID)).To(Succeed())
 	Expect(db.PersistRoleBindingFromCRD(DefaultContext, &v1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{Name: "viewers", Namespace: adapter.ShippedNamespace, UID: k8sTypes.UID(uuid.NewString())},
-		Spec: v1.RoleBindingSpec{Role: shipped.RoleViewer, Subjects: v1.RoleBindingSubjects{
+		ObjectMeta: metav1.ObjectMeta{Name: "viewers", Namespace: "default", UID: k8sTypes.UID(uuid.NewString())},
+		Spec: v1.RoleBindingSpec{Role: adapter.ShippedNamespace + "/" + shipped.RoleViewer, Subjects: v1.RoleBindingSubjects{
 			PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{people["viewer"].Email}},
 		}},
 	})).To(Succeed())

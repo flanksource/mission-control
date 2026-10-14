@@ -114,8 +114,8 @@ func newViewer(name, email string) *models.Person {
 	p := setup.CreateUserWithRole(DefaultContext, name, email)
 	Expect(shipped.Sync(DefaultContext)).To(Succeed())
 	binding := &v1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{Name: "viewer-" + p.ID.String(), Namespace: adapter.ShippedNamespace, UID: k8sTypes.UID(uuid.NewString())},
-		Spec:       v1.RoleBindingSpec{Role: shipped.RoleViewer, Subjects: boundPeople(p)},
+		ObjectMeta: metav1.ObjectMeta{Name: "viewer-" + p.ID.String(), Namespace: "default", UID: k8sTypes.UID(uuid.NewString())},
+		Spec:       v1.RoleBindingSpec{Role: adapter.ShippedNamespace + "/" + shipped.RoleViewer, Subjects: boundPeople(p)},
 	}
 	Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).To(Succeed())
 	Expect(rbac.ReloadPolicy()).To(Succeed())

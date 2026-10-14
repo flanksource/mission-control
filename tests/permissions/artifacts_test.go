@@ -103,8 +103,8 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 		Expect(shipped.Sync(DefaultContext)).To(Succeed())
 		adminRole = setup.CreateUserWithRole(DefaultContext, "Artifact Admin Role", "artifact-admin-role@test.com")
 		Expect(db.PersistRoleBindingFromCRD(DefaultContext, &v1.RoleBinding{
-			ObjectMeta: metav1.ObjectMeta{Name: namespace, Namespace: adapter.ShippedNamespace, UID: k8sTypes.UID(uuid.NewString())},
-			Spec:       v1.RoleBindingSpec{Role: shipped.RoleAdmin, Subjects: boundPeople(adminRole)},
+			ObjectMeta: metav1.ObjectMeta{Name: "admins", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
+			Spec:       v1.RoleBindingSpec{Role: adapter.ShippedNamespace + "/" + shipped.RoleAdmin, Subjects: boundPeople(adminRole)},
 		})).To(Succeed())
 		nobody = setup.CreateUserWithRole(DefaultContext, "Artifact Nobody", "artifact-nobody@test.com")
 
@@ -184,7 +184,7 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 		for _, record := range []any{&change, &config, &check, &scraper, &playbook} {
 			Expect(DefaultContext.DB().Delete(record).Error).To(Succeed())
 		}
-		Expect(DefaultContext.DB().Where("namespace = ? OR (namespace = ? AND name = ?)", namespace, adapter.ShippedNamespace, namespace).Delete(&models.RoleBinding{}).Error).To(Succeed())
+		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.RoleBinding{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Role{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Scope{}).Error).To(Succeed())
 		if len(tokenIDs) > 0 {

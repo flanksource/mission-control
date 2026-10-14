@@ -18,7 +18,7 @@ spec:
     schema:
       openAPIV3Schema:
         description: |-
-          RoleBinding grants a Role (in the same namespace) to many subjects,
+          RoleBinding grants a Role to many subjects,
           optionally narrowing the role's allow rules with a constraint.
         properties:
           apiVersion:
@@ -46,24 +46,26 @@ spec:
                   Without one, the binding grants the role's rules as written.
                 properties:
                   resource:
-                    description: Resource is a Scope, in the binding's namespace,
-                      the resource of every operation must also belong to.
+                    description: Resource is a Scope the resource of every operation
+                      must also belong to.
                     properties:
                       scopeRef:
-                        description: ScopeRef is the name of the Scope.
-                        maxLength: 253
+                        description: ScopeRef is the Scope's name, in the namespace
+                          of the Role or RoleBinding, or namespace/name.
+                        maxLength: 317
                         minLength: 1
                         type: string
                     required:
                     - scopeRef
                     type: object
                   target:
-                    description: Target is a Scope, in the binding's namespace, the
-                      target of every operation must also belong to.
+                    description: Target is a Scope the target of every operation must
+                      also belong to.
                     properties:
                       scopeRef:
-                        description: ScopeRef is the name of the Scope.
-                        maxLength: 253
+                        description: ScopeRef is the Scope's name, in the namespace
+                          of the Role or RoleBinding, or namespace/name.
+                        maxLength: 317
                         minLength: 1
                         type: string
                     required:
@@ -77,8 +79,8 @@ spec:
                 description: Description provides a brief explanation of the binding.
                 type: string
               role:
-                description: Role is the name of the Role to grant, in the same namespace
-                  as the binding.
+                description: Role is the name of the Role to grant, in the binding's
+                  namespace, or namespace/name.
                 minLength: 1
                 type: string
               subjects:

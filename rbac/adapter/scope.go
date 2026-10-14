@@ -34,9 +34,14 @@ func (s ScopeSelection) DeclaredTypes() []string {
 	return kinds
 }
 
-// ResolveScope returns what the named Scope, in the namespace, selects.
-// A missing or invalid Scope is a validation error.
-func ResolveScope(ctx context.Context, cache *gocache.Cache, namespace, name string) (ScopeSelection, error) {
+// ResolveScope returns what the Scope a reference names selects. A bare name is resolved in the namespace.
+// A malformed reference, or a missing or invalid Scope, is a validation error.
+func ResolveScope(ctx context.Context, cache *gocache.Cache, namespace, ref string) (ScopeSelection, error) {
+	namespace, name, err := v1.ParseReference(namespace, ref)
+	if err != nil {
+		return ScopeSelection{}, NewValidationError("scope %v", err)
+	}
+
 	scope, err := getScope(ctx, cache, namespace, name)
 	if err != nil {
 		if IsValidationError(err) {
@@ -47,7 +52,7 @@ func ResolveScope(ctx context.Context, cache *gocache.Cache, namespace, name str
 		return ScopeSelection{}, NewInvalid(ReasonScopeNotFound, "scope %s/%s not found", namespace, name)
 	}
 
-	selection := NewScopeSelection(scope.id, name, scope.targets)
+	selection := NewScopeSelection(scope.id, ref, scope.targets)
 	selection.Shipped = scope.shipped
 	return selection, nil
 }

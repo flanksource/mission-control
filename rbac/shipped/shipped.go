@@ -205,7 +205,7 @@ func invokeRuleName(action string, used map[string]bool) string {
 var syncLock sync.Mutex
 
 // Sync writes the shipped objects, with plugin-admin's rules for the operations of the installed plugins.
-// It replaces any other object of the same namespace and name (a team's name alone), recreates shipped ones that were
+// It deletes any other object in the shipped namespace and any other team of a shipped name, recreates shipped ones that were
 // deleted, and deletes shipped ones that are no longer shipped, e.g. plugin-admin's rule for an operation that's gone,
 // or plugin-admin and its binding once no plugin has an operation.
 // It never changes a team's members. It's idempotent, and writes everything or nothing.
@@ -227,14 +227,22 @@ func Sync(ctx context.Context) error {
 			return err
 		}
 
-		var scopeIDs, roleIDs, teamIDs, bindingIDs []string
-		for i := range objects.Scopes {
-			scope := &objects.Scopes[i]
-			scope.UID = objectID("scopes", scope.Namespace, scope.Name)
-			scopeIDs = append(scopeIDs, string(scope.UID))
-			if err := replaceOthers(txCtx, "scopes", scope.ObjectMeta); err != nil {
+		var teamIDs []string
+		scopeIDs := setObjectIDs("scopes", objects.Scopes, func(s *v1.Scope) *metav1.ObjectMeta { return &s.ObjectMeta })
+		roleIDs := setObjectIDs("roles", objects.Roles, func(r *v1.Role) *metav1.ObjectMeta { return &r.ObjectMeta })
+		bindingIDs := setObjectIDs("role_bindings", objects.RoleBindings, func(b *v1.RoleBinding) *metav1.ObjectMeta { return &b.ObjectMeta })
+
+		for _, table := range []struct {
+			name string
+			ids  []string
+		}{{"role_bindings", bindingIDs}, {"roles", roleIDs}, {"scopes", scopeIDs}} {
+			if err := clearShippedNamespace(txCtx, table.name, table.ids); err != nil {
 				return err
 			}
+		}
+
+		for i := range objects.Scopes {
+			scope := &objects.Scopes[i]
 			if err := persisted(db.PersistScope(txCtx, scope, adapter.SourceShipped, nil), &notReady); err != nil {
 				return fmt.Errorf("scope %s/%s: %w", scope.Namespace, scope.Name, err)
 			}
@@ -242,11 +250,6 @@ func Sync(ctx context.Context) error {
 
 		for i := range objects.Roles {
 			role := &objects.Roles[i]
-			role.UID = objectID("roles", role.Namespace, role.Name)
-			roleIDs = append(roleIDs, string(role.UID))
-			if err := replaceOthers(txCtx, "roles", role.ObjectMeta); err != nil {
-				return err
-			}
 			if err := persisted(db.PersistRole(txCtx, role, adapter.SourceShipped, nil), &notReady); err != nil {
 				return fmt.Errorf("role %s/%s: %w", role.Namespace, role.Name, err)
 			}
@@ -262,11 +265,6 @@ func Sync(ctx context.Context) error {
 
 		for i := range objects.RoleBindings {
 			binding := &objects.RoleBindings[i]
-			binding.UID = objectID("role_bindings", binding.Namespace, binding.Name)
-			bindingIDs = append(bindingIDs, string(binding.UID))
-			if err := replaceOthers(txCtx, "role_bindings", binding.ObjectMeta); err != nil {
-				return err
-			}
 			if err := persisted(db.PersistRoleBinding(txCtx, binding, adapter.SourceShipped, nil), &notReady); err != nil {
 				return fmt.Errorf("role binding %s/%s: %w", binding.Namespace, binding.Name, err)
 			}
@@ -442,10 +440,21 @@ func objectID(table, namespace, name string) k8sTypes.UID {
 	return k8sTypes.UID(uuid.NewSHA1(idNamespace, []byte(table+"/"+namespace+"/"+name)).String())
 }
 
-// replaceOthers deletes any other object in the table with the namespace and name, e.g. one applied through
-// Kubernetes before Mission Control shipped one by that name.
-func replaceOthers(ctx context.Context, table string, meta metav1.ObjectMeta) error {
-	return softDelete(ctx, table, "namespace = ? AND name = ? AND id != ?", meta.Namespace, meta.Name, meta.UID)
+// setObjectIDs sets the UID of each shipped object of the table, and returns them.
+func setObjectIDs[T any](table string, objects []T, meta func(*T) *metav1.ObjectMeta) []string {
+	ids := make([]string, 0, len(objects))
+	for i := range objects {
+		m := meta(&objects[i])
+		m.UID = objectID(table, m.Namespace, m.Name)
+		ids = append(ids, string(m.UID))
+	}
+	return ids
+}
+
+// clearShippedNamespace deletes every object in the table's shipped namespace that isn't among the ids, e.g. one
+// written there before Mission Control owned the namespace.
+func clearShippedNamespace(ctx context.Context, table string, ids []string) error {
+	return softDelete(ctx, table, "namespace = ? AND NOT (id::text = ANY (?))", adapter.ShippedNamespace, pq.StringArray(ids))
 }
 
 // deleteUnshipped deletes the shipped objects in the table that aren't among the ids.

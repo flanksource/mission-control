@@ -165,8 +165,10 @@ func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
 	reports := map[uuid.UUID]unappliedReport{}
 	for _, binding := range bindings {
 		var role *models.Role
-		if r, ok := rolesByName[binding.Namespace+"/"+binding.Role]; ok {
-			role = &r
+		if namespace, name, err := BindingRoleRef(binding); err == nil {
+			if r, ok := rolesByName[namespace+"/"+name]; ok {
+				role = &r
+			}
 		}
 
 		policies, unapplied, err := a.roleBindingToCasbinRules(binding, role)
@@ -176,7 +178,7 @@ func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
 
 		report := unappliedReport{binding: binding, report: strings.Join(lo.Map(unapplied, func(u UnappliedRule, _ int) string { return u.String() }), "; ")}
 		if role != nil {
-			report.roleSource = role.Source
+			report.role = *role
 		}
 		reports[binding.ID] = report
 
@@ -212,9 +214,11 @@ func loadRoleLimit(ctx context.Context, m model.Model, role models.Role, rules [
 
 // unappliedReport is what a binding reports about the allow rules that don't apply through it.
 type unappliedReport struct {
-	binding    models.RoleBinding
-	roleSource string
-	report     string
+	binding models.RoleBinding
+
+	// role is the binding's role, empty when it doesn't exist.
+	role   models.Role
+	report string
 }
 
 // unappliedReports are the reports of every binding as of the last policy load, by binding id.
@@ -237,8 +241,8 @@ func recordUnappliedReports(reports map[uuid.UUID]unappliedReport) {
 	}
 
 	notifyRole := func(r unappliedReport) {
-		if r.roleSource != "" {
-			ValidityChanged("roles", r.binding.Namespace, r.binding.Role, r.roleSource)
+		if r.role.ID != uuid.Nil {
+			ValidityChanged("roles", r.role.Namespace, r.role.Name, r.role.Source)
 		}
 	}
 
@@ -534,7 +538,11 @@ func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding,
 	}
 
 	if role == nil {
-		return nil, nil, NewInvalid(ReasonRoleNotFound, "role %s/%s not found", binding.Namespace, binding.Role)
+		namespace, name, err := BindingRoleRef(binding)
+		if err != nil {
+			return nil, nil, err
+		}
+		return nil, nil, NewInvalid(ReasonRoleNotFound, "role %s/%s not found", namespace, name)
 	}
 
 	compiled, compileErr := CompileBinding(a.ctx, a.cache, binding, *role)
