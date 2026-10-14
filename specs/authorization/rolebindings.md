@@ -301,7 +301,7 @@ A constraint can't widen a rule: it narrows each input to the resources in both 
 
 "Types both Scopes select" are the types the input accepts (`roles.md`, Section 2) that a target of the rule's Scope and a target of the constraint's Scope both select. Two Scopes with a type in common can still select no resource in common, e.g. configs in two different namespaces. That's an empty set like any other (`scopes.md`, Section 4.1), and isn't reported.
 
-For `read`, a constraint's Scope narrows a type to all of it when it has a whole-type target of the type, whatever its other targets, since targets combine with OR (`scopes.md`, Section 4). Such a constraint adds no row filter for that type: the rule's listings are filtered by row only if its own Scope isn't whole-type for it. `collection-access.md`, Section 2.4 counts the rule as whole-type only when both Scopes are.
+For `read`, a constraint's Scope narrows a type to all of it when it has a whole-type target of the type, whatever its other targets, since targets combine with OR (`scopes.md`, Section 4). A Scope that excludes anything of the type has no whole-type target of it (`scopes.md`, Section 4.4), and its exclusions narrow the rule like its targets do. Such a constraint adds no row filter for that type: the rule's listings are filtered by row only if its own Scope isn't whole-type for it. `collection-access.md`, Section 2.4 counts the rule as whole-type only when both Scopes are.
 
 Two rules close the gaps:
 

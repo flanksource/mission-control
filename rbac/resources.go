@@ -68,7 +68,7 @@ var managedKinds = []managedKind{
 		newModel:  func() any { return &models.Scope{} },
 		newList:   func() any { return &[]models.Scope{} },
 		validate: func(obj client.Object) error {
-			return adapter.ValidateScopeTargets(obj.(*v1.Scope).Spec.Targets)
+			return adapter.ValidateScopeSpec(obj.(*v1.Scope).Spec)
 		},
 		persist: func(ctx context.Context, obj client.Object, source string, createdBy *uuid.UUID) error {
 			return db.PersistScope(ctx, obj.(*v1.Scope), source, createdBy)

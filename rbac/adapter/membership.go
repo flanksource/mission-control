@@ -1,7 +1,6 @@
 package adapter
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -23,34 +22,39 @@ func init() {
 	}
 }
 
-// MembershipTargets converts a valid Scope's targets, with agents resolved, to the targets its membership is built from.
-// Targets of types whose membership isn't stored, i.e. views, are left out.
-func MembershipTargets(targets []v1.ScopeTarget) []membership.Target {
+// MembershipTargets converts a valid Scope's targets and exclusions, with agents resolved, to the targets its
+// membership is built from. Targets of types whose membership isn't stored, i.e. views, are left out.
+func MembershipTargets(spec v1.ScopeSpec) []membership.Target {
 	var out []membership.Target
-	for _, target := range targets {
-		kind, selector := target.Selector()
-		if membership.Supported(kind) {
-			out = append(out, membership.Target{Type: kind, Selector: selector})
+	for _, targets := range []struct {
+		targets []v1.ScopeTarget
+		exclude bool
+	}{{spec.Targets, false}, {spec.Exclude, true}} {
+		for _, target := range targets.targets {
+			kind, selector := target.Selector()
+			if membership.Supported(kind) {
+				out = append(out, membership.Target{Type: kind, Selector: selector, Exclude: targets.exclude})
+			}
 		}
 	}
 	return out
 }
 
 // SaveScopeMembership brings a Scope's membership in line with the version just saved, in the context's transaction:
-// a valid Scope's targets and members are rebuilt from its resolved targets; an invalid one's are cleared.
-func SaveScopeMembership(ctx context.Context, scope models.Scope, resolved []v1.ScopeTarget, validationErr error) error {
+// a valid Scope's targets and members are rebuilt from its resolved targets and exclusions; an invalid one's are cleared.
+func SaveScopeMembership(ctx context.Context, scope models.Scope, resolved v1.ScopeSpec, validationErr error) error {
 	if validationErr != nil {
 		return membership.Clear(ctx, scope.ID)
 	}
 
-	if _, err := membership.Rebuild(ctx, scope.ID, scope.Targets, MembershipTargets(resolved)); err != nil {
+	if _, err := membership.Rebuild(ctx, scope, MembershipTargets(resolved)); err != nil {
 		return fmt.Errorf("failed to save the membership of scope %s/%s: %w", scope.Namespace, scope.Name, err)
 	}
 	return nil
 }
 
 // SyncScopeMembership validates a stored Scope and brings its membership in line with it: a valid Scope's targets
-// and members are rebuilt when its targets, or the agents they resolve to, changed; an invalid or deleted one's are
+// and members are rebuilt when its targets or exclusions, or the agents they resolve to, changed; an invalid or deleted one's are
 // cleared. An invalid Scope's validation error is returned once its membership is cleared (see IsValidationError).
 // A Scope saved again since it was loaded is left to that save.
 func SyncScopeMembership(ctx context.Context, scope models.Scope) error {
@@ -58,16 +62,16 @@ func SyncScopeMembership(ctx context.Context, scope models.Scope) error {
 		return membership.Clear(ctx, scope.ID)
 	}
 
-	var targets []v1.ScopeTarget
-	if err := json.Unmarshal(scope.Targets, &targets); err != nil {
-		validationErr := NewValidationError("invalid targets: %v", err)
+	spec, err := ScopeSpec(scope)
+	if err != nil {
+		validationErr := NewValidationError("%v", err)
 		if err := membership.Clear(ctx, scope.ID); err != nil {
 			return err
 		}
 		return validationErr
 	}
 
-	resolved, validationErr := ValidateScope(ctx, targets)
+	resolved, validationErr := ValidateScope(ctx, spec)
 	if validationErr != nil && !IsValidationError(validationErr) {
 		return validationErr
 	}

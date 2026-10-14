@@ -368,14 +368,14 @@ func addObjectGrants(ctx context.Context, claim *claim, selectors v1.PermissionO
 // A missing or invalid Scope selects nothing.
 func addScopeGrants(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSelector, claim *claim) error {
 	for _, ref := range scopeRefs {
-		scopeID, targets, err := adapter.LoadScope(ctx, nil, ref.Namespace, ref.Name)
+		scopeID, spec, err := adapter.LoadScope(ctx, nil, ref.Namespace, ref.Name)
 		if err != nil {
 			if adapter.IsValidationError(err) {
 				ctx.Warnf("scope %s/%s selects nothing: %v", ref.Namespace, ref.Name, err)
 				continue
 			}
 			return fmt.Errorf("failed to load scope %s/%s: %w", ref.Namespace, ref.Name, err)
-		} else if targets == nil {
+		} else if spec == nil {
 			ctx.Warnf("scope %s/%s not found", ref.Namespace, ref.Name)
 			continue
 		}
@@ -383,7 +383,7 @@ func addScopeGrants(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSe
 		// Add scope UUID for view row-level grants
 		claim.scopes = append(claim.scopes, scopeID)
 
-		for _, target := range targets {
+		for _, target := range spec.Targets {
 			kind, selector := target.Selector()
 			if target.View != nil {
 				claim.view = append(claim.view, viewRefToFilter(dutyRBAC.ViewRef{ID: selector.ID, Name: selector.Name, Namespace: selector.Namespace}))

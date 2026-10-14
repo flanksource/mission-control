@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/flanksource/duty/rbac/policy"
-	"github.com/flanksource/duty/types"
 	"github.com/samber/lo"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -205,28 +204,32 @@ func (c ActionContract) validateInput(input string, scope ScopeSelection) error 
 				c.Action, input, strings.Join(accepted, ", "), scope.Name, strings.Join(scope.DeclaredTypes(), ", "))
 		}
 
-		for _, selector := range scope.Selectors[kind] {
-			if err := c.enforceable(kind, selector); err != nil {
-				return fmt.Errorf("scope %s: %w", scope.Name, err)
-			}
+		if err := c.enforceable(kind, scope); err != nil {
+			return fmt.Errorf("scope %s: %w", scope.Name, err)
 		}
 	}
 
 	return nil
 }
 
-// enforceable checks that the selector can be enforced as written wherever the action is checked.
-func (c ActionContract) enforceable(kind string, selector types.ResourceSelector) error {
-	switch c.enforcement {
-	case enforcedOnObjects:
-		if !selector.Wildcard() {
-			return fmt.Errorf(`%s is only checked on whole types, so its %s selectors must be exactly name: "*"`, c.Action, kind)
-		}
-	case enforcedWithRows:
-		// Membership is decided by the resource alone, so listings can filter by any Scope.
-		// Connections aren't filtered by row.
-		if kind == policy.ResourceConnection && !selector.Wildcard() {
-			return fmt.Errorf(`connections aren't filtered by row, so %s can only select them with name: "*"`, c.Action)
+// enforceable checks that the Scope's selection of the type can be enforced as written wherever the action is checked.
+// A type the Scope excludes resources of isn't selected entirely, whatever its selectors.
+func (c ActionContract) enforceable(kind string, scope ScopeSelection) error {
+	excluded := len(scope.Exclusions[kind]) > 0
+	for _, selector := range scope.Selectors[kind] {
+		switch c.enforcement {
+		case enforcedOnObjects:
+			if excluded {
+				return fmt.Errorf(`%s is only checked on whole types, so it can't take a scope that excludes %s`, c.Action, kind)
+			} else if !selector.Wildcard() {
+				return fmt.Errorf(`%s is only checked on whole types, so its %s selectors must be exactly name: "*"`, c.Action, kind)
+			}
+		case enforcedWithRows:
+			// Membership is decided by the resource alone, so listings can filter by any Scope.
+			// Connections aren't filtered by row.
+			if kind == policy.ResourceConnection && (excluded || !selector.Wildcard()) {
+				return fmt.Errorf(`connections aren't filtered by row, so %s can only select them with name: "*" and no exclusions`, c.Action)
+			}
 		}
 	}
 

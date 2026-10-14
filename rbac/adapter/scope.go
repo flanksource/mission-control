@@ -1,12 +1,14 @@
 package adapter
 
 import (
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	gocache "github.com/patrickmn/go-cache"
@@ -23,6 +25,9 @@ type ScopeSelection struct {
 	Name      string
 	Selectors map[string][]types.ResourceSelector
 
+	// Exclusions remove resources from what Selectors select, by resource type.
+	Exclusions map[string][]types.ResourceSelector
+
 	// Shipped is set for a Scope Mission Control ships, which can't be changed through the API or Kubernetes.
 	Shipped bool
 }
@@ -32,6 +37,14 @@ func (s ScopeSelection) DeclaredTypes() []string {
 	kinds := lo.Keys(s.Selectors)
 	slices.Sort(kinds)
 	return kinds
+}
+
+// SelectsEntirely reports whether the Scope selects every resource of the type: it has a whole-type target of the type
+// and excludes nothing of it. It mirrors membership.WholeTypes, which decides which types are stored whole.
+func (s ScopeSelection) SelectsEntirely(kind string) bool {
+	return len(s.Exclusions[kind]) == 0 && lo.SomeBy(s.Selectors[kind], func(selector types.ResourceSelector) bool {
+		return selector.Wildcard()
+	})
 }
 
 // ResolveScope returns what the Scope a reference names selects. A bare name is resolved in the namespace.
@@ -52,28 +65,53 @@ func ResolveScope(ctx context.Context, cache *gocache.Cache, namespace, ref stri
 		return ScopeSelection{}, NewInvalid(ReasonScopeNotFound, "scope %s/%s not found", namespace, name)
 	}
 
-	selection := NewScopeSelection(scope.id, ref, scope.targets)
+	selection := NewScopeSelection(scope.id, ref, scope.spec)
 	selection.Shipped = scope.shipped
 	return selection, nil
 }
 
-// NewScopeSelection returns what the targets of a valid Scope select.
-func NewScopeSelection(id, name string, targets []v1.ScopeTarget) ScopeSelection {
+// NewScopeSelection returns what the targets of a valid Scope select, less its exclusions.
+func NewScopeSelection(id, name string, spec v1.ScopeSpec) ScopeSelection {
 	selection := ScopeSelection{ID: id, Name: name, Selectors: map[string][]types.ResourceSelector{}}
-	for _, target := range targets {
+	for _, target := range spec.Targets {
 		kind, selector := target.Selector()
 		selection.Selectors[kind] = append(selection.Selectors[kind], selector)
+	}
+	for _, exclusion := range spec.Exclude {
+		if selection.Exclusions == nil {
+			selection.Exclusions = map[string][]types.ResourceSelector{}
+		}
+		kind, selector := exclusion.Selector()
+		selection.Exclusions[kind] = append(selection.Exclusions[kind], selector)
 	}
 
 	return selection
 }
 
-// ValidateScope validates the targets of a Scope, and returns them with every agent resolved to its id.
+// ValidateScope validates the targets and exclusions of a Scope, and returns them with every agent resolved to its id.
 // Agents are resolved on every validation: a name follows the agent registered under it,
 // an id only matches that one registration.
-func ValidateScope(ctx context.Context, targets []v1.ScopeTarget) ([]v1.ScopeTarget, error) {
-	if err := ValidateScopeTargets(targets); err != nil {
-		return nil, NewValidationError("%v", err)
+func ValidateScope(ctx context.Context, spec v1.ScopeSpec) (v1.ScopeSpec, error) {
+	if err := ValidateScopeSpec(spec); err != nil {
+		return v1.ScopeSpec{}, NewValidationError("%v", err)
+	}
+
+	resolved := v1.ScopeSpec{Description: spec.Description}
+	var err error
+	if resolved.Targets, err = resolveAgents(ctx, "target", spec.Targets); err != nil {
+		return v1.ScopeSpec{}, err
+	}
+	if resolved.Exclude, err = resolveAgents(ctx, "exclusion", spec.Exclude); err != nil {
+		return v1.ScopeSpec{}, err
+	}
+	return resolved, nil
+}
+
+// resolveAgents returns copies of the targets with every agent resolved to its id.
+// An agent that doesn't resolve invalidates the whole Scope, exclusions included: dropping an exclusion would widen it.
+func resolveAgents(ctx context.Context, role string, targets []v1.ScopeTarget) ([]v1.ScopeTarget, error) {
+	if targets == nil {
+		return nil, nil
 	}
 
 	resolved := make([]v1.ScopeTarget, 0, len(targets))
@@ -83,7 +121,7 @@ func ValidateScope(ctx context.Context, targets []v1.ScopeTarget) ([]v1.ScopeTar
 		if selector.Agent != "" {
 			id, err := resolveAgent(ctx, selector.Agent)
 			if err != nil {
-				return nil, withContext(err, "target %d (%s)", i, kind)
+				return nil, withContext(err, "%s %d (%s)", role, i, kind)
 			}
 			switch {
 			case target.Config != nil:
@@ -104,6 +142,20 @@ func ValidateScope(ctx context.Context, targets []v1.ScopeTarget) ([]v1.ScopeTar
 	return resolved, nil
 }
 
+// ScopeSpec returns the targets and exclusions a stored Scope was saved with.
+func ScopeSpec(scope models.Scope) (v1.ScopeSpec, error) {
+	spec := v1.ScopeSpec{Description: scope.Description}
+	if err := json.Unmarshal(scope.Targets, &spec.Targets); err != nil {
+		return v1.ScopeSpec{}, fmt.Errorf("invalid targets: %w", err)
+	}
+	if len(scope.Exclude) > 0 {
+		if err := json.Unmarshal(scope.Exclude, &spec.Exclude); err != nil {
+			return v1.ScopeSpec{}, fmt.Errorf("invalid exclude: %w", err)
+		}
+	}
+	return spec, nil
+}
+
 // resolveAgent returns the id of the agent with the given name. The value is never read as an id.
 func resolveAgent(ctx context.Context, agent string) (string, error) {
 	var ids []uuid.UUID
@@ -118,11 +170,54 @@ func resolveAgent(ctx context.Context, agent string) (string, error) {
 	return ids[0].String(), nil
 }
 
-// maxScopeTargets is the most targets a Scope can have.
+// maxScopeTargets is the most targets, and the most exclusions, a Scope can have.
 const maxScopeTargets = 10
 
+// excludableTypes are the resource types a Scope can exclude resources of. A type with an exclusion has a stored
+// member per resource instead of one whole-type member, so it's limited to types with few resources.
+var excludableTypes = []string{policy.ResourcePlaybook}
+
+// ValidateScopeSpec validates the targets and exclusions of a Scope on their own: each selects exactly one resource
+// type, with a selector that type supports, and each exclusion removes resources of a type the targets select.
+// A Scope that fails it can never become valid, so the API rejects it.
+func ValidateScopeSpec(spec v1.ScopeSpec) error {
+	if err := ValidateScopeTargets(spec.Targets); err != nil {
+		return err
+	}
+
+	if len(spec.Exclude) > maxScopeTargets {
+		return fmt.Errorf("a scope can have at most %d exclusions, not %d", maxScopeTargets, len(spec.Exclude))
+	}
+
+	selected := map[string]bool{}
+	for _, target := range spec.Targets {
+		kind, _ := target.Selector()
+		selected[kind] = true
+	}
+
+	for i, exclusion := range spec.Exclude {
+		if n := exclusion.TypeCount(); n != 1 {
+			return fmt.Errorf("exclusion %d must select exactly one resource type, not %d", i, n)
+		}
+
+		kind, selector := exclusion.Selector()
+		if !slices.Contains(excludableTypes, kind) {
+			return fmt.Errorf("exclusion %d (%s): only %s can be excluded", i, kind, strings.Join(excludableTypes, ", "))
+		} else if !selected[kind] {
+			return fmt.Errorf("exclusion %d (%s): no target selects %s, so it excludes nothing", i, kind, kind)
+		} else if selector.Wildcard() {
+			return fmt.Errorf(`exclusion %d (%s): name: "*" excludes every %s; remove its targets instead`, i, kind, kind)
+		}
+		if err := ValidateSelector(kind, selector); err != nil {
+			return fmt.Errorf("exclusion %d (%s): %w", i, kind, err)
+		}
+	}
+
+	return nil
+}
+
 // ValidateScopeTargets validates the targets of a Scope on their own: each selects exactly one resource type,
-// with a selector that type supports. A Scope that fails it can never become valid, so the API rejects it.
+// with a selector that type supports.
 func ValidateScopeTargets(targets []v1.ScopeTarget) error {
 	if len(targets) == 0 {
 		return fmt.Errorf("a scope must have at least one target")
