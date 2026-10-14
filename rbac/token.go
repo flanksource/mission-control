@@ -67,16 +67,24 @@ func ForgetAccessToken(id uuid.UUID) {
 }
 
 // TokenLimit returns the Roles that limit a check made as the subject, and whether it's limited.
-// A check is limited when the request was made with an access token that lists Roles and the subject is the
-// request's own user, the token's person. Checks made as another subject, e.g. a playbook during a run the request
-// started, aren't limited, and neither are requests made without a token. A token that lists no Roles, e.g. an
-// agent's, doesn't limit.
+// A check is limited when the request was made with an access token and the subject is the request's own user, the
+// token's person. Checks made as another subject, e.g. a playbook during a run the request started, aren't limited,
+// and neither are requests made without a token.
+//
+// Only an agent's token, on a request made as that agent, lists no Roles and isn't limited. Any other token that
+// lists none is limited by no Role, so it may do nothing.
 func TokenLimit(ctx context.Context, subject string) (models.AccessTokenRoles, bool) {
 	token, ok := ctx.Value(accessTokenKey{}).(requestToken)
-	if !ok || len(token.roles) == 0 || subject != token.person {
+	if !ok || subject != token.person {
 		return nil, false
 	}
-	return token.roles, true
+	if len(token.roles) > 0 {
+		return token.roles, true
+	}
+	if agent := ctx.Agent(); agent != nil && agent.PersonID != nil && agent.PersonID.String() == token.person {
+		return nil, false
+	}
+	return models.AccessTokenRoles{}, true
 }
 
 // withinTokenLimit reports whether the request's access token allows a check as the subject: it isn't limited,
