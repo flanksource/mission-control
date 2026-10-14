@@ -74,6 +74,15 @@ type RoleBindingSubjects struct {
 	Plugins []PermissionGroupSelector `json:"plugins,omitempty" yaml:"plugins,omitempty"`
 }
 
+// AllPeople is the people entry that selects every person: every human user of Mission Control.
+// It never selects agents, users of external identity providers or the people of access tokens.
+const AllPeople = "*"
+
+// AllPeople reports whether the subjects select every person.
+func (t RoleBindingSubjects) AllPeople() bool {
+	return len(t.People) == 1 && t.People[0] == AllPeople
+}
+
 func (t RoleBindingSubjects) Empty() bool {
 	s := t.PermissionGroupSubjects
 	return len(t.OIDC) == 0 && len(t.Plugins) == 0 && len(s.People) == 0 && len(s.Teams) == 0 &&
@@ -157,6 +166,17 @@ func (t RoleBindingSpec) Validate() error {
 	}
 
 	for _, person := range t.Subjects.People {
+		if person == AllPeople {
+			if len(t.Subjects.People) > 1 {
+				return fmt.Errorf(`people: %q selects every person and must be the only entry`, AllPeople)
+			}
+			continue
+		}
+
+		if strings.Contains(person, "*") {
+			return fmt.Errorf(`person %q must be an email address; patterns aren't supported, use %q alone to select every person`, person, AllPeople)
+		}
+
 		if address, err := mail.ParseAddress(person); err != nil || address.Address != person {
 			return fmt.Errorf("person %q must be an email address", person)
 		}

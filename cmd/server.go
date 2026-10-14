@@ -382,6 +382,7 @@ func tableUpdatesHandler(ctx context.Context) {
 	scopeUpdateChan := notifyRouter.GetOrCreateChannel("scopes")
 	agentUpdateChan := notifyRouter.GetOrCreateChannel("agents")
 	teamMembersUpdateChan := notifyRouter.GetOrCreateChannel("team_members")
+	peopleUpdateChan := notifyRouter.GetOrCreateChannel("people")
 
 	// use a single job instance to maintain retention
 	pushPlaybookActionsJob := jobs.PushPlaybookActions(ctx)
@@ -505,6 +506,10 @@ func tableUpdatesHandler(ctx context.Context) {
 		// the reload re-validates every Scope and rebuilds the ones that changed.
 		case <-agentUpdateChan:
 			schedulePolicyReload("agent")
+
+		// A created or deleted person changes who a RoleBinding selects, by email or by people: ["*"].
+		case <-peopleUpdateChan:
+			schedulePolicyReload("people")
 
 		case <-policyReloadTimer.C:
 			policyReloadPending = false

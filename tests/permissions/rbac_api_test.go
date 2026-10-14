@@ -156,6 +156,12 @@ var _ = Describe("Scope, Role and RoleBinding API", Ordered, func() {
 		{"a binding to guests, beside a team", "/rbac/role-bindings", object("guests", map[string]any{
 			"role": "runner", "subjects": map[string]any{"roles": []string{policy.RoleGuest}, "teams": []string{"rbac-api-team"}},
 		})},
+		{"a binding to every person beside another person", "/rbac/role-bindings", object("all-people-and-one", map[string]any{
+			"role": "runner", "subjects": map[string]any{"people": []string{"*", "someone@example.com"}},
+		})},
+		{"a binding to an email pattern", "/rbac/role-bindings", object("email-pattern", map[string]any{
+			"role": "runner", "subjects": map[string]any{"people": []string{"*@example.com"}},
+		})},
 		{"a binding with a match that doesn't compile", "/rbac/role-bindings", object("bad-match", map[string]any{
 			"role": "runner", "subjects": map[string]any{"oidc": []any{map[string]any{"provider": "oipa", "match": "claims.tenant =="}}},
 		})},
