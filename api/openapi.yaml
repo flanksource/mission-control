@@ -222,7 +222,7 @@ paths:
     get:
       tags: [Authentication]
       summary: List access tokens
-      description: List all access tokens for the current user
+      description: List the current user's own access tokens. An agent's tokens are listed with the agent.
       responses:
         "200":
           description: List of tokens
@@ -244,7 +244,7 @@ paths:
     delete:
       tags: [Authentication]
       summary: Delete access token
-      description: Delete an access token
+      description: Delete one of the current user's own access tokens
       parameters:
         - name: id
           in: path

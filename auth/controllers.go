@@ -11,7 +11,6 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 
@@ -204,9 +203,8 @@ func ListTokens(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "error fetching user"))
 	}
 
-	// A person lists their own tokens without a grant, and agents' tokens when they may rotate or revoke them
-	// (specs/authorization/roles.md, Section 4.5)
-	payload, err := db.ListAccessTokens(ctx, user.ID, icrbac.CheckContext(ctx, policy.ObjectAgent, policy.ActionUpdate))
+	// A person lists their own tokens without a grant. Agents' tokens are listed with the agent.
+	payload, err := db.ListAccessTokens(ctx, user.ID)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "unable to list tokens"))
 	}
@@ -215,6 +213,11 @@ func ListTokens(c echo.Context) error {
 
 func DeleteToken(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
+	user := ctx.User()
+	if user == nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "error fetching user"))
+	}
+
 	tokenID := c.Param("id")
 	if tokenID == "" {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "token id not provided"))
@@ -228,18 +231,10 @@ func DeleteToken(c echo.Context) error {
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error fetching token"))
 	}
-	personType, err := db.GetPersonType(ctx, token.PersonID.String())
-	if err != nil {
-		return dutyAPI.WriteError(c, err)
-	}
 
-	// Revoking an agent's token takes update on agent. No action grants managing another person's tokens
-	// (specs/authorization/roles.md, Section 4.5).
-	if personType == db.PersonTypeAgent {
-		if !icrbac.CheckContext(ctx, policy.ObjectAgent, policy.ActionUpdate) {
-			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "revoking an agent's token takes update on agent"))
-		}
-	} else if lo.FromPtr(token.CreatedBy) != ctx.User().ID {
+	// A person deletes only their own tokens. Agents' tokens are deleted with the agent, and no action grants
+	// deleting another person's (specs/authorization/identities.md, Section 4).
+	if token.PersonID != user.ID || lo.FromPtr(token.CreatedBy) != user.ID {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "only the creator can delete an access token"))
 	}
 
