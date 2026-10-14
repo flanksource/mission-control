@@ -254,26 +254,39 @@ func MigrateLegacyTokenPeople(ctx context.Context) error {
 	migrated, err := db.MigrateLegacyTokenPeople(ctx)
 	for _, m := range migrated {
 		person := m.Person.String()
-		if _, err := rbac.Enforcer().DeleteRolesForUser(person); err != nil {
-			ctx.Errorf("failed to delete the roles of token person %s: %v", person, err)
-		}
-		if _, err := rbac.Enforcer().DeletePermissionsForUser(person); err != nil {
-			ctx.Errorf("failed to delete the permissions of token person %s: %v", person, err)
-		}
+		removeRulesOf(ctx, person)
 
 		if m.Deleted {
 			deletedTokensCache.Set(m.Token.ID.String(), true, cache.DefaultExpiration)
-			ctx.Logger.Infof("deleted access token %q (%s) of token person %s: it names no owner", m.Token.Name, m.Token.ID, person)
+			ctx.Logger.Infof("deleted access token %q (%s) of token person %s: its owner %v is missing or isn't a person", m.Token.Name, m.Token.ID, person, m.Token.CreatedBy)
 		} else if m.Renamed != "" {
 			ctx.Logger.Infof("moved access token %q (%s) from token person %s to its owner %s as %q: the owner has a token of its name", m.Token.Name, m.Token.ID, person, m.Token.CreatedBy, m.Renamed)
 		} else {
 			ctx.Logger.Infof("moved access token %q (%s) from token person %s to its owner %s", m.Token.Name, m.Token.ID, person, m.Token.CreatedBy)
 		}
 	}
-	if len(migrated) > 0 {
+
+	// Token people whose tokens are gone would otherwise stay selectable as people
+	leftovers, leftoverErr := db.SoftDeleteLegacyTokenPeople(ctx)
+	for _, id := range leftovers {
+		removeRulesOf(ctx, id.String())
+		ctx.Logger.Infof("soft-deleted token person %s: it has no access token", id)
+	}
+
+	if len(migrated) > 0 || len(leftovers) > 0 {
 		FlushTokenCache()
 	}
-	return err
+	return errors.Join(err, leftoverErr)
+}
+
+// removeRulesOf removes the person's grouping rules and policies from the permission engine.
+func removeRulesOf(ctx context.Context, person string) {
+	if _, err := rbac.Enforcer().DeleteRolesForUser(person); err != nil {
+		ctx.Errorf("failed to delete the roles of token person %s: %v", person, err)
+	}
+	if _, err := rbac.Enforcer().DeletePermissionsForUser(person); err != nil {
+		ctx.Errorf("failed to delete the permissions of token person %s: %v", person, err)
+	}
 }
 
 // DeleteAccessToken deletes an access token, and drops what's cached for requests made with it.

@@ -102,7 +102,8 @@ type LegacyTokenPersonMigration struct {
 	// Person is the token's former person, which was soft-deleted.
 	Person uuid.UUID
 
-	// Deleted is set when the token was deleted, rather than moved to its owner, since it names no owner.
+	// Deleted is set when the token was deleted, rather than moved to its owner, since it names no owner that's a
+	// person: created_by is empty, or a person that's deleted, an agent or another token's person.
 	Deleted bool
 
 	// Renamed is the token's new name when its owner already had a token of its name, or empty.
@@ -110,8 +111,8 @@ type LegacyTokenPersonMigration struct {
 }
 
 // MigrateLegacyTokenPeople moves every access token of a person of type access_token to its owner, created_by,
-// soft-deletes that person and removes its rules from casbin_rule. A token without an owner is deleted, and a token
-// whose name its owner already uses is renamed.
+// soft-deletes that person and removes its rules from casbin_rule. A token without an owner that's a person is
+// deleted, and a token whose name its owner already uses is renamed.
 // It's idempotent: each token is migrated in a transaction, and a migrated token's person is its owner.
 func MigrateLegacyTokenPeople(ctx context.Context) ([]LegacyTokenPersonMigration, error) {
 	var tokens []models.AccessToken
@@ -123,8 +124,14 @@ func MigrateLegacyTokenPeople(ctx context.Context) ([]LegacyTokenPersonMigration
 	var migrated []LegacyTokenPersonMigration
 	var errs []error
 	for _, token := range tokens {
-		result := LegacyTokenPersonMigration{Token: token, Person: token.PersonID, Deleted: token.CreatedBy == nil}
+		result := LegacyTokenPersonMigration{Token: token, Person: token.PersonID}
 		err := ctx.DB().Transaction(func(tx *gorm.DB) error {
+			owner, err := isTokenOwner(tx, token.CreatedBy)
+			if err != nil {
+				return err
+			}
+			result.Deleted = !owner
+
 			if result.Deleted {
 				if err := tx.Where("id = ?", token.ID).Delete(&models.AccessToken{}).Error; err != nil {
 					return err
@@ -160,4 +167,40 @@ func MigrateLegacyTokenPeople(ctx context.Context) ([]LegacyTokenPersonMigration
 		migrated = append(migrated, result)
 	}
 	return migrated, errors.Join(errs...)
+}
+
+// isTokenOwner reports whether the person may own a token: they exist, aren't deleted, and are neither an agent
+// nor a token's person.
+func isTokenOwner(tx *gorm.DB, id *uuid.UUID) (bool, error) {
+	if id == nil {
+		return false, nil
+	}
+	var count int64
+	err := tx.Model(&models.Person{}).
+		Where("id = ? AND deleted_at IS NULL", *id).
+		Where("(type IS NULL OR type NOT IN ?)", []string{legacyPersonTypeAccessToken, PersonTypeAgent}).
+		Count(&count).Error
+	return count > 0, err
+}
+
+// SoftDeleteLegacyTokenPeople soft-deletes the people of type access_token that no access token belongs to any more,
+// e.g. one whose token was deleted before its person, and removes their rules from casbin_rule. It returns their ids.
+func SoftDeleteLegacyTokenPeople(ctx context.Context) ([]uuid.UUID, error) {
+	var ids []uuid.UUID
+	err := ctx.DB().Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&models.Person{}).
+			Where("type = ? AND deleted_at IS NULL", legacyPersonTypeAccessToken).
+			Where("NOT EXISTS (SELECT 1 FROM access_tokens t WHERE t.person_id = people.id)").
+			Pluck("id", &ids).Error; err != nil || len(ids) == 0 {
+			return err
+		}
+		if err := tx.Model(&models.Person{}).Where("id IN ?", ids).UpdateColumn("deleted_at", duty.Now()).Error; err != nil {
+			return err
+		}
+		return tx.Exec("DELETE FROM casbin_rule WHERE v0 IN ?", lo.Map(ids, func(id uuid.UUID, _ int) string { return id.String() })).Error
+	})
+	if err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to soft-delete the people of deleted access tokens")
+	}
+	return ids, nil
 }
