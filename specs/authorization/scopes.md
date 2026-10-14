@@ -251,7 +251,7 @@ A selector MUST only use the fields Section 3.1 lists for its type. Anything els
 
 A Scope is valid when:
 
-- It has at least one target, and at most ten.
+- It has at least one target, and at most ten. _Why ten:_ a Scope needs some limit on its targets, and ten was picked arbitrarily when Scopes were first written. There's no technical reason for the number.
 - Every target sets exactly one resource type.
 - Every selector has at least one condition.
 - Every selector only uses fields its type supports (Section 3.1), with valid values (Sections 5.1, 5.2).
