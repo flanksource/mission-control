@@ -85,9 +85,6 @@ func whoamiText(report whoamiReport) clickyapi.Text {
 	if report.Auth.User != nil {
 		t = addWhoamiLine(t, "user", clicky.Text(formatUser(report.Auth.User), "font-bold"))
 	}
-	if len(report.Auth.Roles) > 0 {
-		t = addWhoamiLine(t, "roles", clicky.Text(strings.Join(report.Auth.Roles, ", "), "text-purple-600"))
-	}
 	if report.Auth.AccessToken != nil {
 		value := statusText(report.Auth.AccessToken.Status, report.Auth.AccessToken.Error)
 		if report.Auth.AccessToken.AutoRenew {

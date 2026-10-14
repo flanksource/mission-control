@@ -1094,15 +1094,13 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(rec.Code).To(Equal(http.StatusOK))
 			var response struct {
 				Payload struct {
-					Access      map[string]map[string]mcRBAC.Access `json:"access"`
-					Actions     map[string]bool                     `json:"access_actions"`
-					Roles       []string                            `json:"roles"`
-					Permissions []policy.Permission                 `json:"permissions"`
+					Access  map[string]map[string]mcRBAC.Access `json:"access"`
+					Actions map[string]bool                     `json:"access_actions"`
 				} `json:"payload"`
 			}
 			Expect(json.Unmarshal(rec.Body.Bytes(), &response)).To(Succeed())
-			Expect(response.Payload.Roles).ToNot(BeNil())
-			Expect(response.Payload.Permissions).ToNot(BeNil())
+			Expect(rec.Body.String()).ToNot(ContainSubstring(`"roles"`))
+			Expect(rec.Body.String()).ToNot(ContainSubstring(`"permissions"`))
 			Expect(lo.Keys(response.Payload.Access)).To(ConsistOf(
 				policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck, policy.ResourceCanary,
 				policy.ResourcePlaybook, policy.ResourceConnection, policy.ResourceScraper,

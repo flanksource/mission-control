@@ -62,7 +62,6 @@ type whoamiAuth struct {
 	TokenTTL      string             `json:"token_ttl,omitempty"`
 	RefreshStatus string             `json:"refresh_status,omitempty"`
 	User          map[string]any     `json:"user,omitempty"`
-	Roles         []string           `json:"roles,omitempty"`
 	AccessToken   *accessTokenStatus `json:"access_token,omitempty"`
 	Error         string             `json:"error,omitempty"`
 }
@@ -253,7 +252,7 @@ func probeAuth(parent gocontext.Context, mcCtx *mccontext.MCContext, dbConn stri
 		out.AccessToken = before
 	}
 
-	user, roles, endpoint, statusCode, err := callWhoami(parent, mcCtx.Server, token)
+	user, endpoint, statusCode, err := callWhoami(parent, mcCtx.Server, token)
 	out.Endpoint = endpoint
 	if err != nil {
 		out.Status = "error"
@@ -266,7 +265,6 @@ func probeAuth(parent gocontext.Context, mcCtx *mccontext.MCContext, dbConn stri
 
 	out.Status = "ok"
 	out.User = user
-	out.Roles = roles
 
 	after := inspectAccessToken(dbConn, token)
 	if after != nil {
@@ -290,7 +288,7 @@ type whoamiAttempt struct {
 	err      error
 }
 
-func callWhoami(parent gocontext.Context, server, token string) (map[string]any, []string, string, int, error) {
+func callWhoami(parent gocontext.Context, server, token string) (map[string]any, string, int, error) {
 	if parent == nil {
 		parent = gocontext.Background()
 	}
@@ -311,14 +309,14 @@ func callWhoami(parent gocontext.Context, server, token string) (map[string]any,
 				attempts = append(attempts, whoamiAttempt{endpoint, err})
 				continue
 			}
-			return nil, nil, endpoint, statusCode, err
+			return nil, endpoint, statusCode, err
 		}
-		return decoded.Payload.User, decoded.Payload.Roles, endpoint, statusCode, nil
+		return decoded.Payload.User, endpoint, statusCode, nil
 	}
 	if len(attempts) > 0 {
-		return nil, nil, "", lastStatus, whoamiAttemptsError(attempts)
+		return nil, "", lastStatus, whoamiAttemptsError(attempts)
 	}
-	return nil, nil, "", lastStatus, fmt.Errorf("no whoami endpoint candidates for %s", server)
+	return nil, "", lastStatus, fmt.Errorf("no whoami endpoint candidates for %s", server)
 }
 
 func whoamiAttemptOnce(parent gocontext.Context, base, token string) (*sdk.WhoamiResponse, int, error) {

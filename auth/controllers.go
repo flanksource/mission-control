@@ -130,27 +130,10 @@ func WhoAmI(c echo.Context) error {
 
 	hostname, _ := os.Hostname()
 
-	roles, err := rbac.RolesForUser(ctx.Subject())
-	if err != nil {
-		ctx.Warnf("Error getting roles: %v", err)
-	}
-	if roles == nil {
-		roles = []string{}
-	}
-	permissions, err := rbac.PermsForUser(ctx.Subject())
-	if err != nil {
-		ctx.Warnf("Error getting permissions: %v", err)
-	}
-	if permissions == nil {
-		permissions = []policy.Permission{}
-	}
-
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{
 		Message: "success",
 		Payload: map[string]any{
 			"user":           user,
-			"roles":          roles,
-			"permissions":    permissions,
 			"access":         icrbac.AccessSummary(ctx),
 			"access_actions": icrbac.AccessActions(ctx),
 			"hostname":       hostname,

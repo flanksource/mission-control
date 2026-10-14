@@ -243,8 +243,7 @@ func stringifyServerErrorField(value any) string {
 
 type WhoamiResponse struct {
 	Payload struct {
-		User  map[string]any `json:"user"`
-		Roles []string       `json:"roles"`
+		User map[string]any `json:"user"`
 	} `json:"payload"`
 }
 
