@@ -141,7 +141,7 @@ func ValidateScopeTargets(targets []v1.ScopeTarget) error {
 
 // ValidateSelector checks the values of a converted Scope selector.
 // name matches exactly, any name when set to "*", or names starting with a prefix when it ends with "*".
-// namespace and id only match exactly. Other patterns, lists and exclusions aren't supported.
+// namespace and id only match exactly. Other patterns aren't supported; "," and "!" are ordinary characters.
 func ValidateSelector(kind string, selector types.ResourceSelector) error {
 	if selector.ID == "" && selector.Name == "" && selector.Namespace == "" && selector.Agent == "" &&
 		len(selector.Types) == 0 && selector.TagSelector == "" && selector.LabelSelector == "" {
@@ -211,24 +211,24 @@ func validateEqualities(field, value string) error {
 }
 
 // ValidateName checks a name: an exact value, "*" for any name, or a prefix followed by one "*".
-// Lists and exclusions aren't supported.
+// Every other character, "," and "!" included, is literal.
 func ValidateName(value string) error {
 	if value == "*" {
 		return nil
 	}
-	if prefix, ok := strings.CutSuffix(value, "*"); ok && prefix != "" && !strings.ContainsAny(prefix, "*!,") {
+	if prefix, ok := strings.CutSuffix(value, "*"); ok && prefix != "" && !strings.Contains(prefix, "*") {
 		return nil
 	}
-	if strings.ContainsAny(value, "*!,") {
-		return fmt.Errorf(`name %q must be an exact value, "*", or a prefix followed by "*"; other patterns, lists and exclusions aren't supported`, value)
+	if strings.Contains(value, "*") {
+		return fmt.Errorf(`name %q must be an exact value, "*", or a prefix followed by "*"; other patterns aren't supported`, value)
 	}
 	return nil
 }
 
 // ValidateExact checks a value that only matches exactly. To match any value, the field is omitted.
 func ValidateExact(field, value string) error {
-	if strings.ContainsAny(value, "*!,") {
-		return fmt.Errorf(`%s %q must be an exact value; omit %s to match any, patterns, lists and exclusions aren't supported`, field, value, field)
+	if strings.Contains(value, "*") {
+		return fmt.Errorf(`%s %q must be an exact value; omit %s to match any`, field, value, field)
 	}
 	return nil
 }

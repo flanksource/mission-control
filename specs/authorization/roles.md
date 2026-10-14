@@ -38,6 +38,8 @@ spec:
 
 A Scope is a named set of resources (see `scopes.md`). A rule references exactly one Scope per input, by name. A Role MUST have a namespace, and `scopeRef` only names Scopes in it (`overview.md`, "Namespaces"). The resources a Scope selects can be in any namespace.
 
+A Role has at least one rule, and at most 200; the Roles Mission Control ships aren't limited, since `plugin-admin` has a rule per plugin operation. _Why 200:_ the number is arbitrary, and there's no technical reason for it. It's high because the shipped `admin` Role has a rule for every action on every type, 77 in all (`overview.md`, "Shipped Roles"), and a Role written by hand must be able to grant as much.
+
 Mission Control ships a few Roles, e.g. `viewer` and `admin` (`overview.md`, "Shipped Roles"). They're Roles like any other.
 
 ### 1.1 Why one Scope per input
@@ -105,7 +107,7 @@ For `playbook:run`, `target` is optional. A rule without it matches only runs wi
   - A pattern can cover actions that accept different resources. `*` covers both `read` (configs) and `playbook:run` (playbooks), and no single Scope fits both.
   - A pattern grants actions added later. If the `kubernetes-logs` plugin ships a new `exec-shell` operation, `invoke:kubernetes-logs:*` would grant it without anyone reviewing the Role.
 - A plugin action isn't checked against the installed plugins: plugins are installed and upgraded often, and a Role mustn't break when one is. A rule on an operation no plugin declares matches nothing until one does.
-- `create`, `update` and `delete` are only checked on all resources of a type, so their Scope MUST consist of whole-type targets only (`scopes.md`, Section 5.2).
+- `create`, `update` and `delete` MUST pick whole types (`scopes.md`, Section 3.1).
 
 An operation may make more than one check. For example, running a playbook on a config also checks `read` on that config. Section 4.3 lists every check each operation makes; a rule never grants the other checks implicitly.
 
@@ -125,9 +127,9 @@ A connection is read and used separately:
 | Create, change or delete it                                                                   | `create`, `update`, `delete` |
 
 - `read` MUST NOT return a connection's credentials, in plain text or decrypted from a secret. They're masked wherever a connection is shown.
-- Mission Control MUST check `connection:use` wherever it fills in a connection's credentials, as the subject doing the work (Section 4.4). Looking a connection up by name to record which one is meant, without its credentials, checks nothing.
-- The check is made on the connection whose credentials are filled in, found exactly as it's found to fill them in. That includes every connection a connection's settings name, e.g. an HTTP connection's AWS signing connection, after settings read from a secret or configmap are resolved.
-- A `connection:use` rule's Scope may select connections with any target. It's only checked on the connection being used, never on a listing, so unlike `read` (Section 3.1) it needs no row filtering.
+- Mission Control MUST check `connection:use` wherever it fills in a connection's credentials, as the subject doing the work (`identities.md`, Section 2). Looking a connection up by name to record which one is meant, without its credentials, checks nothing.
+- The check is made on the connection being used, found exactly as it's found to fill in its credentials. `connection:use` on it covers every connection its settings name, e.g. an HTTP connection's AWS signing connection: their credentials are filled in for it without a check of their own. _Why:_ a connection is granted as a whole. Whoever may use it may use it as it's configured, whatever it relies on, so a grant on it never depends on how it's built. Whoever may change its settings (`update` on `connection`) decides what it relies on.
+- A `connection:use` rule's Scope may pick some connections, unlike a `read` rule's (`scopes.md`, Section 3.1): it's only checked on the connection being used, never on a listing.
 
 _Why two actions:_ seeing that a connection exists and acting with its credentials are different risks. With one action, letting someone see the connections a notification can use would let anything bound the same way send with them. _Why testing is a use:_ a test makes an authenticated call to the other system, and its result can show what the masked connection doesn't, e.g. whether the credentials work.
 
@@ -155,7 +157,7 @@ rules:
 
 - `property:manage` is one action for every write. A property changes what Mission Control does for everyone, e.g. which pages are enabled, so creating, changing and deleting one are equally privileged.
 - `event:read` covers the event queue (`event_queue`) and the recent events kept in memory by playbooks and notifications. Events are only written by Mission Control itself, so no action writes them.
-- `job:read` covers all job history, e.g. a cleanup job's runs and a scraper's runs, whether or not a job ran for a resource. A subject with it sees all of it, and a subject without it sees none, whatever resources they may read (`collection-access.md`, Section 3.1). A resource's latest job status shown in its own row stays visible with the resource (`scopes.md`, Section 3.2).
+- `job:read` covers all job history, e.g. a cleanup job's runs and a scraper's runs, whether or not a job ran for a resource. A subject with it sees all of it, and a subject without it sees none, whatever resources they may read (`collection-access.md`, Section 3.1). A resource's latest job status shown in its own row stays visible with the resource (Section 3.1).
 - `job:read` is as privileged as `admin`, like `person:manage`, and is only for subjects trusted as admins. A job's details and errors mention the resources it worked on, e.g. configs a scraper found or the playbook a run was refused for, which the holder may not otherwise be able to read. _Why not per resource:_ one job touches many resources, and its details aren't split by resource, so a row can't be shown only to those who may read everything it mentions.
 
 - Every other action takes a resource, and a rule that omits it is rejected. `read`, `create`, `update`, `delete` and every other generic action always take one: no rule grants them on everything.
@@ -240,11 +242,24 @@ A rule with `action: read` is checked in two places:
 
 Both MUST allow the same resources at every moment (`scopes.md`, Section 7.1): a resource a subject can open appears in their listings, and a resource in their listings can be opened. How Mission Control keeps the two in step is the design's business (`design/materialised-membership.md`).
 
-A `read` rule accepts any Scope whose membership is decided by the resource alone (`scopes.md`, Section 4.3), which every Scope is, with one exception: connections aren't filtered by row, so a `read` rule's Scope MUST select connections with a whole-type target only. The types that only take `name: "*"` (`scopes.md`, Section 5.3) can only be selected whole, so they need no row filtering either.
+A `read` rule accepts some or all of a type wherever its type allows it (`scopes.md`, Section 3.1). For connections, that's all of them only.
 
-Listings are filtered by row-level security, which is always on: there's no setting to turn it off. So a `read` rule whose Scope has a target that isn't a whole-type target (`scopes.md`, Section 5.2) filters listings to what it selects. A rule whose Scope consists of whole-type targets only doesn't need row filters: opening any resource and listing all of them allow the same resources. A binding's constraint can still narrow it, and then its listings are filtered by the constraint's Scope (`rolebindings.md`, Section 3.2).
+Listings are filtered by row-level security, which is always on: there's no setting to turn it off. So a `read` rule whose Scope picks some of a type (`scopes.md`, Section 3.1) filters listings to what it selects. A rule whose Scope consists of whole-type targets only doesn't need row filters: opening any resource and listing all of them allow the same resources. A binding's constraint can still narrow it, and then its listings are filtered by the constraint's Scope (`rolebindings.md`, Section 3.2).
 
-Records follow the resource they belong to (`scopes.md`, Section 3.2): a playbook run is listed and opened exactly when its playbook, and the config or check it ran on, can be read, and its steps exactly when the run can. Lookup views derived from a type, e.g. `config_types` or `config_tags`, which list the distinct values the UI's filters offer, are readable by anyone with a `read` grant on that type, and MUST only show values from rows the subject can read. A database table that's neither a type, a record of one, nor a lookup view derived from one isn't served through the database API.
+**Records.** Some data belongs to a resource rather than being one: a config's changes and analysis, a playbook's runs, a notification's send history and a check's statuses. A record isn't a type. It's listed and opened exactly when every resource it belongs to can be read:
+
+- A playbook run belongs to its playbook, and to the config or check it ran on, if any.
+- A run's steps, approvals and the data its agent reports belong to the run, so they follow the run.
+- A relationship between two configs belongs to both.
+- An artifact, e.g. a file a run's step or a check produced, belongs to what produced it: a run's step, a check, a config change or a scraper. So an artifact from a playbook run is visible exactly when the run is, whoever started the run.
+
+Job history isn't a record, even when a job ran for a resource, e.g. a scraper's runs: it's read whole with `job:read`, or not at all (Section 2.3). A resource's latest job status, where it's shown in the resource's own row, e.g. a canary's in `canaries_with_status`, is part of the resource and is visible with it.
+
+**TODO:** runs on a component. Today they follow their playbook alone, so anyone who can read the playbook sees them.
+
+_Why:_ who may see a run or a change is never a separate question from who may see what it's about. A run on a config is about the config as much as the playbook, so a subject who can't read the config can't read the run, its steps or their results.
+
+Lookup views derived from a type, e.g. `config_types` or `config_tags`, which list the distinct values the UI's filters offer, are readable by anyone with a `read` grant on that type, and MUST only show values from rows the subject can read. A database table that's neither a type, a record of one, nor a lookup view derived from one isn't served through the database API.
 
 Properties are the one thing read without a rule: any signed-in subject may read them. Reading them still requires authentication, like every other endpoint. They configure Mission Control's behaviour, e.g. which pages are enabled, and MUST NOT hold anything confidential. Writing them takes `property:manage` (Section 2.3). _Why:_ every page needs them before it can decide what to show, a subject with no grants included.
 
@@ -330,145 +345,9 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Use connection C, e.g. to send        | `connection:use`                            | C               | None                              |
 | Test connection C                     | `connection:use`                            | C               | None                              |
 
-The plugin's checks during the operation are made as the caller, except looking up a connection, which is checked as the plugin (Section 4.4). Approving or cancelling a run checks `read` on its resource for the same reason running it does: the run, its parameters and its results are about that resource, and are only readable with it (`scopes.md`, Section 3.2).
+The plugin's checks during the operation are made as the caller, except looking up a connection, which is checked as the plugin (`identities.md`, Section 3). Approving or cancelling a run checks `read` on its resource for the same reason running it does: the run, its parameters and its results are about that resource, and are only readable with it (Section 3.1).
 
-Each check is made as the subject performing the operation: the caller, or, where there's none, the resource doing the work (Section 4.4).
-
-### 4.4 Operations without a caller
-
-Some work isn't done by the person who started it: a playbook running on its schedule, from a webhook or from an event it's triggered by, a notification being sent, a playbook started by a notification or by another playbook. Mission Control has no identity of its own to run it as (`overview.md`, "Access"). It's checked as the resource doing it, which a RoleBinding selects like any subject (`rolebindings.md`, Section 2.5):
-
-| Work                                              | Starting it is checked as             | Checks made during it are made as |
-| ------------------------------------------------- | ------------------------------------- | --------------------------------- |
-| A person runs playbook P                          | The person                            | P                                 |
-| P runs on its schedule, from a webhook, or from an event it's triggered by | P: `playbook:run` on P, then `read` on the target | P |
-| Notification N runs playbook P                    | N                                     | P                                 |
-| Playbook Q's run starts playbook P                | Q                                     | P                                 |
-| N is evaluated against an event                   | Not checked                           | Not checked                       |
-| N is sent                                         | Not checked: no one asks for the send | N                                 |
-| A person invokes operation O of plugin X on config C | The person: `invoke:X:O`, then `read` on C | The person, except connection lookups: X |
-
-- A run no person started is created only if the playbook passes the checks a person starting it would (Section 4.3): `playbook:run` on itself, with the run's target if it has one, then `read` on the target. A playbook refused either check gets no run, and the refusal is recorded in its job history. _Why:_ starting a run makes the same checks whoever starts it, with no exception for the playbook. The `read` check also matters on its own: a run's templates are filled with its target's data before any step runs, so without it, a playbook could be triggered on configs it may not read and send their data anywhere.
-- A run's actions are checked as its playbook, whoever started it. A playbook with no binding can do nothing that's checked: it can't read a config, use a connection or run another playbook.
-- An action a run assigns to an agent runs there without being checked against the agent's own RoleBindings, e.g. for `connection:use` on the agent's connections, and the agent needn't know the playbook. The run was authorized here when it started, and the agent only fetches the actions assigned to it, by its own identity (Section 4.6). _Why:_ the playbook and its bindings live here, not on the agent, so no binding on the agent could select it, and the agent's token already proves the action is its own.
-- So whoever may run P may have P act with P's grants, through the parameters they pass too, e.g. a parameter naming the connection or config a step acts on. `playbook:run` on P is as sensitive as P's own bindings: grant it, and write P's parameters, with that in mind.
-- A webhook authenticates the request with the playbook's own webhook settings. The webhook isn't a subject, and grants nothing.
-- Evaluating a notification matches an event against the notification's events, filter and silences, and queues what to send. It makes no check, and MUST NOT fill in a connection's credentials. It records the connection to send through by id only.
-- **TODO:** a notification isn't checked for `read` on the resource it reports on, although its templates are filled with that resource's data and sent through its connection. A playbook can't do the same: a run checks `read` on its target before its templates are filled (Section 4.3). Accepted for now, and to be revisited. Recipients that aren't connections, e.g. a person or team emailed through Mission Control's own SMTP settings, aren't covered either: no check is made for them.
-- Sending checks `connection:use` on that connection as the notification. If the check fails, the send fails, and the failure is recorded on the notification's send history and status. It's never retried as another subject.
-- No one's access is checked when a notification or playbook is created or changed against the connections and resources it names. What it may do comes only from the bindings that select it. A notification created from a custom resource has no author to check, so an author check would treat the same notification differently depending on where it was written.
-
-A plugin is different: its work always has a caller, and it acts for them, except with connections.
-
-- Every check a plugin's work makes is made as the caller, with the caller's grants: reading a config, listing configs, and starting another plugin's operation (`invoke:<plugin>:<operation>`, then `read` on the config). If the caller used an access token, its Roles limit these checks (Section 4.5).
-- Looking up a connection is the one exception. It's checked as the plugin, selected by `plugins` in a RoleBinding (`rolebindings.md`, Section 2.5), by whatever path the plugin resolves it: `read` lets it see a connection's name, type and settings, and `connection:use` lets it act with the credentials (Section 2.2). The caller's access to the connection is never checked: a caller needs no grant on the plugin's connections, and their grants give the plugin none. A plugin without a grant that matches is refused, and the call fails. It's never retried as the caller or as any other subject.
-- A plugin can only be granted two actions, `read` and `connection:use`, on Scopes that select connections and nothing else. A RoleBinding that selects a plugin and binds a Role with any other rule, or with a rule whose Scope selects another type, is `Ready=False` and grants nothing, to any of its subjects, until the Role or the binding is changed. _Why:_ connection lookups are the only checks made as the plugin, so no other grant could take effect.
-- So whoever may invoke operation O of plugin X may have X act with X's connections, on any config they may read that X's selector matches. `invoke:X:O` is as sensitive as what O does with them: grant it with that in mind.
-- Plugins are upgraded by Mission Control itself, on a schedule. No person or Role can trigger an upgrade.
-
-  ```yaml
-  kind: Role
-  metadata:
-    name: logs-plugin-connections
-    namespace: mission-control
-  spec:
-    rules:
-      - name: use-loki
-        action: connection:use
-        resource:
-          scopeRef: loki-connections
-  ---
-  kind: RoleBinding
-  metadata:
-    name: kubernetes-logs-plugin
-    namespace: mission-control
-  spec:
-    role: logs-plugin-connections
-    subjects:
-      plugins:
-        - namespace: mission-control
-          name: kubernetes-logs
-  ```
-
-  The `kubernetes-logs` plugin can use the connections in `loki-connections`, whoever invokes it, and no others. A person with `invoke:kubernetes-logs:get-pod-logs` and `read` on a pod gets that pod's logs through them, without any grant on the connections.
-
-_Why the caller:_ a plugin does work someone asked for, so it reads with their access, and no one reaches more data through a plugin than they could directly. _Why connections are the plugin's:_ a plugin often needs credentials its callers shouldn't hold, e.g. a cluster's credentials to fetch one pod's logs, and its code, not the caller, decides what it does with them. Borrowing the caller's access would let anyone allowed to invoke an operation have the plugin act with any credentials they can use. Granting connections to the plugin keeps them readable from its own bindings, and the same whoever invokes it.
-
-_Why the resource and not its author:_ a resource's author can change, and resources come from Git, the UI and other tools. Granting the resource itself makes what it may do one question, answered by its bindings, whoever wrote it last. Who can change a resource with a grant is covered by `rolebindings.md`, Section 2.5.
-
-### 4.5 Access tokens
-
-An access token is a credential, not a subject. A request made with a person's token is checked as that person, and RoleBindings select the person, never the token. Actions taken with it are recorded as the person's.
-
-A token is limited by Roles. It may do what its owner may do, and only what one of its Roles' rules also matches:
-
-```yaml
-# POST /auth/create_token
-name: ci-readonly
-expiry: 720h
-roles:
-  - namespace: mission-control-builtin
-    name: viewer
-```
-
-Alice may read, change and delete every config, run playbooks and read connections. With this token she can read configs, playbooks and components, but can't run a playbook, delete a config or read a connection: her own rules allow each of them, but no rule of `viewer` does.
-
-- **A limit, not a grant.** Each check of an operation (Section 4.3) passes when the owner's rules allow it and a rule of one of the token's Roles matches it (Section 4). A listing returns the rows both allow. A rule the owner doesn't hold adds nothing, so a token never does more than its owner.
-- **Any Role, matched check by check.** A token's Roles needn't be the owner's, or bound to anyone. Each check is one action on one resource, with its target, and the owner's rules and the token's Roles must each have a rule matching that same check. Which Roles they come from doesn't matter, so neither side can pair a resource from one rule with a target from another (Section 4.2).
-- **Roles mean what they mean anywhere.** A Role's rules are matched against a token's checks exactly as against a binding's. A token names Roles by namespace and name, in any namespace, since a token has none. Naming one takes no grant on it: a Role in a token only removes access.
-- **Every check of an operation.** An operation's checks are each limited (Section 4.3), so a Role meant to let a token run a playbook on a config needs `read` on the config too.
-- **Live.** Every check uses the owner's current grants and the Roles' current rules. A Role that's missing or invalid (Section 6) matches nothing, so a token limited only by it can do nothing until it's valid again. Nothing is granted to the token, so nothing is left behind: when the owner loses an action, every token of theirs loses it on the next request, whatever its Roles; when the owner gains one, a token gains it only where its Roles allow it.
-- **Roles are required.** A person's token MUST list at least one Role, however it's created: through the UI, the API or the `auth token` CLI command. A token meant to do everything its owner may lists the shipped `admin` and `plugin-admin` Roles. An agent's token MUST NOT list any (Section 4.6). _Why:_ what a token may do is chosen when it's created, never everything by default.
-- **Tokens without Roles.** A person's token that lists no Role, e.g. one created before Roles were required, MUST be refused with `401 Unauthorized`. Mission Control deletes such tokens when it starts, and logs each one with its name and owner. Agents' tokens are kept. _Why break them:_ they can't be limited, and the scopes some of them had before Roles can't be told apart from no limit. Agents, the one use that can't afford the break, aren't affected.
-- **Tokens don't manage tokens.** A request made with a token can't create, change or delete a token, whatever its Roles. _Why:_ otherwise a limited token could create one without its limit.
-- **The summary follows the token.** The access summary of a request made with a token is computed with the token's limit (`collection-access.md`, Section 4).
-
-For example, `production` selects the configs of the `payments`, `billing` and `search` namespaces, and `production-payments` those of `payments` alone. Alice is bound to a Role that runs the ops playbooks on `production` and reads it. An admin publishes a Role bound to no one:
-
-```yaml
-kind: Role
-metadata:
-  name: payments-runner
-  namespace: default
-spec:
-  rules:
-    - name: run-ops
-      action: playbook:run
-      resource:
-        scopeRef: ops-playbooks
-      target:
-        scopeRef: production-payments
-    - name: read-payments
-      action: read
-      resource:
-        scopeRef: production-payments
-```
-
-A token of Alice's limited by `payments-runner` runs the ops playbooks on `payments` configs only, and lists those configs only. The same Role limits Bob's token, who may only read `payments`, to reading them. If Alice's binding is removed, her token can run nothing, though it still lists `payments-runner`.
-
-A person may create, change and delete their own tokens, without any grant, but not through a token. No person can create, change or delete a token for another person, and no action grants it.
-
-An agent's token is different: it's created with the agent, by a subject with `create` on `agent`, and handed to them (Section 4.6). Rotating or revoking an agent's token takes `update` on `agent`. An agent's token lists no Roles.
-
-_Why no grant:_ a token adds no access its owner doesn't already have, so there's nothing for a Role to decide. _Why Roles:_ a token's limit has to say which actions as well as which resources, e.g. reading playbooks but never running them, and a Role already says exactly that. A limit of Scopes alone couldn't keep a token from running a playbook it may read, and rules written into the token would be a second way to write what a Role says.
-
-### 4.6 Agents
-
-An agent is a Mission Control instance in another cluster that sends what it scrapes and checks to this one. Every request it makes carries an access token issued to that agent. The agent a request acts as MUST be the one its token belongs to: a request that names another agent, or a token that belongs to no agent, is refused. A request never creates an agent.
-
-An agent may, without any Role or RoleBinding:
-
-- push its own data, e.g. configs, changes, components, checks and their statuses, job history and artifacts, and delete data it pushed before;
-- fetch what's assigned to it: its canaries, scrape configs and playbook actions, and report the results of those actions;
-- keep its connection: ping, and open the tunnel this instance uses to reach it;
-- read the column definitions of any view, never its rows;
-- register the plugins it runs. It MUST NOT replace a plugin registered by anyone else.
-
-An agent may do nothing else, e.g. read configs other agents pushed or list playbooks. No RoleBinding can select an agent (`rolebindings.md`, Section 2.3), so nothing grants it more.
-
-_Why no Role:_ everything above acts on the agent's own data, and the token already proves which agent is asking. A rule would be the same for every agent, so it would grant nothing a reader of a Role couldn't assume. Creating the agent is the grant: only a subject with `create` on `agent` can, and only they receive its token. Kubernetes authorizes a kubelet the same way, by the node its credential names rather than by RBAC.
-
-An agent sets the tags and labels of what it pushes. A Scope that selects by them, e.g. `tagSelector: env=prod`, includes an agent's resources when the agent tags them so, and grants on that Scope reach them. To keep an agent's resources out of a Scope, select by `agent` too (`scopes.md`, Section 5.4).
+Each check is made as the subject performing the operation: the caller, or, where there's none, the resource doing the work (`identities.md`).
 
 ## 5. Combining rules
 

@@ -123,14 +123,6 @@ func IsReservedShippedName(table, namespace, name string) bool {
 	return namespace == ShippedNamespace && slices.Contains(reservedShippedNames[table], name)
 }
 
-// ValidateRoleName checks that a Role isn't named after a built-in role.
-func ValidateRoleName(name string) error {
-	if slices.Contains(BuiltInRoles, name) {
-		return NewValidationError("a role can't be named after the built-in role %q", name)
-	}
-	return nil
-}
-
 // ResolveRoleRules validates the rules of a role and resolves their Scopes in the role's namespace.
 // A role is valid as a whole or not at all: every problem is a validation error.
 func ResolveRoleRules(ctx context.Context, cache *gocache.Cache, namespace string, rules []v1.RoleRule) ([]ResolvedRule, error) {
@@ -153,12 +145,10 @@ func ResolveRoleRules(ctx context.Context, cache *gocache.Cache, namespace strin
 // ValidateRoleSpec checks a role on its own, without the Scopes and plugins its rules reference.
 // A role that fails it can never become valid, so the API rejects it.
 func ValidateRoleSpec(name string, rules []v1.RoleRule) error {
-	if err := ValidateRoleName(name); err != nil {
-		return err
-	}
-
 	if err := (v1.RoleSpec{Rules: rules}).Validate(); err != nil {
 		return NewValidationError("%v", err)
+	} else if len(rules) > v1.MaxRoleRules {
+		return NewValidationError("a role can have at most %d rules, not %d", v1.MaxRoleRules, len(rules))
 	}
 
 	for _, rule := range rules {
@@ -261,13 +251,6 @@ type CompiledRule struct {
 
 // ValidateRole validates a stored role against the Scopes it references, and returns its resolved rules.
 func ValidateRole(ctx context.Context, cache *gocache.Cache, role models.Role) ([]ResolvedRule, error) {
-	// The shipped viewer and admin Roles are the only ones named after built-in roles.
-	if !IsShipped(role.Namespace, role.Source) {
-		if err := ValidateRoleName(role.Name); err != nil {
-			return nil, err
-		}
-	}
-
 	var rules []v1.RoleRule
 	if err := json.Unmarshal(role.Rules, &rules); err != nil {
 		return nil, NewValidationError("invalid rules: %v", err)

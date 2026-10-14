@@ -431,17 +431,14 @@ var _ = Describe("Shipped roles", Ordered, func() {
 				request(http.MethodPost, "/rbac/scopes", map[string]any{
 					"metadata": map[string]any{"name": "all-configs", "namespace": namespace}, "spec": configTargets,
 				}),
+				request(http.MethodPost, "/rbac/roles", map[string]any{
+					"metadata": map[string]any{"name": "viewer", "namespace": namespace}, "spec": readRole,
+				}),
 			}
 			for _, rec := range conflicts {
 				Expect(rec.Code).To(Equal(http.StatusConflict), rec.Body.String())
 				Expect(rec.Body.String()).To(ContainSubstring("shipped with Mission Control"))
 			}
-
-			// Only shipped Roles may be named after a built-in role
-			rec := request(http.MethodPost, "/rbac/roles", map[string]any{
-				"metadata": map[string]any{"name": "viewer", "namespace": namespace}, "spec": readRole,
-			})
-			Expect(rec.Code).To(Equal(http.StatusBadRequest), rec.Body.String())
 
 			after, _ := stored()
 			Expect(after).To(HaveLen(len(before)))

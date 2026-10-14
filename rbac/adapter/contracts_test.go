@@ -1,6 +1,8 @@
 package adapter
 
 import (
+	"fmt"
+
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/rls"
@@ -51,11 +53,12 @@ var _ = ginkgo.Describe("ValidateSelector", func() {
 		{"name prefix", policy.ResourceConfig, types.ResourceSelector{Name: "nginx-*"}, true},
 		{"name prefix with a second wildcard", policy.ResourceConfig, types.ResourceSelector{Name: "nginx-*-*"}, false},
 		{"lone wildcard prefix", policy.ResourceConfig, types.ResourceSelector{Name: "**"}, false},
-		{"name list", policy.ResourceConfig, types.ResourceSelector{Name: "a,b"}, false},
+		{"name with a comma, which is literal", policy.ResourceConfig, types.ResourceSelector{Name: "a,b"}, true},
 		{"uppercase id", policy.ResourceConfig, types.ResourceSelector{ID: "3C3E0B2A-9F1E-4D2B-8C5A-1E2F3A4B5C6D"}, false},
 		{"agent name, resolved when the scope is validated", policy.ResourceConfig, types.ResourceSelector{Agent: "homelab"}, true},
 		{"name suffix", policy.ResourceConfig, types.ResourceSelector{Name: "*-prod"}, false},
-		{"name exclusion", policy.ResourceConfig, types.ResourceSelector{Name: "!api"}, false},
+		{"name starting with !, which is literal", policy.ResourceConfig, types.ResourceSelector{Name: "!api"}, true},
+		{"namespace with a comma, which is literal", policy.ResourceConfig, types.ResourceSelector{Namespace: "a,b"}, true},
 		{"wildcard namespace", policy.ResourceConfig, types.ResourceSelector{Namespace: "*"}, false},
 		{"namespace prefix", policy.ResourceConfig, types.ResourceSelector{Namespace: "prod-*"}, false},
 		{"wildcard id", policy.ResourceConfig, types.ResourceSelector{ID: "*"}, false},
@@ -219,6 +222,17 @@ var _ = ginkgo.Describe("Actions without a resource", func() {
 			Expect(ValidateRoleSpec("ops", []v1.RoleRule{deny})).ToNot(Succeed())
 		})
 	}
+
+	ginkgo.It("accepts at most v1.MaxRoleRules rules", func() {
+		rules := func(n int) []v1.RoleRule {
+			return lo.Times(n, func(i int) v1.RoleRule { return rule(fmt.Sprintf("rule-%d", i), policy.ActionMCPUse, nil) })
+		}
+		Expect(ValidateRoleSpec("ops", rules(v1.MaxRoleRules))).To(Succeed())
+
+		err := ValidateRoleSpec("ops", rules(v1.MaxRoleRules+1))
+		Expect(IsValidationError(err)).To(BeTrue())
+		Expect(err.Error()).To(ContainSubstring("at most 200 rules"))
+	})
 
 	ginkgo.It("rejects an action that takes a resource without one", func() {
 		for _, action := range []string{policy.ActionRead, policy.ActionUpdate, policy.ActionPlaybookRun, "invoke:kubernetes-logs:tail"} {

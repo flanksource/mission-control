@@ -507,11 +507,11 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			rejectRole(allow("same", policy.ActionPlaybookRun, "all-playbooks"), allow("same", policy.ActionRead, "role-configs"))
 		})
 
-		It("rejects roles named after a built-in role", func() {
+		It("accepts roles named like the built-in roles of earlier versions", func() {
 			role := newRole(policy.RoleViewer, namespace, allow("run", policy.ActionPlaybookRun, "all-playbooks"))
-			Expect(db.PersistRoleFromCRD(DefaultContext, role)).ToNot(Succeed())
+			Expect(db.PersistRoleFromCRD(DefaultContext, role)).To(Succeed())
 			stored := storedRole(role.UID)
-			Expect(stored.Error).ToNot(BeNil())
+			Expect(stored.Error).To(BeNil())
 			Expect(DefaultContext.DB().Delete(&stored).Error).To(Succeed())
 		})
 

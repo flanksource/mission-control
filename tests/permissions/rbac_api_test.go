@@ -129,9 +129,6 @@ var _ = Describe("Scope, Role and RoleBinding API", Ordered, func() {
 		{"a scope with a global target", "/rbac/scopes", object("global-target", map[string]any{
 			"targets": []any{map[string]any{"global": map[string]any{"name": "*"}}},
 		})},
-		{"a role named after a built-in role", "/rbac/roles", object(policy.RoleViewer, map[string]any{
-			"rules": []any{map[string]any{"name": "run", "action": policy.ActionPlaybookRun, "resource": map[string]any{"scopeRef": "all-playbooks"}}},
-		})},
 		{"a role with an action pattern", "/rbac/roles", object("pattern", map[string]any{
 			"rules": []any{map[string]any{"name": "run", "action": "playbook:*", "resource": map[string]any{"scopeRef": "all-playbooks"}}},
 		})},

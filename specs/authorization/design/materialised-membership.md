@@ -47,12 +47,12 @@ scope_members (scope_id, resource_type, resource_id)   -- no resource_id: every 
 
 ## Scrapers and the types granted whole
 
-Most types added to Scopes only take type-wide grants (`scopes.md` §5.3), so they're never filtered by row and need no membership rows beyond the whole-type one. Scrapers are the exception: they can be granted in part, by `id`, `name`, `namespace` and `agent`, so `config_scrapers` is filtered like configs.
+Most types added to Scopes only take type-wide grants (`scopes.md` §3.1), so they're never filtered by row and need no membership rows beyond the whole-type one. Scrapers are the exception: they can be granted in part, by `id`, `name`, `namespace` and `agent`, so `config_scrapers` is filtered like configs.
 
 - **Targets and predicate.** A scraper target is a `scope_targets` row with `resource_type = scraper`, using the `id`, `name`/`name_prefix`, `namespace` and `agent_id` columns. The scraper predicate tests those against `config_scrapers` columns of the same names.
 - **Trigger.** `config_scrapers` gets the membership trigger every resource table has. Its selectable fields are the four above, so other updates, e.g. to `spec`, change nothing.
 - **Row-level security.** `config_scrapers` gets a policy admitting a row through the claim's `scraper` grants, and `scraper` joins the claim's grant types.
-- **Records.** Artifacts a scraper produced follow the scraper (`scopes.md` §3.2): their policies test the scraper's row with `EXISTS`, like the child tables in the FAQ. Job history isn't a record: it's read whole with `job:read`, so it has no row-level policy.
+- **Records.** Artifacts a scraper produced follow the scraper (`roles.md` §3.1): their policies test the scraper's row with `EXISTS`, like the child tables in the FAQ. Job history isn't a record: it's read whole with `job:read`, so it has no row-level policy.
 
 _Why not leave scrapers whole-type only:_ grants on some scrapers, e.g. one agent's or one namespace's, are needed from the start, and the fields that express them are already columns.
 
@@ -60,7 +60,7 @@ _Why not leave scrapers whole-type only:_ grants on some scrapers, e.g. one agen
 
 Per type: `all`, for access that names no Scope, or grants, each a set of Scopes the row must be in all of. A grant is never empty and never repeats a Scope. The claim names Scopes only.
 
-A request made with an access token limited by Roles (`roles.md` §4.5) carries a second claim, built the same way from the `read` rules of the token's Roles. A listing admits a row only when both claims do. Single-resource checks likewise pass only when the owner's policies and the token's Roles' policies both allow.
+A request made with an access token limited by Roles (`limiting-permissions.md`, "Access tokens") carries a second claim, built the same way from the `read` rules of the token's Roles. A listing admits a row only when both claims do. Single-resource checks likewise pass only when the owner's policies and the token's Roles' policies both allow.
 
 A listing admits a row through a Scope when the Scope has a membership row for it, or one with no `resource_id` for the table's type. A Scope with neither admits nothing, so a grant naming it fails whole. _Why:_ a claim then depends only on Roles and RoleBindings, whose changes already refresh it, and stays correct across Scope changes however long it's cached. Dropping only the Scope with no rows would widen the grant.
 
