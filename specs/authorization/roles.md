@@ -36,7 +36,7 @@ spec:
 | `resource.scopeRef` | Depends on the action | The Scope of resources the action is performed on, e.g. the playbooks to run. Omitted for the few actions that take no resource (Section 2.3). |
 | `target.scopeRef`   | Depends on the action | The Scope of resources the action is performed against, e.g. the configs a playbook runs on. |
 
-A Scope is a named set of resources (see `scopes.md`). A rule references exactly one Scope per input. A Role MAY have no namespace through the API/UI; Kubernetes Roles retain their Kubernetes namespace. A bare `scopeRef` names a Scope in the Role's namespace, including no namespace; `global:<name>` names a namespace-less Scope. References MUST resolve from the Role, never from a binding that uses it (`overview.md`, "Namespaces"). The resources a Scope selects can be in any namespace.
+A Scope is a named set of resources (see `scopes.md`). A rule references exactly one Scope per input. A Role MUST have a namespace. A bare `scopeRef` MUST resolve in the Role's namespace, never a binding's; `namespace/name` names a Scope in the specified namespace (`overview.md`, "Namespaces"). The resources a Scope selects can be in any namespace.
 
 _Why:_ a shared Role must grant the same rules wherever it is bound, without requiring its Scopes to be copied into each binding's namespace.
 

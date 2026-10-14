@@ -22,13 +22,13 @@ spec:
 
 | Field         | Type   | Required                  | Meaning                                                  |
 | ------------- | ------ | ------------------------- | -------------------------------------------------------- |
-| `role`        | string | Yes                       | A Role in the binding's namespace, or `global:<name>` for a namespace-less Role (`overview.md`, "Namespaces"). |
+| `role`        | string | Yes                       | A Role in the binding's namespace, or `namespace/name` for an explicitly named namespace (`overview.md`, "Namespaces"). |
 | `subjects`    | object | Yes, at least one subject | Who gets the Role (Section 2).                           |
 | `constraint`  | object | No                        | Narrows the Role's rules for these subjects (Section 3). |
 | `description` | string | No                        | Explanatory text; no effect.                             |
 
 
-A RoleBinding MAY have no namespace through the API/UI; Kubernetes RoleBindings retain their Kubernetes namespace. Bare Role and constraint Scope references resolve in the binding's namespace, including no namespace; `global:<name>` explicitly selects a namespace-less object. The Role's own Scope references MUST resolve from the Role, not the binding (`overview.md`, "Namespaces"). Subjects can match resources in any namespace (Section 2.5).
+A RoleBinding MUST have a namespace. Bare Role and constraint Scope references MUST resolve in the binding's namespace; `namespace/name` explicitly selects an object in the specified namespace. The Role's own bare Scope references MUST resolve from the Role, not the binding (`overview.md`, "Namespaces"). Subjects can match resources in any namespace (Section 2.5).
 
 _Why:_ a binding can grant a shared Role while narrowing it with local Scopes, without changing what the Role itself means. A binding's namespace does not limit the access it grants.
 
@@ -254,8 +254,8 @@ Tenant A's users can run and approve monitoring playbooks on the configs that ar
 
 | Field               | Type   | Required | Meaning                                                                                 |
 | ------------------- | ------ | -------- | --------------------------------------------------------------------------------------- |
-| `resource.scopeRef` | string | No       | A Scope the resource of every operation must also be in; local or `global:<name>`. |
-| `target.scopeRef`   | string | No       | A Scope the target of every operation must also be in; local or `global:<name>`. |
+| `resource.scopeRef` | string | No       | A Scope the resource of every operation must also be in; `name` or `namespace/name`. |
+| `target.scopeRef`   | string | No       | A Scope the target of every operation must also be in; `name` or `namespace/name`. |
 
 At least one of them MUST be set: a `constraint` that sets neither is rejected. A missing `constraint` and `null` both mean no constraint, and the binding grants the Role's rules as written.
 
@@ -316,6 +316,10 @@ The narrowed input must still be enforceable for the rule's action, by the same 
 #### Reporting
 
 A binding reports the rules that don't apply through it. Its `AllRulesApply` condition is `True` when every rule applies, and `False` with a message naming each rule that doesn't and why. The Role's status lists the bindings whose `AllRulesApply` is `False` (`roles.md`, Section 6), and the response to a Role update through the API carries the same list. A binding with that condition is `Ready=True` while at least one rule applies through it, and `Ready=False` once none does (Section 4).
+
+Both reports MUST include affected bindings from every namespace, whether their Role reference is bare or qualified. Each entry MUST identify the binding with separate `namespace` and `name` fields, even when it is in the Role's namespace.
+
+_Why:_ bindings in different namespaces can have the same name. A report must identify which binding needs attention without assuming it lives beside the Role.
 
 A rule the constraint can't narrow is reported rather than failing the binding, for two reasons. Rules are added to the Role, and whoever adds one can't see its bindings: failing the binding would turn a rule added to a shared Role into an outage for every tenant. Reporting keeps what worked working, and still never grants as written. The price is that what a binding grants isn't readable from its Role alone, which is why the Role shows it too.
 

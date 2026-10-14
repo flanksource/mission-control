@@ -75,38 +75,50 @@ The `platform` team can read staging configs, and run monitoring playbooks on th
 
 ## Namespaces
 
-Scopes, Roles and RoleBindings MAY have no namespace. Through Mission Control's API and UI, an omitted or empty `metadata.namespace` MUST mean namespace-less, not `default` or the namespace Mission Control is installed in. Objects created through Kubernetes MUST retain their Kubernetes namespace; `kubectl apply` fills in the current namespace when a manifest leaves it out.
+Every Scope, Role and RoleBinding MUST have a namespace, however it is created. The UI MUST supply a default namespace when the user does not choose one. Kubernetes objects retain their Kubernetes namespace; `kubectl apply` fills in the current namespace when a manifest leaves it out.
 
-_Why:_ teams need to use shared Roles and Scopes, including shipped ones, without copying them into each namespace. Namespace-less objects let those definitions be maintained once and referenced from any namespace. UI/API-created bindings can also omit a namespace, since it does not limit their subjects or the access they grant.
+_Why:_ a namespace and name give every object the same identity, whether it is created through the UI, API or Kubernetes. A UI default keeps that requirement out of the way for users who do not organise their objects by namespace.
 
 ### Name uniqueness
 
-Within each kind, names MUST be unique within a namespace, and separately among namespace-less objects. A namespace-less Role `auditor` and a Role `auditor` in `platform` MAY coexist. Namespace-less does not mean shipped: users MAY create their own namespace-less objects, apart from reserved shipped names ("Shipped Roles" and "Configured bindings"). The permissions required to manage these objects are unchanged ("Who may manage these resources").
+Within each kind, names MUST be unique within a namespace. Roles `payments/auditor` and `platform/auditor` MAY coexist. Users MAY create objects in any namespace except `mission-control-builtin`, which is reserved for shipped authorization objects ("Reserved namespace").
 
-_Why:_ a shared definition must not replace a team's same-named local definition, and sharing is useful for user-created objects as well as shipped ones.
+_Why:_ teams can name their own definitions without colliding with another team's or with shipped objects.
+
+### API addresses
+
+For `scopes`, `roles` and `role-bindings`, GET, PUT and DELETE address one object at `/rbac/<kind>/<namespace>/<name>`. POST to `/rbac/<kind>` MUST supply a nonempty `metadata.namespace` and `metadata.name`. PUT MAY omit those fields in the body, in which case the URL supplies them; if present and nonempty, they MUST match the URL. GET on the collection MAY filter by `?namespace=<namespace>`; an omitted or empty filter lists all namespaces. Responses MUST include the object's namespace and name.
+
+_Why:_ every object has a complete address, and a namespace filter always selects the same group of objects regardless of how they were created.
 
 ### References
 
 A RoleBinding's `role`, a Role rule's `resource.scopeRef` and `target.scopeRef`, and a binding constraint's `resource.scopeRef` and `target.scopeRef` MUST resolve as follows:
 
-| Reference | In a namespaced object | In a namespace-less object |
-| --------- | ---------------------- | -------------------------- |
-| `name` | The object named `name` in the referencing object's namespace | The namespace-less object named `name` |
-| `global:name` | The namespace-less object named `name` | The namespace-less object named `name` |
+| Reference | Resolves to |
+| --------- | ----------- |
+| `name` | The object in the referencing object's namespace |
+| `namespace/name` | The object in the explicitly named namespace |
 
-`global:` is a reference qualifier, not part of the object's name. It applies equally to shipped and user-created objects. References MUST contain a valid object name, optionally preceded by exactly `global:`; an empty name, an unknown prefix or a namespace-qualified path such as `platform/auditor` MUST be rejected.
+For an object in `monitoring`, `configs` and `monitoring/configs` MUST identify the same Scope. A qualified reference MUST contain exactly one slash, with a valid namespace before it and a valid object name after it. A bare reference MUST be a valid object name. Empty components, extra slashes and invalid names MUST be rejected.
 
-_Why:_ the qualifier distinguishes two same-named objects without changing string references into structured objects. A colon cannot occur in a Kubernetes object name, so the two forms are unambiguous. Bare names retain one rule everywhere: the referencing object's own namespace, including no namespace.
+_Why:_ `/` cannot occur in a namespace or object name, so qualification is unambiguous. Bare names keep references within one namespace concise.
+
+#### Sharing definitions across namespaces
+
+Roles and RoleBindings MAY reference definitions in any namespace, whether those definitions are managed through Kubernetes or the API. Shared user definitions can live in an ordinary namespace, e.g. the Role `shared/ops`, and be declared in Git alongside the objects that reference them.
+
+_Why:_ teams need to reuse reviewed definitions without copying them. Namespaces are not an administration boundary: API grants to manage these resources cover whole types, and Kubernetes write access in any namespace already confers Mission Control admin power ("Who may manage these resources"). A reference across namespaces adds no new management privilege; changing a shared definition affects all objects that use it.
 
 #### Missing and recreated targets
 
-There MUST NOT be fallback between namespaced and namespace-less objects. A missing reference follows the resource's existing validity rules (`roles.md`, Section 6; `rolebindings.md`, Section 4). Creating or deleting a same-named object in another namespace MUST NOT change its target. References are by namespace and name, not immutable id: recreating a deleted target with the same namespace and name restores the reference.
+There MUST NOT be fallback to another namespace. A missing reference follows the resource's existing validity rules (`roles.md`, Section 6; `rolebindings.md`, Section 4). Creating or deleting a same-named object in another namespace MUST NOT change its target. References are by namespace and name, not immutable id: recreating a deleted target with the same namespace and name restores the reference.
 
 _Why:_ access must not silently switch between a local and shared definition when either appears or disappears. Recreating the intended target still lets related objects be applied in any order.
 
 #### Role Scopes and binding constraints
 
-A rule's Scope references MUST resolve from the Role's namespace, not the binding's. Constraint Scope references MUST resolve from the binding's namespace. For example, this Kubernetes RoleBinding uses a namespace-less Role with a local constraint Scope:
+A rule's bare Scope references MUST resolve from the Role's namespace, not the binding's. A constraint's bare Scope references MUST resolve from the binding's namespace. Qualified references always use their explicit namespace. For example, this Kubernetes RoleBinding uses a shipped Role with a local constraint Scope:
 
 ```yaml
 apiVersion: mission-control.flanksource.com/v1
@@ -115,7 +127,7 @@ metadata:
   name: platform-admins
   namespace: platform
 spec:
-  role: global:admin
+  role: mission-control-builtin/admin
   subjects:
     teams: [platform]
   constraint:
@@ -123,21 +135,21 @@ spec:
       scopeRef: tenant-a
 ```
 
-Here `tenant-a` means the Scope in `platform`; the shipped Role's Scopes remain namespace-less. A Role in `platform` can likewise use `scopeRef: global:all-connections` in a rule. A namespace-less binding can use `role: global:admin` or `role: admin`, with the same result.
+Here `tenant-a` means `platform/tenant-a`; the shipped Role's bare Scope references resolve in `mission-control-builtin`. A Role in `platform` can likewise use `scopeRef: monitoring/configs` or `scopeRef: mission-control-builtin/all-connections` in a rule.
 
 _Why:_ a shared Role must mean the same thing wherever it is bound, while each binding can narrow it using its own Scopes.
 
-#### References to named namespaces
+#### Token and request limits
 
-References to a different named namespace are not supported. A namespace-less Role or RoleBinding therefore cannot reference a namespaced Role or Scope. To bind a Role kept in Kubernetes, a UI-created binding MUST use that Role's namespace. Access tokens already name Roles with explicit namespace/name pairs and can select either namespaced or namespace-less Roles (`limiting-permissions.md`, "Access tokens"). The `X-Flanksource-Scope` header still uses Scope ids.
+Access tokens MUST identify each Role with an explicit namespace and name (`limiting-permissions.md`, "Access tokens"). The `X-Flanksource-Scope` header uses Scope ids.
 
-_Why:_ `global:` enables sharing without introducing arbitrary cross-namespace references. Token references have no owning namespace and already identify their target explicitly.
+_Why:_ a token or request has no owning namespace in which to resolve a bare name.
 
 ### Namespaces do not limit access
 
-An object's namespace, including its absence, MUST NOT limit the resources a Scope selects, the subjects a binding selects or the access a Role grants. Only selectors, rules and constraints do that; namespaces are not a security boundary ("Who may manage these resources").
+An object's namespace MUST NOT limit the resources a Scope selects, the subjects a binding selects or the access a Role grants. Only selectors, rules and constraints do that; namespaces are not a security boundary ("Who may manage these resources").
 
-_Why:_ `global:` selects where a definition lives, not how much access it grants. A namespace-less Scope can select one resource, and a namespaced Scope can select resources across the install.
+_Why:_ a namespace identifies where a definition lives, not how much access it grants. A Scope in any namespace can select one resource or resources across the install.
 
 ## A note on "target"
 
@@ -173,7 +185,7 @@ _Why no deny rules:_ with nothing allowed by default, every restriction can be w
 
 ### Shipped Roles
 
-Mission Control ships these Roles without a namespace. They're ordinary Roles, bound by ordinary RoleBindings. The only bindings Mission Control ships are `admins` and `plugin-admins`, which bind `global:admin` and `global:plugin-admin` to the `admins` team ("Configured bindings").
+Mission Control ships these Roles in `mission-control-builtin`. They're ordinary Roles, bound by ordinary RoleBindings. The only bindings Mission Control ships are `admins` and `plugin-admins` in the same namespace, which bind `admin` and `plugin-admin` to the `admins` team ("Configured bindings").
 
 | Role     | Allows                                                                                       |
 | -------- | -------------------------------------------------------------------------------------------- |
@@ -187,19 +199,23 @@ Mission Control ships these Roles without a namespace. They're ordinary Roles, b
 
 #### Shared per-type Scopes
 
-Each rule of a shipped Role, apart from those on actions without a resource, needs a Scope (`roles.md`, Section 1), so the Scopes they use ship with them, also without a namespace. There's one per type, named `all-<type>` in the plural, e.g. `all-configs`, `all-notification-silences`, with a single whole-type target (`scopes.md`, Section 5.2), so a rule takes one Scope for each type it covers. No action accepts views, so no shipped Scope selects them.
+Each rule of a shipped Role, apart from those on actions without a resource, needs a Scope (`roles.md`, Section 1), so the Scopes they use ship with them in `mission-control-builtin`. There's one per type, named `all-<type>` in the plural, e.g. `all-configs`, `all-notification-silences`, with a single whole-type target (`scopes.md`, Section 5.2), so a rule takes one Scope for each type it covers. No action accepts views, so no shipped Scope selects them.
 
-The shipped Scopes are part of Mission Control's interface: Roles anyone creates, with or without a namespace, MAY use them through `global:<name>`. So a shipped Scope MUST select exactly its one type, and MUST NOT be renamed, regrouped or widened. A new type MUST get a new Scope. _Why one per type:_ a Scope grouping several types would grant more to every Role using it as soon as a release added a type to it, and could make those Roles invalid, since a rule's Scope may only select types its action accepts (`roles.md`, Section 3).
+The shipped Scopes are part of Mission Control's interface: Roles in any namespace MAY use them through `mission-control-builtin/<name>`. So a shipped Scope MUST select exactly its one type, and MUST NOT be renamed, regrouped or widened. A new type MUST get a new Scope. _Why one per type:_ a Scope grouping several types would grant more to every Role using it as soon as a release added a type to it, and could make those Roles invalid, since a rule's Scope may only select types its action accepts (`roles.md`, Section 3).
 
 #### Binding shipped Roles
 
-A RoleBinding in any namespace, or without one, MAY bind a shipped Role using `global:<name>`. Its constraint MAY use local or namespace-less Scopes ("References"). The subjects it selects can be anyone.
+A RoleBinding in any user namespace MAY bind a shipped Role using `mission-control-builtin/<name>`. Its constraint MAY use Scopes from its own or another namespace ("References"). The subjects it selects can be anyone. Shipped objects live in Mission Control's database, so binding them requires no Kubernetes namespace named `mission-control-builtin` or Kubernetes permissions in that namespace.
 
-#### Updates and reserved names
+#### Shipped object updates
 
-Mission Control writes the shipped Roles and their Scopes when it starts, and writes `plugin-admin` again whenever a plugin is installed, upgraded or removed and its operations change. `viewer` and `admin` are exactly as shipped, and only change with Mission Control itself. `plugin-admin` exists only while some plugin has an operation, since a Role needs a rule; a binding to it has no effect in between. The shipped objects aren't Kubernetes objects and MUST NOT be changed or deleted through the API. Namespace-less Role names `admin`, `viewer` and `plugin-admin`, and namespace-less Scope names beginning with `all-`, MUST be reserved for Mission Control, even while an object isn't shipped. Same-named objects in a Kubernetes namespace remain independent and MUST NOT be overwritten by shipped objects.
+Mission Control writes the shipped Roles and their Scopes when it starts, and writes `plugin-admin` again whenever a plugin is installed, upgraded or removed and its operations change. `viewer` and `admin` are exactly as shipped, and only change with Mission Control itself. `plugin-admin` exists only while some plugin has an operation, since a Role needs a rule; a binding to it has no effect in between. The shipped objects aren't Kubernetes objects and MUST NOT be changed or deleted through the API.
 
-_Why reserved names:_ a user-created object must not later be replaced by a shipped one and silently change what its references grant. Reserving `all-` also leaves room for new per-type Scopes. Namespace-less user objects outside the reserved names remain editable; being namespace-less alone does not make an object shipped.
+#### Reserved namespace
+
+Mission Control MUST own all Scope, Role and RoleBinding names in `mission-control-builtin`, including names it does not currently ship. The API MUST refuse user writes there with `409 Conflict`. A Scope, Role or RoleBinding applied through Kubernetes in that namespace MUST be marked `Ready=False` with reason `Shipped` and MUST NOT take effect in Mission Control. These restrictions apply only to authorization objects, not unrelated Kubernetes resources in a namespace with that name.
+
+_Why:_ a release can ship a new Role or Scope without replacing a user object and silently changing its grants. Users can use any valid name in their own namespaces, including `admin` or names starting with `all-`; those objects remain independent of shipped ones.
 
 #### Plugin permissions stay separate from admin
 
@@ -217,23 +233,29 @@ metadata:
 kind: RoleBinding
 metadata:
   name: admins
+  namespace: mission-control-builtin
 spec:
-  role: global:admin
+  role: admin
   subjects:
     teams: [admins]
 ---
 kind: RoleBinding
 metadata:
   name: plugin-admins
+  namespace: mission-control-builtin
 spec:
-  role: global:plugin-admin
+  role: plugin-admin
   subjects:
     teams: [admins]
 ```
 
 #### Shipped binding protection
 
-These declarations are Mission Control's configuration, not manifests to apply through Kubernetes. The bindings have no namespace. They're written like the shipped Roles, when Mission Control starts and whenever a plugin's operations change ("Shipped Roles"). `plugin-admins` is shipped only while `plugin-admin` is, i.e. while some plugin has an operation. Namespace-less RoleBinding names `admins` and `plugin-admins` MUST be reserved for Mission Control, even while a binding isn't shipped, so a user binding cannot later be replaced by one with different subjects or access. They can't be changed or deleted through the API. Same-named Kubernetes RoleBindings remain independent. The Team has no namespace: a Team applied through Kubernetes under the name `admins` is overwritten. If the shipped team or bindings are missing, e.g. deleted directly in the database, they're recreated.
+These declarations are Mission Control's configuration, not manifests to apply through Kubernetes. They're written like the shipped Roles, when Mission Control starts and whenever a plugin's operations change ("Shipped Roles"). `plugin-admins` is shipped only while `plugin-admin` is, i.e. while some plugin has an operation. The bindings are protected by the reserved namespace and can't be changed or deleted through the API. Same-named bindings in other namespaces remain independent. If the shipped team or bindings are missing, e.g. deleted directly in the database, they're recreated.
+
+The Team has no namespace. A Team applied through Kubernetes under the name `admins` MUST be marked `Ready=False` with reason `Shipped` and MUST NOT replace the shipped Team or change its members.
+
+_Why:_ creating a same-named Kubernetes Team must not change who holds the shipped admin grants.
 
 #### Admin team membership
 
@@ -302,4 +324,4 @@ Where the specs say an object "is rejected", this is what they mean.
 - **Reading checks. TODO.** Whether a check is read through its canary, through its own membership, or both, is for flanksource/mission-control#3520. Until it's decided, `read` accepts checks (`roles.md`, Section 2).
 - **The Kubernetes proxy. TODO, deliberately postponed.** The requests made through Mission Control's Kubernetes proxy have no action under these specs, so no Role or RoleBinding can grant them, and they don't work under this model. The kubeconfig download, whose token was the proxy's credential, is removed until the proxy has an action. That's a known gap, accepted for now: the feature is rarely used and isn't worth holding the rest of this design back, though some installations may rely on it. A proposed design is recorded in `design/kubernetes-proxy.md`, and is not adopted.
 - **Debug endpoints. TODO, undecided.** The debug handlers Mission Control serves from duty (`AddDebugHandlers`) are checked today against `update` on the old `database.monitor` object, which no Role can grant. Whether they get an action of their own, fall under one of the actions without a resource, or are left to admins some other way, is undecided.
-- **Delegated administration.** Letting a team manage the Roles and RoleBindings of its own namespace isn't supported. It needs an escalation check, so that a binding can't grant more than its author holds.
+- **Delegated administration.** Letting a team manage the Roles and RoleBindings of its own namespace isn't supported. It needs an escalation check, so that a binding can't grant more than its author holds. Making namespaces an administration boundary would also require revisiting cross-namespace references and who may change the definitions they reference.

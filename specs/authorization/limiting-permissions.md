@@ -36,15 +36,15 @@ A token is limited by Roles. It may do what its owner may do, and only what one 
 name: ci-readonly
 expiry: 720h
 roles:
-  - namespace: ""
+  - namespace: mission-control-builtin
     name: viewer
 ```
 
 Alice may read, change and delete every config, run playbooks and read connections. With this token she can read configs, playbooks and components, but can't run a playbook, delete a config or read a connection: her own rules allow each of them, but no rule of `viewer` does.
 
-Token Role references MUST use the object's name, e.g. `viewer`, and its namespace. An omitted or empty `namespace` MUST select a namespace-less Role, without fallback. `name: global:viewer` MUST be rejected: the namespace/name pair already identifies the target.
+Token Role references through the API MUST supply separate, nonempty `namespace` and `name` fields. The `auth token --role` CLI option MUST use `namespace/name`, e.g. `mission-control-builtin/viewer`; a bare name MUST be rejected. Both forms identify the same Role, with no fallback.
 
-_Why:_ token references are already structured and need no string qualifier to distinguish namespaced and namespace-less Roles.
+_Why:_ a token has no namespace of its own, so every Role reference must state one explicitly.
 
 - **A limit, not a grant.** Each check of an operation (`roles.md`, Section 4.3) passes when the owner's rules allow it and a rule of one of the token's Roles matches it (`roles.md`, Section 4). A listing returns the rows both allow. A rule the owner doesn't hold adds nothing, so a token never does more than its owner.
 - **Any Role, matched check by check.** A token's Roles needn't be the owner's, or bound to anyone. Each check is one action on one resource, with its target, and the owner's rules and the token's Roles must each have a rule matching that same check. Which Roles they come from doesn't matter, so neither side can pair a resource from one rule with a target from another (`roles.md`, Section 4.2).
