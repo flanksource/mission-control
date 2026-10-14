@@ -461,8 +461,9 @@ var _ = Describe("Views", func() {
 
 		It("should compute grants for config queries when scopes match", func() {
 			scope := models.Scope{
-				Name:    "test-scope-for-grants",
-				Targets: []byte(`[{"config": {"name": "node-a"}}]`),
+				Name:      "test-scope-for-grants",
+				Namespace: "default",
+				Targets:   []byte(`[{"config": {"name": "node-a"}}]`),
 			}
 			err := DefaultContext.DB().Create(&scope).Error
 			Expect(err).ToNot(HaveOccurred())

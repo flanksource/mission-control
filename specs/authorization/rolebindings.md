@@ -22,13 +22,15 @@ spec:
 
 | Field         | Type   | Required                  | Meaning                                                  |
 | ------------- | ------ | ------------------------- | -------------------------------------------------------- |
-| `role`        | string | Yes                       | Name of a Role in the binding's namespace (`roles.md`).  |
+| `role`        | string | Yes                       | A Role, as `name` in the binding's namespace or `namespace/name` (`overview.md`, "References"). |
 | `subjects`    | object | Yes, at least one subject | Who gets the Role (Section 2).                           |
 | `constraint`  | object | No                        | Narrows the Role's rules for these subjects (Section 3). |
 | `description` | string | No                        | Explanatory text; no effect.                             |
 
 
-A RoleBinding MUST have a namespace, and its Role and constraint Scopes must be in it (`overview.md`, "Namespaces"). Subjects can match resources in any namespace (Section 2.5).
+A RoleBinding MUST have a namespace. A bare `role` or constraint `scopeRef` names an object in the binding's namespace, and `namespace/name` names one in any namespace. The Scopes in the Role's own rules resolve from the Role, not the binding (`overview.md`, "References"). Subjects can match resources in any namespace (Section 2.5).
+
+_Why:_ a binding can grant a shared Role and narrow it with its own Scopes, without changing what the Role means. The binding's namespace doesn't limit what it grants.
 
 ## 2. Subjects
 
@@ -252,8 +254,8 @@ Tenant A's users can run and approve monitoring playbooks on the configs that ar
 
 | Field               | Type   | Required | Meaning                                                                                 |
 | ------------------- | ------ | -------- | --------------------------------------------------------------------------------------- |
-| `resource.scopeRef` | string | No       | A Scope, in the binding's namespace, the resource of every operation must also be in.   |
-| `target.scopeRef`   | string | No       | A Scope, in the binding's namespace, the target of every operation must also be in.     |
+| `resource.scopeRef` | string | No       | A Scope the resource of every operation must also be in, as `name` or `namespace/name`. |
+| `target.scopeRef`   | string | No       | A Scope the target of every operation must also be in, as `name` or `namespace/name`. |
 
 At least one of them MUST be set: a `constraint` that sets neither is rejected. A missing `constraint` and `null` both mean no constraint, and the binding grants the Role's rules as written.
 
@@ -314,6 +316,10 @@ The narrowed input must still be enforceable for the rule's action, by the same 
 #### Reporting
 
 A binding reports the rules that don't apply through it. Its `AllRulesApply` condition is `True` when every rule applies, and `False` with a message naming each rule that doesn't and why. The Role's status lists the bindings whose `AllRulesApply` is `False` (`roles.md`, Section 6), and the response to a Role update through the API carries the same list. A binding with that condition is `Ready=True` while at least one rule applies through it, and `Ready=False` once none does (Section 4).
+
+Both lists include bindings from every namespace, and name each one by separate `namespace` and `name` fields, even when it's in the Role's namespace.
+
+_Why:_ a Role can be bound from any namespace, and bindings in different namespaces can share a name.
 
 A rule the constraint can't narrow is reported rather than failing the binding, for two reasons. Rules are added to the Role, and whoever adds one can't see its bindings: failing the binding would turn a rule added to a shared Role into an outage for every tenant. Reporting keeps what worked working, and still never grants as written. The price is that what a binding grants isn't readable from its Role alone, which is why the Role shows it too.
 

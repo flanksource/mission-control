@@ -110,20 +110,7 @@ const RolePluginAdmin = "plugin-admin"
 // BindingPluginAdmins is the shipped RoleBinding of the admins team to plugin-admin, written only while plugin-admin is.
 const BindingPluginAdmins = "plugin-admins"
 
-// reservedShippedNames are the names, by table, of shipped objects that aren't always written. Only Mission Control
-// may write an object with one of them in the shipped namespace, whether or not it exists yet. Otherwise someone could
-// create one before it's shipped, and their bindings to it would widen when the shipped one replaces it.
-var reservedShippedNames = map[string][]string{
-	"roles":         {RolePluginAdmin},
-	"role_bindings": {BindingPluginAdmins},
-}
-
-// IsReservedShippedName reports whether only a shipped object may have the namespace and name in the table.
-func IsReservedShippedName(table, namespace, name string) bool {
-	return namespace == ShippedNamespace && slices.Contains(reservedShippedNames[table], name)
-}
-
-// ResolveRoleRules validates the rules of a role and resolves their Scopes in the role's namespace.
+// ResolveRoleRules validates the rules of a role and resolves their Scopes from the role's namespace.
 // A role is valid as a whole or not at all: every problem is a validation error.
 func ResolveRoleRules(ctx context.Context, cache *gocache.Cache, namespace string, rules []v1.RoleRule) ([]ResolvedRule, error) {
 	if err := (v1.RoleSpec{Rules: rules}).Validate(); err != nil {
@@ -276,7 +263,7 @@ type CompiledBinding struct {
 	Unapplied []UnappliedRule
 }
 
-// constraintScopes are the Scopes of a binding's constraint, resolved in the binding's namespace.
+// constraintScopes are the Scopes of a binding's constraint, resolved from the binding's namespace.
 type constraintScopes struct {
 	resource *ScopeSelection
 	target   *ScopeSelection
@@ -515,21 +502,49 @@ func ValidateBinding(ctx context.Context, cache *gocache.Cache, binding models.R
 		return CompiledBinding{}, err
 	}
 
-	var role models.Role
-	if err := ctx.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", binding.Namespace, binding.Role).Find(&role).Error; err != nil {
+	role, err := bindingRole(ctx, binding)
+	if err != nil {
 		return CompiledBinding{}, err
-	} else if role.ID == uuid.Nil {
-		return CompiledBinding{}, NewInvalid(ReasonRoleNotFound, "role %s/%s not found", binding.Namespace, binding.Role)
+	} else if role == nil {
+		namespace, name, _ := BindingRoleRef(binding)
+		return CompiledBinding{}, NewInvalid(ReasonRoleNotFound, "role %s/%s not found", namespace, name)
 	}
 
-	return CompileBinding(ctx, cache, binding, role)
+	return CompileBinding(ctx, cache, binding, *role)
 }
 
-// BindingsWithUnappliedRules returns the bindings of the role that some of its allow rules don't apply through.
+// BindingRoleRef returns the namespace and name of the role a binding grants.
+func BindingRoleRef(binding models.RoleBinding) (string, string, error) {
+	namespace, name, err := v1.ParseReference(binding.Namespace, binding.Role)
+	if err != nil {
+		return "", "", NewValidationError("role binding %s/%s: role %v", binding.Namespace, binding.Name, err)
+	}
+	return namespace, name, nil
+}
+
+// bindingRole returns the role a binding grants, or nil when it doesn't exist.
+func bindingRole(ctx context.Context, binding models.RoleBinding) (*models.Role, error) {
+	namespace, name, err := BindingRoleRef(binding)
+	if err != nil {
+		return nil, err
+	}
+
+	var role models.Role
+	if err := ctx.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", namespace, name).Find(&role).Error; err != nil {
+		return nil, err
+	} else if role.ID == uuid.Nil {
+		return nil, nil
+	}
+	return &role, nil
+}
+
+// BindingsWithUnappliedRules returns the bindings of the role, in any namespace, that some of its allow rules don't
+// apply through.
 func BindingsWithUnappliedRules(ctx context.Context, role models.Role) ([]v1.BindingUnappliedRules, error) {
 	var bindings []models.RoleBinding
-	if err := ctx.DB().Where("namespace = ? AND role = ? AND deleted_at IS NULL", role.Namespace, role.Name).
-		Order("name").Find(&bindings).Error; err != nil {
+	if err := ctx.DB().Where("deleted_at IS NULL").
+		Where("(namespace = ? AND role = ?) OR role = ?", role.Namespace, role.Name, role.Namespace+"/"+role.Name).
+		Order("namespace, name").Find(&bindings).Error; err != nil {
 		return nil, err
 	}
 
@@ -543,8 +558,9 @@ func BindingsWithUnappliedRules(ctx context.Context, role models.Role) ([]v1.Bin
 		}
 
 		result = append(result, v1.BindingUnappliedRules{
-			Name:  binding.Name,
-			Rules: lo.Map(compiled.Unapplied, func(u UnappliedRule, _ int) string { return u.Rule }),
+			Namespace: binding.Namespace,
+			Name:      binding.Name,
+			Rules:     lo.Map(compiled.Unapplied, func(u UnappliedRule, _ int) string { return u.Rule }),
 		})
 	}
 
@@ -565,14 +581,12 @@ func LoadBindingRules(ctx context.Context, bindingID uuid.UUID) ([]CompiledRule,
 		return nil, err
 	}
 
-	var role models.Role
-	if err := ctx.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", binding.Namespace, binding.Role).Find(&role).Error; err != nil {
+	role, err := bindingRole(ctx, binding)
+	if err != nil || role == nil {
 		return nil, err
-	} else if role.ID == uuid.Nil {
-		return nil, nil
 	}
 
-	compiled, err := CompileBinding(ctx, nil, binding, role)
+	compiled, err := CompileBinding(ctx, nil, binding, *role)
 	if err != nil && !IsValidationError(err) {
 		return nil, err
 	}

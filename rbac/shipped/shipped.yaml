@@ -3,8 +3,8 @@
 # installed plugins, and written again whenever they change. They can't be changed through the API or Kubernetes.
 # The admins team's members are managed as usual; only the team itself and its bindings are shipped.
 #
-# There's one Scope per resource type, all-<type>, with a single whole-type target. Roles anyone creates in this
-# namespace may use them, so each always selects exactly its type: a new type gets a new Scope, never a wider one.
+# There's one Scope per resource type, all-<type>, with a single whole-type target. Roles in any namespace may use them,
+# as mission-control-builtin/<name>, so each always selects exactly its type: a new type gets a new Scope, never a wider one.
 apiVersion: mission-control.flanksource.com/v1
 kind: Scope
 metadata:

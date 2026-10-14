@@ -74,9 +74,11 @@ spec:
                         Omitted for the actions that take no resource: person:manage, mcp:use, property:manage, event:read and job:read.
                       properties:
                         scopeRef:
-                          description: ScopeRef is the name of the Scope.
-                          maxLength: 253
+                          description: ScopeRef is the Scope's name, in the namespace
+                            of the Role or RoleBinding, or namespace/name.
+                          maxLength: 317
                           minLength: 1
+                          pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?/)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                           type: string
                       required:
                       - scopeRef
@@ -88,9 +90,11 @@ spec:
                         Without a target, the rule only matches operations without one.
                       properties:
                         scopeRef:
-                          description: ScopeRef is the name of the Scope.
-                          maxLength: 253
+                          description: ScopeRef is the Scope's name, in the namespace
+                            of the Role or RoleBinding, or namespace/name.
+                          maxLength: 317
                           minLength: 1
+                          pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?/)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
                           type: string
                       required:
                       - scopeRef
@@ -132,7 +136,11 @@ spec:
                     condition is False.
                   properties:
                     name:
-                      description: Name of the RoleBinding, in the role's namespace.
+                      description: Name of the RoleBinding.
+                      type: string
+                    namespace:
+                      description: Namespace of the RoleBinding, which needn't be
+                        the role's.
                       type: string
                     rules:
                       description: Rules of the role that don't apply through the
@@ -142,6 +150,7 @@ spec:
                       type: array
                   required:
                   - name
+                  - namespace
                   - rules
                   type: object
                 type: array

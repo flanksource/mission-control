@@ -73,12 +73,13 @@ type RoleRule struct {
 	Deny bool `json:"deny,omitempty" yaml:"deny,omitempty"`
 }
 
-// ScopeReference references a Scope in the namespace of the Role or RoleBinding.
+// ScopeReference references a Scope: by name in the namespace of the Role or RoleBinding, or as namespace/name.
 // +kubebuilder:object:generate=true
 type ScopeReference struct {
-	// ScopeRef is the name of the Scope.
+	// ScopeRef is the Scope's name, in the namespace of the Role or RoleBinding, or namespace/name.
 	// +kubebuilder:validation:MinLength=1
-	// +kubebuilder:validation:MaxLength=253
+	// +kubebuilder:validation:MaxLength=317
+	// +kubebuilder:validation:Pattern=`^([a-z0-9]([-a-z0-9]*[a-z0-9])?/)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	ScopeRef string `json:"scopeRef" yaml:"scopeRef"`
 }
 
@@ -110,10 +111,18 @@ func (t RoleSpec) Validate() error {
 
 		if rule.Resource != nil && rule.Resource.ScopeRef == "" {
 			return fmt.Errorf("rule %s: resource.scopeRef is required when resource is set", rule.Name)
+		} else if rule.Resource != nil {
+			if err := validateReference(rule.Resource.ScopeRef); err != nil {
+				return fmt.Errorf("rule %s: resource.scopeRef %w", rule.Name, err)
+			}
 		}
 
 		if rule.Target != nil && rule.Target.ScopeRef == "" {
 			return fmt.Errorf("rule %s: target.scopeRef is required when target is set", rule.Name)
+		} else if rule.Target != nil {
+			if err := validateReference(rule.Target.ScopeRef); err != nil {
+				return fmt.Errorf("rule %s: target.scopeRef %w", rule.Name, err)
+			}
 		}
 	}
 
@@ -132,7 +141,10 @@ type RoleStatus struct {
 // BindingUnappliedRules is a RoleBinding whose AllRulesApply condition is False.
 // +kubebuilder:object:generate=true
 type BindingUnappliedRules struct {
-	// Name of the RoleBinding, in the role's namespace.
+	// Namespace of the RoleBinding, which needn't be the role's.
+	Namespace string `json:"namespace" yaml:"namespace"`
+
+	// Name of the RoleBinding.
 	Name string `json:"name" yaml:"name"`
 
 	// Rules of the role that don't apply through the binding.

@@ -212,17 +212,17 @@
       },
       "additionalProperties": false,
       "type": "object",
-      "description": "RoleBinding grants a Role (in the same namespace) to many subjects,\noptionally narrowing the role's allow rules with a constraint."
+      "description": "RoleBinding grants a Role to many subjects,\noptionally narrowing the role's allow rules with a constraint."
     },
     "RoleBindingConstraint": {
       "properties": {
         "resource": {
           "$ref": "#/$defs/ScopeReference",
-          "description": "Resource is a Scope, in the binding's namespace, the resource of every operation must also belong to."
+          "description": "Resource is a Scope the resource of every operation must also belong to."
         },
         "target": {
           "$ref": "#/$defs/ScopeReference",
-          "description": "Target is a Scope, in the binding's namespace, the target of every operation must also belong to."
+          "description": "Target is a Scope the target of every operation must also belong to."
         }
       },
       "additionalProperties": false,
@@ -237,7 +237,7 @@
         },
         "role": {
           "type": "string",
-          "description": "Role is the name of the Role to grant, in the same namespace as the binding."
+          "description": "Role is the name of the Role to grant, in the binding's namespace, or namespace/name."
         },
         "subjects": {
           "$ref": "#/$defs/RoleBindingSubjects",
@@ -345,7 +345,7 @@
       "properties": {
         "scopeRef": {
           "type": "string",
-          "description": "ScopeRef is the name of the Scope."
+          "description": "ScopeRef is the Scope's name, in the namespace of the Role or RoleBinding, or namespace/name."
         }
       },
       "additionalProperties": false,
@@ -353,7 +353,7 @@
       "required": [
         "scopeRef"
       ],
-      "description": "ScopeReference references a Scope in the namespace of the Role or RoleBinding."
+      "description": "ScopeReference references a Scope: by name in the namespace of the Role or RoleBinding, or as namespace/name."
     },
     "Time": {
       "properties": {},

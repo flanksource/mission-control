@@ -169,16 +169,23 @@ func (k managedKind) find(ctx context.Context, namespace, name string) (*storedO
 	return &objects[0], nil
 }
 
+// errShippedNamespace is returned for any write in the shipped namespace, which only Mission Control writes to.
+func errShippedNamespace() error {
+	return dutyAPI.Errorf(dutyAPI.ECONFLICT, "namespace %s is reserved for objects shipped with Mission Control", adapter.ShippedNamespace)
+}
+
 // editable finds a stored object that can be changed through the API: one created through it.
 // Objects from Kubernetes (or synced from it) are changed where they're defined, which would overwrite any change here.
 func (k managedKind) editable(ctx context.Context, namespace, name string) (*storedObject, error) {
+	if namespace == adapter.ShippedNamespace {
+		return nil, errShippedNamespace()
+	}
+
 	stored, err := k.find(ctx, namespace, name)
 	if err != nil {
 		return nil, err
 	} else if stored == nil {
 		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %s/%s not found", k.path, namespace, name)
-	} else if adapter.IsShipped(namespace, stored.Source) {
-		return nil, dutyAPI.Errorf(dutyAPI.ECONFLICT, "%s %s/%s is shipped with Mission Control and can't be changed or deleted", k.path, namespace, name)
 	} else if stored.Source != models.SourceUI {
 		return nil, dutyAPI.Errorf(dutyAPI.ECONFLICT, "%s %s/%s is managed by %s; change it there", k.path, namespace, name, stored.Source)
 	}
@@ -230,12 +237,12 @@ func (k managedKind) create(c echo.Context) error {
 		return dutyAPI.WriteError(c, err)
 	}
 
+	if obj.GetNamespace() == adapter.ShippedNamespace {
+		return dutyAPI.WriteError(c, errShippedNamespace())
+	}
+
 	if stored, err := k.find(ctx, obj.GetNamespace(), obj.GetName()); err != nil {
 		return dutyAPI.WriteError(c, err)
-	} else if stored != nil && adapter.IsShipped(obj.GetNamespace(), stored.Source) {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ECONFLICT, "%s %s/%s is shipped with Mission Control and can't be changed or deleted", k.path, obj.GetNamespace(), obj.GetName()))
-	} else if adapter.IsReservedShippedName(k.table, obj.GetNamespace(), obj.GetName()) {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ECONFLICT, "%s %s/%s is reserved for an object shipped with Mission Control", k.path, obj.GetNamespace(), obj.GetName()))
 	} else if stored != nil {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ECONFLICT, "%s %s/%s already exists", k.path, obj.GetNamespace(), obj.GetName()))
 	}

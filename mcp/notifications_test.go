@@ -3,6 +3,7 @@ package mcp
 import (
 	gocontext "context"
 	"fmt"
+	"strings"
 
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
@@ -39,7 +40,7 @@ var _ = ginkgo.Describe("Notification tools", ginkgo.Ordered, func() {
 	// bind binds the person to a Role reading all resources of the type
 	bind := func(person models.Person, resource string) {
 		ginkgo.GinkgoHelper()
-		name := "read-" + resource
+		name := "read-" + strings.ToLower(resource)
 		target := v1.ScopeTarget{}
 		switch resource {
 		case v1.ResourceNotification:

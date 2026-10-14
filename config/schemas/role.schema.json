@@ -5,9 +5,13 @@
   "$defs": {
     "BindingUnappliedRules": {
       "properties": {
+        "namespace": {
+          "type": "string",
+          "description": "Namespace of the RoleBinding, which needn't be the role's."
+        },
         "name": {
           "type": "string",
-          "description": "Name of the RoleBinding, in the role's namespace."
+          "description": "Name of the RoleBinding."
         },
         "rules": {
           "items": {
@@ -20,6 +24,7 @@
       "additionalProperties": false,
       "type": "object",
       "required": [
+        "namespace",
         "name",
         "rules"
       ],
@@ -286,7 +291,7 @@
       "properties": {
         "scopeRef": {
           "type": "string",
-          "description": "ScopeRef is the name of the Scope."
+          "description": "ScopeRef is the Scope's name, in the namespace of the Role or RoleBinding, or namespace/name."
         }
       },
       "additionalProperties": false,
@@ -294,7 +299,7 @@
       "required": [
         "scopeRef"
       ],
-      "description": "ScopeReference references a Scope in the namespace of the Role or RoleBinding."
+      "description": "ScopeReference references a Scope: by name in the namespace of the Role or RoleBinding, or as namespace/name."
     },
     "Time": {
       "properties": {},

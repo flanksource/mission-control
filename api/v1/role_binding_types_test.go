@@ -35,3 +35,39 @@ var _ = ginkgo.Describe("RoleBindingSpec.Validate", func() {
 		Expect(RoleBindingSpec{Role: "connections"}.Validate()).To(MatchError(ContainSubstring("at least one subject is required")))
 	})
 })
+
+var _ = ginkgo.Describe("ParseReference", func() {
+	for _, tt := range []struct {
+		ref       string
+		namespace string
+		name      string
+		err       string
+	}{
+		{ref: "admin", namespace: "platform", name: "admin"},
+		{ref: "mission-control-builtin/admin", namespace: "mission-control-builtin", name: "admin"},
+		{ref: "platform/admin", namespace: "platform", name: "admin"},
+		{ref: "team.a/admin", err: `namespace "team.a" is invalid`},
+		{ref: "/admin", err: `namespace "" is invalid`},
+		{ref: "platform/", err: `name "" is invalid`},
+		{ref: "a/b/c", err: `name "b/c" is invalid`},
+		{ref: "Admin", err: `name "Admin" is invalid`},
+	} {
+		ginkgo.It(tt.ref, func() {
+			namespace, name, err := ParseReference("platform", tt.ref)
+			if tt.err != "" {
+				Expect(err).To(MatchError(ContainSubstring(tt.err)))
+				return
+			}
+			Expect(err).ToNot(HaveOccurred())
+			Expect([]string{namespace, name}).To(Equal([]string{tt.namespace, tt.name}))
+		})
+	}
+
+	ginkgo.It("rejects a malformed role or constraint reference in a RoleBinding", func() {
+		subjects := RoleBindingSubjects{PermissionGroupSubjects: PermissionGroupSubjects{People: []string{"*"}}}
+		Expect(RoleBindingSpec{Role: "a/b/c", Subjects: subjects}.Validate()).To(MatchError(ContainSubstring("role")))
+		Expect(RoleBindingSpec{Role: "admin", Subjects: subjects, Constraint: &RoleBindingConstraint{
+			Resource: &ScopeReference{ScopeRef: "/configs"},
+		}}.Validate()).To(MatchError(ContainSubstring("constraint: resource.scopeRef")))
+	})
+})

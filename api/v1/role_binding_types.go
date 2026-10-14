@@ -17,7 +17,7 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 //
-// RoleBinding grants a Role (in the same namespace) to many subjects,
+// RoleBinding grants a Role to many subjects,
 // optionally narrowing the role's allow rules with a constraint.
 type RoleBinding struct {
 	metav1.TypeMeta   `json:",inline" yaml:",inline"`
@@ -32,8 +32,9 @@ type RoleBindingSpec struct {
 	// Description provides a brief explanation of the binding.
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 
-	// Role is the name of the Role to grant, in the same namespace as the binding.
+	// Role is the name of the Role to grant, in the binding's namespace, or namespace/name.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:Pattern=`^([a-z0-9]([-a-z0-9]*[a-z0-9])?/)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$`
 	Role string `json:"role" yaml:"role"`
 
 	// Subjects the role is granted to. At least one is required.
@@ -51,10 +52,10 @@ type RoleBindingSpec struct {
 // +kubebuilder:object:generate=true
 // +kubebuilder:validation:XValidation:rule="has(self.resource) || has(self.target)",message="a constraint must set resource or target"
 type RoleBindingConstraint struct {
-	// Resource is a Scope, in the binding's namespace, the resource of every operation must also belong to.
+	// Resource is a Scope the resource of every operation must also belong to.
 	Resource *ScopeReference `json:"resource,omitempty" yaml:"resource,omitempty"`
 
-	// Target is a Scope, in the binding's namespace, the target of every operation must also belong to.
+	// Target is a Scope the target of every operation must also belong to.
 	Target *ScopeReference `json:"target,omitempty" yaml:"target,omitempty"`
 }
 
@@ -132,6 +133,8 @@ func EvalClaimsMatch(program cel.Program, claims map[string]any) bool {
 func (t RoleBindingSpec) Validate() error {
 	if strings.TrimSpace(t.Role) == "" {
 		return fmt.Errorf("role is required")
+	} else if err := validateReference(t.Role); err != nil {
+		return fmt.Errorf("role %w", err)
 	}
 
 	if c := t.Constraint; c != nil {
@@ -141,10 +144,18 @@ func (t RoleBindingSpec) Validate() error {
 
 		if c.Resource != nil && c.Resource.ScopeRef == "" {
 			return fmt.Errorf("constraint: resource.scopeRef is required when resource is set")
+		} else if c.Resource != nil {
+			if err := validateReference(c.Resource.ScopeRef); err != nil {
+				return fmt.Errorf("constraint: resource.scopeRef %w", err)
+			}
 		}
 
 		if c.Target != nil && c.Target.ScopeRef == "" {
 			return fmt.Errorf("constraint: target.scopeRef is required when target is set")
+		} else if c.Target != nil {
+			if err := validateReference(c.Target.ScopeRef); err != nil {
+				return fmt.Errorf("constraint: target.scopeRef %w", err)
+			}
 		}
 	}
 

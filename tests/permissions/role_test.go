@@ -387,7 +387,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(condition.Message).To(ContainSubstring("rule read:"))
 
 			Expect(db.PersistRoleFromCRD(DefaultContext, role)).To(Succeed())
-			Expect(role.Status.BindingsWithUnappliedRules).To(ConsistOf(v1.BindingUnappliedRules{Name: "whole-role", Rules: []string{"read"}}))
+			Expect(role.Status.BindingsWithUnappliedRules).To(ConsistOf(v1.BindingUnappliedRules{Namespace: namespace, Name: "whole-role", Rules: []string{"read"}}))
 		})
 
 		It("report every allow rule as applying when the constraint narrows them all", func() {
@@ -717,7 +717,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			added := newRole(role.Name, namespace, append(role.Spec.Rules, allow("update", policy.ActionUpdate, "all-configs"))...)
 			added.UID = role.UID
 			Expect(db.PersistRoleFromCRD(DefaultContext, added)).To(Succeed(), "a role is never validated against its bindings")
-			Expect(added.Status.BindingsWithUnappliedRules).To(ContainElement(v1.BindingUnappliedRules{Name: "tenant-a-operators", Rules: []string{"update"}}))
+			Expect(added.Status.BindingsWithUnappliedRules).To(ContainElement(v1.BindingUnappliedRules{Namespace: namespace, Name: "tenant-a-operators", Rules: []string{"update"}}))
 			Expect(rbac.ReloadPolicy()).To(Succeed())
 
 			Expect(changed).To(HaveKey("role_bindings/"+namespace+"/tenant-a-operators"), "the binding's CRD is reconciled again, so its AllRulesApply condition follows")
@@ -1257,6 +1257,43 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			})
 
 			Expect(summaryOf(viewer, policy.ActionUpdate)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessSome))
+		})
+	})
+
+	Describe("references across namespaces", func() {
+		It("grants a Role of another namespace, narrowed by a Scope of the binding's namespace, and lists the binding on the Role", func() {
+			frank := setup.CreateUserWithRole(DefaultContext, "Role Frank", "role-frank@test.com")
+			Expect(db.PersistScopeFromCRD(DefaultContext, newScope("other-playbooks", otherNamespace, v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "*"}}))).To(Succeed())
+
+			binding := constrained(newBinding("cross-namespace", namespace+"/read-configs", people(frank)), "other-playbooks", "")
+			binding.Namespace = otherNamespace
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).To(Succeed())
+			Expect(rbac.ReloadPolicy()).To(Succeed())
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Where("id = ?", binding.UID).Delete(&models.RoleBinding{}).Error).To(Succeed())
+				Expect(DefaultContext.DB().Delete(frank).Error).To(Succeed())
+				Expect(rbac.ReloadPolicy()).To(Succeed())
+			})
+
+			Expect(canRunOn(frank.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue(), "the Role's Scopes resolve from its namespace, the constraint's from the binding's")
+			Expect(canRead(frank.ID.String(), tenantA)).To(BeFalse(), "other-playbooks selects no configs, so the read rule doesn't apply")
+
+			role := roles[namespace+"/read-configs"]
+			persistRole(role)
+			Expect(role.Status.BindingsWithUnappliedRules).To(ContainElement(
+				v1.BindingUnappliedRules{Namespace: otherNamespace, Name: "cross-namespace", Rules: []string{"read"}}))
+		})
+
+		It("resolves a bare Role name only in the binding's namespace", func() {
+			binding := newBinding("bare-elsewhere", "read-configs", people(erin))
+			binding.Namespace = otherNamespace
+			DeferCleanup(func() {
+				Expect(DefaultContext.DB().Where("id = ?", binding.UID).Delete(&models.RoleBinding{}).Error).To(Succeed())
+			})
+
+			var notReady *kopper.NotReadyError
+			Expect(errors.As(db.PersistRoleBindingFromCRD(DefaultContext, binding), &notReady)).To(BeTrue())
+			Expect(notReady.Reason).To(Equal(adapter.ReasonRoleNotFound))
 		})
 	})
 })
