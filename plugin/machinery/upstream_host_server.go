@@ -183,7 +183,7 @@ func upstreamHostContextWithInvocation(base dutyContext.Context, ctx context.Con
 		return nil, status.Errorf(codes.Unauthenticated, "plugin invocation user %s: %v", claims.User, err)
 	}
 
-	return dutyCtx.WithAgent(*agent).WithUser(&person), nil
+	return WithInvocationAccessToken(dutyCtx.WithAgent(*agent).WithUser(&person), claims)
 }
 
 func firstMetadataValue(md metadata.MD, key string) string {

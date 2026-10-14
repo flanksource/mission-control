@@ -14,6 +14,7 @@ import (
 	"github.com/flanksource/duty/rbac/policy"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/plugin"
@@ -95,7 +96,7 @@ func InvokeOperation(ctx dutyContext.Context, req Request) (*api.InvokeResponse,
 		}
 
 		var err error
-		token, err = plugin.MintInvocationToken(subject, req.User, entry.ID, req.Depth, req.Roles...)
+		token, err = plugin.MintInvocationToken(subject, req.User, icrbac.RequestAccessTokenID(ctx), entry.ID, req.Depth, req.Roles...)
 		if err != nil {
 			return nil, entry, ctx.Oops().Wrapf(err, "mint plugin invocation token")
 		}
@@ -188,6 +189,10 @@ func AuthorizeInvocationToken(ctx dutyContext.Context, token string, entry *plug
 	if upstream && auth.IsTrustedUpstream(ctx) {
 		return claims, nil
 	}
+	ctx, err = WithInvocationAccessToken(ctx, claims)
+	if err != nil {
+		return nil, err
+	}
 	if err := EnforceInvokePermission(ctx, claims.Subject, entry, op, configID); err != nil {
 		return nil, err
 	}
@@ -243,4 +248,21 @@ func authorizeConfigRead(ctx dutyContext.Context, subject, configID string) (dut
 
 func CanInvokePluginOperation(ctx dutyContext.Context, subject string, attr *models.ABACAttribute, pluginName, op string) bool {
 	return icrbac.HasPermission(ctx, subject, attr, policy.NewPluginInvokeAction(pluginName, op))
+}
+
+// WithInvocationAccessToken limits the context by the access token the invocation was made with, as the request that
+// minted it was. An invocation of a token that's been deleted is refused.
+func WithInvocationAccessToken(ctx dutyContext.Context, claims *plugin.InvocationTokenClaims) (dutyContext.Context, error) {
+	if claims.AccessToken == nil {
+		return ctx, nil
+	}
+
+	var token models.AccessToken
+	if err := ctx.DB().Select("id", "person_id", "roles").Where("id = ?", *claims.AccessToken).First(&token).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ctx, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("the access token of the plugin invocation was deleted")
+		}
+		return ctx, ctx.Oops().Wrapf(err, "failed to read the access token of the plugin invocation")
+	}
+	return icrbac.WithAccessToken(ctx, &token), nil
 }

@@ -9,6 +9,8 @@ import (
 	"path"
 	"strings"
 
+	icrbac "github.com/flanksource/incident-commander/rbac"
+
 	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
 	"github.com/google/uuid"
@@ -73,7 +75,7 @@ func pluginUIToken(c echo.Context) error {
 		return dutyAPI.WriteError(c, err)
 	}
 
-	token, err := plugin.MintInvocationToken(ctx.Subject(), user.ID.String(), entry.ID, 0, roles...)
+	token, err := plugin.MintInvocationToken(ctx.Subject(), user.ID.String(), icrbac.RequestAccessTokenID(ctx), entry.ID, 0, roles...)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 	}
@@ -164,6 +166,7 @@ func operationHTTPProxy(c echo.Context) error {
 	var roles []string
 	var subject string
 	var userID string
+	accessToken := icrbac.RequestAccessTokenID(ctx)
 	invocationToken := c.Request().Header.Get(api.InvocationTokenHTTPHeader)
 	if invocationToken != "" {
 		claims, err := machinery.AuthorizeInvocationToken(ctx, invocationToken, entry, op, configID)
@@ -174,6 +177,7 @@ func operationHTTPProxy(c echo.Context) error {
 		subject = claims.Subject
 		userID = claims.User
 		roles = claims.Roles
+		accessToken = claims.AccessToken
 	} else {
 		// No invocation token was supplied, so authorize locally before minting one.
 		user := ctx.User()
@@ -195,7 +199,7 @@ func operationHTTPProxy(c echo.Context) error {
 	}
 
 	if entry.Kind == api.PluginKindProxied {
-		invocationToken, err = plugin.MintInvocationToken(subject, userID, entry.ID, 0, roles...)
+		invocationToken, err = plugin.MintInvocationToken(subject, userID, accessToken, entry.ID, 0, roles...)
 		if err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 		}
@@ -212,7 +216,7 @@ func operationHTTPProxy(c echo.Context) error {
 	}
 
 	if invocationToken == "" {
-		invocationToken, err = plugin.MintInvocationToken(subject, userID, entry.ID, 0, roles...)
+		invocationToken, err = plugin.MintInvocationToken(subject, userID, accessToken, entry.ID, 0, roles...)
 		if err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "mint plugin invocation token"))
 		}
