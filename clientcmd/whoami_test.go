@@ -33,7 +33,7 @@ var _ = ginkgo.Describe("whoami command", func() {
 			Expect(r.URL.Path).To(Equal("/auth/whoami"))
 			Expect(r.Header.Get("Authorization")).To(Equal("Bearer test-token"))
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"payload":{"user":{"id":"u1","email":"me@example.com"},"roles":["admin"]}}`))
+			_, _ = w.Write([]byte(`{"payload":{"user":{"id":"u1","email":"me@example.com"}}}`))
 		}))
 		defer server.Close()
 
@@ -46,7 +46,6 @@ var _ = ginkgo.Describe("whoami command", func() {
 		Expect(report.Status).To(Equal("ok"))
 		Expect(report.Endpoint).To(Equal(server.URL + "/auth/whoami"))
 		Expect(report.User["email"]).To(Equal("me@example.com"))
-		Expect(report.Roles).To(Equal([]string{"admin"}))
 	})
 
 	ginkgo.It("falls back to api-prefixed whoami endpoints", func() {
@@ -57,11 +56,11 @@ var _ = ginkgo.Describe("whoami command", func() {
 			}
 			Expect(r.URL.Path).To(Equal("/api/auth/whoami"))
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"payload":{"user":{"id":"u1"},"roles":[]}}`))
+			_, _ = w.Write([]byte(`{"payload":{"user":{"id":"u1"}}}`))
 		}))
 		defer server.Close()
 
-		_, _, endpoint, _, err := callWhoami(context.TODO(), server.URL, "test-token")
+		_, endpoint, _, err := callWhoami(context.TODO(), server.URL, "test-token")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(endpoint).To(Equal(server.URL + "/api/auth/whoami"))
 	})
@@ -76,7 +75,7 @@ var _ = ginkgo.Describe("whoami command", func() {
 		unreachable := server.URL
 		server.Close()
 
-		_, _, _, _, err := callWhoami(context.TODO(), unreachable+"/api", "test-token")
+		_, _, _, err := callWhoami(context.TODO(), unreachable+"/api", "test-token")
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring(unreachable + "/api/auth/whoami"))
 		Expect(err.Error()).To(ContainSubstring(unreachable + "/auth/whoami"))
@@ -88,7 +87,7 @@ var _ = ginkgo.Describe("whoami command", func() {
 		}))
 		defer server.Close()
 
-		_, _, endpoint, statusCode, err := callWhoami(context.TODO(), server.URL+"/api", "test-token")
+		_, endpoint, statusCode, err := callWhoami(context.TODO(), server.URL+"/api", "test-token")
 		Expect(err).To(MatchError(ContainSubstring("tenant disabled")))
 		Expect(statusCode).To(Equal(http.StatusForbidden))
 		Expect(endpoint).To(Equal(server.URL + "/api/auth/whoami"))
@@ -105,11 +104,11 @@ var _ = ginkgo.Describe("whoami command", func() {
 				return
 			}
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"payload":{"user":{"id":"u1"},"roles":[]}}`))
+			_, _ = w.Write([]byte(`{"payload":{"user":{"id":"u1"}}}`))
 		}))
 		defer server.Close()
 
-		_, _, endpoint, _, err := callWhoami(context.TODO(), server.URL+"/api", "test-token")
+		_, endpoint, _, err := callWhoami(context.TODO(), server.URL+"/api", "test-token")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(endpoint).To(Equal(server.URL + "/auth/whoami"))
 	})

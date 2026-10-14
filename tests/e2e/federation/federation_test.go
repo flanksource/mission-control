@@ -10,6 +10,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"time"
 
 	"github.com/flanksource/duty/models"
@@ -237,15 +238,23 @@ var _ = ginkgo.Describe("Federated requests through the server", ginkgo.Ordered,
 
 		var whoami struct {
 			Payload struct {
-				User  models.Person `json:"user"`
-				Roles []string      `json:"roles"`
+				User models.Person `json:"user"`
 			} `json:"payload"`
 		}
 		Expect(json.Unmarshal(body, &whoami)).To(Succeed())
 		Expect(whoami.Payload.User.Name).To(Equal("Tina"))
 		Expect(whoami.Payload.User.Type).To(Equal(db.PersonTypeFederated))
 		Expect(whoami.Payload.User.ExternalID).To(Equal("appx:tina-123"))
-		Expect(lo.Uniq(whoami.Payload.Roles)).To(ConsistOf(models.BindingPrincipal(namespace, "tenant-a-operators")))
+		// A federated person is checked as a subject of their own per set of bindings, which whoami doesn't report
+		memberships, err := dutyRBAC.Enforcer().GetGroupingPolicy()
+		Expect(err).ToNot(HaveOccurred())
+		var roles []string
+		for _, membership := range memberships {
+			if strings.HasPrefix(membership[0], models.FederatedPrincipal(whoami.Payload.User.ID.String())+":") {
+				roles = append(roles, membership[1])
+			}
+		}
+		Expect(lo.Uniq(roles)).To(ConsistOf(models.BindingPrincipal(namespace, "tenant-a-operators")))
 	})
 
 	ginkgo.It("runs a playbook on a config Tina may read, recorded as Tina", func() {

@@ -33,7 +33,7 @@ var _ = ginkgo.Describe("GetConnection HTML detection", func() {
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			Expect(r.URL.Path).To(Equal("/auth/whoami"))
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"payload":{"user":{"id":"u1"},"roles":[]}}`))
+			_, _ = w.Write([]byte(`{"payload":{"user":{"id":"u1"}}}`))
 		}))
 		defer server.Close()
 
@@ -48,7 +48,7 @@ var _ = ginkgo.Describe("GetConnection HTML detection", func() {
 			Expect(r.URL.Path).To(Equal("/auth/whoami"))
 			seen = append(seen, r.Header.Get("Authorization"))
 			w.Header().Set("Content-Type", "application/json")
-			_, _ = w.Write([]byte(`{"payload":{"user":{"id":"u1"},"roles":[]}}`))
+			_, _ = w.Write([]byte(`{"payload":{"user":{"id":"u1"}}}`))
 		}))
 		defer server.Close()
 
