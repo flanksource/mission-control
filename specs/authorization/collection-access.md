@@ -103,7 +103,7 @@ Every authenticated subject MUST receive their **access summary** from `GET /aut
 - Every type accepted by `read`, `create`, `update` or `delete` ([roles.md, Section 2](roles.md#2-actions)), with an answer for each of those actions: `all`, `some` or `none`. An action that doesn't accept the type is `none`.
 - A boolean for each action without a resource: `person:manage`, `mcp:use`, `property:manage`, `event:read` and `job:read`. It is true exactly when the subject may perform that action.
 
-A request made with an access token MUST receive the summary of what the token may do, its Roles' limit included ([roles.md, Section 4.5](roles.md#45-access-tokens)), for both type answers and action booleans.
+A request made with an access token MUST receive the summary of what the token may do, its Roles' limit included ([limiting-permissions.md, "Access tokens"](limiting-permissions.md#access-tokens)), for both type answers and action booleans.
 
 The UI MUST use the summary alone for page, route and write-control gates, including Settings. Role names, team membership and legacy permissions MUST NOT be client-side gates. Listings and searches MUST use the same grants on the server: a page the summary shows MUST NOT have its listing refused for lack of its gate, and a permitted listing MUST NOT be hidden behind a refused page. The summary MUST reflect the grants of each request, not be kept for a session. A client receiving `403 Forbidden` from a listing MUST fetch the summary again.
 
@@ -147,7 +147,7 @@ The Permissions entry MUST open Roles. Role Bindings and Scopes MUST use their o
 
 **Why.** Roles, bindings and Scopes are separate types. Reading one doesn't grant reading another.
 
-Tokens and Artifacts MUST NOT require a page-level grant. Token operations MUST follow the ownership and credential restrictions in [roles.md, Section 4.5](roles.md#45-access-tokens). Artifact listings and fetches MUST allow only artifacts whose producers the subject may read ([roles.md, Section 3.1](roles.md#31-the-read-action)).
+Tokens and Artifacts MUST NOT require a page-level grant. Token operations MUST follow the ownership and credential restrictions in [identities.md, Section 4](identities.md#4-access-tokens). Artifact listings and fetches MUST allow only artifacts whose producers the subject may read ([roles.md, Section 3.1](roles.md#31-the-read-action)).
 
 **Why.** Own tokens need no grant, and artifacts inherit their producers' access. Opening either page grants no additional access.
 

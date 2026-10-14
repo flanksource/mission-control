@@ -41,7 +41,7 @@ A RoleBinding MUST have a namespace, and its Role and constraint Scopes must be 
 | `oidc`                                                             | list of objects | Users of an external identity provider, by the claims in their token |
 | `playbooks`, `notifications`, `topologies`, `scrapers`, `canaries`, `plugins` | list of objects | Those resources, when they act on their own               |
 
-A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either, and no subject selects them (Section 2.3). An access token isn't a subject at all: a request made with one is checked as its owner (`roles.md`, Section 4.5). `people` selects humans only, whether by email or by `*`, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
+A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either, and no subject selects them (Section 2.3). An access token isn't a subject at all: a request made with one is checked as its owner (`identities.md`, Section 4). `people` selects humans only, whether by email or by `*`, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
 
 ### 2.1 People
 
@@ -114,7 +114,7 @@ Users of an external identity provider aren't mapped into teams. Their access co
 
 ### 2.3 Agents
 
-Agents aren't subjects of a RoleBinding: no field selects them, and they can't be in a team. An agent only pushes its own data and fetches what's assigned to it, which its token allows without a Role (`roles.md`, Section 4.6). _Why:_ nothing an agent does needs a grant yet. A subject that selects agents can be added when one does.
+Agents aren't subjects of a RoleBinding: no field selects them, and they can't be in a team. An agent only pushes its own data and fetches what's assigned to it, which its token allows without a Role (`identities.md`, Section 5). _Why:_ nothing an agent does needs a grant yet. A subject that selects agents can be added when one does.
 
 ### 2.4 External identity provider users
 
@@ -167,7 +167,7 @@ Some resources act on their own and need permissions too, e.g. a playbook callin
 | `topologies` | Topologies |
 | `scrapers` | Config scrapers |
 | `canaries` | Canaries |
-| `plugins` | Plugins, by the namespace and name of their Plugin resource, for the connections they look up. They can only be granted `read` and `connection:use` on connections. Everything else a plugin does is checked as its caller (`roles.md`, Section 4.4) |
+| `plugins` | Plugins, by the namespace and name of their Plugin resource, for the connections they look up. They can only be granted `read` and `connection:use` on connections. Everything else a plugin does is checked as its caller (`identities.md`, Section 3) |
 
 ```yaml
 subjects:
@@ -201,7 +201,7 @@ Since resource subjects are matched this way, a binding also reaches resources c
 - `name: "*"` does the same across every namespace.
 - An exact name not yet in use is taken by whoever first creates a resource with that name.
 
-Bind by exact namespace and name wherever the Role is sensitive, e.g. `connection:use` on a connection that pages people, or anything bound to `admin`. _Why it's allowed:_ a playbook or notification's access is a property of where it lives, like a Kubernetes pod using any service account in its namespace. Granting by namespace is how a team gives its own playbooks access without a binding per playbook. The binding is still the grant: creating a resource that matches no binding gets it nothing, whatever connections or resources it names (`roles.md`, Section 4.4).
+Bind by exact namespace and name wherever the Role is sensitive, e.g. `connection:use` on a connection that pages people, or anything bound to `admin`. _Why it's allowed:_ a playbook or notification's access is a property of where it lives, like a Kubernetes pod using any service account in its namespace. Granting by namespace is how a team gives its own playbooks access without a binding per playbook. The binding is still the grant: creating a resource that matches no binding gets it nothing, whatever connections or resources it names (`identities.md`, Section 2).
 
 ## 3. Constraint
 
