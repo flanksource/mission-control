@@ -563,10 +563,25 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			rejectBinding("does-not-exist")
 		})
 
-		It("rejects people by name, and resource subjects with patterns", func() {
+		It("accepts people: [\"*\"] alone", func() {
+			spec := v1.RoleBindingSpec{Role: "read-configs", Subjects: v1.RoleBindingSubjects{
+				PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{"*"}},
+			}}
+			Expect(spec.Validate()).To(Succeed())
+		})
+
+		It("rejects people by name or pattern, \"*\" with other people, and resource subjects with patterns", func() {
+			for _, people := range [][]string{{"*", "a@b.com"}, {"a@b.com", "*"}, {"*@x.com"}, {"a*@x.com"}, {"a@*.x.com"}} {
+				spec := v1.RoleBindingSpec{Role: "read-configs", Subjects: v1.RoleBindingSubjects{
+					PermissionGroupSubjects: v1.PermissionGroupSubjects{People: people},
+				}}
+				Expect(spec.Validate()).ToNot(Succeed(), "%v", people)
+			}
+
 			for _, subjects := range []v1.RoleBindingSubjects{
 				{PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{"Role Erin"}}},
-				{PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{"*"}}},
+				{PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{"*", erin.Email}}},
+				{PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{"*@test.com"}}},
 				{PermissionGroupSubjects: v1.PermissionGroupSubjects{Playbooks: []v1.PermissionGroupSelector{{}}}},
 				{PermissionGroupSubjects: v1.PermissionGroupSubjects{Playbooks: []v1.PermissionGroupSelector{{Namespace: "*"}}}},
 				{PermissionGroupSubjects: v1.PermissionGroupSubjects{Scrapers: []v1.PermissionGroupSelector{{Name: "prod-*"}}}},

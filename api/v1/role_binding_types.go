@@ -157,6 +157,17 @@ func (t RoleBindingSpec) Validate() error {
 	}
 
 	for _, person := range t.Subjects.People {
+		if person == "*" {
+			if len(t.Subjects.People) > 1 {
+				return fmt.Errorf(`people: "*" selects every person and must be the only entry`)
+			}
+			continue
+		}
+
+		if strings.Contains(person, "*") {
+			return fmt.Errorf(`person %q must be an email address; patterns aren't supported, use "*" alone to select every person`, person)
+		}
+
 		if address, err := mail.ParseAddress(person); err != nil || address.Address != person {
 			return fmt.Errorf("person %q must be an email address", person)
 		}

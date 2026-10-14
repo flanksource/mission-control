@@ -52,9 +52,13 @@ subjects:
     - bob@example.com
 ```
 
-Each entry MUST be a person's email address, never their name, or `*` alone to select every person, e.g. to bind `viewer` to everyone in the organisation.
+Each entry MUST be a person's email address, never their name, or `*` alone to select every person, e.g. to bind `viewer` to everyone in the organisation:
 
-An entry selects a person only by an email address they've verified. _Why:_ a person can change their own email, e.g. through Kratos's settings flow. Matching an unverified address would let anyone take the bindings of an address they don't own, e.g. one bound for someone who hasn't signed up yet or has left.
+- `*` MUST be the only entry. `["*", "alice@example.com"]` is rejected: the email adds nothing, and the list reads as if it narrowed `*`.
+- Any other entry containing `*` is rejected, e.g. `*@example.com`, `alice*@example.com` or `alice@*.example.com`. Patterns aren't supported, and an email parser would otherwise accept them as addresses that match no one.
+- `*` selects every person who exists when the policy is loaded. A person who signs up gets it at the next reload, like a person a binding names by email.
+
+An email entry selects a person only by an email address they've verified. `*` names no address, so it doesn't depend on verification. _Why:_ a person can change their own email, e.g. through Kratos's settings flow. Matching an unverified address would let anyone take the bindings of an address they don't own, e.g. one bound for someone who hasn't signed up yet or has left.
 
 ### 2.2 Teams
 
@@ -386,7 +390,7 @@ To narrow two rules differently, put them in two Roles and bind each with its ow
 
 A binding is validated against what it references: its Role, and the Scopes its constraint names. Nothing is ever validated against the binding.
 
-A binding that's wrong on its own is rejected (`overview.md`, "Rejected or not in effect"): no subjects, a `people` entry that isn't an email or `*`, an `oidc.match` that doesn't compile or doesn't return a bool, an empty or wildcard-namespace resource subject, or a `constraint` that sets neither `resource` nor `target`. Everything else is checked against the Role and Scopes, as follows.
+A binding that's wrong on its own is rejected (`overview.md`, "Rejected or not in effect"): no subjects, a `people` entry that isn't an email or `*` alone, an `oidc.match` that doesn't compile or doesn't return a bool, an empty or wildcard-namespace resource subject, or a `constraint` that sets neither `resource` nor `target`. Everything else is checked against the Role and Scopes, as follows.
 
 - A binding takes effect only once its Role exists and is valid. Until then it's `Ready=False` with the reason and none of its rules apply. There is no previous version to fall back to; the binding is whatever was last written.
 - Its rules apply as the constraint narrows them (Section 3.2). When the Role or a Scope the constraint names changes, is deleted or becomes invalid, each rule is checked again. A Scope that's gone or invalid selects nothing (`scopes.md`, Section 7), so no rule applies through the binding while that holds. A rule the constraint can't narrow doesn't apply and is reported; the others keep applying.
