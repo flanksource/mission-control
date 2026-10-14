@@ -328,7 +328,7 @@ func AddToAdmins(ctx context.Context, personID uuid.UUID) error {
 	}
 
 	if err := ctx.DB().Exec(`INSERT INTO team_members (team_id, person_id, source) VALUES (?, ?, ?)
-		ON CONFLICT (team_id, person_id) DO NOTHING`, team.UID, personID, adapter.SourceShipped).Error; err != nil {
+		ON CONFLICT (team_id, person_id) DO UPDATE SET source = EXCLUDED.source`, team.UID, personID, adapter.SourceShipped).Error; err != nil {
 		return ctx.Oops().Wrapf(err, "failed to add %s to team %s", personID, TeamAdmins)
 	}
 
