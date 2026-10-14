@@ -29,7 +29,7 @@ var _ = ginkgo.Describe("RoleBinding selecting every person", ginkgo.Ordered, fu
 		everyoneID                         = uuid.NewString()
 	)
 
-	allPeople := v1.RoleBindingSubjects{PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{v1.AllPeople}}}
+	allPeople := v1.RoleBindingSubjects{PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{"*"}}}
 
 	allow := func(name, action, resource string) v1.RoleRule {
 		return v1.RoleRule{Name: name, Action: action, Resource: &v1.ScopeReference{ScopeRef: resource}}

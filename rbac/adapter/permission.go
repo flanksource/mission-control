@@ -562,7 +562,7 @@ func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding,
 		return nil, nil, fmt.Errorf("failed to resolve subjects for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
 	}
 
-	people, err := a.resolvePeople(subjects)
+	people, err := a.resolvePeople(subjects.People)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to resolve people for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
 	}
@@ -612,11 +612,11 @@ func RoleBindingSpec(binding models.RoleBinding) (v1.RoleBindingSpec, error) {
 
 // resolvePeople returns the ids of the people a binding selects: every person for people: ["*"], otherwise those
 // with the listed emails.
-func (a *PermissionAdapter) resolvePeople(subjects v1.RoleBindingSubjects) ([]string, error) {
-	if subjects.AllPeople() {
+func (a *PermissionAdapter) resolvePeople(people []string) ([]string, error) {
+	if len(people) == 1 && people[0] == "*" {
 		return a.resolveAllPeople()
 	}
-	return a.resolvePeopleByEmail(subjects.People)
+	return a.resolvePeopleByEmail(people)
 }
 
 // resolveAllPeople returns the ids of every human user of Mission Control. Agents, users of external identity
