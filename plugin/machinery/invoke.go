@@ -173,7 +173,8 @@ func SelectorMatches(ctx dutyContext.Context, entry *plugin.Entry, configID stri
 }
 
 // AuthorizeInvocationToken validates a caller-supplied invocation token for the
-// plugin and authorizes the operation against the token's subject.
+// plugin and authorizes the operation against the token's subject, limited by the
+// access token it was minted with.
 //
 // A token only proves who the caller is, not what they may do: tokens minted for
 // a plugin UI carry no operation or config scope. So the subject must hold read
@@ -185,6 +186,13 @@ func AuthorizeInvocationToken(ctx dutyContext.Context, token string, entry *plug
 	claims, upstream, err := plugin.ValidateRequestInvocationToken(ctx, token, entry.ID)
 	if err != nil {
 		return nil, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("invalid plugin invocation token: %v", err)
+	}
+
+	// A request made with an access token is limited by it, so it may only carry an invocation minted under the
+	// same token. Otherwise an invocation from its owner's session would run without the token's limit.
+	if requestToken := icrbac.RequestAccessTokenID(ctx); requestToken != nil &&
+		(claims.AccessToken == nil || *claims.AccessToken != *requestToken) {
+		return nil, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("the plugin invocation token wasn't minted with this request's access token")
 	}
 	if upstream && auth.IsTrustedUpstream(ctx) {
 		return claims, nil
