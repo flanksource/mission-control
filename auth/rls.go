@@ -53,6 +53,16 @@ func InvalidateRLSCacheForUser(userID string) {
 	}
 }
 
+// invalidateRLSCacheForToken removes the RLS payloads cached for requests made with the access token.
+func invalidateRLSCacheForToken(tokenID uuid.UUID) {
+	key := rbac.AccessTokenIDCacheKey(tokenID)
+	for cacheKey := range tokenCache.Items() {
+		if strings.HasPrefix(cacheKey, "rls-payload-") && strings.Contains(cacheKey, key) {
+			tokenCache.Delete(cacheKey)
+		}
+	}
+}
+
 func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 	user := ctx.User()
 	if user == nil {
@@ -63,7 +73,8 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 
 	subject := ctx.Subject()
 
-	cacheKey := getRLSCacheKey(subject)
+	// The subject's sessions and each of their access tokens are limited differently
+	cacheKey := getRLSCacheKey(subject) + rbac.AccessTokenCacheKey(ctx)
 	for _, limit := range limits {
 		cacheKey = fmt.Sprintf("%s:scopes=%s", cacheKey, strings.Join(limit, ","))
 	}
@@ -74,7 +85,7 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 
 	var payload *rls.Payload
 	var err error
-	if tokenRoles, limited := rbac.TokenLimit(ctx, user.ID.String()); limited {
+	if tokenRoles, limited := rbac.TokenLimit(ctx, subject); limited {
 		// A token lists the rows both its owner's read grants and its Roles select (roles.md, Section 4.5)
 		if payload, err = buildRLSPayload(ctx, subject); err != nil {
 			return nil, ctx.Oops().Wrap(err)

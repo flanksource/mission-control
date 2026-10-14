@@ -44,7 +44,7 @@ func createPersonWithToken(ctx context.Context) string {
 	person, err := db.CreatePerson(ctx, username, username+"@example.com", "")
 	Expect(err).ToNot(HaveOccurred())
 
-	token, _, err := db.CreateAccessToken(ctx, person.ID, "default", nil, nil, false, viewerRole)
+	token, _, err := db.CreateAccessTokenForPerson(ctx, person, "default", 0, false, viewerRole)
 	Expect(err).ToNot(HaveOccurred())
 	return token.PlainText()
 }

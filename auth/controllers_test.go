@@ -58,12 +58,6 @@ func findTokenByName(ctx context.Context, tokenName string) models.AccessToken {
 
 var testRoles = models.AccessTokenRoles{{Namespace: "mission-control-builtin", Name: "viewer"}}
 
-func canEnforce(sub, obj, act string) bool {
-	allowed, err := rbac.Enforcer().Enforce(sub, obj, act)
-	Expect(err).To(BeNil())
-	return allowed
-}
-
 var _ = Describe("CreateToken", Ordered, func() {
 	var (
 		testUser *models.Person
@@ -112,22 +106,30 @@ var _ = Describe("CreateToken", Ordered, func() {
 			Expect(err).To(MatchError(gorm.ErrRecordNotFound))
 		})
 
-		It("stores the token's roles without writing deny rows", func() {
+		It("creates the token for its owner, without a person of its own", func() {
 			reqData := CreateTokenRequest{
 				Name:  "limited-token",
 				Roles: models.AccessTokenRoles{{Namespace: "anywhere", Name: "readonly"}},
 			}
+
+			var peopleBefore int64
+			Expect(DefaultContext.DB().Model(&models.Person{}).Count(&peopleBefore).Error).To(Succeed())
 
 			ctx := DefaultContext.WithUser(testUser)
 			_ = postCreateToken(ctx, e, reqData, http.StatusOK)
 
 			token := findTokenByName(ctx, reqData.Name)
 			Expect(token.Roles).To(Equal(reqData.Roles))
+			Expect(token.PersonID).To(Equal(testUser.ID))
+			Expect(token.CreatedBy).To(Equal(&testUser.ID))
 
-			own, err := rbac.Enforcer().GetPermissionsForUser(token.PersonID.String())
+			var peopleAfter int64
+			Expect(DefaultContext.DB().Model(&models.Person{}).Count(&peopleAfter).Error).To(Succeed())
+			Expect(peopleAfter).To(Equal(peopleBefore))
+
+			roles, err := rbac.Enforcer().GetRolesForUser(testUser.ID.String())
 			Expect(err).To(BeNil())
-			Expect(own).To(BeEmpty(), "a token's limit is its roles, not deny rows")
-			Expect(canEnforce(token.PersonID.String(), policy.ObjectCatalog, policy.ActionRead)).To(BeTrue())
+			Expect(roles).To(BeEmpty(), "a token adds no grouping rule")
 		})
 
 		It("refuses to create or delete a token with a token", func() {
@@ -135,9 +137,7 @@ var _ = Describe("CreateToken", Ordered, func() {
 			_ = postCreateToken(ctx, e, CreateTokenRequest{Name: "first-token", Roles: testRoles}, http.StatusOK)
 			first := findTokenByName(ctx, "first-token")
 
-			var tokenPerson models.Person
-			Expect(DefaultContext.DB().Where("id = ?", first.PersonID).First(&tokenPerson).Error).To(Succeed())
-			tokenCtx := withAccessToken(DefaultContext.WithUser(&tokenPerson))
+			tokenCtx := withAccessToken(DefaultContext.WithUser(testUser), &first)
 
 			_ = postCreateToken(tokenCtx, e, CreateTokenRequest{Name: "second-token", Roles: testRoles}, http.StatusForbidden)
 			_, err := gorm.G[models.AccessToken](DefaultContext.DB()).Where("name = ?", "second-token").First(DefaultContext)
@@ -185,6 +185,7 @@ var _ = Describe("CreateToken", Ordered, func() {
 			token := findTokenByName(ctx, reqData.Name)
 			Expect(token.ID.String()).ToNot(Equal(uuid.Nil.String()))
 
+			Expect(token.PersonID).To(Equal(noPermUser.ID))
 			perms, err := rbac.PermsForUser(token.PersonID.String())
 			Expect(err).To(BeNil())
 			Expect(perms).To(HaveLen(0), "Token should have no permissions")

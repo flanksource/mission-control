@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"time"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
@@ -40,7 +41,8 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 		e                             *echo.Echo
 		adminLocal, adminRole, nobody *models.Person
 		readers                       = map[string]*models.Person{}
-		tokens                        = map[string]*models.Person{}
+		tokens                        = map[string]context.Context{}
+		tokenIDs                      []uuid.UUID
 		artifactIDs                   []uuid.UUID
 		check                         models.Check
 		config                        models.ConfigItem
@@ -51,10 +53,14 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 		cases                         []artifactCase
 	)
 
-	request := func(person *models.Person, path string) *httptest.ResponseRecorder {
+	as := func(person *models.Person) context.Context {
+		return DefaultContext.WithUser(person)
+	}
+
+	request := func(ctx context.Context, path string) *httptest.ResponseRecorder {
 		ginkgo.GinkgoHelper()
 		req := httptest.NewRequest(http.MethodGet, path, nil)
-		req = req.WithContext(DefaultContext.WithUser(person))
+		req = req.WithContext(ctx)
 		rec := httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		return rec
@@ -156,12 +162,11 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 		}
 		for name, reader := range readers {
 			for _, role := range []string{"outside", name} {
-				result, err := db.CreateAccessTokenForPerson(DefaultContext, reader, namespace+"-"+name+"-"+role, time.Hour, false,
+				_, token, err := db.CreateAccessTokenForPerson(DefaultContext, reader, namespace+"-"+name+"-"+role, time.Hour, false,
 					models.AccessTokenRoles{{Namespace: namespace, Name: role}})
 				Expect(err).ToNot(HaveOccurred())
-				_, err = rbac.Enforcer().AddGroupingPolicy(result.Person.ID.String(), reader.ID.String())
-				Expect(err).ToNot(HaveOccurred())
-				tokens[name+"-"+role] = result.Person
+				tokenIDs = append(tokenIDs, token.ID)
+				tokens[name+"-"+role] = mcRBAC.WithAccessToken(as(reader), token)
 			}
 		}
 		Expect(rbac.ReloadPolicy()).To(Succeed())
@@ -182,9 +187,8 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 		Expect(DefaultContext.DB().Where("namespace = ? OR (namespace = ? AND name = ?)", namespace, adapter.ShippedNamespace, namespace).Delete(&models.RoleBinding{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Role{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Scope{}).Error).To(Succeed())
-		for _, person := range tokens {
-			Expect(DefaultContext.DB().Where("person_id = ?", person.ID).Delete(&models.AccessToken{}).Error).To(Succeed())
-			Expect(DefaultContext.DB().Delete(person).Error).To(Succeed())
+		if len(tokenIDs) > 0 {
+			Expect(DefaultContext.DB().Where("id IN ?", tokenIDs).Delete(&models.AccessToken{}).Error).To(Succeed())
 		}
 		for _, person := range append(lo.Values(readers), adminRole, nobody) {
 			Expect(DefaultContext.DB().Delete(person).Error).To(Succeed())
@@ -196,25 +200,25 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 	for _, subject := range []string{"admins", "admin Role", "producer reader", "no producer read", "limited token", "covered token"} {
 		ginkgo.It("serves producer artifacts to "+subject+" only when readable", func() {
 			for _, tc := range cases {
-				person, allowed := readers[tc.reader], true
+				ctx, allowed := as(readers[tc.reader]), true
 				switch subject {
 				case "admins":
-					person = adminLocal
+					ctx = as(adminLocal)
 				case "admin Role":
-					person = adminRole
+					ctx = as(adminRole)
 				case "no producer read":
-					person, allowed = nobody, false
+					ctx, allowed = as(nobody), false
 				case "limited token":
-					person, allowed = tokens[tc.reader+"-outside"], false
+					ctx, allowed = tokens[tc.reader+"-outside"], false
 				case "covered token":
-					person = tokens[tc.reader+"-"+tc.reader]
+					ctx = tokens[tc.reader+"-"+tc.reader]
 				}
 				paths := []string{"/artifacts/download/" + tc.id.String()}
 				if tc.list != "" {
 					paths = append(paths, tc.list)
 				}
 				for _, path := range paths {
-					rec := request(person, path)
+					rec := request(ctx, path)
 					if !allowed {
 						Expect(rec.Code).To(Equal(http.StatusNotFound), "%s: %s", path, rec.Body.String())
 						continue
@@ -243,8 +247,8 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 				targetReader = readers["check"]
 			}
 			for _, person := range []*models.Person{readers["playbook"], targetReader, nobody} {
-				Expect(request(person, tc.list).Code).To(Equal(http.StatusNotFound))
-				Expect(request(person, "/artifacts/download/"+tc.id.String()).Code).To(Equal(http.StatusNotFound))
+				Expect(request(as(person), tc.list).Code).To(Equal(http.StatusNotFound))
+				Expect(request(as(person), "/artifacts/download/"+tc.id.String()).Code).To(Equal(http.StatusNotFound))
 			}
 		}
 	})
@@ -252,10 +256,10 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 	ginkgo.It("returns the same response for missing, unreadable and unowned artifacts or producers", func() {
 		unowned := saveArtifact(models.Artifact{})
 		for _, tc := range cases {
-			missing := request(adminLocal, "/artifacts/download/"+uuid.NewString())
+			missing := request(as(adminLocal), "/artifacts/download/"+uuid.NewString())
 			for _, rec := range []*httptest.ResponseRecorder{
-				request(nobody, "/artifacts/download/"+tc.id.String()),
-				request(adminLocal, "/artifacts/download/"+unowned.String()),
+				request(as(nobody), "/artifacts/download/"+tc.id.String()),
+				request(as(adminLocal), "/artifacts/download/"+unowned.String()),
 			} {
 				Expect(rec.Code).To(Equal(http.StatusNotFound))
 				Expect(rec.Body.String()).To(Equal(missing.Body.String()))
@@ -266,9 +270,9 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 			"/artifacts/list/config_change/" + uuid.NewString(),
 			"/artifacts/list/playbook_run/" + uuid.NewString(),
 		} {
-			rec := request(adminLocal, path)
+			rec := request(as(adminLocal), path)
 			Expect(rec.Code).To(Equal(http.StatusNotFound), rec.Body.String())
-			Expect(rec.Body.String()).To(Equal(request(nobody, cases[0].list).Body.String()))
+			Expect(rec.Body.String()).To(Equal(request(as(nobody), cases[0].list).Body.String()))
 		}
 	})
 
@@ -284,26 +288,34 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 		ginkgo.DeferCleanup(func() {
 			Expect(DefaultContext.DB().Where("id = ?", id).Delete(&models.Artifact{}).Error).To(Succeed())
 		})
-		for _, person := range []*models.Person{readers["canary"], readers["config"], tokens["canary-canary"], nobody} {
-			rec := request(person, cases[1].list)
-			if person == nobody || person == tokens["canary-canary"] {
+		for _, subject := range []struct {
+			name string
+			ctx  context.Context
+		}{
+			{"canary", as(readers["canary"])},
+			{"config", as(readers["config"])},
+			{"token", tokens["canary-canary"]},
+			{"nobody", as(nobody)},
+		} {
+			rec := request(subject.ctx, cases[1].list)
+			if subject.name == "nobody" || subject.name == "token" {
 				Expect(rec.Code).To(Equal(http.StatusNotFound), rec.Body.String())
 			} else {
 				Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
 				var listed []models.Artifact
 				Expect(json.Unmarshal(rec.Body.Bytes(), &listed)).To(Succeed())
 				ids := lo.Map(listed, func(a models.Artifact, _ int) uuid.UUID { return a.ID })
-				if person == readers["canary"] {
+				if subject.name == "canary" {
 					Expect(ids).To(ContainElement(id))
 				} else {
 					Expect(ids).ToNot(ContainElement(id))
 				}
 				for _, artifact := range listed {
-					Expect(request(person, "/artifacts/download/"+artifact.ID.String()).Body.String()).To(Equal(content))
+					Expect(request(subject.ctx, "/artifacts/download/"+artifact.ID.String()).Body.String()).To(Equal(content))
 				}
 			}
-			download := request(person, "/artifacts/download/"+id.String())
-			if person == readers["canary"] {
+			download := request(subject.ctx, "/artifacts/download/"+id.String())
+			if subject.name == "canary" {
 				Expect(download.Code).To(Equal(http.StatusOK), download.Body.String())
 				Expect(download.Body.String()).To(Equal(content))
 			} else {
@@ -313,18 +325,18 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 	})
 
 	ginkgo.It("omits deleted artifacts from every list and refuses their downloads", func() {
-		missing := request(adminLocal, "/artifacts/download/"+uuid.NewString())
+		missing := request(as(adminLocal), "/artifacts/download/"+uuid.NewString())
 		for _, tc := range cases {
 			var original models.Artifact
 			Expect(DefaultContext.DB().First(&original, tc.id).Error).To(Succeed())
 			original.DeletedAt = lo.ToPtr(time.Now())
 			id := saveArtifact(original)
-			for _, person := range []*models.Person{adminLocal, adminRole, readers[tc.reader], tokens[tc.reader+"-"+tc.reader]} {
-				download := request(person, "/artifacts/download/"+id.String())
+			for _, ctx := range []context.Context{as(adminLocal), as(adminRole), as(readers[tc.reader]), tokens[tc.reader+"-"+tc.reader]} {
+				download := request(ctx, "/artifacts/download/"+id.String())
 				Expect(download.Code).To(Equal(http.StatusNotFound))
 				Expect(download.Body.String()).To(Equal(missing.Body.String()))
 				if tc.list != "" {
-					rec := request(person, tc.list)
+					rec := request(ctx, tc.list)
 					Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
 					var listed []models.Artifact
 					Expect(json.Unmarshal(rec.Body.Bytes(), &listed)).To(Succeed())
@@ -340,9 +352,9 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 		ginkgo.DeferCleanup(func() {
 			Expect(DefaultContext.DB().Model(&check).Update("deleted_at", nil).Error).To(Succeed())
 		})
-		missing := request(adminLocal, "/artifacts/download/"+uuid.NewString())
+		missing := request(as(adminLocal), "/artifacts/download/"+uuid.NewString())
 		for _, path := range []string{cases[0].list, "/artifacts/download/" + cases[0].id.String()} {
-			rec := request(adminLocal, path)
+			rec := request(as(adminLocal), path)
 			Expect(rec.Code).To(Equal(http.StatusNotFound))
 			Expect(rec.Body.String()).To(Equal(missing.Body.String()))
 		}
@@ -356,13 +368,13 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 			Expect(DefaultContext.DB().Model(&check).Update("deleted_at", nil).Error).To(Succeed())
 		})
 		for _, person := range []*models.Person{adminLocal, adminRole} {
-			rec := request(person, cases[1].list)
+			rec := request(as(person), cases[1].list)
 			Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
 			var listed []models.Artifact
 			Expect(json.Unmarshal(rec.Body.Bytes(), &listed)).To(Succeed())
 			Expect(listed).To(HaveLen(1))
 			Expect(listed[0].ID).To(Equal(cases[1].id))
-			Expect(request(person, "/artifacts/download/"+id.String()).Code).To(Equal(http.StatusNotFound))
+			Expect(request(as(person), "/artifacts/download/"+id.String()).Code).To(Equal(http.StatusNotFound))
 		}
 	})
 })

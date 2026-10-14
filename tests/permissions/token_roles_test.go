@@ -3,9 +3,11 @@ package permissions_test
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
@@ -27,6 +29,24 @@ import (
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
+// tokenCaller makes requests as a person, with one of their access tokens when token is set.
+type tokenCaller struct {
+	person *models.Person
+	token  *models.AccessToken
+}
+
+func (c tokenCaller) ctx() context.Context {
+	ctx := DefaultContext.WithUser(c.person)
+	if c.token != nil {
+		ctx = mcRBAC.WithAccessToken(ctx, c.token)
+	}
+	return ctx
+}
+
+func session(person *models.Person) tokenCaller {
+	return tokenCaller{person: person}
+}
+
 // Access tokens limited by Roles (specs/authorization/roles.md, Section 4.5).
 var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func() {
 	const namespace = "token-roles"
@@ -37,9 +57,9 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		inA, inB, outside    models.ConfigItem
 		runbook              models.Playbook
 		roleIDs, bindingIDs  = map[string]string{}, map[string]string{}
-		readonly             *models.Person
-		tenantToken, missing *models.Person
-		carolToken           *models.Person
+		readonly             tokenCaller
+		tenantToken, missing tokenCaller
+		carolToken           tokenCaller
 	)
 
 	newScope := func(name string, targets ...v1.ScopeTarget) {
@@ -83,47 +103,50 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		auth.FlushTokenCache()
 	}
 
-	do := func(user *models.Person, method, path string, body any) *httptest.ResponseRecorder {
+	do := func(caller tokenCaller, method, path string, body any) *httptest.ResponseRecorder {
 		ginkgo.GinkgoHelper()
 		raw, err := json.Marshal(body)
 		Expect(err).ToNot(HaveOccurred())
 
 		req := httptest.NewRequest(method, path, bytes.NewReader(raw))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-		req = req.WithContext(DefaultContext.WithUser(user))
+		req = req.WithContext(caller.ctx())
 		rec := httptest.NewRecorder()
 		e.ServeHTTP(rec, req)
 		return rec
 	}
 
-	// createToken creates a token of the owner through the API and returns the person it authenticates as.
-	createToken := func(owner *models.Person, name string, roles ...string) *models.Person {
+	// createToken creates a token of the owner through the API.
+	createToken := func(owner *models.Person, name string, roles ...string) tokenCaller {
 		ginkgo.GinkgoHelper()
 		tokenRoles := lo.Map(roles, func(role string, _ int) models.AccessTokenRole {
 			return models.AccessTokenRole{Namespace: namespace, Name: role}
 		})
-		rec := do(owner, http.MethodPost, "/auth/create_token", auth.CreateTokenRequest{Name: name, Roles: tokenRoles})
+		rec := do(session(owner), http.MethodPost, "/auth/create_token", auth.CreateTokenRequest{Name: name, Roles: tokenRoles})
 		Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
 
 		var token models.AccessToken
 		Expect(DefaultContext.DB().Where("name = ? AND created_by = ?", name, owner.ID).First(&token).Error).To(Succeed())
-		var person models.Person
-		Expect(DefaultContext.DB().Where("id = ?", token.PersonID).First(&person).Error).To(Succeed())
-		return &person
+		Expect(token.PersonID).To(Equal(owner.ID))
+		return tokenCaller{person: owner, token: &token}
 	}
 
-	canRead := func(subject *models.Person, config models.ConfigItem) bool {
-		return mcRBAC.HasPermission(DefaultContext, subject.ID.String(), &models.ABACAttribute{Config: config}, policy.ActionRead)
+	canRead := func(caller tokenCaller, config models.ConfigItem) bool {
+		return mcRBAC.HasPermission(caller.ctx(), caller.person.ID.String(), &models.ABACAttribute{Config: config}, policy.ActionRead)
 	}
 
-	canRun := func(subject *models.Person, config models.ConfigItem) bool {
-		return mcRBAC.HasPermission(DefaultContext, subject.ID.String(), &models.ABACAttribute{Playbook: runbook, Config: config}, policy.ActionPlaybookRun)
+	canRun := func(caller tokenCaller, config models.ConfigItem) bool {
+		return mcRBAC.HasPermission(caller.ctx(), caller.person.ID.String(), &models.ABACAttribute{Playbook: runbook, Config: config}, policy.ActionPlaybookRun)
+	}
+
+	configAccess := func(caller tokenCaller, action string) mcRBAC.Access {
+		return mcRBAC.AccessSummary(caller.ctx())[policy.ResourceConfig][action]
 	}
 
 	// listed returns which of the test's configs a listing as the person returns.
-	listed := func(person *models.Person) []uuid.UUID {
+	listed := func(caller tokenCaller) []uuid.UUID {
 		ginkgo.GinkgoHelper()
-		payload, err := auth.GetRLSPayload(DefaultContext.WithUser(person))
+		payload, err := auth.GetRLSPayload(caller.ctx())
 		Expect(err).ToNot(HaveOccurred())
 
 		tx := DefaultContext.DB().Begin()
@@ -206,35 +229,106 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.RoleBinding{})
 		DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Role{})
 		DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Scope{})
-		for _, token := range []*models.Person{readonly, tenantToken, missing, carolToken} {
-			DefaultContext.DB().Where("person_id = ?", token.ID).Delete(&models.AccessToken{})
+		for _, caller := range []tokenCaller{readonly, tenantToken, missing, carolToken} {
+			DefaultContext.DB().Delete(caller.token)
 		}
 		Expect(rbac.ReloadPolicy()).To(Succeed())
 	})
 
 	ginkgo.It("lets a token with a read-only Role read configs but not run a playbook its owner can run", func() {
-		Expect(do(alice, http.MethodGet, "/test/catalog", nil).Code).To(Equal(http.StatusOK))
+		owner := session(alice)
+		Expect(do(owner, http.MethodGet, "/test/catalog", nil).Code).To(Equal(http.StatusOK))
 		Expect(do(readonly, http.MethodGet, "/test/catalog", nil).Code).To(Equal(http.StatusOK))
 
-		Expect(do(alice, http.MethodDelete, "/test/catalog", nil).Code).To(Equal(http.StatusOK))
+		Expect(do(owner, http.MethodDelete, "/test/catalog", nil).Code).To(Equal(http.StatusOK))
 		Expect(do(readonly, http.MethodDelete, "/test/catalog", nil).Code).To(Equal(http.StatusForbidden))
 
-		Expect(canRead(alice, inA)).To(BeTrue())
+		Expect(canRead(owner, inA)).To(BeTrue())
 		Expect(canRead(readonly, inA)).To(BeTrue())
-		Expect(canRun(alice, inA)).To(BeTrue())
+		Expect(canRun(owner, inA)).To(BeTrue())
 		Expect(canRun(readonly, inA)).To(BeFalse())
 
-		ownerSummary := mcRBAC.AccessSummary(DefaultContext.WithUser(alice))[policy.ResourceConfig]
-		Expect(ownerSummary[policy.ActionRead]).To(Equal(mcRBAC.AccessAll))
-		Expect(ownerSummary[policy.ActionDelete]).To(Equal(mcRBAC.AccessAll))
-		tokenSummary := mcRBAC.AccessSummary(DefaultContext.WithUser(readonly))[policy.ResourceConfig]
-		Expect(tokenSummary[policy.ActionRead]).To(Equal(mcRBAC.AccessAll))
-		Expect(tokenSummary[policy.ActionDelete]).To(Equal(mcRBAC.AccessNone))
+		Expect(configAccess(owner, policy.ActionRead)).To(Equal(mcRBAC.AccessAll))
+		Expect(configAccess(owner, policy.ActionDelete)).To(Equal(mcRBAC.AccessAll))
+		Expect(configAccess(readonly, policy.ActionRead)).To(Equal(mcRBAC.AccessAll))
+		Expect(configAccess(readonly, policy.ActionDelete)).To(Equal(mcRBAC.AccessNone))
 
 		run := map[string]any{"id": runbook.ID, "config_id": inA.ID}
 		Expect(do(readonly, http.MethodPost, "/playbook/run", run).Code).To(Equal(http.StatusForbidden))
-		rec := do(alice, http.MethodPost, "/playbook/run", run)
+		rec := do(owner, http.MethodPost, "/playbook/run", run)
 		Expect(rec.Code).To(Equal(http.StatusCreated), rec.Body.String())
+	})
+
+	// The owner's sessions and tokens share a subject, so nothing cached for one may be served to the other
+	for _, tokenFirst := range []bool{true, false} {
+		ginkgo.It(fmt.Sprintf("limits the token but not its owner's session with caches warm (token first: %v)", tokenFirst), func() {
+			reload()
+
+			checkOwner := func() {
+				ginkgo.GinkgoHelper()
+				owner := session(alice)
+				Expect(do(owner, http.MethodDelete, "/test/catalog", nil).Code).To(Equal(http.StatusOK))
+				Expect(canRun(owner, inA)).To(BeTrue())
+				Expect(configAccess(owner, policy.ActionDelete)).To(Equal(mcRBAC.AccessAll))
+				Expect(listed(session(bob))).To(ConsistOf(inA.ID, inB.ID))
+			}
+			checkToken := func() {
+				ginkgo.GinkgoHelper()
+				Expect(do(readonly, http.MethodGet, "/test/catalog", nil).Code).To(Equal(http.StatusOK))
+				Expect(do(readonly, http.MethodDelete, "/test/catalog", nil).Code).To(Equal(http.StatusForbidden))
+				Expect(canRead(readonly, inA)).To(BeTrue())
+				Expect(canRun(readonly, inA)).To(BeFalse())
+				Expect(configAccess(readonly, policy.ActionDelete)).To(Equal(mcRBAC.AccessNone))
+				Expect(listed(tenantToken)).To(Equal([]uuid.UUID{inA.ID}))
+			}
+
+			first, second := checkOwner, checkToken
+			if tokenFirst {
+				first, second = checkToken, checkOwner
+			}
+			first()
+			second()
+			first()
+		})
+	}
+
+	ginkgo.It("limits each token of an owner by its own Roles only", func() {
+		newRole("config-deleter", allow("delete-configs", policy.ActionDelete, "all-configs"))
+		reload()
+		deleter := createToken(alice, "config-deleter", "config-deleter")
+		ginkgo.DeferCleanup(func() {
+			Expect(DefaultContext.DB().Delete(deleter.token).Error).To(Succeed())
+		})
+
+		for range 2 {
+			Expect(do(readonly, http.MethodGet, "/test/catalog", nil).Code).To(Equal(http.StatusOK))
+			Expect(do(deleter, http.MethodGet, "/test/catalog", nil).Code).To(Equal(http.StatusForbidden))
+			Expect(do(readonly, http.MethodDelete, "/test/catalog", nil).Code).To(Equal(http.StatusForbidden))
+			Expect(do(deleter, http.MethodDelete, "/test/catalog", nil).Code).To(Equal(http.StatusOK))
+
+			Expect(canRead(readonly, inA)).To(BeTrue())
+			Expect(canRead(deleter, inA)).To(BeFalse())
+
+			Expect(configAccess(readonly, policy.ActionRead)).To(Equal(mcRBAC.AccessAll))
+			Expect(configAccess(deleter, policy.ActionRead)).To(Equal(mcRBAC.AccessNone))
+			Expect(configAccess(readonly, policy.ActionDelete)).To(Equal(mcRBAC.AccessNone))
+			Expect(configAccess(deleter, policy.ActionDelete)).To(Equal(mcRBAC.AccessAll))
+
+			Expect(listed(readonly)).To(ConsistOf(inA.ID, inB.ID, outside.ID))
+			Expect(listed(deleter)).To(BeEmpty())
+		}
+	})
+
+	ginkgo.It("checks a run's playbook as the playbook, without the limit of the token that started it", func() {
+		_, err := rbac.Enforcer().AddPolicy(runbook.ID.String(), policy.ObjectCatalog, policy.ActionDelete, "allow", "", "token-roles-test")
+		Expect(err).ToNot(HaveOccurred())
+		ginkgo.DeferCleanup(func() {
+			_, err := rbac.Enforcer().DeletePermissionsForUser(runbook.ID.String())
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		Expect(mcRBAC.CheckContext(readonly.ctx(), policy.ObjectCatalog, policy.ActionDelete)).To(BeFalse())
+		Expect(mcRBAC.CheckContext(playbook.RunAsPlaybook(readonly.ctx(), &runbook), policy.ObjectCatalog, policy.ActionDelete)).To(BeTrue())
 	})
 
 	ginkgo.It("summarizes whoami access for token-limited admins and subjects as an intersection", func() {
@@ -248,19 +342,18 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		adminToken := createToken(admin, "summary-admin", "summary-limit")
 		subjectToken := createToken(carol, "summary-subject", "summary-limit")
 		ginkgo.DeferCleanup(func() {
-			for _, token := range []*models.Person{adminToken, subjectToken} {
-				Expect(DefaultContext.DB().Where("person_id = ?", token.ID).Delete(&models.AccessToken{}).Error).To(Succeed())
-				Expect(DefaultContext.DB().Delete(token).Error).To(Succeed())
+			for _, caller := range []tokenCaller{adminToken, subjectToken} {
+				Expect(DefaultContext.DB().Delete(caller.token).Error).To(Succeed())
 			}
 			Expect(DefaultContext.DB().Delete(admin).Error).To(Succeed())
 		})
 
 		for _, tt := range []struct {
-			person *models.Person
+			caller tokenCaller
 			jobs   bool
 		}{{adminToken, true}, {subjectToken, false}} {
 			mcRBAC.FlushAccessSummaries()
-			rec := do(tt.person, http.MethodGet, "/auth/whoami", nil)
+			rec := do(tt.caller, http.MethodGet, "/auth/whoami", nil)
 			Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
 			var response struct {
 				Payload struct {
@@ -291,7 +384,7 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 	})
 
 	ginkgo.It("refuses a new token without Roles", func() {
-		rec := do(alice, http.MethodPost, "/auth/create_token", auth.CreateTokenRequest{Name: "no-roles"})
+		rec := do(session(alice), http.MethodPost, "/auth/create_token", auth.CreateTokenRequest{Name: "no-roles"})
 		Expect(rec.Code).To(Equal(http.StatusBadRequest), rec.Body.String())
 	})
 
@@ -300,7 +393,7 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 	})
 
 	ginkgo.It("lists the rows both the owner and the token's Roles allow", func() {
-		Expect(listed(bob)).To(ConsistOf(inA.ID, inB.ID))
+		Expect(listed(session(bob))).To(ConsistOf(inA.ID, inB.ID))
 		Expect(listed(tenantToken)).To(Equal([]uuid.UUID{inA.ID}), "tenant-a-reader allows inA and outside, bob reads inA and inB")
 
 		Expect(canRead(tenantToken, inA)).To(BeTrue())
@@ -320,7 +413,7 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 
 		Expect(canRead(tenantToken, inA)).To(BeFalse())
 		Expect(listed(tenantToken)).To(BeEmpty())
-		Expect(listed(bob)).To(ConsistOf(inA.ID, inB.ID))
+		Expect(listed(session(bob))).To(ConsistOf(inA.ID, inB.ID))
 	})
 
 	ginkgo.It("loses what its owner loses", func() {

@@ -34,7 +34,7 @@ var _ = ginkgo.Describe("Access tokens without roles", ginkgo.Ordered, func() {
 		var err error
 		person, err = db.CreatePerson(DefaultContext, "Legacy Owner", "legacy-"+uuid.NewString()[:8]+"@example.com", "")
 		Expect(err).ToNot(HaveOccurred())
-		tokenPerson, err = db.CreatePerson(DefaultContext, "Legacy Owner (Token)", "legacy-"+uuid.NewString()[:8]+"@example.com", db.PersonTypeAccessToken)
+		tokenPerson, err = db.CreatePerson(DefaultContext, "Legacy Owner (Token)", "legacy-"+uuid.NewString()[:8]+"@example.com", "access_token")
 		Expect(err).ToNot(HaveOccurred())
 		agent, err = db.CreatePerson(DefaultContext, "agent-"+uuid.NewString()[:8], uuid.NewString()[:8]+"@local", db.PersonTypeAgent)
 		Expect(err).ToNot(HaveOccurred())

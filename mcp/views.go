@@ -178,11 +178,6 @@ func viewRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 		return mcp.NewToolResultError(fmt.Sprintf("tool[%s] is not associated with any view", viewToolName)), nil
 	}
 
-	owner, err := resolveOwner(ctx)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
 	var view models.View
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
 		view, err = gorm.G[models.View](rlsCtx.DB()).Where("namespace = ? AND name = ? AND deleted_at IS NULL", v.Namespace, v.Name).First(rlsCtx)
@@ -193,7 +188,7 @@ func viewRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 	}
 
 	attr := &models.ABACAttribute{View: view}
-	if !icrbac.HasPermission(ctx, owner, attr, policy.ActionMCPRun) || !icrbac.TokenAllows(ctx, ctx.Subject(), attr, policy.ActionMCPRun) {
+	if !icrbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionMCPRun) {
 		return mcp.NewToolResultError(fmt.Sprintf("forbidden: mcp:run not permitted on view %s/%s", view.Namespace, view.Name)), nil
 	}
 
@@ -276,14 +271,9 @@ func addViewsAsTool(goctx gocontext.Context, srv *server.MCPServer, session serv
 		return ctx.Oops().Wrapf(err, "failed to get view tools for session %s", sessionID)
 	}
 
-	owner, err := resolveOwner(ctx)
-	if err != nil {
-		return ctx.Oops().Wrap(err)
-	}
-
 	permittedViews := lo.Filter(allViews, func(view models.View, _ int) bool {
 		attr := &models.ABACAttribute{View: view}
-		return icrbac.HasPermission(ctx, owner, attr, policy.ActionMCPRun) && icrbac.TokenAllows(ctx, ctx.Subject(), attr, policy.ActionMCPRun)
+		return icrbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionMCPRun)
 	})
 
 	tools, toolsMap, err := getViewsAsTools(ctx, permittedViews)

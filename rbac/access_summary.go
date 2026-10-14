@@ -44,7 +44,8 @@ var summaryObjects = func() map[string]string {
 // summaryActions are the actions the access summary reports for each resource type.
 var summaryActions = []string{policy.ActionRead, policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete}
 
-// summaryCache holds summaries by subject and the roles, e.g. teams and bindings, it's assigned to. It's flushed whenever grants change.
+// summaryCache holds summaries by subject, the roles, e.g. teams and bindings, it's assigned to, and the access token
+// the request was made with. It's flushed whenever grants change.
 var summaryCache = gocache.New(10*time.Minute, 10*time.Minute)
 
 // summaryGeneration counts flushes, so a summary computed across a flush isn't cached.
@@ -73,7 +74,7 @@ func AccessSummary(ctx context.Context) map[string]map[string]Access {
 	}
 
 	roles := subjectRoles(ctx)
-	cacheKey := fmt.Sprintf("%s:%s", ctx.Subject(), strings.Join(roles, ","))
+	cacheKey := fmt.Sprintf("%s:%s%s", ctx.Subject(), strings.Join(roles, ","), AccessTokenCacheKey(ctx))
 	if cached, ok := summaryCache.Get(cacheKey); ok {
 		return cached.(map[string]map[string]Access)
 	}
@@ -93,8 +94,8 @@ func AccessSummary(ctx context.Context) map[string]map[string]Access {
 		}
 	}
 
-	if tokenRoles, limited := TokenLimit(ctx, user.ID.String()); limited {
-		if err := limitSummary(ctx, summary, user.ID.String(), tokenRoles); err != nil {
+	if tokenRoles, limited := TokenLimit(ctx, ctx.Subject()); limited {
+		if err := limitSummary(ctx, summary, ctx.Subject(), tokenRoles); err != nil {
 			ctx.Warnf("failed to limit the access summary of %s to its token's roles: %v", ctx.Subject(), err)
 			return noAccess()
 		}

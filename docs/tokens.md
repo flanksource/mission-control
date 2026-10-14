@@ -34,23 +34,23 @@ Only the Argon2id hash is stored in the database. For v2 tokens, the hash input 
 | Flow                 | Where                                          | Subject                               | Lifetime                                                                 | Use case                                                                             |
 | -------------------- | ---------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | Agent token          | `agent/agent.go`                               | Agent `Person`                        | 365d                                                                     | Primary intended long-lived credential for agents. v2 tokens append the public JWK agents use to verify upstream tunnel JWTs. |
-| Delegated user token | `auth/controllers.go` → `/auth/create_token`   | New `Person` with type `access_token` | Default 90d via `access_token.default_expiry`; request can supply expiry | Scoped/delegated token, mainly used by MCP clients that need restricted permissions. |
+| Delegated user token | `auth/controllers.go` → `/auth/create_token`   | The creating user's `Person`          | Default 90d via `access_token.default_expiry`; request can supply expiry | Scoped/delegated token, mainly used by MCP clients that need restricted permissions. |
 | CLI-created token    | `cmd/token.go`                                 | Existing user `Person`                | Default 4h unless `--expiry` supplied                                    | Admin/operator-created token from CLI.                                               |
 | Kubeconfig token     | `echo/kube_config_download.go` → `/kubeconfig` | Current user `Person`                 | Currently non-expiring (`expiry=nil`)                                    | Embedded in kubeconfig as `username: token`, `password: <token>` for `/kubeproxy`.   |
 
 ### Delegated token model
 
-`CreateAccessTokenForPerson(...)` exists to create a separate RBAC subject for a token.
+A token is a credential: it signs in as its owner, and its Roles only limit what the owner may do on requests made with it.
 
 For `/auth/create_token`:
 
-1. A new `people` row is created with `type = access_token`.
-2. An access token is created for that token-person.
-3. `access_tokens.created_by` points back to the real user.
-4. The token-person is grouped to the creator in RBAC.
-5. The token is limited by the Roles it was created with: it can do only what one of their rules also allows, within its owner's access.
+1. An access token is created with `person_id` and `created_by` both set to the user. No person or RBAC rule is created for it.
+2. Signing in with the token makes the user the request's user, and puts the token on the request context.
+3. A check made as the request's own user is limited by the token's Roles: it allows only what one of their rules also allows, within the owner's access. Checks made as another subject, e.g. a playbook during a run the request started, aren't limited, and neither are the owner's other sessions and tokens.
 
-This allows delegated MCP tokens to have a subset of the user's permissions, or token-specific permissions, without changing the user's own permissions.
+Since the owner's sessions and tokens share a subject, caches of per-subject results (RLS payloads, access summaries, PostgREST JWTs) are also keyed by the token.
+
+Tokens created before this had a person of type `access_token` of their own. On startup they're moved to their owner (`created_by`), and those people are soft-deleted and their RBAC rules removed.
 
 ### Authentication
 
@@ -71,7 +71,7 @@ Validation happens through `auth.getAccessToken(...)`.
 
 ### Revocation
 
-Access tokens are revocable by deleting their `access_tokens` row. For delegated user tokens, the associated `access_token` person is soft-deleted as well.
+Access tokens are revocable by deleting their `access_tokens` row.
 
 ---
 

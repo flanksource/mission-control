@@ -112,14 +112,19 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 		auth.FlushTokenCache()
 	}
 
-	dbStatusOf := func(person *models.Person, method, table string) int {
+	dbStatusWith := func(ctx context.Context, method, table string) int {
 		ginkgo.GinkgoHelper()
 		req := httptest.NewRequest(method, "/db/"+table, nil)
-		req = req.WithContext(DefaultContext.WithUser(person))
+		req = req.WithContext(ctx)
 		rec := httptest.NewRecorder()
 		handler := mcRBAC.DbMiddleware()(func(c echo.Context) error { return c.NoContent(http.StatusOK) })
 		Expect(handler(echo.New().NewContext(req, rec))).To(Succeed())
 		return rec.Code
+	}
+
+	dbStatusOf := func(person *models.Person, method, table string) int {
+		ginkgo.GinkgoHelper()
+		return dbStatusWith(DefaultContext.WithUser(person), method, table)
 	}
 
 	dbStatus := func(person *models.Person, method string) int {
@@ -352,23 +357,21 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 			newPermission(everyReader, policy.ActionUpdate, policy.ObjectDatabaseSettings, "")
 			Expect(dbStatus(everyReader, http.MethodPatch)).To(Equal(http.StatusOK))
 
-			token := func(role string) *models.Person {
+			token := func(role string) context.Context {
 				ginkgo.GinkgoHelper()
-				result, err := db.CreateAccessTokenForPerson(DefaultContext, everyReader, "scraper-scopes-"+role, time.Hour, false,
+				_, token, err := db.CreateAccessTokenForPerson(DefaultContext, everyReader, "scraper-scopes-"+role, time.Hour, false,
 					models.AccessTokenRoles{{Namespace: namespace, Name: role}})
 				Expect(err).ToNot(HaveOccurred())
-				_, err = rbac.Enforcer().AddGroupingPolicy(result.Person.ID.String(), everyReader.ID.String())
-				Expect(err).ToNot(HaveOccurred())
 				ginkgo.DeferCleanup(func() {
-					Expect(DefaultContext.DB().Where("person_id = ?", result.Person.ID).Delete(&models.AccessToken{}).Error).To(Succeed())
+					Expect(DefaultContext.DB().Where("id = ?", token.ID).Delete(&models.AccessToken{}).Error).To(Succeed())
 				})
-				return result.Person
+				return mcRBAC.WithAccessToken(DefaultContext.WithUser(everyReader), token)
 			}
 			writes, reads := token("write-every-scraper"), token("read-every-scraper")
-			Expect(rbac.ReloadPolicy()).To(Succeed())
 
-			Expect(dbStatus(writes, http.MethodPatch)).To(Equal(http.StatusOK))
-			Expect(dbStatus(reads, http.MethodPatch)).To(Equal(http.StatusForbidden), "its Roles don't allow updating scrapers")
+			Expect(dbStatusWith(writes, http.MethodPatch, "config_scrapers")).To(Equal(http.StatusOK))
+			Expect(dbStatusWith(reads, http.MethodPatch, "config_scrapers")).To(Equal(http.StatusForbidden), "its Roles don't allow updating scrapers")
+			Expect(dbStatus(everyReader, http.MethodPatch)).To(Equal(http.StatusOK), "the owner's session isn't limited")
 		})
 
 	})

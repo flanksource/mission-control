@@ -28,28 +28,21 @@ type MCPServer struct {
 	Server      *server.MCPServer
 }
 
-// AuthMiddleware allows MCP only when the owner user has MCP channel access.
-//
-// Owner resolution:
-//   - direct user auth (e.g. OIDC): owner = subject
-//   - delegated access token auth: owner = access_token.created_by
+// AuthMiddleware allows MCP only when the subject has MCP channel access, limited by the Roles of the request's
+// access token.
 func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 	return func(c echov4.Context) error {
 		setCORSHeaders(c.Response().Header())
 		ctx := c.Request().Context().(context.Context)
 
-		owner, err := resolveOwner(ctx)
-		if err != nil {
-			return dutyAPI.WriteError(c, err)
-		}
-
-		allowed, err := rbac.Enforcer().Enforce(owner, policy.ObjectMCP, policy.ActionMCPUse)
+		subject := ctx.Subject()
+		allowed, err := rbac.Enforcer().Enforce(subject, policy.ObjectMCP, policy.ActionMCPUse)
 		if err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 		}
 
-		if !allowed || !icrbac.TokenAllowsObject(ctx, ctx.Subject(), policy.ObjectMCP, policy.ActionMCPUse) {
-			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "forbidden: user %s does not have mcp:use permission", owner))
+		if !allowed || !icrbac.TokenAllowsObject(ctx, subject, policy.ObjectMCP, policy.ActionMCPUse) {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "forbidden: user %s does not have mcp:use permission", subject))
 		}
 
 		return next(c)

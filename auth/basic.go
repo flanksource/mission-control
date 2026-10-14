@@ -256,11 +256,11 @@ func basicAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 				ctx := c.Request().Context().(context.Context)
 				var person models.Person
 				if err := ctx.DB().Where("id = ?", accessToken.PersonID).First(&person).Error; err == nil {
-					if err := InjectToken(ctx, c, &person, ""); err == nil {
-						ctx, err = withPersonAgent(withAccessToken(ctx.WithUser(&person)), person.ID)
-						if err != nil {
-							return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal error"})
-						}
+					ctx, err = withPersonAgent(withAccessToken(ctx.WithUser(&person), accessToken), person.ID)
+					if err != nil {
+						return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal error"})
+					}
+					if err := InjectToken(ctx, c, &person, accessToken.ID.String()); err == nil {
 						c.SetRequest(c.Request().WithContext(ctx))
 						return next(c)
 					}
