@@ -121,6 +121,33 @@ var _ = ginkgo.Describe("Access tokens sign in as their owner", ginkgo.Ordered, 
 		})
 	}
 
+	ginkgo.It("lets only an agent's own token go without Roles", func() {
+		name := "token-owner-agent-" + uuid.NewString()[:8]
+		agentPerson, err := db.CreatePerson(DefaultContext, name, name+"@local", db.PersonTypeAgent)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(db.CreateAgent(DefaultContext, name, &agentPerson.ID, nil)).To(Succeed())
+		plain, agentToken, err := db.CreateAccessToken(DefaultContext, agentPerson.ID, "default", nil, nil, false, nil)
+		Expect(err).ToNot(HaveOccurred())
+
+		got := signIn(modes[1].middleware, modes[1].auth(plain.PlainText()))
+		Expect(got.code).To(Equal(http.StatusOK))
+		Expect(got.user).To(Equal(agentPerson.ID))
+		Expect(got.limited).To(BeFalse())
+
+		// The same token on a request that isn't made as its agent, e.g. a plugin callback another agent carries
+		otherAgent := models.Agent{ID: uuid.New(), PersonID: new(uuid.New())}
+		_, limited := icrbac.TokenLimit(icrbac.WithAccessToken(DefaultContext.WithUser(agentPerson).WithAgent(otherAgent), agentToken), agentPerson.ID.String())
+		Expect(limited).To(BeTrue())
+
+		// A person's token that lists no Roles may do nothing
+		rolesless := &models.AccessToken{ID: uuid.New(), PersonID: owner.ID}
+		ctx := icrbac.WithAccessToken(DefaultContext.WithUser(owner), rolesless)
+		roles, limited := icrbac.TokenLimit(ctx, owner.ID.String())
+		Expect(limited).To(BeTrue())
+		Expect(roles).To(BeEmpty())
+		Expect(icrbac.TokenAllowsObject(ctx, owner.ID.String(), policy.ObjectCatalog, policy.ActionRead)).To(BeFalse())
+	})
+
 	ginkgo.It("drops the RLS payloads cached for a deleted token, but not its owner's", func() {
 		_, row, err := db.CreateAccessTokenForPerson(DefaultContext, owner, "rls-cache", 0, false, viewerRole)
 		Expect(err).ToNot(HaveOccurred())
