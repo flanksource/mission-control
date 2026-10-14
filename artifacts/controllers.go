@@ -11,17 +11,12 @@ import (
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/query"
-	dutyRBAC "github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/membership"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/auth"
 	echoSrv "github.com/flanksource/incident-commander/echo"
-	"github.com/flanksource/incident-commander/rbac"
 )
 
 func init() {
@@ -52,7 +47,21 @@ func ListArtifacts(c echo.Context) error {
 	err = auth.WithRLS(ctx, func(ctx context.Context) error {
 		var err error
 		artifacts, err = listArtifacts(ctx, c, id)
-		return err
+		if err != nil {
+			return err
+		}
+		active := artifacts[:0]
+		for _, artifact := range artifacts {
+			if err := findProducer(ctx, artifact); err != nil {
+				if api.ErrorCode(err) == api.ENOTFOUND {
+					continue
+				}
+				return err
+			}
+			active = append(active, artifact)
+		}
+		artifacts = active
+		return nil
 	})
 	if err != nil {
 		return api.WriteError(c, err)
@@ -63,6 +72,7 @@ func ListArtifacts(c echo.Context) error {
 
 // listArtifacts returns the artifacts of the check, config change or playbook run the request names.
 func listArtifacts(ctx context.Context, c echo.Context, id uuid.UUID) ([]models.Artifact, error) {
+	q := ctx.DB().Model(&models.Artifact{}).Where("artifacts.deleted_at IS NULL")
 	switch {
 	case strings.Contains(c.Path(), "/list/check/"):
 		_checkTime := c.Param("check_time")
@@ -70,25 +80,26 @@ func listArtifacts(ctx context.Context, c echo.Context, id uuid.UUID) ([]models.
 		if err != nil {
 			return nil, api.Errorf(api.EINVALID, "invalid check_time(%s). must be in RFC3339", _checkTime)
 		}
-		if err := authorizeProducer(ctx, models.Artifact{CheckID: &id}); err != nil {
+		if err := findProducer(ctx, models.Artifact{CheckID: &id}); err != nil {
 			return nil, err
 		}
-		return query.ArtifactsByCheck(ctx, id, checkTime)
+		q = q.Where("artifacts.check_id = ? AND artifacts.check_time = ?", id, checkTime)
 	case strings.Contains(c.Path(), "/list/config_change/"):
-		if err := authorizeProducer(ctx, models.Artifact{ConfigChangeID: &id}); err != nil {
+		if err := findProducer(ctx, models.Artifact{ConfigChangeID: &id}); err != nil {
 			return nil, err
 		}
-		return query.ArtifactsByConfigChange(ctx, id)
+		q = q.Where("artifacts.config_change_id = ?", id)
 	default:
-		if err := authorizeRun(ctx, id); err != nil {
+		if err := findRun(ctx, id); err != nil {
 			return nil, err
 		}
-		var artifacts []models.Artifact
-		err := ctx.DB().Model(&models.Artifact{}).
+		q = q.
 			Joins("JOIN playbook_run_actions ON playbook_run_actions.id = artifacts.playbook_run_action_id").
-			Where("playbook_run_actions.playbook_run_id = ?", id).Find(&artifacts).Error
-		return artifacts, err
+			Where("playbook_run_actions.playbook_run_id = ?", id)
 	}
+	var artifacts []models.Artifact
+	err := q.Find(&artifacts).Error
+	return artifacts, err
 }
 
 // producerError hides whether a producer is missing or unreadable.
@@ -99,15 +110,14 @@ func producerError(err error) error {
 	return err
 }
 
-// authorizeProducer requires read on every producer an artifact names; unowned artifacts are never readable.
-func authorizeProducer(ctx context.Context, artifact models.Artifact) error {
-	var attrs []*models.ABACAttribute
+// findProducer rejects unowned artifacts and missing/deleted producers. The caller must use WithRLS;
+// PostgreSQL decides readability, including check access inherited from a canary.
+func findProducer(ctx context.Context, artifact models.Artifact) error {
 	if artifact.CheckID != nil {
 		var check models.Check
 		if err := ctx.DB().Where("deleted_at IS NULL").First(&check, artifact.CheckID).Error; err != nil {
 			return producerError(err)
 		}
-		attrs = append(attrs, &models.ABACAttribute{Check: check})
 	}
 	if artifact.ConfigChangeID != nil {
 		var change models.ConfigChange
@@ -118,67 +128,48 @@ func authorizeProducer(ctx context.Context, artifact models.Artifact) error {
 		if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", change.ConfigID).First(&config).Error; err != nil {
 			return producerError(err)
 		}
-		attrs = append(attrs, &models.ABACAttribute{Config: config})
-	}
-	if err := authorizeReads(ctx, attrs...); err != nil {
-		return err
 	}
 	if artifact.PlaybookRunActionID != nil {
 		var action models.PlaybookRunAction
 		if err := ctx.DB().First(&action, artifact.PlaybookRunActionID).Error; err != nil {
 			return producerError(err)
 		}
-		if err := authorizeRun(ctx, action.PlaybookRunID); err != nil {
+		if err := findRun(ctx, action.PlaybookRunID); err != nil {
 			return err
 		}
 	}
 	if artifact.ScraperID != nil {
-		// Scrapers have no ABAC attribute; their token-limited RLS rows decide scoped reads.
-		if err := auth.WithRLS(ctx, func(ctx context.Context) error {
-			var scraper models.ConfigScraper
-			return ctx.DB().Where("deleted_at IS NULL").First(&scraper, artifact.ScraperID).Error
-		}); err != nil {
+		var scraper models.ConfigScraper
+		if err := ctx.DB().Where("deleted_at IS NULL").First(&scraper, artifact.ScraperID).Error; err != nil {
 			return producerError(err)
 		}
 	}
-	if len(attrs) == 0 && artifact.PlaybookRunActionID == nil && artifact.ScraperID == nil {
+	if artifact.CheckID == nil && artifact.ConfigChangeID == nil && artifact.PlaybookRunActionID == nil && artifact.ScraperID == nil {
 		return producerError(nil)
 	}
 	return nil
 }
 
-// authorizeRun follows playbook_runs RLS: read the playbook and each config/check target, not the component.
-func authorizeRun(ctx context.Context, id uuid.UUID) error {
+// findRun checks live producers under RLS; component targets do not restrict run visibility.
+func findRun(ctx context.Context, id uuid.UUID) error {
 	var run models.PlaybookRun
 	if err := ctx.DB().First(&run, id).Error; err != nil {
 		return producerError(err)
 	}
-	run.ComponentID = nil
-	attr, err := run.GetABACAttributes(ctx.DB())
-	if err != nil {
+	var playbook models.Playbook
+	if err := ctx.DB().Where("deleted_at IS NULL").First(&playbook, run.PlaybookID).Error; err != nil {
 		return producerError(err)
 	}
-	if attr.Playbook.DeletedAt != nil || attr.Config.DeletedAt != nil || attr.Check.DeletedAt != nil {
-		return producerError(nil)
-	}
-	attrs := []*models.ABACAttribute{{Playbook: attr.Playbook}}
 	if run.ConfigID != nil {
-		attrs = append(attrs, &models.ABACAttribute{Config: attr.Config})
+		var config models.ConfigItem
+		if err := ctx.DB().Where("deleted_at IS NULL").First(&config, run.ConfigID).Error; err != nil {
+			return producerError(err)
+		}
 	}
 	if run.CheckID != nil {
-		attrs = append(attrs, &models.ABACAttribute{Check: attr.Check})
-	}
-	return authorizeReads(ctx, attrs...)
-}
-
-func authorizeReads(ctx context.Context, attrs ...*models.ABACAttribute) error {
-	checkCtx, err := membership.ForOperation(ctx, dutyRBAC.MembershipRefs(attrs...)...)
-	if err != nil {
-		return err
-	}
-	for _, attr := range attrs {
-		if !rbac.HasPermission(checkCtx, ctx.Subject(), attr, policy.ActionRead) {
-			return producerError(nil)
+		var check models.Check
+		if err := ctx.DB().Where("deleted_at IS NULL").First(&check, run.CheckID).Error; err != nil {
+			return producerError(err)
 		}
 	}
 	return nil
@@ -192,17 +183,13 @@ func DownloadArtifact(c echo.Context) error {
 		return api.WriteError(c, api.Errorf(api.EINVALID, "invalid id: %v", err))
 	}
 
-	if visible, err := auth.CanReadArtifact(ctx, artifactID); err != nil {
-		return api.WriteError(c, err)
-	} else if !visible {
-		return api.WriteError(c, producerError(nil))
-	}
-
 	var artifact models.Artifact
-	if err := ctx.DB().Where("deleted_at IS NULL").First(&artifact, artifactID).Error; err != nil {
-		return api.WriteError(c, producerError(err))
-	}
-	if err := authorizeProducer(ctx, artifact); err != nil {
+	if err := auth.WithRLS(ctx, func(ctx context.Context) error {
+		if err := ctx.DB().Where("deleted_at IS NULL").First(&artifact, artifactID).Error; err != nil {
+			return producerError(err)
+		}
+		return findProducer(ctx, artifact)
+	}); err != nil {
 		return api.WriteError(c, err)
 	}
 
