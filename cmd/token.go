@@ -67,7 +67,7 @@ var Token = &cobra.Command{
 
 		// The token is this command's output. Sensitive's String() is redacted, so print its plain text.
 		fmt.Fprintln(cmd.OutOrStdout(), result.Token.PlainText())
-		fmt.Fprintln(cmd.ErrOrStderr(), "The token takes effect once the server reloads its policy, within 5 minutes.")
+		fmt.Fprintln(cmd.ErrOrStderr(), "The token takes effect on the server's next policy reload (every 5 minutes by default).")
 		return nil
 	},
 }
