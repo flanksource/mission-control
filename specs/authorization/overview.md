@@ -79,6 +79,8 @@ Scopes, Roles and RoleBindings MAY have no namespace. Through Mission Control's 
 
 _Why:_ an install with access to only one Kubernetes namespace must be able to use shared definitions. Namespace-less objects live in Mission Control, without requiring cluster-scoped Kubernetes resources or access to another Kubernetes namespace.
 
+### Name uniqueness
+
 Within each kind, names MUST be unique within a namespace, and separately among namespace-less objects. A namespace-less Role `auditor` and a Role `auditor` in `platform` MAY coexist. Namespace-less does not mean shipped: users MAY create their own namespace-less objects, apart from reserved shipped names ("Shipped Roles" and "Configured bindings"). The permissions required to manage these objects are unchanged ("Who may manage these resources").
 
 _Why:_ a shared definition must not replace a team's same-named local definition, and sharing is useful for user-created objects as well as shipped ones.
