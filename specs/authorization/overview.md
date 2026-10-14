@@ -10,6 +10,8 @@ Mission Control decides who may do what with three resources:
 
 An ExternalIdentityProvider lets an external application's users sign in with its own tokens, so RoleBindings can grant them Roles (`external-identity-providers.md`).
 
+`limiting-permissions.md` says how a request is limited to less than its subject may do, e.g. by an application that signs its users in through an external identity provider.
+
 `collection-access.md` cuts across the three: it says how a subject's grants decide whether they may read a type at all, which is what listings, searches and the pages of the UI ask.
 
 Each has one job. Resource selectors only live in Scopes, actions only in Roles, and subjects only in RoleBindings.
