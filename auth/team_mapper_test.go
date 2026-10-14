@@ -13,6 +13,8 @@ import (
 	client "github.com/ory/client-go"
 
 	dbModels "github.com/flanksource/incident-commander/db/models"
+	"github.com/flanksource/incident-commander/rbac/adapter"
+	"github.com/flanksource/incident-commander/rbac/shipped"
 )
 
 var _ = ginkgo.Describe("Team mapper", ginkgo.Ordered, func() {
@@ -157,6 +159,34 @@ var _ = ginkgo.Describe("Team mapper", ginkgo.Ordered, func() {
 		Expect(memberships()).To(Equal(map[string]string{"mapper-a": SourceTeamMapper}))
 
 		Expect(mapIDsToTeams(DefaultContext, kratosSession("s1"), person)).To(Succeed())
+	})
+
+	ginkgo.It("makes a mapper-sourced bootstrap admin membership direct on startup", func() {
+		admin, err := GetOrCreateAdminUser(DefaultContext)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(shipped.Sync(DefaultContext)).To(Succeed())
+		Expect(DefaultContext.DB().Exec(`INSERT INTO team_members (team_id, person_id, source)
+			SELECT id, ?, ? FROM teams WHERE name = ? AND deleted_at IS NULL
+			ON CONFLICT (team_id, person_id) DO UPDATE SET source = EXCLUDED.source`,
+			admin.ID, SourceTeamMapper, shipped.TeamAdmins).Error).To(Succeed())
+
+		membership := func() dbModels.TeamMember {
+			ginkgo.GinkgoHelper()
+			var member dbModels.TeamMember
+			Expect(DefaultContext.DB().Table("team_members").
+				Joins("JOIN teams ON teams.id = team_members.team_id").
+				Where("team_members.person_id = ? AND teams.name = ? AND teams.deleted_at IS NULL", admin.ID, shipped.TeamAdmins).
+				First(&member).Error).To(Succeed())
+			return member
+		}
+		Expect(membership().Source).To(Equal(SourceTeamMapper))
+
+		Expect(shipped.AddToAdmins(DefaultContext, admin.ID)).To(Succeed())
+		Expect(shipped.Sync(DefaultContext)).To(Succeed())
+		Expect(membership().Source).To(Equal(adapter.SourceShipped))
+
+		Expect(mapTeams(DefaultContext, admin.ID, `{"teams": []}`, nil, "bootstrap-admin-without-teams")).To(Succeed())
+		Expect(membership().Source).To(Equal(adapter.SourceShipped))
 	})
 })
 
