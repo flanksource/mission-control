@@ -47,7 +47,7 @@ func SaveScopeMembership(ctx context.Context, scope models.Scope, resolved v1.Sc
 		return membership.Clear(ctx, scope.ID)
 	}
 
-	if _, err := membership.Rebuild(ctx, scope, MembershipTargets(resolved)); err != nil {
+	if _, err := membership.RebuildScope(ctx, scope, MembershipTargets(resolved)); err != nil {
 		return fmt.Errorf("failed to save the membership of scope %s/%s: %w", scope.Namespace, scope.Name, err)
 	}
 	return nil
