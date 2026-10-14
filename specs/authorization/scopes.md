@@ -14,10 +14,9 @@ Other objects reference a Scope by name to say which resources they apply to:
 
 - **Role rules**, to select the resources an action is performed on, or with.
 - **RoleBinding constraints**, to narrow the rules of a Role.
-- **Permissions**, through `object.scopes` (legacy).
 - **The `X-Flanksource-Scope` header**, to limit one request (`limiting-permissions.md`).
 
-Each of those decides which resource types, and which forms of target (e.g. whole-type only), it accepts from a Scope, and rejects a reference to a Scope it can't use. Those rules are specified with the objects themselves, in `roles.md` and `rolebindings.md`. This document only covers the Scope.
+Each of those decides which resource types it accepts from a Scope, and is specified with the object itself (`roles.md`, `rolebindings.md`, `limiting-permissions.md`). This document only covers the Scope.
 
 Because other objects grant access through it, editing a Scope changes what they grant. Scope administration is permission administration.
 
@@ -105,21 +104,6 @@ targets:
 
 So it would either add nothing or stop being a set. Write one target per type instead.
 
-### 3.2 Records
-
-Some data belongs to a resource rather than being one: a config's changes and analysis, a playbook's runs, a notification's send history and a check's statuses. A record isn't a type. It's readable exactly when every resource it belongs to is (`roles.md`, Section 3.1):
-
-- A playbook run belongs to its playbook, and to the config or check it ran on, if any.
-- A run's steps, approvals and the data its agent reports belong to the run, so they follow the run.
-- A relationship between two configs belongs to both.
-- An artifact, e.g. a file a run's step or a check produced, belongs to what produced it: a run's step, a check, a config change or a scraper. So an artifact from a playbook run is visible exactly when the run is, whoever started the run.
-
-Job history isn't a record, even when a job ran for a resource, e.g. a scraper's runs. All of it is read with `job:read`, and none of it without (`roles.md`, Section 2.3). A resource's latest job status, where it's shown in the resource's own row, e.g. a canary's in `canaries_with_status`, is part of the resource and is visible with it.
-
-**TODO:** runs on a component. Today they follow their playbook alone, so anyone who can read the playbook sees them.
-
-**Why.** Who may see a run or a change is never a separate question from who may see what it's about. A run on a config is about the config as much as the playbook, so a subject who can't read the config can't read the run, its steps or their results. Job history is different: it's Mission Control's record of its own work, and one job's details can mention many resources, so it's read whole or not at all (`roles.md`, Section 2.3).
-
 ## 4. Membership
 
 A resource belongs to a Scope when **at least one target of the resource's type matches it**.
@@ -139,7 +123,7 @@ targets:
 
 This selects Configs in staging that belong to payments, **or** any Config in development. It does not select every staging Config.
 
-A Scope is always a union of resources. It never expresses a relationship between them.
+A Scope is always a union of resources. It never expresses a relationship between them, and never references another Scope: two Scopes are only combined by an object that names both, a RoleBinding constraint (`rolebindings.md`, Section 3) or the `X-Flanksource-Scope` header (`limiting-permissions.md`).
 
 ### 4.1 Empty sets
 
@@ -159,11 +143,11 @@ Membership MUST be decidable from the Scope and the resource's own identity and 
 
 **Why:** Health and status change without anyone deciding to change access. State-based grants make access disappear when a fix succeeds, flicker when a resource flaps, and grow during an outage. They can also change a playbook permission between run and approval, and prevent a stable access review.
 
-The grant defines the resources a person is responsible for. Listing filters narrow that set to, for example, unhealthy resources. A playbook's own configs filter decides whether it should run on a resource; a Scope decides whether the person may run it. An open-ended field selector would bypass this rule and silently expose new fields as the resource record grows.
+State belongs in listing filters, e.g. "show me the unhealthy ones", and a playbook's own `configs` decide whether it should run on a resource. A Scope only decides whether the person may.
 
 The name of the agent a resource belongs to counts as the resource's ownership, although it's stored on the agent (Section 5.4). Registering, renaming or deleting an agent therefore changes the membership of its resources, the same way a change to their own fields does.
 
-**Why.** Mission Control may evaluate a Scope once, when a resource or the Scope changes, and store which Scopes each resource belongs to, rather than evaluating it on every read (`design/materialised-membership.md`). That's only correct if nothing but a change to the resource, to its agent's name or to the Scope can change the resource's membership. Every field in Section 5.1 meets this. A selector that wouldn't is rejected when it's proposed for the language, never evaluated differently.
+**Why.** Mission Control stores which Scopes each resource belongs to, and only re-evaluates when the resource or the Scope changes (`design/materialised-membership.md`). That's only correct if nothing else can change membership. Every field in Section 5.1 meets this, and a field that wouldn't isn't added to the language.
 
 ## 5. Selector language
 
@@ -200,15 +184,11 @@ A pattern has exactly one `*`, at the end, and at least one character before it.
 - `*` at the start (`*-db`), in the middle (`prod-*-db`), at both ends (`*db*`), or more than once (`prod-*-*`).
 - `*` in `namespace` or `id`.
 
-There's no list or exclusion syntax. `name: "a,b"` selects a resource named `a,b`, and `name: "!a"` one named `!a`. To select several names, use one target per name; targets combine with OR (Section 4).
+Every character other than a trailing `*` is literal, including `,`, `!`, `%` and `_`, so there's no list or exclusion syntax: `name: "a,b"` selects a resource named `a,b`. To select several names, use one target per name; targets combine with OR (Section 4). Matching is case-sensitive: `prod-*` doesn't match `Prod-db`. A resource whose name contains `*` can only be selected by `id`.
 
-Matching is case-sensitive: `prod-*` doesn't match `Prod-db`. Every character other than a trailing `*` is literal, including `,`, `!`, `%` and `_`. A resource whose name contains `*` can only be selected by `id`.
+`types` values are exact: `*` and `!` are rejected. Tag and label values can't contain `*`, so no wildcard is inferred there either.
 
-- `name: "*"` selects every resource of the target's type, not of every type.
-- `types` values are exact: `*` and `!` are rejected.
-- Label selector values can't contain `*`, so no wildcard is inferred in `tagSelector` or `labelSelector`.
-
-A **whole-type target** is `name: "*"` and nothing else. It selects every resource of its type, and it's the only target that counts as selecting a whole type where that matters (`roles.md`, Sections 2 and 3.1). A pattern target isn't a whole-type target, however many resources it matches:
+A **whole-type target** is `name: "*"` and nothing else. It selects every resource of its type, not of every type, and it's the only target that counts as selecting a whole type (Section 3.1). A pattern target isn't one, however many resources it matches:
 
 ```yaml
 targets:
@@ -232,7 +212,7 @@ Every form a `name` can take has to mean exactly the same set in both, or a reso
 - **Tags and labels take `key=value` only.** `!=`, `notin` and `!key` are exclusions, ruled out below. `in` is a list, which one target per value already says. A bare `key` matches any value, a wildcard this language doesn't infer. What's left is an exact match, which has one reading and is one indexed lookup.
 - **No exclusions**: an exclusion makes a selector match everything it doesn't name, including resources created later. A Scope grants access, so it names what's in, never what's out.
 - **Case-sensitive** matching selects what was typed and nothing wider. Resource names from cloud providers can differ only by case, and a Scope must not quietly include both.
-- **Literal `,`, `!`, `%` and `_`** keep a name that contains them selectable exactly. Only `*` has a meaning. A target is a plain value, not a selector language: `,` and `!` don't mean what they mean in other Mission Control selectors, e.g. a playbook's `configs`, and aren't rejected either. A name written as a list or an exclusion matches no resource, so it grants nothing.
+- **Literal `,` and `!`**: a target is a plain value, not a selector language, so they don't mean what they mean in other Mission Control selectors, e.g. a playbook's `configs`. A name written as a list or an exclusion matches no resource, so it grants nothing.
 - **A pattern is not a whole type**, even one that happens to match every resource today, because what it matches changes as resources come and go. A whole-type grant must be decidable from the Scope alone.
 
 ### 5.3 Fields each type supports
@@ -311,15 +291,13 @@ targets:
 
 ## 7. How changes take effect
 
-A Scope that's wrong on its own, i.e. any rule of Section 6 other than its `agent` resolving, is rejected (`overview.md`, "Rejected or not in effect"). A Scope whose `agent` doesn't resolve is stored `Ready=False`, since the agent may be registered later.
+A Scope that breaks any rule of Section 6 other than its `agent` resolving is rejected (`overview.md`, "Rejected or not in effect").
 
-A Scope is validated (Section 6) when it's saved, and again shortly after an agent is registered, renamed or deleted. Validation on save alone isn't enough: an agent can be deleted or re-registered without any Scope being saved.
+A Scope whose `agent` doesn't resolve, or that Kubernetes couldn't reject, is stored `Ready=False` with the reason, and selects nothing. There's no previous version to fall back to: the Scope is whatever was last written. Once its `agent` resolves, it's valid and selects again, without being re-applied, and the Roles and RoleBindings that reference it follow (`roles.md`, Section 6; `rolebindings.md`, Section 4).
 
-A stored Scope that becomes invalid, because its `agent` no longer resolves (Section 5.4), is `Ready=False` with the reason and selects nothing. It becomes valid again, and selects again, as soon as its `agent` resolves, without being re-applied. Roles and RoleBindings that reference it follow it (`roles.md`, Section 6; `rolebindings.md`, Section 4).
+A Scope is validated when it's saved, and again shortly after an agent is registered, renamed or deleted, since an agent can change without any Scope being saved.
 
-A Scope is never validated against the Roles and RoleBindings that reference it: a change that makes it unusable to a rule or constraint goes through, and the referencing object stops granting, in whole or in part, until it's updated (`roles.md`, Section 6; `rolebindings.md`, Section 4). Deleting a Scope has the same effect as changing it into one nothing accepts.
-
-An invalid Scope that's stored, because its `agent` doesn't resolve or because Kubernetes couldn't reject it (`overview.md`, "Rejected or not in effect"), is `Ready=False` with the reason and selects nothing. There is no previous version to fall back to; the Scope is whatever was last written.
+A Scope is never validated against the Roles and RoleBindings that reference it. A change that makes it unusable to a rule or constraint goes through, and the referencing object stops granting, in whole or in part, until it's updated. Deleting a Scope has the same effect.
 
 ### 7.1 Membership changes
 
@@ -335,29 +313,12 @@ Membership MUST be decided when a Scope or a resource changes, never when a chec
 
 **Why.** A resource's membership depends only on the Scope and the resource's own fields (Section 4.3), so the write that changes either can decide it. A resource is never selected by a Scope that no longer matches it, and a playbook or a Scope applied and used straight away is never refused for being new.
 
-Saving a Scope therefore takes as long as finding every resource it selects: seconds for a broad Scope on a large tenant, while resources wait to be saved (`design/materialised-membership.md`, notice at the top).
+Saving a Scope therefore takes as long as finding every resource it selects: seconds for a broad Scope on a large tenant (`design/materialised-membership.md`).
 
-An agent change MAY take effect shortly after it's saved rather than with it. Until it does, the previous membership holds in full. _Why:_ agents are set up once and rarely registered, renamed or deleted again, and a new agent's resources arrive after it registers anyway.
+An agent change MAY take effect shortly after it's saved, with the previous membership holding in full until then. _Why:_ agents rarely change after they're set up, and a new agent's resources arrive after it registers anyway.
 
 ### 7.2 Operations with several checks
 
 An operation that makes several checks (`roles.md`, Section 4.3) MUST make all of them against the membership of one moment, for every resource the operation involves. It MUST NOT see a Scope's previous membership in one check and its new membership in another.
 
 **Why.** Each check alone sees a real state, but two checks on either side of a change can together allow what neither state allows. E.g. a subject may run playbook P on configs tagged `env=dev`, and may read configs tagged `env=prod`. Config C's tag changes from `env=dev` to `env=prod`. Before, P may run on C but C can't be read; after, C can be read but P may not run on it. If the `playbook:run` check sees C before the change and the `read` check sees it after, both pass, and P runs on C.
-
-## 8. Operations
-
-A Scope never references another Scope, so two Scopes are only ever combined by an object that references them both.
-
-### 8.1 Within a Scope
-
-| Operation    | How                      | Example                                                             |
-| ------------ | ------------------------ | ------------------------------------------------------------------- |
-| Intersection | Conditions in one target | `tagSelector: team=payments` and `namespace: staging` in one target |
-| Union        | Separate targets         | One target for `namespace: staging`, another for `development`      |
-
-A Scope can't intersect two targets, exclude resources, or list names (Sections 5.1, 5.2). Targets of different types never interact.
-
-### 8.2 Across Scopes
-
-Two Scopes are combined in two places only: a RoleBinding constraint, which narrows a rule's Scope to the resources in both (`rolebindings.md`, Section 3), and the `X-Flanksource-Scope` header, which limits a request to the resources in any of the Scopes it names (`limiting-permissions.md`). Combining grants is specified in `roles.md`, Section 5.

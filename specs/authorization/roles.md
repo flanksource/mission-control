@@ -155,7 +155,7 @@ rules:
 
 - `property:manage` is one action for every write. A property changes what Mission Control does for everyone, e.g. which pages are enabled, so creating, changing and deleting one are equally privileged.
 - `event:read` covers the event queue (`event_queue`) and the recent events kept in memory by playbooks and notifications. Events are only written by Mission Control itself, so no action writes them.
-- `job:read` covers all job history, e.g. a cleanup job's runs and a scraper's runs, whether or not a job ran for a resource. A subject with it sees all of it, and a subject without it sees none, whatever resources they may read (`collection-access.md`, Section 3.1). A resource's latest job status shown in its own row stays visible with the resource (`scopes.md`, Section 3.2).
+- `job:read` covers all job history, e.g. a cleanup job's runs and a scraper's runs, whether or not a job ran for a resource. A subject with it sees all of it, and a subject without it sees none, whatever resources they may read (`collection-access.md`, Section 3.1). A resource's latest job status shown in its own row stays visible with the resource (Section 3.1).
 - `job:read` is as privileged as `admin`, like `person:manage`, and is only for subjects trusted as admins. A job's details and errors mention the resources it worked on, e.g. configs a scraper found or the playbook a run was refused for, which the holder may not otherwise be able to read. _Why not per resource:_ one job touches many resources, and its details aren't split by resource, so a row can't be shown only to those who may read everything it mentions.
 
 - Every other action takes a resource, and a rule that omits it is rejected. `read`, `create`, `update`, `delete` and every other generic action always take one: no rule grants them on everything.
@@ -244,7 +244,20 @@ A `read` rule accepts some or all of a type wherever its type allows it (`scopes
 
 Listings are filtered by row-level security, which is always on: there's no setting to turn it off. So a `read` rule whose Scope picks some of a type (`scopes.md`, Section 3.1) filters listings to what it selects. A rule whose Scope consists of whole-type targets only doesn't need row filters: opening any resource and listing all of them allow the same resources. A binding's constraint can still narrow it, and then its listings are filtered by the constraint's Scope (`rolebindings.md`, Section 3.2).
 
-Records follow the resource they belong to (`scopes.md`, Section 3.2): a playbook run is listed and opened exactly when its playbook, and the config or check it ran on, can be read, and its steps exactly when the run can. Lookup views derived from a type, e.g. `config_types` or `config_tags`, which list the distinct values the UI's filters offer, are readable by anyone with a `read` grant on that type, and MUST only show values from rows the subject can read. A database table that's neither a type, a record of one, nor a lookup view derived from one isn't served through the database API.
+**Records.** Some data belongs to a resource rather than being one: a config's changes and analysis, a playbook's runs, a notification's send history and a check's statuses. A record isn't a type. It's listed and opened exactly when every resource it belongs to can be read:
+
+- A playbook run belongs to its playbook, and to the config or check it ran on, if any.
+- A run's steps, approvals and the data its agent reports belong to the run, so they follow the run.
+- A relationship between two configs belongs to both.
+- An artifact, e.g. a file a run's step or a check produced, belongs to what produced it: a run's step, a check, a config change or a scraper. So an artifact from a playbook run is visible exactly when the run is, whoever started the run.
+
+Job history isn't a record, even when a job ran for a resource, e.g. a scraper's runs: it's read whole with `job:read`, or not at all (Section 2.3). A resource's latest job status, where it's shown in the resource's own row, e.g. a canary's in `canaries_with_status`, is part of the resource and is visible with it.
+
+**TODO:** runs on a component. Today they follow their playbook alone, so anyone who can read the playbook sees them.
+
+_Why:_ who may see a run or a change is never a separate question from who may see what it's about. A run on a config is about the config as much as the playbook, so a subject who can't read the config can't read the run, its steps or their results.
+
+Lookup views derived from a type, e.g. `config_types` or `config_tags`, which list the distinct values the UI's filters offer, are readable by anyone with a `read` grant on that type, and MUST only show values from rows the subject can read. A database table that's neither a type, a record of one, nor a lookup view derived from one isn't served through the database API.
 
 Properties are the one thing read without a rule: any signed-in subject may read them. Reading them still requires authentication, like every other endpoint. They configure Mission Control's behaviour, e.g. which pages are enabled, and MUST NOT hold anything confidential. Writing them takes `property:manage` (Section 2.3). _Why:_ every page needs them before it can decide what to show, a subject with no grants included.
 
@@ -330,7 +343,7 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Use connection C, e.g. to send        | `connection:use`                            | C               | None                              |
 | Test connection C                     | `connection:use`                            | C               | None                              |
 
-The plugin's checks during the operation are made as the caller, except looking up a connection, which is checked as the plugin (Section 4.4). Approving or cancelling a run checks `read` on its resource for the same reason running it does: the run, its parameters and its results are about that resource, and are only readable with it (`scopes.md`, Section 3.2).
+The plugin's checks during the operation are made as the caller, except looking up a connection, which is checked as the plugin (Section 4.4). Approving or cancelling a run checks `read` on its resource for the same reason running it does: the run, its parameters and its results are about that resource, and are only readable with it (Section 3.1).
 
 Each check is made as the subject performing the operation: the caller, or, where there's none, the resource doing the work (Section 4.4).
 

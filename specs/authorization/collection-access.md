@@ -92,7 +92,7 @@ The event queue and job history aren't types: they're reached through `event:rea
 | Job history (`job_history`)   | Every row, to a subject with `job:read`. Refused with `403 Forbidden` without it                          |
 
 - Both are all or nothing. There's no per-row rule: a job history row about a resource is listed with `job:read` whether or not the subject may read the resource, and never without `job:read`, whatever resources the subject may read.
-- A resource's latest job status shown in its own row, e.g. in `canaries_with_status`, isn't job history: it's listed with the resource ([scopes.md, Section 3.2](scopes.md#32-records)).
+- A resource's latest job status shown in its own row, e.g. in `canaries_with_status`, isn't job history: it's listed with the resource ([roles.md, Section 3.1](roles.md#31-the-read-action)).
 
 ## 4. One answer
 
@@ -147,7 +147,7 @@ The Permissions entry MUST open Roles. Role Bindings and Scopes MUST use their o
 
 **Why.** Roles, bindings and Scopes are separate types. Reading one doesn't grant reading another.
 
-Tokens and Artifacts MUST NOT require a page-level grant. Token operations MUST follow the ownership and credential restrictions in [roles.md, Section 4.5](roles.md#45-access-tokens). Artifact listings and fetches MUST allow only artifacts whose producers the subject may read ([scopes.md, Section 3.2](scopes.md#32-records)).
+Tokens and Artifacts MUST NOT require a page-level grant. Token operations MUST follow the ownership and credential restrictions in [roles.md, Section 4.5](roles.md#45-access-tokens). Artifact listings and fetches MUST allow only artifacts whose producers the subject may read ([roles.md, Section 3.1](roles.md#31-the-read-action)).
 
 **Why.** Own tokens need no grant, and artifacts inherit their producers' access. Opening either page grants no additional access.
 
