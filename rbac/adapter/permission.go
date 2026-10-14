@@ -620,13 +620,14 @@ func (a *PermissionAdapter) resolvePeople(people []string) ([]string, error) {
 }
 
 // resolveAllPeople returns the ids of every human user of Mission Control. Agents, users of external identity
-// providers and the system user aren't selected.
+// providers and the system user aren't selected, and neither are the people access tokens had before they signed in
+// as their owners: one left over when its migration failed must not gain what everyone is granted.
 // It doesn't depend on email verification: it names no address.
 func (a *PermissionAdapter) resolveAllPeople() ([]string, error) {
 	var ids []string
 	err := a.ctx.DB().Select("id").Model(&models.Person{}).
 		Where("deleted_at IS NULL").
-		Where("(type IS NULL OR type NOT IN ?)", []string{"agent", "federated"}).
+		Where("(type IS NULL OR type NOT IN ?)", []string{"agent", "federated", "access_token"}).
 		Where("NOT (name = 'System' AND email IS NULL)").
 		Find(&ids).Error
 	return ids, err

@@ -189,6 +189,21 @@ var _ = ginkgo.Describe("Access tokens sign in as their owner", ginkgo.Ordered, 
 		plain, token := legacyToken(tokenPerson, &owner.ID)
 		_, orphan := legacyToken(orphanPerson, nil)
 
+		// Owners that aren't people: a deleted person and an agent
+		gone, err := db.CreatePerson(DefaultContext, "Gone Owner", "gone-"+uuid.NewString()[:8]+"@example.com", "")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(DefaultContext.DB().Model(gone).UpdateColumn("deleted_at", time.Now()).Error).To(Succeed())
+		agentOwner, err := db.CreatePerson(DefaultContext, "agent-"+uuid.NewString()[:8], uuid.NewString()[:8]+"@local", db.PersonTypeAgent)
+		Expect(err).ToNot(HaveOccurred())
+		goneTokenPerson, agentTokenPerson := legacyPerson(), legacyPerson()
+		_, ofGone := legacyToken(goneTokenPerson, &gone.ID)
+		_, ofAgent := legacyToken(agentTokenPerson, &agentOwner.ID)
+
+		// A token person whose token is already gone
+		leftover := legacyPerson()
+		_, err = dutyRBAC.Enforcer().AddGroupingPolicy(leftover.ID.String(), owner.ID.String())
+		Expect(err).ToNot(HaveOccurred())
+
 		// The owner already has a token of the name another of their tokens had on its own person
 		_, clash := legacyToken(clashPerson, &owner.ID)
 		_, taken, err := db.CreateAccessTokenForPerson(DefaultContext, owner, clash.Name, 0, false, viewerRole)
@@ -216,9 +231,11 @@ var _ = ginkgo.Describe("Access tokens sign in as their owner", ginkgo.Ordered, 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(moved.PersonID).To(Equal(owner.ID))
 
-			var count int64
-			Expect(DefaultContext.DB().Model(&models.AccessToken{}).Where("id = ?", orphan.ID).Count(&count).Error).To(Succeed())
-			Expect(count).To(BeZero(), "a token without an owner is deleted")
+			for _, deleted := range []models.AccessToken{orphan, ofGone, ofAgent} {
+				var count int64
+				Expect(DefaultContext.DB().Model(&models.AccessToken{}).Where("id = ?", deleted.ID).Count(&count).Error).To(Succeed())
+				Expect(count).To(BeZero(), "a token without an owner that's a person is deleted")
+			}
 
 			renamed, err := db.GetAccessToken(DefaultContext, clash.ID.String())
 			Expect(err).ToNot(HaveOccurred())
@@ -228,7 +245,7 @@ var _ = ginkgo.Describe("Access tokens sign in as their owner", ginkgo.Ordered, 
 			Expect(err).ToNot(HaveOccurred())
 			Expect(kept.Name).To(Equal(clash.Name))
 
-			for _, person := range []*models.Person{tokenPerson, orphanPerson, clashPerson} {
+			for _, person := range []*models.Person{tokenPerson, orphanPerson, clashPerson, goneTokenPerson, agentTokenPerson, leftover} {
 				var deleted int64
 				Expect(DefaultContext.DB().Model(&models.Person{}).Where("id = ? AND deleted_at IS NOT NULL", person.ID).Count(&deleted).Error).To(Succeed())
 				Expect(deleted).To(Equal(int64(1)))
