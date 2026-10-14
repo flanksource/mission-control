@@ -207,7 +207,8 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	run, err := playbook.Run(ctx.WithSubject(owner), pb, rp)
+	// As the request's subject, so an access token's Roles limit the run's own checks too
+	run, err := playbook.Run(ctx, pb, rp)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

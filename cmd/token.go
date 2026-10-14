@@ -9,12 +9,15 @@ import (
 	"strings"
 	"time"
 
+	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/crypto/bcrypt"
 
 	"github.com/flanksource/incident-commander/auth"
@@ -41,12 +44,30 @@ var Token = &cobra.Command{
 			return errors.New("user not found")
 		}
 
-		token, _, err := db.CreateAccessToken(ctx, user.ID, "default", &tokenExpiry, nil, false)
+		roles, err := parseTokenRoles(tokenRoles)
 		if err != nil {
-			return fmt.Errorf("failed to create a new access token: %w", err)
+			return err
 		}
 
-		fmt.Println(token)
+		var result db.CreateAccessTokenForPersonResult
+		err = ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
+			if result, err = db.CreateAccessTokenForPerson(ctx, &user, tokenName, tokenExpiry, false, roles); err != nil {
+				return fmt.Errorf("failed to create a new access token: %w", err)
+			}
+
+			grouping := gormadapter.CasbinRule{Ptype: "g", V0: result.Person.ID.String(), V1: user.ID.String()}
+			if err := ctx.DB().Create(&grouping).Error; err != nil {
+				return fmt.Errorf("failed to group the access token with its owner: %w", err)
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+
+		// The token is this command's output. Sensitive's String() is redacted, so print its plain text.
+		fmt.Fprintln(cmd.OutOrStdout(), result.Token.PlainText())
+		fmt.Fprintln(cmd.ErrOrStderr(), "The token takes effect on the server's next policy reload (every 5 minutes by default).")
 		return nil
 	},
 }
@@ -89,8 +110,27 @@ var PasswordReset = &cobra.Command{
 	},
 }
 
+// parseTokenRoles parses Roles given as namespace/name. A token must list at least one.
+func parseTokenRoles(values []string) (models.AccessTokenRoles, error) {
+	if len(values) == 0 {
+		return nil, errors.New("must specify at least one --role, e.g. --role mission-control-builtin/admin --role mission-control-builtin/plugin-admin for all of the user's access")
+	}
+
+	var roles models.AccessTokenRoles
+	for _, value := range values {
+		namespace, name, ok := strings.Cut(value, "/")
+		if !ok || namespace == "" || name == "" || strings.Contains(name, "/") {
+			return nil, fmt.Errorf("role %q must be namespace/name", value)
+		}
+		roles = append(roles, models.AccessTokenRole{Namespace: namespace, Name: name})
+	}
+	return roles, nil
+}
+
 var (
 	tokenUser         string
+	tokenName         string
+	tokenRoles        []string
 	tokenExpiry       time.Duration
 	resetPasswordUser string
 )
@@ -178,6 +218,8 @@ func init() {
 	clientcmd.AuthCmd.AddCommand(Token, Check, PasswordReset)
 
 	Token.Flags().StringVar(&tokenUser, "user", "", "User to generate a token for")
+	Token.Flags().StringVar(&tokenName, "name", "cli", "Name of the token")
+	Token.Flags().StringSliceVar(&tokenRoles, "role", nil, "Role, as namespace/name, that limits the token. At least one is required")
 	Token.Flags().DurationVar(&tokenExpiry, "expiry", time.Hour*4, "Expiry duration for token")
 
 	PasswordReset.Flags().StringVar(&resetPasswordUser, "user", "", "User email to reset password for")

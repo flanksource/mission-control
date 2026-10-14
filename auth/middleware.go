@@ -33,6 +33,9 @@ var (
 	Basic           = "basic"
 )
 
+// errTokenWithoutRoles is a person's access token that lists no Role, e.g. one created before Roles were required.
+var errTokenWithoutRoles = errors.New("access token lists no roles; create a new one")
+
 var skipAuthPathPrefixes = []string{
 	"/kratos/",
 	"/canary/webhook/",

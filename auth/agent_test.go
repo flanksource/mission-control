@@ -28,7 +28,7 @@ func createAgentWithToken(ctx context.Context, name string) agentAuthFixture {
 	person, err := db.CreatePerson(ctx, username, username+"@local", db.PersonTypeAgent)
 	Expect(err).ToNot(HaveOccurred())
 
-	token, _, err := db.CreateAccessToken(ctx, person.ID, "default", nil, nil, false)
+	token, _, err := db.CreateAccessToken(ctx, person.ID, "default", nil, nil, false, nil)
 	Expect(err).ToNot(HaveOccurred())
 
 	Expect(db.CreateAgent(ctx, name, &person.ID, nil)).To(Succeed())
@@ -44,7 +44,7 @@ func createPersonWithToken(ctx context.Context) string {
 	person, err := db.CreatePerson(ctx, username, username+"@example.com", "")
 	Expect(err).ToNot(HaveOccurred())
 
-	token, _, err := db.CreateAccessToken(ctx, person.ID, "default", nil, nil, false)
+	token, _, err := db.CreateAccessToken(ctx, person.ID, "default", nil, nil, false, viewerRole)
 	Expect(err).ToNot(HaveOccurred())
 	return token.PlainText()
 }
