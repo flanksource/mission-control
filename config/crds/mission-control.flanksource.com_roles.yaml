@@ -206,9 +206,6 @@ spec:
                 type: integer
             type: object
         type: object
-        x-kubernetes-validations:
-        - message: a Role can't be named after a built-in role
-          rule: '!(self.metadata.name in [''admin'',''everyone'',''guest'',''viewer'',''editor'',''commander'',''responder'',''agent''])'
     served: true
     storage: true
     subresources:

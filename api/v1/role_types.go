@@ -18,7 +18,6 @@ import (
 // Role is a named set of rules, each allowing an action on the resources selected by a Scope,
 // optionally on the targets selected by another Scope.
 // A role grants nothing on its own: a RoleBinding grants it to subjects.
-// +kubebuilder:validation:XValidation:rule="!(self.metadata.name in ['admin','everyone','guest','viewer','editor','commander','responder','agent'])",message="a Role can't be named after a built-in role"
 type Role struct {
 	metav1.TypeMeta   `json:",inline" yaml:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty"`
