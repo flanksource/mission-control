@@ -147,6 +147,7 @@ var _ = Describe("Authorization", func() {
 		"GET /db/event_queue",
 		"GET /db/properties",
 		"PATCH /db/properties",
+		"GET /db/view_default_pods",
 	}
 
 	for _, t := range served {
@@ -157,9 +158,9 @@ var _ = Describe("Authorization", func() {
 		})
 	}
 
-	// No Role rule selects views or incidents yet (specs/authorization/overview.md, "Not covered yet"), so the admin
-	// Role doesn't read them
-	for _, t := range []string{"GET /db/view_default_pods", "GET /db/incidents"} {
+	// No Role rule selects incidents (specs/authorization/overview.md, "Not covered yet"), so the admin Role doesn't
+	// read them
+	for _, t := range []string{"GET /db/incidents"} {
 		tests = append(tests, TC{
 			user:         "admin",
 			path:         t,
