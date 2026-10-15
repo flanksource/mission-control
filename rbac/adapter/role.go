@@ -484,12 +484,16 @@ func narrowInput(contract ActionContract, input string, ruleScope, constraintSco
 
 	narrowed := ScopeSelection{ID: constraintScope.ID, Name: constraintScope.Name, Selectors: map[string][]types.ResourceSelector{}}
 	for _, kind := range common {
-		for _, selector := range constraintScope.Selectors[kind] {
-			if err := contract.enforceable(kind, selector); err != nil {
-				return ScopeSelection{}, NewInvalid(ReasonConstraintDoesNotFit, "constraint scope %s: %v", constraintScope.Name, err)
-			}
+		if err := contract.enforceable(kind, constraintScope); err != nil {
+			return ScopeSelection{}, NewInvalid(ReasonConstraintDoesNotFit, "constraint scope %s: %v", constraintScope.Name, err)
 		}
 		narrowed.Selectors[kind] = constraintScope.Selectors[kind]
+		if exclusions := constraintScope.Exclusions[kind]; len(exclusions) > 0 {
+			if narrowed.Exclusions == nil {
+				narrowed.Exclusions = map[string][]types.ResourceSelector{}
+			}
+			narrowed.Exclusions[kind] = exclusions
+		}
 	}
 
 	return narrowed, nil
@@ -654,9 +658,7 @@ func (r CompiledRule) GrantsAllOf(kind string) bool {
 
 // SelectsEntirely reports whether every Scope of the rule's resource selects every resource of the type.
 func (r CompiledRule) SelectsEntirely(kind string) bool {
-	return len(r.Resource) > 0 && lo.EveryBy(r.Resource, func(scope ScopeSelection) bool {
-		return lo.SomeBy(scope.Selectors[kind], func(s types.ResourceSelector) bool { return s.Wildcard() })
-	})
+	return len(r.Resource) > 0 && lo.EveryBy(r.Resource, func(scope ScopeSelection) bool { return scope.SelectsEntirely(kind) })
 }
 
 // compiledRuleToCasbinRules compiles a rule granted by a binding into casbin policies filed under the binding's principal.

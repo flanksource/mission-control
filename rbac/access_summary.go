@@ -320,20 +320,26 @@ func permissionSelections(ctx context.Context, permission models.Permission) ([]
 }
 
 // scopeSelections returns what a Permission naming Scopes selects: one per target of its Scopes,
-// each covering the whole type when the target selects every resource of it.
+// each covering the whole type when the target selects every resource of it and its Scope excludes none.
 func scopeSelections(ctx context.Context, refs []rbac.NamespacedNameIDSelector, ids map[string]bool) ([]map[string]bool, error) {
 	var selections []map[string]bool
 	for _, ref := range refs {
-		_, targets, err := adapter.LoadScope(ctx, nil, ref.Namespace, ref.Name)
+		_, spec, err := adapter.LoadScope(ctx, nil, ref.Namespace, ref.Name)
 		if err != nil {
 			return nil, err
-		} else if targets == nil {
+		} else if spec == nil {
 			return nil, adapter.NewInvalid(adapter.ReasonScopeNotFound, "scope %s/%s not found", ref.Namespace, ref.Name)
 		}
 
-		for _, target := range targets {
+		excluded := map[string]bool{}
+		for _, exclusion := range spec.Exclude {
+			kind, _ := exclusion.Selector()
+			excluded[kind] = true
+		}
+
+		for _, target := range spec.Targets {
 			kind, selector := target.Selector()
-			selections = append(selections, map[string]bool{kind: !ids[kind] && kind != policy.ResourceView && selectsAll(selector)})
+			selections = append(selections, map[string]bool{kind: !ids[kind] && kind != policy.ResourceView && !excluded[kind] && selectsAll(selector)})
 		}
 	}
 	return selections, nil

@@ -134,6 +134,56 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 				Expect(built).To(BeFalse(), "a deleted scope has no membership")
 			})
 
+			ginkgo.It("stores a scope's exclusions, and leaves the resources they match out of its membership", func() {
+				scopeObj := &v1.Scope{
+					ObjectMeta: metav1.ObjectMeta{Name: "every-playbook-but-echo", Namespace: "default", UID: k8sTypes.UID(uuid.New().String())},
+					Spec: v1.ScopeSpec{
+						Targets: []v1.ScopeTarget{{Playbook: &v1.ScopePlaybookRef{Name: "*"}}},
+						Exclude: []v1.ScopeTarget{{Playbook: &v1.ScopePlaybookRef{Namespace: dummy.EchoConfig.Namespace, Name: dummy.EchoConfig.Name}}},
+					},
+				}
+				Expect(PersistScopeFromCRD(DefaultContext, scopeObj)).To(Succeed())
+				id := uuid.MustParse(string(scopeObj.UID))
+				ginkgo.DeferCleanup(func() { Expect(DeleteScope(DefaultContext, id.String())).To(Succeed()) })
+
+				var saved models.Scope
+				Expect(DefaultContext.DB().Where("id = ?", id).First(&saved).Error).To(Succeed())
+				Expect(saved.Error).To(BeNil())
+				Expect(string(saved.Exclude)).To(ContainSubstring(dummy.EchoConfig.Name))
+
+				Expect(members(id)).To(ContainElement(dummy.RestartPod.ID))
+				Expect(members(id)).ToNot(ContainElement(dummy.EchoConfig.ID))
+
+				var whole int64
+				Expect(DefaultContext.DB().Raw("SELECT COUNT(*) FROM scope_members WHERE scope_id = ? AND resource_id IS NULL", id).Scan(&whole).Error).To(Succeed())
+				Expect(whole).To(BeZero(), "a type with an exclusion isn't stored whole")
+
+				Expect(adapter.SyncScopeMembership(DefaultContext, saved)).To(Succeed())
+				Expect(members(id)).ToNot(ContainElement(dummy.EchoConfig.ID), "a stored scope is re-validated with its exclusions")
+
+				scopeObj.Spec.Exclude = nil
+				Expect(PersistScopeFromCRD(DefaultContext, scopeObj)).To(Succeed())
+				Expect(DefaultContext.DB().Raw("SELECT COUNT(*) FROM scope_members WHERE scope_id = ? AND resource_id IS NULL", id).Scan(&whole).Error).To(Succeed())
+				Expect(whole).To(Equal(int64(1)), "without exclusions, the type is stored whole again")
+			})
+
+			ginkgo.It("stores a scope with an exclusion it can't apply as invalid, with no membership", func() {
+				scopeObj := &v1.Scope{
+					ObjectMeta: metav1.ObjectMeta{Name: "invalid-exclusion", Namespace: "default", UID: k8sTypes.UID(uuid.New().String())},
+					Spec: v1.ScopeSpec{
+						Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}},
+						Exclude: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: *dummy.EKSCluster.Name}}}},
+					},
+				}
+				Expect(PersistScopeFromCRD(DefaultContext, scopeObj)).To(MatchError(ContainSubstring("only playbook can be excluded")))
+				id := uuid.MustParse(string(scopeObj.UID))
+				ginkgo.DeferCleanup(func() { Expect(DeleteScope(DefaultContext, id.String())).To(Succeed()) })
+
+				built, err := membership.IsBuilt(DefaultContext, id)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(built).To(BeFalse(), "an exclusion that can't be applied never leaves the scope granting its targets")
+			})
+
 			ginkgo.It("builds, at startup, the membership of a scope stored before membership was", func() {
 				scopeObj := eksScope("unbuilt-scope")
 				targets, err := json.Marshal(scopeObj.Spec.Targets)
@@ -258,9 +308,9 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 				targets = append(targets, target)
 			}
 
-			resolved, err := adapter.ValidateScope(DefaultContext, targets)
+			resolved, err := adapter.ValidateScope(DefaultContext, v1.ScopeSpec{Targets: targets})
 			Expect(err).ToNot(HaveOccurred())
-			for i, target := range resolved {
+			for i, target := range resolved.Targets {
 				_, selector := target.Selector()
 				Expect(selector.Agent).To(Equal(agents[i].ID.String()))
 				_, original := targets[i].Selector()

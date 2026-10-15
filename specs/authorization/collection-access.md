@@ -51,7 +51,7 @@ Row-level security is always on; there's no setting to turn it off ([roles.md, S
 
 ### 2.4 Whole-type under a constraint
 
-A constraint narrows a rule to the resources in both Scopes ([rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)). That's a set of resources, not a Scope, so "whole-type" has to be decided from the two Scopes: a narrowed rule is whole-type for a type exactly when the rule's Scope and the constraint's Scope each have a whole-type target of it. A Scope with a whole-type target of a type selects the type whole whatever its other targets, since targets combine with OR ([scopes.md, Section 4](scopes.md#4-membership)).
+A constraint narrows a rule to the resources in both Scopes ([rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)). That's a set of resources, not a Scope, so "whole-type" has to be decided from the two Scopes: a narrowed rule is whole-type for a type exactly when the rule's Scope and the constraint's Scope each have a whole-type target of it. A Scope with a whole-type target of a type selects the type whole whatever its other targets, since targets combine with OR ([scopes.md, Section 4](scopes.md#4-membership)), unless it excludes anything of the type: then it has no whole-type target of it ([scopes.md, Section 4.4](scopes.md#44-exclusions)), and the answer is `some`.
 
 | Rule's Scope       | Constraint's Scope             | Answer |
 | ------------------ | ------------------------------ | ------ |

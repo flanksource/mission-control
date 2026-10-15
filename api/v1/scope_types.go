@@ -244,6 +244,13 @@ type ScopeSpec struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=10
 	Targets []ScopeTarget `json:"targets"`
+
+	// Exclude removes resources from the Scope: a resource is in the Scope when it matches a target and no exclusion.
+	// Each exclusion is shaped like a target and selects resources of a type the targets select.
+	// Only playbooks can be excluded.
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=10
+	Exclude []ScopeTarget `json:"exclude,omitempty"`
 }
 
 type ScopeStatus struct {

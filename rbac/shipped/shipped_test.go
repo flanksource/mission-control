@@ -34,8 +34,8 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 		scopes = map[string]adapter.ScopeSelection{}
 		for _, scope := range shippedScopes {
 			Expect(scope.Namespace).To(Equal(adapter.ShippedNamespace))
-			Expect(adapter.ValidateScopeTargets(scope.Spec.Targets)).To(Succeed(), scope.Name)
-			scopes[scope.Name] = adapter.NewScopeSelection("", scope.Name, scope.Spec.Targets)
+			Expect(adapter.ValidateScopeSpec(scope.Spec)).To(Succeed(), scope.Name)
+			scopes[scope.Name] = adapter.NewScopeSelection("", scope.Name, scope.Spec)
 		}
 
 		roles = lo.KeyBy(shippedRoles, func(r v1.Role) string { return r.Name })

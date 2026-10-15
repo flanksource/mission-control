@@ -90,7 +90,7 @@ var _ = ginkgo.Describe("Whole-type Scope targets", func() {
 			target, err := decode(fmt.Sprintf(`{"%s":{"name":"*"}}`, kind))
 			Expect(err).ToNot(HaveOccurred())
 			Expect(ValidateScopeTargets([]v1.ScopeTarget{target})).To(Succeed())
-			Expect(MembershipTargets([]v1.ScopeTarget{target})).To(BeEmpty())
+			Expect(MembershipTargets(v1.ScopeSpec{Targets: []v1.ScopeTarget{target}})).To(BeEmpty())
 		})
 
 		ginkgo.It("rejects "+kind+" with any other name, or none", func() {

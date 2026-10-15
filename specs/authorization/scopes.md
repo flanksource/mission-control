@@ -45,6 +45,7 @@ spec:
 | `metadata.namespace` | Required                  | Namespace of the Scope object. Objects in other namespaces reference it as `namespace/name`. |
 | `spec.description`   | Optional                  | Explanatory text; no effect.                                                        |
 | `spec.targets`       | Required; 1 to 10 entries | The selectors. Each entry selects resources of exactly one type.                    |
+| `spec.exclude`       | Optional; 1 to 10 entries | Exclusions, shaped like targets. A resource one matches isn't in the Scope (4.4).   |
 
 ### 3.1 Resource types
 
@@ -70,7 +71,7 @@ Each entry under `targets` MUST set exactly one of these keys. The key decides w
 | `role`                | Roles                 | `name: "*"` only                                                            | All only                     |
 | `roleBinding`         | RoleBindings          | `name: "*"` only                                                            | All only                     |
 
-"All" is a whole-type target: `name: "*"` and nothing else (Section 5.2). Any other target picks some.
+"All" is a whole-type target: `name: "*"` and nothing else, in a Scope that excludes nothing of the type (Sections 4.4 and 5.2). Any other target picks some.
 
 Whatever the type, two kinds of rule need all of it:
 
@@ -106,11 +107,12 @@ So it would either add nothing or stop being a set. Write one target per type in
 
 ## 4. Membership
 
-A resource belongs to a Scope when **at least one target of the resource's type matches it**.
+A resource belongs to a Scope when **at least one target of the resource's type matches it, and no exclusion does** (Section 4.4).
 
 - Targets combine with **OR**.
 - Conditions within one target's selector combine with **AND**.
 - A target only ever matches resources of its own type.
+- Exclusions apply to the whole Scope, after every target.
 
 ```yaml
 targets:
@@ -123,13 +125,15 @@ targets:
 
 This selects Configs in staging that belong to payments, **or** any Config in development. It does not select every staging Config.
 
-A Scope is always a union of resources. It never expresses a relationship between them, and never references another Scope: two Scopes are only combined by an object that names both, a RoleBinding constraint (`rolebindings.md`, Section 3) or the `X-Flanksource-Scope` header (`limiting-permissions.md`).
+A Scope is always a set of resources: the union of its targets, less the union of its exclusions. It never expresses a relationship between them, and never references another Scope: two Scopes are only combined by an object that names both, a RoleBinding constraint (`rolebindings.md`, Section 3) or the `X-Flanksource-Scope` header (`limiting-permissions.md`).
 
 ### 4.1 Empty sets
 
 A valid Scope that currently matches nothing is an empty set. It stays valid and selects nothing. It MUST NOT turn into "everything".
 
-A Scope whose `agent` no longer exists isn't an empty set. It's invalid (Section 7).
+A Scope whose exclusions remove everything its targets match is an empty set too.
+
+A Scope whose `agent` no longer exists, in a target or an exclusion, isn't an empty set. It's invalid (Section 7).
 
 ### 4.2 Namespace
 
@@ -150,6 +154,38 @@ State belongs in listing filters, e.g. "show me the unhealthy ones", and a playb
 The name of the agent a resource belongs to counts as the resource's ownership, although it's stored on the agent (Section 5.4). Registering, renaming or deleting an agent therefore changes the membership of its resources, the same way a change to their own fields does.
 
 **Why.** Mission Control stores which Scopes each resource belongs to, and only re-evaluates when the resource or the Scope changes (`design/materialised-membership.md`). That's only correct if nothing else can change membership. Every field in Section 5.1 meets this, and a field that wouldn't isn't added to the language.
+
+### 4.4 Exclusions
+
+`exclude` removes resources from a Scope. A Scope with exclusions selects the resources a target matches and no exclusion matches:
+
+```yaml
+spec:
+  targets:
+    - playbook:
+        name: "*"
+  exclude:
+    - playbook:
+        name: delete-*
+    - playbook:
+        namespace: break-glass
+```
+
+This selects every playbook, including those created later, except the ones named `delete-*` and those in the `break-glass` namespace.
+
+- An exclusion has the shape of a target and the same selector language (Section 5). Its conditions combine with **AND**, and exclusions combine with **OR**: `{namespace: production, name: delete-db}` removes only `production/delete-db`.
+- Exclusions apply to the whole Scope, never to one target. No target can bring an excluded resource back.
+- Only playbooks can be excluded. An exclusion MUST select a type one of the Scope's targets selects, and MUST NOT be a whole-type target.
+- A type the Scope excludes anything of has no whole-type target (Section 5.2), whatever its targets say. It can't back `create`, `update` or `delete`, nor `read` on connections (Section 3.1).
+- Exclusions only narrow the Scope. They aren't a deny: another Role can still grant an excluded resource.
+
+**Exclusions fail open.** Rename an excluded playbook, re-create it under another name, or mistype the exclusion, and the playbook is in the Scope. Exclude by a namespace or a name prefix that new playbooks of the kind will share, e.g. `namespace: break-glass` or `name: delete-*`, rather than by one name, and never by `id`: a playbook re-created by GitOps gets a new id. An exclusion can't be rejected for matching nothing, since membership never depends on whether another resource exists (Section 4.3), and a Scope may be applied before the playbooks it names.
+
+They also don't protect what an excluded playbook does. Anyone who may create playbooks can copy its steps under a name no exclusion matches.
+
+**Why only playbooks.** A type with an exclusion has a stored member per resource instead of one whole-type member (`design/materialised-membership.md`). That's cheap for playbooks, and they have no tags or labels to select a narrower set by. For configs it would mean a member per config. Other types MAY become excludable without changing the shape of a Scope.
+
+**Why a Scope-level list, not a pattern.** An exclusion written into a selector, e.g. `name: "!delete-production"` or `tagSelector: env!=prod`, only applies to its own target: another target that matches the resource adds it back. It would also need a second pattern language with its own readings (Section 5.2). `exclude` reuses the selector language unchanged, and nothing outside the Scope has to subtract: Roles, RoleBindings, the `X-Flanksource-Scope` header and row filters all read the stored membership.
 
 ## 5. Selector language
 
@@ -190,7 +226,7 @@ Every character other than a trailing `*` is literal, including `,`, `!`, `%` an
 
 `types` values are exact: `*` and `!` are rejected. Tag and label values can't contain `*`, so no wildcard is inferred there either.
 
-A **whole-type target** is `name: "*"` and nothing else. It selects every resource of its type, not of every type, and it's the only target that counts as selecting a whole type (Section 3.1). A pattern target isn't one, however many resources it matches:
+A **whole-type target** is `name: "*"` and nothing else, in a Scope that excludes nothing of its type (Section 4.4). It selects every resource of its type, not of every type, and it's the only target that counts as selecting a whole type (Section 3.1). A pattern target isn't one, however many resources it matches:
 
 ```yaml
 targets:
@@ -212,7 +248,7 @@ Every form a `name` can take has to mean exactly the same set in both, or a reso
 - **`*` in the middle or at both ends** (`*db*`) means searching inside every name, and a pattern with several wildcards has more than one reading. Neither is needed to select resources by name, which prefixes already do. A wider grammar would have to satisfy Section 4.3 and give each form one reading; it isn't ruled out.
 - **No lists**: targets already combine with OR (Section 4), so one target per name says the same thing without a second syntax.
 - **Tags and labels take `key=value` only.** `!=`, `notin` and `!key` are exclusions, ruled out below. `in` is a list, which one target per value already says. A bare `key` matches any value, a wildcard this language doesn't infer. What's left is an exact match, which has one reading and is one indexed lookup.
-- **No exclusions**: an exclusion makes a selector match everything it doesn't name, including resources created later. A Scope grants access, so it names what's in, never what's out.
+- **No exclusions in a selector**: an exclusion makes a selector match everything it doesn't name, including resources created later, and another target can add back what it removes. A Scope removes resources only through `exclude` (Section 4.4), which applies to the whole Scope, so what's out is listed in one place.
 - **Case-sensitive** matching selects what was typed and nothing wider. Resource names from cloud providers can differ only by case, and a Scope must not quietly include both.
 - **Literal `,` and `!`**: a target is a plain value, not a selector language, so they don't mean what they mean in other Mission Control selectors, e.g. a playbook's `configs`. A name written as a list or an exclusion matches no resource, so it grants nothing.
 - **A pattern is not a whole type**, even one that happens to match every resource today, because what it matches changes as resources come and go. A whole-type grant must be decidable from the Scope alone.
@@ -239,6 +275,7 @@ A Scope is valid when:
 - Every selector has at least one condition.
 - Every selector only uses fields its type supports (Section 3.1), with valid values (Sections 5.1, 5.2).
 - Every `agent` resolves to an existing agent.
+- It has at most ten exclusions. Every exclusion meets the rules for a target, selects a type one of the targets selects, is of a type that can be excluded (Section 4.4), and isn't a whole-type target.
 
 Examples of invalid Scopes:
 
@@ -289,6 +326,30 @@ targets:
 targets:
   - component:
       tagSelector: team=payments
+---
+# An exclusion of a type no target selects
+targets:
+  - config:
+      name: "*"
+exclude:
+  - playbook:
+      name: delete-production
+---
+# Excluding every playbook: remove the target instead
+targets:
+  - playbook:
+      namespace: ops
+exclude:
+  - playbook:
+      name: "*"
+---
+# Only playbooks can be excluded
+targets:
+  - config:
+      name: "*"
+exclude:
+  - config:
+      tagSelector: env=prod
 ```
 
 ## 7. How changes take effect
@@ -308,6 +369,7 @@ Membership MUST be decided when a Scope or a resource changes, never when a chec
 | Change                                       | Takes effect                       |
 | -------------------------------------------- | ---------------------------------- |
 | A Scope is created or its targets change     | When it's saved                    |
+| A Scope's exclusions change                  | When it's saved                    |
 | A Scope's `agent` resolves to a different id | Shortly after the agent changes    |
 | A Scope becomes invalid or is deleted        | When it's saved or re-validated    |
 | A resource is created, changed or deleted    | When it's saved                    |

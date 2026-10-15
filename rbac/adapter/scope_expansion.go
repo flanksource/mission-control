@@ -93,7 +93,7 @@ func withReason(err error, reason string) error {
 type cachedScope struct {
 	id      string
 	shipped bool
-	targets []v1.ScopeTarget
+	spec    v1.ScopeSpec
 }
 
 // getScope retrieves a scope by namespace and name, using the cache when given.
@@ -115,17 +115,17 @@ func getScope(ctx context.Context, cache *gocache.Cache, namespace, name string)
 		return nil, nil
 	}
 
-	var targets []v1.ScopeTarget
-	if err := json.Unmarshal([]byte(scope.Targets), &targets); err != nil {
+	spec, err := ScopeSpec(scope)
+	if err != nil {
 		return nil, NewInvalid(ReasonScopeInvalid, "%s:%s/%s", ErrScopeExpansionInvalidScopeTargets, namespace, name)
 	}
 
-	resolved, err := ValidateScope(ctx, targets)
+	resolved, err := ValidateScope(ctx, spec)
 	if err != nil {
 		return nil, withContext(withReason(err, ReasonScopeInvalid), "scope %s/%s is invalid", namespace, name)
 	}
 
-	result := &cachedScope{id: scope.ID.String(), shipped: IsShipped(scope.Namespace, scope.Source), targets: resolved}
+	result := &cachedScope{id: scope.ID.String(), shipped: IsShipped(scope.Namespace, scope.Source), spec: resolved}
 	if cache != nil {
 		cache.Set(cacheKey, result, gocache.DefaultExpiration)
 	}
@@ -133,14 +133,14 @@ func getScope(ctx context.Context, cache *gocache.Cache, namespace, name string)
 	return result, nil
 }
 
-// LoadScope returns the id and targets of a valid Scope, with its agents resolved to ids.
-// It returns nil targets for a missing Scope, and a validation error for an invalid one.
-func LoadScope(ctx context.Context, cache *gocache.Cache, namespace, name string) (string, []v1.ScopeTarget, error) {
+// LoadScope returns the id, targets and exclusions of a valid Scope, with its agents resolved to ids.
+// It returns nil for a missing Scope, and a validation error for an invalid one.
+func LoadScope(ctx context.Context, cache *gocache.Cache, namespace, name string) (string, *v1.ScopeSpec, error) {
 	scope, err := getScope(ctx, cache, namespace, name)
 	if err != nil || scope == nil {
 		return "", nil, err
 	}
-	return scope.id, scope.targets, nil
+	return scope.id, &scope.spec, nil
 }
 
 // PermissionScopeConditions returns the casbin conditions of a permission that names Scopes in its object_selector:
@@ -175,7 +175,7 @@ func PermissionScopeConditions(ctx context.Context, cache *gocache.Cache, perm m
 			return nil, NewInvalid(ReasonScopeNotFound, "%s:%s/%s", ErrScopeExpansionScopeNotFound, scopeRef.Namespace, scopeRef.Name)
 		}
 
-		for _, target := range scope.targets {
+		for _, target := range scope.spec.Targets {
 			kind, _ := target.Selector()
 			if slices.Contains(v1.WholeTypeResources, kind) {
 				continue

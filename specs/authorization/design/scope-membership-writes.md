@@ -13,10 +13,10 @@ Resources are the opposite: other processes, such as config-db and canary-checke
 - **Writers.** Mission Control writes `scope_targets`, and the members of the Scope it saves. Triggers on resource tables write the membership of the resources they write. Nothing else writes either table.
 - **Scope saved.** In the save transaction, after validation:
   1. A Scope stored with an error, including an `agent` that isn't registered, has its membership cleared. Its targets aren't written. _Why:_ the Scope selects nothing (`scopes.md` §7), so there's no target row to build, and no agent id to put in one.
-  2. Otherwise each target becomes a `scope_targets` row: `agent` resolved to the id of the agent with that name, a trailing `*` in `name` to a name prefix, `tagSelector` and `labelSelector` to `key=value` maps. A whole-type target becomes one `scope_members` row with no `resource_id`. View targets are skipped.
-  3. The Scope's members are rebuilt from those rows with the one predicate.
+  2. Otherwise each target becomes a `scope_targets` row: `agent` resolved to the id of the agent with that name, a trailing `*` in `name` to a name prefix, `tagSelector` and `labelSelector` to `key=value` maps. A whole-type target becomes one `scope_members` row with no `resource_id`, unless the Scope excludes anything of its type: then it's a row with no conditions. Each exclusion becomes a row the same way, with `excluded` set. View targets are skipped.
+  3. The Scope's members are rebuilt from those rows with the one predicate: the resources a target matches, less those an exclusion matches.
 
-  A save whose targets and resolved agents haven't changed rebuilds nothing. _Why:_ a reconcile saves every Scope again on restart.
+  A save whose targets, exclusions and resolved agents haven't changed rebuilds nothing. _Why:_ a reconcile saves every Scope again on restart.
 - **Scope deleted.** Its membership is cleared in the transaction that deletes it.
 - **Agent registered, renamed or deleted.** Postgres notifies Mission Control, which schedules a policy reload. The reload validates every Scope again, and rebuilds those whose `agent` now resolves to a different id, or no longer resolves. _Why:_ agents are set up once and rarely change, so a lag of one reload costs nothing a user would notice (`scopes.md` §7.1), and needs no trigger that resolves names.
 - **Target can't be converted.** The save fails: `PersistFailed`, with the previous version in effect. _Why:_ validation passed a Scope that can't be built, and failing keeps `Ready=True` from ever describing a Scope without membership.

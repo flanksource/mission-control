@@ -25,7 +25,7 @@ func PersistScopeFromCRD(ctx context.Context, obj *v1.Scope) error {
 }
 
 // PersistScope stores the Scope as written, with why it isn't in effect when it's invalid, and in the same transaction
-// rewrites its membership: a valid Scope's targets and members; nothing for an invalid one. If the membership can't be
+// rewrites its membership: a valid Scope's targets, exclusions and members; nothing for an invalid one. If the membership can't be
 // rewritten, the save fails and the previous version of the Scope stays.
 // Agents are stored as written, and resolved every time the Scope is validated.
 // A Scope is never validated against the Roles and RoleBindings that reference it.
@@ -40,17 +40,25 @@ func PersistScope(ctx context.Context, obj *v1.Scope, source string, createdBy *
 		return ctx.Oops().Wrapf(err, "failed to marshal targets")
 	}
 
+	var excludeJSON types.JSON
+	if len(obj.Spec.Exclude) > 0 {
+		if excludeJSON, err = json.Marshal(obj.Spec.Exclude); err != nil {
+			return ctx.Oops().Wrapf(err, "failed to marshal exclude")
+		}
+	}
+
 	scope := models.Scope{
 		ID:          uid,
 		Name:        obj.GetName(),
 		Namespace:   obj.GetNamespace(),
 		Description: obj.Spec.Description,
 		Targets:     types.JSON(targetsJSON),
+		Exclude:     excludeJSON,
 		Source:      source,
 		CreatedBy:   createdBy,
 	}
 
-	resolved, validationErr := adapter.ValidateScope(ctx, obj.Spec.Targets)
+	resolved, validationErr := adapter.ValidateScope(ctx, obj.Spec)
 	if scope.Error, scope.ErrorReason, err = validity(validationErr); err != nil {
 		return err
 	}

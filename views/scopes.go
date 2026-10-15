@@ -1,7 +1,6 @@
 package views
 
 import (
-	"encoding/json"
 	"fmt"
 	"time"
 
@@ -12,7 +11,6 @@ import (
 	pkgView "github.com/flanksource/duty/view"
 	gocache "github.com/patrickmn/go-cache"
 
-	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
@@ -51,13 +49,13 @@ func getScopeConfigs(ctx context.Context) ([]scopeConfig, error) {
 			continue
 		}
 
-		var targets []v1.ScopeTarget
-		if err := json.Unmarshal(scope.Targets, &targets); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal targets for scope %s: %w", scope.ID, err)
+		spec, err := adapter.ScopeSpec(scope)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal scope %s: %w", scope.ID, err)
 		}
 
 		// An invalid Scope selects nothing. Agents are matched by id.
-		targets, err := adapter.ValidateScope(ctx, targets)
+		spec, err = adapter.ValidateScope(ctx, spec)
 		if err != nil {
 			if adapter.IsValidationError(err) {
 				continue
@@ -66,7 +64,7 @@ func getScopeConfigs(ctx context.Context) ([]scopeConfig, error) {
 		}
 
 		var selectors []types.ResourceSelector
-		for _, target := range targets {
+		for _, target := range spec.Targets {
 			if target.Config != nil {
 				_, selector := target.Selector()
 				selectors = append(selectors, selector)

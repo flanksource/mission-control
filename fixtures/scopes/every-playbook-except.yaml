@@ -1,0 +1,16 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: every-playbook-except
+  namespace: mc
+spec:
+  description: Every playbook except the delete-* ones and those in the break-glass namespace
+  targets:
+    - playbook:
+        name: "*"
+  exclude:
+    - playbook:
+        name: delete-*
+    - playbook:
+        namespace: break-glass
