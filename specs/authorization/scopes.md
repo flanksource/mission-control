@@ -59,7 +59,7 @@ Each entry under `targets` MUST set exactly one of these keys. The key decides w
 | `playbook`            | Playbooks             | `id`, `name`, `namespace`                                                   | Some or all                  |
 | `connection`          | Connections           | `id`, `name`, `namespace`, `types`                                          | Some or all, except `read`   |
 | `scraper`             | Config scrapers       | `id`, `name`, `namespace`, `agent`                                          | Some or all                  |
-| `view`                | Views                 | `id`, `name`, `namespace`                                                   | All only, for `read`         |
+| `view`                | Views                 | `id`, `name`, `namespace`                                                   | Some or all                  |
 | `application`         | Applications          | `name: "*"` only                                                            | All only                     |
 | `notification`        | Notifications         | `name: "*"` only                                                            | All only                     |
 | `notificationSilence` | Notification silences | `name: "*"` only                                                            | All only                     |
@@ -72,17 +72,14 @@ Each entry under `targets` MUST set exactly one of these keys. The key decides w
 
 "All" is a whole-type target: `name: "*"` and nothing else (Section 5.2). Any other target picks some.
 
-Whatever the type, three kinds of rule need all of it:
+Whatever the type, two kinds of rule need all of it:
 
 - **`create`, `update` and `delete`.** Mission Control checks them once per API route, never on one resource, so their Scope MUST pick whole types.
 - **`read` on connections.** Connections aren't listed through the database API, so there are no row filters that could show only some of them.
-- **`read` on views.** Granting some views, or some rows of a view, isn't specified yet (`roles.md`, Section 3.2).
 
-These are the only places a whole type is required. Roles (`roles.md`, Sections 2, 3.1 and 3.2) and RoleBinding constraints (`rolebindings.md`, Section 3.2) refer to this table rather than restate it.
+These are the only places a whole type is required. Roles (`roles.md`, Sections 2 and 3.1) and RoleBinding constraints (`rolebindings.md`, Section 3.2) refer to this table rather than restate it.
 
 _Why some types are all-only:_ picking some resources of a type needs Scope membership and row filtering for that type, which only the types marked "Some or all" have. For the others, `name: "*"` is the only valid target, and every other value is rejected. Each type can get the fields its resources have, and picking some, when it's needed, without breaking a Scope written today.
-
-_Why `view` keeps its fields:_ a `view` target that picks some views, e.g. `name: pods`, is a valid Scope, but no rule accepts it yet (`roles.md`, Section 3.2). It already means what it will mean once views can be granted in part, so nothing written now has to change then.
 
 Everything Mission Control protects is one of these types, apart from what the few actions without a resource reach: accounts (`person:manage`), the MCP server (`mcp:use`), properties, the event queue and job history (`roles.md`, Section 2.3). There's no other kind of object a Role can grant.
 

@@ -13,7 +13,7 @@ Resources are the opposite: other processes, such as config-db and canary-checke
 - **Writers.** Mission Control writes `scope_targets`, and the members of the Scope it saves. Triggers on resource tables write the membership of the resources they write. Nothing else writes either table.
 - **Scope saved.** In the save transaction, after validation:
   1. A Scope stored with an error, including an `agent` that isn't registered, has its membership cleared. Its targets aren't written. _Why:_ the Scope selects nothing (`scopes.md` §7), so there's no target row to build, and no agent id to put in one.
-  2. Otherwise each target becomes a `scope_targets` row: `agent` resolved to the id of the agent with that name, a trailing `*` in `name` to a name prefix, `tagSelector` and `labelSelector` to `key=value` maps. A whole-type target becomes one `scope_members` row with no `resource_id`. View targets are skipped.
+  2. Otherwise each target becomes a `scope_targets` row: `agent` resolved to the id of the agent with that name, a trailing `*` in `name` to a name prefix, `tagSelector` and `labelSelector` to `key=value` maps. A whole-type target becomes one `scope_members` row with no `resource_id`.
   3. The Scope's members are rebuilt from those rows with the one predicate.
 
   A save whose targets and resolved agents haven't changed rebuilds nothing. _Why:_ a reconcile saves every Scope again on restart.
@@ -37,8 +37,10 @@ writes, in the same transaction:
 
 ```
 scope_targets  (config, name_prefix='web-', agent_id=<id of prod>, tags={"env":"prod","team":"web"})
+scope_targets  (view, name='dashboards')
 scope_members  (playbook, resource_id=NULL)
 scope_members  (config, <id>) for every config the target matches
+scope_members  (view, <id>) for the view named dashboards in each namespace
 ```
 
 ## Other choices
