@@ -229,3 +229,24 @@ func GetSystemUser(ctx context.Context) (*models.Person, error) {
 	api.SystemUserID = lo.ToPtr(SystemUser.ID)
 	return SystemUser, nil
 }
+
+// PersonAnalytic is an action a person has taken, e.g. one of the getting-started checklist's, and how many times.
+type PersonAnalytic struct {
+	Key       string    `json:"key"`
+	Count     int       `json:"count"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// ListPersonAnalytics lists the actions the person has taken.
+func ListPersonAnalytics(ctx context.Context, personID uuid.UUID) ([]PersonAnalytic, error) {
+	var analytics []PersonAnalytic
+	err := ctx.DB().Table("person_analytics").Select("key", "count", "created_at", "updated_at").
+		Where("person_id = ?", personID).Order("key").Find(&analytics).Error
+	return analytics, err
+}
+
+// RecordPersonAnalytic records that the person took the action. A person_analytics trigger counts repeats.
+func RecordPersonAnalytic(ctx context.Context, personID uuid.UUID, key string) error {
+	return ctx.DB().Exec("INSERT INTO person_analytics (person_id, key) VALUES (?, ?)", personID, key).Error
+}
