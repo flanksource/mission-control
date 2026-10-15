@@ -142,6 +142,7 @@ func New(ctx context.Context) *echov4.Echo {
 
 	e.Use(ServerCache)
 	e.Use(mcMiddleware.ServerTiming)
+	e.Use(warnRemovedScopeHeader)
 
 	Forward(ctx, e, "/kubeproxy", "https://kubernetes.default.svc", &ForwardOptions{
 		Middlewares: []echov4.MiddlewareFunc{KubeProxyTokenMiddleware},
@@ -471,6 +472,17 @@ func ServerCache(next echov4.HandlerFunc) echov4.HandlerFunc {
 			c.Response().Header().Set(HeaderCacheControl, "no-store")
 		} else if suffixesInItem(c.Request().RequestURI, cacheSuffixes) {
 			c.Response().Header().Set(HeaderCacheControl, CacheControlValue)
+		}
+		return next(c)
+	}
+}
+
+// warnRemovedScopeHeader logs requests that still send X-Flanksource-Scope, which was removed and no longer narrows
+// them, so that callers relying on it show up before they're surprised.
+func warnRemovedScopeHeader(next echov4.HandlerFunc) echov4.HandlerFunc {
+	return func(c echov4.Context) error {
+		if c.Request().Header.Get("X-Flanksource-Scope") != "" {
+			logger.Warnf("ignoring removed X-Flanksource-Scope header on %s %s", c.Request().Method, c.Request().URL.Path)
 		}
 		return next(c)
 	}

@@ -1,6 +1,6 @@
 # Limiting Permissions
 
-A request made with an access token is limited to less than its owner may do. A limit never grants anything: it only removes what's outside it, and the owner's own rules still decide everything else.
+A request made with an access token can be limited to less than its owner may do: every token is, except an agent's own token on requests made as that agent. A limit never grants anything: it only removes what's outside it, and the owner's own rules still decide everything else.
 
 ## Access tokens
 
@@ -53,4 +53,4 @@ A token of Alice's limited by `payments-runner` runs the ops playbooks on `payme
 
 _Why Roles:_ a token's limit has to say which actions as well as which resources, e.g. reading playbooks but never running them, and a Role already says exactly that. A limit of Scopes alone couldn't keep a token from running a playbook it may read, and rules written into the token would be a second way to write what a Role says.
 
-_Why no per-request limit:_ an application that signs its users in through an external identity provider (`external-identity-providers.md`) already decides what each of its requests may reach: the claims of the token it signs select the RoleBindings that apply, and those can narrow to any Scope. A header limiting a request to Scopes added nothing a trusted signer couldn't leave out, and couldn't limit actions.
+_Why no per-request limit:_ an application that signs its users in through an external identity provider (`external-identity-providers.md`) already decides what each of its requests may reach: the claims of each token it signs select the RoleBindings that apply, and a binding's constraint narrows its Role to a Scope (`rolebindings.md`, Section 3). That limits actions as well as resources, which a list of Scopes couldn't. Narrowing this way needs a binding for each context the application narrows to, matched on a claim it sets: unlike the header, it can't narrow to an arbitrary Scope on the fly.

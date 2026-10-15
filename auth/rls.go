@@ -78,18 +78,15 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		return cached.(*rls.Payload), nil
 	}
 
-	var payload *rls.Payload
-	var err error
+	payload, err := buildRLSPayload(ctx, subject)
+	if err != nil {
+		return nil, ctx.Oops().Wrap(err)
+	}
 	if tokenRoles, limited := rbac.TokenLimit(ctx, subject); limited {
 		// A token lists the rows both its owner's read grants and its Roles select (roles.md, Section 4.5)
-		if payload, err = buildRLSPayload(ctx, subject); err != nil {
-			return nil, ctx.Oops().Wrap(err)
-		}
 		if payload, err = limitToTokenRoles(ctx, payload, tokenRoles); err != nil {
 			return nil, ctx.Oops().Wrap(err)
 		}
-	} else if payload, err = buildRLSPayload(ctx, subject); err != nil {
-		return nil, ctx.Oops().Wrap(err)
 	}
 
 	tokenCache.SetDefault(cacheKey, payload)
