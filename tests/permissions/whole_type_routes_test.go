@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -310,37 +311,45 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 		}
 	})
 
-	It("lets any signed-in person record their own analytics through POST /db/person_analytics, and only person:manage another's", func() {
-		recordAnalytics := func(by *models.Person, of ...uuid.UUID) *httptest.ResponseRecorder {
+	It("records analytics inserted through /db as the signed-in person's, whichever person they name", func() {
+		var forwarded []byte
+		server := echo.New()
+		server.Any("/db/*", func(c echo.Context) error {
+			var err error
+			forwarded, err = io.ReadAll(c.Request().Body)
+			if err != nil {
+				return err
+			}
+			return c.NoContent(http.StatusOK)
+		}, mcRBAC.DbMiddleware())
+
+		write := func(by *models.Person, method, body string) *httptest.ResponseRecorder {
 			GinkgoHelper()
-			rows := lo.Map(of, func(id uuid.UUID, _ int) map[string]string {
-				return map[string]string{"person_id": id.String(), "key": "playbooks.run"}
-			})
-			body, err := json.Marshal(rows)
-			Expect(err).ToNot(HaveOccurred())
-			req := httptest.NewRequest(http.MethodPost, "/db/person_analytics", bytes.NewReader(body))
+			req := httptest.NewRequest(method, "/db/person_analytics", strings.NewReader(body))
 			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
-			e.ServeHTTP(rec, req.WithContext(DefaultContext.WithUser(by)))
+			server.ServeHTTP(rec, req.WithContext(DefaultContext.WithUser(by)))
 			return rec
 		}
 
-		Expect(recordAnalytics(nobody, nobody.ID).Code).To(Equal(http.StatusOK))
+		row := func(id uuid.UUID) string { return fmt.Sprintf(`{"person_id": %q, "key": "playbooks.run"}`, id) }
+		own, other := row(nobody.ID), row(configReader.ID)
 
-		for _, of := range [][]uuid.UUID{{configReader.ID}, {nobody.ID, configReader.ID}} {
-			rec := recordAnalytics(nobody, of...)
-			Expect(rec.Code).To(Equal(http.StatusForbidden), "%v", of)
-			Expect(rec.Header().Get("X-Rbac-Action")).To(Equal(adapter.ActionPersonManage))
+		for sent, recorded := range map[string]string{
+			own:                           own,
+			other:                         own,
+			"[" + own + "," + other + "]": "[" + own + "," + own + "]",
+			`{"key": "playbooks.run"}`:    own,
+		} {
+			Expect(write(nobody, http.MethodPost, sent).Code).To(Equal(http.StatusOK), sent)
+			Expect(forwarded).To(MatchJSON(recorded), sent)
 		}
 
-		manager := person("analytics-manager")
-		_, err := rbac.Enforcer().AddPolicy(manager.ID.String(), policy.ObjectPeople, adapter.ActionPersonManage, "allow", "", "test")
-		Expect(err).ToNot(HaveOccurred())
-		DeferCleanup(func() {
-			_, err := rbac.Enforcer().DeletePermissionsForUser(manager.ID.String())
-			Expect(err).ToNot(HaveOccurred())
-		})
-		Expect(recordAnalytics(manager, configReader.ID).Code).To(Equal(http.StatusOK))
+		for _, method := range []string{http.MethodPatch, http.MethodDelete} {
+			rec := write(nobody, method, own)
+			Expect(rec.Code).To(Equal(http.StatusForbidden), method)
+			Expect(rec.Header().Get("X-Rbac-Action")).To(Equal(adapter.ActionPersonManage))
+		}
 	})
 
 	// checked is the object and action a route checks now

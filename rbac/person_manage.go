@@ -5,13 +5,12 @@ import (
 	"encoding/json"
 	"io"
 	"mime"
-	"net/http"
+	"strconv"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac/policy"
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
@@ -23,42 +22,50 @@ func PersonManage() MiddlewareFunc {
 }
 
 // accountTables are the tables /db writes to as account operations, so writing them takes person:manage.
-// Reading them is unchanged. A person may still record their own analytics (insertsOwnAnalytics).
+// Reading them is unchanged. Inserting person_analytics doesn't, as its rows are recorded as the signed-in person's.
 var accountTables = map[string]struct{}{
 	"people":           {},
 	"identities":       {},
 	"person_analytics": {},
 }
 
-// insertsOwnAnalytics reports whether the request inserts person_analytics rows only for the signed-in person,
-// which any signed-in person may do. The insert must be JSON, so it can read whose rows they are.
-func insertsOwnAnalytics(c echo.Context, ctx context.Context) bool {
+// recordAnalyticsAsCaller sets the person of every row a /db insert into person_analytics records to the signed-in
+// person, whichever person the request names, so any signed-in person records their own analytics and only theirs.
+// The insert must be JSON, so the rows can be rewritten.
+func recordAnalyticsAsCaller(c echo.Context, ctx context.Context) error {
 	user := ctx.User()
-	if user == nil || c.Request().Method != http.MethodPost {
-		return false
+	if user == nil {
+		return dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "not signed in")
 	}
 	if mediaType, _, err := mime.ParseMediaType(c.Request().Header.Get(echo.HeaderContentType)); err != nil || mediaType != echo.MIMEApplicationJSON {
-		return false
+		return dutyAPI.Errorf(dutyAPI.EINVALID, "person_analytics can only be recorded with a JSON body")
 	}
 
 	body, err := io.ReadAll(c.Request().Body)
 	if err != nil {
-		return false
+		return dutyAPI.Errorf(dutyAPI.EINVALID, "failed to read request body: %v", err)
 	}
-	c.Request().Body = io.NopCloser(bytes.NewReader(body))
 
+	var out any
 	var rows []map[string]any
-	if err := json.Unmarshal(body, &rows); err != nil {
+	if err := json.Unmarshal(body, &rows); err == nil {
+		out = rows
+	} else {
 		var row map[string]any
 		if err := json.Unmarshal(body, &row); err != nil {
-			return false
+			return dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err)
 		}
-		rows = []map[string]any{row}
+		rows, out = []map[string]any{row}, row
+	}
+	for _, row := range rows {
+		row["person_id"] = user.ID.String()
 	}
 
-	return len(rows) > 0 && lo.EveryBy(rows, func(row map[string]any) bool {
-		value, _ := row["person_id"].(string)
-		id, err := uuid.Parse(value)
-		return err == nil && id == user.ID
-	})
+	if body, err = json.Marshal(out); err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+	c.Request().Body = io.NopCloser(bytes.NewReader(body))
+	c.Request().ContentLength = int64(len(body))
+	c.Request().Header.Set(echo.HeaderContentLength, strconv.Itoa(len(body)))
+	return nil
 }

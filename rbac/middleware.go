@@ -95,7 +95,10 @@ func DbMiddleware() MiddlewareFunc {
 				object, action = policy.ObjectProperties, policy.ActionPropertyManage
 			}
 
-			if resource == "person_analytics" && action == policy.ActionCreate && insertsOwnAnalytics(c, ctx) {
+			if resource == "person_analytics" && action == policy.ActionCreate {
+				if err := recordAnalyticsAsCaller(c, ctx); err != nil {
+					return dutyAPI.WriteError(c, err)
+				}
 				return next(c)
 			}
 
