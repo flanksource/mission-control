@@ -539,6 +539,8 @@ spec:
         scopeRef: all-connections
     - name: manage-people
       action: person:manage
+    - name: review-access
+      action: access:review
     - name: use-mcp
       action: mcp:use
     - name: manage-properties
@@ -547,6 +549,81 @@ spec:
       action: event:read
     - name: read-jobs
       action: job:read
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: access-manage
+  namespace: mission-control-builtin
+spec:
+  description: Reviews and manages who may do what - Scopes, Roles, RoleBindings and subject access reviews. As privileged as admin, since it may bind anyone to any Role
+  rules:
+    - name: review-access
+      action: access:review
+    - name: read-scopes
+      action: read
+      resource:
+        scopeRef: all-scopes
+    - name: read-roles
+      action: read
+      resource:
+        scopeRef: all-roles
+    - name: read-role-bindings
+      action: read
+      resource:
+        scopeRef: all-role-bindings
+    - name: read-people
+      action: read
+      resource:
+        scopeRef: all-people
+    - name: read-teams
+      action: read
+      resource:
+        scopeRef: all-teams
+    - name: read-playbooks
+      action: read
+      resource:
+        scopeRef: all-playbooks
+    - name: read-connections
+      action: read
+      resource:
+        scopeRef: all-connections
+    - name: create-scopes
+      action: create
+      resource:
+        scopeRef: all-scopes
+    - name: update-scopes
+      action: update
+      resource:
+        scopeRef: all-scopes
+    - name: delete-scopes
+      action: delete
+      resource:
+        scopeRef: all-scopes
+    - name: create-roles
+      action: create
+      resource:
+        scopeRef: all-roles
+    - name: update-roles
+      action: update
+      resource:
+        scopeRef: all-roles
+    - name: delete-roles
+      action: delete
+      resource:
+        scopeRef: all-roles
+    - name: create-role-bindings
+      action: create
+      resource:
+        scopeRef: all-role-bindings
+    - name: update-role-bindings
+      action: update
+      resource:
+        scopeRef: all-role-bindings
+    - name: delete-role-bindings
+      action: delete
+      resource:
+        scopeRef: all-role-bindings
 ---
 apiVersion: mission-control.flanksource.com/v1
 kind: Team

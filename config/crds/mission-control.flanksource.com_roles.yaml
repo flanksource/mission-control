@@ -71,7 +71,7 @@ spec:
                     resource:
                       description: |-
                         Resource is the Scope selecting the resources the action is performed on.
-                        Omitted for the actions that take no resource: person:manage, mcp:use, property:manage, event:read and job:read.
+                        Omitted for the actions that take no resource: person:manage, access:review, mcp:use, property:manage, event:read and job:read.
                       properties:
                         scopeRef:
                           description: ScopeRef is the Scope's name, in the namespace
@@ -106,11 +106,12 @@ spec:
                   x-kubernetes-validations:
                   - message: action must be a known action or invoke:<plugin>:<operation>,
                       without patterns
-                    rule: self.action in ['read','create','update','delete','playbook:run','playbook:approve','playbook:cancel','mcp:run','connection:use','person:manage','mcp:use','property:manage','event:read','job:read']
+                    rule: self.action in ['read','create','update','delete','playbook:run','playbook:approve','playbook:cancel','mcp:run','connection:use','person:manage','access:review','mcp:use','property:manage','event:read','job:read']
                       || self.action.matches('^invoke:[^:*!, ]+:[^:*!, ]+$')
-                  - message: person:manage, mcp:use, property:manage, event:read and
-                      job:read take no resource; every other action needs one
-                    rule: has(self.resource) != (self.action in ['person:manage','mcp:use','property:manage','event:read','job:read'])
+                  - message: person:manage, access:review, mcp:use, property:manage,
+                      event:read and job:read take no resource; every other action
+                      needs one
+                    rule: has(self.resource) != (self.action in ['person:manage','access:review','mcp:use','property:manage','event:read','job:read'])
                   - message: 'deny isn''t supported: rules only allow'
                     rule: '!has(self.deny) || self.deny != true'
                   - message: only playbook:run, playbook:approve and playbook:cancel

@@ -90,6 +90,7 @@ Every action has a contract, defined in code: the resource types it accepts, and
 | `invoke:<plugin>:<operation>`                         | Config                                                 | None                               |
 | `connection:use`                                      | Connection                                             | None                               |
 | `person:manage`                                       | None                                                   | None                               |
+| `access:review`                                       | None                                                   | None                               |
 | `mcp:use`                                             | None                                                   | None                               |
 | `property:manage`                                     | None                                                   | None                               |
 | `event:read`                                          | None                                                   | None                               |
@@ -142,6 +143,7 @@ A few actions aren't performed on a resource a Scope could select. They act on a
 | Action            | Allows                                                                                         |
 | ----------------- | ---------------------------------------------------------------------------------------------- |
 | `person:manage`   | Inviting, disabling, re-enabling and deleting accounts, and changing their properties, name or email |
+| `access:review`   | Asking what any subject may do: subject access reviews and searches (`/rbac/subject-access-reviews`, `/rbac/subject-access-search`) |
 | `mcp:use`         | Using Mission Control's MCP server at all. Each MCP tool still checks what it touches (Section 4.3) |
 | `property:manage` | Creating, changing and deleting properties, Mission Control's settings and feature flags. Reading them needs no rule (Section 3.1) |
 | `event:read`      | Reading Mission Control's event queue, and the recent events playbooks and notifications have handled |
@@ -157,6 +159,7 @@ rules:
     action: job:read
 ```
 
+- `access:review` only answers whether a subject may perform an action. It grants reading nothing: a search only returns resources the reviewer may read themselves, so a review never names a resource the reviewer can't see. Reviewing access across a type takes `read` on that type too.
 - `property:manage` is one action for every write. A property changes what Mission Control does for everyone, e.g. which pages are enabled, so creating, changing and deleting one are equally privileged.
 - `event:read` covers the event queue (`event_queue`) and the recent events kept in memory by playbooks and notifications. Events are only written by Mission Control itself, so no action writes them.
 - `job:read` covers all job history, e.g. a cleanup job's runs and a scraper's runs, whether or not a job ran for a resource. A subject with it sees all of it, and a subject without it sees none, whatever resources they may read (`collection-access.md`, Section 3.1). A resource's latest job status shown in its own row stays visible with the resource (Section 3.1).
@@ -341,6 +344,7 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Invoke a plugin operation on config C | `invoke:<plugin>:<operation>`, then `read`  | C, then C       | None                              |
 | Open resource X                       | `read`                                      | X               | None                              |
 | Connect to the MCP server             | `mcp:use`                                   | None            | None                              |
+| Review what a subject may do          | `access:review`                             | None            | None                              |
 | Create, change or delete a property   | `property:manage`                           | None            | None                              |
 | Read the event queue or recent events | `event:read`                                | None            | None                              |
 | Read job history                      | `job:read`                                  | None            | None                              |

@@ -40,6 +40,10 @@ const (
 	// ActionPersonManage allows inviting, disabling, re-enabling and deleting accounts, and changing their
 	// properties, name or email. Checked on policy.ObjectPeople.
 	ActionPersonManage = "person:manage"
+
+	// ActionAccessReview allows asking what any subject may do: subject access reviews and searches.
+	// Checked on policy.ObjectRBAC.
+	ActionAccessReview = "access:review"
 )
 
 // ActionContract declares the inputs an action accepts.
@@ -142,6 +146,7 @@ var contracts = map[string]ActionContract{
 	ActionConnectionUse: {Resources: []string{policy.ResourceConnection}, enforcement: enforcedPerRequest},
 
 	ActionPersonManage:          {Object: policy.ObjectPeople, enforcement: enforcedWithoutResource},
+	ActionAccessReview:          {Object: policy.ObjectRBAC, enforcement: enforcedWithoutResource},
 	policy.ActionMCPUse:         {Object: policy.ObjectMCP, enforcement: enforcedWithoutResource},
 	policy.ActionPropertyManage: {Object: policy.ObjectProperties, enforcement: enforcedWithoutResource},
 	policy.ActionEventRead:      {Object: policy.ObjectEvents, enforcement: enforcedWithoutResource},
