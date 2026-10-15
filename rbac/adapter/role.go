@@ -603,7 +603,7 @@ func (r CompiledRule) ReadGrants() map[string]rls.Grant {
 
 	grant := rls.Grant{Scope: r.Resource[0].ID}
 	if len(r.Resource) > 1 {
-		grant.Constraint = r.Resource[1].ID
+		grant.Constraints = []string{r.Resource[1].ID}
 	}
 
 	for _, kind := range r.Resource[0].DeclaredTypes() {

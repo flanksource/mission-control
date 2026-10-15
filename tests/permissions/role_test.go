@@ -859,7 +859,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			})
 			grant := rls.Grant{Scope: ids[0]}
 			if len(ids) > 1 {
-				grant.Constraint = ids[1]
+				grant.Constraints = []string{ids[1]}
 			}
 			g.Add(grant)
 			return g
