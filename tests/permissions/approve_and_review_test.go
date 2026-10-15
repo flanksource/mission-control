@@ -69,7 +69,10 @@ var _ = ginkgo.Describe("Approving a run and reviewing access", ginkgo.Ordered, 
 
 		uid := func() k8sTypes.UID { return k8sTypes.UID(uuid.NewString()) }
 		for name, targets := range map[string][]v1.ScopeTarget{
-			"in":        {{Config: &v1.ScopeConfigSelector{TagSelector: namespace + "=in"}}},
+			"in": {
+				{Config: &v1.ScopeConfigSelector{TagSelector: namespace + "=in"}},
+				{Playbook: &v1.ScopePlaybookRef{Name: namespace}},
+			},
 			"configs":   {{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}},
 			"playbooks": {{Playbook: &v1.ScopePlaybookRef{Name: namespace}}},
 		} {
@@ -79,7 +82,7 @@ var _ = ginkgo.Describe("Approving a run and reviewing access", ginkgo.Ordered, 
 			})).To(Succeed())
 		}
 
-		// The approver may approve the playbook on any config, narrowed by the binding to the configs in "in"
+		// The approver may read every config and approve the playbook on any of them, narrowed by the binding to "in"
 		Expect(db.PersistRoleFromCRD(DefaultContext, &v1.Role{
 			ObjectMeta: metav1.ObjectMeta{Name: "approver", Namespace: namespace, UID: uid()},
 			Spec: v1.RoleSpec{Rules: []v1.RoleRule{
@@ -95,9 +98,12 @@ var _ = ginkgo.Describe("Approving a run and reviewing access", ginkgo.Ordered, 
 		Expect(db.PersistRoleBindingFromCRD(DefaultContext, &v1.RoleBinding{
 			ObjectMeta: metav1.ObjectMeta{Name: "approver", Namespace: namespace, UID: uid()},
 			Spec: v1.RoleBindingSpec{
-				Role:       "approver",
-				Subjects:   boundPeople(approver),
-				Constraint: &v1.RoleBindingConstraint{Target: &v1.ScopeReference{ScopeRef: "in"}},
+				Role:     "approver",
+				Subjects: boundPeople(approver),
+				Constraint: &v1.RoleBindingConstraint{
+					Resource: &v1.ScopeReference{ScopeRef: "in"},
+					Target:   &v1.ScopeReference{ScopeRef: "in"},
+				},
 			},
 		})).To(Succeed())
 
@@ -120,7 +126,8 @@ var _ = ginkgo.Describe("Approving a run and reviewing access", ginkgo.Ordered, 
 	})
 
 	ginkgo.AfterAll(func() {
-		Expect(DefaultContext.DB().Where("playbook_id = ?", approvable.ID).Delete(&models.PlaybookApproval{}).Error).To(Succeed())
+		runs := DefaultContext.DB().Model(&models.PlaybookRun{}).Select("id").Where("playbook_id = ?", approvable.ID)
+		Expect(DefaultContext.DB().Where("run_id IN (?)", runs).Delete(&models.PlaybookApproval{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("playbook_id = ?", approvable.ID).Delete(&models.PlaybookRun{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Delete(&approvable).Error).To(Succeed())
 		Expect(DefaultContext.DB().Delete(&cfgIn).Error).To(Succeed())
