@@ -109,7 +109,7 @@ The UI MUST use the summary alone for page, route and write-control gates, inclu
 
 **Why.** A page and its listing ask the same access question, whether it is about resources or an action without a resource. Role names say nothing about the rules a subject holds.
 
-For `create`, `update` and `delete`, the answer is derived as in [Section 2](#2-all-some-or-none), from the subject's rules for that action instead of `read`. Their rules, and the constraints that narrow them, select whole types only ([roles.md, Section 2](roles.md#2-actions); [rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)), so the answer is `all` or `none`, never `some`. Under `all`, the UI offers the write control. Under `none`, it MUST NOT. The same holds for `read` on views, whose rules pick views whole ([roles.md, Section 3.2](roles.md#32-views)).
+For `create`, `update` and `delete`, the answer is derived as in [Section 2](#2-all-some-or-none), from the subject's rules for that action instead of `read`. Their rules, and the constraints that narrow them, select whole types only ([roles.md, Section 2](roles.md#2-actions); [rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)), so the answer is `all` or `none`, never `some`. Under `all`, the UI offers the write control. Under `none`, it MUST NOT.
 
 **Why the server answers.** The answer is a function of rules, bindings and constraints. A client that re-derives it has to re-implement all of them, and drifts with every release. The bug that motivated this specification was a client treating a `some` grant as `none`, and showing a user with a valid grant a screen saying they had no access to anything.
 
@@ -159,7 +159,7 @@ Users' write controls MUST require `person:manage`. Feature Flags' write control
 
 Checks are read through their canary (flanksource/mission-control#3520), so Health shows one type.
 
-Views are read whole ([roles.md, Section 3.2](roles.md#32-views)), so the answer for views is `all` or `none`, never `some`. A view shown inside another page, e.g. an application's view section, takes `read` on `view` as well as that page's gate.
+A view is granted whole, with every row and panel ([roles.md, Section 3.2](roles.md#32-views)), so a `some` answer for views lists some views, never part of one. A view shown inside another page, e.g. an application's view section, takes `read` on that view as well as that page's gate.
 
 Integrations and Log Backends are deprecated and aren't covered here.
 

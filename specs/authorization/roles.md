@@ -96,7 +96,7 @@ Every action has a contract, defined in code: the resource types it accepts, and
 | `event:read`                                          | None                                                   | None                               |
 | `job:read`                                            | None                                                   | None                               |
 
-The types are those of `scopes.md`, Section 3.1. Views are only read, and only whole (Section 3.2): no other action accepts them. Checks are only written by Mission Control itself. Properties, the event queue and job history aren't types: they're reached through actions without a resource (Section 2.3). `connection:use` allows acting with a connection's credentials (Section 2.2).
+The types are those of `scopes.md`, Section 3.1. Views are only read (Section 3.2): no other action accepts them. Checks are only written by Mission Control itself. Properties, the event queue and job history aren't types: they're reached through actions without a resource (Section 2.3). `connection:use` allows acting with a connection's credentials (Section 2.2).
 
 `person:manage` allows everything about accounts: inviting someone to Mission Control, disabling and re-enabling them, changing their properties, name or email, and deleting them. People aren't created, changed or deleted any other way, so `create`, `update` and `delete` don't apply to them. _Why:_ inviting someone and managing their account are what an admin actually does, and a named action says so. A rule allowing `create` on people would leave its reader asking where people are created.
 
@@ -247,7 +247,7 @@ A rule with `action: read` is checked in two places:
 
 Both MUST allow the same resources at every moment (`scopes.md`, Section 7.1): a resource a subject can open appears in their listings, and a resource in their listings can be opened. How Mission Control keeps the two in step is the design's business (`design/materialised-membership.md`).
 
-A `read` rule accepts some or all of a type wherever its type allows it (`scopes.md`, Section 3.1). For connections and views, that's all of them only.
+A `read` rule accepts some or all of a type wherever its type allows it (`scopes.md`, Section 3.1). For connections, that's all of them only.
 
 Listings are filtered by row-level security, which is always on: there's no setting to turn it off. So a `read` rule whose Scope picks some of a type (`scopes.md`, Section 3.1) filters listings to what it selects. A rule whose Scope consists of whole-type targets only doesn't need row filters: opening any resource and listing all of them allow the same resources. A binding's constraint can still narrow it, and then its listings are filtered by the constraint's Scope (`rolebindings.md`, Section 3.2).
 
@@ -272,35 +272,32 @@ Whether a subject may list a type at all, and what a listing returns for a subje
 
 ### 3.2 Views
 
-A `read` rule MUST pick views whole: every view target of its Scope MUST be whole-type, `view: {name: "*"}` (`scopes.md`, Section 5.2). A Scope with any other view target, e.g. `name: pods` or `namespace: staging`, doesn't fit `read`, and the rule is invalid (Section 3).
+A `read` rule on a Scope of views lets its subjects open the views it selects, some or all of them like any other type (`scopes.md`, Section 3.1). A view is granted whole: a subject who may read a view sees every row and every panel of it, and one who may not sees none of them. There's no grant of some rows or some panels of a view.
 
 ```yaml
 kind: Scope
 metadata:
-  name: all-views
-  namespace: mission-control-builtin
+  name: staging-dashboards
+  namespace: default
 spec:
   targets:
     - view:
-        name: "*"
+        namespace: staging
 ---
 rules:
-  - name: read-views
+  - name: read-staging-dashboards
     action: read
     resource:
-      scopeRef: mission-control-builtin/all-views
+      scopeRef: staging-dashboards
 ```
 
-A subject with such a rule may open every view, and read every row and every panel of each. A subject without one opens no view and reads no view's rows. There's no grant of some views, or of some rows of a view.
-
-- A view's rows and panels are read with the view, not through the resources its queries read: a subject who may read views sees every row and panel stored for a view, and one who may not sees none, whatever configs they may read.
+- A view's rows and panels are read with the view, not through the resources its queries read: a subject who may read a view sees every row and panel stored for it, whatever configs they may read, and one who may read every config but not the view sees none.
+- Listing views lists the ones the subject may read, like any type (Section 3.1).
+- Every way of reading a view or its rows makes the same check on that view: the UI and the views API, the dashboard, the database API (`views`, `view_panels` and each view's generated table), MCP, exports, an application's view sections, and a playbook's report action. The report action is checked as its playbook, like every action of a run (`identities.md`, Section 2).
+- A view's column definitions, without its rows, are readable by agents without a rule (`identities.md`, Section 5).
 - **TODO:** which subject a view's queries are run as when it's refreshed, and so which connections and resources a refresh may use, isn't specified here.
-- Every way of reading a view or its rows makes the same check: the UI and the views API, the dashboard, the database API (`views`, `view_panels` and each view's generated table), MCP, exports, an application's view sections, and a playbook's report action. The report action is checked as its playbook, like every action of a run (`identities.md`, Section 2).
-- A view's column definitions, without its rows, are readable by agents without this rule (`identities.md`, Section 5).
 
-_Why whole only:_ a view raises two questions, which views a subject may open and which rows of a view they may see. The second has no answer yet: a view's rows are arbitrary data from several sources, e.g. configs, SQL and Prometheus, computed once and shared by every reader, so they can't simply follow the grants of the resources they came from (flanksource/mission-control#3539). A whole-view grant is the part every answer shares: a view target without a row condition grants every row. Granting some views, or some rows, will only accept Scopes and fields `read` refuses today, so no rule written now changes meaning then.
-
-_Why `read`:_ opening a view is reading it. A separate action, or a switch outside Roles, would have to be replaced once views can be granted in part.
+_Why whole views:_ which views a subject may open is an ordinary resource question, answered like it is for every other type. Which rows of a view they may see isn't: a view's rows are arbitrary data from several sources, e.g. configs, SQL and Prometheus, computed once and shared by every reader, so they can't simply follow the grants of the resources they came from (flanksource/mission-control#3539). Granting some rows will add a condition to view targets; a target without one grants the whole view, as it does now, so no rule written now changes meaning then.
 
 ## 4. Matching
 
