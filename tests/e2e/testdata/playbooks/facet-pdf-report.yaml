@@ -4,6 +4,7 @@ setup:
   facet: true
   permissions:
     - ../fixtures/allow-artifacts.yaml
+    - ../fixtures/allow-read-views.yaml
 params:
   view: "{{viewRef}}"
   facet_url: "{{facetURL}}"
