@@ -1202,7 +1202,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 				Expect(actions[policy.ActionRead]).To(Equal(mcRBAC.AccessAll))
 				for _, action := range []string{policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete} {
 					expected := mcRBAC.AccessAll
-					if kind == policy.ResourceCheck || kind == v1.ResourcePerson {
+					if kind == policy.ResourceCheck || kind == v1.ResourcePerson || kind == policy.ResourceView {
 						expected = mcRBAC.AccessNone
 					}
 					Expect(actions[action]).To(Equal(expected), "%s %s", kind, action)
