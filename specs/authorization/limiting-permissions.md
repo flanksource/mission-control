@@ -17,7 +17,7 @@ The `X-Flanksource-Scope` header limits one request to the Scopes it names, a JS
 
 A header naming no Scope, or only Scopes that select nothing, e.g. ones that don't exist, allows nothing. A resource whose membership isn't stored, e.g. a view, isn't limited, and neither are checks on a whole type, e.g. `create` on configs (`roles.md`, Section 2). Connections are limited in checks, e.g. resolving one outside the Scopes is refused, but not in listings, since their rows aren't filtered by row-level security.
 
-The access summary of a request sent with the header is computed with its limit (`collection-access.md`, Section 4), so a type the header's Scopes select only in part is `some`, and one they don't select is `none`.
+The access summary of a request sent with the header is computed with its limit (`collection-access.md`, Section 4), so a type the header's Scopes select only in part is `some`, and one they don't select is `none`. Views, which the header doesn't limit, keep the subject's own answer.
 
 The limit applies to the requester's own request. An access review (`/rbac/subject-access-reviews`) answers by each reviewed subject's own access, without it.
 

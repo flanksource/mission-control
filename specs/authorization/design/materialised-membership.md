@@ -111,7 +111,7 @@ _Why delete the stored denies rather than drop the column alone:_ without the co
 
 ## Not covered
 
-- **Views.** No rule can select Views, and Roles grant no rows of the tables Views generate (`overview.md`, "Not covered yet"). Views keep computing which Scopes each of their rows matches, into their `grants` column, as they do today, and don't read `scope_members`. _Why:_ Views are outside Roles and RoleBindings for now; moving them onto stored membership waits until they're brought in.
+- **Views.** `read` grants views whole (`roles.md` §3.2), so they get no membership rows. A subject with the grant gets a claim entry admitting every view, and the policies of `views`, `view_panels` and every generated view table admit every row on it. Views keep computing which Scopes each of their rows matches, into their `grants` column, for Permissions only, and don't read `scope_members`. _Why no membership:_ a whole-type grant is decided by the claim alone, like the other types granted whole ("Scrapers and the types granted whole"). Stored membership for views waits until views can be granted in part (flanksource/mission-control#3539).
 
 ## Other choices
 
