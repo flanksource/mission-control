@@ -73,6 +73,7 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 			"all-playbooks":             {policy.ResourcePlaybook},
 			"all-connections":           {policy.ResourceConnection},
 			"all-scrapers":              {policy.ResourceScraper},
+			"all-views":                 {policy.ResourceView},
 			"all-applications":          {v1.ResourceApplication},
 			"all-notifications":         {v1.ResourceNotification},
 			"all-notification-silences": {v1.ResourceNotificationSilence},
@@ -112,7 +113,7 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 		// overview.md, "Shipped Roles"
 		wanted := []string{
 			policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck, policy.ResourceCanary,
-			policy.ResourcePlaybook, v1.ResourceApplication, v1.ResourcePerson, v1.ResourceTeam,
+			policy.ResourcePlaybook, policy.ResourceView, v1.ResourceApplication, v1.ResourcePerson, v1.ResourceTeam,
 		}
 		Expect(read).To(ConsistOf(wanted))
 	})

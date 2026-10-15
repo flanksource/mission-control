@@ -24,7 +24,7 @@ func init() {
 }
 
 // MembershipTargets converts a valid Scope's targets, with agents resolved, to the targets its membership is built from.
-// Targets of types whose membership isn't stored, i.e. views, are left out.
+// Targets of types whose membership isn't stored, i.e. the types Scopes only select entirely, are left out.
 func MembershipTargets(targets []v1.ScopeTarget) []membership.Target {
 	var out []membership.Target
 	for _, target := range targets {

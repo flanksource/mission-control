@@ -10,7 +10,6 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/rbac/policy"
 	pkgView "github.com/flanksource/duty/view"
 	"github.com/invopop/jsonschema"
 	"github.com/labstack/echo/v4"
@@ -24,8 +23,6 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/views"
-
-	icrbac "github.com/flanksource/incident-commander/rbac"
 )
 
 const (
@@ -128,37 +125,28 @@ func buildViewRequestOptions(args map[string]any) []views.ViewOption {
 
 func fetchViewData(ctx context.Context, namespace, name string, args ArgParser) ([]api.PanelResult, []map[string]any, error) {
 	opts := parseViewOptions(args)
-	var (
-		rows     []map[string]any
-		response *api.ViewResult
-	)
-	err := auth.WithRLS(ctx, func(rlsCtx context.Context) error {
-		viewOpts := buildViewRequestOptions(args.Raw())
-		var err error
-		response, err = views.ReadOrPopulateViewTable(rlsCtx, namespace, name, viewOpts...)
-		if err != nil {
-			return err
-		}
 
-		normalizePagination(&opts, response)
+	// The caller has been checked for read on the view, which is granted whole, as the views API does
+	response, err := views.ReadOrPopulateViewTable(ctx, namespace, name, buildViewRequestOptions(args.Raw())...)
+	if err != nil {
+		return nil, nil, err
+	}
 
-		if opts.withRows {
-			requestedColumns := filterRequestedColumns(opts.selectColumns, response.Columns)
+	normalizePagination(&opts, response)
+
+	var rows []map[string]any
+	if opts.withRows {
+		requestedColumns := filterRequestedColumns(opts.selectColumns, response.Columns)
+		if err := auth.WithRLS(ctx, func(rlsCtx context.Context) error {
 			rows, err = readViewRows(rlsCtx, namespace, name, response.RequestFingerprint, requestedColumns, opts.page, opts.limit)
-			if err != nil {
-				return err
-			}
+			return err
+		}); err != nil {
+			return nil, rows, err
 		}
+	}
 
-		if !opts.withPanels {
-			response.Panels = nil
-		}
-
-		return nil
-	})
-
-	if err != nil || response == nil {
-		return nil, rows, err
+	if !opts.withPanels {
+		response.Panels = nil
 	}
 
 	return response.Panels, rows, nil
@@ -178,18 +166,14 @@ func viewRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 		return mcp.NewToolResultError(fmt.Sprintf("tool[%s] is not associated with any view", viewToolName)), nil
 	}
 
-	var view models.View
-	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
-		view, err = gorm.G[models.View](rlsCtx.DB()).Where("namespace = ? AND name = ? AND deleted_at IS NULL", v.Namespace, v.Name).First(rlsCtx)
-		return err
-	})
+	// The view is checked by CanRead, which also allows the views legacy Permissions select inline
+	view, err := gorm.G[models.View](ctx.DB()).Where("namespace = ? AND name = ? AND deleted_at IS NULL", v.Namespace, v.Name).First(ctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	attr := &models.ABACAttribute{View: view}
-	if !icrbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionMCPRun) {
-		return mcp.NewToolResultError(fmt.Sprintf("forbidden: mcp:run not permitted on view %s/%s", view.Namespace, view.Name)), nil
+	if !views.CanRead(ctx, view) {
+		return mcp.NewToolResultError(fmt.Sprintf("forbidden: read not permitted on view %s/%s", view.Namespace, view.Name)), nil
 	}
 
 	args := NewArgParser(req.Params.Arguments)
@@ -261,19 +245,14 @@ func addViewsAsTool(goctx gocontext.Context, srv *server.MCPServer, session serv
 		return fmt.Errorf("failed to get duty context for session %s: %w", sessionID, err)
 	}
 
-	var allViews []models.View
-	err = auth.WithRLS(ctx, func(txCtx context.Context) error {
-		var err error
-		allViews, err = gorm.G[models.View](txCtx.DB()).Where("deleted_at IS NULL").Find(txCtx)
-		return err
-	})
+	// Each view is checked by CanRead, which also allows the views legacy Permissions select inline
+	allViews, err := gorm.G[models.View](ctx.DB()).Where("deleted_at IS NULL").Find(ctx)
 	if err != nil {
 		return ctx.Oops().Wrapf(err, "failed to get view tools for session %s", sessionID)
 	}
 
 	permittedViews := lo.Filter(allViews, func(view models.View, _ int) bool {
-		attr := &models.ABACAttribute{View: view}
-		return icrbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionMCPRun)
+		return views.CanRead(ctx, view)
 	})
 
 	tools, toolsMap, err := getViewsAsTools(ctx, permittedViews)

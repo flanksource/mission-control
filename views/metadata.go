@@ -6,12 +6,9 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/api"
 	"golang.org/x/sync/errgroup"
 	"gorm.io/gorm"
-
-	icrbac "github.com/flanksource/incident-commander/rbac"
 )
 
 // ViewMetadataResponse is the response for the view metadata endpoint.
@@ -27,9 +24,8 @@ type ViewMetadataResponse struct {
 //
 // Permission checks for the root view happen here.
 func getViewMetadata(ctx context.Context, viewModel models.View) (*ViewMetadataResponse, error) {
-	attr := &models.ABACAttribute{View: viewModel}
-	if !icrbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionRead) {
-		return nil, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("access denied to view %s/%s", viewModel.Namespace, viewModel.Name)
+	if !CanRead(ctx, viewModel) {
+		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view %s/%s not found", viewModel.Namespace, viewModel.Name)
 	}
 
 	viewResult, err := ReadOrPopulateViewTable(ctx, viewModel.Namespace, viewModel.Name)
@@ -104,8 +100,7 @@ func fetchSection(ctx context.Context, namespace, name string) (*api.ViewResult,
 		return nil, ctx.Oops().Wrap(err)
 	}
 
-	attr := &models.ABACAttribute{View: viewModel}
-	if !icrbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionRead) {
+	if !CanRead(ctx, viewModel) {
 		return nil, nil
 	}
 

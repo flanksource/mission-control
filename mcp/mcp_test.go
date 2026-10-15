@@ -395,7 +395,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 				},
 				Spec: v1.PermissionSpec{
 					Subject: v1.PermissionSubject{Person: testUser.Email},
-					Actions: []string{policy.ActionRead, policy.ActionMCPRun},
+					Actions: []string{policy.ActionRead},
 					Object: v1.PermissionObject{
 						Selectors: dutyRBAC.Selectors{
 							Views: []dutyRBAC.ViewRef{{
@@ -409,22 +409,6 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 			Expect(db.PersistPermissionFromCRD(DefaultContext, perm)).To(Succeed())
 			ginkgo.DeferCleanup(func() {
 				Expect(DefaultContext.DB().Delete(&models.Permission{}, "id = ?", string(perm.GetUID())).Error).To(Succeed())
-			})
-
-			// The user reads the denied view too, so it's refused for mcp:run rather than not found
-			readDenied := &v1.Permission{
-				ObjectMeta: metav1.ObjectMeta{Name: "mcp-view-runner-read-" + uuid.NewString(), Namespace: "default", UID: k8sTypes.UID(uuid.NewString())},
-				Spec: v1.PermissionSpec{
-					Subject: v1.PermissionSubject{Person: testUser.Email},
-					Actions: []string{policy.ActionRead},
-					Object: v1.PermissionObject{Selectors: dutyRBAC.Selectors{
-						Views: []dutyRBAC.ViewRef{{Namespace: deniedView.Namespace, Name: deniedView.Name}},
-					}},
-				},
-			}
-			Expect(db.PersistPermissionFromCRD(DefaultContext, readDenied)).To(Succeed())
-			ginkgo.DeferCleanup(func() {
-				Expect(DefaultContext.DB().Delete(&models.Permission{}, "id = ?", string(readDenied.GetUID())).Error).To(Succeed())
 			})
 
 			Expect(dutyRBAC.ReloadPolicy()).To(Succeed())
@@ -465,7 +449,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 			})
 			Expect(err).NotTo(HaveOccurred())
 			Expect(deniedResult.IsError).To(BeTrue())
-			checkResultInMCPResponse(deniedResult.Content, []string{"forbidden: mcp:run not permitted"})
+			checkResultInMCPResponse(deniedResult.Content, []string{"forbidden: read not permitted"})
 		})
 	})
 

@@ -145,8 +145,8 @@ func LoadScope(ctx context.Context, cache *gocache.Cache, namespace, name string
 
 // PermissionScopeConditions returns the casbin conditions of a permission that names Scopes in its object_selector:
 // one per Scope and resource type, each holding when the request has a resource of the type that's in the Scope.
-// Membership is stored for every type but views, whose targets are still matched by their selectors,
-// and the types Scopes only select entirely, which Permissions can't match through a Scope.
+// Membership is stored for every type but the types Scopes only select entirely, which Permissions can't match
+// through a Scope.
 // Scraper targets get noSingleResourceMatch: duty can't check a single scraper against a Scope yet (NOTES.md),
 // but the Permission must still be loaded, so that its grants and denies filter scraper listings.
 // It returns nil when the permission names no Scopes.
@@ -186,16 +186,6 @@ func PermissionScopeConditions(ctx context.Context, cache *gocache.Cache, perm m
 				}
 				continue
 			}
-			if target.View != nil {
-				object := dutyRBAC.Selectors{Views: []dutyRBAC.ViewRef{{ID: target.View.ID, Name: target.View.Name, Namespace: target.View.Namespace}}}
-				raw, err := json.Marshal(object)
-				if err != nil {
-					return nil, err
-				}
-				conditions = append(conditions, selectorCondition(raw))
-				continue
-			}
-
 			condition, err := dutyRBAC.ScopeCondition(kind, scope.id)
 			if err != nil {
 				return nil, NewValidationError("%s: %v", ErrScopeExpansionInvalidScopeTargets, err)

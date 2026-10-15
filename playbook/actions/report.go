@@ -138,6 +138,12 @@ func (r *Report) runView(ctx context.Context, action v1.ReportAction, format str
 		return nil, fmt.Errorf("view %s not found", action.View)
 	}
 
+	if readable, err := views.CanReadNamed(ctx, namespace, name); err != nil {
+		return nil, fmt.Errorf("failed to check view %s: %w", action.View, err)
+	} else if !readable {
+		return nil, fmt.Errorf("read not permitted on view %s", action.View)
+	}
+
 	if err := authorizeViewConnections(ctx, v, action.Variables); err != nil {
 		return nil, err
 	}

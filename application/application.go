@@ -26,7 +26,19 @@ var (
 	backupRestoreChangeTypes = []string{"BackupRestored", "RestoreCompleted"}
 )
 
+// buildApplicationForCaller builds the application for the request's subject: a view section shows its view only to
+// who may read it (specs/authorization/collection-access.md, Section 5).
+func buildApplicationForCaller(ctx context.Context, app *v1.Application) (*api.Application, error) {
+	return build(ctx, app, views.CanReadNamed)
+}
+
+// buildApplication builds the application with every view section, e.g. for the CLI, which reads the database as no one.
 func buildApplication(ctx context.Context, app *v1.Application) (*api.Application, error) {
+	return build(ctx, app, nil)
+}
+
+// build builds the application. canReadView, when set, decides whether a view section shows its view.
+func build(ctx context.Context, app *v1.Application, canReadView func(ctx context.Context, namespace, name string) (bool, error)) (*api.Application, error) {
 	response := api.Application{
 		ApplicationDetail: api.ApplicationDetail{
 			ID:          app.GetID().String(),
@@ -127,7 +139,7 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 	}
 
 	for _, section := range app.Spec.Sections {
-		appSection, err := buildSection(ctx, section)
+		appSection, err := buildSection(ctx, section, canReadView)
 		if err != nil {
 			return nil, ctx.Oops().Errorf("failed to build section %q: %w", section.Title, err)
 		}
@@ -137,7 +149,7 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 	return &response, nil
 }
 
-func buildSection(ctx context.Context, section api.ViewSection) (api.ApplicationSection, error) {
+func buildSection(ctx context.Context, section api.ViewSection, canReadView func(ctx context.Context, namespace, name string) (bool, error)) (api.ApplicationSection, error) {
 	appSection := api.ApplicationSection{
 		Title: section.Title,
 		Icon:  section.Icon,
@@ -145,6 +157,15 @@ func buildSection(ctx context.Context, section api.ViewSection) (api.Application
 
 	if section.ViewRef != nil {
 		appSection.Type = api.SectionTypeView
+
+		if canReadView != nil {
+			if readable, err := canReadView(ctx, section.ViewRef.Namespace, section.ViewRef.Name); err != nil {
+				return appSection, ctx.Oops().Errorf("failed to check view %s/%s: %w", section.ViewRef.Namespace, section.ViewRef.Name, err)
+			} else if !readable {
+				return appSection, nil
+			}
+		}
+
 		viewResult, err := views.ReadOrPopulateViewTable(ctx, section.ViewRef.Namespace, section.ViewRef.Name)
 		if err != nil {
 			return appSection, ctx.Oops().Errorf("failed to read view table (%s/%s): %w", section.ViewRef.Namespace, section.ViewRef.Name, err)
