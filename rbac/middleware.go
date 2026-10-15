@@ -95,6 +95,10 @@ func DbMiddleware() MiddlewareFunc {
 				object, action = policy.ObjectProperties, policy.ActionPropertyManage
 			}
 
+			if resource == "person_analytics" && action == policy.ActionCreate && insertsOwnAnalytics(c, ctx) {
+				return next(c)
+			}
+
 			if _, ok := accountTables[resource]; ok && action != policy.ActionRead {
 				object, action = policy.ObjectPeople, adapter.ActionPersonManage
 			}
