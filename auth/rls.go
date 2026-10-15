@@ -120,7 +120,7 @@ func limitToTokenRoles(ctx context.Context, owner *rls.Payload, roles models.Acc
 }
 
 // intersectGrants returns the grants that admit the rows both a and b admit: one grant per pair of their grants,
-// which a row must satisfy both of. b's Scopes are added to each of a's grants as Scopes the row must also be in.
+// which a row must satisfy both of. b's Scopes are added to each of a's grants as constraints.
 func intersectGrants(a, b *rls.Grants) *rls.Grants {
 	if a.All {
 		return &rls.Grants{All: b.All, Any: slices.Clone(b.Any)}
@@ -132,12 +132,7 @@ func intersectGrants(a, b *rls.Grants) *rls.Grants {
 	for _, x := range a.Any {
 		for _, y := range b.Any {
 			narrowed := x
-			narrowed.Impersonated = append(slices.Clone(x.Impersonated), y.Impersonated...)
-			for _, id := range []string{y.Scope, y.Constraint} {
-				if id != "" {
-					narrowed.Impersonated = append(narrowed.Impersonated, id)
-				}
-			}
+			narrowed.Constraints = append(append(slices.Clone(x.Constraints), y.Scope), y.Constraints...)
 			result.Add(narrowed)
 		}
 	}

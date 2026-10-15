@@ -151,7 +151,7 @@ var _ = ginkgo.Describe("CompiledRule", func() {
 	ginkgo.It("lists, by type, the rows in every scope of a read rule", func() {
 		rule := CompiledRule{Contract: read, Resource: []ScopeSelection{production, tenantA}}
 		Expect(rule.ReadGrants()).To(Equal(map[string]rls.Grant{
-			policy.ResourceConfig: {Scope: production.ID, Constraint: tenantA.ID},
+			policy.ResourceConfig: {Scope: production.ID, Constraints: []string{tenantA.ID}},
 		}), "tenant-a selects no components, so no component rows are listed")
 
 		Expect(CompiledRule{Contract: read, Resource: []ScopeSelection{production}}.ReadGrants()).To(Equal(map[string]rls.Grant{
