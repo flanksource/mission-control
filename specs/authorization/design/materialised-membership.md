@@ -151,9 +151,6 @@ Yes, and that's accepted (`permissions.md`). Their single-resource checks keep w
 **What happens to a stored Scope that uses `!=`, `in`, `notin` or a bare key?**
 It's `Ready=False` with a reason naming the operator, selects nothing, and the rules that use it stop granting until it's rewritten (`scopes.md` §7). Nothing converts it. _Why:_ an exclusion has no equivalent, rewriting `in` into several targets would change an object its owner manages, e.g. through GitOps, which would revert it, and an authorization object fails closed.
 
-**Does the `X-Flanksource-Scope` header keep working?**
-Yes, but it names Scopes instead of carrying selectors. Each Scope it names is added to every grant of the request's claim, so it can only narrow; for a type the claim grants as `all`, its Scopes are the type's only grant. _Why:_ the claim names Scopes only, and a header of selectors would need the per-row evaluator this design removes.
-
 **What if Mission Control runs more than one replica?**
 It doesn't: Mission Control runs as a single replica (`AGENTS.md`). The lock is a database lock anyway, so it orders rebuilds against resource writes from every process, config-db and canary-checker included.
 

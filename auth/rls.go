@@ -43,7 +43,7 @@ func getRLSCacheKey(userID string) string {
 }
 
 // InvalidateRLSCacheForUser removes the user's cached RLS payloads, including the ones
-// cached per X-Flanksource-Scope header (<key>:<fingerprint>).
+// cached per access token (<key>:token=<id>).
 func InvalidateRLSCacheForUser(userID string) {
 	cacheKey := getRLSCacheKey(userID)
 	for key := range tokenCache.Items() {
@@ -69,15 +69,10 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		return nil, fmt.Errorf("user is required for RLS payload")
 	}
 
-	limits := dutyRBAC.ScopeLimits(ctx)
-
 	subject := ctx.Subject()
 
 	// The subject's sessions and each of their access tokens are limited differently
 	cacheKey := getRLSCacheKey(subject) + rbac.AccessTokenCacheKey(ctx)
-	for _, limit := range limits {
-		cacheKey = fmt.Sprintf("%s:scopes=%s", cacheKey, strings.Join(limit, ","))
-	}
 
 	if cached, ok := tokenCache.Get(cacheKey); ok {
 		return cached.(*rls.Payload), nil
@@ -97,7 +92,6 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		return nil, ctx.Oops().Wrap(err)
 	}
 
-	payload = applyScopeLimits(payload, limits)
 	tokenCache.SetDefault(cacheKey, payload)
 	return payload, nil
 }

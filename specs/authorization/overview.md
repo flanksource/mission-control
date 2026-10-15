@@ -12,7 +12,7 @@ An ExternalIdentityProvider lets an external application's users sign in with it
 
 `identities.md` says who each check is made as: the caller, the resource doing work no one started, a plugin, an access token's owner or an agent.
 
-`limiting-permissions.md` says how a request is limited to less than its subject may do, e.g. by an application that signs its users in through an external identity provider.
+`limiting-permissions.md` says how a request made with an access token is limited to less than its owner may do.
 
 `collection-access.md` cuts across the three: it says how a subject's grants decide whether they may read a type at all, which is what listings, searches and the pages of the UI ask.
 
@@ -137,11 +137,11 @@ Here `tenant-a` is `platform/tenant-a`, while the Scopes in `admin`'s rules are 
 
 _Why:_ a shared Role means the same thing wherever it's bound, and each binding can narrow it with its own Scopes.
 
-#### Token and request limits
+#### Token limits
 
-An access token names each Role by namespace and name (`limiting-permissions.md`, "Access tokens"). The `X-Flanksource-Scope` header names Scopes by id.
+An access token names each Role by namespace and name (`limiting-permissions.md`, "Access tokens").
 
-_Why:_ a token or a request has no namespace to resolve a bare name in.
+_Why:_ a token has no namespace to resolve a bare name in.
 
 ### Namespaces do not limit access
 

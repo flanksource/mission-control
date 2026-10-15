@@ -142,7 +142,6 @@ func New(ctx context.Context) *echov4.Echo {
 
 	e.Use(ServerCache)
 	e.Use(mcMiddleware.ServerTiming)
-	e.Use(auth.ScopeImpersonation)
 
 	Forward(ctx, e, "/kubeproxy", "https://kubernetes.default.svc", &ForwardOptions{
 		Middlewares: []echov4.MiddlewareFunc{KubeProxyTokenMiddleware},
