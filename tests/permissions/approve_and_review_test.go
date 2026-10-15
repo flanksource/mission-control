@@ -197,14 +197,6 @@ var _ = ginkgo.Describe("Approving a run and reviewing access", ginkgo.Ordered, 
 		}
 
 		ginkgo.It("answers by the reviewed subject's grants", func() {
-			// No action grants access reviews yet (specs/authorization/overview.md, "Not covered yet")
-			_, err := rbac.Enforcer().AddPolicy(admin.ID.String(), policy.ObjectRBAC, policy.ActionRead, "allow", "", "access-review")
-			Expect(err).ToNot(HaveOccurred())
-			ginkgo.DeferCleanup(func() {
-				_, err := rbac.Enforcer().RemovePolicy(admin.ID.String(), policy.ObjectRBAC, policy.ActionRead, "allow", "", "access-review")
-				Expect(err).ToNot(HaveOccurred())
-			})
-
 			Expect(review(cfgIn)).To(BeTrue())
 			Expect(review(cfgOut)).To(BeFalse(), "the reader has no grant on configs outside in")
 		})
