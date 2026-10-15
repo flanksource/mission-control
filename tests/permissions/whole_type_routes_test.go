@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -27,6 +26,7 @@ import (
 	"github.com/flanksource/incident-commander/application"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
+	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/notification"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
@@ -194,7 +194,6 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 		{v1.ResourceAgent, http.MethodDelete, "/agent/" + uuid.NewString() + "/tokens/" + uuid.NewString(), true, grant(policy.ObjectAgent, policy.ActionUpdate)},
 
 		{v1.ResourcePerson, http.MethodGet, "/db/people", false, read(policy.ObjectPeople)},
-		{v1.ResourcePerson, http.MethodGet, "/db/person_analytics", false, read(policy.ObjectPeople)},
 
 		{v1.ResourceTeam, http.MethodGet, "/db/teams", false, read(policy.ObjectDatabasePublic)},
 		{v1.ResourceTeam, http.MethodGet, "/db/teams_with_status", false, read(policy.ObjectDatabasePublic)},
@@ -311,45 +310,43 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 		}
 	})
 
-	It("records analytics inserted through /db as the signed-in person's, whichever person they name", func() {
-		var forwarded []byte
-		server := echo.New()
-		server.Any("/db/*", func(c echo.Context) error {
-			var err error
-			forwarded, err = io.ReadAll(c.Request().Body)
-			if err != nil {
-				return err
-			}
-			return c.NoContent(http.StatusOK)
-		}, mcRBAC.DbMiddleware())
+	It("serves a person's analytics only through /people/analytics, as the signed-in person's", func() {
+		server := wholeTypeRoutes()
+		echoSrv.RegisterPeopleRoutes(server, nil)
+		DeferCleanup(func() {
+			Expect(DefaultContext.DB().Exec("DELETE FROM person_analytics WHERE person_id IN ?", []uuid.UUID{nobody.ID, configReader.ID}).Error).To(Succeed())
+		})
 
-		write := func(by *models.Person, method, body string) *httptest.ResponseRecorder {
+		request := func(by *models.Person, method, path, body string) *httptest.ResponseRecorder {
 			GinkgoHelper()
-			req := httptest.NewRequest(method, "/db/person_analytics", strings.NewReader(body))
+			req := httptest.NewRequest(method, path, strings.NewReader(body))
 			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 			rec := httptest.NewRecorder()
 			server.ServeHTTP(rec, req.WithContext(DefaultContext.WithUser(by)))
 			return rec
 		}
-
-		row := func(id uuid.UUID) string { return fmt.Sprintf(`{"person_id": %q, "key": "playbooks.run"}`, id) }
-		own, other := row(nobody.ID), row(configReader.ID)
-
-		for sent, recorded := range map[string]string{
-			own:                           own,
-			other:                         own,
-			"[" + own + "," + other + "]": "[" + own + "," + own + "]",
-			`{"key": "playbooks.run"}`:    own,
-		} {
-			Expect(write(nobody, http.MethodPost, sent).Code).To(Equal(http.StatusOK), sent)
-			Expect(forwarded).To(MatchJSON(recorded), sent)
+		keys := func(by *models.Person) map[string]int {
+			GinkgoHelper()
+			rec := request(by, http.MethodGet, "/people/analytics", "")
+			Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
+			var response struct{ Payload []db.PersonAnalytic }
+			Expect(json.Unmarshal(rec.Body.Bytes(), &response)).To(Succeed())
+			return lo.SliceToMap(response.Payload, func(a db.PersonAnalytic) (string, int) { return a.Key, a.Count })
 		}
 
-		for _, method := range []string{http.MethodPatch, http.MethodDelete} {
-			rec := write(nobody, method, own)
-			Expect(rec.Code).To(Equal(http.StatusForbidden), method)
-			Expect(rec.Header().Get("X-Rbac-Action")).To(Equal(adapter.ActionPersonManage))
+		for _, method := range []string{http.MethodGet, http.MethodPost, http.MethodPatch, http.MethodDelete} {
+			Expect(request(readers[v1.ResourcePerson], method, "/db/person_analytics", "{}").Code).To(Equal(http.StatusNotFound), method)
 		}
+
+		other := fmt.Sprintf(`{"person_id": %q, "key": "playbooks.run"}`, configReader.ID)
+		for range 2 {
+			rec := request(nobody, http.MethodPost, "/people/analytics", other)
+			Expect(rec.Code).To(Equal(http.StatusNoContent), rec.Body.String())
+		}
+		Expect(request(nobody, http.MethodPost, "/people/analytics", `{}`).Code).To(Equal(http.StatusBadRequest))
+
+		Expect(keys(nobody)).To(Equal(map[string]int{"playbooks.run": 2}))
+		Expect(keys(configReader)).To(BeEmpty())
 	})
 
 	// checked is the object and action a route checks now

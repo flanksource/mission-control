@@ -12,6 +12,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/db"
 	icrbac "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/vars"
 )
@@ -67,11 +68,14 @@ type PersonController struct {
 	kratos *client.APIClient
 }
 
-// RegisterPeopleRoutes registers the routes that change or delete a person's account.
+// RegisterPeopleRoutes registers the routes that change or delete a person's account,
+// and those of the signed-in person's analytics.
 func RegisterPeopleRoutes(e *echov4.Echo, kratos *client.APIClient) {
 	controller := PersonController{kratos: kratos}
 	e.POST("/people/update", controller.UpdatePerson, icrbac.PersonManage())
 	e.DELETE("/people/:id", controller.DeletePerson, icrbac.PersonManage())
+	e.GET("/people/analytics", ListAnalytics)
+	e.POST("/people/analytics", RecordAnalytic)
 }
 
 func (t *PersonController) UpdatePerson(c echov4.Context) error {
@@ -131,4 +135,46 @@ func (t *PersonController) DeletePerson(c echov4.Context) error {
 	}
 
 	return c.Stream(response.StatusCode, "application/json", response.Body)
+}
+
+type RecordAnalyticRequest struct {
+	Key string `json:"key"`
+}
+
+// ListAnalytics lists the actions the signed-in person has taken. A person reads their own without a grant.
+func ListAnalytics(c echov4.Context) error {
+	ctx := c.Request().Context().(context.Context)
+	user := ctx.User()
+	if user == nil {
+		return api.WriteError(c, api.Errorf(api.EUNAUTHORIZED, "error fetching user"))
+	}
+
+	analytics, err := db.ListPersonAnalytics(ctx, user.ID)
+	if err != nil {
+		return api.WriteError(c, ctx.Oops().Wrapf(err, "unable to list analytics"))
+	}
+	return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "success", Payload: analytics})
+}
+
+// RecordAnalytic records an action the signed-in person took. A person records their own without a grant,
+// and only their own: the person is the signed-in one, not one the request names.
+func RecordAnalytic(c echov4.Context) error {
+	ctx := c.Request().Context().(context.Context)
+	user := ctx.User()
+	if user == nil {
+		return api.WriteError(c, api.Errorf(api.EUNAUTHORIZED, "error fetching user"))
+	}
+
+	var req RecordAnalyticRequest
+	if err := c.Bind(&req); err != nil {
+		return api.WriteError(c, api.Errorf(api.EINVALID, "invalid request body: %v", err))
+	}
+	if req.Key == "" {
+		return api.WriteError(c, api.Errorf(api.EINVALID, "key is required"))
+	}
+
+	if err := db.RecordPersonAnalytic(ctx, user.ID, req.Key); err != nil {
+		return api.WriteError(c, ctx.Oops().Wrapf(err, "unable to record analytic"))
+	}
+	return c.NoContent(http.StatusNoContent)
 }

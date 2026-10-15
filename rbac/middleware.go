@@ -95,13 +95,6 @@ func DbMiddleware() MiddlewareFunc {
 				object, action = policy.ObjectProperties, policy.ActionPropertyManage
 			}
 
-			if resource == "person_analytics" && action == policy.ActionCreate {
-				if err := recordAnalyticsAsCaller(c, ctx); err != nil {
-					return dutyAPI.WriteError(c, err)
-				}
-				return next(c)
-			}
-
 			if _, ok := accountTables[resource]; ok && action != policy.ActionRead {
 				object, action = policy.ObjectPeople, adapter.ActionPersonManage
 			}

@@ -164,7 +164,6 @@ var dbTables = map[string]dbTable{
 	"artifact_summary":                          recordOf(policy.ResourcePlaybook, policy.ResourceCheck, policy.ResourceConfig, policy.ResourceScraper),
 	"identities":                                recordOf(v1.ResourcePerson),
 	"people_roles":                              recordOf(v1.ResourcePerson),
-	"person_analytics":                          recordOf(v1.ResourcePerson),
 	"team_components":                           recordOf(v1.ResourceTeam, policy.ResourceComponent),
 	"team_members":                              recordOf(v1.ResourceTeam),
 	"scope_targets":                             recordOf(v1.ResourceScope),
