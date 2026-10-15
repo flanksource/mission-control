@@ -48,7 +48,7 @@ func ApplicationSpec(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Errorf("failed to convert application: %w", err))
 	}
 
-	generated, err := buildApplication(ctx, app)
+	generated, err := buildApplicationForCaller(ctx, app)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Errorf("failed to build application: %w", err))
 	}

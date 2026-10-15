@@ -57,7 +57,9 @@ Panels are visualizations that query the in-memory SQLite database. See `api/vie
 
 ### Row-Level Security (RLS)
 
-Views implement RLS via the `__grants` column. Each config row is matched against scope selectors, and matching scope IDs are stored for PostgreSQL RLS policy filtering.
+A view is granted whole (`specs/authorization/roles.md`, Section 3.2): a subject who may read a view reads every row and panel of it. Handlers check each view with `CanRead`, and PostgreSQL admits a generated table's rows when its view is readable under the `views` policy.
+
+Rows are also stamped with the Scopes their config matches, in the `__grants` column, for legacy Permissions only.
 
 - **Scope Caching**: Scope configurations are cached in memory (`scopes.go`). Use `FlushScopeCache()` to invalidate.
 - **RLS Context**: Operations needing RLS context use `auth.WithRLS()`.

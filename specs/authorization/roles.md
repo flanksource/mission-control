@@ -83,7 +83,7 @@ Every action has a contract, defined in code: the resource types it accepts, and
 
 | Action                                                | Resource                                               | Target                             |
 | ----------------------------------------------------- | ------------------------------------------------------ | ---------------------------------- |
-| `read`                                                | Every type but View                                    | None                               |
+| `read`                                                | Every type                                             | None                               |
 | `create`, `update`, `delete`                          | Every type but Check, Person and View                  | None                               |
 | `playbook:run`, `playbook:approve`, `playbook:cancel` | Playbook                                               | Optional: Config, Component, Check |
 | `mcp:run`                                             | Playbook                                               | None                               |
@@ -96,7 +96,7 @@ Every action has a contract, defined in code: the resource types it accepts, and
 | `event:read`                                          | None                                                   | None                               |
 | `job:read`                                            | None                                                   | None                               |
 
-The types are those of `scopes.md`, Section 3.1. Views aren't covered yet, so no action accepts them (`overview.md`, "Not covered yet"). Checks are only written by Mission Control itself. Properties, the event queue and job history aren't types: they're reached through actions without a resource (Section 2.3). `connection:use` allows acting with a connection's credentials (Section 2.2).
+The types are those of `scopes.md`, Section 3.1. Views are only read (Section 3.2): no other action accepts them. Checks are only written by Mission Control itself. Properties, the event queue and job history aren't types: they're reached through actions without a resource (Section 2.3). `connection:use` allows acting with a connection's credentials (Section 2.2).
 
 `person:manage` allows everything about accounts: inviting someone to Mission Control, disabling and re-enabling them, changing their properties, name or email, and deleting them. People aren't created, changed or deleted any other way, so `create`, `update` and `delete` don't apply to them. _Why:_ inviting someone and managing their account are what an admin actually does, and a named action says so. A rule allowing `create` on people would leave its reader asking where people are created.
 
@@ -270,6 +270,35 @@ Properties are the one thing read without a rule: any signed-in subject may read
 
 Whether a subject may list a type at all, and what a listing returns for a subject whose grants cover only part of it, is specified in `collection-access.md`. Every subject lists only what their `read` grants select, and a listing of a type none of their grants covers is refused with `403 Forbidden`.
 
+### 3.2 Views
+
+A `read` rule on a Scope of views lets its subjects open the views it selects, some or all of them like any other type (`scopes.md`, Section 3.1). A view is granted whole: a subject who may read a view sees every row and every panel of it, and one who may not sees none of them. There's no grant of some rows or some panels of a view.
+
+```yaml
+kind: Scope
+metadata:
+  name: staging-dashboards
+  namespace: default
+spec:
+  targets:
+    - view:
+        namespace: staging
+---
+rules:
+  - name: read-staging-dashboards
+    action: read
+    resource:
+      scopeRef: staging-dashboards
+```
+
+- A view's rows and panels are read with the view, not through the resources its queries read: a subject who may read a view sees every row and panel stored for it, whatever configs they may read, and one who may read every config but not the view sees none.
+- Listing views lists the ones the subject may read, like any type (Section 3.1).
+- Every way of reading a view or its rows makes the same check on that view: the UI and the views API, the dashboard, the database API (`views`, `view_panels` and each view's generated table), MCP, exports, an application's view sections, and a playbook's report action. The report action is checked as its playbook, like every action of a run (`identities.md`, Section 2).
+- A view's column definitions, without its rows, are readable by agents without a rule (`identities.md`, Section 5).
+- **TODO:** which subject a view's queries are run as when it's refreshed, and so which connections and resources a refresh may use, isn't specified here.
+
+_Why whole views:_ which views a subject may open is an ordinary resource question, answered like it is for every other type. Which rows of a view they may see isn't: a view's rows are arbitrary data from several sources, e.g. configs, SQL and Prometheus, computed once and shared by every reader, so they can't simply follow the grants of the resources they came from (flanksource/mission-control#3539). Granting some rows will add a condition to view targets; a target without one grants the whole view, as it does now, so no rule written now changes meaning then.
+
 ## 4. Matching
 
 A rule matches an operation when all three hold:
@@ -331,7 +360,7 @@ A rule is matched against the actual resource and target of an operation:
 - The operation MUST name its resource, and its target if it has one. A missing or unknown target is never treated as "no target".
 - An operation that doesn't fit the action, such as a target of the wrong type, matches no rule.
 - An entry point may require an extra permission, e.g. `mcp:run` for playbooks run through MCP. It never replaces the check of the operation itself.
-- Reaching an entry point needs authentication. Mission Control's MCP server also needs `mcp:use` (Section 2.3), and each MCP tool then checks the resources it touches, e.g. `mcp:run` and the run's own checks for a playbook. _Why `mcp:use`:_ it lets an admin allow someone to use Mission Control directly but not through an AI agent, whatever else they're granted.
+- Reaching an entry point needs authentication. Mission Control's MCP server also needs `mcp:use` (Section 2.3), and each MCP tool then checks the resources it touches, e.g. `mcp:run` and the run's own checks for a playbook, and `read` for a view. _Why `mcp:use`:_ it lets an admin allow someone to use Mission Control directly but not through an AI agent, whatever else they're granted.
 
 A check carries only the resources its action's contract can match (Section 2). An action without a target carries the resource alone, even when the operation it gates has one. So each operation makes these checks:
 
@@ -343,6 +372,7 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Approve or cancel run R               | `playbook:approve` or `playbook:cancel`, then `read` if R had a resource | R's playbook, then R's resource | R's resource, then none |
 | Invoke a plugin operation on config C | `invoke:<plugin>:<operation>`, then `read`  | C, then C       | None                              |
 | Open resource X                       | `read`                                      | X               | None                              |
+| Open view V, or read its rows or panels, including through MCP | `read`             | V               | None                              |
 | Connect to the MCP server             | `mcp:use`                                   | None            | None                              |
 | Review what a subject may do          | `access:review`                             | None            | None                              |
 | Create, change or delete a property   | `property:manage`                           | None            | None                              |

@@ -85,6 +85,17 @@ spec:
 apiVersion: mission-control.flanksource.com/v1
 kind: Scope
 metadata:
+  name: all-views
+  namespace: mission-control-builtin
+spec:
+  description: Every view
+  targets:
+    - view:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
   name: all-applications
   namespace: mission-control-builtin
 spec:
@@ -209,6 +220,10 @@ spec:
       action: read
       resource:
         scopeRef: all-playbooks
+    - name: read-views
+      action: read
+      resource:
+        scopeRef: all-views
     - name: read-applications
       action: read
       resource:
@@ -258,6 +273,10 @@ spec:
       action: read
       resource:
         scopeRef: all-scrapers
+    - name: read-views
+      action: read
+      resource:
+        scopeRef: all-views
     - name: read-applications
       action: read
       resource:

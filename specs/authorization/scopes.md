@@ -58,7 +58,7 @@ Each entry under `targets` MUST set exactly one of these keys. The key decides w
 | `playbook`            | Playbooks             | `id`, `name`, `namespace`                                                   | Some or all                  |
 | `connection`          | Connections           | `id`, `name`, `namespace`, `types`                                          | Some or all, except `read`   |
 | `scraper`             | Config scrapers       | `id`, `name`, `namespace`, `agent`                                          | Some or all                  |
-| `view`                | Views                 | `id`, `name`, `namespace`                                                   | No action accepts views yet  |
+| `view`                | Views                 | `id`, `name`, `namespace`                                                   | Some or all                  |
 | `application`         | Applications          | `name: "*"` only                                                            | All only                     |
 | `notification`        | Notifications         | `name: "*"` only                                                            | All only                     |
 | `notificationSilence` | Notification silences | `name: "*"` only                                                            | All only                     |

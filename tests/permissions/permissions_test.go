@@ -125,7 +125,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				"the inline namespace=media config selector grants no rows")
 			Expect(payload.Playbook).To(Equal(grants(restartPodScope)),
 				"the inline echo-config playbook selector grants no rows")
-			Expect(payload.View).To(ConsistOf(rls.Scope{Names: []string{"pods"}}), "views are still filtered by their selectors")
+			Expect(payload.View).To(BeNil(), "the inline pods view selector grants no rows")
 			Expect(payload.Component).To(BeNil())
 			Expect(payload.Canary).To(BeNil())
 		})
@@ -137,7 +137,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload).To(Equal(&rls.Payload{
 				Config:   grants(multiTargetScope),
 				Playbook: grants(multiTargetScope),
-				View:     []rls.Scope{{Names: []string{"metrics"}}},
+				View:     grants(multiTargetScope),
 				Scopes:   []string{multiTargetScope},
 			}))
 		})
@@ -166,7 +166,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload.Playbook).To(BeNil())
 			Expect(payload.Component).To(BeNil())
 			Expect(payload.Canary).To(BeNil())
-			Expect(payload.View).To(BeEmpty())
+			Expect(payload.View).To(BeNil())
 		})
 
 		It("should filter an admin's rows by their grants, like any subject's", func() {
@@ -195,15 +195,15 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload.Component).To(BeNil())
 		})
 
-		It("should return RLS payload for user with metrics view permission", func() {
+		It("should grant no rows through an inline view selector", func() {
 			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(userMetrics))
 			Expect(err).ToNot(HaveOccurred())
-			Expect(payload).To(Equal(&rls.Payload{View: []rls.Scope{{Names: []string{"metrics"}}}}))
+			Expect(payload).To(Equal(&rls.Payload{}))
 		})
 	})
 
 	Context("Scope conditions", func() {
-		It("should check a multi-target Scope through its membership, and its views by their selectors", func() {
+		It("should check a multi-target Scope through its membership", func() {
 			var permission models.Permission
 			err := DefaultContext.DB().
 				Where("subject = ? AND deleted_at IS NULL", guestUserMultiTarget.ID.String()).
@@ -218,8 +218,8 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(conditions).To(ContainElements(
 				"'scope:a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d' in r.obj.Membership.Config",
 				"'scope:a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d' in r.obj.Membership.Playbook",
+				"'scope:a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d' in r.obj.Membership.View",
 			))
-			Expect(conditions).To(ContainElement(And(ContainSubstring("matchResourceSelector"), ContainSubstring("metrics"))))
 		})
 
 		It("should check a combined agent+tag Scope through its membership", func() {
@@ -951,22 +951,20 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 	})
 
 	Describe("View ABAC Permissions", func() {
-		// No Role rule can select Views yet (specs/authorization/overview.md, "Not covered yet"), so the admin Role doesn't
-		// read them: only a Permission does
 		DescribeTable("admin user",
 			func(view models.View, description string) {
 				attr := &models.ABACAttribute{
 					View: view,
 				}
 				allowed := rbac.HasPermission(DefaultContext, adminUser.ID.String(), attr, policy.ActionRead)
-				Expect(allowed).To(BeFalse(), description)
+				Expect(allowed).To(BeTrue(), description)
 			},
-			Entry("should NOT have access to pods view",
+			Entry("should have access to pods view",
 				dummy.PodView,
-				"the admin Role doesn't grant views"),
-			Entry("should NOT have access to dev dashboard view",
+				"the admin Role reads every view"),
+			Entry("should have access to dev dashboard view",
 				dummy.ViewDev,
-				"the admin Role doesn't grant views"),
+				"the admin Role reads every view"),
 		)
 
 		DescribeTable("guest user with no permissions",

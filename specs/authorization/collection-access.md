@@ -126,6 +126,7 @@ Each page MUST have exactly one gate. Its sidebar entry and route MUST use the s
 | Health, Health Check settings              | `read` on `canary`           |
 | Playbooks, Playbook Runs                   | `read` on `playbook`         |
 | Applications                              | `read` on `application`      |
+| Views, Dashboard                          | `read` on `view`             |
 | Connections                               | `read` on `connection`       |
 | Notifications, Notification send history  | `read` on `notification`     |
 | Notification Silences                     | `read` on `notificationSilence` |
@@ -158,7 +159,7 @@ Users' write controls MUST require `person:manage`. Feature Flags' write control
 
 Checks are read through their canary (flanksource/mission-control#3520), so Health shows one type.
 
-Views and dashboards aren't covered: no rule can select Views yet ([overview.md, "Not covered yet"](overview.md#not-covered-yet)).
+A view is granted whole, with every row and panel ([roles.md, Section 3.2](roles.md#32-views)), so a `some` answer for views lists some views, never part of one. A view shown inside another page, e.g. an application's view section, takes `read` on that view as well as that page's gate.
 
 Integrations and Log Backends are deprecated and aren't covered here.
 

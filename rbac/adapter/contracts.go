@@ -96,6 +96,7 @@ var objectForType = map[string]string{
 	policy.ResourcePlaybook:   policy.ObjectPlaybooks,
 	policy.ResourceConnection: policy.ObjectConnection,
 	policy.ResourceScraper:    ObjectScrapers,
+	policy.ResourceView:       policy.ObjectViews,
 
 	v1.ResourceApplication:         policy.ObjectApplication,
 	v1.ResourceNotification:        policy.ObjectNotification,
@@ -113,8 +114,8 @@ var (
 	genericResources = append([]string{policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCanary, policy.ResourcePlaybook, policy.ResourceConnection, policy.ResourceScraper},
 		lo.Without(v1.WholeTypeResources, v1.ResourcePerson)...)
 
-	// readableResources are what read takes: every type but views.
-	readableResources = append([]string{policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck, policy.ResourceCanary, policy.ResourcePlaybook, policy.ResourceConnection, policy.ResourceScraper},
+	// readableResources are what read takes: every type.
+	readableResources = append([]string{policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck, policy.ResourceCanary, policy.ResourcePlaybook, policy.ResourceConnection, policy.ResourceScraper, policy.ResourceView},
 		v1.WholeTypeResources...)
 
 	playbookTargets = []string{policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck}

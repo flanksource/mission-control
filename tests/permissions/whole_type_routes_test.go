@@ -450,13 +450,9 @@ var _ = Describe("Records and lookup views of a type through /db", Ordered, func
 		deleteNamespace(namespace)
 	})
 
-	It("lets the shipped admin read every one, but those of views", func() {
-		for table, types := range mcRBAC.TablesOfTypes() {
-			expected := http.StatusOK
-			if lo.Contains(types, policy.ResourceView) {
-				expected = http.StatusForbidden
-			}
-			Expect(serveAs(e, admin, http.MethodGet, "/db/"+table)).To(Equal(expected), table)
+	It("lets the shipped admin read every one", func() {
+		for table := range mcRBAC.TablesOfTypes() {
+			Expect(serveAs(e, admin, http.MethodGet, "/db/"+table)).To(Equal(http.StatusOK), table)
 		}
 	})
 

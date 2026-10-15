@@ -13,6 +13,7 @@ import (
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/api"
@@ -29,7 +30,7 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /views routes")
 
-	g := e.Group("/view", rbac.Authorization(policy.ObjectViews, policy.ActionRead))
+	g := e.Group("/view", rbac.ViewRead())
 	g.GET("/list", HandleViewList)
 	g.GET("/display-plugin-variables/:viewID", GetDisplayPluginsVariables)
 
@@ -43,7 +44,7 @@ func RegisterRoutes(e *echo.Echo) {
 	g.POST("/:namespace/:name", GetViewByNamespaceName)
 	g.POST("/:id", GetViewByID)
 
-	e.GET("/dashboard", HandleGetDashboard, rbac.Authorization(policy.ObjectViews, policy.ActionRead))
+	e.GET("/dashboard", HandleGetDashboard, rbac.ViewRead())
 }
 
 func HandleGetViewMetadataByID(c echo.Context) error {
@@ -98,6 +99,16 @@ func GetDisplayPluginsVariables(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "config_id is required"))
 	}
 
+	var view models.View
+	if err := ctx.DB().Select("id, namespace, name").Where("id = ? AND deleted_at IS NULL", viewID).First(&view).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(id=%s) not found", viewID))
+		}
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	} else if !CanRead(ctx, view) {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(id=%s) not found", viewID))
+	}
+
 	plugins, err := db.GetDisplayPlugins(ctx, viewID)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
@@ -148,12 +159,8 @@ func GetViewByID(c echo.Context) error {
 		return dutyAPI.WriteError(c, err)
 	}
 
-	// Check ABAC permissions for this specific view
-	attr := &models.ABACAttribute{
-		View: view,
-	}
-	if !rbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionRead) {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("access denied to view %s/%s", view.Namespace, view.Name))
+	if !CanRead(ctx, view) {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(id=%s) not found", id))
 	}
 
 	return getViewByNamespaceName(ctx, c, view.Namespace, view.Name)
@@ -174,12 +181,8 @@ func GetViewByNamespaceName(c echo.Context) error {
 		return dutyAPI.WriteError(c, err)
 	}
 
-	// Check ABAC permissions for this specific view
-	attr := &models.ABACAttribute{
-		View: view,
-	}
-	if !rbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionRead) {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("access denied to view %s/%s", view.Namespace, view.Name))
+	if !CanRead(ctx, view) {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(namespace=%s, name=%s) not found", namespace, name))
 	}
 
 	return getViewByNamespaceName(ctx, c, namespace, name)
@@ -251,5 +254,29 @@ func listViewsForConfig(ctx context.Context, id string) ([]api.ViewListItem, err
 	}
 
 	list, err := db.FindViewsForConfig(ctx, config)
-	return list, ctx.Oops().Wrap(err)
+	if err != nil {
+		return nil, ctx.Oops().Wrap(err)
+	}
+
+	return lo.Filter(list, func(item api.ViewListItem, _ int) bool {
+		return CanRead(ctx, models.View{ID: item.ID, Name: item.Name, Namespace: item.Namespace})
+	}), nil
+}
+
+// CanRead reports whether the subject may read the view, and with it every row and panel of it
+// (specs/authorization/roles.md, Section 3.2).
+func CanRead(ctx context.Context, view models.View) bool {
+	return rbac.HasPermission(ctx, ctx.Subject(), &models.ABACAttribute{View: view}, policy.ActionRead)
+}
+
+// CanReadNamed is CanRead for the view of the namespace and name. A view that doesn't exist can't be read.
+func CanReadNamed(ctx context.Context, namespace, name string) (bool, error) {
+	var view models.View
+	if err := ctx.DB().Select("id, namespace, name").Where("namespace = ? AND name = ? AND deleted_at IS NULL", namespace, name).First(&view).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	return CanRead(ctx, view), nil
 }

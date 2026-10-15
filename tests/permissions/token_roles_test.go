@@ -365,7 +365,7 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 			read, err := adapter.ContractFor(policy.ActionRead)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(lo.Keys(response.Payload.Access)).To(ConsistOf(read.Resources))
-			Expect(response.Payload.Access).To(HaveLen(16))
+			Expect(response.Payload.Access).To(HaveLen(17))
 			for kind, actions := range response.Payload.Access {
 				Expect(lo.Keys(actions)).To(ConsistOf(policy.ActionRead, policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete))
 				for action, access := range actions {

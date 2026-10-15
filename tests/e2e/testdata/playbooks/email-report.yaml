@@ -4,6 +4,7 @@ setup:
   smtp: true
   permissions:
     - ../fixtures/allow-artifacts.yaml
+    - ../fixtures/allow-read-views.yaml
 params:
   view: "{{viewRef}}"
   smtp_url: "{{smtpURL}}"

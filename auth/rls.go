@@ -94,8 +94,8 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 }
 
 // limitToTokenRoles narrows the owner's row filters, built from the owner's read grants, to the rows the read rules
-// of the token's Roles list: a row is listed when a grant of the owner and a grant of a Role both admit it. Roles list
-// no view rows, as Role rules don't for bindings. A Role that's missing or invalid lists nothing.
+// of the token's Roles list: a row is listed when a grant of the owner and a grant of a Role both admit it. Rows of
+// generated view tables stamped for a Permission's Scopes aren't listed. A Role that's missing or invalid lists nothing.
 func limitToTokenRoles(ctx context.Context, owner *rls.Payload, roles models.AccessTokenRoles) (*rls.Payload, error) {
 	limit := newClaim()
 	for _, role := range roles {
@@ -227,7 +227,6 @@ func buildRLSPayload(ctx context.Context, subject string) (*rls.Payload, error) 
 // claim accumulates a subject's grants by resource type.
 type claim struct {
 	grants map[string]*rls.Grants
-	view   []rls.Scope
 	scopes []string
 }
 
@@ -268,7 +267,7 @@ func (c *claim) grantRule(rule adapter.CompiledRule) {
 }
 
 func (c *claim) payload() *rls.Payload {
-	payload := &rls.Payload{View: c.view}
+	payload := &rls.Payload{}
 	if len(c.scopes) > 0 {
 		payload.Scopes = lo.Uniq(c.scopes)
 	}
@@ -314,10 +313,8 @@ func addPermissionGrants(ctx context.Context, claim *claim, ids []string) error 
 }
 
 // addBindingRuleGrants adds the grants of the given read rules (by id) of each binding.
-// A rule narrowed by a constraint lists the rows in both Scopes.
-//
-// Role rules grant no rows of generated view tables: Views are outside the Role model.
-// A binding that can't be compiled grants no rows.
+// A rule narrowed by a constraint lists the rows in both Scopes. A rule on views lists every row of the views it
+// grants, since a view is granted whole. A binding that can't be compiled grants no rows.
 func addBindingRuleGrants(ctx context.Context, claim *claim, bindingRules map[uuid.UUID][]string) error {
 	for bindingID, ids := range bindingRules {
 		rules, err := adapter.LoadBindingRules(ctx, bindingID)
@@ -340,19 +337,12 @@ func addBindingRuleGrants(ctx context.Context, claim *claim, bindingRules map[uu
 }
 
 // addObjectGrants adds what a Permission's object grants on listings: the rows of the Scopes it names.
-// Its inline selectors grant no rows, except of views, which are still filtered by their selectors.
+// Its inline selectors grant no rows.
 func addObjectGrants(ctx context.Context, claim *claim, selectors v1.PermissionObject) error {
-	if len(selectors.Scopes) > 0 {
-		if err := addScopeGrants(ctx, selectors.Scopes, claim); err != nil {
-			return err
-		}
+	if len(selectors.Scopes) == 0 {
+		return nil
 	}
-
-	for _, viewRef := range selectors.Views {
-		claim.view = append(claim.view, viewRefToFilter(viewRef))
-	}
-
-	return nil
+	return addScopeGrants(ctx, selectors.Scopes, claim)
 }
 
 // addScopeGrants grants the rows of the referenced Scopes, of each type they select.
@@ -371,34 +361,14 @@ func addScopeGrants(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSe
 			continue
 		}
 
-		// Add scope UUID for view row-level grants
+		// The rows of generated view tables stamped with the Scope's id, by its config targets
 		claim.scopes = append(claim.scopes, scopeID)
 
 		for _, target := range targets {
-			kind, selector := target.Selector()
-			if target.View != nil {
-				claim.view = append(claim.view, viewRefToFilter(dutyRBAC.ViewRef{ID: selector.ID, Name: selector.Name, Namespace: selector.Namespace}))
-			} else {
-				claim.grant(kind, rls.Grant{Scope: scopeID})
-			}
+			kind, _ := target.Selector()
+			claim.grant(kind, rls.Grant{Scope: scopeID})
 		}
 	}
 
 	return nil
-}
-
-// viewRefToFilter converts a view ViewRef (namespace/name) to a row filter
-// Views only support id and name in match_scope (namespace is not supported)
-func viewRefToFilter(viewRef dutyRBAC.ViewRef) rls.Scope {
-	rlsScope := rls.Scope{}
-
-	if viewRef.Name != "" {
-		rlsScope.Names = []string{viewRef.Name}
-	}
-
-	if viewRef.ID != "" {
-		rlsScope.ID = viewRef.ID
-	}
-
-	return rlsScope
 }

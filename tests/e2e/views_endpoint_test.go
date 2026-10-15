@@ -22,7 +22,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// viewReader creates a person allowed to read views through a Permission: no Role rule selects views yet.
+// viewReader creates a person allowed to read every view through a legacy Permission.
 func viewReader(name, email string) *models.Person {
 	ginkgo.GinkgoHelper()
 	person := setup.CreateUserWithRole(DefaultContext, name, email)

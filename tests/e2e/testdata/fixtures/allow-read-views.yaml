@@ -1,0 +1,14 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-read-views
+  namespace: default
+spec:
+  description: allow playbook to read the views it reports on
+  subject:
+    playbook: "{{playbookRef}}"
+  actions: ["read"]
+  object:
+    selectors:
+      views:
+        - name: "*"

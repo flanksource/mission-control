@@ -220,6 +220,23 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 				},
 			},
 		})).To(Succeed())
+
+		// The report action reads the view as the playbook
+		Expect(db.PersistPermissionFromCRD(DefaultContext, &v1.Permission{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("allow-%s-read-views", pb.Name),
+				Namespace: pb.Namespace,
+				UID:       types.UID(uuid.NewString()),
+			},
+			Spec: v1.PermissionSpec{
+				Description: fmt.Sprintf("allow %s to read the views it reports on", playbookRef),
+				Subject:     v1.PermissionSubject{Playbook: playbookRef},
+				Actions:     []string{"read"},
+				Object: v1.PermissionObject{
+					Selectors: dutyRBAC.Selectors{Views: []dutyRBAC.ViewRef{{Name: "*"}}},
+				},
+			},
+		})).To(Succeed())
 		Expect(dutyRBAC.ReloadPolicy()).To(Succeed())
 
 		playbookModel, err := pb.ToModel()

@@ -456,7 +456,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			rejectRole(allow("views", policy.ActionPlaybookRun, "staging-views"))
 			rejectRole(allow("mixed", policy.ActionPlaybookRun, "configs-and-playbooks"))
 			rejectRole(on(allow("target-playbooks", policy.ActionPlaybookRun, "all-playbooks"), "all-playbooks"))
-			rejectRole(allow("read-views", policy.ActionRead, "staging-views"))
+			rejectRole(allow("update-views", policy.ActionUpdate, "staging-views"))
 		})
 
 		It("accepts reading checks by name", func() {
@@ -1103,7 +1103,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(rec.Body.String()).ToNot(ContainSubstring(`"permissions"`))
 			Expect(lo.Keys(response.Payload.Access)).To(ConsistOf(
 				policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck, policy.ResourceCanary,
-				policy.ResourcePlaybook, policy.ResourceConnection, policy.ResourceScraper,
+				policy.ResourcePlaybook, policy.ResourceConnection, policy.ResourceScraper, policy.ResourceView,
 				v1.ResourceApplication, v1.ResourceNotification, v1.ResourceNotificationSilence,
 				v1.ResourceAgent, v1.ResourcePerson, v1.ResourceTeam, v1.ResourceScope, v1.ResourceRole, v1.ResourceRoleBinding))
 			for _, actions := range response.Payload.Access {
@@ -1184,7 +1184,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 
 			expected := only(policy.ResourceConfig, mcRBAC.AccessAll)
 			for _, kind := range []string{policy.ResourceComponent, policy.ResourceCheck, policy.ResourceCanary,
-				policy.ResourcePlaybook, v1.ResourceApplication, v1.ResourcePerson, v1.ResourceTeam} {
+				policy.ResourcePlaybook, policy.ResourceView, v1.ResourceApplication, v1.ResourcePerson, v1.ResourceTeam} {
 				expected[kind] = mcRBAC.AccessAll
 			}
 			Expect(readSummaryOf(viewer)).To(Equal(expected))
@@ -1202,7 +1202,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 				Expect(actions[policy.ActionRead]).To(Equal(mcRBAC.AccessAll))
 				for _, action := range []string{policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete} {
 					expected := mcRBAC.AccessAll
-					if kind == policy.ResourceCheck || kind == v1.ResourcePerson {
+					if kind == policy.ResourceCheck || kind == v1.ResourcePerson || kind == policy.ResourceView {
 						expected = mcRBAC.AccessNone
 					}
 					Expect(actions[action]).To(Equal(expected), "%s %s", kind, action)

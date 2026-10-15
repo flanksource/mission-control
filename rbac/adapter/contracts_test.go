@@ -117,7 +117,7 @@ var _ = ginkgo.Describe("validateInput", func() {
 		Expect(run.validateInput("resource", configsAndPlaybooks)).ToNot(Succeed())
 		Expect(run.validateInput("target", views)).ToNot(Succeed())
 		Expect(run.validateInput("target", playbooks)).ToNot(Succeed())
-		Expect(read.validateInput("resource", views)).ToNot(Succeed())
+		Expect(update.validateInput("resource", views)).ToNot(Succeed())
 	})
 
 	ginkgo.It("accepts any read scope: membership is decided by the resource alone", func() {
@@ -371,10 +371,10 @@ var _ = ginkgo.Describe("Whole-type resources", func() {
 		}
 	})
 
-	ginkgo.It("takes every type but views for read", func() {
+	ginkgo.It("takes every type for read", func() {
 		Expect(read.Resources).To(ConsistOf(append([]string{
 			policy.ResourceConfig, policy.ResourceComponent, policy.ResourceCheck, policy.ResourceCanary, policy.ResourcePlaybook, policy.ResourceConnection,
-			policy.ResourceScraper,
+			policy.ResourceScraper, policy.ResourceView,
 		}, v1.WholeTypeResources...)))
 	})
 

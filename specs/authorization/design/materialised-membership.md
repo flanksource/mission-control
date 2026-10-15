@@ -24,7 +24,7 @@ This design materialises. Query time needs the selector grammar implemented twic
 
 Membership is stored synchronously. A resource is matched in the transaction that writes it, and a Scope is built in the transaction that saves it. _Why:_ the Scope language is plain values (`scopes.md` §5), so a target is one row of values, and matching a resource against every target of its type is one predicate over a handful of rows. That's cheap enough to run inside every write, and needs no queue, worker or lag.
 
-Only the membership predicate evaluates a Scope's targets, Views aside (see Not covered). Every check, of every action (`read`, `playbook:run`, `invoke:<plugin>:<operation>`, …), reads the stored result. _Why:_ a second evaluator could disagree with the stored result.
+Only the membership predicate evaluates a Scope's targets. Every check, of every action (`read`, `playbook:run`, `invoke:<plugin>:<operation>`, …), reads the stored result. _Why:_ a second evaluator could disagree with the stored result.
 
 ## Storage
 
@@ -47,7 +47,7 @@ scope_members (scope_id, resource_type, resource_id)   -- no resource_id: every 
 
 ## Scrapers and the types granted whole
 
-Most types added to Scopes only take type-wide grants (`scopes.md` §3.1), so they're never filtered by row and need no membership rows beyond the whole-type one. Scrapers are the exception: they can be granted in part, by `id`, `name`, `namespace` and `agent`, so `config_scrapers` is filtered like configs.
+Most types added to Scopes only take type-wide grants (`scopes.md` §3.1), so they're never filtered by row and need no membership rows beyond the whole-type one. Scrapers are an exception, and views another ("Views"): scrapers can be granted in part, by `id`, `name`, `namespace` and `agent`, so `config_scrapers` is filtered like configs.
 
 - **Targets and predicate.** A scraper target is a `scope_targets` row with `resource_type = scraper`, using the `id`, `name`/`name_prefix`, `namespace` and `agent_id` columns. The scraper predicate tests those against `config_scrapers` columns of the same names.
 - **Trigger.** `config_scrapers` gets the membership trigger every resource table has. Its selectable fields are the four above, so other updates, e.g. to `spec`, change nothing.
@@ -55,6 +55,17 @@ Most types added to Scopes only take type-wide grants (`scopes.md` §3.1), so th
 - **Records.** Artifacts a scraper produced follow the scraper (`roles.md` §3.1): their policies test the scraper's row with `EXISTS`, like the child tables in the FAQ. Job history isn't a record: it's read whole with `job:read`, so it has no row-level policy.
 
 _Why not leave scrapers whole-type only:_ grants on some scrapers, e.g. one agent's or one namespace's, are needed from the start, and the fields that express them are already columns.
+
+## Views
+
+Views can be granted in part, by `id`, `name` and `namespace` (`scopes.md` §3.1), so they get membership like playbooks.
+
+- **Targets and predicate.** A view target is a `scope_targets` row with `resource_type = view`, using the `id`, `name`/`name_prefix` and `namespace` columns. The view predicate tests those against `views` columns of the same names.
+- **Trigger.** `views` gets the membership trigger every resource table has.
+- **Row-level security.** `views` gets a policy admitting a row through the claim's `view` grants, and `view` joins the claim's grant types.
+- **Rows and panels.** A view's rows and panels are part of it (`roles.md` §3.2): `view_panels` and each generated table test their view's row with `EXISTS`, like the child tables in the FAQ, and admit every row of a readable view. A row is also admitted when its `grants` column names a Scope a Permission grants, as it is today.
+
+_Why membership rather than a whole-type claim:_ a grant on some views is the ordinary case, e.g. a team's dashboards, and the fields that express it are already columns.
 
 ## Claim
 
@@ -111,7 +122,7 @@ _Why delete the stored denies rather than drop the column alone:_ without the co
 
 ## Not covered
 
-- **Views.** No rule can select Views, and Roles grant no rows of the tables Views generate (`overview.md`, "Not covered yet"). Views keep computing which Scopes each of their rows matches, into their `grants` column, as they do today, and don't read `scope_members`. _Why:_ Views are outside Roles and RoleBindings for now; moving them onto stored membership waits until they're brought in.
+- **Rows of a view.** A view is granted whole (`roles.md` §3.2), so rows aren't members of anything. Views keep computing which Scopes each of their rows matches, into their `grants` column, for Permissions only. Granting some rows is for flanksource/mission-control#3539.
 
 ## Other choices
 
@@ -137,7 +148,7 @@ _Why delete the stored denies rather than drop the column alone:_ without the co
 ## FAQ
 
 **Which child tables does row-level security filter, and how?**
-The same tables as today, with the same rules: `config_changes`, `config_analysis`, `config_costs`, `config_cost_compact` and `config_component_relationships` show a row when its config is readable; `config_relationships` when both of its configs are; `playbook_runs` when its playbook is, and its config and check when it has them; `checks` when its canary is, or through its own membership. Each of these tests its parent with `EXISTS` on the parent's table, which applies the parent's policy, so only the parents' policies change. `views` and `view_panels` keep today's policies (Not covered).
+The same tables as today, with the same rules: `config_changes`, `config_analysis`, `config_costs`, `config_cost_compact` and `config_component_relationships` show a row when its config is readable; `config_relationships` when both of its configs are; `playbook_runs` when its playbook is, and its config and check when it has them; `checks` when its canary is, or through its own membership. Each of these tests its parent with `EXISTS` on the parent's table, which applies the parent's policy, so only the parents' policies change. `view_panels` and each view's generated table show a row when its view is readable ("Views").
 
 **Does deleting a resource remove its membership?**
 Soft deletion doesn't. `deleted_at` is state, not identity or ownership (`scopes.md` §4.3), so setting it doesn't match the resource again, and audit and history listings keep showing a deleted resource to whoever could read it. A row deleted outright loses its membership in the same transaction.

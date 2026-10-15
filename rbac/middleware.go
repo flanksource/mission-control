@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	dutyAPI "github.com/flanksource/duty/api"
@@ -146,7 +147,7 @@ func readsConnections(ctx context.Context, table, action string) bool {
 // readsWholeTypes reports whether the request reads records or a lookup view of types the subject may read entirely.
 // They're readable with read on their types (specs/authorization/roles.md, Section 3), but duty's /db map files many
 // under legacy objects, e.g. database.public, that no Role grants. A table of several types takes read on each of them,
-// so it's never wider than a grant on one type. Types without an object of their own, i.e. views, are never read this way.
+// so it's never wider than a grant on one type.
 func readsWholeTypes(ctx context.Context, table dbTable, action string) bool {
 	if action != policy.ActionRead || (table.kind != dbRecord && table.kind != dbLookup) {
 		return false
@@ -239,6 +240,9 @@ var rowFilteredTables = map[string]string{
 
 	"config_scrapers":             policy.ResourceScraper,
 	"config_scrapers_with_status": policy.ResourceScraper,
+
+	"views":         policy.ResourceView,
+	"views_summary": policy.ResourceView,
 }
 
 // ReadGrantsCover reports whether the subject's read grants filter rows of the resource type.
@@ -247,13 +251,25 @@ var ReadGrantsCover func(ctx context.Context, resourceType string) bool
 
 // canListFilteredRows reports whether the subject can list a table because its read grants cover some rows of it.
 // Postgres then filters the rows. Its read grants on whole types pass the object check instead.
+// A view's panels and generated table are its records, which Postgres lists with the view.
 func canListFilteredRows(ctx context.Context, table, action string) bool {
 	if action != policy.ActionRead || ReadGrantsCover == nil || ctx.User() == nil {
 		return false
 	}
 
 	resourceType, ok := rowFilteredTables[table]
+	if t, served := servedTable(table); !ok && served && t.kind == dbRecord && slices.Equal(t.of, []string{policy.ResourceView}) {
+		resourceType, ok = policy.ResourceView, true
+	}
 	return ok && ReadGrantsCover(ctx, resourceType)
+}
+
+// ViewRead authorizes reading views through a read of the whole type, or through read grants that cover some views.
+// Its handlers must check each view they read.
+func ViewRead() MiddlewareFunc {
+	return authorize(policy.ObjectViews, policy.ActionRead, func(ctx context.Context) bool {
+		return canListFilteredRows(ctx, "views", policy.ActionRead)
+	})
 }
 
 // PlaybookRead authorizes reading playbooks and their runs through a read of the whole type,
