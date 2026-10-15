@@ -7,8 +7,6 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/membership"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
@@ -40,39 +38,15 @@ func AuthorizeConnectionUse(ctx context.Context, conn models.Connection) error {
 }
 
 // AuthorizeConnection returns an EFORBIDDEN error unless the person making the request may perform the action on
-// connections, and the connection is within the request's Scope limits.
+// connections.
 func AuthorizeConnection(ctx context.Context, conn models.Connection, action string) error {
-	if CheckContext(ctx, policy.ObjectConnection, action) && withinScopeLimits(ctx, conn) {
+	if CheckContext(ctx, policy.ObjectConnection, action) {
 		return nil
 	}
 
 	return ctx.Oops().Code(dutyAPI.EFORBIDDEN).
 		With("permission", action, "connection", conn.ID).
 		Errorf("access denied to %s: %s required on connection %s/%s", ctx.Subject(), action, conn.Namespace, conn.Name)
-}
-
-// withinScopeLimits reports whether the connection is in a Scope of each of the request's Scope limits, as
-// HasPermission requires of the resources it checks. Checks on whole object types don't apply the limits themselves.
-func withinScopeLimits(ctx context.Context, conn models.Connection) bool {
-	limits := rbac.ScopeLimits(ctx)
-	if len(limits) == 0 {
-		return true
-	}
-
-	ref := membership.Ref{Type: policy.ResourceConnection, ID: conn.ID}
-	snapshot, err := membership.Read(ctx, ref)
-	if err != nil {
-		ctx.Errorf("failed to read scope membership of connection %s: %v", conn.ID, err)
-		return false
-	}
-
-	scopes := lo.Map(snapshot.Scopes(ref), func(id uuid.UUID, _ int) string { return id.String() })
-	for _, limit := range limits {
-		if len(lo.Intersect(limit, scopes)) == 0 {
-			return false
-		}
-	}
-	return true
 }
 
 // GetConnectionForUse finds the connection a reference names, by id or connection://<namespace>/<name>, and returns

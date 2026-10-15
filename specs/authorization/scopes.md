@@ -14,9 +14,8 @@ Other objects reference a Scope by name to say which resources they apply to:
 
 - **Role rules**, to select the resources an action is performed on, or with.
 - **RoleBinding constraints**, to narrow the rules of a Role.
-- **The `X-Flanksource-Scope` header**, to limit one request (`limiting-permissions.md`).
 
-Each of those decides which resource types it accepts from a Scope, and is specified with the object itself (`roles.md`, `rolebindings.md`, `limiting-permissions.md`). This document only covers the Scope.
+Each of those decides which resource types it accepts from a Scope, and is specified with the object itself (`roles.md`, `rolebindings.md`). This document only covers the Scope.
 
 Because other objects grant access through it, editing a Scope changes what they grant. Scope administration is permission administration.
 
@@ -123,7 +122,7 @@ targets:
 
 This selects Configs in staging that belong to payments, **or** any Config in development. It does not select every staging Config.
 
-A Scope is always a union of resources. It never expresses a relationship between them, and never references another Scope: two Scopes are only combined by an object that names both, a RoleBinding constraint (`rolebindings.md`, Section 3) or the `X-Flanksource-Scope` header (`limiting-permissions.md`).
+A Scope is always a union of resources. It never expresses a relationship between them, and never references another Scope: two Scopes are only combined by an object that names both, a RoleBinding constraint (`rolebindings.md`, Section 3).
 
 ### 4.1 Empty sets
 

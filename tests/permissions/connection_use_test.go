@@ -255,14 +255,6 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 				Expect(do(editor, tt.method, path()).Code).To(Equal(http.StatusForbidden))
 			})
 
-			It("is refused when the request is limited to Scopes the connection isn't in", func() {
-				req := httptest.NewRequest(tt.method, path(), nil)
-				req = req.WithContext(rbac.LimitToScopes(DefaultContext.WithUser(admin), []string{uuid.NewString()}))
-				rec := httptest.NewRecorder()
-				e.ServeHTTP(rec, req)
-				Expect(rec.Code).To(Equal(http.StatusForbidden))
-			})
-
 		})
 	}
 

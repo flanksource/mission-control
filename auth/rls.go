@@ -43,7 +43,7 @@ func getRLSCacheKey(userID string) string {
 }
 
 // InvalidateRLSCacheForUser removes the user's cached RLS payloads, including the ones
-// cached per X-Flanksource-Scope header (<key>:<fingerprint>).
+// cached per access token (<key>:token=<id>).
 func InvalidateRLSCacheForUser(userID string) {
 	cacheKey := getRLSCacheKey(userID)
 	for key := range tokenCache.Items() {
@@ -69,35 +69,26 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		return nil, fmt.Errorf("user is required for RLS payload")
 	}
 
-	limits := dutyRBAC.ScopeLimits(ctx)
-
 	subject := ctx.Subject()
 
 	// The subject's sessions and each of their access tokens are limited differently
 	cacheKey := getRLSCacheKey(subject) + rbac.AccessTokenCacheKey(ctx)
-	for _, limit := range limits {
-		cacheKey = fmt.Sprintf("%s:scopes=%s", cacheKey, strings.Join(limit, ","))
-	}
 
 	if cached, ok := tokenCache.Get(cacheKey); ok {
 		return cached.(*rls.Payload), nil
 	}
 
-	var payload *rls.Payload
-	var err error
+	payload, err := buildRLSPayload(ctx, subject)
+	if err != nil {
+		return nil, ctx.Oops().Wrap(err)
+	}
 	if tokenRoles, limited := rbac.TokenLimit(ctx, subject); limited {
 		// A token lists the rows both its owner's read grants and its Roles select (roles.md, Section 4.5)
-		if payload, err = buildRLSPayload(ctx, subject); err != nil {
-			return nil, ctx.Oops().Wrap(err)
-		}
 		if payload, err = limitToTokenRoles(ctx, payload, tokenRoles); err != nil {
 			return nil, ctx.Oops().Wrap(err)
 		}
-	} else if payload, err = buildRLSPayload(ctx, subject); err != nil {
-		return nil, ctx.Oops().Wrap(err)
 	}
 
-	payload = applyScopeLimits(payload, limits)
 	tokenCache.SetDefault(cacheKey, payload)
 	return payload, nil
 }
