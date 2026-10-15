@@ -187,14 +187,14 @@ Mission Control ships these Roles in `mission-control-builtin`. They're ordinary
 
 | Role     | Allows                                                                                       |
 | -------- | -------------------------------------------------------------------------------------------- |
-| `viewer` | `read` on `config`, `component`, `check`, `canary`, `playbook`, `application`, `person` and `team` |
+| `viewer` | `read` on `config`, `component`, `check`, `canary`, `playbook`, `view`, `application`, `person` and `team` |
 | `admin`  | Every action on every type (`scopes.md`, Section 3.1) and every action without a resource (`roles.md`, Section 2.3), except plugin operations |
 | `access-manage` | `access:review`, `read` on `scope`, `role`, `roleBinding`, `person`, `team`, `playbook` and `connection`, and `create`, `update` and `delete` on `scope`, `role` and `roleBinding` |
 | `plugin-admin` | Every operation of the installed plugins (`invoke:<plugin>:<operation>`), on any config |
 
 #### Viewer access
 
-`viewer` reads the resources people operate on, and nothing that configures access, holds credentials or exposes Mission Control's internals: no connections, notifications, notification silences, scrapers, agents, Scopes, Roles or RoleBindings, and neither `event:read` nor `job:read`. _Why:_ `viewer` is the Role most often bound to everyone, so it grants only what everyone may see. Each of the excluded types takes an explicit grant, e.g. `read` on `scope`, `role` and `roleBinding` for an auditor, and so do the event queue and job history.
+`viewer` reads the resources people operate on, and nothing that configures access, holds credentials or exposes Mission Control's internals: no connections, notifications, notification silences, scrapers, agents, Scopes, Roles or RoleBindings, and neither `event:read` nor `job:read`. _Why:_ `viewer` is the Role most often bound to everyone, so it grants only what everyone may see. It reads views, which can show data from any source, e.g. an SQL query through a connection: a view is published for its readers, and whoever writes it decides what they see (`roles.md`, Section 3.2). Each of the excluded types takes an explicit grant, e.g. `read` on `scope`, `role` and `roleBinding` for an auditor, and so do the event queue and job history.
 
 #### Access management
 
@@ -202,7 +202,7 @@ Mission Control ships these Roles in `mission-control-builtin`. They're ordinary
 
 #### Shared per-type Scopes
 
-Each rule of a shipped Role, apart from those on actions without a resource, needs a Scope (`roles.md`, Section 1), so the Scopes they use ship with them in `mission-control-builtin`. There's one per type, named `all-<type>` in the plural, e.g. `all-configs`, `all-notification-silences`, with a single whole-type target (`scopes.md`, Section 5.2), so a rule takes one Scope for each type it covers. No action accepts views, so no shipped Scope selects them.
+Each rule of a shipped Role, apart from those on actions without a resource, needs a Scope (`roles.md`, Section 1), so the Scopes they use ship with them in `mission-control-builtin`. There's one per type, named `all-<type>` in the plural, e.g. `all-configs`, `all-views`, `all-notification-silences`, with a single whole-type target (`scopes.md`, Section 5.2), so a rule takes one Scope for each type it covers.
 
 The shipped Scopes are part of Mission Control's interface: Roles in any namespace MAY use them, as `mission-control-builtin/<name>`. So a shipped Scope MUST select exactly its one type, and MUST NOT be renamed, regrouped or widened. A new type MUST get a new Scope. _Why one per type:_ a Scope grouping several types would grant more to every Role using it as soon as a release added a type to it, and could make those Roles invalid, since a rule's Scope may only select types its action accepts (`roles.md`, Section 3).
 
@@ -320,7 +320,8 @@ Where the specs say an object "is rejected", this is what they mean.
 
 - **Incidents. Deliberately skipped.** Incidents, with their hypotheses, evidence, responders and comments, have been behind a feature flag that's been off for years, and are expected to be removed. They get no type or action, so no Role can grant them.
 - **Component logs. Deliberately skipped.** Fetching a component's logs through its log selectors is behind a disabled feature flag and is expected to be removed. It gets no action, so no one can fetch them.
-- **Views.** No rule can select Views, and Roles grant no rows of the tables Views generate.
+- **Writing views. TODO.** `create`, `update` and `delete` don't accept views (`roles.md`, Section 2), so no Role grants writing them through the API. Views are written through Kubernetes.
+- **Some views, or some rows of a view.** `read` grants views whole, with every row and panel (`roles.md`, Section 3.2). Which views a subject may open, and which rows of a view they may see, is for flanksource/mission-control#3539.
 - **Permissions and PermissionGroups** are deprecated, and not specified here (`permissions.md`). They have no type, so no Role can grant managing them. **TODO.**
 - **Plugins. TODO.** Plugins have no type, so no Role can grant installing, changing or removing them. Since a plugin acts with its own connections for whoever may invoke it (`identities.md`, Section 3), installing one trusts its code with those connections.
 - **Reading checks. TODO.** Whether a check is read through its canary, through its own membership, or both, is for flanksource/mission-control#3520. Until it's decided, `read` accepts checks (`roles.md`, Section 2).

@@ -310,7 +310,7 @@ Two rules close the gaps:
 
 The narrowed input must still be enforceable for the rule's action, by the same requirements the rule's own Scope meets (`roles.md`, Sections 2 and 3.1). A constraint isn't a way around them. They're checked on the constraint's targets of the types both Scopes select, and only those: a target of another type never narrows the rule, so it's never checked against the rule's action. The playbook target in `tenant-a` (Section 3.3) is never checked against `read`, although `read` accepts playbooks, because `read-production`'s Scope selects no playbook. Where the checked targets don't meet the requirements, the rule doesn't apply through the binding:
 
-- **Where a rule needs whole types** (`scopes.md`, Section 3.1): `create`, `update` and `delete`, and `read` on connections. A constraint can't narrow these to part of a type: its checked targets MUST pick whole types. It can still drop types: on a rule whose Scope selects every config and every component, a constraint whose Scope selects every config grants the action on configs only.
+- **Where a rule needs whole types** (`scopes.md`, Section 3.1): `create`, `update` and `delete`, and `read` on connections and views. A constraint can't narrow these to part of a type: its checked targets MUST pick whole types. It can still drop types: on a rule whose Scope selects every config and every component, a constraint whose Scope selects every config grants the action on configs only.
 - **Everywhere else**, any checked target is accepted. For `read`, a checked target that picks part of a type filters the rule's listings by row, even when the rule's own Scope wouldn't.
 
 #### Reporting
