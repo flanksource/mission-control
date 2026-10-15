@@ -41,8 +41,8 @@ type RoleSpec struct {
 }
 
 // +kubebuilder:object:generate=true
-// +kubebuilder:validation:XValidation:rule="self.action in ['read','create','update','delete','playbook:run','playbook:approve','playbook:cancel','mcp:run','connection:use','person:manage','mcp:use','property:manage','event:read','job:read'] || self.action.matches('^invoke:[^:*!, ]+:[^:*!, ]+$')",message="action must be a known action or invoke:<plugin>:<operation>, without patterns"
-// +kubebuilder:validation:XValidation:rule="has(self.resource) != (self.action in ['person:manage','mcp:use','property:manage','event:read','job:read'])",message="person:manage, mcp:use, property:manage, event:read and job:read take no resource; every other action needs one"
+// +kubebuilder:validation:XValidation:rule="self.action in ['read','create','update','delete','playbook:run','playbook:approve','playbook:cancel','mcp:run','connection:use','person:manage','access:review','mcp:use','property:manage','event:read','job:read'] || self.action.matches('^invoke:[^:*!, ]+:[^:*!, ]+$')",message="action must be a known action or invoke:<plugin>:<operation>, without patterns"
+// +kubebuilder:validation:XValidation:rule="has(self.resource) != (self.action in ['person:manage','access:review','mcp:use','property:manage','event:read','job:read'])",message="person:manage, access:review, mcp:use, property:manage, event:read and job:read take no resource; every other action needs one"
 // +kubebuilder:validation:XValidation:rule="!has(self.deny) || self.deny != true",message="deny isn't supported: rules only allow"
 // +kubebuilder:validation:XValidation:rule="!has(self.target) || self.action in ['playbook:run','playbook:approve','playbook:cancel']",message="only playbook:run, playbook:approve and playbook:cancel take a target"
 type RoleRule struct {
@@ -60,7 +60,7 @@ type RoleRule struct {
 	Action string `json:"action" yaml:"action"`
 
 	// Resource is the Scope selecting the resources the action is performed on.
-	// Omitted for the actions that take no resource: person:manage, mcp:use, property:manage, event:read and job:read.
+	// Omitted for the actions that take no resource: person:manage, access:review, mcp:use, property:manage, event:read and job:read.
 	Resource *ScopeReference `json:"resource,omitempty" yaml:"resource,omitempty"`
 
 	// Target is the Scope selecting what the action is performed on the resource with,

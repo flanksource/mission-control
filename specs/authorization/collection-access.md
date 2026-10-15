@@ -101,7 +101,7 @@ Mission Control computes the answer. Clients MUST NOT derive it themselves from 
 Every authenticated subject MUST receive their **access summary** from `GET /auth/whoami`, users of external identity providers included. It MUST report:
 
 - Every type accepted by `read`, `create`, `update` or `delete` ([roles.md, Section 2](roles.md#2-actions)), with an answer for each of those actions: `all`, `some` or `none`. An action that doesn't accept the type is `none`.
-- A boolean for each action without a resource: `person:manage`, `mcp:use`, `property:manage`, `event:read` and `job:read`. It is true exactly when the subject may perform that action.
+- A boolean for each action without a resource: `person:manage`, `access:review`, `mcp:use`, `property:manage`, `event:read` and `job:read`. It is true exactly when the subject may perform that action.
 
 A request made with an access token MUST receive the summary of what the token may do, its Roles' limit included ([limiting-permissions.md, "Access tokens"](limiting-permissions.md#access-tokens)), for both type answers and action booleans.
 
@@ -136,6 +136,7 @@ Each page MUST have exactly one gate. Its sidebar entry and route MUST use the s
 | Permissions (Roles)                       | `read` on `role`             |
 | Role Bindings                             | `read` on `roleBinding`      |
 | Scopes                                    | `read` on `scope`            |
+| Subjects                                  | `access:review`              |
 | Jobs History, including resource job tabs | `job:read`                   |
 | Event Queue, including recent event tabs  | `event:read`                 |
 | MCP                                       | `mcp:use`                    |
@@ -170,7 +171,7 @@ These pages have no single gate in the model. Their gates need a decision; no ne
 | Plugins, including Catalog Plugins | What permits opening the plugin listing? Plugin invocation actions don't grant administration of plugins. |
 | Logs | Should the page use `read` on `component`, or is a different gate needed for logs? There is no log type or action. |
 | Incidents, Rules | What permits opening these pages? There is no incident or incident-rule type or action. |
-| Legacy Permissions, Subjects | How should these pages be exposed? Neither legacy permissions nor subject-access inspection has a type or action. |
+| Legacy Permissions | How should this page be exposed? Legacy permissions have no type or action. |
 
 ## 6. What a subject may learn
 

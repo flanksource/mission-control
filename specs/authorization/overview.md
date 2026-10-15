@@ -189,11 +189,16 @@ Mission Control ships these Roles in `mission-control-builtin`. They're ordinary
 | -------- | -------------------------------------------------------------------------------------------- |
 | `viewer` | `read` on `config`, `component`, `check`, `canary`, `playbook`, `application`, `person` and `team` |
 | `admin`  | Every action on every type (`scopes.md`, Section 3.1) and every action without a resource (`roles.md`, Section 2.3), except plugin operations |
+| `access-manage` | `access:review`, `read` on `scope`, `role`, `roleBinding`, `person`, `team`, `playbook` and `connection`, and `create`, `update` and `delete` on `scope`, `role` and `roleBinding` |
 | `plugin-admin` | Every operation of the installed plugins (`invoke:<plugin>:<operation>`), on any config |
 
 #### Viewer access
 
 `viewer` reads the resources people operate on, and nothing that configures access, holds credentials or exposes Mission Control's internals: no connections, notifications, notification silences, scrapers, agents, Scopes, Roles or RoleBindings, and neither `event:read` nor `job:read`. _Why:_ `viewer` is the Role most often bound to everyone, so it grants only what everyone may see. Each of the excluded types takes an explicit grant, e.g. `read` on `scope`, `role` and `roleBinding` for an auditor, and so do the event queue and job history.
+
+#### Access management
+
+`access-manage` is for subjects who review and manage access without being bound to `admin`, e.g. through the Settings → Permissions pages. It's as privileged as `admin`: it may bind anyone, itself included, to any Role. _Why ship it:_ it bundles what those pages need, so granting them doesn't take writing a Role. `admin` already allows everything in it.
 
 #### Shared per-type Scopes
 
@@ -207,7 +212,7 @@ A RoleBinding in any other namespace can bind a shipped Role as `mission-control
 
 #### Shipped object updates
 
-Mission Control writes the shipped Roles and their Scopes when it starts, and writes `plugin-admin` again whenever a plugin is installed, upgraded or removed and its operations change. `viewer` and `admin` are exactly as shipped, and only change with Mission Control itself. `plugin-admin` exists only while some plugin has an operation, since a Role needs a rule; a binding to it has no effect in between. The shipped objects aren't Kubernetes objects, and can't be changed or deleted through the API.
+Mission Control writes the shipped Roles and their Scopes when it starts, and writes `plugin-admin` again whenever a plugin is installed, upgraded or removed and its operations change. `viewer`, `admin` and `access-manage` are exactly as shipped, and only change with Mission Control itself. `plugin-admin` exists only while some plugin has an operation, since a Role needs a rule; a binding to it has no effect in between. The shipped objects aren't Kubernetes objects, and can't be changed or deleted through the API.
 
 #### Reserved namespace
 
@@ -318,7 +323,6 @@ Where the specs say an object "is rejected", this is what they mean.
 - **Views.** No rule can select Views, and Roles grant no rows of the tables Views generate.
 - **Permissions and PermissionGroups** are deprecated, and not specified here (`permissions.md`). They have no type, so no Role can grant managing them. **TODO.**
 - **Plugins. TODO.** Plugins have no type, so no Role can grant installing, changing or removing them. Since a plugin acts with its own connections for whoever may invoke it (`identities.md`, Section 3), installing one trusts its code with those connections.
-- **Access reviews. TODO.** No action grants reviewing another subject's access (`/rbac/subject-access-reviews`).
 - **Reading checks. TODO.** Whether a check is read through its canary, through its own membership, or both, is for flanksource/mission-control#3520. Until it's decided, `read` accepts checks (`roles.md`, Section 2).
 - **The Kubernetes proxy. TODO, deliberately postponed.** The requests made through Mission Control's Kubernetes proxy have no action under these specs, so no Role or RoleBinding can grant them, and they don't work under this model. The kubeconfig download, whose token was the proxy's credential, is removed until the proxy has an action. That's a known gap, accepted for now: the feature is rarely used and isn't worth holding the rest of this design back, though some installations may rely on it. A proposed design is recorded in `design/kubernetes-proxy.md`, and is not adopted.
 - **Debug endpoints. TODO, undecided.** The debug handlers Mission Control serves from duty (`AddDebugHandlers`) are checked today against `update` on the old `database.monitor` object, which no Role can grant. Whether they get an action of their own, fall under one of the actions without a resource, or are left to admins some other way, is undecided.

@@ -167,10 +167,10 @@ var _ = Describe("Shipped roles", Ordered, func() {
 		Expect(rbac.ReloadPolicy()).To(Succeed())
 	})
 
-	It("stores both Roles and their Scopes, all Ready", func() {
+	It("stores the shipped Roles and their Scopes, all Ready", func() {
 		scopes, roles := stored()
 
-		Expect(lo.Map(roles, func(r models.Role, _ int) string { return r.Name })).To(ConsistOf(shipped.RoleAdmin, shipped.RoleViewer, shipped.RolePluginAdmin))
+		Expect(lo.Map(roles, func(r models.Role, _ int) string { return r.Name })).To(ConsistOf(shipped.RoleAdmin, shipped.RoleViewer, shipped.RoleAccessManage, shipped.RolePluginAdmin))
 		for _, role := range roles {
 			Expect(role.Source).To(Equal(adapter.SourceShipped))
 			Expect(role.Error).To(BeNil(), "role %s: %s", role.Name, lo.FromPtr(role.Error))

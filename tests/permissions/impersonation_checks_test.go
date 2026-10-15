@@ -27,6 +27,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 // The X-Flanksource-Scope header limits the checks made through rbac.HasPermission by the same rule as listings:
@@ -286,11 +287,10 @@ var _ = ginkgo.Describe("Scope impersonation of resource checks", ginkgo.Ordered
 		}
 
 		ginkgo.It("answers by the reviewed subject's own access, whatever the requester's header", func() {
-			// No action grants access reviews yet (specs/authorization/overview.md, "Not covered yet")
-			_, err := rbac.Enforcer().AddPolicy(admin.ID.String(), policy.ObjectRBAC, policy.ActionRead, "allow", "", "access-review")
+			_, err := rbac.Enforcer().AddPolicy(admin.ID.String(), policy.ObjectRBAC, adapter.ActionAccessReview, "allow", "", "access-review")
 			Expect(err).ToNot(HaveOccurred())
 			ginkgo.DeferCleanup(func() {
-				_, err := rbac.Enforcer().RemovePolicy(admin.ID.String(), policy.ObjectRBAC, policy.ActionRead, "allow", "", "access-review")
+				_, err := rbac.Enforcer().RemovePolicy(admin.ID.String(), policy.ObjectRBAC, adapter.ActionAccessReview, "allow", "", "access-review")
 				Expect(err).ToNot(HaveOccurred())
 			})
 
