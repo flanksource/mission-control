@@ -1,5 +1,9 @@
 # Tokens in Mission Control
 
+## Background
+
+`access-tokens.md` and `token-bindings.md` say what an access token may do and who manages it. This design says how tokens are built and checked. A credential for clients that aren't a browser can be an opaque token stored by Mission Control, or a self-contained signed token. Access tokens are opaque and stored, because they're long-lived and must be revocable at once: deleting the row revokes them, which a signed token can't offer before it expires. Short-lived signed tokens are minted after authentication for the subsystems that need a verifiable claim without a database lookup.
+
 At a high level Mission Control has two credential families:
 
 1. **Access tokens** — long-lived, opaque, DB-backed, revocable credentials.
@@ -36,21 +40,20 @@ Only the Argon2id hash is stored in the database. For v2 tokens, the hash input 
 | Agent token          | `agent/agent.go`                               | Agent `Person`                        | 365d                                                                     | Primary intended long-lived credential for agents. v2 tokens append the public JWK agents use to verify upstream tunnel JWTs. |
 | Delegated user token | `auth/controllers.go` → `/auth/create_token`   | The creating user's `Person`          | Default 90d via `access_token.default_expiry`; request can supply expiry | Scoped/delegated token, mainly used by MCP clients that need restricted permissions. |
 | CLI-created token    | `cmd/token.go`                                 | Existing user `Person`                | Default 4h unless `--expiry` supplied                                    | Admin/operator-created token from CLI.                                               |
-| Kubeconfig token     | `echo/kube_config_download.go` → `/kubeconfig` | Current user `Person`                 | Currently non-expiring (`expiry=nil`)                                    | Embedded in kubeconfig as `username: token`, `password: <token>` for `/kubeproxy`.   |
 
 ### Delegated token model
 
-A token is a credential: it signs in as its owner, and its token bindings (RoleBindings that select it by id, `specs/authorization/rolebindings.md` Section 2.6) only limit what the owner may do on requests made with it.
+A token is a credential: it signs in as its owner, and the RoleBindings that select it (`token-bindings.md`) only limit what the owner may do on requests made with it.
 
 For `/auth/create_token`:
 
-1. An access token is created with `person_id` and `created_by` both set to the user. No person or RBAC rule is created for it.
+1. An access token is created with `person_id` and `created_by` both set to the user, and one RoleBinding per requested Role selecting it, in the same transaction. No person is created for it.
 2. Signing in with the token makes the user the request's user, and puts the token on the request context.
-3. A check made as the request's own user is limited by the token's bindings: it allows only what one of their rules also allows, within the owner's access. Checks made as another subject, e.g. a playbook during a run the request started, aren't limited, and neither are the owner's other sessions and tokens.
+3. A check made as the request's own user is limited by the token: the bindings that select it are grouped under the token's own casbin subject, which is never the subject of a request, and the check must pass for both the owner and that subject. Checks made as another subject, e.g. a playbook during a run the request started, aren't limited, and neither are the owner's other sessions and tokens.
+
+_Why a casbin subject per token:_ it reuses the same compiled policies as every other binding, constraints included, so a token's limit needs no evaluator of its own.
 
 Since the owner's sessions and tokens share a subject, caches of per-subject results (RLS payloads, access summaries, PostgREST JWTs) are also keyed by the token.
-
-Tokens created before this had a person of type `access_token` of their own. On startup they're moved to their owner (`created_by`), and those people are soft-deleted and their RBAC rules removed.
 
 ### Authentication
 
@@ -71,7 +74,7 @@ Validation happens through `auth.getAccessToken(...)`.
 
 ### Revocation
 
-Access tokens are revocable by deleting their `access_tokens` row.
+Access tokens are revocable by deleting their `access_tokens` row, which also deletes the RoleBindings that select them.
 
 ---
 
