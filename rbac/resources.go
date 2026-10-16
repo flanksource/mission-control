@@ -174,11 +174,18 @@ func errShippedNamespace() error {
 	return dutyAPI.Errorf(dutyAPI.ECONFLICT, "namespace %s is reserved for objects shipped with Mission Control", adapter.ShippedNamespace)
 }
 
+func errAccessTokenNamespace() error {
+	return dutyAPI.Errorf(dutyAPI.ECONFLICT, "namespace %s is reserved for the role bindings of access tokens; they're created and deleted with their token", adapter.AccessTokenNamespace)
+}
+
 // editable finds a stored object that can be changed through the API: one created through it.
 // Objects from Kubernetes (or synced from it) are changed where they're defined, which would overwrite any change here.
 func (k managedKind) editable(ctx context.Context, namespace, name string) (*storedObject, error) {
-	if namespace == adapter.ShippedNamespace {
+	switch namespace {
+	case adapter.ShippedNamespace:
 		return nil, errShippedNamespace()
+	case adapter.AccessTokenNamespace:
+		return nil, errAccessTokenNamespace()
 	}
 
 	stored, err := k.find(ctx, namespace, name)
@@ -205,8 +212,13 @@ func (k managedKind) list(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
 	query := ctx.DB().Where("deleted_at IS NULL").Order("namespace, name")
-	if namespace := c.QueryParam("namespace"); namespace != "" {
+	namespace := c.QueryParam("namespace")
+	if namespace != "" {
 		query = query.Where("namespace = ?", namespace)
+	}
+	// Access tokens' bindings grant nothing, so they're left out unless asked for, or their namespace is
+	if k.table == "role_bindings" && c.QueryParam("include") != "access-tokens" && namespace != adapter.AccessTokenNamespace {
+		query = query.Where("namespace != ?", adapter.AccessTokenNamespace)
 	}
 
 	list := k.newList()
@@ -239,6 +251,8 @@ func (k managedKind) create(c echo.Context) error {
 
 	if obj.GetNamespace() == adapter.ShippedNamespace {
 		return dutyAPI.WriteError(c, errShippedNamespace())
+	} else if obj.GetNamespace() == adapter.AccessTokenNamespace {
+		return dutyAPI.WriteError(c, errAccessTokenNamespace())
 	}
 
 	if stored, err := k.find(ctx, obj.GetNamespace(), obj.GetName()); err != nil {

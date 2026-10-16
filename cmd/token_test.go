@@ -1,16 +1,17 @@
 package cmd
 
 import (
-	"github.com/flanksource/duty/models"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/flanksource/incident-commander/db"
 )
 
 var _ = ginkgo.Describe("auth token --role", func() {
 	ginkgo.It("parses roles as namespace/name", func() {
 		roles, err := parseTokenRoles([]string{"mission-control-builtin/admin", "default/runner"})
 		Expect(err).NotTo(HaveOccurred())
-		Expect(roles).To(Equal(models.AccessTokenRoles{
+		Expect(roles).To(Equal(db.AccessTokenRoles{
 			{Namespace: "mission-control-builtin", Name: "admin"},
 			{Namespace: "default", Name: "runner"},
 		}))

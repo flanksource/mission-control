@@ -7,9 +7,6 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/google/uuid"
-	"github.com/samber/lo"
-
-	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 type accessTokenKey struct{}
@@ -18,13 +15,12 @@ type accessTokenKey struct{}
 type requestToken struct {
 	id     uuid.UUID
 	person string
-	roles  models.AccessTokenRoles
 }
 
-// WithAccessToken marks the request as made with the access token. The token signs in as its person, and its Roles
-// limit the checks made as that person during the request (TokenLimit).
+// WithAccessToken marks the request as made with the access token. The token signs in as its person, and the
+// RoleBindings that select it limit the checks made as that person during the request (TokenLimit).
 func WithAccessToken(ctx context.Context, token *models.AccessToken) context.Context {
-	return ctx.WithValue(accessTokenKey{}, requestToken{id: token.ID, person: token.PersonID.String(), roles: token.Roles})
+	return ctx.WithValue(accessTokenKey{}, requestToken{id: token.ID, person: token.PersonID.String()})
 }
 
 // RequestAccessTokenID returns the ID of the access token the request was made with, or nil.
@@ -83,42 +79,36 @@ func ForgetAccessToken(id uuid.UUID) {
 	}
 }
 
-// TokenLimit returns the Roles that limit a check made as the subject, and whether it's limited.
+// TokenLimit returns the access token that limits a check made as the subject, and whether it's limited.
 // A check is limited when the request was made with an access token and the subject is the request's own user, the
 // token's person. Checks made as another subject, e.g. a playbook during a run the request started, aren't limited,
 // and neither are requests made without a token.
 //
-// Only an agent's token, on a request made as that agent, lists no Roles and isn't limited. Any other token that
-// lists none is limited by no Role, so it may do nothing.
-func TokenLimit(ctx context.Context, subject string) (models.AccessTokenRoles, bool) {
+// Only an agent's token, on a request made as that agent, isn't limited. Any other token is limited by the
+// RoleBindings that select it, so a token no binding selects may do nothing.
+func TokenLimit(ctx context.Context, subject string) (uuid.UUID, bool) {
 	token, ok := ctx.Value(accessTokenKey{}).(requestToken)
 	if !ok || subject != token.person {
-		return nil, false
-	}
-	if len(token.roles) > 0 {
-		return token.roles, true
+		return uuid.Nil, false
 	}
 	if agent := ctx.Agent(); agent != nil && agent.PersonID != nil && agent.PersonID.String() == token.person {
-		return nil, false
+		return uuid.Nil, false
 	}
-	return models.AccessTokenRoles{}, true
+	return token.id, true
 }
 
 // withinTokenLimit reports whether the request's access token allows a check as the subject: it isn't limited,
-// or allowed accepts the limit principal of one of its Roles.
+// or allowed accepts the token's principal, which the RoleBindings that select it are grouped under.
 func withinTokenLimit(ctx context.Context, subject string, allowed func(principal string) bool) bool {
-	roles, limited := TokenLimit(ctx, subject)
+	tokenID, limited := TokenLimit(ctx, subject)
 	if !limited {
 		return true
 	}
 
-	return lo.SomeBy(roles, func(role models.AccessTokenRole) bool {
-		return allowed(adapter.RoleLimitPrincipal(role.Namespace, role.Name))
-	})
+	return allowed(models.AccessTokenPrincipal(tokenID))
 }
 
-// CheckContext checks the action on a whole object as ctx.Subject(), limited by the Roles of the request's access
-// token. Every subject is checked the same way, whatever kind it is (specs/authorization/overview.md, "Access").
+// CheckContext checks the action on a whole object as ctx.Subject(), limited by the request's access token. Every subject is checked the same way, whatever kind it is (specs/authorization/overview.md, "Access").
 func CheckContext(ctx context.Context, object, action string) bool {
 	user := ctx.User()
 	if user == nil {
@@ -127,13 +117,13 @@ func CheckContext(ctx context.Context, object, action string) bool {
 	return rbac.Check(ctx, ctx.Subject(), object, action) && TokenAllowsObject(ctx, ctx.Subject(), object, action)
 }
 
-// HasPermission is rbac.HasPermission, limited by the Roles of the request's access token when the subject is the
-// request's own user. Checks made as another subject, e.g. a playbook during its run, aren't limited.
+// HasPermission is rbac.HasPermission, limited by the request's access token when the subject is the request's own
+// user. Checks made as another subject, e.g. a playbook during its run, aren't limited.
 func HasPermission(ctx context.Context, subject string, attr *models.ABACAttribute, action string) bool {
 	return rbac.HasPermission(ctx, subject, attr, action) && TokenAllows(ctx, subject, attr, action)
 }
 
-// TokenAllowsObject reports whether the Roles of the request's access token allow a check as the subject on a whole
+// TokenAllowsObject reports whether the RoleBindings that select the request's access token allow a check as the subject on a whole
 // object. It's true when the check isn't limited by a token (TokenLimit).
 func TokenAllowsObject(ctx context.Context, subject, object, action string) bool {
 	return withinTokenLimit(ctx, subject, func(principal string) bool {
@@ -145,7 +135,7 @@ func TokenAllowsObject(ctx context.Context, subject, object, action string) bool
 	})
 }
 
-// TokenAllows reports whether the Roles of the request's access token allow a check as the subject on resources.
+// TokenAllows reports whether the RoleBindings that select the request's access token allow a check as the subject on resources.
 // It's true when the check isn't limited by a token (TokenLimit).
 func TokenAllows(ctx context.Context, subject string, attr *models.ABACAttribute, action string) bool {
 	return withinTokenLimit(ctx, subject, func(principal string) bool {

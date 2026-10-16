@@ -186,14 +186,6 @@ func getAccessToken(ctx context.Context, token string) (*models.AccessToken, err
 		return nil, errTokenExpired
 	}
 
-	if len(accessToken.Roles) == 0 {
-		if personType, err := db.GetPersonType(ctx, accessToken.PersonID.String()); err != nil {
-			return nil, err
-		} else if personType != db.PersonTypeAgent {
-			return nil, errTokenWithoutRoles
-		}
-	}
-
 	expiry := accessToken.ExpiresAt
 	if expiry == nil {
 		tokenCache.Set(token, &accessToken, -1)
@@ -223,29 +215,6 @@ func extractBearerAuthToken(header http.Header) (string, bool) {
 		return "", false
 	}
 	return strings.TrimPrefix(auth, "Bearer "), true
-}
-
-// DeleteTokensWithoutRoles deletes every access token of a person that lists no Role, logging each one. Such tokens
-// were created before Roles were required, and can't be used anyway (getAccessToken). Agents' tokens are kept.
-func DeleteTokensWithoutRoles(ctx context.Context) error {
-	tokens, err := db.PersonalTokensWithoutRoles(ctx)
-	if err != nil {
-		return err
-	}
-
-	var errs []error
-	for _, token := range tokens {
-		owner := token.PersonID
-		if token.CreatedBy != nil {
-			owner = *token.CreatedBy
-		}
-		if err := DeleteAccessToken(ctx, token.ID.String()); err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		ctx.Logger.Infof("deleted access token %q (%s) of person %s: it lists no roles", token.Name, token.ID, owner)
-	}
-	return errors.Join(errs...)
 }
 
 // MigrateLegacyTokenPeople moves the access tokens created with a person of their own to their owners, and removes
@@ -298,11 +267,15 @@ func DeleteAccessToken(ctx context.Context, tokenID string) error {
 		return ctx.Oops().Wrapf(err, "failed to get access token %s", tokenID)
 	}
 
-	// Add to blacklist immediately to prevent any further use
-	deletedTokensCache.Set(tokenID, true, cache.DefaultExpiration)
+	// The stored id, not the one given: a UUID can be written in other forms that Postgres accepts, but the deny
+	// list and the token's bindings are keyed by its canonical form.
+	id := token.ID.String()
 
-	if err := db.DeleteAccessToken(ctx, tokenID); err != nil {
-		return ctx.Oops().Wrapf(err, "failed to delete access token %s", tokenID)
+	// Add to blacklist immediately to prevent any further use
+	deletedTokensCache.Set(id, true, cache.DefaultExpiration)
+
+	if err := db.DeleteAccessToken(ctx, id); err != nil {
+		return ctx.Oops().Wrapf(err, "failed to delete access token %s", id)
 	}
 
 	invalidateRLSCacheForToken(token.ID)

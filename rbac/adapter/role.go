@@ -1,6 +1,8 @@
 package adapter
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -45,40 +47,115 @@ func ParseBindingRuleID(id string) (bindingID uuid.UUID, rule string, ok bool) {
 	return bindingID, rule, true
 }
 
-// RoleLimitPrincipalPrefix prefixes the casbin subject a Role's rules are filed under to limit access tokens.
-const RoleLimitPrincipalPrefix = "role:"
+// The RoleBindings created with an access token, one per Role it's created with, have this source and are in this
+// reserved namespace (specs/authorization/token-bindings.md). Nothing else can be stored there.
+const (
+	SourceAccessToken    = "AccessToken"
+	AccessTokenNamespace = "mission-control-access-tokens"
+)
 
-// RoleLimitPrincipal returns the casbin subject a Role's rules are filed under to limit access tokens.
-// Nothing is grouped under it, so it grants nothing: it's only checked alongside a token's owner.
-func RoleLimitPrincipal(namespace, name string) string {
-	return RoleLimitPrincipalPrefix + namespace + "/" + name
+// AccessTokenBindingName returns the name of the RoleBinding created with an access token for one of its Roles.
+// The token id and the hash are fixed length, so the name fits a Kubernetes name.
+func AccessTokenBindingName(tokenID uuid.UUID, roleNamespace, roleName string) string {
+	sum := md5.Sum([]byte(roleNamespace + "/" + roleName))
+	return fmt.Sprintf("token-%s-%s", tokenID, hex.EncodeToString(sum[:])[:12])
 }
 
-// RoleLimitRules returns the rules of a valid Role as they limit an access token: as written, with no constraint.
-func RoleLimitRules(role models.Role, rules []ResolvedRule) []CompiledRule {
-	return lo.Map(rules, func(rule ResolvedRule, _ int) CompiledRule {
-		return compileResolvedRule(fmt.Sprintf("%s%s/%s", RoleLimitPrincipalPrefix, role.ID, rule.Name), rule)
-	})
+// accessTokenSubject is the subject a RoleBinding created with an access token stores, and its only one.
+// It's not part of v1.RoleBindingSubjects: neither a custom resource nor the RoleBinding API can select a token.
+type accessTokenSubject struct {
+	AccessToken string `json:"accessToken"`
 }
 
-// LoadRoleLimitRules returns the rules of the Role as they limit an access token.
-// A Role that doesn't exist or is invalid has none, so it matches nothing.
-func LoadRoleLimitRules(ctx context.Context, namespace, name string) ([]CompiledRule, error) {
-	var role models.Role
-	if err := ctx.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", namespace, name).Find(&role).Error; err != nil {
-		return nil, err
-	} else if role.ID == uuid.Nil {
-		return nil, nil
+// AccessTokenBindingSubjects returns the stored subjects of a RoleBinding that selects the access token.
+func AccessTokenBindingSubjects(tokenID uuid.UUID) ([]byte, error) {
+	return json.Marshal(accessTokenSubject{AccessToken: tokenID.String()})
+}
+
+// bindingAccessToken returns the access token a stored binding selects, if it's a binding created with a token.
+// Such a binding has no other subject and no constraint, and is in the reserved namespace.
+func bindingAccessToken(binding models.RoleBinding) (uuid.UUID, bool, error) {
+	if len(binding.Subjects) == 0 {
+		return uuid.Nil, false, nil
 	}
 
-	rules, err := ValidateRole(ctx, nil, role)
-	if err != nil {
-		if IsValidationError(err) {
-			return nil, nil
+	var subjects map[string]json.RawMessage
+	if err := json.Unmarshal(binding.Subjects, &subjects); err != nil {
+		return uuid.Nil, false, NewValidationError("role binding %s/%s: invalid subjects: %v", binding.Namespace, binding.Name, err)
+	}
+
+	raw, ok := subjects["accessToken"]
+	if !ok {
+		if binding.Namespace == AccessTokenNamespace {
+			return uuid.Nil, false, NewValidationError("role binding %s/%s: namespace %s holds only access tokens' bindings", binding.Namespace, binding.Name, AccessTokenNamespace)
 		}
+		return uuid.Nil, false, nil
+	}
+
+	var id string
+	if err := json.Unmarshal(raw, &id); err != nil {
+		return uuid.Nil, false, NewValidationError("role binding %s/%s: invalid access token subject: %v", binding.Namespace, binding.Name, err)
+	}
+	tokenID, err := uuid.Parse(id)
+	if err != nil {
+		return uuid.Nil, false, NewValidationError("role binding %s/%s: %q isn't an access token id", binding.Namespace, binding.Name, id)
+	}
+
+	switch {
+	case len(subjects) > 1:
+		return uuid.Nil, false, NewValidationError("role binding %s/%s: a binding that selects an access token can't select any other subject", binding.Namespace, binding.Name)
+	case binding.Namespace != AccessTokenNamespace || binding.Source != SourceAccessToken:
+		return uuid.Nil, false, NewValidationError("role binding %s/%s: only an access token's own bindings, in %s, can select it", binding.Namespace, binding.Name, AccessTokenNamespace)
+	case binding.Constraint != nil:
+		return uuid.Nil, false, NewValidationError("role binding %s/%s: an access token's binding has no constraint", binding.Namespace, binding.Name)
+	}
+
+	return tokenID, true, nil
+}
+
+// AccessTokenBindings returns the RoleBindings that select the access token.
+func AccessTokenBindings(ctx context.Context, tokenID uuid.UUID) ([]models.RoleBinding, error) {
+	var bindings []models.RoleBinding
+	err := ctx.DB().Where("deleted_at IS NULL AND namespace = ? AND source = ?", AccessTokenNamespace, SourceAccessToken).
+		Where("subjects->>'accessToken' = ?", tokenID.String()).
+		Order("role").
+		Find(&bindings).Error
+	return bindings, err
+}
+
+// LoadAccessTokenLimitRules returns the rules that limit the access token: those of every valid RoleBinding that
+// selects it, narrowed by its constraint. A token no binding selects has none, so it matches nothing.
+func LoadAccessTokenLimitRules(ctx context.Context, tokenID uuid.UUID) ([]CompiledRule, error) {
+	bindings, err := AccessTokenBindings(ctx, tokenID)
+	if err != nil {
 		return nil, err
 	}
-	return RoleLimitRules(role, rules), nil
+
+	var rules []CompiledRule
+	for _, binding := range bindings {
+		if binding.Error != nil {
+			continue
+		}
+
+		namespace, name, err := BindingRoleRef(binding)
+		if err != nil {
+			continue
+		}
+
+		var role models.Role
+		if err := ctx.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL AND error IS NULL", namespace, name).Find(&role).Error; err != nil {
+			return nil, err
+		} else if role.ID == uuid.Nil {
+			continue
+		}
+
+		compiled, err := CompileBinding(ctx, nil, binding, role)
+		if err != nil && !IsValidationError(err) {
+			return nil, err
+		}
+		rules = append(rules, compiled.Rules...)
+	}
+	return rules, nil
 }
 
 // ResolvedRule is a validated rule of a role, with its Scopes resolved.

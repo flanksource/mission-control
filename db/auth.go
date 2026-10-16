@@ -10,25 +10,43 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/secret"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/auth/accesstoken"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
+// AccessTokenRole names a Role, by namespace and name, that limits an access token it's created with.
+type AccessTokenRole struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+}
+
+// AccessTokenRoles are the Roles an access token is created with.
+type AccessTokenRoles []AccessTokenRole
+
 // CreateAccessToken generates a new v2 access token and saves it in the database.
-// A person's token must list at least one Role. An agent's lists none: Roles don't apply to agents
-// (specs/authorization/roles.md, Section 4.5).
-func CreateAccessToken(ctx context.Context, personID uuid.UUID, name string, expiry *time.Duration, createdBy *uuid.UUID, autoRenew bool, roles models.AccessTokenRoles) (secret.Sensitive, *models.AccessToken, error) {
-	personType, err := GetPersonType(ctx, personID.String())
-	if err != nil {
-		return nil, nil, err
+//
+// A person's token must be created with at least one Role. Each becomes a RoleBinding that selects the token, which
+// limits it (specs/authorization/limiting-permissions.md). An agent's is created with none: it isn't limited
+// (specs/authorization/identities.md, Section 5).
+func CreateAccessToken(ctx context.Context, personID uuid.UUID, name string, expiry *time.Duration, createdBy *uuid.UUID, autoRenew bool, roles AccessTokenRoles) (secret.Sensitive, *models.AccessToken, error) {
+	var person models.Person
+	if err := ctx.DB().Select("id", "type").Where("id = ?", personID).First(&person).Error; err != nil {
+		return nil, nil, ctx.Oops().Wrapf(err, "failed to get person %s", personID)
 	}
-	if personType == PersonTypeAgent && len(roles) > 0 {
+
+	// A Role listed twice binds it once
+	roles = lo.Uniq(roles)
+
+	if person.Type == PersonTypeAgent && len(roles) > 0 {
 		return nil, nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("an agent's access token can't list roles")
-	} else if personType != PersonTypeAgent && len(roles) == 0 {
+	} else if person.Type != PersonTypeAgent && len(roles) == 0 {
 		return nil, nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("an access token must list at least one role")
 	}
 
@@ -46,7 +64,6 @@ func CreateAccessToken(ctx context.Context, personID uuid.UUID, name string, exp
 		Value:     token.Hash(),
 		PersonID:  personID,
 		AutoRenew: autoRenew,
-		Roles:     roles,
 	}
 	if expiry != nil {
 		accessTokenModel.ExpiresAt = lo.ToPtr(time.Now().Add(*expiry))
@@ -55,30 +72,68 @@ func CreateAccessToken(ctx context.Context, personID uuid.UUID, name string, exp
 		accessTokenModel.CreatedBy = createdBy
 	}
 
-	if err := ctx.DB().Create(&accessTokenModel).Error; err != nil {
-		return nil, nil, ctx.Oops().Wrapf(err, "failed to create access token")
+	err = ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
+		if err := txCtx.DB().Create(&accessTokenModel).Error; err != nil {
+			return ctx.Oops().Wrapf(err, "failed to create access token")
+		}
+
+		for _, role := range roles {
+			if err := createAccessTokenBinding(txCtx, accessTokenModel, role, personID); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// The token is committed, and its plain text exists only here, so a failed reload doesn't fail its creation:
+	// the reload its bindings' insert notifies picks it up.
+	if len(roles) > 0 {
+		if err := dutyRBAC.ReloadPolicy(); err != nil {
+			ctx.Errorf("failed to reload the policy after creating access token %q: %v", name, err)
+		}
 	}
 
 	return token.V2(), accessTokenModel, nil
 }
 
-// PersonalTokensWithoutRoles returns the access tokens that list no Role and don't belong to an agent.
-// Tokens created before Roles were required are such tokens.
-func PersonalTokensWithoutRoles(ctx context.Context) ([]models.AccessToken, error) {
-	var tokens []models.AccessToken
-	err := ctx.DB().Raw(`SELECT t.* FROM access_tokens t LEFT JOIN people p ON p.id = t.person_id
-		WHERE p.type IS DISTINCT FROM ?
-			AND COALESCE(jsonb_typeof(t.roles) <> 'array' OR t.roles = '[]'::jsonb, TRUE)`, PersonTypeAgent).
-		Scan(&tokens).Error
+// createAccessTokenBinding creates the RoleBinding that limits the access token by the Role, in the reserved
+// namespace of access tokens' bindings. Its only subject is the token, which no custom resource or RoleBinding API
+// write can express, so it's stored directly.
+func createAccessTokenBinding(ctx context.Context, token *models.AccessToken, role AccessTokenRole, owner uuid.UUID) error {
+	subjects, err := adapter.AccessTokenBindingSubjects(token.ID)
 	if err != nil {
-		return nil, ctx.Oops().Wrapf(err, "failed to list access tokens without roles")
+		return err
 	}
-	return tokens, nil
+
+	binding := models.RoleBinding{
+		ID:          uuid.New(),
+		Name:        adapter.AccessTokenBindingName(token.ID, role.Namespace, role.Name),
+		Namespace:   adapter.AccessTokenNamespace,
+		Description: fmt.Sprintf("Limits access token %s", token.Name),
+		Source:      adapter.SourceAccessToken,
+		Role:        role.Namespace + "/" + role.Name,
+		Subjects:    subjects,
+		CreatedBy:   &owner,
+	}
+
+	// A Role that's missing or invalid is stored as not ready, as for any binding: it limits the token to nothing.
+	_, validationErr := adapter.ValidateBinding(ctx, nil, binding)
+	if binding.Error, binding.ErrorReason, err = validity(validationErr); err != nil {
+		return err
+	}
+
+	if err := ctx.DB().Create(&binding).Error; err != nil {
+		return ctx.Oops().Wrapf(err, "failed to bind role %s/%s to access token %q", role.Namespace, role.Name, token.Name)
+	}
+	return nil
 }
 
 // CreateAccessTokenForPerson creates an access token of the user, limited by the given Roles. The token signs in as
 // the user: it's no subject of its own.
-func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenName string, expiry time.Duration, autoRenew bool, roles models.AccessTokenRoles) (secret.Sensitive, *models.AccessToken, error) {
+func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenName string, expiry time.Duration, autoRenew bool, roles AccessTokenRoles) (secret.Sensitive, *models.AccessToken, error) {
 	// 0 expiry means default
 	if expiry == 0 {
 		expiry = properties.Duration(90*24*time.Hour, "access_token.default_expiry")

@@ -12,16 +12,16 @@ import (
 
 var _ = ginkgo.Describe("WithRequestIdentity", func() {
 	owner := &models.Person{ID: uuid.New(), Name: "owner"}
-	token := &models.AccessToken{ID: uuid.New(), PersonID: owner.ID, Roles: models.AccessTokenRoles{{Namespace: "ns", Name: "viewer"}}}
+	token := &models.AccessToken{ID: uuid.New(), PersonID: owner.ID}
 
 	ginkgo.It("keeps the request's access token limit on a context of its own", func() {
 		request := WithAccessToken(context.NewContext(gocontext.Background()).WithUser(owner), token)
 		carried := WithRequestIdentity(context.NewContext(gocontext.Background()), request)
 
 		Expect(carried.User().ID).To(Equal(owner.ID))
-		roles, limited := TokenLimit(carried, owner.ID.String())
+		tokenID, limited := TokenLimit(carried, owner.ID.String())
 		Expect(limited).To(BeTrue())
-		Expect(roles).To(Equal(token.Roles))
+		Expect(tokenID).To(Equal(token.ID))
 		Expect(AccessTokenCacheKey(carried)).To(Equal(AccessTokenCacheKey(request)))
 	})
 

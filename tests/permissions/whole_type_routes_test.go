@@ -144,6 +144,14 @@ func deleteNamespace(namespace string) {
 	Expect(rbac.ReloadPolicy()).To(Succeed())
 }
 
+// deleteToken deletes the access token and the RoleBindings created with it.
+func deleteToken(id uuid.UUID) {
+	GinkgoHelper()
+	Expect(DefaultContext.DB().Where("namespace = ? AND subjects->>'accessToken' = ?", adapter.AccessTokenNamespace, id.String()).
+		Delete(&models.RoleBinding{}).Error).To(Succeed())
+	Expect(DefaultContext.DB().Where("id = ?", id).Delete(&models.AccessToken{}).Error).To(Succeed())
+}
+
 var _ = Describe("Routes of whole-type resources", Ordered, func() {
 	const namespace = "whole-type-routes"
 
@@ -399,7 +407,7 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 		Expect(rbac.ReloadPolicy()).To(Succeed())
 		Expect(authorized(serveAs(e, owner, http.MethodPost, "/notification/silence"))).To(BeTrue())
 
-		body, err := json.Marshal(auth.CreateTokenRequest{Name: "notifications-only", Roles: models.AccessTokenRoles{{Namespace: namespace, Name: "write-notifications-too"}}})
+		body, err := json.Marshal(auth.CreateTokenRequest{Name: "notifications-only", Roles: db.AccessTokenRoles{{Namespace: namespace, Name: "write-notifications-too"}}})
 		Expect(err).ToNot(HaveOccurred())
 		req := httptest.NewRequest(http.MethodPost, "/auth/create_token", bytes.NewReader(body))
 		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
@@ -409,7 +417,7 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 
 		var token models.AccessToken
 		Expect(DefaultContext.DB().Where("name = ? AND created_by = ?", "notifications-only", owner.ID).First(&token).Error).To(Succeed())
-		DeferCleanup(func() { Expect(DefaultContext.DB().Delete(&token).Error).To(Succeed()) })
+		DeferCleanup(func() { deleteToken(token.ID) })
 
 		tokenCtx := mcRBAC.WithAccessToken(DefaultContext.WithUser(owner), &token)
 		Expect(authorized(serveWith(e, tokenCtx, http.MethodPatch, "/db/notifications"))).To(BeTrue())

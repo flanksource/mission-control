@@ -43,7 +43,7 @@ _Why:_ a binding can grant a shared Role and narrow it with its own Scopes, with
 | `oidc`                                                             | list of objects | Users of an external identity provider, by the claims in their token |
 | `playbooks`, `notifications`, `topologies`, `scrapers`, `canaries`, `plugins` | list of objects | Those resources, when they act on their own               |
 
-A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either, and no subject selects them (Section 2.3). An access token isn't a subject at all: a request made with one is checked as its owner (`identities.md`, Section 4). `people` selects humans only, whether by email or by `*`, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
+A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either, and no subject selects them (Section 2.3). An access token isn't an identity: a request made with one is checked as its owner (`identities.md`, Section 4). A token is selected only by the bindings created with it (Section 2.6). `people` selects humans only, whether by email or by `*`, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
 
 ### 2.1 People
 
@@ -204,6 +204,10 @@ Since resource subjects are matched this way, a binding also reaches resources c
 - An exact name not yet in use is taken by whoever first creates a resource with that name.
 
 Bind by exact namespace and name wherever the Role is sensitive, e.g. `connection:use` on a connection that pages people, or anything bound to `admin`. _Why it's allowed:_ a playbook or notification's access is a property of where it lives, like a Kubernetes pod using any service account in its namespace. Granting by namespace is how a team gives its own playbooks access without a binding per playbook. The binding is still the grant: creating a resource that matches no binding gets it nothing, whatever connections or resources it names (`identities.md`, Section 2).
+
+### 2.6 Access tokens
+
+A RoleBinding can select an access token, to limit it, but only when the token is created, for its owner (`token-bindings.md`). Neither a custom resource nor the RoleBinding API has a field that selects a token, and both are refused in the reserved namespace token bindings live in, so neither can write, change or delete one.
 
 ## 3. Constraint
 

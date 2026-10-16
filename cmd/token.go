@@ -96,18 +96,18 @@ var PasswordReset = &cobra.Command{
 }
 
 // parseTokenRoles parses Roles given as namespace/name. A token must list at least one.
-func parseTokenRoles(values []string) (models.AccessTokenRoles, error) {
+func parseTokenRoles(values []string) (db.AccessTokenRoles, error) {
 	if len(values) == 0 {
 		return nil, errors.New("must specify at least one --role, e.g. --role mission-control-builtin/admin --role mission-control-builtin/plugin-admin for all of the user's access")
 	}
 
-	var roles models.AccessTokenRoles
+	var roles db.AccessTokenRoles
 	for _, value := range values {
 		namespace, name, ok := strings.Cut(value, "/")
 		if !ok || namespace == "" || name == "" || strings.Contains(name, "/") {
 			return nil, fmt.Errorf("role %q must be namespace/name", value)
 		}
-		roles = append(roles, models.AccessTokenRole{Namespace: namespace, Name: name})
+		roles = append(roles, db.AccessTokenRole{Namespace: namespace, Name: name})
 	}
 	return roles, nil
 }

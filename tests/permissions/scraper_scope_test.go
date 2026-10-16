@@ -360,10 +360,10 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 			token := func(role string) context.Context {
 				ginkgo.GinkgoHelper()
 				_, token, err := db.CreateAccessTokenForPerson(DefaultContext, everyReader, "scraper-scopes-"+role, time.Hour, false,
-					models.AccessTokenRoles{{Namespace: namespace, Name: role}})
+					db.AccessTokenRoles{{Namespace: namespace, Name: role}})
 				Expect(err).ToNot(HaveOccurred())
 				ginkgo.DeferCleanup(func() {
-					Expect(DefaultContext.DB().Where("id = ?", token.ID).Delete(&models.AccessToken{}).Error).To(Succeed())
+					deleteToken(token.ID)
 				})
 				return mcRBAC.WithAccessToken(DefaultContext.WithUser(everyReader), token)
 			}
