@@ -139,9 +139,9 @@ _Why:_ a shared Role means the same thing wherever it's bound, and each binding 
 
 #### Token limits
 
-An access token names each Role by namespace and name (`limiting-permissions.md`, "Access tokens").
+An access token is bound to each Role by namespace and name (`limiting-permissions.md`, "Access tokens"). Its token bindings are in the `access-tokens` namespace, and name the Role as `namespace/name` (`rolebindings.md`, Section 2.6).
 
-_Why:_ a token has no namespace to resolve a bare name in.
+_Why:_ a token has no namespace to resolve a bare name in, and the shipped namespace holds only what Mission Control ships.
 
 ### Namespaces do not limit access
 
@@ -161,7 +161,7 @@ The word appears twice, with different meanings:
 **A subject may perform an action on a resource when a RoleBinding that selects the subject gives it a Role with a rule matching the action and resource.** The few actions that take no resource, e.g. `person:manage`, need a rule with that action alone (`roles.md`, Section 2.3). Otherwise it's refused. Nothing else grants anything, apart from deprecated Permissions (`permissions.md`).
 
 - **Every subject is checked the same way.** A person, a team member, a user of an external identity provider and a playbook acting on its own are all subjects. What kind of subject they are only decides which RoleBinding subjects can select them (`rolebindings.md`, Section 2). It never decides what they may do. Agents are the one exception: no RoleBinding selects them, so an agent may do only what its token allows (`identities.md`, Section 5).
-- **Owners act on what's theirs without a grant.** A subject's own credentials, and the data it pushes, belong to its identity rather than being granted by Roles: a person manages their own access tokens (`identities.md`, Section 4), and an agent pushes and fetches its own data (`identities.md`, Section 5). Nothing else is reached this way.
+- **Owners act on what's theirs without a grant.** A subject's own credentials, and the data it pushes, belong to its identity rather than being granted by Roles: a person manages their own access tokens and the bindings that limit them (`identities.md`, Section 4), and an agent pushes and fetches its own data (`identities.md`, Section 5). Nothing else is reached this way.
 - **Everything is a resource.** Every protected thing is a type a Scope selects, from configs to RoleBindings (`scopes.md`, Section 3.1). Data about a resource, such as a playbook's runs, follows it. The exceptions are named actions without a resource: accounts, the MCP server, properties, the event queue and job history (`roles.md`, Section 2.3). Properties alone are readable by every signed-in subject without a rule (`roles.md`, Section 3.1).
 - **Signing in grants nothing.** A new person or an invited person can do nothing until a RoleBinding selects them, directly or through a team their login maps them into (`rolebindings.md`, Section 2.2). A new agent can only push and fetch its own data, and no binding grants it more.
 - **Listings follow the same grants.** A subject lists every resource of a type their `read` rules cover whole, the resources their `read` rules select where they cover part of it, and is refused where none applies (`collection-access.md`).

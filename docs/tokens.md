@@ -40,13 +40,13 @@ Only the Argon2id hash is stored in the database. For v2 tokens, the hash input 
 
 ### Delegated token model
 
-A token is a credential: it signs in as its owner, and its Roles only limit what the owner may do on requests made with it.
+A token is a credential: it signs in as its owner, and its token bindings (RoleBindings that select it by id, `specs/authorization/rolebindings.md` Section 2.6) only limit what the owner may do on requests made with it.
 
 For `/auth/create_token`:
 
 1. An access token is created with `person_id` and `created_by` both set to the user. No person or RBAC rule is created for it.
 2. Signing in with the token makes the user the request's user, and puts the token on the request context.
-3. A check made as the request's own user is limited by the token's Roles: it allows only what one of their rules also allows, within the owner's access. Checks made as another subject, e.g. a playbook during a run the request started, aren't limited, and neither are the owner's other sessions and tokens.
+3. A check made as the request's own user is limited by the token's bindings: it allows only what one of their rules also allows, within the owner's access. Checks made as another subject, e.g. a playbook during a run the request started, aren't limited, and neither are the owner's other sessions and tokens.
 
 Since the owner's sessions and tokens share a subject, caches of per-subject results (RLS payloads, access summaries, PostgREST JWTs) are also keyed by the token.
 

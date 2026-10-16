@@ -36,7 +36,7 @@ _Why the resource and not its author:_ a resource's author can change, and resou
 
 Unlike the work in Section 2, a plugin's work always has a caller, and the plugin acts for them, except with connections.
 
-- Every check a plugin's work makes is made as the caller, with the caller's grants: reading a config, listing configs, and starting another plugin's operation (`invoke:<plugin>:<operation>`, then `read` on the config). If the caller used an access token, its Roles limit these checks (Section 4).
+- Every check a plugin's work makes is made as the caller, with the caller's grants: reading a config, listing configs, and starting another plugin's operation (`invoke:<plugin>:<operation>`, then `read` on the config). If the caller used an access token, its bindings limit these checks (Section 4).
 - Looking up a connection is the one exception. It's checked as the plugin, selected by `plugins` in a RoleBinding (`rolebindings.md`, Section 2.5), by whatever path the plugin resolves it: `read` lets it see a connection's name, type and settings, and `connection:use` lets it act with the credentials (`roles.md`, Section 2.2). The caller's access to the connection is never checked: a caller needs no grant on the plugin's connections, and their grants give the plugin none. A plugin without a grant that matches is refused, and the call fails. It's never retried as the caller or as any other subject.
 - A plugin can only be granted two actions, `read` and `connection:use`, on Scopes that select connections and nothing else. A RoleBinding that selects a plugin and binds a Role with any other rule, or with a rule whose Scope selects another type, is `Ready=False` and grants nothing, to any of its subjects, until the Role or the binding is changed. _Why:_ connection lookups are the only checks made as the plugin, so no other grant could take effect.
 - So whoever may invoke operation O of plugin X may have X act with X's connections, on any config they may read that X's selector matches. `invoke:X:O` is as sensitive as what O does with them: grant it with that in mind.
@@ -72,15 +72,29 @@ _Why the caller:_ a plugin does work someone asked for, so it reads with their a
 
 ## 4. Access tokens
 
-An access token is a credential, not a subject. A request made with a person's token is checked as that person, and RoleBindings select the person, never the token. Actions taken with it are recorded as the person's. What a token may do is limited by its Roles (`limiting-permissions.md`, "Access tokens").
+An access token is a credential, not an identity. A request made with a person's token is checked as that person, and RoleBindings grant the person, never the token. Actions taken with it are recorded as the person's. What a token may do is limited by its token bindings: the RoleBindings that select it (`limiting-permissions.md`, "Access tokens"; `rolebindings.md`, Section 2.6).
 
-- **Roles are required.** A person's token MUST list at least one Role, however it's created: through the UI, the API or the `auth token` CLI command. A token meant to do everything its owner may lists the shipped `admin` and `plugin-admin` Roles. An agent's token MUST NOT list any (Section 5). _Why:_ what a token may do is chosen when it's created, never everything by default.
-- **Tokens without Roles.** A person's token that lists no Role, e.g. one created before Roles were required, MUST be refused with `401 Unauthorized`. Mission Control deletes such tokens when it starts, and logs each one with its name and owner. Agents' tokens are kept. _Why break them:_ they can't be limited, and the scopes some of them had before Roles can't be told apart from no limit. Agents, the one use that can't afford the break, aren't affected.
-- **Tokens don't manage tokens.** A request made with a token can't create, change or delete a token, whatever its Roles. _Why:_ otherwise a limited token could create one without its limit.
+- **Bindings are required.** A person's token MUST be created with at least one Role, however it's created: through the UI, the API or the `auth token` CLI command. Each Role becomes a token binding. A token meant to do everything its owner may is bound to the shipped `admin` and `plugin-admin` Roles. _Why:_ what a token may do is chosen when it's created, never everything by default.
+- **A token no binding selects can do nothing.** It still signs in as its owner, but every check made with it fails. Only what needs no grant, e.g. properties, is reachable with it. _Why not refuse it:_ its bindings can change, and that changes its limit, not whether the credential is valid.
+- **Tokens don't manage tokens.** A request made with a token can't create, change or delete a token or its bindings, whatever its bindings. _Why:_ otherwise a limited token could lift its own limit, or create a token without it.
 
 A person may create, change and delete their own tokens, without any grant, but not through a token. No person can create, change or delete a token for another person, and no action grants it.
 
-An agent's token is different: it's created with the agent, by a subject with `create` on `agent`, and handed to them (Section 5). Listing an agent's tokens takes `read` on `agent`; it shows when each was created and expires, never the token. Rotating or revoking an agent's token takes `update` on `agent`. An agent's token lists no Roles.
+### 4.1 Token bindings
+
+A person may create, change and delete the bindings of their own tokens without any grant on RoleBindings. This is the only way a person writes a RoleBinding without one (`overview.md`, "Access").
+
+- **Only through the token API.** Token bindings are written only when a token is created, and through the endpoint that changes a token's bindings. They MUST NOT be written as a custom resource or through the RoleBinding API, which have no field to select a token.
+- **One token, the caller's own.** A token binding selects exactly one token, which the caller owns and created, and no other subject. It MUST NOT be written through a token, or for a token of an agent or of another person.
+- **Any Role.** A token may be bound to any Role, named by namespace and name, whether or not its owner may read it. Its status then reveals whether a Role of that name exists, but none of its rules. _Why:_ a Role's name is accepted as discoverable; its rules aren't.
+- **Deleted with the token.** A token's bindings are deleted when it is.
+- **Listed with the token.** A person listing their tokens sees each token's bindings, without needing to read RoleBindings.
+
+_Why no grant:_ creating RoleBindings is a high privilege because a binding grants: it gives a Role to people, teams and resources. A token binding grants nothing. Every check made with a token is also checked as its owner, so a binding can only narrow what the owner can already do with that token. It adds nothing to the owner, to anyone else, or to the token beyond its owner. Requiring a grant on RoleBindings would keep anyone without that high privilege from creating a usable token, and protect nothing.
+
+_Why a RoleBinding:_ a token's limit is a Role bound to the token, which is what a RoleBinding is. Storing it as one keeps a single way to bind a Role, compiled, reported and narrowed the same way, instead of a second list of Roles on the token.
+
+An agent's token is different: it's created with the agent, by a subject with `create` on `agent`, and handed to them (Section 5). Listing an agent's tokens takes `read` on `agent`; it shows when each was created and expires, never the token. Rotating or revoking an agent's token takes `update` on `agent`. An agent's token has no bindings, and none can be added: it isn't limited (Section 5).
 
 _Why no grant:_ a token adds no access its owner doesn't already have, so there's nothing for a Role to decide.
 
