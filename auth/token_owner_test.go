@@ -25,7 +25,7 @@ type signedIn struct {
 	code          int
 	user          uuid.UUID
 	madeWithToken bool
-	limit         models.AccessTokenRoles
+	limit         uuid.UUID
 	limited       bool
 	otherLimited  bool
 }
@@ -113,7 +113,7 @@ var _ = ginkgo.Describe("Access tokens sign in as their owner", ginkgo.Ordered, 
 			Expect(got.user).To(Equal(owner.ID))
 			Expect(got.madeWithToken).To(BeTrue())
 			Expect(got.limited).To(BeTrue())
-			Expect(got.limit).To(Equal(viewerRole))
+			Expect(got.limit).To(Equal(row.ID))
 			Expect(got.otherLimited).To(BeFalse(), "another subject isn't limited by the token")
 
 			Expect(DeleteAccessToken(DefaultContext, row.ID.String())).To(Succeed())
@@ -139,12 +139,12 @@ var _ = ginkgo.Describe("Access tokens sign in as their owner", ginkgo.Ordered, 
 		_, limited := icrbac.TokenLimit(icrbac.WithAccessToken(DefaultContext.WithUser(agentPerson).WithAgent(otherAgent), agentToken), agentPerson.ID.String())
 		Expect(limited).To(BeTrue())
 
-		// A person's token that lists no Roles may do nothing
-		rolesless := &models.AccessToken{ID: uuid.New(), PersonID: owner.ID}
-		ctx := icrbac.WithAccessToken(DefaultContext.WithUser(owner), rolesless)
-		roles, limited := icrbac.TokenLimit(ctx, owner.ID.String())
+		// A person's token that no RoleBinding selects may do nothing
+		unbound := &models.AccessToken{ID: uuid.New(), PersonID: owner.ID}
+		ctx := icrbac.WithAccessToken(DefaultContext.WithUser(owner), unbound)
+		tokenID, limited := icrbac.TokenLimit(ctx, owner.ID.String())
 		Expect(limited).To(BeTrue())
-		Expect(roles).To(BeEmpty())
+		Expect(tokenID).To(Equal(unbound.ID))
 		Expect(icrbac.TokenAllowsObject(ctx, owner.ID.String(), policy.ObjectCatalog, policy.ActionRead)).To(BeFalse())
 	})
 
@@ -180,7 +180,7 @@ var _ = ginkgo.Describe("Access tokens sign in as their owner", ginkgo.Ordered, 
 			ginkgo.GinkgoHelper()
 			token, err := accesstoken.Generate()
 			Expect(err).ToNot(HaveOccurred())
-			row := models.AccessToken{Name: "legacy-" + uuid.NewString()[:8], Value: token.Hash(), PersonID: person.ID, CreatedBy: createdBy, Roles: viewerRole}
+			row := models.AccessToken{Name: "legacy-" + uuid.NewString()[:8], Value: token.Hash(), PersonID: person.ID, CreatedBy: createdBy}
 			Expect(DefaultContext.DB().Create(&row).Error).To(Succeed())
 			return token.V2().PlainText(), row
 		}
@@ -264,6 +264,6 @@ var _ = ginkgo.Describe("Access tokens sign in as their owner", ginkgo.Ordered, 
 		Expect(got.code).To(Equal(http.StatusOK))
 		Expect(got.user).To(Equal(owner.ID))
 		Expect(got.limited).To(BeTrue())
-		Expect(got.limit).To(Equal(viewerRole))
+		Expect(got.limit).To(Equal(token.ID))
 	})
 })

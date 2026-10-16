@@ -56,8 +56,8 @@ var _ = ginkgo.Describe("RoleBinding selecting every person", ginkgo.Ordered, fu
 
 	createToken := func(owner *models.Person, name string, roles ...string) *models.AccessToken {
 		ginkgo.GinkgoHelper()
-		tokenRoles := lo.Map(roles, func(role string, _ int) models.AccessTokenRole {
-			return models.AccessTokenRole{Namespace: namespace, Name: role}
+		tokenRoles := lo.Map(roles, func(role string, _ int) db.AccessTokenRole {
+			return db.AccessTokenRole{Namespace: namespace, Name: role}
 		})
 		_, token, err := db.CreateAccessTokenForPerson(DefaultContext, owner, name, 0, false, tokenRoles)
 		Expect(err).ToNot(HaveOccurred())

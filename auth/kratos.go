@@ -179,7 +179,7 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			ctx.GetSpan().RecordError(err)
 			if errors.Is(err, accesstoken.ErrInvalidFormat) {
 				return c.String(http.StatusBadRequest, "invalid access token")
-			} else if errors.Is(err, errTokenExpired) || errors.Is(err, errTokenWithoutRoles) {
+			} else if errors.Is(err, errTokenExpired) {
 				setWWWAuthenticate(c)
 				return c.String(http.StatusUnauthorized, err.Error())
 			}

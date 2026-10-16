@@ -10,7 +10,7 @@ import (
 	"github.com/flanksource/commons/duration"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 
@@ -18,6 +18,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/mail"
 	icrbac "github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 func RegisterRoutes(e *echo.Echo) {
@@ -144,8 +145,9 @@ type CreateTokenRequest struct {
 	Expiry    string `json:"expiry"`
 	AutoRenew bool   `json:"auto_renew"`
 
-	// Roles limit the token to what one of their rules also matches, within its owner's access. At least one is required.
-	Roles models.AccessTokenRoles `json:"roles"`
+	// Roles limit the token to what one of their rules also matches, within its owner's access. Each becomes a
+	// RoleBinding that selects the token. At least one is required.
+	Roles db.AccessTokenRoles `json:"roles"`
 }
 
 func CreateToken(c echo.Context) error {
@@ -203,10 +205,23 @@ func ListTokens(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "error fetching user"))
 	}
 
+	if madeWithAccessToken(ctx) {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "access tokens can't be listed with an access token"))
+	}
+
 	// A person lists their own tokens without a grant. Agents' tokens are listed with the agent.
 	payload, err := db.ListAccessTokens(ctx, user.ID)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "unable to list tokens"))
+	}
+
+	// A binding's validation message can name its Role's rules and Scopes
+	if !icrbac.CheckContext(ctx, adapter.ObjectRoles, policy.ActionRead) {
+		for i := range payload {
+			for j := range payload[i].RoleBindings {
+				payload[i].RoleBindings[j].Error = nil
+			}
+		}
 	}
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success", Payload: payload})
 }

@@ -49,7 +49,8 @@ func GetPermissionsForToken(c echo.Context) error {
 		})
 	}
 
-	perms, err := rbac.PermsForUser(token.PersonID.String())
+	// The token's limit: the policies of the RoleBindings that select it. What it may do is also capped by its owner's.
+	perms, err := rbac.PermsForUser(models.AccessTokenPrincipal(token.ID))
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Err:     err.Error(),
@@ -79,9 +80,9 @@ func SubjectAccessReviews(c echo.Context) error {
 		return api.WriteError(c, err)
 	}
 
-	// A Role's limit principal isn't a subject. Checking it would join it to everyone, widening every token it limits.
+	// An access token isn't a subject, and its limit isn't for anyone allowed to review access to probe.
 	for _, subject := range req.Subjects {
-		if strings.HasPrefix(subject, adapter.RoleLimitPrincipalPrefix) {
+		if strings.HasPrefix(subject, models.AccessTokenPrincipalPrefix) {
 			return api.WriteError(c, api.Errorf(api.EINVALID, "%q isn't a subject", subject))
 		}
 	}
@@ -104,6 +105,11 @@ func SubjectAccessSearch(c echo.Context) error {
 	var req SubjectAccessSearchRequest
 	if err := c.Bind(&req); err != nil {
 		return api.WriteError(c, api.Errorf(api.EINVALID, "invalid request body: %v", err))
+	}
+
+	// An access token isn't a subject, and its limit isn't for anyone allowed to review access to probe.
+	if strings.HasPrefix(req.Subject, models.AccessTokenPrincipalPrefix) {
+		return api.WriteError(c, api.Errorf(api.EINVALID, "%q isn't a subject", req.Subject))
 	}
 
 	response, err := rbac.RunSubjectAccessSearch(ctx, req)

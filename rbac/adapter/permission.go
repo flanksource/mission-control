@@ -145,14 +145,9 @@ func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
 	}
 
 	for _, role := range roles {
-		rules, err := ValidateRole(a.ctx, a.cache, role)
+		_, err := ValidateRole(a.ctx, a.cache, role)
 		if err := recordValidity(a.ctx, role.TableName(), role.ID, role.Namespace, role.Name, role.Source, role.Error, role.ErrorReason, err); err != nil {
 			return err
-		}
-		if err == nil {
-			if err := loadRoleLimit(a.ctx, m, role, rules); err != nil {
-				return err
-			}
 		}
 	}
 	rolesByName := lo.KeyBy(roles, func(r models.Role) string { return r.Namespace + "/" + r.Name })
@@ -190,25 +185,6 @@ func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
 	}
 
 	recordUnappliedReports(reports)
-	return nil
-}
-
-// loadRoleLimit files the rules of a valid Role under its limit principal, which access tokens limited by the Role
-// are checked against. A rule that can't be compiled is left out, so the limit matches less, never more.
-func loadRoleLimit(ctx context.Context, m model.Model, role models.Role, rules []ResolvedRule) error {
-	principal := RoleLimitPrincipal(role.Namespace, role.Name)
-	for _, rule := range RoleLimitRules(role, rules) {
-		policies, err := compiledRuleToCasbinRules(principal, rule)
-		if err != nil {
-			ctx.Warnf("role %s/%s: rule %s doesn't limit access tokens: %v", role.Namespace, role.Name, rule.Name, err)
-			continue
-		}
-		for _, policy := range policies {
-			if err := persist.LoadPolicyArray(policy, m); err != nil {
-				return err
-			}
-		}
-	}
 	return nil
 }
 
@@ -344,9 +320,9 @@ func (a *PermissionAdapter) loadBasePolicy(m model.Model) error {
 	}
 
 	for _, line := range lines {
-		// A Role's limit principal only holds the Role's own rules (loadRoleLimit). A stored row for it,
-		// e.g. a grouping into everyone written by a check made as it, would widen every token it limits.
-		if strings.HasPrefix(line.V0, RoleLimitPrincipalPrefix) {
+		// A token's principal only holds the bindings that select it. A stored row for it, e.g. a grouping
+		// into everyone written by a check made as it, would widen the token's limit.
+		if strings.HasPrefix(line.V0, models.AccessTokenPrincipalPrefix) {
 			continue
 		}
 		if err := loadCasbinRule(line, m); err != nil {
@@ -596,6 +572,17 @@ func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding,
 	allSubjects = append(allSubjects, teams...)
 	allSubjects = append(allSubjects, plugins...)
 
+	tokenID, isToken, err := bindingAccessToken(binding)
+	if err != nil {
+		return nil, nil, err
+	} else if isToken {
+		token, err := a.resolveAccessToken(tokenID)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to resolve the access token of role binding %s/%s: %w", binding.Namespace, binding.Name, err)
+		}
+		allSubjects = append(allSubjects, token...)
+	}
+
 	for _, subject := range lo.Uniq(allSubjects) {
 		policies = append(policies, []string{"g", subject, principal, "", "", ""})
 	}
@@ -604,8 +591,18 @@ func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding,
 }
 
 // RoleBindingSpec returns the spec of a stored binding, validated on its own.
+//
+// A binding created with an access token has no subjects of v1.RoleBindingSubjects: its only subject is the token
+// (bindingAccessToken), so it's validated without them.
 func RoleBindingSpec(binding models.RoleBinding) (v1.RoleBindingSpec, error) {
 	spec := v1.RoleBindingSpec{Role: binding.Role}
+	if _, isToken, err := bindingAccessToken(binding); err != nil {
+		return spec, err
+	} else if isToken {
+		_, _, err := BindingRoleRef(binding)
+		return spec, err
+	}
+
 	if len(binding.Subjects) > 0 {
 		if err := json.Unmarshal(binding.Subjects, &spec.Subjects); err != nil {
 			return spec, NewValidationError("role binding %s/%s: invalid subjects: %v", binding.Namespace, binding.Name, err)
@@ -662,6 +659,18 @@ func (a *PermissionAdapter) resolvePeopleByEmail(emails []string) ([]string, err
 		Where("email IN ?", emails).
 		Find(&ids).Error
 	return ids, err
+}
+
+// resolveAccessToken returns the principal of the person's access token with the id, or none when it doesn't exist.
+// Agents' tokens aren't limited, so they're never selected.
+func (a *PermissionAdapter) resolveAccessToken(id uuid.UUID) ([]string, error) {
+	var found []uuid.UUID
+	err := a.ctx.DB().Raw(`SELECT t.id FROM access_tokens t JOIN people p ON p.id = t.person_id
+		WHERE t.id = ? AND p.type IS DISTINCT FROM ?`, id, "agent").Scan(&found).Error
+	if err != nil {
+		return nil, err
+	}
+	return lo.Map(found, func(id uuid.UUID, _ int) string { return models.AccessTokenPrincipal(id) }), nil
 }
 
 func (a *PermissionAdapter) resolveTeams(names []string) ([]string, error) {

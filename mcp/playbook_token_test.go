@@ -47,7 +47,7 @@ var _ = ginkgo.Describe("Running a playbook through MCP with an access token", g
 			[]string{policy.ActionRead, policy.ActionMCPRun})).To(Succeed())
 
 		_, token, err = db.CreateAccessTokenForPerson(DefaultContext, owner, "mcp-only", 0, false,
-			models.AccessTokenRoles{{Namespace: namespace, Name: "mcp-only"}})
+			db.AccessTokenRoles{{Namespace: namespace, Name: "mcp-only"}})
 		Expect(err).ToNot(HaveOccurred())
 
 		playbookToolNameToID.Store(toolName, dummy.EchoConfig.ID.String())

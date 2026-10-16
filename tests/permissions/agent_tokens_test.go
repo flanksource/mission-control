@@ -85,7 +85,7 @@ var _ = Describe("Agent access tokens", Ordered, func() {
 
 		var err error
 		_, personal, err = db.CreateAccessTokenForPerson(DefaultContext, writer, "personal", time.Hour, false,
-			models.AccessTokenRoles{{Namespace: namespace, Name: "update-agents"}})
+			db.AccessTokenRoles{{Namespace: namespace, Name: "update-agents"}})
 		Expect(err).ToNot(HaveOccurred())
 		writerToken = personal
 

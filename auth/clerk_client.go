@@ -385,7 +385,7 @@ func (h ClerkHandler) authenticateBearerOrCookie(ctx context.Context, c echo.Con
 func (h ClerkHandler) authenticateWithToken(ctx context.Context, c echo.Context, token string) (AuthResult, error) {
 	accessToken, err := getAccessToken(ctx, token)
 	if err != nil {
-		if errors.Is(err, accesstoken.ErrInvalidFormat) || errors.Is(err, errTokenExpired) || errors.Is(err, errTokenWithoutRoles) {
+		if errors.Is(err, accesstoken.ErrInvalidFormat) || errors.Is(err, errTokenExpired) {
 			ctx.GetSpan().RecordError(err)
 			return AuthResult{}, c.String(http.StatusUnauthorized, fmt.Sprintf("Unauthorized: %s", err.Error()))
 		}

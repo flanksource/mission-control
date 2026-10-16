@@ -8,6 +8,7 @@ import (
 
 	"github.com/flanksource/incident-commander/db"
 	icrbac "github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/samber/lo"
 
 	dutyAPI "github.com/flanksource/duty/api"
@@ -56,7 +57,7 @@ func findTokenByName(ctx context.Context, tokenName string) models.AccessToken {
 	return token
 }
 
-var testRoles = models.AccessTokenRoles{{Namespace: "mission-control-builtin", Name: "viewer"}}
+var testRoles = db.AccessTokenRoles{{Namespace: "mission-control-builtin", Name: "viewer"}}
 
 var _ = Describe("CreateToken", Ordered, func() {
 	var (
@@ -100,7 +101,7 @@ var _ = Describe("CreateToken", Ordered, func() {
 		It("refuses a token without roles", func() {
 			ctx := DefaultContext.WithUser(testUser)
 			_ = postCreateToken(ctx, e, CreateTokenRequest{Name: "no-roles-token"}, http.StatusBadRequest)
-			_ = postCreateToken(ctx, e, CreateTokenRequest{Name: "no-roles-token", Roles: models.AccessTokenRoles{}}, http.StatusBadRequest)
+			_ = postCreateToken(ctx, e, CreateTokenRequest{Name: "no-roles-token", Roles: db.AccessTokenRoles{}}, http.StatusBadRequest)
 
 			_, err := gorm.G[models.AccessToken](DefaultContext.DB()).Where("name = ?", "no-roles-token").First(DefaultContext)
 			Expect(err).To(MatchError(gorm.ErrRecordNotFound))
@@ -109,7 +110,7 @@ var _ = Describe("CreateToken", Ordered, func() {
 		It("creates the token for its owner, without a person of its own", func() {
 			reqData := CreateTokenRequest{
 				Name:  "limited-token",
-				Roles: models.AccessTokenRoles{{Namespace: "anywhere", Name: "readonly"}},
+				Roles: db.AccessTokenRoles{{Namespace: "anywhere", Name: "readonly"}},
 			}
 
 			var peopleBefore int64
@@ -119,7 +120,13 @@ var _ = Describe("CreateToken", Ordered, func() {
 			_ = postCreateToken(ctx, e, reqData, http.StatusOK)
 
 			token := findTokenByName(ctx, reqData.Name)
-			Expect(token.Roles).To(Equal(reqData.Roles))
+			bindings, err := adapter.AccessTokenBindings(DefaultContext, token.ID)
+			Expect(err).To(BeNil())
+			Expect(bindings).To(HaveLen(1), "the token is limited by a RoleBinding of its Role")
+			Expect(bindings[0].Namespace).To(Equal(adapter.AccessTokenNamespace))
+			Expect(bindings[0].Name).To(Equal(adapter.AccessTokenBindingName(token.ID, "anywhere", "readonly")))
+			Expect(bindings[0].Role).To(Equal("anywhere/readonly"))
+			Expect(bindings[0].Source).To(Equal(adapter.SourceAccessToken))
 			Expect(token.PersonID).To(Equal(testUser.ID))
 			Expect(token.CreatedBy).To(Equal(&testUser.ID))
 

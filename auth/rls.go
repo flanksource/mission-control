@@ -82,9 +82,9 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 	if err != nil {
 		return nil, ctx.Oops().Wrap(err)
 	}
-	if tokenRoles, limited := rbac.TokenLimit(ctx, subject); limited {
-		// A token lists the rows both its owner's read grants and its Roles select (roles.md, Section 4.5)
-		if payload, err = limitToTokenRoles(ctx, payload, tokenRoles); err != nil {
+	if tokenID, limited := rbac.TokenLimit(ctx, subject); limited {
+		// A token lists the rows both its owner's read grants and its RoleBindings select (roles.md, Section 4.5)
+		if payload, err = limitToTokenBindings(ctx, payload, tokenID); err != nil {
 			return nil, ctx.Oops().Wrap(err)
 		}
 	}
@@ -93,19 +93,19 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 	return payload, nil
 }
 
-// limitToTokenRoles narrows the owner's row filters, built from the owner's read grants, to the rows the read rules
-// of the token's Roles list: a row is listed when a grant of the owner and a grant of a Role both admit it. Rows of
-// generated view tables stamped for a Permission's Scopes aren't listed. A Role that's missing or invalid lists nothing.
-func limitToTokenRoles(ctx context.Context, owner *rls.Payload, roles models.AccessTokenRoles) (*rls.Payload, error) {
+// limitToTokenBindings narrows the owner's row filters, built from the owner's read grants, to the rows the read
+// rules of the token's RoleBindings list: a row is listed when a grant of the owner and a grant of a binding both
+// admit it. Rows of generated view tables stamped for a Permission's Scopes aren't listed. A binding that's invalid,
+// or whose Role is missing or invalid, lists nothing.
+func limitToTokenBindings(ctx context.Context, owner *rls.Payload, tokenID uuid.UUID) (*rls.Payload, error) {
+	rules, err := adapter.LoadAccessTokenLimitRules(ctx, tokenID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load the rules that limit access token %s: %w", tokenID, err)
+	}
+
 	limit := newClaim()
-	for _, role := range roles {
-		rules, err := adapter.LoadRoleLimitRules(ctx, role.Namespace, role.Name)
-		if err != nil {
-			return nil, fmt.Errorf("failed to load the rules of role %s/%s: %w", role.Namespace, role.Name, err)
-		}
-		for _, rule := range rules {
-			limit.grantRule(rule)
-		}
+	for _, rule := range rules {
+		limit.grantRule(rule)
 	}
 
 	result := &rls.Payload{}

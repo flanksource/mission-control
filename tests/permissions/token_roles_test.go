@@ -119,8 +119,8 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 	// createToken creates a token of the owner through the API.
 	createToken := func(owner *models.Person, name string, roles ...string) tokenCaller {
 		ginkgo.GinkgoHelper()
-		tokenRoles := lo.Map(roles, func(role string, _ int) models.AccessTokenRole {
-			return models.AccessTokenRole{Namespace: namespace, Name: role}
+		tokenRoles := lo.Map(roles, func(role string, _ int) db.AccessTokenRole {
+			return db.AccessTokenRole{Namespace: namespace, Name: role}
 		})
 		rec := do(session(owner), http.MethodPost, "/auth/create_token", auth.CreateTokenRequest{Name: name, Roles: tokenRoles})
 		Expect(rec.Code).To(Equal(http.StatusOK), rec.Body.String())
@@ -343,7 +343,7 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		subjectToken := createToken(carol, "summary-subject", "summary-limit")
 		ginkgo.DeferCleanup(func() {
 			for _, caller := range []tokenCaller{adminToken, subjectToken} {
-				Expect(DefaultContext.DB().Delete(caller.token).Error).To(Succeed())
+				deleteToken(caller.token.ID)
 			}
 			Expect(DefaultContext.DB().Delete(admin).Error).To(Succeed())
 		})

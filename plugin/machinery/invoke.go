@@ -266,7 +266,7 @@ func WithInvocationAccessToken(ctx dutyContext.Context, claims *plugin.Invocatio
 	}
 
 	var token models.AccessToken
-	if err := ctx.DB().Select("id", "person_id", "roles").Where("id = ?", *claims.AccessToken).First(&token).Error; err != nil {
+	if err := ctx.DB().Select("id", "person_id").Where("id = ?", *claims.AccessToken).First(&token).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return ctx, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("the access token of the plugin invocation was deleted")
 		}

@@ -18,7 +18,7 @@ var _ = ginkgo.Describe("Plugin invocations made with an access token", ginkgo.O
 		tokenA     *models.AccessToken
 		tokenB     *models.AccessToken
 		entry      = &plugin.Entry{ID: uuid.New(), Name: "invocation-token-test"}
-		viewerRole = models.AccessTokenRoles{{Namespace: "mission-control-builtin", Name: "viewer"}}
+		viewerRole = db.AccessTokenRoles{{Namespace: "mission-control-builtin", Name: "viewer"}}
 	)
 
 	mint := func(accessToken *uuid.UUID) string {
@@ -57,9 +57,9 @@ var _ = ginkgo.Describe("Plugin invocations made with an access token", ginkgo.O
 		claims := &plugin.InvocationTokenClaims{AccessToken: &tokenB.ID}
 		ctx, err := WithInvocationAccessToken(DefaultContext.WithUser(owner), claims)
 		Expect(err).ToNot(HaveOccurred())
-		roles, limited := icrbac.TokenLimit(ctx, owner.ID.String())
+		tokenID, limited := icrbac.TokenLimit(ctx, owner.ID.String())
 		Expect(limited).To(BeTrue())
-		Expect(roles).To(Equal(viewerRole))
+		Expect(tokenID).To(Equal(tokenB.ID))
 
 		Expect(db.DeleteAccessToken(DefaultContext, tokenB.ID.String())).To(Succeed())
 		_, err = WithInvocationAccessToken(DefaultContext.WithUser(owner), claims)

@@ -163,7 +163,7 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 		for name, reader := range readers {
 			for _, role := range []string{"outside", name} {
 				_, token, err := db.CreateAccessTokenForPerson(DefaultContext, reader, namespace+"-"+name+"-"+role, time.Hour, false,
-					models.AccessTokenRoles{{Namespace: namespace, Name: role}})
+					db.AccessTokenRoles{{Namespace: namespace, Name: role}})
 				Expect(err).ToNot(HaveOccurred())
 				tokenIDs = append(tokenIDs, token.ID)
 				tokens[name+"-"+role] = mcRBAC.WithAccessToken(as(reader), token)
@@ -187,8 +187,8 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.RoleBinding{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Role{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Scope{}).Error).To(Succeed())
-		if len(tokenIDs) > 0 {
-			Expect(DefaultContext.DB().Where("id IN ?", tokenIDs).Delete(&models.AccessToken{}).Error).To(Succeed())
+		for _, id := range tokenIDs {
+			deleteToken(id)
 		}
 		for _, person := range append(lo.Values(readers), adminRole, nobody) {
 			Expect(DefaultContext.DB().Delete(person).Error).To(Succeed())

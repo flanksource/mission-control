@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	dbModels "github.com/flanksource/incident-commander/db/models"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 const (
@@ -149,15 +151,44 @@ func UpdateAccessTokenExpiry(ctx context.Context, tokenID uuid.UUID, newExpiry t
 type AccessTokenWithUser struct {
 	models.AccessToken
 	Person models.Person `json:"person" gorm:"foreignKey:PersonID"`
+
+	// RoleBindings are the bindings that select the token, which limit it.
+	RoleBindings []AccessTokenBinding `json:"role_bindings" gorm:"-"`
+}
+
+// AccessTokenBinding is what a token's owner sees of a RoleBinding that limits it: the Role, and whether it's in
+// effect. Error, the binding's validation message, can name the Role's rules and Scopes, so it's only for those who
+// may read Roles (specs/authorization/token-bindings.md, Section 3).
+type AccessTokenBinding struct {
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Role        string    `json:"role"`
+	Ready       bool      `json:"ready"`
+	ErrorReason *string   `json:"error_reason,omitempty"`
+	Error       *string   `json:"error,omitempty"`
 }
 
 // ListAccessTokens lists the person's own tokens: those they created that sign in as them.
 func ListAccessTokens(ctx context.Context, owner uuid.UUID) ([]AccessTokenWithUser, error) {
-	return gorm.G[AccessTokenWithUser](ctx.DB()).
-		Select("id", "name", "person_id", "created_at", "roles").
+	tokens, err := gorm.G[AccessTokenWithUser](ctx.DB()).
+		Select("id", "name", "person_id", "created_at", "expires_at").
 		Where("person_id = ? AND created_by = ?", owner, owner).
 		Preload("Person", nil).
 		Find(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	for i, token := range tokens {
+		bindings, err := adapter.AccessTokenBindings(ctx, token.ID)
+		if err != nil {
+			return nil, err
+		}
+		tokens[i].RoleBindings = lo.Map(bindings, func(b models.RoleBinding, _ int) AccessTokenBinding {
+			return AccessTokenBinding{ID: b.ID, Name: b.Name, Role: b.Role, Ready: b.Error == nil, ErrorReason: b.ErrorReason, Error: b.Error}
+		})
+	}
+	return tokens, nil
 }
 
 // ListPersonAccessTokens lists the access tokens of the person, e.g. an agent's, without their values.
@@ -198,12 +229,21 @@ func GetPersonType(ctx context.Context, id string) (string, error) {
 	return person.Type, nil
 }
 
-// DeleteAccessToken deletes the access token.
+// DeleteAccessToken deletes the access token, and the RoleBindings created with it.
 func DeleteAccessToken(ctx context.Context, id string) error {
-	if err := ctx.DB().Where("id = ?", id).Delete(&models.AccessToken{}).Error; err != nil {
-		return ctx.Oops().Wrapf(err, "failed to delete access token %s", id)
-	}
-	return nil
+	return ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
+		if err := txCtx.DB().Model(&models.RoleBinding{}).
+			Where("source = ? AND namespace = ? AND deleted_at IS NULL", adapter.SourceAccessToken, adapter.AccessTokenNamespace).
+			Where("subjects->>'accessToken' = ?", id).
+			Update("deleted_at", duty.Now()).Error; err != nil {
+			return ctx.Oops().Wrapf(err, "failed to delete the role bindings of access token %s", id)
+		}
+
+		if err := txCtx.DB().Where("id = ?", id).Delete(&models.AccessToken{}).Error; err != nil {
+			return ctx.Oops().Wrapf(err, "failed to delete access token %s", id)
+		}
+		return nil
+	})
 }
 
 func AddPersonToTeam(ctx context.Context, personID uuid.UUID, teamID uuid.UUID) error {

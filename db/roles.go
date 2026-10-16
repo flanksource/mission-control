@@ -56,16 +56,27 @@ func PersistRoleFromCRD(ctx context.Context, obj *v1.Role) error {
 // name of a shipped one, isn't in effect.
 const ReasonShipped = "Shipped"
 
-// notShipped returns a not-ready error for an object in the shipped namespace, which only Mission Control writes to.
-func notShipped(namespace string) error {
-	if namespace != adapter.ShippedNamespace {
-		return nil
-	}
+// ReasonAccessToken is the reason a Kubernetes Scope, Role or RoleBinding in the namespace of access tokens' bindings
+// isn't in effect.
+const ReasonAccessToken = "AccessToken"
 
-	return &kopper.NotReadyError{
-		Reason:  ReasonShipped,
-		Message: fmt.Sprintf("namespace %s is reserved for objects shipped with Mission Control", namespace),
+// notShipped returns a not-ready error for an object in a namespace only Mission Control writes to: the shipped
+// namespace, and the namespace of access tokens' bindings. Nothing of the object is stored, so it can't take the
+// name of one Mission Control wrote.
+func notShipped(namespace string) error {
+	switch namespace {
+	case adapter.ShippedNamespace:
+		return &kopper.NotReadyError{
+			Reason:  ReasonShipped,
+			Message: fmt.Sprintf("namespace %s is reserved for objects shipped with Mission Control", namespace),
+		}
+	case adapter.AccessTokenNamespace:
+		return &kopper.NotReadyError{
+			Reason:  ReasonAccessToken,
+			Message: fmt.Sprintf("namespace %s is reserved for the role bindings of access tokens", namespace),
+		}
 	}
+	return nil
 }
 
 // PersistRole stores the role as written, with why it isn't in effect when it's invalid.
@@ -217,11 +228,16 @@ func DeleteRoleBinding(ctx context.Context, id string) error {
 }
 
 // DeleteStaleRoleBinding replaces an older binding of the same name with the newer one.
+// An access token's binding is never replaced, whatever its namespace.
 func DeleteStaleRoleBinding(ctx context.Context, newer *v1.RoleBinding) error {
+	if err := notShipped(newer.GetNamespace()); err != nil {
+		return err
+	}
+
 	if err := ctx.DB().Model(&models.RoleBinding{}).
 		Where("namespace = ? AND name = ?", newer.Namespace, newer.Name).
 		Where("id != ?", newer.UID).
-		Where("source != ?", adapter.SourceShipped).
+		Where("source NOT IN ?", []string{adapter.SourceShipped, adapter.SourceAccessToken}).
 		Where("deleted_at IS NULL").
 		Update("deleted_at", duty.Now()).Error; err != nil {
 		return err
