@@ -51,9 +51,11 @@ For `/auth/create_token`:
 2. Signing in with the token makes the user the request's user, and puts the token on the request context.
 3. A check made as the request's own user is limited by the token: it must pass for both the owner and the token's own casbin subject, `token:<id>`. Checks made as another subject, e.g. a playbook during a run the request started, aren't limited, and neither are the owner's other sessions and tokens.
 
-Each of a token's RoleBindings has no constraint, so it's one grouping of `token:<id>` into its Role's shared policies (`binding-policies.md`). The token API adds those groupings to the enforcer in memory when the token's transaction commits, so the token works as soon as it's returned. A token created by the `auth token` command, in another process, is picked up by the next policy reload.
+Each of a token's RoleBindings is compiled like any other binding, under its own principal, and `token:<id>` is grouped into it. The token API reloads the policy from the database after the token's transaction commits and before it returns, so the token works as soon as it's returned. A reload that runs at the same time also reads the committed rows, so it can't drop the token. A token created by the `auth token` command, in another process, is picked up by the next policy reload.
 
-`token:<id>` is never the subject of a request, gets no implicit grants (the `everyone` role a person joins on their first check), and is refused as the subject of an access review or access search. A stored casbin row for it is ignored when the policy loads.
+Every token binding to a large Role adds a copy of its rules, e.g. about 80 for `admin`, and casbin walks every policy on each check. That's accepted at the expected number of tokens. Sharing one copy of a Role's rules between bindings without a constraint would remove the cost, and is left for later.
+
+`token:<id>` is never the subject of a request, gets no implicit grants (the `everyone` role a subject joins on its first check), and is refused as the subject of an access review or access search. A stored casbin row for it is ignored when the policy loads.
 
 _Why a casbin subject per token:_ it reuses the same policies as every other binding, so a token's limit needs no evaluator of its own.
 

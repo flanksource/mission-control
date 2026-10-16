@@ -6,7 +6,7 @@ A token binding is a RoleBinding whose subject is an access token. It isn't a ki
 
 A token may do what its owner may do, and only what a rule of one of its bindings' Roles also matches (`limiting-permissions.md`, "Access tokens"). Every check made with a token is checked as its owner too, so a binding can only narrow what the owner can already do with that token. It adds nothing to the owner, to anyone else, or to the token beyond its owner.
 
-- **A token is never a subject of its own.** Nothing is granted to a token except through its bindings: it MUST NOT get the implicit grants every person gets, and no other binding, team or Permission can select it. An access review or access search MUST NOT be run as a token. _Why:_ any grant of its own would let a token's limit reach beyond its bindings, and probing a token's limit would tell anyone allowed to review access what another person's token can do.
+- **A token is never a subject of its own.** Nothing reaches a token except its bindings: no other binding, team or Permission can select it. An access review or access search MUST NOT be run as a token. _Why:_ any grant of its own would let a token's limit reach beyond its bindings, and probing a token's limit would tell anyone allowed to review access what another person's token can do.
 
 ## 2. Who may write it
 
@@ -25,7 +25,7 @@ _Why not a custom resource:_ a binding from Git is applied by whoever deploys it
 
 ## 3. Where it's shown
 
-- **With the token.** A person listing their tokens sees each token's bindings, without needing to read RoleBindings: the Role each names, and whether it's `Ready`, with the reason. The binding's validation message is shown only when the person may read its Role. _Why:_ a Role's validation message names its rules, actions and Scopes, e.g. "rule run-ops: scope platform/prod-payments not found", which a person who can't read the Role mustn't learn. Its name and whether it's valid tell them no more than they typed.
+- **With the token.** A person listing their tokens sees each token's bindings, without needing to read RoleBindings: the Role each names, and whether it's `Ready`, with the reason. The binding's validation message is shown only when the person may read its Role. _Why:_ a Role's validation message names its rules, actions and Scopes, e.g. "rule run-ops: scope platform/prod-payments not found", which a person who can't read the Role mustn't learn. Whether a binding is `Ready`, and the reason, do reveal whether a Role of that name exists and is valid; a Role's name is accepted as discoverable, its rules aren't.
 - **Not with other RoleBindings.** The Role Bindings page MUST NOT show token bindings, and the RoleBinding API MUST NOT list them unless asked to include them, e.g. `include=access-tokens`. Including them takes the same `read` on RoleBindings as listing any other binding, and shows each token's id and owner. _Why:_ a token binding grants nothing, so among the bindings that decide who has access it's noise. Including them on request keeps them auditable.
 - **Picking Roles.** When creating a token, a person picks from the Roles they may read, and MAY type any other as `namespace/name`.
 
@@ -42,12 +42,10 @@ _Why not a custom resource:_ a binding from Git is applied by whoever deploys it
 
 - **By id.** The token is selected by its id, so a token deleted and created again with the same name isn't selected. _Why:_ the binding belongs to that one credential.
 - **Found by its subject.** A token's bindings are those whose `subjects.accessToken` is its id. The name only has to be unique in the namespace and short enough for a Kubernetes name: the token id and a hash of the Role's reference are both fixed length.
-- **In a reserved namespace.** Token bindings are in `mission-control-access-tokens`, which belongs to Mission Control (`overview.md`, "Reserved namespace"). Nothing else can be stored there: the RoleBinding API MUST refuse writes there with `409 Conflict`, and a RoleBinding applied there through Kubernetes is stored `Ready=False` and has no effect. _Why:_ a RoleBinding needs a namespace, and a token has none of its own. A Role's namespace is someone else's to fill, where a binding of the same name, e.g. one from Git, would replace a token binding. The shipped namespace is cleared of anything Mission Control didn't ship. A reserved namespace of its own means the namespace alone says a binding is a token's, which is what the listings rely on.
+- **In a reserved namespace.** Token bindings are in `mission-control-access-tokens`, which belongs to Mission Control (`overview.md`, "Reserved namespace"). Nothing else can be stored there: the RoleBinding API MUST refuse writes there with `409 Conflict`, and a RoleBinding applied there through Kubernetes is marked `Ready=False` and nothing of it is stored. _Why:_ a RoleBinding needs a namespace, and a token has none of its own. A Role's namespace is someone else's to fill, where a binding of the same name, e.g. one from Git, would replace a token binding. The shipped namespace is cleared of anything Mission Control didn't ship. A reserved namespace of its own means the namespace alone says a binding is a token's, which is what the listings rely on.
 - **Like any binding otherwise.** It's validated and reported as `rolebindings.md`, Section 4 says. A binding whose Role is missing or invalid is `Ready=False` and matches nothing, so the token can do nothing through it. A binding whose token no longer exists selects nothing.
 
 _Why a RoleBinding:_ a token's limit is a Role bound to the token, which is what a RoleBinding is. Storing it as one keeps a single way to bind a Role, compiled, reported and narrowed the same way, instead of a second list of Roles on the token.
-
-_How it's checked:_ like every binding without a constraint, a token binding shares its Role's policies rather than compiling a copy of its own (`design/binding-policies.md`), so the number of tokens doesn't slow checks down.
 
 _Why no link table or column:_ a token's bindings are only ever written with it and deleted with it, in one transaction, so a lookup by subject is enough. A foreign key would only add a guarantee for tokens deleted outside Mission Control, whose leftover bindings select nothing.
 

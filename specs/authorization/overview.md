@@ -218,7 +218,7 @@ Mission Control writes the shipped Roles and their Scopes when it starts, and wr
 
 #### Reserved namespace
 
-Mission Control owns every Scope, Role and RoleBinding name in `mission-control-builtin`, including names it doesn't ship yet, and in `mission-control-access-tokens`, which holds only the RoleBindings of access tokens (`token-bindings.md`). The API MUST refuse writes to either with `409 Conflict`. A Scope, Role or RoleBinding applied to either through Kubernetes is stored `Ready=False` with reason `Shipped` or `AccessToken`, and has no effect. Other Kubernetes resources in namespaces of those names aren't affected.
+Mission Control owns every Scope, Role and RoleBinding name in `mission-control-builtin`, including names it doesn't ship yet, and in `mission-control-access-tokens`, which holds only the RoleBindings of access tokens (`token-bindings.md`). The API MUST refuse writes to either with `409 Conflict`. A Scope, Role or RoleBinding applied to `mission-control-builtin` through Kubernetes is stored `Ready=False` with reason `Shipped`, and has no effect. One applied to `mission-control-access-tokens` is marked `Ready=False` with reason `AccessToken`, and nothing of it is stored, so it can't take a token binding's name. Other Kubernetes resources in namespaces of those names aren't affected.
 
 _Why:_ a release can ship a new Role or Scope without replacing a user's object and silently changing what it grants, and no object applied from Git can replace a token's binding. Users can use any name in their own namespaces, including `admin` and names starting with `all-`, and those objects are unrelated to the shipped ones.
 
