@@ -181,9 +181,10 @@ func errAccessTokenNamespace() error {
 // editable finds a stored object that can be changed through the API: one created through it.
 // Objects from Kubernetes (or synced from it) are changed where they're defined, which would overwrite any change here.
 func (k managedKind) editable(ctx context.Context, namespace, name string) (*storedObject, error) {
-	if namespace == adapter.ShippedNamespace {
+	switch namespace {
+	case adapter.ShippedNamespace:
 		return nil, errShippedNamespace()
-	} else if namespace == adapter.AccessTokenNamespace {
+	case adapter.AccessTokenNamespace:
 		return nil, errAccessTokenNamespace()
 	}
 
