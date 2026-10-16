@@ -43,7 +43,7 @@ _Why:_ a binding can grant a shared Role and narrow it with its own Scopes, with
 | `oidc`                                                             | list of objects | Users of an external identity provider, by the claims in their token |
 | `playbooks`, `notifications`, `topologies`, `scrapers`, `canaries`, `plugins` | list of objects | Those resources, when they act on their own               |
 
-A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either, and no subject selects them (Section 2.3). An access token isn't an identity: a request made with one is checked as its owner (`identities.md`, Section 4). A token is selected only by the bindings its owner writes through the token API (Section 2.6). `people` selects humans only, whether by email or by `*`, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
+A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either, and no subject selects them (Section 2.3). An access token isn't an identity: a request made with one is checked as its owner (`identities.md`, Section 4). A token is selected only by the bindings created with it (Section 2.6). `people` selects humans only, whether by email or by `*`, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
 
 ### 2.1 People
 
@@ -207,7 +207,7 @@ Bind by exact namespace and name wherever the Role is sensitive, e.g. `connectio
 
 ### 2.6 Access tokens
 
-A RoleBinding can select an access token, to limit it, but only the token API writes one, for the token's owner (`token-bindings.md`). Neither a custom resource nor the RoleBinding API has a field that selects a token.
+A RoleBinding can select an access token, to limit it, but only when the token is created, for its owner (`token-bindings.md`). Neither a custom resource nor the RoleBinding API has a field that selects a token, so neither MAY write such a binding, and the RoleBinding API MUST NOT change or delete one.
 
 ## 3. Constraint
 

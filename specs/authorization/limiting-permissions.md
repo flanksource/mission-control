@@ -15,7 +15,7 @@ roles:
     name: viewer
 ```
 
-The owner changes them later through the token API, never through the RoleBinding API (`token-bindings.md`, Section 2).
+They can't be changed afterwards: to change what a token may do, its owner creates a new one (`token-bindings.md`, Section 2).
 
 Alice may read, change and delete every config, run playbooks and read connections. With this token she can read configs, playbooks and components, but can't run a playbook, delete a config or read a connection: her own rules allow each of them, but no rule of `viewer` does.
 
