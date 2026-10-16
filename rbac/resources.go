@@ -211,11 +211,12 @@ func (k managedKind) list(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
 	query := ctx.DB().Where("deleted_at IS NULL").Order("namespace, name")
-	if namespace := c.QueryParam("namespace"); namespace != "" {
+	namespace := c.QueryParam("namespace")
+	if namespace != "" {
 		query = query.Where("namespace = ?", namespace)
 	}
-	// Access tokens' bindings grant nothing, so they're left out unless asked for
-	if k.table == "role_bindings" && c.QueryParam("include") != "access-tokens" {
+	// Access tokens' bindings grant nothing, so they're left out unless asked for, or their namespace is
+	if k.table == "role_bindings" && c.QueryParam("include") != "access-tokens" && namespace != adapter.AccessTokenNamespace {
 		query = query.Where("namespace != ?", adapter.AccessTokenNamespace)
 	}
 

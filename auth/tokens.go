@@ -267,11 +267,15 @@ func DeleteAccessToken(ctx context.Context, tokenID string) error {
 		return ctx.Oops().Wrapf(err, "failed to get access token %s", tokenID)
 	}
 
-	// Add to blacklist immediately to prevent any further use
-	deletedTokensCache.Set(tokenID, true, cache.DefaultExpiration)
+	// The stored id, not the one given: a UUID can be written in other forms that Postgres accepts, but the deny
+	// list and the token's bindings are keyed by its canonical form.
+	id := token.ID.String()
 
-	if err := db.DeleteAccessToken(ctx, tokenID); err != nil {
-		return ctx.Oops().Wrapf(err, "failed to delete access token %s", tokenID)
+	// Add to blacklist immediately to prevent any further use
+	deletedTokensCache.Set(id, true, cache.DefaultExpiration)
+
+	if err := db.DeleteAccessToken(ctx, id); err != nil {
+		return ctx.Oops().Wrapf(err, "failed to delete access token %s", id)
 	}
 
 	invalidateRLSCacheForToken(token.ID)

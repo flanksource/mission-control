@@ -41,6 +41,9 @@ func CreateAccessToken(ctx context.Context, personID uuid.UUID, name string, exp
 		return nil, nil, ctx.Oops().Wrapf(err, "failed to get person %s", personID)
 	}
 
+	// A Role listed twice binds it once
+	roles = lo.Uniq(roles)
+
 	if person.Type == PersonTypeAgent && len(roles) > 0 {
 		return nil, nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("an agent's access token can't list roles")
 	} else if person.Type != PersonTypeAgent && len(roles) == 0 {
@@ -85,9 +88,11 @@ func CreateAccessToken(ctx context.Context, personID uuid.UUID, name string, exp
 		return nil, nil, err
 	}
 
+	// The token is committed, and its plain text exists only here, so a failed reload doesn't fail its creation:
+	// the reload its bindings' insert notifies picks it up.
 	if len(roles) > 0 {
 		if err := dutyRBAC.ReloadPolicy(); err != nil {
-			return nil, nil, ctx.Oops().Wrapf(err, "failed to reload the policy after creating access token %q", name)
+			ctx.Errorf("failed to reload the policy after creating access token %q: %v", name, err)
 		}
 	}
 
