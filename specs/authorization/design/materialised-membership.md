@@ -71,7 +71,7 @@ _Why membership rather than a whole-type claim:_ a grant on some views is the or
 
 Per type: `all`, for access that names no Scope, or grants, each a set of Scopes the row must be in all of. A grant is never empty and never repeats a Scope. The claim names Scopes only.
 
-A request made with an access token (`limiting-permissions.md`, "Access tokens") carries a second claim, built the same way from the `read` rules of the token's bindings, as their constraints narrow them. A listing admits a row only when both claims do. Single-resource checks likewise pass only when the owner's policies and the token's bindings' policies both allow.
+A request made with an access token (`limiting-permissions.md`, "Access tokens") carries a second claim, built the same way from the `read` rules of the token's bindings. A listing admits a row only when both claims do. Single-resource checks likewise pass only when the owner's policies and the token's bindings' policies both allow.
 
 A listing admits a row through a Scope when the Scope has a membership row for it, or one with no `resource_id` for the table's type. A Scope with neither admits nothing, so a grant naming it fails whole. _Why:_ a claim then depends only on Roles and RoleBindings, whose changes already refresh it, and stays correct across Scope changes however long it's cached. Dropping only the Scope with no rows would widen the grant.
 

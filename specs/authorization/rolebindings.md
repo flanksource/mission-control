@@ -207,7 +207,7 @@ Bind by exact namespace and name wherever the Role is sensitive, e.g. `connectio
 
 ### 2.6 Access tokens
 
-A RoleBinding can select an access token, to limit it, but only when the token is created, for its owner (`token-bindings.md`). Neither a custom resource nor the RoleBinding API has a field that selects a token, so neither MAY write such a binding, and the RoleBinding API MUST NOT change or delete one.
+A RoleBinding can select an access token, to limit it, but only when the token is created, for its owner (`token-bindings.md`). Neither a custom resource nor the RoleBinding API has a field that selects a token, and both are refused in the reserved namespace token bindings live in, so neither can write, change or delete one.
 
 ## 3. Constraint
 

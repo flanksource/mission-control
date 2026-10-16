@@ -83,7 +83,7 @@ _Why:_ every object gets the same kind of identity, whether it comes from the UI
 
 ### Name uniqueness
 
-Names are unique per kind within a namespace, so Roles `payments/auditor` and `platform/auditor` can both exist. Users can create objects in any namespace except `mission-control-builtin`, which belongs to Mission Control ("Reserved namespace").
+Names are unique per kind within a namespace, so Roles `payments/auditor` and `platform/auditor` can both exist. Users can create objects in any namespace except `mission-control-builtin` and `mission-control-access-tokens`, which belong to Mission Control ("Reserved namespace").
 
 ### API addresses
 
@@ -141,7 +141,7 @@ _Why:_ a shared Role means the same thing wherever it's bound, and each binding 
 
 #### Token limits
 
-An access token is bound to each Role by namespace and name (`limiting-permissions.md`, "Access tokens"). The RoleBindings that select it are in the `access-tokens` namespace, and name the Role as `namespace/name` (`token-bindings.md`, Section 3).
+An access token is bound to each Role by namespace and name (`limiting-permissions.md`, "Access tokens"). The RoleBindings that select it are in the reserved `mission-control-access-tokens` namespace, and name the Role as `namespace/name` (`token-bindings.md`, Section 3).
 
 _Why:_ a token has no namespace to resolve a bare name in, and the shipped namespace holds only what Mission Control ships.
 
@@ -160,9 +160,9 @@ The word appears twice, with different meanings:
 
 ## Access
 
-**A subject may perform an action on a resource when a RoleBinding that selects the subject gives it a Role with a rule matching the action and resource.** The few actions that take no resource, e.g. `person:manage`, need a rule with that action alone (`roles.md`, Section 2.3). Otherwise it's refused. Nothing else grants anything, apart from deprecated Permissions (`permissions.md`).
+**A subject may perform an action on a resource when a RoleBinding that selects the subject gives it a Role with a rule matching the action and resource.** A RoleBinding that selects an access token is the one exception: it grants nothing, and only limits what the token's owner may do with it (`token-bindings.md`). The few actions that take no resource, e.g. `person:manage`, need a rule with that action alone (`roles.md`, Section 2.3). Otherwise it's refused. Nothing else grants anything, apart from deprecated Permissions (`permissions.md`).
 
-- **Every subject is checked the same way.** A person, a team member, a user of an external identity provider and a playbook acting on its own are all subjects. What kind of subject they are only decides which RoleBinding subjects can select them (`rolebindings.md`, Section 2). It never decides what they may do. Agents are the one exception: no RoleBinding selects them, so an agent may do only what its token allows (`identities.md`, Section 5).
+- **Every subject is checked the same way.** A person, a team member, a user of an external identity provider and a playbook acting on its own are all subjects. What kind of subject they are only decides which RoleBinding subjects can select them (`rolebindings.md`, Section 2). It never decides what they may do. Agents are the one exception: no RoleBinding selects them, so an agent may do only what its token allows (`identities.md`, Section 5). Access tokens aren't subjects: a request made with one is checked as its owner, and the RoleBindings that select the token only narrow it.
 - **Owners act on what's theirs without a grant.** A subject's own credentials, and the data it pushes, belong to its identity rather than being granted by Roles: a person manages their own access tokens and the bindings that limit them (`access-tokens.md`, `token-bindings.md`), and an agent pushes and fetches its own data (`identities.md`, Section 5). Nothing else is reached this way.
 - **Everything is a resource.** Every protected thing is a type a Scope selects, from configs to RoleBindings (`scopes.md`, Section 3.1). Data about a resource, such as a playbook's runs, follows it. The exceptions are named actions without a resource: accounts, the MCP server, properties, the event queue and job history (`roles.md`, Section 2.3). Properties alone are readable by every signed-in subject without a rule (`roles.md`, Section 3.1).
 - **Signing in grants nothing.** A new person or an invited person can do nothing until a RoleBinding selects them, directly or through a team their login maps them into (`rolebindings.md`, Section 2.2). A new agent can only push and fetch its own data, and no binding grants it more.
@@ -218,9 +218,9 @@ Mission Control writes the shipped Roles and their Scopes when it starts, and wr
 
 #### Reserved namespace
 
-Mission Control owns every Scope, Role and RoleBinding name in `mission-control-builtin`, including names it doesn't ship yet. The API MUST refuse writes there with `409 Conflict`. A Scope, Role or RoleBinding applied there through Kubernetes is stored `Ready=False` with reason `Shipped`, and has no effect. Other Kubernetes resources in a namespace of that name aren't affected.
+Mission Control owns every Scope, Role and RoleBinding name in `mission-control-builtin`, including names it doesn't ship yet, and in `mission-control-access-tokens`, which holds only the RoleBindings of access tokens (`token-bindings.md`). The API MUST refuse writes to either with `409 Conflict`. A Scope, Role or RoleBinding applied to either through Kubernetes is stored `Ready=False` with reason `Shipped` or `AccessToken`, and has no effect. Other Kubernetes resources in namespaces of those names aren't affected.
 
-_Why:_ a release can ship a new Role or Scope without replacing a user's object and silently changing what it grants. Users can use any name in their own namespaces, including `admin` and names starting with `all-`, and those objects are unrelated to the shipped ones.
+_Why:_ a release can ship a new Role or Scope without replacing a user's object and silently changing what it grants, and no object applied from Git can replace a token's binding. Users can use any name in their own namespaces, including `admin` and names starting with `all-`, and those objects are unrelated to the shipped ones.
 
 #### Plugin permissions stay separate from admin
 

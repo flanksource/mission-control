@@ -10,13 +10,14 @@ _Why:_ a token is a way to sign in as its owner from somewhere a browser session
 
 ## 2. People's tokens
 
-A person MAY create, list and delete their own tokens without any grant, but MUST NOT through a token. No person can create, change or delete a token for another person, and no action grants it.
+A person MAY create, list and delete their own tokens without any grant, but MUST NOT do so through a token. No person can create, change or delete a token for another person, and no action grants it.
 
 - **Created with Roles.** A person's token MUST be created with at least one Role, however it's created: through the UI, the API or the `auth token` CLI command. Each Role becomes a RoleBinding that selects the token, created with it (`token-bindings.md`). A token's Roles can't be changed afterwards; to change them, its owner creates a new token. A token meant to do everything its owner may is bound to the shipped `admin` and `plugin-admin` Roles. _Why:_ what a token may do is chosen when it's created, never everything by default.
-- **A token no binding selects can do nothing.** It still signs in as its owner, but every check made with it fails. Only what needs no grant, e.g. properties, is reachable with it. _Why not refuse it:_ its bindings can change, and that changes its limit, not whether the credential is valid.
-- **Tokens don't manage tokens.** A request made with a token can't create, change or delete a token or the RoleBindings that select one, whatever its bindings. _Why:_ otherwise a limited token could lift its own limit, or create a token without it.
+- **A token no binding selects can do nothing.** It still signs in as its owner, but every check made with it fails. Only what needs no grant, e.g. properties, is reachable with it. _Why not refuse it:_ a binding's Role can be deleted or become invalid, and come back, which changes the token's limit, not whether the credential is valid.
+- **Tokens don't manage tokens.** A request made with a token MUST NOT create, list or delete tokens, whatever its bindings. _Why:_ otherwise a limited token could create a token without its limit, and a leaked token would reveal its owner's other tokens and their Roles.
 - **Not for users of an external identity provider.** They're checked as the bindings their claims match, not as a person (`external-identity-providers.md`), so a token signing in as their person would give them grants they don't have.
 - **Names are unique per owner.** A person can't have two tokens of the same name.
+- **Usable at once.** A token created through the API or the UI MUST be usable as soon as it's returned. One created with the `auth token` CLI command, which runs apart from Mission Control's server, may take up to a few seconds. _Why:_ a client is configured with a token straight after creating it, so a delay there would fail its first request.
 
 _Why no grant:_ a token adds no access its owner doesn't already have, so there's nothing for a Role to decide.
 
