@@ -30,6 +30,15 @@ func GetResource(c echov4.Context) error {
 		return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "invalid config item id: %s", c.Param("id")))
 	}
 
+	// The cache isn't filtered by row, so the config is first looked up under row-level security. One outside the
+	// subject's grants is answered like one that doesn't exist (collection-access.md, Section 3).
+	var visible int64
+	if err := ctx.DB().Table("config_items").Where("id = ?", id).Count(&visible).Error; err != nil {
+		return dutyApi.WriteError(c, ctx.Oops().Wrapf(err, "get config item %s", id))
+	} else if visible == 0 {
+		return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.ENOTFOUND, "config item %s not found", id))
+	}
+
 	item, err := query.ConfigItemFromCache(ctx, id.String())
 	if err != nil {
 		// ConfigItemFromCache reports a miss with a bare gorm.ErrRecordNotFound, which carries no
