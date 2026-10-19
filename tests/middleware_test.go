@@ -124,6 +124,7 @@ var _ = Describe("Authorization", func() {
 		"/db/identity_verification_tokens",
 		"/db/casbin_rule",
 		"/db/migration_logs",
+		"/db/properties",
 		"/db/scope_members",
 		"/db/rpc/uuid_to_ulid",
 		"/db/no_such_table",
@@ -145,8 +146,7 @@ var _ = Describe("Authorization", func() {
 		"GET /db/config_types",
 		"GET /db/job_history",
 		"GET /db/event_queue",
-		"GET /db/properties",
-		"PATCH /db/properties",
+		"GET /db/feature_flags",
 		"GET /db/view_default_pods",
 	}
 
