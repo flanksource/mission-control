@@ -61,6 +61,11 @@ type Attempt struct {
 	// after the request is answered. A denied request must not have happened, and an allowed one must have.
 	Happened func() bool
 
+	// Shows reports whether a successful response shows what the request asks for. When it's set, a successful
+	// response that doesn't is one of a denied request: a listing filtered by row-level security answers 200 without
+	// the rows the caller may not read.
+	Shows func(Response) bool
+
 	// Verify checks an allowed response further, e.g. that it doesn't reveal credentials.
 	Verify func(Response)
 
@@ -317,6 +322,8 @@ func (r *run) expectRoute(caller *Caller, want outcome, route int) {
 	case resp.Status == http.StatusUnauthorized:
 		got = unauthenticated
 	case slices.Contains(deniedStatuses, resp.Status):
+		got = denied
+	case resp.Status >= 200 && resp.Status < 300 && attempt.Shows != nil && !attempt.Shows(resp):
 		got = denied
 	case resp.Status >= 200 && resp.Status < 300:
 		got = allowed

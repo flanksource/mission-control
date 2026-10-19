@@ -1,6 +1,8 @@
 package harness
 
 import (
+	"bytes"
+	"encoding/json"
 	"net/http"
 	"reflect"
 	"strings"
@@ -48,6 +50,7 @@ func Create[R Resource](f *Fixture, r R) R {
 }
 
 // Read reads the resource as the admin, as it's stored now, or returns false when there's none.
+// A resource read through /db is answered as a list of the rows the path selects.
 func Read[R Resource](f *Fixture, r R) (R, bool) {
 	ginkgo.GinkgoHelper()
 	stored := reflect.New(reflect.TypeOf(r).Elem()).Interface().(R)
@@ -56,6 +59,18 @@ func Read[R Resource](f *Fixture, r R) (R, bool) {
 		return stored, false
 	}
 	gomega.Expect(resp.Status).To(gomega.Equal(http.StatusOK), resp.String())
+
+	if body := bytes.TrimSpace(resp.Body); len(body) > 0 && body[0] == '[' {
+		var rows []json.RawMessage
+		gomega.Expect(json.Unmarshal(body, &rows)).To(gomega.Succeed(), resp.String())
+		if len(rows) == 0 {
+			return stored, false
+		}
+		gomega.Expect(rows).To(gomega.HaveLen(1), "%s selects more than one row", r.Path())
+		gomega.Expect(json.Unmarshal(rows[0], stored)).To(gomega.Succeed(), resp.String())
+		return stored, true
+	}
+
 	gomega.Expect(resp.Decode(stored)).To(gomega.Succeed())
 	return stored, true
 }

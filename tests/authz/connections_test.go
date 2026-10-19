@@ -109,7 +109,7 @@ var _ = Describe("Connections",
 		},
 		Grant: Rules(Allow(ActionConnectionUse, Here[*Connection]())),
 		NearMisses: []NearMiss{
-			Miss("connection:use on another namespace's connections", Allow(ActionConnectionUse, In[*Connection]("authz-elsewhere"))),
+			Miss("connection:use on another namespace's connections", Allow(ActionConnectionUse, In[*Connection](elsewhere))),
 			Miss("read and update on every connection", Allow(ActionRead, AllOf[*Connection]()), Allow(ActionUpdate, AllOf[*Connection]())),
 		},
 	},

@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"time"
+	"unicode/utf8"
 )
 
 var httpClient = &http.Client{Timeout: 30 * time.Second}
@@ -67,6 +68,9 @@ type Response struct {
 func (r Response) String() string {
 	if r.Err != nil {
 		return fmt.Sprintf("%s: %v", r.Request, r.Err)
+	}
+	if !utf8.Valid(r.Body) || bytes.ContainsRune(r.Body, 0) {
+		return fmt.Sprintf("%s: %d <%d bytes of binary>", r.Request, r.Status, len(r.Body))
 	}
 	body := string(r.Body)
 	if len(body) > 600 {
