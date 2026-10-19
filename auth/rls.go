@@ -326,12 +326,9 @@ func (c *claim) grantRule(rule adapter.CompiledRule) {
 }
 
 // payload returns the claim's row filters. A type denied whole has no grants, so it lists no rows.
-//
-// The rows of generated view tables stamped for a Permission's Scopes aren't listed when the subject is denied any
-// view: Postgres admits them by their stamp alone, so it couldn't keep a denied view's rows out.
 func (c *claim) payload() *rls.Payload {
 	payload := &rls.Payload{}
-	if len(c.scopes) > 0 && !c.deniedTypes[policy.ResourceView] && len(c.denies[policy.ResourceView]) == 0 {
+	if len(c.scopes) > 0 {
 		payload.Scopes = lo.Uniq(c.scopes)
 	}
 	for _, kind := range rls.GrantTypes {

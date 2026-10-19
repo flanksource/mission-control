@@ -19,8 +19,6 @@ The model's effect is `some(where (p.eft == allow)) && !some(where (p.eft == den
 - **Read rules** are denied on the object of every type they select, entirely or in part. A string-object check, e.g. the middleware's `catalog`/`read`, is how an endpoint decides that a subject may read the whole type without filtering rows. Failing it sends a partially denied subject down the row-filtered paths that serve `some`.
 - **Actions without a resource** are denied on their object, e.g. `events`.
 
-Rows stored in `casbin_rule` with the `deny` effect are skipped when the policy loads. Nothing writes them today. One left by an older version would refuse what no RoleBinding denies.
-
 ### RoleBindings left out
 
 Before narrowing, a deny binding drops the `roleBinding` type from each rule's resource Scope, so nothing compiles a deny on the `role-bindings` object. A RoleBinding is never an ABAC resource, so the per-request conditions can't reach one either. A rule left with no type is reported with reason `DenyOnRoleBindings`. Dropping the type, instead of refusing such a Role, lets a Role that also manages RoleBindings be bound as a deny for everything else.
@@ -39,8 +37,6 @@ The claim gains a `deny` object of grants by type, in the same shape as the gran
 - The `checks` policy also admits a check through its canary. That path is refused for a denied check too.
 
 A deny over a whole type isn't sent as a deny grant. The type gets no grants instead, so it lists nothing and its answer is `none`.
-
-Generated view tables also admit rows stamped for a Permission's Scopes, through `__grants`, without knowing which view they belong to. A subject with any deny on views doesn't get those stamps in their claim. Permissions are deprecated, so this fails closed instead of tying stamps to views.
 
 A request made with an access token gets its owner's deny grants unchanged. The token's bindings only narrow the grants.
 

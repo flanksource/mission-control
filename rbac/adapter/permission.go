@@ -325,11 +325,6 @@ func (a *PermissionAdapter) loadBasePolicy(m model.Model) error {
 		if strings.HasPrefix(line.V0, models.AccessTokenPrincipalPrefix) {
 			continue
 		}
-		// Only deny RoleBindings deny, and their policies are compiled on every load. A stored deny, e.g. one an older
-		// version wrote for a Permission, would refuse what nothing reviewable denies.
-		if line.Ptype == "p" && line.V3 == "deny" {
-			continue
-		}
 		if err := loadCasbinRule(line, m); err != nil {
 			return err
 		}
