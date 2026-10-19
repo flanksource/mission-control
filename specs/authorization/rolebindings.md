@@ -443,6 +443,7 @@ _Why on the binding:_ a rule says what an operation is, and a binding says who i
 A deny applies wherever its rule would have granted: checks on one resource, checks on a whole type, actions without a resource, and listings.
 
 - **Listings.** Rows a deny of `read` matches aren't listed, searched or exported. A subject denied part of a type reads the rest as `some`, never `all`, even when an allow covers the whole type, and one denied a whole type reads it as `none` (`collection-access.md`, Section 2.5).
+- **Writes of denied rows.** A row a deny of `read` matches can't be written through the row filters either, even by a subject allowed `create` or `update` on its type. _Why:_ the row filters decide reads and writes by the same grants, and one rule for both is simpler than a second set of filters for writes.
 - **Whole types.** A subject denied part of a type isn't allowed the whole type. Where an endpoint needs the whole type, it refuses them; where it lists by row, it shows the rest.
 - **Access tokens.** A request made with an access token is checked as its owner (`identities.md`, Section 4), so the owner's denies apply to it. A token's own bindings never deny (`token-bindings.md`).
 
