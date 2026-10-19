@@ -14,7 +14,7 @@ A deny has to hold at every place a grant is enforced: Casbin checks on one reso
 
 The model's effect is `some(where (p.eft == allow)) && !some(where (p.eft == deny))`. A deny binding compiles like any binding, under its own principal and with its subjects grouped into it, with the `deny` effect:
 
-- **Per-request rules** get a condition over `r.obj.Membership`, like allow rules, wrapped as `r.obj.Membership.Unknown || (<condition>)`. `Unknown` is set when a request's Scope membership couldn't be read, so such a request matches every deny instead of none.
+- **Per-request rules** get the same condition over `r.obj.Membership` as allow rules. A request whose membership can't be read matches no rule of either kind. Every allow on a resource also needs membership, so the request is refused anyway.
 - **Whole-type rules** (`create`, `update`, `delete`) are denied on the object of each type, e.g. `catalog`.
 - **Read rules** are denied on the object of every type they select, entirely or in part. A string-object check, e.g. the middleware's `catalog`/`read`, is how an endpoint decides that a subject may read the whole type without filtering rows. Failing it sends a partially denied subject down the row-filtered paths that serve `some`.
 - **Actions without a resource** are denied on their object, e.g. `events`.

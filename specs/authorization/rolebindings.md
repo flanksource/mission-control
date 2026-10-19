@@ -460,7 +460,7 @@ A deny that isn't in effect denies nothing:
 - a rule its constraint can't narrow (Section 3.2)
 - an `oidc` subject whose `match` fails, e.g. on a missing claim (Section 2.4)
 
-Each is visible in the binding's `Ready` and `AllRulesApply` conditions. After writing a deny binding, check both. A request whose resources' Scope membership can't be read is the one exception: it matches every deny.
+Each is visible in the binding's `Ready` and `AllRulesApply` conditions. After writing a deny binding, check both.
 
 _Why not deny everything instead:_ a typo in a deny binding would then refuse everything to everyone it selects, admins included, and no grant could undo it. An allow-only model fails closed on every mistake; denies give that up for these cases, and report each of them instead.
 

@@ -737,7 +737,6 @@ func (r CompiledRule) ReadGrants() map[string]rls.Grant {
 }
 
 // condition returns the casbin condition that matches the rule against a request's Scope membership.
-// A deny rule also matches a request whose membership couldn't be read.
 func (r CompiledRule) condition() (string, error) {
 	ids := func(scopes []ScopeSelection) []string {
 		return lo.Map(scopes, func(scope ScopeSelection, _ int) string { return scope.ID })
@@ -748,9 +747,6 @@ func (r CompiledRule) condition() (string, error) {
 		return "", fmt.Errorf("rule %s: %w", r.Name, err)
 	}
 
-	if r.Deny {
-		return dutyRBAC.DenyCondition(condition), nil
-	}
 	return condition, nil
 }
 
