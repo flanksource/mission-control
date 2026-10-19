@@ -469,6 +469,7 @@ _Why not deny everything instead:_ a typo in a deny binding would then refuse ev
 ### 5.6 What a deny doesn't cover
 
 - **Other paths to the same data.** A deny refuses actions, not information. Denying `read` on a config doesn't stop someone allowed to run a playbook on another config from fetching it, nor someone who may update a connection from using its credentials.
+- **Runs on a target, through a rule without one.** A rule without a target only matches operations without one (`roles.md`, Section 4.1), and a deny rule is matched the same way. A deny of `playbook:run` on a playbook, written without a target, refuses running it alone, not running it on a config. To refuse both, the Role needs two rules: one without a target, and one whose target Scope selects every type the action takes, e.g. configs, components and checks. The same holds for `playbook:approve` and `playbook:cancel`. _Why:_ a deny rule means the same operations as the allow rule it's written as, so a Role reads the same whether it's granted or denied.
 - **Views.** A view is granted whole, and its rows are shared by every reader (`roles.md`, Section 3.2). Denying `read` on configs doesn't remove them from a view that shows them. Deny the view instead.
 - **What's added later.** Rules name actions exactly (`roles.md`, Section 2), so a deny covers the actions and Scopes its Role names today. "Deny everything but X" can't be written, and a deny of every action one by one doesn't cover the next one added.
 
