@@ -128,12 +128,24 @@ func writeRole(namespace, name string, rules []Rule) grant {
 	return g
 }
 
+// adminRole is the shipped Role that allows everything.
+const adminRole = "mission-control-builtin/admin"
+
+// bindPerson binds the Role, named as a RoleBinding names it, to the person with a binding of the name in the
+// namespace. A deny binding refuses the person the Role instead.
+func bindPerson(namespace, name, role, email string, deny bool) object {
+	ginkgo.GinkgoHelper()
+	spec := map[string]any{"role": role, "subjects": map[string]any{"people": []string{email}}}
+	if deny {
+		spec["deny"] = true
+	}
+	return create("role-bindings", namespace, name, spec)
+}
+
 // bindPerson binds the Role to the person.
 func (g *grant) bindPerson(email string) {
 	ginkgo.GinkgoHelper()
-	g.bindings = append(g.bindings, create("role-bindings", g.role.namespace, g.role.name, map[string]any{
-		"role": g.role.name, "subjects": map[string]any{"people": []string{email}},
-	}))
+	g.bindings = append(g.bindings, bindPerson(g.role.namespace, g.role.name, g.role.name, email, false))
 }
 
 // unbind deletes the grant's RoleBindings, and leaves its Role and Scopes.

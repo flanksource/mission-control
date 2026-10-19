@@ -19,11 +19,14 @@ import (
 //  2. Without grants, it's denied.
 //  3. With each near miss alone, it's denied.
 //  4. With the grant, it's allowed.
-//  5. With an access token bound to a copy of the grant's Role, it's allowed.
-//  6. With an access token bound to a near miss, it's denied, though the token's owner is allowed.
-//  7. Once the token's Role is deleted, that token is denied, and another token and its owner are still allowed.
-//  8. Once the grant's RoleBinding is deleted, the person and their remaining token are denied.
-//  9. Once the remaining token is deleted, it's refused as unauthenticated.
+//  5. Bound to admin as well, but refused the grant's Role by a deny binding, it's denied, to the person and to their
+//     token bound to the grant's Role. Once the deny and admin bindings are deleted, it's allowed to both again.
+//  6. With an access token bound to a copy of the grant's Role, it's allowed.
+//  7. With an access token bound to a near miss, it's denied, though the token's owner is allowed.
+//  8. Once the token's Role is deleted, that token is denied, and another token and its owner are still allowed.
+//  9. Once the grant's RoleBinding is deleted, the person and their remaining token are denied.
+//
+// 10. Once the remaining token is deleted, it's refused as unauthenticated.
 //
 // A case that's Never allowed runs steps 1 and 2, and checks that it's still denied with the grant and through a
 // token bound to it.
@@ -127,6 +130,7 @@ type run struct {
 	fixture  *Fixture
 	grant    grant
 	extra    []grant
+	bindings []object
 	tokens   map[string]*Caller
 	tokenIDs map[string]string
 }
@@ -144,6 +148,9 @@ func describeCase(n int, c Case) {
 			for name, id := range r.tokenIDs {
 				r.user.Do(DELETE("/auth/token/" + id))
 				delete(r.tokenIDs, name)
+			}
+			for _, b := range r.bindings {
+				env.server.Admin.Do(DELETE(b.path()))
 			}
 			for _, g := range append(r.extra, r.grant) {
 				for _, o := range append(append(g.bindings, g.role), g.scopes...) {
@@ -188,6 +195,29 @@ func describeCase(n int, c Case) {
 			env.barrier.wait()
 
 			r.expect(r.user, allowed)
+		})
+
+		ginkgo.It("denies a person granted it and bound to admin while a deny binding refuses the grant's Role, and their token", func() {
+			ns, email := r.fixture.Namespace, r.user.Email()
+			r.bindings = append(r.bindings,
+				bindPerson(ns, "deny", r.grant.role.name, email, true),
+				bindPerson(ns, "admin", adminRole, email, false))
+			env.barrier.wait()
+
+			r.expect(r.user, denied)
+			r.createToken("token-denied", r.grant.role.name)
+			r.expect(r.tokens["token-denied"], denied)
+		})
+
+		ginkgo.It("allows the person and their token again once the deny and admin bindings are deleted", func() {
+			for _, b := range r.bindings {
+				remove(b)
+			}
+			r.bindings = nil
+			env.barrier.wait()
+
+			r.expect(r.user, allowed)
+			r.expect(r.tokens["token-denied"], allowed)
 		})
 
 		ginkgo.It("allows an access token bound to the grant's Role", func() {
