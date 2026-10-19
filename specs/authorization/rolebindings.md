@@ -469,6 +469,7 @@ _Why not deny everything instead:_ a typo in a deny binding would then refuse ev
 ### 5.6 What a deny doesn't cover
 
 - **Other paths to the same data.** A deny refuses actions, not information. Denying `read` on a config doesn't stop someone allowed to run a playbook on another config from fetching it, nor someone who may update a connection from using its credentials.
+- **Views.** A view is granted whole, and its rows are shared by every reader (`roles.md`, Section 3.2). Denying `read` on configs doesn't remove them from a view that shows them. Deny the view instead.
 - **What's added later.** Rules name actions exactly (`roles.md`, Section 2), so a deny covers the actions and Scopes its Role names today. "Deny everything but X" can't be written, and a deny of every action one by one doesn't cover the next one added.
 
 Grant narrowly first. Use a deny as a guardrail on top of narrow grants, never instead of them.

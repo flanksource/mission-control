@@ -32,9 +32,9 @@ The claim gains a `deny` object of grants by type, in the same shape as the gran
 ```
 
 - `rls_denying_scopes(kind)` returns the Scopes each deny grant needs, without whole-type Scopes, like `rls_required_scopes`. A malformed deny grant denies every row.
-- `rls_row_denied(kind, id)` checks those against stored membership. `rls_matching_grants` yields nothing for a denied row. Every table's policy goes through it, so they all follow.
+- `rls_matching_grants` yields nothing for a row whose stored membership covers a deny grant's Scopes. The check is written inline, and `rls_row_denials(kind, id)` is its set-returning form for the checks policy, so Postgres inlines both. A scalar function with a sub-SELECT is never inlined, and would run `rls_denying_scopes` again for every row. Every table's policy goes through it, so they all follow.
 - `rls_grants_admit_row`, used by `WITH CHECK` and by rows not stored yet, checks the deny grants against the row's values, so a writer can't insert a denied row.
-- The `checks` policy also admits a check through its canary. That path is refused for a denied check too.
+- The `checks` policy also admits a check through its canary when reading. That path is refused for a denied check too. Its `WITH CHECK` canary path has no deny guard: no Role rule can grant writing checks.
 
 A deny over a whole type also takes the type's grants away, so its answer is `none`. Every deny is still sent as a deny grant, even for a type with no grants of its own, since a row can be admitted another way, e.g. a check through its canary.
 
