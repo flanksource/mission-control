@@ -145,7 +145,7 @@ A few actions aren't performed on a resource a Scope could select. They act on a
 | `person:manage`   | Inviting, disabling, re-enabling and deleting accounts, and changing their properties, name or email |
 | `access:review`   | Asking what any subject may do: subject access reviews and searches (`/rbac/subject-access-reviews`, `/rbac/subject-access-search`) |
 | `mcp:use`         | Using Mission Control's MCP server at all. Each MCP tool still checks what it touches (Section 4.3) |
-| `property:manage` | Creating, changing and deleting properties, Mission Control's settings and feature flags. Reading them needs no rule (Section 3.1) |
+| `property:manage` | Reading private properties and creating, changing and deleting any property. Reading public properties needs no rule (Section 3.1) |
 | `event:read`      | Reading Mission Control's event queue, and the recent events playbooks and notifications have handled |
 | `job:read`        | Reading all of Mission Control's job history                                                   |
 
@@ -160,7 +160,7 @@ rules:
 ```
 
 - `access:review` only answers whether a subject may perform an action. It grants reading nothing: a search only returns resources the reviewer may read themselves, so a review never names a resource the reviewer can't see. Reviewing access across a type takes `read` on that type too.
-- `property:manage` is one action for every write. A property changes what Mission Control does for everyone, e.g. which pages are enabled, so creating, changing and deleting one are equally privileged.
+- `property:manage` is one action for reading private properties and every property write. A property changes what Mission Control does for everyone, e.g. which pages are enabled, so creating, changing and deleting one are equally privileged.
 - `event:read` covers the event queue (`event_queue`) and the recent events kept in memory by playbooks and notifications. Events are only written by Mission Control itself, so no action writes them.
 - `job:read` covers all job history, e.g. a cleanup job's runs and a scraper's runs, whether or not a job ran for a resource. A subject with it sees all of it, and a subject without it sees none, whatever resources they may read (`collection-access.md`, Section 3.1). A resource's latest job status shown in its own row stays visible with the resource (Section 3.1).
 - `job:read` is as privileged as `admin`, like `person:manage`, and is only for subjects trusted as admins. A job's details and errors mention the resources it worked on, e.g. configs a scraper found or the playbook a run was refused for, which the holder may not otherwise be able to read. _Why not per resource:_ one job touches many resources, and its details aren't split by resource, so a row can't be shown only to those who may read everything it mentions.
@@ -266,7 +266,9 @@ _Why:_ who may see a run or a change is never a separate question from who may s
 
 Lookup views derived from a type, e.g. `config_types` or `config_tags`, which list the distinct values the UI's filters offer, are readable by anyone with a `read` grant on that type, and MUST only show values from rows the subject can read. A database table that's neither a type, a record of one, nor a lookup view derived from one isn't served through the database API.
 
-Properties are the one thing read without a rule: any signed-in subject may read them. Reading them still requires authentication, like every other endpoint. They configure Mission Control's behaviour, e.g. which pages are enabled, and MUST NOT hold anything confidential. Writing them takes `property:manage` (Section 2.3). _Why:_ every page needs them before it can decide what to show, a subject with no grants included.
+Properties whose names start with `public.` MUST be readable by any signed-in subject without a rule, and MUST NOT hold anything confidential. All other properties are private. Private property reads and all property writes MUST require `property:manage` (Section 2.3). The properties table MUST NOT be exposed through PostgREST; only the read-only `feature_flags` view of public properties is. Stored properties are managed through `/property`.
+
+_Why:_ every page needs public settings before it can decide what to show. The name explicitly makes a property public without registering it in code; backend configuration stays private by default.
 
 Whether a subject may list a type at all, and what a listing returns for a subject whose grants cover only part of it, is specified in `collection-access.md`. Every subject lists only what their `read` grants select, and a listing of a type none of their grants covers is refused with `403 Forbidden`.
 
@@ -375,7 +377,7 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Open view V, or read its rows or panels, including through MCP | `read`             | V               | None                              |
 | Connect to the MCP server             | `mcp:use`                                   | None            | None                              |
 | Review what a subject may do          | `access:review`                             | None            | None                              |
-| Create, change or delete a property   | `property:manage`                           | None            | None                              |
+| Read private properties, or create, change or delete a property | `property:manage`                | None            | None                              |
 | Read the event queue or recent events | `event:read`                                | None            | None                              |
 | Read job history                      | `job:read`                                  | None            | None                              |
 | Use connection C, e.g. to send        | `connection:use`                            | C               | None                              |

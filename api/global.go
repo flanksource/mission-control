@@ -65,7 +65,7 @@ var (
 )
 
 const (
-	PropertyIncidentsDisabled = "incidents.disable"
+	PropertyIncidentsDisabled = "public.incidents.disable"
 )
 
 type LLMBackend string

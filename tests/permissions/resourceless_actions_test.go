@@ -185,21 +185,21 @@ var _ = Describe("Actions without a resource", Ordered, func() {
 			}
 		}
 
-		It("lets every signed-in subject read properties", func() {
-			Expect(status(guest, http.MethodGet, "properties")).To(Equal(http.StatusOK))
-			Expect(status(holders[policy.ActionPropertyManage], http.MethodGet, "properties")).To(Equal(http.StatusOK))
+		It("doesn't serve properties through /db", func() {
+			Expect(status(guest, http.MethodGet, "properties")).To(Equal(http.StatusNotFound))
+			Expect(status(holders[policy.ActionPropertyManage], http.MethodGet, "properties")).To(Equal(http.StatusNotFound))
 		})
 
-		It("lets a subject with property:manage write properties", func() {
+		It("refuses writing properties through /db even with property:manage", func() {
 			for _, method := range []string{http.MethodPost, http.MethodPatch, http.MethodDelete} {
-				Expect(status(holders[policy.ActionPropertyManage], method, "properties")).To(Equal(http.StatusOK), method)
+				Expect(status(holders[policy.ActionPropertyManage], method, "properties")).To(Equal(http.StatusNotFound), method)
 			}
 		})
 
 		It("refuses writing properties without property:manage", func() {
 			for _, method := range []string{http.MethodPost, http.MethodPatch, http.MethodDelete} {
-				Expect(status(guest, method, "properties")).To(Equal(http.StatusForbidden), method)
-				Expect(status(holders[policy.ActionJobRead], method, "properties")).To(Equal(http.StatusForbidden), method)
+				Expect(status(guest, method, "properties")).To(Equal(http.StatusNotFound), method)
+				Expect(status(holders[policy.ActionJobRead], method, "properties")).To(Equal(http.StatusNotFound), method)
 			}
 		})
 	})

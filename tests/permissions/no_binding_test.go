@@ -49,8 +49,8 @@ var _ = Describe("A person no RoleBinding selects", Ordered, func() {
 		Expect(mcRBAC.AccessSummary(ctx)).To(HaveEach(HaveEach(Equal(mcRBAC.AccessNone))))
 	})
 
-	It("reads nothing through /db but properties", func() {
-		Expect(serveAs(e, nobody, http.MethodGet, "/db/properties")).To(Equal(http.StatusOK))
+	It("reads nothing through /db but feature flags", func() {
+		Expect(serveAs(e, nobody, http.MethodGet, "/db/feature_flags")).To(Equal(http.StatusOK))
 
 		for _, table := range []string{"config_items", "components", "checks", "canaries", "playbooks", "people", "teams",
 			"notifications", "agents", "connection_details", "scopes", "roles", "role_bindings", "config_types", "job_history"} {

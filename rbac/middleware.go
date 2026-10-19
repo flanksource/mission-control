@@ -88,12 +88,12 @@ func DbMiddleware() MiddlewareFunc {
 				action = readAction
 			}
 
-			// Any signed-in subject may read properties; writing them takes property:manage
-			if resource == "properties" {
-				if action == policy.ActionRead {
-					return next(c)
+			// Only the filtered feature flags are readable without property:manage.
+			if resource == "feature_flags" {
+				if action != policy.ActionRead {
+					return c.String(http.StatusMethodNotAllowed, "feature_flags is read-only; write through /property")
 				}
-				object, action = policy.ObjectProperties, policy.ActionPropertyManage
+				return next(c)
 			}
 
 			if _, ok := accountTables[resource]; ok && action != policy.ActionRead {
