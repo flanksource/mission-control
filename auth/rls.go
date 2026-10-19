@@ -95,7 +95,7 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 
 // limitToTokenBindings narrows the owner's row filters, built from the owner's read grants, to the rows the read
 // rules of the token's RoleBindings list: a row is listed when a grant of the owner and a grant of a binding both
-// admit it. Rows of generated view tables stamped for a Permission's Scopes aren't listed. A binding that's invalid,
+// admit it, and none of the owner's denies matches it. Rows of generated view tables stamped for a Permission's Scopes aren't listed. A binding that's invalid,
 // or whose Role is missing or invalid, lists nothing.
 func limitToTokenBindings(ctx context.Context, owner *rls.Payload, tokenID uuid.UUID) (*rls.Payload, error) {
 	rules, err := adapter.LoadAccessTokenLimitRules(ctx, tokenID)
@@ -115,6 +115,11 @@ func limitToTokenBindings(ctx context.Context, owner *rls.Payload, tokenID uuid.
 			continue
 		}
 		result.SetGrants(kind, intersectGrants(ownerGrants, limit.grants[kind]))
+	}
+	for _, kind := range rls.GrantTypes {
+		for _, grant := range owner.DeniesFor(kind) {
+			result.AddDeny(kind, grant)
+		}
 	}
 	return result, nil
 }
@@ -215,18 +220,74 @@ func buildRLSPayload(ctx context.Context, subject string) (*rls.Payload, error) 
 	if err := addBindingRuleGrants(ctx, claim, bindingRules); err != nil {
 		return nil, err
 	}
+	if err := addBindingRuleDenies(ctx, claim, subject); err != nil {
+		return nil, err
+	}
 
 	return claim.payload(), nil
 }
 
-// claim accumulates a subject's grants by resource type.
+// addBindingRuleDenies keeps from listings the rows the subject's deny RoleBindings deny reading. A rule that denies
+// a whole type lists none of it. A binding that can't be compiled denies no rows, as it denies nothing else.
+func addBindingRuleDenies(ctx context.Context, claim *claim, subject string) error {
+	implicit, err := dutyRBAC.Enforcer().GetImplicitPermissionsForUser(subject)
+	if err != nil {
+		return fmt.Errorf("failed to get the denies of %s: %w", subject, err)
+	}
+
+	bindingRules := map[uuid.UUID][]string{}
+	for _, rule := range implicit {
+		if len(rule) < 6 || rule[2] != policy.ActionRead || rule[3] != "deny" {
+			continue
+		}
+		if bindingID, _, ok := adapter.ParseBindingRuleID(rule[5]); ok {
+			bindingRules[bindingID] = append(bindingRules[bindingID], rule[5])
+		}
+	}
+
+	for bindingID, ids := range bindingRules {
+		rules, err := adapter.LoadBindingRules(ctx, bindingID)
+		if err != nil {
+			if adapter.IsValidationError(err) {
+				ctx.Warnf("rls: role binding %s denies no rows: %v", bindingID, err)
+				continue
+			}
+			return fmt.Errorf("failed to load rules of role binding %s: %w", bindingID, err)
+		}
+
+		for _, rule := range rules {
+			if rule.Deny && lo.Contains(ids, rule.ID) {
+				claim.denyRule(rule)
+			}
+		}
+	}
+
+	return nil
+}
+
+// claim accumulates a subject's grants and denies by resource type.
 type claim struct {
 	grants map[string]*rls.Grants
 	scopes []string
+
+	// denies are the rows kept from listings, by type. deniedTypes are the types none of whose rows are listed.
+	denies      map[string][]rls.Grant
+	deniedTypes map[string]bool
 }
 
 func newClaim() *claim {
-	return &claim{grants: map[string]*rls.Grants{}}
+	return &claim{grants: map[string]*rls.Grants{}, denies: map[string][]rls.Grant{}, deniedTypes: map[string]bool{}}
+}
+
+// denyRule keeps from listings the rows a deny read rule matches: every row of a type it selects entirely, and
+// otherwise the rows in its Scopes.
+func (c *claim) denyRule(rule adapter.CompiledRule) {
+	for kind, grant := range rule.ReadGrants() {
+		if rule.SelectsEntirely(kind) {
+			c.deniedTypes[kind] = true
+		}
+		c.denies[kind] = append(c.denies[kind], grant)
+	}
 }
 
 // grant lists the rows of the type that the grant admits.
@@ -252,6 +313,10 @@ func (c *claim) grantAll(kind string) {
 // grantRule lists the rows a read rule grants. A rule over all scrapers through shipped Scopes lists every scraper
 // as "all". Other grants name their Scopes, so a cached claim follows changes to the Scopes' membership.
 func (c *claim) grantRule(rule adapter.CompiledRule) {
+	if rule.Deny {
+		return
+	}
+
 	for kind, grant := range rule.ReadGrants() {
 		if kind == policy.ResourceScraper && rule.GrantsAllOf(kind) {
 			c.grantAll(kind)
@@ -261,14 +326,19 @@ func (c *claim) grantRule(rule adapter.CompiledRule) {
 	}
 }
 
+// payload returns the claim's row filters. A type denied whole has no grants, so it lists no rows.
+// Denies are sent whether or not the type has grants: a row can be admitted another way, e.g. a check with its canary.
 func (c *claim) payload() *rls.Payload {
 	payload := &rls.Payload{}
 	if len(c.scopes) > 0 {
 		payload.Scopes = lo.Uniq(c.scopes)
 	}
 	for _, kind := range rls.GrantTypes {
-		if grants := c.grants[kind]; grants != nil {
+		if grants := c.grants[kind]; grants != nil && !c.deniedTypes[kind] {
 			payload.SetGrants(kind, grants)
+		}
+		for _, grant := range c.denies[kind] {
+			payload.AddDeny(kind, grant)
 		}
 	}
 	return payload

@@ -17,8 +17,8 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 //
-// RoleBinding grants a Role to many subjects,
-// optionally narrowing the role's allow rules with a constraint.
+// RoleBinding grants a Role to many subjects, or with deny, refuses it to them,
+// optionally narrowing the role's rules with a constraint.
 type RoleBinding struct {
 	metav1.TypeMeta   `json:",inline" yaml:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty"`
@@ -42,11 +42,15 @@ type RoleBindingSpec struct {
 	Subjects RoleBindingSubjects `json:"subjects" yaml:"subjects"`
 
 	// Constraint narrows every rule of the role for this binding's subjects.
-	// Without one, the binding grants the role's rules as written.
+	// Without one, the binding grants, or denies, the role's rules as written.
 	Constraint *RoleBindingConstraint `json:"constraint,omitempty" yaml:"constraint,omitempty"`
+
+	// Deny refuses the subjects every operation the role's rules, narrowed by the constraint, match,
+	// whatever any other binding grants them. A deny binding never applies to RoleBindings.
+	Deny bool `json:"deny,omitempty" yaml:"deny,omitempty"`
 }
 
-// RoleBindingConstraint narrows every allow rule of the bound role, one side at a time:
+// RoleBindingConstraint narrows every rule of the bound role, one side at a time:
 // an operation's resource, and its target, must also belong to the constraint's Scopes.
 // A rule the constraint can't narrow doesn't apply through the binding, and is reported by its AllRulesApply condition.
 // +kubebuilder:object:generate=true
@@ -230,7 +234,7 @@ func validateResourceSubject(selector PermissionGroupSelector) error {
 	return nil
 }
 
-// ConditionAllRulesApply is the condition of a RoleBinding that reports whether every allow rule of its role
+// ConditionAllRulesApply is the condition of a RoleBinding that reports whether every rule of its role
 // applies through it. It's False, naming each rule that doesn't and why, when the constraint can't narrow a rule.
 const ConditionAllRulesApply = "AllRulesApply"
 

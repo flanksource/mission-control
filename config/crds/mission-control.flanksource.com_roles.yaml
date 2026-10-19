@@ -112,7 +112,8 @@ spec:
                       event:read and job:read take no resource; every other action
                       needs one
                     rule: has(self.resource) != (self.action in ['person:manage','access:review','mcp:use','property:manage','event:read','job:read'])
-                  - message: 'deny isn''t supported: rules only allow'
+                  - message: 'deny isn''t supported on a rule: rules only allow, and
+                      a RoleBinding with deny refuses a role'
                     rule: '!has(self.deny) || self.deny != true'
                   - message: only playbook:run, playbook:approve and playbook:cancel
                       take a target

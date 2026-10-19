@@ -212,7 +212,7 @@
       },
       "additionalProperties": false,
       "type": "object",
-      "description": "RoleBinding grants a Role to many subjects,\noptionally narrowing the role's allow rules with a constraint."
+      "description": "RoleBinding grants a Role to many subjects, or with deny, refuses it to them,\noptionally narrowing the role's rules with a constraint."
     },
     "RoleBindingConstraint": {
       "properties": {
@@ -227,7 +227,7 @@
       },
       "additionalProperties": false,
       "type": "object",
-      "description": "RoleBindingConstraint narrows every allow rule of the bound role, one side at a time:\nan operation's resource, and its target, must also belong to the constraint's Scopes.\nA rule the constraint can't narrow doesn't apply through the binding, and is reported by its AllRulesApply condition."
+      "description": "RoleBindingConstraint narrows every rule of the bound role, one side at a time:\nan operation's resource, and its target, must also belong to the constraint's Scopes.\nA rule the constraint can't narrow doesn't apply through the binding, and is reported by its AllRulesApply condition."
     },
     "RoleBindingSpec": {
       "properties": {
@@ -245,7 +245,11 @@
         },
         "constraint": {
           "$ref": "#/$defs/RoleBindingConstraint",
-          "description": "Constraint narrows every rule of the role for this binding's subjects.\nWithout one, the binding grants the role's rules as written."
+          "description": "Constraint narrows every rule of the role for this binding's subjects.\nWithout one, the binding grants, or denies, the role's rules as written."
+        },
+        "deny": {
+          "type": "boolean",
+          "description": "Deny refuses the subjects every operation the role's rules, narrowed by the constraint, match,\nwhatever any other binding grants them. A deny binding never applies to RoleBindings."
         }
       },
       "additionalProperties": false,

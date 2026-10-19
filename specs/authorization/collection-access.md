@@ -23,13 +23,15 @@ For every subject and every resource type a `read` rule can accept ([roles.md, S
 | `some`   | May read the resources their `read` grants select, and no other. |
 | `none`     | May read no resource of the type.                                |
 
-The answer is derived from the subject's grants alone, in this order:
+The answer is derived from the subject's grants and denies alone, in this order:
 
+0. `none`, when a deny of `read` applies to the subject over the whole type ([Section 2.5](#25-denies)).
 1. `all`, when a `read` rule applies to the subject whose Scope has a whole-type target of the type ([scopes.md, Section 5.2](scopes.md#52-wildcards-and-patterns)), and the binding it comes through either has no `resource` constraint or constrains it with a Scope that also has a whole-type target of the type ([Section 2.4](#24-whole-type-under-a-constraint)).
+   No deny of `read` may apply to the subject over part of the type either.
 2. Otherwise `some`, when a `read` rule applies to the subject and its Scope, narrowed by the binding's constraint where there is one ([rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)), can select resources of the type: both Scopes have a target of the type.
 3. Otherwise `none`.
 
-A subject bound to the shipped `admin` Role is `all` on every type, and one bound to `viewer` is `all` on the types it reads, through those Roles' rules ([overview.md, "Shipped Roles"](overview.md#shipped-roles)). A subject with no grants is `none` on every type.
+A subject bound to the shipped `admin` Role is `all` on every type, and one bound to `viewer` is `all` on the types it reads, through those Roles' rules ([overview.md, "Shipped Roles"](overview.md#shipped-roles)), unless a deny applies to them (Section 2.5). A subject with no grants is `none` on every type.
 
 Permissions ([permissions.md](permissions.md)) count too. A Permission that allows `read` counts like a rule, with its selectors in place of a Scope, type by type. For connections, which can't be filtered by row ([roles.md, Section 3.1](roles.md#31-the-read-action)), a Permission that isn't whole-type gives nothing.
 
@@ -43,7 +45,7 @@ An invalid Scope is a different case. A Scope naming an agent that isn't registe
 
 ### 2.2 Several grants
 
-A subject often has several `read` grants on a type, from different Roles and bindings. If any one of them is a whole-type grant, the answer is `all`. Otherwise, if there is any grant on the type, the answer is `some`, however many grants there are: three Scopes on three namespaces are still a subset. What the subject sees is the union of what the grants select. A rule that doesn't apply, because its Role or binding isn't in effect ([roles.md, Section 6](roles.md#6-how-changes-take-effect); [rolebindings.md, Section 4](rolebindings.md#4-how-changes-take-effect)), gives nothing.
+A subject often has several `read` grants on a type, from different Roles and bindings. If any one of them is a whole-type grant, and no deny applies (Section 2.5), the answer is `all`. Otherwise, if there is any grant on the type, the answer is `some`, however many grants there are: three Scopes on three namespaces are still a subset. What the subject sees is the union of what the grants select. A rule that doesn't apply, because its Role or binding isn't in effect ([roles.md, Section 6](roles.md#6-how-changes-take-effect); [rolebindings.md, Section 4](rolebindings.md#4-how-changes-take-effect)), gives nothing.
 
 ### 2.3 Row-level security
 
@@ -65,6 +67,22 @@ This is the same test [rolebindings.md, Section 3.2](rolebindings.md#32-which-ru
 
 **Why.** The one unsafe reading of step 1 is "look at the rule's Scope alone": it would list every config to a subject whose binding limits them to tenant A. Requiring an explicit whole-type target on both sides leaves no path to `all` on which a constraint is bypassed.
 
+### 2.5 Denies
+
+A `read` rule of a deny binding ([rolebindings.md, Section 5](rolebindings.md#5-deny)) that applies to the subject is a deny of the resources its Scope, narrowed by the binding's constraint, selects. It's over the whole type exactly when it would be a whole-type grant (Section 2.4), and over part of the type otherwise.
+
+| Grants         | Denies               | Answer | What's listed                         |
+| -------------- | -------------------- | ------ | ------------------------------------- |
+| Whole type     | None                 | `all`  | Every resource                        |
+| Whole type     | Tenant A's configs   | `some` | Every resource not in tenant A        |
+| Tenant A, B    | Tenant A's configs   | `some` | Tenant B's resources not in tenant A  |
+| Any            | Whole type           | `none` | Refused                               |
+
+- A `some` answer that comes from a deny lists exactly the resources the grants select and no deny matches, the same ones the resource-level check allows one by one.
+- A deny of part of a type turns `all` into `some`, never `none`, even when the deny happens to match every resource. Like grants (Section 2.1), the answer follows what was written, not which resources the Scopes currently match.
+
+**Why `some`, not `all`.** Everything that trusts `all` reads the whole type without filtering rows. A subject denied part of it must only ever be served through the paths that filter rows, which is what `some` means.
+
 ## 3. What each answer allows
 
 The answer decides every collection-level operation on the type:
@@ -76,7 +94,7 @@ The answer decides every collection-level operation on the type:
 | Open the type's page in the UI          | Shown                            | Shown, and the page says it shows only the resources granted to the subject                             | Not shown                    |
 | Open one resource by direct link        | The resource-level check decides | The resource-level check decides; a resource outside the grants is refused as one that doesn't exist is | Refused with `403 Forbidden`, whether or not the resource exists |
 
-- A `some` listing MUST return exactly the resources the subject's `read` grants select: the same resources the resource-level check would allow one by one ([roles.md, Section 3.1](roles.md#31-the-read-action)). An empty result is a result, not an error.
+- A `some` listing MUST return exactly the resources the subject's `read` grants select and none of their `read` denies matches: the same resources the resource-level check would allow one by one ([roles.md, Section 3.1](roles.md#31-the-read-action)). An empty result is a result, not an error.
 - Opening one resource is always a resource-level check ([roles.md, Section 4.3](roles.md#43-what-an-operation-must-provide)). The answer never grants a resource the rules don't.
 - A `none` refusal is the same for every id of the type, whether or not a resource with that id exists, so it reveals nothing about which resources exist ([Section 6](#6-what-a-subject-may-learn)). A `some` subject gets the not-found response for a resource outside their grants, the same as for an id that doesn't exist.
 - A search is a search however it's filtered. A search limited to one type skips the type when the answer is `none` and returns an empty result; it never returns `403`. Only an endpoint that lists one type refuses.

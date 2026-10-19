@@ -2,7 +2,7 @@
 
 ## 1. What a RoleBinding is
 
-A RoleBinding gives a Role to subjects: people, teams, users of an external identity provider, and a few kinds of resources.
+A RoleBinding gives a Role to subjects: people, teams, users of an external identity provider, and a few kinds of resources. With `deny: true`, it refuses the Role to them instead (Section 5).
 
 ```yaml
 apiVersion: mission-control.flanksource.com/v1
@@ -25,6 +25,7 @@ spec:
 | `role`        | string | Yes                       | A Role, as `name` in the binding's namespace or `namespace/name` (`overview.md`, "References"). |
 | `subjects`    | object | Yes, at least one subject | Who gets the Role (Section 2).                           |
 | `constraint`  | object | No                        | Narrows the Role's rules for these subjects (Section 3). |
+| `deny`        | bool   | No                        | Refuses the Role's rules to these subjects instead of granting them (Section 5). |
 | `description` | string | No                        | Explanatory text; no effect.                             |
 
 
@@ -394,7 +395,7 @@ Tenant A's users read their production configs and run monitoring playbooks on t
 
 With `target` alone, `read-production` would be narrowed on no side and wouldn't apply (Section 3.2). Tenant A could then run nothing either, since a run checks `read` on its target (`roles.md`, Section 4.3). The binding would report `read-production`: `AllRulesApply=False` is the first thing to check when a constrained binding grants less than expected.
 
-To narrow two rules differently, put them in two Roles and bind each with its own constraint (Section 5).
+To narrow two rules differently, put them in two Roles and bind each with its own constraint (Section 6).
 
 ## 4. How changes take effect
 
@@ -409,7 +410,73 @@ A binding that's wrong on its own is rejected (`overview.md`, "Rejected or not i
 
 So a Role and its bindings can be changed in any order. A constraint names no rule, so rules can be added, renamed or removed without touching the bindings: an added rule applies, already narrowed, as soon as the Role is stored, or is reported if the constraint can't narrow it.
 
-## 5. Future work
+## 5. Deny
+
+```yaml
+kind: RoleBinding
+metadata:
+  name: no-secrets-for-contractors
+  namespace: default
+spec:
+  role: read-secrets
+  deny: true
+  subjects:
+    teams: [contractors]
+```
+
+A binding with `deny: true` refuses its subjects every operation that a rule of its Role, narrowed by its constraint, matches, whatever any other binding grants them. Contractors can't read the configs `read-secrets` reads, even while they're also bound to `admin`.
+
+_Why:_ nothing is allowed by default, so every restriction can be written as a narrower grant, and that stays the way to give access. But a narrower grant only holds until someone binds a wider Role to the same people. A deny binding is a guardrail that holds whatever is bound later: "contractors never read secrets" is written once, and protects against a mistaken grant tomorrow.
+
+### 5.1 Deny wins
+
+An operation is allowed when an allow matches it and no deny does (`roles.md`, Section 5). Which binding, Role or namespace a deny comes from doesn't matter, and no allow, including `admin`'s, overrides it.
+
+### 5.2 Same Roles, same rules
+
+A deny binding binds an ordinary Role, and Sections 1 to 4 apply to it unchanged: the same subjects, the same constraint, the same `Ready` and `AllRulesApply` conditions. A constraint narrows what's denied, as it narrows what's granted.
+
+_Why on the binding:_ a rule says what an operation is, and a binding says who it's for and how. Rules stay allow-only (`roles.md`, Section 1), so a Role reads the same wherever it's bound, and one Role, e.g. `read-secrets`, can be granted to some subjects and denied to others. Whether something is refused is a decision about subjects, which only RoleBindings make (`overview.md`: subjects only live in RoleBindings).
+
+### 5.3 Every check
+
+A deny applies wherever its rule would have granted: checks on one resource, checks on a whole type, actions without a resource, and listings.
+
+- **Listings.** Rows a deny of `read` matches aren't listed, searched or exported. A subject denied part of a type reads the rest as `some`, never `all`, even when an allow covers the whole type, and one denied a whole type reads it as `none` (`collection-access.md`, Section 2.5).
+- **Writes of denied rows.** A row a deny of `read` matches can't be written through the row filters either, even by a subject allowed `create` or `update` on its type. _Why:_ the row filters decide reads and writes by the same grants, and one rule for both is simpler than a second set of filters for writes.
+- **Whole types.** A subject denied part of a type isn't allowed the whole type. Where an endpoint needs the whole type, it refuses them; where it lists by row, it shows the rest.
+- **Access tokens.** A request made with an access token is checked as its owner (`identities.md`, Section 4), so the owner's denies apply to it. A token's own bindings never deny (`token-bindings.md`).
+
+### 5.4 RoleBindings are never denied
+
+A deny binding's rules leave out the `roleBinding` type. A rule whose Scope selects only RoleBindings doesn't apply through it, and is reported with reason `DenyOnRoleBindings` (Section 3.2, "Reporting"). A binding none of whose rules applies is `Ready=False` with reason `NoRulesApply`.
+
+_Why:_ whoever may manage RoleBindings can always delete a deny binding written through the API, so such a deny can't lock admins out. A restart puts `admin@local` back in the shipped `admins` team (`overview.md`, "Restoring admin access"), and `admin` can delete any binding the API manages. A deny of `delete` on `roleBinding` would make that guarantee depend on no one writing one.
+
+A deny binding applied through Kubernetes can only be removed through Kubernetes, like any object it manages. Write access there is already equivalent to Mission Control admin (`overview.md`, "Who may manage these resources"), so recovering from such a deny takes a cluster operator, not a Mission Control admin.
+
+### 5.5 What fails open
+
+A deny that isn't in effect denies nothing:
+
+- a binding that isn't `Ready`, e.g. its Role or a Scope of its constraint is missing or invalid (Section 4)
+- a rule its constraint can't narrow (Section 3.2)
+- an `oidc` subject whose `match` fails, e.g. on a missing claim (Section 2.4)
+
+Each of the first two is visible in the binding's `Ready` and `AllRulesApply` conditions. A binding `Ready=False` with reason `PersistFailed` is the exception: its previous version stays in effect (`overview.md`, "Persistence failures"), denies included. After writing a deny binding, check both.
+
+_Why not deny everything instead:_ a typo in a deny binding would then refuse everything to everyone it selects, admins included, and no grant could undo it. An allow-only model fails closed on every mistake; denies give that up for these cases, and report each of them instead.
+
+### 5.6 What a deny doesn't cover
+
+- **Other paths to the same data.** A deny refuses actions, not information. Denying `read` on a config doesn't stop someone allowed to run a playbook on another config from fetching it, nor someone who may update a connection from using its credentials.
+- **Runs on a target, through a rule without one.** A rule without a target only matches operations without one (`roles.md`, Section 4.1), and a deny rule is matched the same way. A deny of `playbook:run` on a playbook, written without a target, refuses running it alone, not running it on a config. To refuse both, the Role needs two rules: one without a target, and one whose target Scope selects every type the action takes, e.g. configs, components and checks. The same holds for `playbook:approve` and `playbook:cancel`. _Why:_ a deny rule means the same operations as the allow rule it's written as, so a Role reads the same whether it's granted or denied.
+- **Views.** A view is granted whole, and its rows are shared by every reader (`roles.md`, Section 3.2). Denying `read` on configs doesn't remove them from a view that shows them. Deny the view instead.
+- **What's added later.** Rules name actions exactly (`roles.md`, Section 2), so a deny covers the actions and Scopes its Role names today. "Deny everything but X" can't be written, and a deny of every action one by one doesn't cover the next one added.
+
+Grant narrowly first. Use a deny as a guardrail on top of narrow grants, never instead of them.
+
+## 6. Future work
 
 A constraint could choose its Scope from the subject's claims, so one binding serves every tenant:
 

@@ -391,10 +391,10 @@ Each check is made as the subject performing the operation: the caller, or, wher
 
 Across all the rules that apply to a subject, from every Role they're bound to:
 
-- An operation is allowed when any rule matches it, and refused otherwise.
+- An operation is allowed when any rule granted to the subject matches it, and no rule denied to them does. It's refused otherwise.
 - Order doesn't matter, and it doesn't matter which Role a rule comes from.
-- Roles only add access. No Role can remove access another Role grants: rules only allow (`overview.md`, "Access").
-- Row filters follow the same rule: a subject's rows are the ones any of their `read` rules allows (Section 3.1).
+- Granting a Role only adds access. Rules only allow (`overview.md`, "Access"): a Role is refused only by binding it with `deny: true` (`rolebindings.md`, Section 5), and a deny wins over every grant.
+- Row filters follow the same rule: a subject's rows are the ones any of their granted `read` rules allows, less the ones any of their denied `read` rules matches (Section 3.1).
 
 ## 6. How changes take effect
 

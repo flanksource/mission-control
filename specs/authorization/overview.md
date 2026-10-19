@@ -6,7 +6,7 @@ Mission Control decides who may do what with three resources:
 | ----------- | ------------------------------------------------------------------------------------------------------------------------- | ----------------- |
 | Scope       | Which resources: a named set, e.g. "the staging configs".                                                                 | `scopes.md`       |
 | Role        | What may be done to them: rules like "read the staging configs" or "run the monitoring playbooks on the staging configs". | `roles.md`        |
-| RoleBinding | Who gets a Role, optionally limited further, e.g. "tenant A's operators, only on tenant A's configs".                     | `rolebindings.md` |
+| RoleBinding | Who gets a Role, or is refused it, optionally limited further, e.g. "tenant A's operators, only on tenant A's configs". | `rolebindings.md` |
 
 An ExternalIdentityProvider lets an external application's users sign in with its own tokens, so RoleBindings can grant them Roles (`external-identity-providers.md`).
 
@@ -160,20 +160,20 @@ The word appears twice, with different meanings:
 
 ## Access
 
-**A subject may perform an action on a resource when a RoleBinding that selects the subject gives it a Role with a rule matching the action and resource.** A RoleBinding that selects an access token is the one exception: it grants nothing, and only limits what the token's owner may do with it (`token-bindings.md`). The few actions that take no resource, e.g. `person:manage`, need a rule with that action alone (`roles.md`, Section 2.3). Otherwise it's refused. Nothing else grants anything, apart from deprecated Permissions (`permissions.md`).
+**A subject may perform an action on a resource when a RoleBinding that selects the subject gives it a Role with a rule matching the action and resource, and no deny RoleBinding that selects the subject has a rule matching them** (`rolebindings.md`, Section 5). A RoleBinding that selects an access token is the one exception: it grants nothing, and only limits what the token's owner may do with it (`token-bindings.md`). The few actions that take no resource, e.g. `person:manage`, need a rule with that action alone (`roles.md`, Section 2.3). Otherwise it's refused. Nothing else grants anything, apart from deprecated Permissions (`permissions.md`).
 
 - **Every subject is checked the same way.** A person, a team member, a user of an external identity provider and a playbook acting on its own are all subjects. What kind of subject they are only decides which RoleBinding subjects can select them (`rolebindings.md`, Section 2). It never decides what they may do. Agents are the one exception: no RoleBinding selects them, so an agent may do only what its token allows (`identities.md`, Section 5). Access tokens aren't subjects: a request made with one is checked as its owner, and the RoleBindings that select the token only narrow it.
 - **Owners act on what's theirs without a grant.** A subject's own credentials, and the data it pushes, belong to its identity rather than being granted by Roles: a person manages their own access tokens and the bindings that limit them (`access-tokens.md`, `token-bindings.md`), and an agent pushes and fetches its own data (`identities.md`, Section 5). Nothing else is reached this way.
 - **Everything is a resource.** Every protected thing is a type a Scope selects, from configs to RoleBindings (`scopes.md`, Section 3.1). Data about a resource, such as a playbook's runs, follows it. The exceptions are named actions without a resource: accounts, the MCP server, properties, the event queue and job history (`roles.md`, Section 2.3). Properties alone are readable by every signed-in subject without a rule (`roles.md`, Section 3.1).
 - **Signing in grants nothing.** A new person or an invited person can do nothing until a RoleBinding selects them, directly or through a team their login maps them into (`rolebindings.md`, Section 2.2). A new agent can only push and fetch its own data, and no binding grants it more.
-- **Listings follow the same grants.** A subject lists every resource of a type their `read` rules cover whole, the resources their `read` rules select where they cover part of it, and is refused where none applies (`collection-access.md`).
-- **Rules only allow.** There are no deny rules. Adding a binding never removes access, and removing one never adds any. To keep something from a subject, don't grant it: bind the narrower Role to the narrower group.
-- **Admins are subjects like any other.** An admin is a subject bound to the `admin` Role. With no deny rules, nothing can take an admin's access away except removing their binding.
+- **Listings follow the same grants.** A subject lists every resource of a type their `read` rules cover whole, the resources their `read` rules select where they cover part of it, less what their denied `read` rules select, and is refused where none applies (`collection-access.md`).
+- **Rules only allow; bindings may deny.** A Role's rules only describe operations. A RoleBinding grants them, or with `deny: true`, refuses them, and a deny wins over every allow. Adding an allow binding never removes access, and adding a deny binding never adds any. To keep something from a subject, first don't grant it: bind the narrower Role to the narrower group. A deny binding is a guardrail on top of that, for what must stay refused whatever is granted later.
+- **Admins are subjects like any other.** An admin is a subject bound to the `admin` Role. A deny binding that selects them takes away what it denies, except managing RoleBindings, which a deny never covers (`rolebindings.md`, Section 5.4).
 - **Mission Control has no identity of its own.** There's no system user or service subject that checks run as. Work no person started, such as a scheduled playbook run or a notification being sent, is checked as the playbook or notification doing it, with that resource's own grants. A plugin acts as whoever invoked it, except when looking up a connection, which is checked as the plugin (`identities.md`, Section 3).
 
 ### Explicit grants make access reviewable
 
-_Why:_ every exception is something a reader of a Role or RoleBinding can't see. One rule, with no kinds of subject, no access outside the resources and no denies, means what's written is what's granted, and an access review only has to read the allow rules RoleBindings grant.
+_Why:_ every exception is something a reader of a Role or RoleBinding can't see. One rule, with no kinds of subject and no access outside the resources, means what's written is what's granted. An access review reads the rules RoleBindings grant, less the rules deny bindings refuse.
 
 ### Background work uses the resource's identity
 
@@ -181,7 +181,9 @@ _Why no identity of its own:_ an identity that background work runs as has to ho
 
 ### Rules only allow access
 
-_Why no deny rules:_ with nothing allowed by default, every restriction can be written as a narrower grant. A deny adds a second way to read every rule, a way to lock admins out, and traps such as a deny that matches nothing (Kubernetes RBAC, GitHub and Postgres are allow-only for the same reasons).
+_Why no deny rules:_ with nothing allowed by default, every restriction can be written as a narrower grant. A deny in a rule would add a second way to read every Role, so a Role would no longer mean the same thing wherever it's bound.
+
+_Why deny bindings anyway:_ a narrower grant only holds until someone binds a wider Role to the same people. A deny binding says "never" about subjects, once, and holds against a mistaken grant later. It's on the binding because who is refused is a decision about subjects, which only bindings make. Its costs are in `rolebindings.md`, Sections 5.5 and 5.6: a deny that's broken fails open, and a deny doesn't cover other paths to the same data. It can't lock admins out, since it never covers RoleBindings (`rolebindings.md`, Section 5.4).
 
 ### Shipped Roles
 
@@ -279,7 +281,7 @@ _Why a team:_ the binding never changes, so it can be shipped and protected, and
 
 #### Restoring admin access
 
-_Why restored at startup:_ someone has to be able to create the first RoleBinding without going through the API, and a deleted admin binding has to come back without it. In the worst case, e.g. every member removed from `admins` or the team deleted in the database, a restart puts `admin@local` back in it (Kratos, basic), and the team mapper puts organisation admins back on their next request (Clerk). It never takes more than a restart, so admins are never locked out.
+_Why restored at startup:_ someone has to be able to create the first RoleBinding without going through the API, and a deleted admin binding has to come back without it. In the worst case, e.g. every member removed from `admins` or the team deleted in the database, a restart puts `admin@local` back in it (Kratos, basic), and the team mapper puts organisation admins back on their next request (Clerk). A deny binding written through the API can't stop them deleting it, since a deny never covers RoleBindings. One applied through Kubernetes is removed through Kubernetes (`rolebindings.md`, Section 5.4). It never takes more than a restart, so admins are never locked out.
 
 The design is in `design/bootstrap.md`.
 
@@ -295,7 +297,7 @@ Scopes, Roles, RoleBindings and ExternalIdentityProviders are managed in one of 
 An invalid object is either rejected or stored `Ready=False`. Which one depends on why it's invalid:
 
 - **Rejected**: the object is wrong on its own, so no change elsewhere can make it valid. For example, a Scope target with two types or `namespace: "*"`; a Role with two rules of the same name, `action: playbook:*`, `deny: true`, or a `target` on an action that takes none; a Permission with `deny: true` (`permissions.md`); a RoleBinding with no subjects, a `people` entry that isn't an email or `*`, or an `oidc.match` that doesn't compile; an ExternalIdentityProvider with an `http` issuer or `HS256`.
-- **Stored `Ready=False`**: the object is valid on its own, but not together with something it references, or with Mission Control's settings. For example, a Scope whose `agent` isn't registered; a Role whose Scope doesn't exist, is invalid, or selects types its rule can't use; a RoleBinding whose Role doesn't exist or is invalid, or whose constraint leaves none of the Role's rules applying; an ExternalIdentityProvider whose `issuer` or `name` another provider already uses.
+- **Stored `Ready=False`**: the object is valid on its own, but not together with something it references, or with Mission Control's settings. For example, a Scope whose `agent` isn't registered; a Role whose Scope doesn't exist, is invalid, or selects types its rule can't use; a RoleBinding whose Role doesn't exist or is invalid, or whose constraint leaves none of the Role's rules applying; a deny RoleBinding whose Role's rules only select RoleBindings; an ExternalIdentityProvider whose `issuer` or `name` another provider already uses.
 
 ### Recovery after dependency changes
 

@@ -18,8 +18,8 @@ spec:
     schema:
       openAPIV3Schema:
         description: |-
-          RoleBinding grants a Role to many subjects,
-          optionally narrowing the role's allow rules with a constraint.
+          RoleBinding grants a Role to many subjects, or with deny, refuses it to them,
+          optionally narrowing the role's rules with a constraint.
         properties:
           apiVersion:
             description: |-
@@ -43,7 +43,7 @@ spec:
               constraint:
                 description: |-
                   Constraint narrows every rule of the role for this binding's subjects.
-                  Without one, the binding grants the role's rules as written.
+                  Without one, the binding grants, or denies, the role's rules as written.
                 properties:
                   resource:
                     description: Resource is a Scope the resource of every operation
@@ -77,6 +77,11 @@ spec:
                 x-kubernetes-validations:
                 - message: a constraint must set resource or target
                   rule: has(self.resource) || has(self.target)
+              deny:
+                description: |-
+                  Deny refuses the subjects every operation the role's rules, narrowed by the constraint, match,
+                  whatever any other binding grants them. A deny binding never applies to RoleBindings.
+                type: boolean
               description:
                 description: Description provides a brief explanation of the binding.
                 type: string
