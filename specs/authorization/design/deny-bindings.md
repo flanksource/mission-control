@@ -36,7 +36,7 @@ The claim gains a `deny` object of grants by type, in the same shape as the gran
 - `rls_grants_admit_row`, used by `WITH CHECK` and by rows not stored yet, checks the deny grants against the row's values, so a writer can't insert a denied row.
 - The `checks` policy also admits a check through its canary. That path is refused for a denied check too.
 
-A deny over a whole type isn't sent as a deny grant. The type gets no grants instead, so it lists nothing and its answer is `none`.
+A deny over a whole type also takes the type's grants away, so its answer is `none`. Every deny is still sent as a deny grant, even for a type with no grants of its own, since a row can be admitted another way, e.g. a check through its canary.
 
 A request made with an access token gets its owner's deny grants unchanged. The token's bindings only narrow the grants.
 

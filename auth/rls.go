@@ -115,6 +115,8 @@ func limitToTokenBindings(ctx context.Context, owner *rls.Payload, tokenID uuid.
 			continue
 		}
 		result.SetGrants(kind, intersectGrants(ownerGrants, limit.grants[kind]))
+	}
+	for _, kind := range rls.GrantTypes {
 		for _, grant := range owner.DeniesFor(kind) {
 			result.AddDeny(kind, grant)
 		}
@@ -283,9 +285,8 @@ func (c *claim) denyRule(rule adapter.CompiledRule) {
 	for kind, grant := range rule.ReadGrants() {
 		if rule.SelectsEntirely(kind) {
 			c.deniedTypes[kind] = true
-		} else {
-			c.denies[kind] = append(c.denies[kind], grant)
 		}
+		c.denies[kind] = append(c.denies[kind], grant)
 	}
 }
 
@@ -326,22 +327,16 @@ func (c *claim) grantRule(rule adapter.CompiledRule) {
 }
 
 // payload returns the claim's row filters. A type denied whole has no grants, so it lists no rows.
+// Denies are sent whether or not the type has grants: a row can be admitted another way, e.g. a check with its canary.
 func (c *claim) payload() *rls.Payload {
 	payload := &rls.Payload{}
 	if len(c.scopes) > 0 {
 		payload.Scopes = lo.Uniq(c.scopes)
 	}
 	for _, kind := range rls.GrantTypes {
-		if c.deniedTypes[kind] {
-			continue
+		if grants := c.grants[kind]; grants != nil && !c.deniedTypes[kind] {
+			payload.SetGrants(kind, grants)
 		}
-
-		grants := c.grants[kind]
-		if grants == nil {
-			continue
-		}
-
-		payload.SetGrants(kind, grants)
 		for _, grant := range c.denies[kind] {
 			payload.AddDeny(kind, grant)
 		}
