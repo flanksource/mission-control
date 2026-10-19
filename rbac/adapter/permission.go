@@ -120,7 +120,7 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 }
 
 // loadRoleBindings validates every Scope, Role and RoleBinding, records why each invalid one isn't in effect,
-// and loads the policies of the valid bindings. An invalid object grants nothing.
+// and loads the policies of the valid bindings. An invalid object grants, and denies, nothing.
 // Each Scope's membership is rebuilt when it changed, e.g. because an agent it names was re-registered,
 // and cleared when it's invalid.
 func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
@@ -188,7 +188,7 @@ func (a *PermissionAdapter) loadRoleBindings(m model.Model) error {
 	return nil
 }
 
-// unappliedReport is what a binding reports about the allow rules that don't apply through it.
+// unappliedReport is what a binding reports about the rules that don't apply through it.
 type unappliedReport struct {
 	binding models.RoleBinding
 
@@ -323,6 +323,11 @@ func (a *PermissionAdapter) loadBasePolicy(m model.Model) error {
 		// A token's principal only holds the bindings that select it. A stored row for it, e.g. a grouping
 		// into everyone written by a check made as it, would widen the token's limit.
 		if strings.HasPrefix(line.V0, models.AccessTokenPrincipalPrefix) {
+			continue
+		}
+		// Only deny RoleBindings deny, and their policies are compiled on every load. A stored deny, e.g. one an older
+		// version wrote for a Permission, would refuse what nothing reviewable denies.
+		if line.Ptype == "p" && line.V3 == "deny" {
 			continue
 		}
 		if err := loadCasbinRule(line, m); err != nil {
@@ -512,7 +517,9 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 //
 // Users of external identity providers are assigned to the binding when their token's claims match (see auth/federation.go).
 //
-// It also returns the allow rules that don't apply through the binding, and a validation error when the binding
+// A deny binding's rules compile to deny policies (see compiledRuleToCasbinRules).
+//
+// It also returns the rules that don't apply through the binding, and a validation error when the binding
 // isn't Ready. A binding that's invalid on its own, or whose role is missing or invalid, has no policies.
 func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding, role *models.Role) ([][]string, []UnappliedRule, error) {
 	spec, err := RoleBindingSpec(binding)
@@ -595,7 +602,7 @@ func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding,
 // A binding created with an access token has no subjects of v1.RoleBindingSubjects: its only subject is the token
 // (bindingAccessToken), so it's validated without them.
 func RoleBindingSpec(binding models.RoleBinding) (v1.RoleBindingSpec, error) {
-	spec := v1.RoleBindingSpec{Role: binding.Role}
+	spec := v1.RoleBindingSpec{Role: binding.Role, Deny: binding.Deny}
 	if _, isToken, err := bindingAccessToken(binding); err != nil {
 		return spec, err
 	} else if isToken {

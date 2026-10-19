@@ -36,11 +36,14 @@ const (
 	ReasonRoleNotFound  = "RoleNotFound"
 	ReasonRoleInvalid   = "RoleInvalid"
 
-	// ReasonNoRulesApply is a binding with a constraint that none of its role's allow rules applies through.
+	// ReasonNoRulesApply is a binding that none of its role's rules applies through.
 	ReasonNoRulesApply = "NoRulesApply"
 
-	// ReasonConstraintDoesNotFit is an allow rule a binding's constraint can't narrow.
+	// ReasonConstraintDoesNotFit is a rule a binding's constraint can't narrow.
 	ReasonConstraintDoesNotFit = "ConstraintDoesNotFit"
+
+	// ReasonDenyOnRoleBindings is a rule of a deny binding that only selects RoleBindings, which are never denied.
+	ReasonDenyOnRoleBindings = "DenyOnRoleBindings"
 
 	// ReasonPluginRuleNotAllowed is a binding that selects a plugin and binds a role with a rule a plugin can't be granted.
 	ReasonPluginRuleNotAllowed = "PluginRuleNotAllowed"

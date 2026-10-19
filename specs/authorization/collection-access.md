@@ -23,9 +23,11 @@ For every subject and every resource type a `read` rule can accept ([roles.md, S
 | `some`   | May read the resources their `read` grants select, and no other. |
 | `none`     | May read no resource of the type.                                |
 
-The answer is derived from the subject's grants alone, in this order:
+The answer is derived from the subject's grants and denies alone, in this order:
 
+0. `none`, when a deny of `read` applies to the subject over the whole type ([Section 2.5](#25-denies)).
 1. `all`, when a `read` rule applies to the subject whose Scope has a whole-type target of the type ([scopes.md, Section 5.2](scopes.md#52-wildcards-and-patterns)), and the binding it comes through either has no `resource` constraint or constrains it with a Scope that also has a whole-type target of the type ([Section 2.4](#24-whole-type-under-a-constraint)).
+   No deny of `read` may apply to the subject over part of the type either.
 2. Otherwise `some`, when a `read` rule applies to the subject and its Scope, narrowed by the binding's constraint where there is one ([rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)), can select resources of the type: both Scopes have a target of the type.
 3. Otherwise `none`.
 
@@ -64,6 +66,22 @@ A constraint narrows a rule to the resources in both Scopes ([rolebindings.md, S
 This is the same test [rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows) uses to decide whether a narrowed `read` rule filters listings by row, and the two MUST agree: a narrowed rule is whole-type for the answer exactly when it doesn't filter by row.
 
 **Why.** The one unsafe reading of step 1 is "look at the rule's Scope alone": it would list every config to a subject whose binding limits them to tenant A. Requiring an explicit whole-type target on both sides leaves no path to `all` on which a constraint is bypassed.
+
+### 2.5 Denies
+
+A `read` rule of a deny binding ([rolebindings.md, Section 5](rolebindings.md#5-deny)) that applies to the subject is a deny of the resources its Scope, narrowed by the binding's constraint, selects. It's over the whole type exactly when it would be a whole-type grant (Section 2.4), and over part of the type otherwise.
+
+| Grants         | Denies               | Answer | What's listed                         |
+| -------------- | -------------------- | ------ | ------------------------------------- |
+| Whole type     | None                 | `all`  | Every resource                        |
+| Whole type     | Tenant A's configs   | `some` | Every resource not in tenant A        |
+| Tenant A, B    | Tenant A's configs   | `some` | Tenant B's resources not in tenant A  |
+| Any            | Whole type           | `none` | Refused                               |
+
+- A `some` answer that comes from a deny lists exactly the resources the grants select and no deny matches, the same ones the resource-level check allows one by one.
+- A deny of part of a type turns `all` into `some`, never `none`, even when the deny happens to match every resource. Like grants (Section 2.1), the answer follows what was written, not which resources the Scopes currently match.
+
+**Why `some`, not `all`.** Everything that trusts `all` reads the whole type without filtering rows. A subject denied part of it must only ever be served through the paths that filter rows, which is what `some` means.
 
 ## 3. What each answer allows
 

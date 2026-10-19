@@ -148,8 +148,8 @@ func PersistRoleBindingFromCRD(ctx context.Context, obj *v1.RoleBinding) error {
 }
 
 // PersistRoleBinding stores the binding as written, with why it isn't Ready: its role doesn't exist or is invalid,
-// a Scope of its constraint doesn't exist or is invalid, or none of the role's allow rules applies through it.
-// Its AllRulesApply condition reports the allow rules its constraint can't narrow.
+// a Scope of its constraint doesn't exist or is invalid, or none of the role's rules applies through it.
+// Its AllRulesApply condition reports the rules that don't apply through it.
 func PersistRoleBinding(ctx context.Context, obj *v1.RoleBinding, source string, createdBy *uuid.UUID) error {
 	uid, err := uuid.Parse(string(obj.GetUID()))
 	if err != nil {
@@ -184,6 +184,7 @@ func PersistRoleBinding(ctx context.Context, obj *v1.RoleBinding, source string,
 		Role:        obj.Spec.Role,
 		Constraint:  constraint,
 		Subjects:    subjects,
+		Deny:        obj.Spec.Deny,
 		CreatedBy:   createdBy,
 	}
 
@@ -200,7 +201,7 @@ func PersistRoleBinding(ctx context.Context, obj *v1.RoleBinding, source string,
 	return notReady(binding.ErrorReason, binding.Error)
 }
 
-// setAllRulesApply sets the AllRulesApply condition of a binding: whether every allow rule of its role applies
+// setAllRulesApply sets the AllRulesApply condition of a binding: whether every rule of its role applies
 // through it. It's Unknown when that can't be told, because the role or a Scope of the constraint is missing or invalid.
 func setAllRulesApply(obj *v1.RoleBinding, unapplied []adapter.UnappliedRule, notReadyReason *string) {
 	condition := metav1.Condition{
