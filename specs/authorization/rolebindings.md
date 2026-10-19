@@ -450,7 +450,9 @@ A deny applies wherever its rule would have granted: checks on one resource, che
 
 A deny binding's rules leave out the `roleBinding` type. A rule whose Scope selects only RoleBindings doesn't apply through it, and is reported with reason `DenyOnRoleBindings` (Section 3.2, "Reporting"). A binding none of whose rules applies is `Ready=False` with reason `NoRulesApply`.
 
-_Why:_ whoever may manage RoleBindings can always delete a deny binding, so a deny can't lock admins out. A restart puts `admin@local` back in the shipped `admins` team (`overview.md`, "Restoring admin access"), and `admin` can delete any binding. A deny of `delete` on `roleBinding` would make that guarantee depend on no one writing one.
+_Why:_ whoever may manage RoleBindings can always delete a deny binding written through the API, so such a deny can't lock admins out. A restart puts `admin@local` back in the shipped `admins` team (`overview.md`, "Restoring admin access"), and `admin` can delete any binding the API manages. A deny of `delete` on `roleBinding` would make that guarantee depend on no one writing one.
+
+A deny binding applied through Kubernetes can only be removed through Kubernetes, like any object it manages. Write access there is already equivalent to Mission Control admin (`overview.md`, "Who may manage these resources"), so recovering from such a deny takes a cluster operator, not a Mission Control admin.
 
 ### 5.5 What fails open
 
@@ -460,7 +462,7 @@ A deny that isn't in effect denies nothing:
 - a rule its constraint can't narrow (Section 3.2)
 - an `oidc` subject whose `match` fails, e.g. on a missing claim (Section 2.4)
 
-Each is visible in the binding's `Ready` and `AllRulesApply` conditions. After writing a deny binding, check both.
+Each of the first two is visible in the binding's `Ready` and `AllRulesApply` conditions. A binding `Ready=False` with reason `PersistFailed` is the exception: its previous version stays in effect (`overview.md`, "Persistence failures"), denies included. After writing a deny binding, check both.
 
 _Why not deny everything instead:_ a typo in a deny binding would then refuse everything to everyone it selects, admins included, and no grant could undo it. An allow-only model fails closed on every mistake; denies give that up for these cases, and report each of them instead.
 

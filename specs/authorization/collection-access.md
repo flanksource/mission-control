@@ -31,7 +31,7 @@ The answer is derived from the subject's grants and denies alone, in this order:
 2. Otherwise `some`, when a `read` rule applies to the subject and its Scope, narrowed by the binding's constraint where there is one ([rolebindings.md, Section 3.2](rolebindings.md#32-which-rules-a-constraint-narrows)), can select resources of the type: both Scopes have a target of the type.
 3. Otherwise `none`.
 
-A subject bound to the shipped `admin` Role is `all` on every type, and one bound to `viewer` is `all` on the types it reads, through those Roles' rules ([overview.md, "Shipped Roles"](overview.md#shipped-roles)). A subject with no grants is `none` on every type.
+A subject bound to the shipped `admin` Role is `all` on every type, and one bound to `viewer` is `all` on the types it reads, through those Roles' rules ([overview.md, "Shipped Roles"](overview.md#shipped-roles)), unless a deny applies to them (Section 2.5). A subject with no grants is `none` on every type.
 
 Permissions ([permissions.md](permissions.md)) count too. A Permission that allows `read` counts like a rule, with its selectors in place of a Scope, type by type. For connections, which can't be filtered by row ([roles.md, Section 3.1](roles.md#31-the-read-action)), a Permission that isn't whole-type gives nothing.
 
@@ -45,7 +45,7 @@ An invalid Scope is a different case. A Scope naming an agent that isn't registe
 
 ### 2.2 Several grants
 
-A subject often has several `read` grants on a type, from different Roles and bindings. If any one of them is a whole-type grant, the answer is `all`. Otherwise, if there is any grant on the type, the answer is `some`, however many grants there are: three Scopes on three namespaces are still a subset. What the subject sees is the union of what the grants select. A rule that doesn't apply, because its Role or binding isn't in effect ([roles.md, Section 6](roles.md#6-how-changes-take-effect); [rolebindings.md, Section 4](rolebindings.md#4-how-changes-take-effect)), gives nothing.
+A subject often has several `read` grants on a type, from different Roles and bindings. If any one of them is a whole-type grant, and no deny applies (Section 2.5), the answer is `all`. Otherwise, if there is any grant on the type, the answer is `some`, however many grants there are: three Scopes on three namespaces are still a subset. What the subject sees is the union of what the grants select. A rule that doesn't apply, because its Role or binding isn't in effect ([roles.md, Section 6](roles.md#6-how-changes-take-effect); [rolebindings.md, Section 4](rolebindings.md#4-how-changes-take-effect)), gives nothing.
 
 ### 2.3 Row-level security
 
@@ -94,7 +94,7 @@ The answer decides every collection-level operation on the type:
 | Open the type's page in the UI          | Shown                            | Shown, and the page says it shows only the resources granted to the subject                             | Not shown                    |
 | Open one resource by direct link        | The resource-level check decides | The resource-level check decides; a resource outside the grants is refused as one that doesn't exist is | Refused with `403 Forbidden`, whether or not the resource exists |
 
-- A `some` listing MUST return exactly the resources the subject's `read` grants select: the same resources the resource-level check would allow one by one ([roles.md, Section 3.1](roles.md#31-the-read-action)). An empty result is a result, not an error.
+- A `some` listing MUST return exactly the resources the subject's `read` grants select and none of their `read` denies matches: the same resources the resource-level check would allow one by one ([roles.md, Section 3.1](roles.md#31-the-read-action)). An empty result is a result, not an error.
 - Opening one resource is always a resource-level check ([roles.md, Section 4.3](roles.md#43-what-an-operation-must-provide)). The answer never grants a resource the rules don't.
 - A `none` refusal is the same for every id of the type, whether or not a resource with that id exists, so it reveals nothing about which resources exist ([Section 6](#6-what-a-subject-may-learn)). A `some` subject gets the not-found response for a resource outside their grants, the same as for an id that doesn't exist.
 - A search is a search however it's filtered. A search limited to one type skips the type when the answer is `none` and returns an empty result; it never returns `403`. Only an endpoint that lists one type refuses.

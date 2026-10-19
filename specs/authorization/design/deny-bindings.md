@@ -4,7 +4,7 @@ Implements `rolebindings.md`, Section 5, and `collection-access.md`, Section 2.5
 
 ## Background
 
-A deny has to hold at every place a grant is enforced: Casbin checks on one resource, Casbin checks on whole object types, and Postgres row-level security on listings. It can be enforced either by subtracting denies from grants before they reach those places, or by giving each place a deny of its own. We chose a deny at each place, because grants and denies name Scopes, whose members are only known when a request is checked: "every config in `prod` but not in `secrets`" isn't a Scope, so it can't be compiled into one grant.
+A deny has to hold at every place a grant is enforced: Casbin checks on one resource, Casbin checks on whole object types, and Postgres row-level security on listings. It can be enforced either by subtracting denies from grants before they reach those places, or by giving each place a deny of its own. We chose a deny at each place, because grants and denies name Scopes, and checks read each Scope's stored membership when a request is made: "every config in `prod` but not in `secrets`" isn't a Scope, so it can't be compiled into one grant without storing a membership of its own.
 
 ## Storage
 
