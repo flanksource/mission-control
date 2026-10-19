@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	ginkgo "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 )
 
 // Resource is a kind of thing cases create, read and delete, only through Mission Control's public API.
@@ -42,7 +42,7 @@ func Create[R Resource](f *Fixture, r R) R {
 	ginkgo.GinkgoHelper()
 	Build(f, r)
 	resp := f.Admin().Do(r.CreateRequest())
-	Expect(resp.Status).To(BeElementOf(http.StatusOK, http.StatusCreated), resp.String())
+	gomega.Expect(resp.Status).To(gomega.BeElementOf(http.StatusOK, http.StatusCreated), resp.String())
 	f.Defer(func() { f.Admin().Do(DELETE(r.Path())) })
 	return r
 }
@@ -55,8 +55,8 @@ func Read[R Resource](f *Fixture, r R) (R, bool) {
 	if resp.Status == http.StatusNotFound {
 		return stored, false
 	}
-	Expect(resp.Status).To(Equal(http.StatusOK), resp.String())
-	Expect(resp.Decode(stored)).To(Succeed())
+	gomega.Expect(resp.Status).To(gomega.Equal(http.StatusOK), resp.String())
+	gomega.Expect(resp.Decode(stored)).To(gomega.Succeed())
 	return stored, true
 }
 
@@ -100,7 +100,7 @@ func Any(checks ...func() bool) func() bool {
 func NoSecret(resources ...Secretive) func(Response) {
 	return func(resp Response) {
 		for _, r := range resources {
-			Expect(strings.Contains(string(resp.Body), r.Secret())).To(BeFalse(), "%s revealed a credential", resp.Request)
+			gomega.Expect(strings.Contains(string(resp.Body), r.Secret())).To(gomega.BeFalse(), "%s revealed a credential", resp.Request)
 		}
 	}
 }

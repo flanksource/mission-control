@@ -6,7 +6,7 @@ import (
 	"time"
 
 	ginkgo "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 )
 
 // Actions a Role's rules allow.
@@ -78,13 +78,13 @@ func create(kind, namespace, name string, spec map[string]any) object {
 	resp := env.server.Admin.Do(POST("/rbac/"+kind, map[string]any{
 		"metadata": meta(namespace, name), "spec": spec,
 	}))
-	Expect(resp.Status).To(Equal(http.StatusCreated), "creating %s %s/%s: %s", kind, namespace, name, resp)
+	gomega.Expect(resp.Status).To(gomega.Equal(http.StatusCreated), "creating %s %s/%s: %s", kind, namespace, name, resp)
 
 	var created struct {
 		Error *string `json:"error"`
 	}
-	Expect(resp.Decode(&created)).To(Succeed())
-	Expect(created.Error).To(BeNil(), "%s %s/%s isn't in effect: %s", kind, namespace, name, resp)
+	gomega.Expect(resp.Decode(&created)).To(gomega.Succeed())
+	gomega.Expect(created.Error).To(gomega.BeNil(), "%s %s/%s isn't in effect: %s", kind, namespace, name, resp)
 	return object{kind: kind, namespace: namespace, name: name}
 }
 
@@ -92,7 +92,7 @@ func create(kind, namespace, name string, spec map[string]any) object {
 func remove(o object) {
 	ginkgo.GinkgoHelper()
 	resp := env.server.Admin.Do(DELETE(o.path()))
-	Expect(resp.Status).To(Equal(http.StatusOK), "deleting %s: %s", o.path(), resp)
+	gomega.Expect(resp.Status).To(gomega.Equal(http.StatusOK), "deleting %s: %s", o.path(), resp)
 }
 
 // writeRole writes the rules as a Role of the name in the namespace, with a Scope for each selector.
@@ -188,9 +188,9 @@ func (b *barrier) wait() {
 		want = http.StatusForbidden
 	}
 
-	Eventually(func() int {
+	gomega.Eventually(func() int {
 		return b.user.Do(GET("/rbac/roles")).Status
-	}).WithTimeout(30*time.Second).WithPolling(200*time.Millisecond).Should(Equal(want), func() string {
+	}).WithTimeout(30*time.Second).WithPolling(200*time.Millisecond).Should(gomega.Equal(want), func() string {
 		return "the authorization policy wasn't reloaded. Mission Control's log ends with:\n" + env.server.LogTail(80)
 	})
 }

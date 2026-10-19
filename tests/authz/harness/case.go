@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	ginkgo "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega"
 )
 
 // Case is one thing a person may only do with a grant, checked through every route that reaches it.
@@ -230,7 +230,7 @@ func describeCase(n int, c Case) {
 
 		ginkgo.It("refuses a deleted access token", func() {
 			resp := r.user.Do(DELETE("/auth/token/" + r.tokenIDs["token-b"]))
-			Expect(resp.Status).To(BeElementOf(http.StatusOK, http.StatusNoContent), resp.String())
+			gomega.Expect(resp.Status).To(gomega.BeElementOf(http.StatusOK, http.StatusNoContent), resp.String())
 			delete(r.tokenIDs, "token-b")
 
 			r.expect(r.tokens["token-b"], unauthenticated)
@@ -261,32 +261,32 @@ func (r *run) createToken(name, role string) {
 		"name":  name,
 		"roles": []any{map[string]any{"namespace": r.fixture.Namespace, "name": role}},
 	}))
-	Expect(resp.Status).To(Equal(http.StatusOK), resp.String())
+	gomega.Expect(resp.Status).To(gomega.Equal(http.StatusOK), resp.String())
 
 	var created struct {
 		Payload struct {
 			Token string `json:"token"`
 		} `json:"payload"`
 	}
-	Expect(resp.Decode(&created)).To(Succeed())
-	Expect(created.Payload.Token).ToNot(BeEmpty(), resp.String())
+	gomega.Expect(resp.Decode(&created)).To(gomega.Succeed())
+	gomega.Expect(created.Payload.Token).ToNot(gomega.BeEmpty(), resp.String())
 	r.tokens[name] = r.user.WithToken(name, created.Payload.Token)
 
 	list := r.user.Do(GET("/auth/tokens"))
-	Expect(list.Status).To(Equal(http.StatusOK), list.String())
+	gomega.Expect(list.Status).To(gomega.Equal(http.StatusOK), list.String())
 	var tokens struct {
 		Payload []struct {
 			ID   string `json:"id"`
 			Name string `json:"name"`
 		} `json:"payload"`
 	}
-	Expect(list.Decode(&tokens)).To(Succeed())
+	gomega.Expect(list.Decode(&tokens)).To(gomega.Succeed())
 	for _, t := range tokens.Payload {
 		if t.Name == name {
 			r.tokenIDs[name] = t.ID
 		}
 	}
-	Expect(r.tokenIDs).To(HaveKey(name), "token %s isn't listed: %s", name, list)
+	gomega.Expect(r.tokenIDs).To(gomega.HaveKey(name), "token %s isn't listed: %s", name, list)
 }
 
 // expect takes the case's action as the caller through each of its routes, once each, and checks each was answered
@@ -294,7 +294,7 @@ func (r *run) createToken(name, role string) {
 func (r *run) expect(caller *Caller, want outcome) {
 	ginkgo.GinkgoHelper()
 	routes := len(r.c.Arrange(r.fixture).Requests)
-	Expect(routes).To(BeNumerically(">", 0), "the case has no requests")
+	gomega.Expect(routes).To(gomega.BeNumerically(">", 0), "the case has no requests")
 	for i := range routes {
 		r.expectRoute(caller, want, i)
 	}
@@ -305,7 +305,7 @@ func (r *run) expectRoute(caller *Caller, want outcome, route int) {
 	attempt := r.c.Arrange(r.fixture)
 	request := attempt.Requests[route]
 	resp := caller.Do(request)
-	Expect(resp.Err).ToNot(HaveOccurred())
+	gomega.Expect(resp.Err).ToNot(gomega.HaveOccurred())
 
 	deniedStatuses := attempt.Denied
 	if len(deniedStatuses) == 0 {
@@ -323,13 +323,13 @@ func (r *run) expectRoute(caller *Caller, want outcome, route int) {
 	default:
 		ginkgo.Fail(fmt.Sprintf("%s: expected it %s, but it was answered with neither an allow nor a denial: %s", caller, want, resp))
 	}
-	Expect(got).To(Equal(want), "%s: %s", caller, resp)
+	gomega.Expect(got).To(gomega.Equal(want), "%s: %s", caller, resp)
 
 	if attempt.Happened != nil {
 		if want == allowed {
-			Expect(attempt.Happened()).To(BeTrue(), "%s was allowed for %s, but didn't happen", request, caller)
+			gomega.Expect(attempt.Happened()).To(gomega.BeTrue(), "%s was allowed for %s, but didn't happen", request, caller)
 		} else {
-			Expect(attempt.Happened()).To(BeFalse(), "%s was refused for %s, but happened anyway", request, caller)
+			gomega.Expect(attempt.Happened()).To(gomega.BeFalse(), "%s was refused for %s, but happened anyway", request, caller)
 		}
 	}
 	if want == allowed && attempt.Verify != nil {
