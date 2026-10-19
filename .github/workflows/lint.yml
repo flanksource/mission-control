@@ -22,6 +22,8 @@ jobs:
           cache: false
       - name: Check clientapi dependencies
         run: make check-clientapi-dependencies
+      - name: Check authorization tests stay black-box
+        run: make check-authz-dependencies
       - run: make -B manifests
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # For deps
