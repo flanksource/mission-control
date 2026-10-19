@@ -32,9 +32,10 @@ The claim gains a `deny` object of grants by type, in the same shape as the gran
 ```
 
 - `rls_denying_scopes(kind)` returns the Scopes each deny grant needs, without whole-type Scopes, like `rls_required_scopes`. A malformed deny grant denies every row.
-- `rls_matching_grants` yields nothing for a row whose stored membership covers a deny grant's Scopes. The check is written inline, and `rls_row_denials(kind, id)` is its set-returning form for the checks policy, so Postgres inlines both. A scalar function with a sub-SELECT is never inlined, and would run `rls_denying_scopes` again for every row. Every table's policy goes through it, so they all follow.
-- `rls_grants_admit_row`, used by `WITH CHECK` and by rows not stored yet, checks the deny grants against the row's values, so a writer can't insert a denied row.
-- The `checks` policy also admits a check through its canary when reading. That path is refused for a denied check too. Its `WITH CHECK` canary path has no deny guard: no Role rule can grant writing checks.
+- `rls_denied_resources(kind)` returns the resources in every Scope of some deny grant, or a NULL for a deny over the whole type.
+- Each row-filtered table (`config_items`, `components`, `canaries`, `checks`, `playbooks`, `config_scrapers`, `views`) has a restrictive policy, `<table>_deny`: `id NOT IN (SELECT rls_denied_resources(kind))`. Postgres ANDs it with the permissive policies, so it covers every way a row is admitted, including a check through its canary, and the tables that read through these, e.g. `config_changes`.
+- The deny set names no row, so Postgres computes it once per statement and hashes it. A check correlated with the row, even one that never runs, keeps Postgres from hashing the `config_items` subquery `config_changes` reads through, which doubles those listings. A claim without denies for the type skips the set entirely.
+- `rls_grants_admit_row`, used by `WITH CHECK` and by rows not stored yet, checks the deny grants against the row's values, so a writer can't insert a denied row. A stored row's membership is checked by the restrictive policy, which also applies to writes.
 
 A deny over a whole type also takes the type's grants away, so its answer is `none`. Every deny is still sent as a deny grant, even for a type with no grants of its own, since a row can be admitted another way, e.g. a check through its canary.
 
