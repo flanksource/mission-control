@@ -10,11 +10,14 @@ import (
 type Fixture struct {
 	Namespace string
 
+	// Person is the email of the case's person, e.g. to name them as a playbook's approver.
+	Person string
+
 	cleanups []func()
 }
 
-func newFixture(namespace string) *Fixture {
-	return &Fixture{Namespace: namespace}
+func newFixture(namespace, person string) *Fixture {
+	return &Fixture{Namespace: namespace, Person: person}
 }
 
 // Admin makes requests as the admin, to set up a request or check what it did.

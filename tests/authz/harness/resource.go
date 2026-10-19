@@ -28,6 +28,12 @@ type Resource interface {
 	Path() string
 }
 
+// Identified is a resource the server identifies when it's created, e.g. a playbook run, which takes its id from the
+// response to its creation.
+type Identified interface {
+	Created(resp Response)
+}
+
 // Secretive is a resource with a credential that no response may reveal.
 type Secretive interface {
 	Secret() string
@@ -45,6 +51,9 @@ func Create[R Resource](f *Fixture, r R) R {
 	Build(f, r)
 	resp := f.Admin().Do(r.CreateRequest())
 	gomega.Expect(resp.Status).To(gomega.BeElementOf(http.StatusOK, http.StatusCreated), resp.String())
+	if identified, ok := any(r).(Identified); ok {
+		identified.Created(resp)
+	}
 	f.Defer(func() { f.Admin().Do(DELETE(r.Path())) })
 	return r
 }
@@ -96,6 +105,18 @@ func Changed[R Resource](f *Fixture, r R, changed func(stored R) bool) func() bo
 	return func() bool {
 		stored, ok := Read(f, r)
 		return ok && changed(stored)
+	}
+}
+
+// Listed reports whether a listing through /db, made as the admin, has any rows, e.g. the runs of a playbook.
+func Listed(f *Fixture, path string, args ...any) func() bool {
+	return func() bool {
+		ginkgo.GinkgoHelper()
+		resp := f.Admin().Do(GET(path, args...))
+		gomega.Expect(resp.Status).To(gomega.Equal(http.StatusOK), resp.String())
+		var rows []json.RawMessage
+		gomega.Expect(resp.Decode(&rows)).To(gomega.Succeed())
+		return len(rows) > 0
 	}
 }
 

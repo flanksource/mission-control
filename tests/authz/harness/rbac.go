@@ -16,6 +16,10 @@ const (
 	ActionUpdate        = "update"
 	ActionDelete        = "delete"
 	ActionConnectionUse = "connection:use"
+
+	ActionPlaybookRun     = "playbook:run"
+	ActionPlaybookApprove = "playbook:approve"
+	ActionPlaybookCancel  = "playbook:cancel"
 )
 
 // Selector is a Scope target. It's given the namespace of the case it's granted in.

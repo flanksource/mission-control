@@ -137,7 +137,7 @@ func describeCase(n int, c Case) {
 	ginkgo.Describe(c.Name, ginkgo.Ordered, func() {
 		ginkgo.BeforeAll(func() {
 			r.user = env.server.NewUser()
-			r.fixture = newFixture(namespaceFor(n, c.Name))
+			r.fixture = newFixture(namespaceFor(n, c.Name), r.user.Email())
 		})
 
 		ginkgo.AfterAll(func() {
