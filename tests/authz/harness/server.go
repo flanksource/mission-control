@@ -202,7 +202,7 @@ func (s *Server) waitReady(timeout time.Duration) error {
 		}
 
 		// The admin is made an admin last thing before the server listens, and PostgREST starts on its own
-		if last = s.Admin.Do(Request{Method: http.MethodGet, Path: "/db/people?limit=1"}); last.Status == http.StatusOK {
+		if last = s.Admin.Do(GET("/db/people?limit=1")); last.Status == http.StatusOK {
 			return nil
 		}
 	}
@@ -211,9 +211,9 @@ func (s *Server) waitReady(timeout time.Duration) error {
 // createPerson creates the user's person through the database API, as the admin.
 // Mission Control doesn't create one when a basic auth user signs in.
 func (s *Server) createPerson(user *Caller) error {
-	resp := s.Admin.Do(Request{Method: http.MethodPost, Path: "/db/people", Body: map[string]any{
+	resp := s.Admin.Do(POST("/db/people", map[string]any{
 		"name": strings.TrimSuffix(user.username, "@authz.test"), "email": user.username,
-	}})
+	}))
 	if resp.Status != http.StatusCreated {
 		return fmt.Errorf("creating person %s: %s", user.username, resp)
 	}

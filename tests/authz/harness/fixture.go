@@ -4,9 +4,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"sync"
-
-	ginkgo "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
 )
 
 // Fixture creates what a case's requests need, as the admin, in the case's namespace, and deletes it after the case.
@@ -74,12 +71,4 @@ func (s *Sink) Calls() []*http.Request {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return append([]*http.Request(nil), s.requests...)
-}
-
-// mustDo makes the request as the admin and expects one of the statuses.
-func (f *Fixture) mustDo(r Request, statuses ...int) Response {
-	ginkgo.GinkgoHelper()
-	resp := f.Admin().Do(r)
-	Expect(resp.Status).To(BeElementOf(statuses), resp.String())
-	return resp
 }

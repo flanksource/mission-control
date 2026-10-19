@@ -24,6 +24,38 @@ func (r Request) String() string {
 	return r.Method + " " + r.Path
 }
 
+// GET is a GET request of the path, formatted with the args.
+func GET(path string, args ...any) Request {
+	return Request{Method: http.MethodGet, Path: format(path, args)}
+}
+
+// DELETE is a DELETE request of the path, formatted with the args.
+func DELETE(path string, args ...any) Request {
+	return Request{Method: http.MethodDelete, Path: format(path, args)}
+}
+
+// POST is a POST request of the path, with the body.
+func POST(path string, body any) Request {
+	return Request{Method: http.MethodPost, Path: path, Body: body}
+}
+
+// PUT is a PUT request of the path, with the body.
+func PUT(path string, body any) Request {
+	return Request{Method: http.MethodPut, Path: path, Body: body}
+}
+
+// PATCH is a PATCH request of the path, with the body.
+func PATCH(path string, body any) Request {
+	return Request{Method: http.MethodPatch, Path: path, Body: body}
+}
+
+func format(path string, args []any) string {
+	if len(args) == 0 {
+		return path
+	}
+	return fmt.Sprintf(path, args...)
+}
+
 // Response is what Mission Control answered.
 type Response struct {
 	Request Request

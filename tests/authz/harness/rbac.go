@@ -9,6 +9,15 @@ import (
 	. "github.com/onsi/gomega"
 )
 
+// Actions a Role's rules allow.
+const (
+	ActionRead          = "read"
+	ActionCreate        = "create"
+	ActionUpdate        = "update"
+	ActionDelete        = "delete"
+	ActionConnectionUse = "connection:use"
+)
+
 // Selector is a Scope target. It's given the namespace of the case it's granted in.
 type Selector func(namespace string) map[string]any
 
@@ -23,6 +32,16 @@ type Rule struct {
 // Allow is a rule allowing the action on the resources the selector picks.
 func Allow(action string, resource Selector) Rule {
 	return Rule{Action: action, Resource: resource}
+}
+
+// Rules are the rules of a grant.
+func Rules(rules ...Rule) []Rule {
+	return rules
+}
+
+// Miss is a near miss of the name, granting the rules.
+func Miss(name string, rules ...Rule) NearMiss {
+	return NearMiss{Name: name, Rules: rules}
 }
 
 // On limits the rule to the targets the selector picks.
@@ -56,9 +75,9 @@ func meta(namespace, name string) map[string]any {
 // create writes an object through the RBAC API, as the admin.
 func create(kind, namespace, name string, spec map[string]any) object {
 	ginkgo.GinkgoHelper()
-	resp := env.server.Admin.Do(Request{Method: http.MethodPost, Path: "/rbac/" + kind, Body: map[string]any{
+	resp := env.server.Admin.Do(POST("/rbac/"+kind, map[string]any{
 		"metadata": meta(namespace, name), "spec": spec,
-	}})
+	}))
 	Expect(resp.Status).To(Equal(http.StatusCreated), "creating %s %s/%s: %s", kind, namespace, name, resp)
 
 	var created struct {
@@ -72,7 +91,7 @@ func create(kind, namespace, name string, spec map[string]any) object {
 // remove deletes an object through the RBAC API, as the admin.
 func remove(o object) {
 	ginkgo.GinkgoHelper()
-	resp := env.server.Admin.Do(Request{Method: http.MethodDelete, Path: o.path()})
+	resp := env.server.Admin.Do(DELETE(o.path()))
 	Expect(resp.Status).To(Equal(http.StatusOK), "deleting %s: %s", o.path(), resp)
 }
 
@@ -170,7 +189,7 @@ func (b *barrier) wait() {
 	}
 
 	Eventually(func() int {
-		return b.user.Do(Request{Method: http.MethodGet, Path: "/rbac/roles"}).Status
+		return b.user.Do(GET("/rbac/roles")).Status
 	}).WithTimeout(30*time.Second).WithPolling(200*time.Millisecond).Should(Equal(want), func() string {
 		return "the authorization policy wasn't reloaded. Mission Control's log ends with:\n" + env.server.LogTail(80)
 	})

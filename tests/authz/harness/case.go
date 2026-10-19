@@ -11,7 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-// Case is one thing a person may only do with a grant, checked through every way it can be reached.
+// Case is one thing a person may only do with a grant, checked through every route that reaches it.
 //
 // Each case gets a person of its own and runs these steps in order, each against the live server:
 //
@@ -30,7 +30,8 @@ import (
 type Case struct {
 	Name string
 
-	// Arrange sets up what one request needs, as the admin, and returns it. It's called before each request.
+	// Arrange sets up what one request needs, as the admin, and returns the action's requests. It's called before
+	// each request.
 	Arrange func(f *Fixture) Attempt
 
 	// Grant are the rules that let a person make the request.
@@ -49,11 +50,14 @@ type NearMiss struct {
 	Rules []Rule
 }
 
-// Attempt is one request of a case, and how to tell what it did.
+// Attempt is what a case's action needs once: the requests that each take the action through one route, and how
+// to tell what one did. Arrange is called again before each request, so a request always finds what it needs, e.g. a
+// connection to delete.
 type Attempt struct {
-	Request Request
+	// Requests take the action, each through another route, e.g. /connection and /db. Every step checks each.
+	Requests []Request
 
-	// Happened reports whether the request did what it asks, e.g. that a connection is gone, checked as the admin
+	// Happened reports whether a request did what it asks, e.g. that a connection is gone, checked as the admin
 	// after the request is answered. A denied request must not have happened, and an allowed one must have.
 	Happened func() bool
 
@@ -133,13 +137,13 @@ func describeCase(n int, c Case) {
 
 		ginkgo.AfterAll(func() {
 			for name, id := range r.tokenIDs {
-				r.user.Do(Request{Method: http.MethodDelete, Path: "/auth/token/" + id})
+				r.user.Do(DELETE("/auth/token/" + id))
 				delete(r.tokenIDs, name)
 			}
 			for _, g := range append(r.extra, r.grant) {
 				for _, o := range append(append(g.bindings, g.role), g.scopes...) {
 					if o.name != "" {
-						env.server.Admin.Do(Request{Method: http.MethodDelete, Path: o.path()})
+						env.server.Admin.Do(DELETE(o.path()))
 					}
 				}
 			}
@@ -225,7 +229,7 @@ func describeCase(n int, c Case) {
 		})
 
 		ginkgo.It("refuses a deleted access token", func() {
-			resp := r.user.Do(Request{Method: http.MethodDelete, Path: "/auth/token/" + r.tokenIDs["token-b"]})
+			resp := r.user.Do(DELETE("/auth/token/" + r.tokenIDs["token-b"]))
 			Expect(resp.Status).To(BeElementOf(http.StatusOK, http.StatusNoContent), resp.String())
 			delete(r.tokenIDs, "token-b")
 
@@ -253,10 +257,10 @@ func (r *run) describeNever() {
 // createToken creates an access token of the case's person, through their session, bound to the case's Role.
 func (r *run) createToken(name, role string) {
 	ginkgo.GinkgoHelper()
-	resp := r.user.Do(Request{Method: http.MethodPost, Path: "/auth/create_token", Body: map[string]any{
+	resp := r.user.Do(POST("/auth/create_token", map[string]any{
 		"name":  name,
 		"roles": []any{map[string]any{"namespace": r.fixture.Namespace, "name": role}},
-	}})
+	}))
 	Expect(resp.Status).To(Equal(http.StatusOK), resp.String())
 
 	var created struct {
@@ -268,7 +272,7 @@ func (r *run) createToken(name, role string) {
 	Expect(created.Payload.Token).ToNot(BeEmpty(), resp.String())
 	r.tokens[name] = r.user.WithToken(name, created.Payload.Token)
 
-	list := r.user.Do(Request{Method: http.MethodGet, Path: "/auth/tokens"})
+	list := r.user.Do(GET("/auth/tokens"))
 	Expect(list.Status).To(Equal(http.StatusOK), list.String())
 	var tokens struct {
 		Payload []struct {
@@ -285,12 +289,22 @@ func (r *run) createToken(name, role string) {
 	Expect(r.tokenIDs).To(HaveKey(name), "token %s isn't listed: %s", name, list)
 }
 
-// expect makes the case's request as the caller once, and checks it was answered as want, and did or didn't happen
-// accordingly.
+// expect takes the case's action as the caller through each of its routes, once each, and checks each was answered
+// as want, and did or didn't happen accordingly.
 func (r *run) expect(caller *Caller, want outcome) {
 	ginkgo.GinkgoHelper()
+	routes := len(r.c.Arrange(r.fixture).Requests)
+	Expect(routes).To(BeNumerically(">", 0), "the case has no requests")
+	for i := range routes {
+		r.expectRoute(caller, want, i)
+	}
+}
+
+func (r *run) expectRoute(caller *Caller, want outcome, route int) {
+	ginkgo.GinkgoHelper()
 	attempt := r.c.Arrange(r.fixture)
-	resp := caller.Do(attempt.Request)
+	request := attempt.Requests[route]
+	resp := caller.Do(request)
 	Expect(resp.Err).ToNot(HaveOccurred())
 
 	deniedStatuses := attempt.Denied
@@ -313,9 +327,9 @@ func (r *run) expect(caller *Caller, want outcome) {
 
 	if attempt.Happened != nil {
 		if want == allowed {
-			Expect(attempt.Happened()).To(BeTrue(), "%s was allowed for %s, but didn't happen", attempt.Request, caller)
+			Expect(attempt.Happened()).To(BeTrue(), "%s was allowed for %s, but didn't happen", request, caller)
 		} else {
-			Expect(attempt.Happened()).To(BeFalse(), "%s was refused for %s, but happened anyway", attempt.Request, caller)
+			Expect(attempt.Happened()).To(BeFalse(), "%s was refused for %s, but happened anyway", request, caller)
 		}
 	}
 	if want == allowed && attempt.Verify != nil {
