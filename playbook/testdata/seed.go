@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/rbac"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -104,7 +104,7 @@ func LoadPermissions(ctx context.Context) error {
 		}
 	}
 
-	err = rbac.ReloadPolicy()
+	err = adapter.ReloadPolicy()
 	if err != nil {
 		return err
 	}

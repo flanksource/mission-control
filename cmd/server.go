@@ -410,7 +410,7 @@ func tableUpdatesHandler(ctx context.Context) {
 			// Only updates to the "deleted_at" column should trigger a reload
 			// but the emitted event doesn't include that information.
 			if tgOperation == TGOPUpdate {
-				if err := rbac.ReloadPolicy(); err != nil {
+				if err := adapter.ReloadPolicy(); err != nil {
 					ctx.Errorf("failed to reload rbac policy due to notification updates: %v", err)
 				} else {
 					ctx.Logger.Debugf("reloading rbac policy due to notification updates")
@@ -422,7 +422,7 @@ func tableUpdatesHandler(ctx context.Context) {
 			query.InvalidateCacheByID[models.Playbook](id)
 
 			if tgOperation == TGOPUpdate {
-				if err := rbac.ReloadPolicy(); err != nil {
+				if err := adapter.ReloadPolicy(); err != nil {
 					ctx.Errorf("failed to reload rbac policy due to playbook updates: %v", err)
 				} else {
 					ctx.Logger.Debugf("reloading rbac policy due to playbook updates")
@@ -446,7 +446,7 @@ func tableUpdatesHandler(ctx context.Context) {
 				if ok, err := rbac.DeleteRole(id); err != nil {
 					ctx.Errorf("failed to delete rbac policy for team(%s): %v", id, err)
 				} else if ok {
-					if err := rbac.ReloadPolicy(); err != nil {
+					if err := adapter.ReloadPolicy(); err != nil {
 						ctx.Errorf("failed to reload rbac policy due to team updates: %v", err)
 					}
 				}
@@ -469,7 +469,7 @@ func tableUpdatesHandler(ctx context.Context) {
 				auth.InvalidateRLSCacheForUser(personID)
 				if err := rbac.DeleteRoleForUser(personID, teamID); err != nil {
 					ctx.Errorf("failed to delete team(%s)->user(%s) rbac policy: %v", teamID, personID, err)
-				} else if err := rbac.ReloadPolicy(); err != nil {
+				} else if err := adapter.ReloadPolicy(); err != nil {
 					ctx.Errorf("failed to reload rbac policy due to team_members updates: %v", err)
 				}
 
@@ -480,7 +480,7 @@ func tableUpdatesHandler(ctx context.Context) {
 				auth.InvalidateRLSCacheForUser(personID)
 				if err := rbac.AddRoleForUser(personID, teamID); err != nil {
 					ctx.Errorf("failed to add team(%s)->user(%s) rbac policy: %v", teamID, personID, err)
-				} else if err := rbac.ReloadPolicy(); err != nil {
+				} else if err := adapter.ReloadPolicy(); err != nil {
 					ctx.Errorf("failed to reload rbac policy due to team_members updates: %v", err)
 				}
 			}

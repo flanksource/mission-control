@@ -10,7 +10,6 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/secret"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
@@ -91,7 +90,7 @@ func CreateAccessToken(ctx context.Context, personID uuid.UUID, name string, exp
 	// The token is committed, and its plain text exists only here, so a failed reload doesn't fail its creation:
 	// the reload its bindings' insert notifies picks it up.
 	if len(roles) > 0 {
-		if err := dutyRBAC.ReloadPolicy(); err != nil {
+		if err := adapter.ReloadPolicy(); err != nil {
 			ctx.Errorf("failed to reload the policy after creating access token %q: %v", name, err)
 		}
 	}

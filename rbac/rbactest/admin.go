@@ -7,13 +7,13 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/rbac/shipped"
 )
 
@@ -28,7 +28,7 @@ func MakeAdmins(ctx context.Context, personIDs ...uuid.UUID) error {
 			return err
 		}
 	}
-	return dutyRBAC.ReloadPolicy()
+	return adapter.ReloadPolicy()
 }
 
 // BindWholeType creates, in the namespace, a Scope of every resource of each type, a Role allowing the actions on
@@ -62,7 +62,7 @@ func BindWholeType(ctx context.Context, namespace, name string, emails, resource
 	if err := db.PersistRoleBindingFromCRD(ctx, &v1.RoleBinding{ObjectMeta: meta(), Spec: v1.RoleBindingSpec{Role: name, Subjects: subjects}}); err != nil {
 		return err
 	}
-	return dutyRBAC.ReloadPolicy()
+	return adapter.ReloadPolicy()
 }
 
 // DeleteNamespace deletes the Scopes, Roles and RoleBindings of the namespace, and reloads the policy.
@@ -72,5 +72,5 @@ func DeleteNamespace(ctx context.Context, namespace string) error {
 			return err
 		}
 	}
-	return dutyRBAC.ReloadPolicy()
+	return adapter.ReloadPolicy()
 }

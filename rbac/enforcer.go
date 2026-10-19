@@ -23,5 +23,5 @@ func Init(ctx context.Context) error {
 
 	// duty's Init adds its built-in roles' rules to the loaded policy. The adapter doesn't store them, so loading
 	// the policy again leaves them out.
-	return rbac.ReloadPolicy()
+	return adapter.ReloadPolicy()
 }

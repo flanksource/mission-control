@@ -283,7 +283,7 @@ func Sync(ctx context.Context) error {
 	})
 
 	errs := append([]error{err}, notReady...)
-	if err := dutyRBAC.ReloadPolicy(); err != nil {
+	if err := adapter.ReloadPolicy(); err != nil {
 		errs = append(errs, fmt.Errorf("failed to reload policy: %w", err))
 	}
 	return errors.Join(errs...)
