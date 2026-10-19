@@ -432,6 +432,8 @@ github.com/flanksource/duty v1.0.1414-0.20261019053607-a6ae6475f8ba h1:6LhMA6UMK
 github.com/flanksource/duty v1.0.1414-0.20261019053607-a6ae6475f8ba/go.mod h1:0gXfpvczCZKXaCbfHWz0W13O9GXoT2ic8NWHlwCCyc0=
 github.com/flanksource/duty v1.0.1414-0.20261019055153-c9df290621c3 h1:fnejdpIYzCiJ9DFGIUg6GtCq075oVijRSYnhqPt7eMg=
 github.com/flanksource/duty v1.0.1414-0.20261019055153-c9df290621c3/go.mod h1:0gXfpvczCZKXaCbfHWz0W13O9GXoT2ic8NWHlwCCyc0=
+github.com/flanksource/duty v1.0.1414-0.20261019084833-a92cca0f431f h1:nc3LX2/v4A1KRfykIXJC+X7EG4FziRoq2XxoIifyi9o=
+github.com/flanksource/duty v1.0.1414-0.20261019084833-a92cca0f431f/go.mod h1:0gXfpvczCZKXaCbfHWz0W13O9GXoT2ic8NWHlwCCyc0=
 github.com/flanksource/gomplate/v3 v3.24.90 h1:MAUlwU7REhSL62i4n74yvo+T4LA7HuRpJ9tKH9dbMzk=
 github.com/flanksource/gomplate/v3 v3.24.90/go.mod h1:tcjpBIaHboWVPUYt973dGLCWgTD1sOHdiFgA/AaPBPQ=
 github.com/flanksource/is-healthy v1.0.90 h1:YV4rmL9y1BOgg0FZsWF7FgMBiHyf1FS3oJG6mB8o4VY=
