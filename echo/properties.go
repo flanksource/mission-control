@@ -33,9 +33,10 @@ func RegisterPropertyRoutes(e *echov4.Echo) {
 
 	group := e.Group("/property", rbac.Authorization(policy.ObjectProperties, policy.ActionPropertyManage))
 	group.GET("", ListProperties)
-	group.GET("/:name", GetProperty)
-	group.PUT("/:name", SaveProperty)
-	group.DELETE("/:name", DeleteProperty)
+	group.POST("", SaveProperty)
+	group.GET("/*", GetProperty)
+	group.PUT("/*", SaveProperty)
+	group.DELETE("/*", DeleteProperty)
 }
 
 // ListProperties returns stored properties, without local overrides.
@@ -51,8 +52,12 @@ func ListProperties(c echov4.Context) error {
 // GetProperty returns the stored value for editing, even when a local property overrides it.
 func GetProperty(c echov4.Context) error {
 	ctx := c.Request().Context().(context.Context)
+	name := propertyName(c)
+	if name == "" {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "name is required"))
+	}
 	var property models.AppProperty
-	if err := ctx.DB().Where("name = ?", c.Param("name")).First(&property).Error; err != nil {
+	if err := ctx.DB().Where("name = ?", name).First(&property).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "property was not found"))
 		}
@@ -61,15 +66,19 @@ func GetProperty(c echov4.Context) error {
 	return c.JSON(http.StatusOK, property)
 }
 
-// SaveProperty creates or updates a value, recording the authenticated creator on insert.
+// SaveProperty creates on POST and upserts on PUT, recording the authenticated creator on insert.
 func SaveProperty(c echov4.Context) error {
 	ctx := c.Request().Context().(context.Context)
-	name := c.Param("name")
 	var body struct {
+		Name  string  `json:"name"`
 		Value *string `json:"value"`
 	}
 	if err := c.Bind(&body); err != nil {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
+	}
+	name := body.Name
+	if c.Request().Method == http.MethodPut {
+		name = propertyName(c)
 	}
 	if strings.TrimSpace(name) == "" || body.Value == nil {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "name and value are required"))
@@ -79,10 +88,18 @@ func SaveProperty(c echov4.Context) error {
 	if user := ctx.User(); user != nil {
 		property.CreatedBy = &user.ID
 	}
-	if err := ctx.DB().Raw(`INSERT INTO properties (name, value, created_by) VALUES (?, ?, ?)
-		ON CONFLICT (name) DO UPDATE SET value = excluded.value, updated_at = now(), deleted_at = NULL
-		RETURNING *`, name, *body.Value, property.CreatedBy).Scan(&property).Error; err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	query := "INSERT INTO properties (name, value, created_by) VALUES (?, ?, ?) ON CONFLICT (name) "
+	if c.Request().Method == http.MethodPut {
+		query += "DO UPDATE SET value = excluded.value, updated_at = now(), deleted_at = NULL"
+	} else {
+		query += "DO NOTHING"
+	}
+	result := ctx.DB().Raw(query+" RETURNING *", name, *body.Value, property.CreatedBy).Scan(&property)
+	if result.Error != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(result.Error))
+	}
+	if result.RowsAffected == 0 {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ECONFLICT, "property already exists"))
 	}
 	ctx.ClearCache()
 	return c.JSON(http.StatusOK, property)
@@ -91,9 +108,19 @@ func SaveProperty(c echov4.Context) error {
 // DeleteProperty removes the stored override, leaving local properties unchanged.
 func DeleteProperty(c echov4.Context) error {
 	ctx := c.Request().Context().(context.Context)
-	if err := ctx.DB().Where("name = ?", c.Param("name")).Delete(&models.AppProperty{}).Error; err != nil {
+	name := propertyName(c)
+	if name == "" {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "name is required"))
+	}
+	if err := ctx.DB().Where("name = ?", name).Delete(&models.AppProperty{}).Error; err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 	ctx.ClearCache()
 	return c.NoContent(http.StatusNoContent)
+}
+
+// propertyName uses the already-decoded URL path: Echo params preserve encoded slashes,
+// and decoding them again would confuse a literal "%2F" with "/".
+func propertyName(c echov4.Context) string {
+	return strings.TrimPrefix(c.Request().URL.Path, "/property/")
 }
