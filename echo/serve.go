@@ -148,7 +148,6 @@ func New(ctx context.Context) *echov4.Echo {
 		Middlewares: []echov4.MiddlewareFunc{KubeProxyTokenMiddleware},
 	})
 
-	e.GET("/properties", dutyEcho.Properties)
 	// A search decides each type by the subject's own grants on it, so it isn't gated on any one type (collection-access.md, Section 3)
 	e.POST("/resources/search", SearchResources, RLSMiddleware)
 	e.GET("/resources/:id", GetResource, rbac.CatalogRead(), RLSMiddleware)

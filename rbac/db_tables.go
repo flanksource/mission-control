@@ -213,7 +213,7 @@ var dbTables = map[string]dbTable{
 	"event_queue":               readWithAction(policy.ObjectEvents),
 	"event_queue_summary":       readWithAction(policy.ObjectEvents),
 	"failed_events":             readWithAction(policy.ObjectEvents),
-	"properties":                readWithAction(policy.ObjectProperties),
+	"feature_flags":             readWithAction(policy.ObjectProperties),
 
 	// Unclassified, served because the UI calls them
 	"incidents":                        unclassified(ofUnclassifiedIncidents),
