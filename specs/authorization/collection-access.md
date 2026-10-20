@@ -33,8 +33,6 @@ The answer is derived from the subject's grants and denies alone, in this order:
 
 A subject bound to the shipped `admin` Role is `all` on every type, and one bound to `viewer` is `all` on the types it reads, through those Roles' rules ([overview.md, "Shipped Roles"](overview.md#shipped-roles)), unless a deny applies to them (Section 2.5). A subject with no grants is `none` on every type.
 
-Permissions ([permissions.md](permissions.md)) count too. A Permission that allows `read` counts like a rule, with its selectors in place of a Scope, type by type. For connections, which can't be filtered by row ([roles.md, Section 3.1](roles.md#31-the-read-action)), a Permission that isn't whole-type gives nothing.
-
 ### 2.1 Derived from grants, not from resources
 
 The answer depends on what the subject was granted, never on which resources a valid Scope matches. A subject whose only `read` rule names a Scope that currently matches nothing is `some`, not `none`. A Scope's membership changes as resources come and go ([scopes.md, Section 4.1](scopes.md#41-empty-sets)); the answer MUST NOT change with it.
@@ -190,7 +188,6 @@ These pages have no single gate in the model. Their gates need a decision; no ne
 | Plugins, including Catalog Plugins | What permits opening the plugin listing? Plugin invocation actions don't grant administration of plugins. |
 | Logs | Should the page use `read` on `component`, or is a different gate needed for logs? There is no log type or action. |
 | Incidents, Rules | What permits opening these pages? There is no incident or incident-rule type or action. |
-| Legacy Permissions | How should this page be exposed? Legacy permissions have no type or action. |
 
 ## 6. What a subject may learn
 

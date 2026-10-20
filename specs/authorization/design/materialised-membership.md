@@ -104,6 +104,8 @@ Opening `cfg-X`, a member of both, puts `[scope:s-111, scope:s-222]` in `Resourc
 
 ## Permissions
 
+> **Superseded.** Permissions and PermissionGroups now grant nothing (`permissions.md`). This section records how they were handled when this design was written.
+
 Permissions are kept working only where that costs Role rules nothing (`permissions.md`).
 
 - **Naming Scopes** (`object.scopes`): checked through the Scopes' membership, like a rule, on single resources and on listings.
@@ -122,7 +124,7 @@ _Why delete the stored denies rather than drop the column alone:_ without the co
 
 ## Not covered
 
-- **Rows of a view.** A view is granted whole (`roles.md` §3.2), so rows aren't members of anything. Views keep computing which Scopes each of their rows matches, into their `grants` column, for Permissions only. Granting some rows is for flanksource/mission-control#3539.
+- **Rows of a view.** A view is granted whole (`roles.md` §3.2), so rows aren't members of anything. Views keep computing which Scopes each of their rows matches, into their `grants` column, which only Permissions used; nothing reads it now that they grant nothing. Granting some rows is for flanksource/mission-control#3539.
 
 ## Other choices
 

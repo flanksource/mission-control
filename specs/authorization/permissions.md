@@ -1,11 +1,9 @@
 # Permissions
 
-**Deprecated.** `Permission` and `PermissionGroup` are replaced by Scopes, Roles and RoleBindings (`overview.md`), and will be removed.
+**Deprecated, and grant nothing.** `Permission` and `PermissionGroup` are replaced by Scopes, Roles and RoleBindings (`overview.md`). They're kept only so that installations can see what they had and recreate it.
 
-- **Supported, but frozen.** Permissions keep working until they're removed, and get no new features.
-- **Roles and RoleBindings come first.** No requirement of Scopes, Roles or RoleBindings is weakened, and no design of them made harder, to keep a Permission working as it does. Where the two conflict, the Permission changes or loses the feature, with no compatibility path.
-- **No denies.** A Permission only allows, like a Role rule (`overview.md`, "Access"). A Permission that sets `deny: true` is rejected (`overview.md`, "Rejected or not in effect"), and one stored with it grants nothing.
-- **Otherwise never wider.** A change MAY make an allow Permission grant less, or nothing. It MUST NOT make one grant more.
-- **Not specified here.** These specifications don't define how Permissions behave, and where one mentions Permissions, the mention isn't a requirement. A design that changes how Permissions behave says so.
+- **No access.** A Permission or PermissionGroup, whether a Kubernetes resource or a row in `permissions` or `permission_groups`, MUST NOT allow or deny anything, in checks, listings or the access summary.
+- **Kubernetes resources.** Their controller stores nothing. It sets each one's `Ready` condition to `False` with reason `Deprecated`. Deleting one deletes the row it was stored as, if any; creating or changing one changes nothing.
+- **Rows.** Existing rows are kept, so that admins can recreate what they granted as Scopes, Roles and RoleBindings. They can't be created or changed: `/db` refuses those writes with 405. Reading them takes `read` on `roleBinding`, like any other grant; deleting them takes `delete` on `roleBinding`.
 
-**Why.** Few installations use Permissions. Keeping every behaviour of theirs would constrain the system that replaces them, for little gain. Dropping denies widens access for anyone who relied on one; that's accepted, since rules only allow.
+**Why.** Few installations use Permissions, and running them next to RoleBindings meant two systems decided access. Upgrading installations recreate theirs as RoleBindings when they upgrade. Rows written through the UI have no manifest anywhere, so they're kept for reference rather than dropped.

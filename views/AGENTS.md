@@ -59,7 +59,7 @@ Panels are visualizations that query the in-memory SQLite database. See `api/vie
 
 A view is granted whole (`specs/authorization/roles.md`, Section 3.2): a subject who may read a view reads every row and panel of it. Handlers check each view with `CanRead`, and PostgreSQL admits a generated table's rows when its view is readable under the `views` policy.
 
-Rows are also stamped with the Scopes their config matches, in the `__grants` column, for legacy Permissions only.
+Rows are also stamped with the Scopes their config matches, in the `__grants` column. It was for legacy Permissions, which now grant nothing (`specs/authorization/permissions.md`), so nothing reads it; it's kept until it's removed with the UI logic that uses it.
 
 - **Scope Caching**: Scope configurations are cached in memory (`scopes.go`). Use `FlushScopeCache()` to invalidate.
 - **RLS Context**: Operations needing RLS context use `auth.WithRLS()`.
