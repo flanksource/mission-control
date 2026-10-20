@@ -155,6 +155,11 @@ var _ = ginkgo.Describe("Work no person started", func() {
 			Expect(DefaultContext.DB().Where("playbook_id = ?", playbook.ID).First(&run).Error).To(Succeed())
 			Expect(run.ConfigID).To(Equal(&config.ID))
 			Expect(run.CreatedBy).To(BeNil())
+
+			Eventually(func() models.PlaybookRunStatus {
+				Expect(DefaultContext.DB().Where("id = ?", run.ID).First(&run).Error).To(Succeed())
+				return run.Status
+			}, "15s", "500ms").Should(BeElementOf(models.PlaybookRunStatusCompleted, models.PlaybookRunStatusFailed))
 		})
 	})
 
