@@ -142,13 +142,15 @@ var contracts = map[string]ActionContract{
 	},
 	policy.ActionPlaybookApprove: {
 		Resources: []string{policy.ResourcePlaybook}, Targets: playbookTargets, enforcement: enforcedPerRequest,
+		Requires: "read on the run's target, when there is one",
 	},
 	policy.ActionPlaybookCancel: {
 		Resources: []string{policy.ResourcePlaybook}, Targets: playbookTargets, enforcement: enforcedPerRequest,
+		Requires: "read on the run's target, when there is one",
 	},
 	policy.ActionMCPRun: {
 		Resources: []string{policy.ResourcePlaybook}, enforcement: enforcedPerRequest,
-		Requires: "mcp:use; the run itself also needs playbook:run",
+		Requires: "mcp:use; the run it starts is then checked as any run",
 	},
 
 	// Connections are checked per request, on their stored Scope membership, so unlike read any connection selector works.
@@ -202,6 +204,11 @@ func ContractFor(action string) (ActionContract, error) {
 // TakesResource reports whether the action is performed on a resource, so its rules need a resource Scope.
 func (c ActionContract) TakesResource() bool {
 	return c.enforcement != enforcedWithoutResource
+}
+
+// CheckedOnObjects reports whether the action is only checked on whole object types, never on individual resources.
+func (c ActionContract) CheckedOnObjects() bool {
+	return c.enforcement == enforcedOnObjects
 }
 
 // validateInput checks that a Scope can fill an input ("resource" or "target") of the action:
