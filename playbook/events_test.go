@@ -94,7 +94,18 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 		})
 
 		ginkgo.AfterAll(func() {
-			err := DefaultContext.DB().Delete(&models.PlaybookRun{}, "playbook_id IN ?", []uuid.UUID{playbook.ID, ungrantedPlaybook.ID, filteredPlaybook.ID}).Error
+			playbookIDs := []uuid.UUID{playbook.ID, ungrantedPlaybook.ID, filteredPlaybook.ID}
+
+			// Deleting a run while the run consumer still executes its action deadlocks on playbook_run_actions.
+			Eventually(func() int64 {
+				var unfinished int64
+				Expect(DefaultContext.DB().Model(&models.PlaybookRun{}).
+					Where("playbook_id IN ? AND status NOT IN ?", playbookIDs, models.PlaybookRunStatusFinalStates).
+					Count(&unfinished).Error).To(Succeed())
+				return unfinished
+			}, "30s", "500ms").Should(BeZero())
+
+			err := DefaultContext.DB().Delete(&models.PlaybookRun{}, "playbook_id IN ?", playbookIDs).Error
 			Expect(err).NotTo(HaveOccurred())
 
 			err = DefaultContext.DB().Delete(&models.ConfigItem{}, "id IN ?", newConfigItems).Error
