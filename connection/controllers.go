@@ -13,7 +13,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 
-	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
@@ -22,39 +21,16 @@ func RegisterRoutes(e *echo.Echo) {
 
 	prefix := "connection"
 	connectionGroup := e.Group(fmt.Sprintf("/%s", prefix))
-	// Both act with a connection's credentials, so they check connection:use on it, not on the whole connection type
+	// Acts with a connection's credentials, so it checks connection:use on it, not on the whole connection type
 	connectionGroup.POST("/test/:id", TestConnection)
-	connectionGroup.GET("/llm", GetDefaultLLMProviderConnection)
 
 	// The PostgREST roles can't read or write connections, so they're only written through these routes
 	connectionGroup.POST("", CreateConnection, rbac.Authorization(policy.ObjectConnection, policy.ActionCreate))
 	connectionGroup.GET("/:id", GetConnection)
 	connectionGroup.PUT("/:id", SaveConnection)
 	connectionGroup.DELETE("/:id", DeleteConnection)
-}
 
-// GetDefaultLLMProviderConnection returns the hydrated connection for the default LLM Provider connection.
-// It requires connection:use on it.
-//
-// It must only be used by the Next Backend for the AI Chat
-func GetDefaultLLMProviderConnection(c echo.Context) error {
-	ctx := c.Request().Context().(context.Context)
-
-	conn, err := db.FindDefaultLLMProviderConnection(ctx)
-	if err != nil {
-		return dutyAPI.WriteError(c, err)
-	}
-
-	if err := rbac.AuthorizeConnectionUse(ctx, *conn); err != nil {
-		return dutyAPI.WriteError(c, err)
-	}
-
-	hydratedConn, err := ctx.HydrateConnection(conn)
-	if err != nil {
-		return dutyAPI.WriteError(c, err)
-	}
-
-	return c.JSON(http.StatusOK, hydratedConn)
+	registerLLMRoutes(e)
 }
 
 // TestConnection makes an authenticated call with the connection's credentials, so it requires connection:use on it.

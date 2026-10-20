@@ -21,7 +21,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
 
-	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/connection"
 	"github.com/flanksource/incident-commander/db"
@@ -38,11 +37,10 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 	)
 
 	var (
-		conn                         models.Connection
-		guest, reader, user, editor  *models.Person
-		admin                        *models.Person
-		previousDefaultLLMConnection string
-		e                            *echo.Echo
+		conn                        models.Connection
+		guest, reader, user, editor *models.Person
+		admin                       *models.Person
+		e                           *echo.Echo
 	)
 
 	uid := func() k8sTypes.UID { return k8sTypes.UID(uuid.NewString()) }
@@ -128,16 +126,12 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 		})).To(Succeed())
 		Expect(rbac.ReloadPolicy()).To(Succeed())
 
-		previousDefaultLLMConnection = api.DefaultLLMConnection
-		api.DefaultLLMConnection = fmt.Sprintf("connection://%s/%s", namespace, conn.Name)
-
 		e = echo.New()
 		connection.RegisterRoutes(e)
 		e.Any("/db/*", func(c echo.Context) error { return c.NoContent(http.StatusOK) }, mcRBAC.DbMiddleware())
 	})
 
 	AfterAll(func() {
-		api.DefaultLLMConnection = previousDefaultLLMConnection
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.RoleBinding{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Role{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Scope{}).Error).To(Succeed())
@@ -221,7 +215,6 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 
 	for _, tt := range []struct{ name, method, path string }{
 		{"testing a connection", http.MethodPost, "/connection/test/%s"},
-		{"getting the default LLM connection", http.MethodGet, "/connection/llm"},
 	} {
 		Describe(tt.name, func() {
 			path := func() string {
@@ -323,14 +316,5 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 			Expect(do(editor, http.MethodGet, "/connection/"+created.ID.String()).Code).To(Equal(http.StatusNotFound))
 			Expect(DefaultContext.DB().Delete(&models.Connection{}, "id = ?", created.ID).Error).To(Succeed())
 		})
-	})
-
-	It("returns the hydrated default LLM connection to those who may use it", func() {
-		rec := do(user, http.MethodGet, "/connection/llm")
-		Expect(rec.Code).To(Equal(http.StatusOK))
-
-		var c models.Connection
-		Expect(json.Unmarshal(rec.Body.Bytes(), &c)).To(Succeed())
-		Expect(c.Password).To(Equal(password))
 	})
 })
