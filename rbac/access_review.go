@@ -113,10 +113,7 @@ type ReviewedRule struct {
 	Role        *RBACObjectRef  `json:"role,omitempty"`
 	Rule        string          `json:"rule,omitempty"`
 
-	// Permission is the legacy Permission that grants the rule.
-	Permission *RBACObjectRef `json:"permission,omitempty"`
-
-	// Direct is set when the binding or Permission selects the subject itself.
+	// Direct is set when the binding selects the subject itself.
 	Direct bool `json:"direct,omitempty"`
 
 	// Through are the subjects, e.g. teams, through which the subject holds the rule.
@@ -575,16 +572,13 @@ func explainReview(names *ruleNames, explained []dutyRBAC.ExplainedRule) ([]Revi
 }
 
 func (r ReviewedRule) sortKey() string {
-	switch {
-	case r.RoleBinding != nil:
+	if r.RoleBinding != nil {
 		return r.RoleBinding.Namespace + "/" + r.RoleBinding.Name + "/" + r.Rule
-	case r.Permission != nil:
-		return r.Permission.Namespace + "/" + r.Permission.Name
 	}
 	return ""
 }
 
-// ruleNames names the bindings, roles, Permissions and teams that grant rules, as far as the reviewer may read them:
+// ruleNames names the bindings, roles and teams that grant rules, as far as the reviewer may read them:
 // an access review never names what the reviewer can't see (specs/authorization/roles.md, Section 2.3).
 // It caches what it loads for the review.
 type ruleNames struct {
@@ -592,10 +586,9 @@ type ruleNames struct {
 
 	canReadBindings, canReadRoles, canReadTeams bool
 
-	bindings    map[uuid.UUID]*models.RoleBinding
-	roles       map[string]*models.Role
-	permissions map[uuid.UUID]*models.Permission
-	teams       map[string]*models.Team
+	bindings map[uuid.UUID]*models.RoleBinding
+	roles    map[string]*models.Role
+	teams    map[string]*models.Team
 }
 
 func newRuleNames(ctx context.Context) *ruleNames {
@@ -606,7 +599,6 @@ func newRuleNames(ctx context.Context) *ruleNames {
 		canReadTeams:    CheckContext(ctx, adapter.ObjectForType(v1.ResourceTeam), policy.ActionRead),
 		bindings:        map[uuid.UUID]*models.RoleBinding{},
 		roles:           map[string]*models.Role{},
-		permissions:     map[uuid.UUID]*models.Permission{},
 		teams:           map[string]*models.Team{},
 	}
 }
@@ -664,21 +656,6 @@ func (n *ruleNames) describe(rule dutyRBAC.ExplainedRule) (ReviewedRule, error) 
 		return reviewed, nil
 	}
 
-	if permissionID, err := uuid.Parse(rule.ID); err == nil {
-		// Permissions are deprecated RoleBindings (specs/authorization/permissions.md), named to whoever may read those
-		if !n.canReadBindings {
-			reviewed.Hidden = true
-			return reviewed, nil
-		}
-
-		permission, err := n.permission(permissionID)
-		if err != nil {
-			return ReviewedRule{}, err
-		} else if permission != nil {
-			reviewed.Permission = &RBACObjectRef{ID: permission.ID.String(), Namespace: permission.Namespace, Name: permission.Name}
-		}
-	}
-
 	return reviewed, nil
 }
 
@@ -730,20 +707,6 @@ func (n *ruleNames) role(namespace, name string) (*models.Role, error) {
 
 	n.roles[key] = lo.Ternary(role.ID == uuid.Nil, nil, &role)
 	return n.roles[key], nil
-}
-
-func (n *ruleNames) permission(id uuid.UUID) (*models.Permission, error) {
-	if permission, ok := n.permissions[id]; ok {
-		return permission, nil
-	}
-
-	var permission models.Permission
-	if err := n.ctx.DB().Where("id = ? AND deleted_at IS NULL", id).Limit(1).Find(&permission).Error; err != nil {
-		return nil, n.ctx.Oops().Wrapf(err, "failed to load permission %s", id)
-	}
-
-	n.permissions[id] = lo.Ternary(permission.ID == uuid.Nil, nil, &permission)
-	return n.permissions[id], nil
 }
 
 func (n *ruleNames) team(id string) (*models.Team, error) {

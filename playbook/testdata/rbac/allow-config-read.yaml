@@ -1,0 +1,33 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: john-catalog-read
+  namespace: default
+spec:
+  targets:
+    - config:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: john-catalog-read
+  namespace: default
+spec:
+  description: Grant John read permissions to catalogs
+  rules:
+    - name: read-configs
+      action: read
+      resource:
+        scopeRef: john-catalog-read
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: RoleBinding
+metadata:
+  name: john-catalog-read
+  namespace: default
+spec:
+  role: john-catalog-read
+  subjects:
+    people:
+      - john@doe.com

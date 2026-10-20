@@ -13,14 +13,12 @@ import (
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
-	dutyTypes "github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/robfig/cron/v3"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/yaml"
 
@@ -29,6 +27,7 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/playbook/sdk"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 func waitFor(ctx context.Context, run *models.PlaybookRun, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
@@ -181,63 +180,19 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 
 		Expect(db.PersistPlaybookFromCRD(DefaultContext, &pb)).To(Succeed())
 
-		// Grant artifact access for the scheduled playbook
-		playbookRef := fmt.Sprintf("%s/%s", pb.Namespace, pb.Name)
-		perm := &v1.Permission{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("allow-%s-artifacts", pb.Name),
-				Namespace: pb.Namespace,
-				UID:       types.UID(uuid.NewString()),
+		// No person starts a scheduled run: the playbook needs playbook:run on itself.
+		// It also uses the artifacts connection, and its report action reads the view as the playbook.
+		ginkgo.DeferCleanup(grantAccess(pb.Name,
+			v1.RoleBindingSubjects{PermissionGroupSubjects: v1.PermissionGroupSubjects{
+				Playbooks: []v1.PermissionGroupSelector{{Name: pb.Name, Namespace: pb.Namespace}},
+			}},
+			accessGrant{
+				Action:   adapter.ActionConnectionUse,
+				Resource: v1.ScopeTarget{Connection: &v1.ScopeConnectionSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "artifacts", Namespace: "default"}}},
 			},
-			Spec: v1.PermissionSpec{
-				Description: fmt.Sprintf("allow %s to use the artifacts connection", playbookRef),
-				Subject:     v1.PermissionSubject{Playbook: playbookRef},
-				Actions:     []string{"connection:use"},
-				Object: v1.PermissionObject{
-					Selectors: dutyRBAC.Selectors{
-						Connections: []dutyTypes.ResourceSelector{{Name: "artifacts", Namespace: "default"}},
-					},
-				},
-			},
-		}
-		Expect(db.PersistPermissionFromCRD(DefaultContext, perm)).To(Succeed())
-
-		// No person starts a scheduled run: the playbook needs playbook:run on itself
-		Expect(db.PersistPermissionFromCRD(DefaultContext, &v1.Permission{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("allow-%s-run-itself", pb.Name),
-				Namespace: pb.Namespace,
-				UID:       types.UID(uuid.NewString()),
-			},
-			Spec: v1.PermissionSpec{
-				Description: fmt.Sprintf("allow %s to run on its schedule", playbookRef),
-				Subject:     v1.PermissionSubject{Playbook: playbookRef},
-				Actions:     []string{"playbook:run"},
-				Object: v1.PermissionObject{
-					Selectors: dutyRBAC.Selectors{
-						Playbooks: []dutyTypes.ResourceSelector{{Name: pb.Name, Namespace: pb.Namespace}},
-					},
-				},
-			},
-		})).To(Succeed())
-
-		// The report action reads the view as the playbook
-		Expect(db.PersistPermissionFromCRD(DefaultContext, &v1.Permission{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      fmt.Sprintf("allow-%s-read-views", pb.Name),
-				Namespace: pb.Namespace,
-				UID:       types.UID(uuid.NewString()),
-			},
-			Spec: v1.PermissionSpec{
-				Description: fmt.Sprintf("allow %s to read the views it reports on", playbookRef),
-				Subject:     v1.PermissionSubject{Playbook: playbookRef},
-				Actions:     []string{"read"},
-				Object: v1.PermissionObject{
-					Selectors: dutyRBAC.Selectors{Views: []dutyRBAC.ViewRef{{Name: "*"}}},
-				},
-			},
-		})).To(Succeed())
-		Expect(dutyRBAC.ReloadPolicy()).To(Succeed())
+			accessGrant{Action: policy.ActionPlaybookRun, Resource: v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: pb.Name, Namespace: pb.Namespace}}},
+			accessGrant{Action: policy.ActionRead, Resource: v1.ScopeTarget{View: &v1.ScopeViewRef{Name: "*"}}},
+		))
 
 		playbookModel, err := pb.ToModel()
 		Expect(err).ToNot(HaveOccurred())

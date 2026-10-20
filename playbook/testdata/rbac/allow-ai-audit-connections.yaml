@@ -1,0 +1,38 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: allow-ai-audit-connections
+  namespace: default
+spec:
+  targets:
+    - connection:
+        name: gemini
+        namespace: default
+    - connection:
+        name: artifacts
+        namespace: default
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: allow-ai-audit-connections
+  namespace: default
+spec:
+  description: allow playbook default/ai-audit-catalog to use gemini and artifacts connections
+  rules:
+    - name: use-connections
+      action: connection:use
+      resource:
+        scopeRef: allow-ai-audit-connections
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: RoleBinding
+metadata:
+  name: allow-ai-audit-connections
+  namespace: default
+spec:
+  role: allow-ai-audit-connections
+  subjects:
+    playbooks:
+      - name: ai-audit-catalog
+        namespace: default

@@ -6,7 +6,7 @@ A token binding is a RoleBinding whose subject is an access token. It isn't a ki
 
 A token may do what its owner may do, and only what a rule of one of its bindings' Roles also matches (`limiting-permissions.md`, "Access tokens"). Every check made with a token is checked as its owner too, so a binding can only narrow what the owner can already do with that token. It adds nothing to the owner, to anyone else, or to the token beyond its owner.
 
-- **A token is never a subject of its own.** Nothing reaches a token except its bindings: no other binding, team or Permission can select it. An access review or access search MUST NOT be run as a token. _Why:_ any grant of its own would let a token's limit reach beyond its bindings, and probing a token's limit would tell anyone allowed to review access what another person's token can do.
+- **A token is never a subject of its own.** Nothing reaches a token except its bindings: no other binding or team can select it. An access review or access search MUST NOT be run as a token. _Why:_ any grant of its own would let a token's limit reach beyond its bindings, and probing a token's limit would tell anyone allowed to review access what another person's token can do.
 
 ## 2. Who may write it
 

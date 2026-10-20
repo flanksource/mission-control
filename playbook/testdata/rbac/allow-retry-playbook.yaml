@@ -1,0 +1,57 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: retry-echo-playbook
+  namespace: default
+spec:
+  targets:
+    - playbook:
+        name: retry-echo
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-configs
+  namespace: default
+spec:
+  targets:
+    - config:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: john-retry-echo-run
+  namespace: default
+spec:
+  description: allow user john to run retry-echo playbook on any config
+  rules:
+    - name: run
+      action: playbook:run
+      resource:
+        scopeRef: retry-echo-playbook
+      target:
+        scopeRef: all-configs
+    - name: approve
+      action: playbook:approve
+      resource:
+        scopeRef: retry-echo-playbook
+      target:
+        scopeRef: all-configs
+    - name: cancel
+      action: playbook:cancel
+      resource:
+        scopeRef: retry-echo-playbook
+      target:
+        scopeRef: all-configs
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: RoleBinding
+metadata:
+  name: john-retry-echo-run
+  namespace: default
+spec:
+  role: john-retry-echo-run
+  subjects:
+    people:
+      - john@doe.com

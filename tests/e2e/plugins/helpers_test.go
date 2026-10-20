@@ -11,18 +11,15 @@ import (
 	"net/http"
 	"time"
 
-	dutyRBAC "github.com/flanksource/duty/rbac"
-
 	"github.com/flanksource/duty/rbac/policy"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
-	"github.com/google/uuid"
 
 	. "github.com/onsi/gomega"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	ktypes "k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func applyHasherPlugin() {
@@ -37,7 +34,7 @@ func applyHasherPlugin() {
 	Expect(k8sClient.Create(context.Background(), plugin)).To(Succeed())
 }
 
-// configScope is the Scope of the config the plugin is invoked on. Permissions name it, rather than selecting the config
+// configScope is the Scope of the config the plugin is invoked on. Roles name it, rather than selecting the config
 // inline, so that it's also listed under row-level security, which the plugin's config lookups run under.
 const configScope = "plugin-config"
 
@@ -51,29 +48,38 @@ func applyUserPermissions(configID string) {
 	}
 	Expect(k8sClient.Create(context.Background(), scope)).To(Succeed())
 
-	permissions := []*v1.Permission{
-		permissionCRD("good-config-read", goodUser.Email, []string{policy.ActionRead}, configID),
-		permissionCRD("good-plugin-invoke", goodUser.Email, []string{policy.NewPluginInvokeAction(pluginName, pluginOperation)}, configID),
-		permissionCRD("no-invoke-config-read", noInvokeUser.Email, []string{policy.ActionRead}, configID),
-		permissionCRD("no-config-plugin-invoke", noConfigUser.Email, []string{policy.NewPluginInvokeAction(pluginName, pluginOperation)}, configID),
+	objects := []client.Object{
+		roleCRD("config-read", policy.ActionRead),
+		roleCRD("plugin-invoke", policy.NewPluginInvokeAction(pluginName, pluginOperation)),
+		roleBindingCRD("config-read", goodUser.Email, noInvokeUser.Email),
+		roleBindingCRD("plugin-invoke", goodUser.Email, noConfigUser.Email),
 	}
-	for _, permission := range permissions {
-		Expect(k8sClient.Create(context.Background(), permission)).To(Succeed())
+	for _, object := range objects {
+		Expect(k8sClient.Create(context.Background(), object)).To(Succeed())
 	}
 }
 
-func permissionCRD(name, email string, actions []string, configID string) *v1.Permission {
-	return &v1.Permission{
-		TypeMeta: metav1.TypeMeta{APIVersion: "mission-control.flanksource.com/v1", Kind: "Permission"},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: pluginNamespace,
-			UID:       ktypes.UID(uuid.NewString()),
-		},
-		Spec: v1.PermissionSpec{
-			Subject: v1.PermissionSubject{Person: email},
-			Actions: actions,
-			Object:  v1.PermissionObject{Scopes: []dutyRBAC.NamespacedNameIDSelector{{Namespace: pluginNamespace, Name: configScope}}},
+// roleCRD is a Role named after its one rule, which allows the action on the config of configScope.
+func roleCRD(name, action string) *v1.Role {
+	return &v1.Role{
+		TypeMeta:   metav1.TypeMeta{APIVersion: "mission-control.flanksource.com/v1", Kind: "Role"},
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: pluginNamespace},
+		Spec: v1.RoleSpec{Rules: []v1.RoleRule{{
+			Name:     name,
+			Action:   action,
+			Resource: &v1.ScopeReference{ScopeRef: configScope},
+		}}},
+	}
+}
+
+// roleBindingCRD binds the people to the Role of the same name.
+func roleBindingCRD(role string, emails ...string) *v1.RoleBinding {
+	return &v1.RoleBinding{
+		TypeMeta:   metav1.TypeMeta{APIVersion: "mission-control.flanksource.com/v1", Kind: "RoleBinding"},
+		ObjectMeta: metav1.ObjectMeta{Name: role, Namespace: pluginNamespace},
+		Spec: v1.RoleBindingSpec{
+			Role:     role,
+			Subjects: v1.RoleBindingSubjects{PermissionGroupSubjects: v1.PermissionGroupSubjects{People: emails}},
 		},
 	}
 }
@@ -87,14 +93,14 @@ func waitForHasherPlugin(configID string) {
 	}).WithTimeout(90 * time.Second).WithPolling(time.Second).Should(Succeed())
 }
 
-// waitForUserPermissions waits for the permissions to take effect: they're reconciled, then the policy is reloaded.
+// waitForUserPermissions waits for the Roles and RoleBindings to take effect: they're reconciled, then the policy is reloaded.
 func waitForUserPermissions(configID string) {
 	path := fmt.Sprintf("/api/plugins/%s/invoke/%s?config_id=%s", pluginName, pluginOperation, configID)
 	Eventually(func(g Gomega) {
 		resp := doPluginRequest(http.MethodPost, path, []byte(`{}`), goodUser.Email, "test-password")
 		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), resp.Body)
 
-		// Each Permission can land in a different debounced policy reload, so goodUser's isn't proof that noInvokeUser's is loaded.
+		// Each object can land in a different debounced policy reload, so goodUser's grants aren't proof that noInvokeUser's are loaded.
 		resp, _ = mintUIToken(noInvokeUser.Email, configID)
 		g.Expect(resp.StatusCode).To(Equal(http.StatusOK), resp.Body)
 	}).WithTimeout(30 * time.Second).WithPolling(500 * time.Millisecond).Should(Succeed())

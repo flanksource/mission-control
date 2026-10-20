@@ -177,17 +177,10 @@ var _ = ginkgo.Describe("Notification recovery lifecycle", ginkgo.Label("recover
 				OnResolved: &v1.NotificationOnResolved{Enabled: true},
 			},
 		}
-		subject := v1.PermissionSubject{Notification: "default/" + obj.Name}
-		_, _, err := subject.Populate(ctx)
-		Expect(err).To(HaveOccurred())
 		attr := &models.ABACAttribute{Connection: conn}
 		Expect(rbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionRead)).To(BeFalse())
 		Expect(db.PersistNotificationFromCRD(ctx, obj)).To(Succeed())
-		subjectID, subjectType, err := subject.Populate(ctx)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(subjectID).To(Equal(id.String()))
-		Expect(subjectType).To(Equal(models.PermissionSubjectTypeNotification))
-		Expect(rbac.HasPermission(ctx, subjectID, attr, policy.ActionRead)).To(BeFalse())
+		Expect(rbac.HasPermission(ctx, id.String(), attr, policy.ActionRead)).To(BeFalse())
 	})
 	ginkgo.It("denies an ungranted named connection and rechecks revoked permission before SMTP recovery", func() {
 		n, config, payload := newRecoveryFixture()

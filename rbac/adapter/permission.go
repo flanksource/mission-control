@@ -2,7 +2,6 @@ package adapter
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -11,7 +10,6 @@ import (
 	"github.com/casbin/casbin/v2/model"
 	"github.com/casbin/casbin/v2/persist"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
-	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	pkgPolicy "github.com/flanksource/duty/rbac/policy"
@@ -59,57 +57,6 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 	// ABAC checks where r.obj is *ABACAttribute.
 	if err := generateABACCompanions(model); err != nil {
 		return err
-	}
-
-	var permissions []models.Permission
-	if err := a.ctx.DB().Where("deleted_at IS NULL AND error IS NULL").Find(&permissions).Error; err != nil {
-		return fmt.Errorf("failed to load permissions: %w", err)
-	}
-
-	for _, permission := range permissions {
-		// A permission naming Scopes is checked through their stored membership
-		conditions, err := PermissionScopeConditions(a.ctx, a.cache, permission)
-		if err != nil {
-			var validationErr *scopeExpansionValidationError
-			if errors.As(err, &validationErr) {
-				// Persist validation error to database
-				if updateErr := a.ctx.DB().Model(&permission).Update("error", err.Error()).Error; updateErr != nil {
-					return fmt.Errorf("failed to update permission error: %w", updateErr)
-				}
-
-				continue // Skip this permission
-			}
-
-			return err
-		}
-
-		policies := PermissionToCasbinRule(permission)
-		if len(conditions) > 0 {
-			policies = scopePermissionPolicies(permission, conditions)
-		}
-		for _, policy := range policies {
-			if err := persist.LoadPolicyArray(policy, model); err != nil {
-				return err
-			}
-		}
-	}
-
-	var permissionGroups []models.PermissionGroup
-	if err := a.ctx.DB().Where("deleted_at IS NULL").Find(&permissionGroups).Error; err != nil {
-		return fmt.Errorf("failed to load permissions: %w", err)
-	}
-
-	for _, pg := range permissionGroups {
-		policies, err := a.permissionGroupToCasbinRule(pg)
-		if err != nil {
-			return err
-		}
-
-		for _, policy := range policies {
-			if err := persist.LoadPolicyArray(policy, model); err != nil {
-				return err
-			}
-		}
 	}
 
 	if err := a.loadRoleBindings(model); err != nil {
@@ -366,90 +313,6 @@ func casbinRuleFromPolicy(ptype string, rule []string) gormadapter.CasbinRule {
 	return line
 }
 
-func PermissionToCasbinRule(permission models.Permission) [][]string {
-	var policies [][]string
-	for _, action := range expandActions(strings.Split(permission.Action, ",")) {
-		policies = append(policies, createPolicy(permission, action))
-
-		if objectSelector := rbacToABACObjectSelector(permission, action); objectSelector != nil {
-			abacPermission := permission
-			abacPermission.Object = ""
-			abacPermission.ObjectSelector = objectSelector
-			policies = append(policies, createPolicy(abacPermission, action))
-		}
-	}
-
-	return policies
-}
-
-// scopePermissionPolicies returns the policies of a permission that names Scopes: one per action and condition.
-func scopePermissionPolicies(permission models.Permission, conditions []string) [][]string {
-	var policies [][]string
-	for _, action := range expandActions(strings.Split(permission.Action, ",")) {
-		for _, condition := range conditions {
-			policies = append(policies, []string{"p", permission.Principal(), "*", action, "allow", condition, permission.ID.String()})
-		}
-	}
-	return policies
-}
-
-// expandActions returns the actions matched by the given patterns: every built-in action a
-// pattern matches (e.g. "*" or "playbook:*"), plus any non built-in action named literally.
-func expandActions(patterns []string) []string {
-	var actions []string
-	seen := map[string]struct{}{}
-
-	add := func(action string) {
-		if action == "" {
-			return
-		}
-		if _, ok := seen[action]; ok {
-			return
-		}
-		seen[action] = struct{}{}
-		actions = append(actions, action)
-	}
-
-	for _, action := range pkgPolicy.AllActions {
-		if collections.MatchItems(action, patterns...) {
-			add(action)
-		}
-	}
-
-	for _, pattern := range patterns {
-		pattern = strings.TrimSpace(pattern)
-		if pattern == "" || collections.MatchItems(pattern, pkgPolicy.AllActions...) {
-			continue
-		}
-		if strings.HasPrefix(pattern, "!") {
-			continue
-		}
-		add(pattern)
-	}
-
-	return actions
-}
-
-// createPolicy generates a Casbin policy rule from a permission.
-func createPolicy(permission models.Permission, action string) []string {
-	policy := []string{
-		"p",
-		permission.Principal(),
-		permission.GetObject(),
-		action,
-		"allow",
-		permission.Condition(),
-		permission.ID.String(),
-	}
-	return policy
-}
-
-// rbacToABACObjectSelector returns object selectors (v1.PermissionObject) in JSON
-// for ABAC policies from a global permission.
-func rbacToABACObjectSelector(permission models.Permission, action string) []byte {
-	return pkgPolicy.ABACObjectSelector(permission.Object, action)
-}
-
 // Helper function for finding namespaced resources by selector
 func (a *PermissionAdapter) findNamespacedResources(tableName string, selectors []v1.PermissionGroupSelector) ([]string, error) {
 	var clauses []clause.Expression
@@ -484,25 +347,6 @@ func (a *PermissionAdapter) findNamespacedResources(tableName string, selectors 
 	}
 
 	return ids, nil
-}
-
-func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.PermissionGroup) ([][]string, error) {
-	var subject v1.PermissionGroupSubjects
-	if err := json.Unmarshal(permission.Selectors, &subject); err != nil {
-		return nil, err
-	}
-
-	allSubjects, err := a.resolveSubjects(subject)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve subjects for permission group %s: %w", permission.Name, err)
-	}
-
-	var policies [][]string
-	for _, subject := range allSubjects {
-		policies = append(policies, []string{"g", subject, permission.Name, "", "", ""})
-	}
-
-	return policies, nil
 }
 
 // roleBindingToCasbinRules compiles a binding into:
@@ -726,44 +570,6 @@ func (a *PermissionAdapter) resolveNamespacedSubjects(subject v1.PermissionGroup
 		}
 
 		allSubjects = append(allSubjects, ids...)
-	}
-
-	return allSubjects, nil
-}
-
-// resolveSubjects resolves the subjects of a PermissionGroup to casbin subjects (ids).
-// People are matched by email or name. ["*"] selected everyone through the built-in everyone role, so it selects no one.
-func (a *PermissionAdapter) resolveSubjects(subject v1.PermissionGroupSubjects) ([]string, error) {
-	allSubjects, err := a.resolveNamespacedSubjects(subject)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(subject.People) > 0 {
-		var personIDs []string
-		people := lo.Without(subject.People, "*")
-		query := a.ctx.DB().Select("id").Model(&models.Person{}).
-			Where("deleted_at IS NULL").
-			Where("type IS DISTINCT FROM 'agent'").
-			Where("email IS NOT NULL"). // Excludes system user
-			Where("email IN ? OR name IN ?", people, people)
-		if err := query.Find(&personIDs).Error; err != nil {
-			return nil, err
-		}
-
-		allSubjects = append(allSubjects, personIDs...)
-	}
-
-	if len(subject.Teams) > 0 {
-		var teamIDs []string
-		if err := a.ctx.DB().Select("id").Model(&models.Team{}).
-			Where("deleted_at IS NULL").
-			Where("name IN ?", subject.Teams).
-			Find(&teamIDs).Error; err != nil {
-			return nil, err
-		}
-
-		allSubjects = append(allSubjects, teamIDs...)
 	}
 
 	return allSubjects, nil

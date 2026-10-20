@@ -49,12 +49,21 @@ func DbMiddleware() MiddlewareFunc {
 				return next(c)
 			}
 
+			resource := strings.ReplaceAll(path, "/db/", "")
+
+			// Permissions and PermissionGroups are deprecated and grant nothing. The ones that remain can be read, to
+			// audit them like any other grant, and deleted, but not created or changed.
+			if legacyPermissionTables[resource] {
+				switch c.Request().Method {
+				case http.MethodPost, http.MethodPatch, http.MethodPut:
+					return c.String(http.StatusMethodNotAllowed, fmt.Sprintf("%s is deprecated and can't be written; use Scopes, Roles and RoleBindings", resource))
+				}
+			}
+
 			action := rbac.GetActionFromHttpMethod(c.Request().Method)
 			if action == "" {
 				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
 			}
-
-			resource := strings.ReplaceAll(path, "/db/", "")
 
 			if _, ok := rlsOnlyTables[resource]; ok {
 				return next(c)
@@ -77,6 +86,10 @@ func DbMiddleware() MiddlewareFunc {
 			// Scopes, Roles and RoleBindings are validated when they're written, so they're only written through their API
 			if route, ok := managedTables[resource]; ok && action != policy.ActionRead {
 				return c.String(http.StatusMethodNotAllowed, fmt.Sprintf("%s can't be written through /db; use %s", resource, route))
+			}
+
+			if legacyPermissionTables[resource] {
+				object = adapter.ObjectRoleBindings
 			}
 
 			ctx := c.Request().Context().(context.Context)
@@ -132,12 +145,6 @@ func DbMiddleware() MiddlewareFunc {
 				}
 			}
 
-			if resource == "permissions" {
-				if err := refusePermissionDeny(c); err != nil {
-					return dutyAPI.WriteError(c, err)
-				}
-			}
-
 			return next(c)
 		}
 	}
@@ -169,6 +176,14 @@ var rlsOnlyTables = map[string]struct{}{
 	"artifact_summary": {},
 	"view_panels":      {},
 	"views_summary":    {},
+}
+
+// legacyPermissionTables are the tables and views of the deprecated Permissions and PermissionGroups.
+var legacyPermissionTables = map[string]bool{
+	"permissions":                      true,
+	"permissions_summary":              true,
+	"permission_groups":                true,
+	"rpc/permissions_for_obj_selector": true,
 }
 
 // readOnlyObjects are the objects only read through /db, with the action each read is checked with.

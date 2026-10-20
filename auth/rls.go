@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -9,7 +8,6 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/rls"
@@ -17,7 +15,6 @@ import (
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
 
-	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
@@ -149,7 +146,7 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 
 // limitToTokenBindings narrows the owner's row filters, built from the owner's read grants, to the rows the read
 // rules of the token's RoleBindings list: a row is listed when a grant of the owner and a grant of a binding both
-// admit it, and none of the owner's denies matches it. Rows of generated view tables stamped for a Permission's Scopes aren't listed. A binding that's invalid,
+// admit it, and none of the owner's denies matches it. A binding that's invalid,
 // or whose Role is missing or invalid, lists nothing.
 func limitToTokenBindings(ctx context.Context, owner *rls.Payload, tokenID uuid.UUID) (*rls.Payload, error) {
 	rules, err := adapter.LoadAccessTokenLimitRules(ctx, tokenID)
@@ -240,18 +237,17 @@ func CanReadArtifact(ctx context.Context, id uuid.UUID) (bool, error) {
 //
 // Each type's grants name Scopes only: a row is listed when it's in every Scope of one of them,
 // which Postgres reads from stored membership. Role rules grant rows through their Scopes, narrowed by their
-// binding's constraint. Permissions grant rows only through the Scopes they name: inline selectors grant none.
+// binding's constraint.
 //
 // Casbin knows every grant that applies to the subject, directly or through roles, teams and bindings,
 // and has already split each grant into one policy per action. Each policy carries the id of the
-// Permission or the binding and role rule it came from.
+// binding and role rule it came from.
 func buildRLSPayload(ctx context.Context, subject string) (*rls.Payload, error) {
 	rules, err := dutyRBAC.PermsForUser(subject)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get permissions for user: %w", err)
 	}
 
-	var permissionIDs []string
 	bindingRules := map[uuid.UUID][]string{}
 	for _, rule := range rules {
 		if rule.Action != policy.ActionRead {
@@ -260,17 +256,12 @@ func buildRLSPayload(ctx context.Context, subject string) (*rls.Payload, error) 
 
 		if bindingID, _, ok := adapter.ParseBindingRuleID(rule.ID); ok {
 			bindingRules[bindingID] = append(bindingRules[bindingID], rule.ID)
-		} else if uuid.Validate(rule.ID) == nil {
-			permissionIDs = append(permissionIDs, rule.ID)
 		} else if rule.ID != "" && rule.ID != "na" { // built-in policies carry no id
 			ctx.Warnf("rls: unrecognized id %q on policy %s %s %s", rule.ID, rule.Subject, rule.Object, rule.Action)
 		}
 	}
 
 	claim := newClaim()
-	if err := addPermissionGrants(ctx, claim, lo.Uniq(permissionIDs)); err != nil {
-		return nil, err
-	}
 	if err := addBindingRuleGrants(ctx, claim, bindingRules); err != nil {
 		return nil, err
 	}
@@ -322,7 +313,6 @@ func addBindingRuleDenies(ctx context.Context, claim *claim, subject string) err
 // claim accumulates a subject's grants and denies by resource type.
 type claim struct {
 	grants map[string]*rls.Grants
-	scopes []string
 
 	// denies are the rows kept from listings, by type. deniedTypes are the types none of whose rows are listed.
 	denies      map[string][]rls.Grant
@@ -384,9 +374,6 @@ func (c *claim) grantRule(rule adapter.CompiledRule) {
 // Denies are sent whether or not the type has grants: a row can be admitted another way, e.g. a check with its canary.
 func (c *claim) payload() *rls.Payload {
 	payload := &rls.Payload{}
-	if len(c.scopes) > 0 {
-		payload.Scopes = lo.Uniq(c.scopes)
-	}
 	for _, kind := range rls.GrantTypes {
 		if grants := c.grants[kind]; grants != nil && !c.deniedTypes[kind] {
 			payload.SetGrants(kind, grants)
@@ -396,39 +383,6 @@ func (c *claim) payload() *rls.Payload {
 		}
 	}
 	return payload
-}
-
-func addPermissionGrants(ctx context.Context, claim *claim, ids []string) error {
-	if len(ids) == 0 {
-		return nil
-	}
-
-	var permissions []models.Permission
-	err := ctx.DB().
-		Where("id IN ?", ids).
-		Where("deleted_at IS NULL").
-		Find(&permissions).Error
-	if err != nil {
-		return fmt.Errorf("failed to query permissions: %w", err)
-	}
-
-	for _, perm := range permissions {
-		if len(perm.ObjectSelector) == 0 {
-			continue
-		}
-
-		var selectors v1.PermissionObject
-		if err := json.Unmarshal([]byte(perm.ObjectSelector), &selectors); err != nil {
-			ctx.Warnf("failed to unmarshal object_selector for permission %s: %v", perm.ID, err)
-			continue
-		}
-
-		if err := addObjectGrants(ctx, claim, selectors); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // addBindingRuleGrants adds the grants of the given read rules (by id) of each binding.
@@ -449,43 +403,6 @@ func addBindingRuleGrants(ctx context.Context, claim *claim, bindingRules map[uu
 			if lo.Contains(ids, rule.ID) {
 				claim.grantRule(rule)
 			}
-		}
-	}
-
-	return nil
-}
-
-// addObjectGrants adds what a Permission's object grants on listings: the rows of the Scopes it names.
-// Its inline selectors grant no rows.
-func addObjectGrants(ctx context.Context, claim *claim, selectors v1.PermissionObject) error {
-	if len(selectors.Scopes) == 0 {
-		return nil
-	}
-	return addScopeGrants(ctx, selectors.Scopes, claim)
-}
-
-// addScopeGrants grants the rows of the referenced Scopes, of each type they select.
-// A missing or invalid Scope selects nothing.
-func addScopeGrants(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSelector, claim *claim) error {
-	for _, ref := range scopeRefs {
-		scopeID, targets, err := adapter.LoadScope(ctx, nil, ref.Namespace, ref.Name)
-		if err != nil {
-			if adapter.IsValidationError(err) {
-				ctx.Warnf("scope %s/%s selects nothing: %v", ref.Namespace, ref.Name, err)
-				continue
-			}
-			return fmt.Errorf("failed to load scope %s/%s: %w", ref.Namespace, ref.Name, err)
-		} else if targets == nil {
-			ctx.Warnf("scope %s/%s not found", ref.Namespace, ref.Name)
-			continue
-		}
-
-		// The rows of generated view tables stamped with the Scope's id, by its config targets
-		claim.scopes = append(claim.scopes, scopeID)
-
-		for _, target := range targets {
-			kind, _ := target.Selector()
-			claim.grant(kind, rls.Grant{Scope: scopeID})
 		}
 	}
 

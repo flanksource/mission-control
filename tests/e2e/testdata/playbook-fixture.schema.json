@@ -46,13 +46,13 @@
             ]
           }
         },
-        "permissions": {
+        "rbac": {
           "type": "array",
-          "description": "Permissions to persist before the test runs",
+          "description": "Scopes, Roles and RoleBindings to persist before the test runs. {{playbookName}} and {{playbookNamespace}} are replaced with the playbook's",
           "items": {
             "oneOf": [
-              {"type": "string", "description": "$ref path to a YAML file relative to the fixture"},
-              {"type": "object", "description": "Inline permission definition"}
+              {"type": "string", "description": "$ref path to a YAML file of Scopes, Roles and RoleBindings, relative to the fixture"},
+              {"type": "object", "description": "Inline Scope, Role or RoleBinding definition"}
             ]
           }
         }

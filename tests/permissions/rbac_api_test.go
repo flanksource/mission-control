@@ -7,8 +7,6 @@ import (
 	"net/http/httptest"
 	"strings"
 
-	dutyRBAC "github.com/flanksource/duty/rbac"
-
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/setup"
@@ -192,32 +190,6 @@ var _ = Describe("Scope, Role and RoleBinding API", Ordered, func() {
 		}))
 		Expect(rec.Code).To(Equal(http.StatusBadRequest), rec.Body.String())
 		Expect(rec.Body.String()).To(ContainSubstring(`unknown field \"deny\"`))
-	})
-
-	It("rejects deny on a permission written through /db as an unknown field", func() {
-		// No Role grants database.system, which permissions are filed under
-		for _, action := range []string{policy.ActionCreate, policy.ActionUpdate} {
-			_, err := dutyRBAC.Enforcer().AddPolicy(admin.ID.String(), policy.ObjectDatabaseSystem, action, "allow", "", "test")
-			Expect(err).ToNot(HaveOccurred())
-		}
-		DeferCleanup(func() {
-			_, err := dutyRBAC.Enforcer().DeletePermissionsForUser(admin.ID.String())
-			Expect(err).ToNot(HaveOccurred())
-		})
-		permission := map[string]any{"name": "deny-run", "namespace": namespace, "action": policy.ActionPlaybookRun, "subject": guest.ID.String()}
-		for _, body := range []any{
-			lo.Assign(permission, map[string]any{"deny": true}),
-			lo.Assign(permission, map[string]any{"deny": false}),
-			[]any{permission, lo.Assign(permission, map[string]any{"deny": true})},
-		} {
-			for _, method := range []string{http.MethodPost, http.MethodPatch} {
-				rec := request(admin, method, "/db/permissions", body)
-				Expect(rec.Code).To(Equal(http.StatusBadRequest), rec.Body.String())
-				Expect(rec.Body.String()).To(ContainSubstring(`unknown field \"deny\"`))
-			}
-		}
-
-		Expect(request(admin, http.MethodPost, "/db/permissions", permission).Code).To(Equal(http.StatusOK))
 	})
 
 	It("stores a binding whose role doesn't exist, and responds with why it isn't in effect", func() {

@@ -9,18 +9,3 @@ spec:
   selector:
     types:
       - Kubernetes::Namespace
----
-apiVersion: mission-control.flanksource.com/v1
-kind: Permission
-metadata:
-  name: allow-kubernetes-plugin-kubernetes-logs
-  namespace: default
-spec:
-  subject:
-    plugin: default/kubernetes
-  actions:
-    - invoke:kubernetes-logs:list-pods
-  object:
-    configs:
-      - types:
-          - Kubernetes::Namespace

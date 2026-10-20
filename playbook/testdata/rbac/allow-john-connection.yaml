@@ -1,0 +1,33 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: john-connections-read
+  namespace: default
+spec:
+  targets:
+    - connection:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: john-connections-read
+  namespace: default
+spec:
+  description: allow john to read connections, e.g. mc/httpbin
+  rules:
+    - name: read-connection
+      action: read
+      resource:
+        scopeRef: john-connections-read
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: RoleBinding
+metadata:
+  name: john-connections-read
+  namespace: default
+spec:
+  role: john-connections-read
+  subjects:
+    people:
+      - john@doe.com

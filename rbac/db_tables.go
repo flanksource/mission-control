@@ -228,6 +228,7 @@ var dbTables = map[string]dbTable{
 	"responders":                       unclassified(ofUnclassifiedIncidents),
 	"permissions":                      unclassified(ofUnclassifiedLegacyPermissions),
 	"permissions_summary":              unclassified(ofUnclassifiedLegacyPermissions),
+	"permission_groups":                unclassified(ofUnclassifiedLegacyPermissions),
 	"permission_subjects":              unclassified(ofUnclassifiedLegacyPermissions),
 	"rpc/permissions_for_obj_selector": unclassified(ofUnclassifiedLegacyPermissions),
 	"external_users":                   unclassified(ofUnclassifiedExternalIdentities),

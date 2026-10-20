@@ -128,7 +128,6 @@ Each user of a provider is represented by a person record, created on their firs
 
 An external user gets exactly what the RoleBindings matching their token grant, and nothing else:
 
-- Permissions never apply to them, not even a Permission whose subject is their person record.
 - A RoleBinding reaches them only through an `oidc` subject naming this provider. `people` and `teams` subjects never match them, not even `people: ["*"]`. To select every user of the provider, use `match: "true"`.
 - Every claim of the token is available to `match`, not only the ones in `claims`:
 

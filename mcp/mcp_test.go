@@ -387,28 +387,23 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 				}
 			})
 
-			perm := &v1.Permission{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "mcp-view-runner-" + uuid.NewString(),
-					Namespace: "default",
-					UID:       k8sTypes.UID(uuid.NewString()),
-				},
-				Spec: v1.PermissionSpec{
-					Subject: v1.PermissionSubject{Person: testUser.Email},
-					Actions: []string{policy.ActionRead},
-					Object: v1.PermissionObject{
-						Selectors: dutyRBAC.Selectors{
-							Views: []dutyRBAC.ViewRef{{
-								Namespace: allowedView.Namespace,
-								Name:      allowedView.Name,
-							}},
-						},
-					},
-				},
+			name := "mcp-view-runner-" + uuid.NewString()
+			meta := func() metav1.ObjectMeta {
+				return metav1.ObjectMeta{Name: name, Namespace: "default", UID: k8sTypes.UID(uuid.NewString())}
 			}
-			Expect(db.PersistPermissionFromCRD(DefaultContext, perm)).To(Succeed())
+			Expect(db.PersistScopeFromCRD(DefaultContext, &v1.Scope{ObjectMeta: meta(), Spec: v1.ScopeSpec{Targets: []v1.ScopeTarget{{
+				View: &v1.ScopeViewRef{Namespace: allowedView.Namespace, Name: allowedView.Name},
+			}}}})).To(Succeed())
+			Expect(db.PersistRoleFromCRD(DefaultContext, &v1.Role{ObjectMeta: meta(), Spec: v1.RoleSpec{Rules: []v1.RoleRule{
+				{Name: "read", Action: policy.ActionRead, Resource: &v1.ScopeReference{ScopeRef: name}},
+			}}})).To(Succeed())
+			Expect(db.PersistRoleBindingFromCRD(DefaultContext, &v1.RoleBinding{ObjectMeta: meta(), Spec: v1.RoleBindingSpec{Role: name, Subjects: v1.RoleBindingSubjects{
+				PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{testUser.Email}},
+			}}})).To(Succeed())
 			ginkgo.DeferCleanup(func() {
-				Expect(DefaultContext.DB().Delete(&models.Permission{}, "id = ?", string(perm.GetUID())).Error).To(Succeed())
+				Expect(DefaultContext.DB().Where("namespace = ? AND name = ?", "default", name).Delete(&models.RoleBinding{}).Error).To(Succeed())
+				Expect(DefaultContext.DB().Where("namespace = ? AND name = ?", "default", name).Delete(&models.Role{}).Error).To(Succeed())
+				Expect(DefaultContext.DB().Where("namespace = ? AND name = ?", "default", name).Delete(&models.Scope{}).Error).To(Succeed())
 			})
 
 			Expect(dutyRBAC.ReloadPolicy()).To(Succeed())

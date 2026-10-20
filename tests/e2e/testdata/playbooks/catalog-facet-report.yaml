@@ -2,7 +2,7 @@
 config: LogisticsAPIPodConfig
 setup:
   facet: true
-  permissions:
+  rbac:
     - ../fixtures/allow-artifacts.yaml
 params:
   facet_url: "{{facetURL}}"

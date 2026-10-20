@@ -1,0 +1,59 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: all-playbooks
+  namespace: default
+spec:
+  targets:
+    - playbook:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: aws-and-demo-configs
+  namespace: default
+spec:
+  targets:
+    - config:
+        tagSelector: cluster=aws
+    - config:
+        tagSelector: cluster=demo
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: john-playbook-run
+  namespace: default
+spec:
+  description: allow user john to run any playbook on configs with tags cluster = demo or aws
+  rules:
+    - name: run
+      action: playbook:run
+      resource:
+        scopeRef: all-playbooks
+      target:
+        scopeRef: aws-and-demo-configs
+    - name: approve
+      action: playbook:approve
+      resource:
+        scopeRef: all-playbooks
+      target:
+        scopeRef: aws-and-demo-configs
+    - name: cancel
+      action: playbook:cancel
+      resource:
+        scopeRef: all-playbooks
+      target:
+        scopeRef: aws-and-demo-configs
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: RoleBinding
+metadata:
+  name: john-playbook-run
+  namespace: default
+spec:
+  role: john-playbook-run
+  subjects:
+    people:
+      - john@doe.com
