@@ -154,7 +154,7 @@ func triggerScheduledRun(ctx context.Context, playbookID uuid.UUID, scheduleInde
 		ID:     pb.ID,
 		Params: templatedParams,
 	}
-	if _, err := createPlaybookRun(ctx.WithObject(&pb, req), &pb, req, playbookRunOptions{CheckPermissions: true}); err != nil {
+	if _, err := createPlaybookRun(ctx.WithObject(&pb, req), &pb, req); err != nil {
 		ctx.Errorf("failed to create scheduled run for playbook %s: %v", playbookID, err)
 		logToJobHistory(ctx, playbookID.String(), err.Error())
 	}
