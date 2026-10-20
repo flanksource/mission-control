@@ -266,6 +266,12 @@ var rowFilteredTables = map[string]string{
 	// A playbook run is read with its playbook, and the config or check it ran on, which its policy checks.
 	"playbook_runs": policy.ResourcePlaybook,
 
+	// A run's actions, approvals and agent data are read with the run, which their policies check.
+	"playbook_run_actions":         policy.ResourcePlaybook,
+	"rpc/get_playbook_run_actions": policy.ResourcePlaybook,
+	"playbook_approvals":           policy.ResourcePlaybook,
+	"playbook_action_agent_data":   policy.ResourcePlaybook,
+
 	"config_scrapers":             policy.ResourceScraper,
 	"config_scrapers_with_status": policy.ResourceScraper,
 
