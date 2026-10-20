@@ -152,8 +152,9 @@ spec:
                           type: array
                       type: object
                     config:
-                      description: ScopeConfigSelector selects configs by identity
-                        and ownership, never by current state.
+                      description: |-
+                        ScopeConfigSelector selects configs by identity and ownership, never by current state.
+                        Configs have no namespace: select it with tagSelector.
                       minProperties: 1
                       properties:
                         agent:
@@ -166,9 +167,6 @@ spec:
                           minLength: 1
                           type: string
                         name:
-                          minLength: 1
-                          type: string
-                        namespace:
                           minLength: 1
                           type: string
                         tagSelector:

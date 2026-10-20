@@ -122,7 +122,7 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 		}
 		checkTarget := v1.ScopeTarget{Check: &v1.ScopeLabelledSelector{ScopeResourceRef: v1.ScopeResourceRef{ID: check.ID.String()}}}
 		canaryTarget := v1.ScopeTarget{Canary: &v1.ScopeCanarySelector{ScopeResourceRef: v1.ScopeResourceRef{ID: check.CanaryID.String()}}}
-		configTarget := v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{ID: config.ID.String()}}}
+		configTarget := v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ID: config.ID.String()}}
 		playbookTarget := v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{ID: playbook.ID.String()}}
 		grant("check", readers["check"], checkTarget)
 		grant("canary", readers["canary"], canaryTarget)
@@ -132,7 +132,7 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 		grant("run-config", readers["run-config"], playbookTarget, configTarget)
 		grant("run-check", readers["run-check"], playbookTarget, checkTarget)
 		grant("run-canary", readers["run-canary"], playbookTarget, canaryTarget)
-		grant("outside", nobody, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{ID: dummy.LogisticsAPI.ID.String()}}})
+		grant("outside", nobody, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ID: dummy.LogisticsAPI.ID.String()}})
 
 		checkTime := time.Now().UTC().Truncate(time.Second)
 		changeID := uuid.MustParse(change.ID)
@@ -281,7 +281,7 @@ var _ = ginkgo.Describe("Artifact producer authorization", ginkgo.Ordered, func(
 		id := saveArtifact(models.Artifact{CheckID: &check.ID, CheckTime: lo.ToPtr(time.Now().UTC()), ConfigChangeID: &changeID})
 		grant("multiple", readers["canary"],
 			v1.ScopeTarget{Canary: &v1.ScopeCanarySelector{ScopeResourceRef: v1.ScopeResourceRef{ID: check.CanaryID.String()}}},
-			v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{ID: config.ID.String()}}},
+			v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ID: config.ID.String()}},
 		)
 		Expect(rbac.ReloadPolicy()).To(Succeed())
 		auth.FlushTokenCache()

@@ -175,7 +175,7 @@ var _ = ginkgo.Describe("Federated requests through the server", ginkgo.Ordered,
 			},
 			{
 				ObjectMeta: metav1.ObjectMeta{Name: "all-configs", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
-				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}}},
+				Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{Name: "*"}}}},
 			},
 			{
 				ObjectMeta: metav1.ObjectMeta{Name: "tenant-a", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},

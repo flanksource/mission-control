@@ -43,7 +43,7 @@ func applyUserPermissions(configID string) {
 		TypeMeta:   metav1.TypeMeta{APIVersion: "mission-control.flanksource.com/v1", Kind: "Scope"},
 		ObjectMeta: metav1.ObjectMeta{Name: configScope, Namespace: pluginNamespace},
 		Spec: v1.ScopeSpec{Targets: []v1.ScopeTarget{{
-			Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{ID: configID}},
+			Config: &v1.ScopeConfigSelector{ID: configID},
 		}}},
 	}
 	Expect(k8sClient.Create(context.Background(), scope)).To(Succeed())

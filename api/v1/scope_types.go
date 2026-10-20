@@ -31,9 +31,13 @@ type ScopePlaybookRef ScopeResourceRef
 type ScopeViewRef ScopeResourceRef
 
 // ScopeConfigSelector selects configs by identity and ownership, never by current state.
+// Configs have no namespace: select it with tagSelector.
 // +kubebuilder:validation:MinProperties=1
 type ScopeConfigSelector struct {
-	ScopeResourceRef `json:",inline"`
+	// +kubebuilder:validation:Pattern=`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`
+	ID string `json:"id,omitempty"`
+	// +kubebuilder:validation:MinLength=1
+	Name string `json:"name,omitempty"`
 	// +kubebuilder:validation:MinLength=1
 	Agent string `json:"agent,omitempty"`
 	// +kubebuilder:validation:MinItems=1
@@ -178,7 +182,7 @@ func (t ScopeTarget) Selector() (string, types.ResourceSelector) {
 	case t.Config != nil:
 		s := t.Config
 		return policy.ResourceConfig, types.ResourceSelector{
-			ID: s.ID, Name: s.Name, Namespace: s.Namespace,
+			ID: s.ID, Name: s.Name,
 			Agent: s.Agent, Types: s.Types, TagSelector: s.TagSelector, LabelSelector: s.LabelSelector,
 		}
 

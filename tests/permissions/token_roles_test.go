@@ -184,7 +184,7 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 		}
 		Expect(DefaultContext.DB().Create(&runbook).Error).To(Succeed())
 
-		newScope("all-configs", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}})
+		newScope("all-configs", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{Name: "*"}})
 		newScope("token-configs", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "token-roles=yes"}})
 		newScope("tenant-a", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "token-tenant=a"}})
 		newScope("playbooks", v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "token-roles-*"}})

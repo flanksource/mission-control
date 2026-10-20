@@ -51,7 +51,7 @@ Each entry under `targets` MUST set exactly one of these keys. The key decides w
 
 | Key                   | Selects               | Fields                                                                      | Some or all                  |
 | --------------------- | --------------------- | --------------------------------------------------------------------------- | ---------------------------- |
-| `config`              | Config items          | `id`, `name`, `namespace`, `agent`, `types`, `tagSelector`, `labelSelector` | Some or all                  |
+| `config`              | Config items          | `id`, `name`, `agent`, `types`, `tagSelector`, `labelSelector`              | Some or all                  |
 | `component`           | Topology components   | `id`, `name`, `namespace`, `agent`, `types`, `labelSelector`                | Some or all                  |
 | `check`               | Health checks         | `id`, `name`, `namespace`, `agent`, `types`, `labelSelector`                | Some or all                  |
 | `canary`              | Canaries              | `id`, `name`, `namespace`, `agent`, `labelSelector`                         | Some or all                  |
@@ -114,10 +114,9 @@ A resource belongs to a Scope when **at least one target of the resource's type 
 ```yaml
 targets:
   - config:
-      tagSelector: team=payments
-      namespace: staging
+      tagSelector: team=payments,namespace=staging
   - config:
-      namespace: development
+      tagSelector: namespace=development
 ```
 
 This selects Configs in staging that belong to payments, **or** any Config in development. It does not select every staging Config.
@@ -220,7 +219,7 @@ Every form a `name` can take has to mean exactly the same set in both, or a reso
 
 A selector MUST only use the fields Section 3.1 lists for its type. Anything else is rejected, never ignored.
 
-- A Config's namespace is its `namespace` tag. `namespace: staging` and `tagSelector: namespace=staging` select the same Configs.
+- Configs have no `namespace` field. Select a Kubernetes namespace by its tag: `tagSelector: namespace=staging`. _Why:_ a namespace is a Kubernetes concept, so most Configs, e.g. cloud or database resources, have none, and Configs store it only as a tag.
 - Only Configs have tags. Components, checks and canaries have labels. Playbooks, connections and scrapers have neither.
 
 ### 5.4 Agents
@@ -261,7 +260,7 @@ targets:
 ---
 # Wildcard outside name
 targets:
-  - config:
+  - component:
       namespace: "*"
 ---
 # Wildcard at the start of a name: suffixes aren't supported

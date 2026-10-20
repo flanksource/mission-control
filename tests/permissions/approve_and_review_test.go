@@ -73,7 +73,7 @@ var _ = ginkgo.Describe("Approving a run and reviewing access", ginkgo.Ordered, 
 				{Config: &v1.ScopeConfigSelector{TagSelector: namespace + "=in"}},
 				{Playbook: &v1.ScopePlaybookRef{Name: namespace}},
 			},
-			"configs":   {{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}},
+			"configs":   {{Config: &v1.ScopeConfigSelector{Name: "*"}}},
 			"playbooks": {{Playbook: &v1.ScopePlaybookRef{Name: namespace}}},
 		} {
 			Expect(db.PersistScopeFromCRD(DefaultContext, &v1.Scope{

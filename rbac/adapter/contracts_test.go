@@ -45,7 +45,7 @@ var _ = ginkgo.Describe("ValidateSelector", func() {
 		selector types.ResourceSelector
 		valid    bool
 	}{
-		{"config tags", policy.ResourceConfig, types.ResourceSelector{TagSelector: "env=prod", Namespace: "default"}, true},
+		{"config tags", policy.ResourceConfig, types.ResourceSelector{TagSelector: "env=prod"}, true},
 		{"component labels", policy.ResourceComponent, types.ResourceSelector{LabelSelector: "team=payments"}, true},
 		{"playbook namespace", policy.ResourcePlaybook, types.ResourceSelector{Namespace: "operations"}, true},
 		{"wildcard", policy.ResourceView, types.ResourceSelector{Name: "*"}, true},
@@ -58,9 +58,9 @@ var _ = ginkgo.Describe("ValidateSelector", func() {
 		{"agent name, resolved when the scope is validated", policy.ResourceConfig, types.ResourceSelector{Agent: "homelab"}, true},
 		{"name suffix", policy.ResourceConfig, types.ResourceSelector{Name: "*-prod"}, false},
 		{"name starting with !, which is literal", policy.ResourceConfig, types.ResourceSelector{Name: "!api"}, true},
-		{"namespace with a comma, which is literal", policy.ResourceConfig, types.ResourceSelector{Namespace: "a,b"}, true},
-		{"wildcard namespace", policy.ResourceConfig, types.ResourceSelector{Namespace: "*"}, false},
-		{"namespace prefix", policy.ResourceConfig, types.ResourceSelector{Namespace: "prod-*"}, false},
+		{"namespace with a comma, which is literal", policy.ResourceComponent, types.ResourceSelector{Namespace: "a,b"}, true},
+		{"wildcard namespace", policy.ResourceComponent, types.ResourceSelector{Namespace: "*"}, false},
+		{"namespace prefix", policy.ResourceComponent, types.ResourceSelector{Namespace: "prod-*"}, false},
 		{"wildcard id", policy.ResourceConfig, types.ResourceSelector{ID: "*"}, false},
 		{"type pattern", policy.ResourceConfig, types.ResourceSelector{Types: []string{"Kubernetes::*"}}, false},
 		{"several tags", policy.ResourceConfig, types.ResourceSelector{TagSelector: "cluster=homelab,namespace=monitoring"}, true},

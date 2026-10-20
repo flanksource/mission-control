@@ -52,7 +52,7 @@ var _ = Describe("Actions without a resource", Ordered, func() {
 
 		Expect(db.PersistScopeFromCRD(DefaultContext, &v1.Scope{
 			ObjectMeta: metav1.ObjectMeta{Name: "all-configs", Namespace: namespace, UID: uid()},
-			Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}}},
+			Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{Name: "*"}}}},
 		})).To(Succeed())
 
 		Expect(db.PersistRoleFromCRD(DefaultContext, &v1.Role{

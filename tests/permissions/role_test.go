@@ -150,7 +150,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			newScope("all-playbooks", namespace, v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "*"}}),
 			newScope("all-playbooks", otherNamespace, v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "*"}}),
 			newScope("kubernetes-playbooks", namespace, v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: dummy.RestartPod.Name}}),
-			newScope("all-configs", namespace, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}),
+			newScope("all-configs", namespace, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{Name: "*"}}),
 			newScope("tenant-a", namespace, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "tenant=a"}}),
 			newScope("tenant-b", namespace, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "tenant=b"}}),
 			newScope("tenant-a-boundary", namespace,
@@ -159,7 +159,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			newScope("role-configs", namespace, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "env=role-test"}}),
 			newScope("staging-views", namespace, v1.ScopeTarget{View: &v1.ScopeViewRef{Namespace: "staging"}}),
 			newScope("configs-and-playbooks", namespace,
-				v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}},
+				v1.ScopeTarget{Config: &v1.ScopeConfigSelector{Name: "*"}},
 				v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "*"}}),
 			newScope("staging-components", namespace, v1.ScopeTarget{Component: &v1.ScopeLabelledSelector{ScopeResourceRef: v1.ScopeResourceRef{Namespace: "staging"}}}),
 			newScope("http-checks", namespace, v1.ScopeTarget{Check: &v1.ScopeLabelledSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "http"}}}),
@@ -630,7 +630,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 				newScope("all-connections", namespace, v1.ScopeTarget{Connection: &v1.ScopeConnectionSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}),
 				newScope("connections-and-configs", namespace,
 					v1.ScopeTarget{Connection: &v1.ScopeConnectionSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}},
-					v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}),
+					v1.ScopeTarget{Config: &v1.ScopeConfigSelector{Name: "*"}}),
 			} {
 				Expect(db.PersistScopeFromCRD(DefaultContext, scope)).To(Succeed())
 			}
@@ -736,7 +736,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			Expect(DefaultContext.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", namespace, "kubernetes-playbooks").First(&stored).Error).To(Succeed())
 			Expect(canRunOn(bob.ID.String(), dummy.RestartPod, &tenantA)).To(BeTrue())
 
-			changed := newScope("kubernetes-playbooks", namespace, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}})
+			changed := newScope("kubernetes-playbooks", namespace, v1.ScopeTarget{Config: &v1.ScopeConfigSelector{Name: "*"}})
 			changed.UID = k8sTypes.UID(stored.ID.String())
 			Expect(db.PersistScopeFromCRD(DefaultContext, changed)).To(Succeed(), "a scope is never validated against what references it")
 			Expect(rbac.ReloadPolicy()).To(Succeed())

@@ -37,9 +37,9 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 					Targets: []v1.ScopeTarget{
 						{
 							Config: &v1.ScopeConfigSelector{
-								ScopeResourceRef: v1.ScopeResourceRef{Name: "prod"},
-								Agent:            "homelab",
-								TagSelector:      "env=prod",
+								Name:        "prod",
+								Agent:       "homelab",
+								TagSelector: "env=prod",
 							},
 						},
 					},
@@ -75,13 +75,13 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			target v1.ScopeTarget
 		}{
 			{"an empty selector", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{}}},
-			{"a name suffix", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*-db"}}}},
-			{"a wildcard in the middle of a name", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "prod-*-db"}}}},
+			{"a name suffix", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{Name: "*-db"}}},
+			{"a wildcard in the middle of a name", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{Name: "prod-*-db"}}},
 			{"a tag exclusion", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "env!=prod"}}},
 			{"a bare label key", v1.ScopeTarget{Component: &v1.ScopeLabelledSelector{LabelSelector: "team"}}},
 			{"a malformed tagSelector", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{TagSelector: "env in (prod"}}},
-			{"two resource types in one target", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}, Playbook: &v1.ScopePlaybookRef{Name: "*"}}},
-			{"a wildcard namespace", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Namespace: "*"}}}},
+			{"two resource types in one target", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{Name: "*"}, Playbook: &v1.ScopePlaybookRef{Name: "*"}}},
+			{"a wildcard namespace", v1.ScopeTarget{Component: &v1.ScopeLabelledSelector{ScopeResourceRef: v1.ScopeResourceRef{Namespace: "*"}}}},
 			{"an agent that doesn't exist", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{Agent: "no-such-agent"}}},
 		} {
 			ginkgo.It("stores a scope with "+tt.name+" as invalid", func() {
@@ -108,7 +108,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			eksScope := func(name string) *v1.Scope {
 				return &v1.Scope{
 					ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", UID: k8sTypes.UID(uuid.New().String())},
-					Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: *dummy.EKSCluster.Name}}}}},
+					Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{Name: *dummy.EKSCluster.Name}}}},
 				}
 			}
 
@@ -160,7 +160,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 				Expect(writer.Exec("SELECT pg_advisory_xact_lock_shared(hashtext('scope_membership'))").Error).To(Succeed())
 
 				changed := scopeObj.DeepCopy()
-				changed.Spec.Targets = []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "staging-db"}}}}
+				changed.Spec.Targets = []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{Name: "staging-db"}}}
 				Expect(PersistScopeFromCRD(DefaultContext, changed)).To(MatchError(ContainSubstring("lock")))
 				Expect(writer.Rollback().Error).To(Succeed())
 
@@ -206,7 +206,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 				Spec: v1.ScopeSpec{
 					Targets: []v1.ScopeTarget{
 						{
-							Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "test"}},
+							Config: &v1.ScopeConfigSelector{Name: "test"},
 						},
 					},
 				},
@@ -223,7 +223,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			scopeID := uuid.New()
 			targetsJSON, _ := json.Marshal([]v1.ScopeTarget{
 				{
-					Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "test"}},
+					Config: &v1.ScopeConfigSelector{Name: "test"},
 				},
 			})
 			scope := models.Scope{
@@ -277,7 +277,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			// Create old scope
 			targetsJSON, _ := json.Marshal([]v1.ScopeTarget{
 				{
-					Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "old"}},
+					Config: &v1.ScopeConfigSelector{Name: "old"},
 				},
 			})
 			oldScope := models.Scope{
@@ -297,7 +297,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 					Namespace: "default",
 					UID:       k8sTypes.UID(newID.String()),
 				},
-				Spec: v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "new"}}}}},
+				Spec: v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{Name: "new"}}}},
 			}
 
 			// Delete stale
@@ -319,7 +319,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			byName := func(uid uuid.UUID, name string) *v1.Scope {
 				return &v1.Scope{
 					ObjectMeta: metav1.ObjectMeta{Name: "rebuilt-scope", Namespace: "default", UID: k8sTypes.UID(uid.String())},
-					Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: name}}}}},
+					Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{Name: name}}}},
 				}
 			}
 			members := func(id uuid.UUID) []uuid.UUID {
@@ -341,7 +341,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 
 		ginkgo.It("replaces the old scope even when the new one is invalid", func() {
 			oldID := uuid.New()
-			targetsJSON, _ := json.Marshal([]v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "old"}}}})
+			targetsJSON, _ := json.Marshal([]v1.ScopeTarget{{Config: &v1.ScopeConfigSelector{Name: "old"}}})
 			Expect(DefaultContext.DB().Create(&models.Scope{
 				ID:        oldID,
 				Name:      "replaced-scope",

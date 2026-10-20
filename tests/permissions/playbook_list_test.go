@@ -53,7 +53,7 @@ var _ = ginkgo.Describe("Playbook list", ginkgo.Ordered, func() {
 
 		for name, targets := range map[string][]v1.ScopeTarget{
 			"echo-on-every-config": {
-				{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}},
+				{Config: &v1.ScopeConfigSelector{Name: "*"}},
 				{Playbook: &v1.ScopePlaybookRef{Name: dummy.EchoConfig.Name}},
 			},
 			"every-playbook": {{Playbook: &v1.ScopePlaybookRef{Name: "*"}}},

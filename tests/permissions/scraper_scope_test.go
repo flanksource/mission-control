@@ -147,7 +147,7 @@ var _ = ginkgo.Describe("Scraper Scopes", ginkgo.Ordered, func() {
 
 		newScope("homelab-scrapers", v1.ScopeTarget{Scraper: &v1.ScopeScraperSelector{Agent: dummy.HomelabAgent.Name}})
 		newScope("every-scraper", v1.ScopeTarget{Scraper: &v1.ScopeScraperSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}})
-		newScope("every-config", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}})
+		newScope("every-config", v1.ScopeTarget{Config: &v1.ScopeConfigSelector{Name: "*"}})
 		newRole("read-homelab-scrapers", "homelab-scrapers")
 		newRole("read-every-scraper", "every-scraper")
 		newRole("read-every-config", "every-config")

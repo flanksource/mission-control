@@ -27,7 +27,7 @@ func selfScope(pb models.Playbook) v1.ScopeTarget {
 	return v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: pb.Name, Namespace: pb.Namespace}}
 }
 
-var allConfigs = v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: "*"}}}
+var allConfigs = v1.ScopeTarget{Config: &v1.ScopeConfigSelector{Name: "*"}}
 
 // runOnItself grants the playbook playbook:run on itself, with the given target if any.
 func runOnItself(pb models.Playbook, target *v1.ScopeTarget) playbookGrant {

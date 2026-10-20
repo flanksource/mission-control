@@ -59,7 +59,10 @@ var _ = ginkgo.Describe("Scope selectors", func() {
 		{"scraper", `"agent":"cluster-e"`, types.ResourceSelector{Agent: "cluster-e"}},
 	} {
 		ginkgo.It("converts every supported "+tt.kind+" field without query options", func() {
-			fields := `"id":"3c3e0b2a-9f1e-4d2b-8c5a-1e2f3a4b5c6d","name":"api","namespace":"production"`
+			fields := `"id":"3c3e0b2a-9f1e-4d2b-8c5a-1e2f3a4b5c6d","name":"api"`
+			if tt.kind != "config" {
+				fields += `,"namespace":"production"`
+			}
 			if tt.fields != "" {
 				fields += "," + tt.fields
 			}
@@ -70,7 +73,9 @@ var _ = ginkgo.Describe("Scope selectors", func() {
 			expected := tt.expected
 			expected.ID = "3c3e0b2a-9f1e-4d2b-8c5a-1e2f3a4b5c6d"
 			expected.Name = "api"
-			expected.Namespace = "production"
+			if tt.kind != "config" {
+				expected.Namespace = "production"
+			}
 			Expect(kind).To(Equal(tt.kind))
 			Expect(selector).To(Equal(expected))
 		})
