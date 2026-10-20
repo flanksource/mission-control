@@ -55,6 +55,11 @@ func DbMiddleware() MiddlewareFunc {
 			}
 
 			resource := strings.ReplaceAll(path, "/db/", "")
+
+			if _, ok := rlsOnlyTables[resource]; ok {
+				return next(c)
+			}
+
 			table, served := servedTable(resource)
 			object := rbac.GetObjectByTable(resource)
 			if !served || object == "" {
@@ -156,6 +161,14 @@ func readsWholeTypes(ctx context.Context, table dbTable, action string) bool {
 		object := adapter.ObjectForType(resourceType)
 		return object != "" && CheckContext(ctx, object, policy.ActionRead)
 	})
+}
+
+// rlsOnlyTables are the tables and views /db leaves entirely to their RLS policies, for every request.
+var rlsOnlyTables = map[string]struct{}{
+	"artifacts":        {},
+	"artifact_summary": {},
+	"view_panels":      {},
+	"views_summary":    {},
 }
 
 // readOnlyObjects are the objects only read through /db, with the action each read is checked with.
