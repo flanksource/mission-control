@@ -94,7 +94,8 @@ test-authz: dev ## Run the end-to-end authorization tests against a freshly buil
 
 .PHONY: check-authz-dependencies
 check-authz-dependencies: ## Check the authorization tests only reach Mission Control through its public API
-	@unexpected="$$(go list -deps ./tests/authz/... | grep -E '^github.com/flanksource/(incident-commander|duty)(/|$$)' | grep -v '^github.com/flanksource/incident-commander/tests/authz' || true)"; \
+	@dependencies="$$(go list -deps -test ./tests/authz/...)" || exit $$?; \
+	unexpected="$$(printf '%s\n' "$$dependencies" | grep -E '^github.com/flanksource/(incident-commander|duty)(/|$$| )' | grep -v '^github.com/flanksource/incident-commander/tests/authz' || true)"; \
 	if [ -n "$$unexpected" ]; then \
 		echo "tests/authz are black-box tests: they reach Mission Control only over HTTP, so they can't import it or duty."; \
 		echo "Unexpected dependencies:"; \

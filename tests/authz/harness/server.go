@@ -29,6 +29,8 @@ type Server struct {
 	dir      string
 	logPath  string
 	process  *exec.Cmd
+	exited   chan struct{}
+	exitErr  error
 	postgres *embeddedPG.EmbeddedPostgres
 	users    []*Caller
 	next     int
@@ -39,8 +41,13 @@ type Server struct {
 //
 // The binary is AUTHZ_BINARY, or .bin/incident-commander at the root of the repository (make dev).
 // The database is DB_URL when it's set, or an embedded Postgres otherwise.
-func StartServer(dir string, users int) (*Server, error) {
+func StartServer(dir string, users int) (_ *Server, err error) {
 	s := &Server{dir: dir, logPath: filepath.Join(dir, "mission-control.log")}
+	defer func() {
+		if err != nil {
+			s.Stop()
+		}
+	}()
 
 	binary, err := binaryPath()
 	if err != nil {
@@ -106,19 +113,19 @@ func StartServer(dir string, users int) (*Server, error) {
 	if err := s.process.Start(); err != nil {
 		return nil, err
 	}
+	s.exited = make(chan struct{})
+	go func() { s.exitErr = s.process.Wait(); close(s.exited) }()
 
 	for _, c := range append([]*Caller{s.Admin}, s.users...) {
 		c.server = s
 	}
 
 	if err := s.waitReady(3 * time.Minute); err != nil {
-		s.Stop()
 		return nil, err
 	}
 
 	for _, user := range s.users {
 		if err := s.createPerson(user); err != nil {
-			s.Stop()
 			return nil, err
 		}
 	}
@@ -137,14 +144,13 @@ func (s *Server) NewUser() *Caller {
 
 // Stop stops Mission Control and its database.
 func (s *Server) Stop() {
-	if s.process != nil && s.process.Process != nil {
+	if s.exited != nil {
 		_ = syscall.Kill(-s.process.Process.Pid, syscall.SIGTERM)
-		done := make(chan struct{})
-		go func() { _ = s.process.Wait(); close(done) }()
 		select {
-		case <-done:
+		case <-s.exited:
 		case <-time.After(20 * time.Second):
 			_ = syscall.Kill(-s.process.Process.Pid, syscall.SIGKILL)
+			<-s.exited
 		}
 	}
 	if s.postgres != nil {
@@ -186,16 +192,12 @@ func (s *Server) startPostgres() (string, error) {
 }
 
 func (s *Server) waitReady(timeout time.Duration) error {
-	exited := make(chan error, 1)
-	go func() { exited <- s.process.Wait() }()
-
 	var last Response
 	deadline := time.After(timeout)
 	for {
 		select {
-		case err := <-exited:
-			s.process = nil
-			return fmt.Errorf("mission control exited before it was ready: %v\n%s", err, s.LogTail(40))
+		case <-s.exited:
+			return fmt.Errorf("mission control exited before it was ready: %v\n%s", s.exitErr, s.LogTail(40))
 		case <-deadline:
 			return fmt.Errorf("mission control wasn't ready after %s, last answering %s\n%s", timeout, last, s.LogTail(40))
 		case <-time.After(500 * time.Millisecond):
