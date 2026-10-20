@@ -8,7 +8,7 @@ require (
 	github.com/casbin/casbin/v2 v2.135.0
 	github.com/casbin/gorm-adapter/v3 v3.41.0
 	github.com/containrrr/shoutrrr v0.8.0
-	github.com/fergusstrange/embedded-postgres v1.34.0 // indirect
+	github.com/fergusstrange/embedded-postgres v1.34.0
 	github.com/flanksource/commons v1.56.0
 	github.com/flanksource/duty v1.0.1416
 	github.com/flanksource/gomplate/v3 v3.24.90
