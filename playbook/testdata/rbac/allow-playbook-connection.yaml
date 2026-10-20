@@ -1,0 +1,35 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: allow-playbook-connection
+  namespace: default
+spec:
+  targets:
+    - connection:
+        name: httpbin
+        namespace: mc
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: allow-playbook-connection
+  namespace: default
+spec:
+  description: allow playbook mc/http-authorized to use connection mc/httpbin
+  rules:
+    - name: use-connections
+      action: connection:use
+      resource:
+        scopeRef: allow-playbook-connection
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: RoleBinding
+metadata:
+  name: allow-playbook-connection
+  namespace: default
+spec:
+  role: allow-playbook-connection
+  subjects:
+    playbooks:
+      - name: http-authorized
+        namespace: mc

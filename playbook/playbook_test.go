@@ -1079,7 +1079,7 @@ var _ = Describe("Playbook", Ordered, func() {
 
 func createAndRun(ctx context.Context, name string, params RunParams, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
 	playbook, _ := createPlaybook(name)
-	Expect(testdata.LoadPermissions(ctx)).To(BeNil())
+	Expect(testdata.LoadRBAC(ctx)).To(BeNil())
 	return runPlaybook(ctx, playbook, params, statuses...)
 }
 
@@ -1090,7 +1090,7 @@ func createAndRunNoWait(ctx context.Context, name string, params RunParams) (*mo
 
 func createAndRunWithSecretParams(ctx context.Context, name string, params RunParams, secretValue string, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
 	playbook, _ := createPlaybook(name)
-	Expect(testdata.LoadPermissions(ctx)).To(BeNil())
+	Expect(testdata.LoadRBAC(ctx)).To(BeNil())
 
 	// Set the password param with the secret value (will be encrypted by Run)
 	if params.Params == nil {

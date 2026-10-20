@@ -225,12 +225,6 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 		return binding
 	}
 
-	It("doesn't store its rules as permissions", func() {
-		var count int64
-		Expect(DefaultContext.DB().Model(&models.Permission{}).Where("subject LIKE ? OR subject LIKE ?", "role:%", "binding:%").Count(&count).Error).To(Succeed())
-		Expect(count).To(BeZero())
-	})
-
 	Describe("subjects", func() {
 		It("grants the role to people", func() {
 			Expect(canRunOn(alice.ID.String(), dummy.EchoConfig, nil)).To(BeTrue())
@@ -1115,19 +1109,6 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			return response.Payload.Access, response.Payload.Actions
 		}
 
-		createPermission := func(permission *models.Permission) {
-			GinkgoHelper()
-			permission.ID = uuid.New()
-			permission.Namespace = "default"
-			permission.SubjectType = models.PermissionSubjectTypePerson
-			Expect(DefaultContext.DB().Create(permission).Error).To(Succeed())
-			DeferCleanup(func() {
-				Expect(DefaultContext.DB().Delete(permission).Error).To(Succeed())
-				Expect(rbac.ReloadPolicy()).To(Succeed())
-			})
-			Expect(rbac.ReloadPolicy()).To(Succeed())
-		}
-
 		bindGuest := func(name, role string, constraint string) *models.Person {
 			GinkgoHelper()
 			guest := setup.CreateUserWithRole(DefaultContext, "Role Summary "+name, "role-summary-"+name+"@test.com")
@@ -1211,53 +1192,12 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			}
 		})
 
-		It("gives some of a write a Permission grants on selected resources", func() {
-			viewer := newViewer("Role Summary scoped-writer", "role-summary-scoped-writer@test.com")
-			createPermission(&models.Permission{
-				Name:           "summary-update-media-configs",
-				Action:         policy.ActionUpdate,
-				Subject:        viewer.ID.String(),
-				ObjectSelector: []byte(`{"configs":[{"tagSelector":"namespace=media"}]}`),
-			})
-
-			Expect(summaryOf(viewer, policy.ActionUpdate)).To(Equal(only(policy.ResourceConfig, mcRBAC.AccessSome)))
-			Expect(summaryOf(viewer, policy.ActionCreate)).To(HaveEach(mcRBAC.AccessNone))
-		})
-
 		It("gives all of a write granted on the whole type", func() {
 			viewer := newViewer("Role Summary whole-writer", "role-summary-whole-writer@test.com")
-			createPermission(&models.Permission{
-				Name:    "summary-update-catalog",
-				Action:  policy.ActionUpdate,
-				Subject: viewer.ID.String(),
-				Object:  policy.ObjectCatalog,
-			})
+			bindWholeType(namespace, "summary-update-configs", "config", people(viewer), policy.ActionUpdate)
+			Expect(rbac.ReloadPolicy()).To(Succeed())
 
 			Expect(summaryOf(viewer, policy.ActionUpdate)).To(Equal(only(policy.ResourceConfig, mcRBAC.AccessAll)))
-		})
-
-		It("doesn't count a Permission that names several types towards any of them", func() {
-			viewer := newViewer("Role Summary multi-type", "role-summary-multi-type@test.com")
-			createPermission(&models.Permission{
-				Name:           "summary-update-configs-with-playbook",
-				Action:         policy.ActionUpdate,
-				Subject:        viewer.ID.String(),
-				ObjectSelector: []byte(`{"configs":[{"name":"*"}],"playbooks":[{"name":"echo-config"}]}`),
-			})
-
-			Expect(summaryOf(viewer, policy.ActionUpdate)).To(HaveEach(mcRBAC.AccessNone))
-		})
-
-		It("reads a selector whatever its text contains", func() {
-			viewer := newViewer("Role Summary search-deny", "role-summary-search-deny@test.com")
-			createPermission(&models.Permission{
-				Name:           "summary-update-search",
-				Action:         policy.ActionUpdate,
-				Subject:        viewer.ID.String(),
-				ObjectSelector: []byte(`{"configs":[{"search":"a && b"}]}`),
-			})
-
-			Expect(summaryOf(viewer, policy.ActionUpdate)[policy.ResourceConfig]).To(Equal(mcRBAC.AccessSome))
 		})
 	})
 

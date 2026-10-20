@@ -1,0 +1,35 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: allow-ai-gemini-connection
+  namespace: default
+spec:
+  targets:
+    - connection:
+        name: gemini
+        namespace: default
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: allow-ai-gemini-connection
+  namespace: default
+spec:
+  description: allow playbook default/diagnose-resource to use connection default/gemini
+  rules:
+    - name: use-connections
+      action: connection:use
+      resource:
+        scopeRef: allow-ai-gemini-connection
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: RoleBinding
+metadata:
+  name: allow-ai-gemini-connection
+  namespace: default
+spec:
+  role: allow-ai-gemini-connection
+  subjects:
+    playbooks:
+      - name: diagnose-resource
+        namespace: default

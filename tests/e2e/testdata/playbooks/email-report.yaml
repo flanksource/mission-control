@@ -2,7 +2,7 @@
 config: LogisticsAPIPodConfig
 setup:
   smtp: true
-  permissions:
+  rbac:
     - ../fixtures/allow-artifacts.yaml
     - ../fixtures/allow-read-views.yaml
 params:

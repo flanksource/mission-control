@@ -8,39 +8,23 @@ import (
 	"strings"
 
 	"github.com/flanksource/duty/models"
-	"github.com/google/uuid"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	k8sTypes "k8s.io/apimachinery/pkg/types"
-
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/db"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-// viewReader creates a person allowed to read every view through a legacy Permission.
+// viewReader creates a person allowed to read every view through a RoleBinding.
 func viewReader(name, email string) *models.Person {
 	ginkgo.GinkgoHelper()
 	person := setup.CreateUserWithRole(DefaultContext, name, email)
-	perm := &v1.Permission{
-		ObjectMeta: metav1.ObjectMeta{Name: "view-reader-" + person.ID.String(), Namespace: "default", UID: k8sTypes.UID(uuid.NewString())},
-		Spec: v1.PermissionSpec{
-			Subject: v1.PermissionSubject{Person: person.Email},
-			Actions: []string{policy.ActionRead},
-			Object: v1.PermissionObject{Selectors: dutyRBAC.Selectors{
-				Views: []dutyRBAC.ViewRef{{Name: "*"}},
-			}},
-		},
-	}
-	Expect(db.PersistPermissionFromCRD(DefaultContext, perm)).To(Succeed())
-	Expect(dutyRBAC.ReloadPolicy()).To(Succeed())
-	ginkgo.DeferCleanup(func() {
-		Expect(DefaultContext.DB().Delete(&models.Permission{}, "id = ?", string(perm.GetUID())).Error).To(Succeed())
-	})
+	ginkgo.DeferCleanup(grantAccess("view-reader-"+person.ID.String(),
+		v1.RoleBindingSubjects{PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{person.Email}}},
+		accessGrant{Action: policy.ActionRead, Resource: v1.ScopeTarget{View: &v1.ScopeViewRef{Name: "*"}}},
+	))
 	return person
 }
 
@@ -48,7 +32,7 @@ var _ = ginkgo.Describe("Views endpoint authorization", func() {
 	ginkgo.It("should allow a view reader and deny a person without grants for GET /view/:id", func() {
 		/*
 			Context for this endpoint test:
-			- viewer: reads the view through a Permission
+			- viewer: reads the view through a RoleBinding
 			- guest: needs explicit permission to read views; without one, it is refused before the handler runs
 		*/
 		viewerUser := viewReader("Views Endpoint Viewer", "views-endpoint-viewer@test.com")

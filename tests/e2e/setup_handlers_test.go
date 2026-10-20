@@ -21,11 +21,11 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/yaml"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/playbook/testdata"
 )
 
 type fixtureContext struct {
@@ -48,7 +48,7 @@ var allSetupHandlers = []setupHandler{
 	&smtpHandler{},
 	&facetHandler{},
 	&connectionsHandler{},
-	&permissionsHandler{},
+	&rbacHandler{},
 }
 
 // --- SMTP types ---
@@ -313,42 +313,33 @@ func (h *connectionsHandler) Handle(fctx *fixtureContext) {
 
 func (h *connectionsHandler) Cleanup() {}
 
-// --- Permissions handler ---
+// --- RBAC handler ---
 
-type permissionsHandler struct{}
+type rbacHandler struct{}
 
-func (h *permissionsHandler) Labels(_ fixtureSetup) []string { return nil }
+func (h *rbacHandler) Labels(_ fixtureSetup) []string { return nil }
 
-func (h *permissionsHandler) Handle(fctx *fixtureContext) {
-	if len(fctx.Fixture.Setup.Permissions) == 0 {
+func (h *rbacHandler) Handle(fctx *fixtureContext) {
+	if len(fctx.Fixture.Setup.RBAC) == 0 {
 		return
 	}
 
-	playbookRef := fmt.Sprintf("%s/%s", fctx.Playbook.Namespace, fctx.Playbook.Name)
-
-	for _, ref := range fctx.Fixture.Setup.Permissions {
+	for _, ref := range fctx.Fixture.Setup.RBAC {
+		content := []byte(ref.Inline)
 		if ref.Ref != "" {
-			content, err := os.ReadFile(filepath.Join(filepath.Dir(fctx.Path), ref.Ref))
+			var err error
+			content, err = os.ReadFile(filepath.Join(filepath.Dir(fctx.Path), ref.Ref))
 			Expect(err).ToNot(HaveOccurred())
-			expanded := strings.ReplaceAll(string(content), "{{playbookRef}}", playbookRef)
-
-			var perm v1.Permission
-			Expect(yaml.Unmarshal([]byte(expanded), &perm)).To(Succeed())
-			if perm.UID == "" {
-				perm.UID = types.UID(uuid.NewString())
-			}
-			Expect(db.PersistPermissionFromCRD(DefaultContext, &perm)).To(Succeed())
-		} else {
-			var perm v1.Permission
-			Expect(json.Unmarshal(ref.Inline, &perm)).To(Succeed())
-			if perm.UID == "" {
-				perm.UID = types.UID(uuid.NewString())
-			}
-			Expect(db.PersistPermissionFromCRD(DefaultContext, &perm)).To(Succeed())
 		}
+
+		expanded := strings.NewReplacer(
+			"{{playbookName}}", fctx.Playbook.Name,
+			"{{playbookNamespace}}", fctx.Playbook.Namespace,
+		).Replace(string(content))
+		Expect(testdata.PersistRBAC(DefaultContext, []byte(expanded))).To(Succeed())
 	}
 
 	Expect(rbac.ReloadPolicy()).To(Succeed())
 }
 
-func (h *permissionsHandler) Cleanup() {}
+func (h *rbacHandler) Cleanup() {}

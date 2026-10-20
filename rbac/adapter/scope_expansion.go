@@ -4,27 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"slices"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	dutyRBAC "github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
 	gocache "github.com/patrickmn/go-cache"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
-// noSingleResourceMatch is the condition of a policy that matches no single-resource check.
-const noSingleResourceMatch = "false"
-
-// Permission expansion error codes
-const (
-	ErrScopeExpansionInvalidObjectSelector = "ErrScopeExpansionInvalidObjectSelector"
-	ErrScopeExpansionScopeNotFound         = "ErrScopeExpansionScopeNotFound"
-	ErrScopeExpansionInvalidScopeTargets   = "ErrScopeExpansionInvalidScopeTargets"
-)
+const ErrScopeExpansionInvalidScopeTargets = "ErrScopeExpansionInvalidScopeTargets"
 
 // Reasons an object isn't in effect. They're stored in the error_reason column of scopes, roles and role_bindings,
 // and reported as the reason of the Ready condition.
@@ -144,64 +133,4 @@ func LoadScope(ctx context.Context, cache *gocache.Cache, namespace, name string
 		return "", nil, err
 	}
 	return scope.id, scope.targets, nil
-}
-
-// PermissionScopeConditions returns the casbin conditions of a permission that names Scopes in its object_selector:
-// one per Scope and resource type, each holding when the request has a resource of the type that's in the Scope.
-// Membership is stored for every type but the types Scopes only select entirely, which Permissions can't match
-// through a Scope.
-// Scraper targets get noSingleResourceMatch: duty can't check a single scraper against a Scope yet (NOTES.md),
-// but the Permission must still be loaded, so that its grants and denies filter scraper listings.
-// It returns nil when the permission names no Scopes.
-func PermissionScopeConditions(ctx context.Context, cache *gocache.Cache, perm models.Permission) ([]string, error) {
-	if len(perm.ObjectSelector) == 0 {
-		return nil, nil
-	}
-
-	var selectors v1.PermissionObject
-	if err := json.Unmarshal(perm.ObjectSelector, &selectors); err != nil {
-		return nil, NewValidationError(ErrScopeExpansionInvalidObjectSelector)
-	} else if len(selectors.Scopes) == 0 {
-		return nil, nil
-	}
-
-	var conditions []string
-	for _, scopeRef := range selectors.Scopes {
-		scope, err := getScope(ctx, cache, scopeRef.Namespace, scopeRef.Name)
-		if err != nil {
-			if IsValidationError(err) {
-				return nil, err
-			}
-
-			return nil, fmt.Errorf("failed to get scope targets: %w", err)
-		} else if scope == nil {
-			return nil, NewInvalid(ReasonScopeNotFound, "%s:%s/%s", ErrScopeExpansionScopeNotFound, scopeRef.Namespace, scopeRef.Name)
-		}
-
-		for _, target := range scope.targets {
-			kind, _ := target.Selector()
-			if slices.Contains(v1.WholeTypeResources, kind) {
-				continue
-			}
-			if kind == policy.ResourceScraper {
-				if !slices.Contains(conditions, noSingleResourceMatch) {
-					conditions = append(conditions, noSingleResourceMatch)
-				}
-				continue
-			}
-			condition, err := dutyRBAC.ScopeCondition(kind, scope.id)
-			if err != nil {
-				return nil, NewValidationError("%s: %v", ErrScopeExpansionInvalidScopeTargets, err)
-			}
-			if !slices.Contains(conditions, condition) {
-				conditions = append(conditions, condition)
-			}
-		}
-	}
-
-	if len(conditions) == 0 {
-		return nil, NewValidationError("%s: scopes select no resources a permission can match", ErrScopeExpansionInvalidScopeTargets)
-	}
-
-	return conditions, nil
 }

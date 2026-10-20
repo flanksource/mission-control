@@ -1,15 +1,36 @@
 apiVersion: mission-control.flanksource.com/v1
-kind: Permission
+kind: Scope
 metadata:
-  name: allow-artifacts
+  name: artifacts-connection
+  namespace: default
+spec:
+  targets:
+    - connection:
+        name: artifacts
+        namespace: default
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: use-artifacts-connection
+  namespace: default
+spec:
+  description: allow using the artifacts connection
+  rules:
+    - name: use-artifacts
+      action: connection:use
+      resource:
+        scopeRef: artifacts-connection
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: RoleBinding
+metadata:
+  name: "{{playbookName}}-artifacts"
   namespace: default
 spec:
   description: allow playbook to use the artifacts connection
-  subject:
-    playbook: "{{playbookRef}}"
-  actions: ["connection:use"]
-  object:
-    selectors:
-      connections:
-        - name: artifacts
-          namespace: default
+  role: use-artifacts-connection
+  subjects:
+    playbooks:
+      - name: "{{playbookName}}"
+        namespace: "{{playbookNamespace}}"

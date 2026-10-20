@@ -1,12 +1,12 @@
 package views
 
 import (
+	"encoding/json"
 	"fmt"
 	"testing"
 
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
-	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
@@ -40,24 +40,32 @@ var _ = ginkgo.BeforeSuite(func() {
 	Expect(icrbac.Init(DefaultContext)).To(Succeed())
 	DefaultContext = DefaultContext.WithUser(&dummy.JohnDoe)
 
-	// Built-in roles grant nothing, so John Doe reads what the views query, and uses their connections, through
-	// Permissions. Unlike the shipped Scopes, they add no Scope to the rows' grants.
-	wildcard := []types.ResourceSelector{{Name: "*"}}
-	for kind, selectors := range map[string]dutyRBAC.Selectors{
-		"configs":     {Configs: wildcard},
-		"components":  {Components: wildcard},
-		"playbooks":   {Playbooks: wildcard},
-		"connections": {Connections: wildcard},
-	} {
-		Expect(db.PersistPermissionFromCRD(DefaultContext, &v1.Permission{
-			ObjectMeta: metav1.ObjectMeta{Name: "views-suite-john-doe-" + kind, Namespace: "default", UID: k8sTypes.UID(uuid.NewString())},
-			Spec: v1.PermissionSpec{
-				Subject: v1.PermissionSubject{Person: dummy.JohnDoe.Email},
-				Actions: []string{policy.ActionRead, adapter.ActionConnectionUse},
-				Object:  v1.PermissionObject{Selectors: selectors},
-			},
+	// Built-in roles grant nothing, so John Doe reads components and playbooks, and uses connections, through a Role.
+	// It grants no read on configs: a Scope selecting configs is stamped on every config row of a view, in its
+	// grants column, which the tests compare.
+	const namespace = "views-suite"
+	uid := func() k8sTypes.UID { return k8sTypes.UID(uuid.NewString()) }
+	var rules []v1.RoleRule
+	for _, kind := range []string{"component", "playbook", "connection"} {
+		var target v1.ScopeTarget
+		Expect(json.Unmarshal(fmt.Appendf(nil, `{%q: {"name": "*"}}`, kind), &target)).To(Succeed())
+		Expect(db.PersistScopeFromCRD(DefaultContext, &v1.Scope{
+			ObjectMeta: metav1.ObjectMeta{Name: kind, Namespace: namespace, UID: uid()},
+			Spec:       v1.ScopeSpec{Targets: []v1.ScopeTarget{target}},
 		})).To(Succeed())
+		rules = append(rules, v1.RoleRule{Name: "read-" + kind, Action: policy.ActionRead, Resource: &v1.ScopeReference{ScopeRef: kind}})
 	}
+	rules = append(rules, v1.RoleRule{Name: "use-connection", Action: adapter.ActionConnectionUse, Resource: &v1.ScopeReference{ScopeRef: "connection"}})
+	Expect(db.PersistRoleFromCRD(DefaultContext, &v1.Role{
+		ObjectMeta: metav1.ObjectMeta{Name: "john-doe", Namespace: namespace, UID: uid()},
+		Spec:       v1.RoleSpec{Rules: rules},
+	})).To(Succeed())
+	Expect(db.PersistRoleBindingFromCRD(DefaultContext, &v1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: "john-doe", Namespace: namespace, UID: uid()},
+		Spec: v1.RoleBindingSpec{Role: "john-doe", Subjects: v1.RoleBindingSubjects{
+			PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{dummy.JohnDoe.Email}},
+		}},
+	})).To(Succeed())
 	Expect(dutyRBAC.ReloadPolicy()).To(Succeed())
 
 	conn = models.Connection{

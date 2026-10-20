@@ -3,7 +3,6 @@ package permissions_test
 import (
 	"database/sql"
 	"os"
-	"time"
 
 	icrbac "github.com/flanksource/incident-commander/rbac"
 
@@ -16,33 +15,30 @@ import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sTypes "k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/yaml"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 	var (
 		guestUser             *models.Person
 		guestUserNoPerms      *models.Person
-		guestUserDirectPerms  *models.Person
 		guestUserMultiTarget  *models.Person
 		homelabManager        *models.Person
 		wildcardManager       *models.Person
 		adminUser             *models.Person
 		multiScopeUser        *models.Person
 		homelabDefaultManager *models.Person
-		userMetrics           *models.Person
-		userMultiViews        *models.Person
 	)
 
-	var directPermissions []*models.Permission
+	var bindings []*v1.RoleBinding
 
 	BeforeAll(func() {
 		err := icrbac.Init(DefaultContext)
@@ -50,43 +46,39 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 		guestUser = setup.CreateUserWithRole(DefaultContext, "Guest User", "guest@test.com")
 		guestUserNoPerms = setup.CreateUserWithRole(DefaultContext, "Guest User No Permissions", "guest-noperms@test.com")
-		guestUserDirectPerms = setup.CreateUserWithRole(DefaultContext, "Guest User Direct Permissions", "guest-direct@test.com")
 		guestUserMultiTarget = setup.CreateUserWithRole(DefaultContext, "Guest User Multi Target", "guest-multi@test.com")
 		homelabManager = setup.CreateUserWithRole(DefaultContext, "Homelab Manager", "manager@homelab.com")
 		homelabDefaultManager = setup.CreateUserWithRole(DefaultContext, "Homelab Default Manager", "homelab-default@manager.com")
 		multiScopeUser = setup.CreateUserWithRole(DefaultContext, "Multi Scope User", "multi-scope@test.com")
 		wildcardManager = setup.CreateUserWithRole(DefaultContext, "Wildcard Manager", "wildcard@manager.com")
-		userMetrics = setup.CreateUserWithRole(DefaultContext, "User Metrics", "user-metrics@test.com")
-		userMultiViews = setup.CreateUserWithRole(DefaultContext, "User Multi Views", "user-b@test.com")
 		adminUser = newAdmin("Admin User", "admin@test.com")
 
-		// Load fixtures
 		loadScopes()
-		loadPermissions()
+		for _, reader := range []struct {
+			person *models.Person
+			scopes []string
+		}{
+			{guestUser, []string{"missioncontrol-configs", "monitoring-configs", "restart-pod-playbook"}},
+			{guestUserMultiTarget, []string{"multi-target-scope"}},
+			{homelabManager, []string{"homelab-configs"}},
+			{homelabDefaultManager, []string{"homelab-default-configs"}},
+			{multiScopeUser, []string{"missioncontrol-configs", "monitoring-configs", "homelab-configs"}},
+			{wildcardManager, []string{"wildcard-all-configs"}},
+		} {
+			bindings = append(bindings, bindReader(reader.person, reader.scopes...))
+		}
 
-		// These are permissions that cannot be created via the CRD as they refer to the resource directly via the ID.
-		// That's why they are created here in the test setup.
-		directPermissions = createDirectPermissions(guestUserDirectPerms.ID.String())
-
-		var permissions []models.Permission
-		err = DefaultContext.DB().Where("deleted_at IS NULL").Find(&permissions).Error
-		Expect(err).ToNot(HaveOccurred())
-
-		// Initialize RBAC only after saving all the permissions.
 		Expect(rbac.ReloadPolicy()).ToNot(HaveOccurred())
 	})
 
 	AfterAll(func() {
-		// Clean up direct permissions
-		for _, perm := range directPermissions {
-			if perm != nil {
-				err := DefaultContext.DB().Delete(perm).Error
-				Expect(err).ToNot(HaveOccurred())
-			}
+		for _, binding := range bindings {
+			Expect(DefaultContext.DB().Where("id = ?", binding.UID).Delete(&models.RoleBinding{}).Error).To(Succeed())
+			Expect(DefaultContext.DB().Where("namespace = ? AND name = ?", binding.Namespace, binding.Spec.Role).Delete(&models.Role{}).Error).To(Succeed())
 		}
 
 		// Clean up users
-		users := []*models.Person{guestUser, guestUserNoPerms, guestUserDirectPerms, guestUserMultiTarget, homelabManager, homelabDefaultManager, multiScopeUser, wildcardManager, userMetrics, userMultiViews, adminUser}
+		users := []*models.Person{guestUser, guestUserNoPerms, guestUserMultiTarget, homelabManager, homelabDefaultManager, multiScopeUser, wildcardManager, adminUser}
 		for _, user := range users {
 			if user != nil {
 				err := DefaultContext.DB().Delete(user).Error
@@ -97,7 +89,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		Expect(rbac.ReloadPolicy()).ToNot(HaveOccurred())
 	})
 
-	Context("Permission to RLS translation", func() {
+	Context("RLS translation", func() {
 		const (
 			missioncontrolScope  = "db80e7f5-b6af-4896-8431-8d6e5430c6f2"
 			monitoringScope      = "eb5a2647-f377-4fd9-83fd-07020e761740"
@@ -116,16 +108,14 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			return g
 		}
 
-		It("should grant rows only through the Scopes a guest's permissions name", func() {
+		It("should grant rows only through the Scopes a guest's Role reads", func() {
 			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(guestUser))
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users with scopes")
-			Expect(payload.Config).To(Equal(grants(missioncontrolScope, monitoringScope)),
-				"the inline namespace=media config selector grants no rows")
-			Expect(payload.Playbook).To(Equal(grants(restartPodScope)),
-				"the inline echo-config playbook selector grants no rows")
-			Expect(payload.View).To(BeNil(), "the inline pods view selector grants no rows")
+			Expect(payload.Config).To(Equal(grants(missioncontrolScope, monitoringScope)))
+			Expect(payload.Playbook).To(Equal(grants(restartPodScope)))
+			Expect(payload.View).To(BeNil())
 			Expect(payload.Component).To(BeNil())
 			Expect(payload.Canary).To(BeNil())
 		})
@@ -138,7 +128,6 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				Config:   grants(multiTargetScope),
 				Playbook: grants(multiTargetScope),
 				View:     grants(multiTargetScope),
-				Scopes:   []string{multiTargetScope},
 			}))
 		})
 
@@ -154,7 +143,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			It("should grant the rows of "+tc.name, func() {
 				payload, err := auth.GetRLSPayload(DefaultContext.WithUser(tc.user()))
 				Expect(err).ToNot(HaveOccurred())
-				Expect(payload).To(Equal(&rls.Payload{Config: grants(tc.scope), Scopes: []string{tc.scope}}))
+				Expect(payload).To(Equal(&rls.Payload{Config: grants(tc.scope)}))
 			})
 		}
 
@@ -184,81 +173,9 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users even without permissions")
 			Expect(payload).To(Equal(&rls.Payload{}))
 		})
-
-		It("should grant no rows through direct ID-based permissions", func() {
-			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(guestUserDirectPerms))
-			Expect(err).ToNot(HaveOccurred())
-
-			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users")
-			Expect(payload.Playbook).To(BeNil())
-			Expect(payload.Canary).To(BeNil())
-			Expect(payload.Component).To(BeNil())
-		})
-
-		It("should grant no rows through an inline view selector", func() {
-			payload, err := auth.GetRLSPayload(DefaultContext.WithUser(userMetrics))
-			Expect(err).ToNot(HaveOccurred())
-			Expect(payload).To(Equal(&rls.Payload{}))
-		})
 	})
 
-	Context("Scope conditions", func() {
-		It("should check a multi-target Scope through its membership", func() {
-			var permission models.Permission
-			err := DefaultContext.DB().
-				Where("subject = ? AND deleted_at IS NULL", guestUserMultiTarget.ID.String()).
-				Where("object_selector IS NOT NULL").
-				First(&permission).Error
-			Expect(err).ToNot(HaveOccurred(), "should find the multi-target scope permission")
-
-			conditions, err := adapter.PermissionScopeConditions(DefaultContext, cache.New(time.Minute, time.Minute), permission)
-			Expect(err).ToNot(HaveOccurred())
-
-			Expect(conditions).To(HaveLen(3))
-			Expect(conditions).To(ContainElements(
-				"'scope:a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d' in r.obj.Membership.Config",
-				"'scope:a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d' in r.obj.Membership.Playbook",
-				"'scope:a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d' in r.obj.Membership.View",
-			))
-		})
-
-		It("should check a combined agent+tag Scope through its membership", func() {
-			var permission models.Permission
-			err := DefaultContext.DB().
-				Where("subject = ? AND deleted_at IS NULL", homelabDefaultManager.ID.String()).
-				Where("object_selector IS NOT NULL").
-				First(&permission).Error
-			Expect(err).ToNot(HaveOccurred(), "should find the combined agent+tag scope permission")
-
-			conditions, err := adapter.PermissionScopeConditions(DefaultContext, cache.New(time.Minute, time.Minute), permission)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(conditions).To(Equal([]string{"'scope:7a8b9c0d-1e2f-4a3b-5c6d-7e8f9a0b1c2d' in r.obj.Membership.Config"}))
-		})
-	})
-
-	Context("Database constraints", func() {
-		It("should prevent creating permission with both object_selector and resource ID", func() {
-			// This test verifies the database CHECK constraint that prevents the AND'ing bug
-			// A permission cannot have BOTH object_selector AND a resource ID field set
-			configID := dummy.NginxIngressPod.ID
-			buggyPermission := &models.Permission{
-				ID:             uuid.New(),
-				Name:           "buggy-permission",
-				Namespace:      "default",
-				Action:         policy.ActionRead,
-				Subject:        guestUser.ID.String(),
-				SubjectType:    models.PermissionSubjectTypePerson,
-				ObjectSelector: []byte(`{"configs":[{"tagSelector":"namespace=monitoring"}]}`),
-				ConfigID:       &configID, // BOTH object_selector AND config_id - should fail!
-			}
-
-			err := DefaultContext.DB().Create(buggyPermission).Error
-			Expect(err).To(HaveOccurred(), "should reject permission with both object_selector and config_id")
-			Expect(err.Error()).To(ContainSubstring("permissions_selector_or_id_check"), "error should mention the check constraint")
-		})
-	})
-
-	Context("Permission to Casbin policy translation", func() {
+	Context("Casbin policy translation", func() {
 		DescribeTable("guest user with some permissions",
 			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
 				storeConfig(attr)
@@ -274,12 +191,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "monitoring"}}},
 				policy.ActionRead, true,
 				"guest user should have read access to monitoring namespace configs via scope"),
-			Entry("should allow read access to media namespace config via direct permission",
-				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "media"}}},
-				policy.ActionRead, true,
-				"guest user should have read access to media namespace configs via direct permission"),
-
-			// Config read access - denied (not in scopes or permissions)
+			// Config read access - denied (not in scopes)
 			Entry("should deny read access to kube-system namespace config",
 				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "kube-system"}}},
 				policy.ActionRead, false,
@@ -289,13 +201,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				policy.ActionRead, false,
 				"guest user should NOT have read access to configs with no namespace tag"),
 
-			// Playbook read access - allowed via direct permission for echo-config
-			Entry("should allow read access to echo-config playbook via direct permission",
-				models.ABACAttribute{Playbook: models.Playbook{ID: dummy.EchoConfig.ID, Name: "echo-config"}},
-				policy.ActionRead, true,
-				"guest user should have read access to echo-config playbook via direct permission"),
-
-			// Playbook read access - allowed via scope permission for restart-pod
+			// Playbook read access - allowed via scope for restart-pod
 			Entry("should allow read access to restart-pod playbook via scope",
 				models.ABACAttribute{Playbook: models.Playbook{ID: dummy.RestartPod.ID, Name: "restart-pod"}},
 				policy.ActionRead, true,
@@ -307,23 +213,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				policy.ActionRead, false,
 				"guest user should NOT have read access to other playbooks"),
 
-			// Playbook run access - allowed for echo-config on missioncontrol configs via direct permission
-			Entry("should allow playbook:run on echo-config for missioncontrol configs",
-				models.ABACAttribute{
-					Playbook: models.Playbook{ID: dummy.EchoConfig.ID, Name: "echo-config"},
-					Config:   models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "missioncontrol"}},
-				},
-				policy.ActionPlaybookRun, true,
-				"guest user should have playbook:run access to echo-config on missioncontrol configs"),
-
-			// Playbook run access - denied for other playbooks
-			Entry("should deny playbook:run on echo-config for monitoring configs",
-				models.ABACAttribute{
-					Playbook: models.Playbook{ID: dummy.EchoConfig.ID, Name: "echo-config"},
-					Config:   models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "monitoring"}},
-				},
-				policy.ActionPlaybookRun, false,
-				"guest user should have playbook:run access to echo-config on missioncontrol configs"),
+			// Playbook run access - denied (only read granted)
 			Entry("should deny playbook:run on restart-pod (no run permission)",
 				models.ABACAttribute{Playbook: models.Playbook{ID: dummy.RestartPod.ID, Name: "restart-pod"}},
 				policy.ActionPlaybookRun, false,
@@ -564,7 +454,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		)
 	})
 
-	Context("Permission to RLS E2E", func() {
+	Context("RLS E2E", func() {
 		var (
 			tx *gorm.DB
 
@@ -585,13 +475,12 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		BeforeAll(func() {
 			// Calculate expected counts from dummy data (without RLS)
 			// Guest user: namespace in [missioncontrol, monitoring], through Scopes.
-			// Its inline namespace=media selector grants no rows.
 			DefaultContext.DB().
 				Where("tags->>'namespace' IN ?", []string{"missioncontrol", "monitoring"}).
 				Model(&models.ConfigItem{}).
 				Count(&guestUserConfigCount)
 
-			// Guest user: playbook restart-pod, through a Scope. Its inline echo-config selector grants no rows.
+			// Guest user: playbook restart-pod, through a Scope.
 			DefaultContext.DB().
 				Where("name IN ?", []string{"restart-pod"}).
 				Model(&models.Playbook{}).
@@ -794,21 +683,6 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(count).To(Equal(totalPlaybooks), "admin user should see all playbooks")
 		})
 
-		// Direct ID permissions tests
-		It("should grant no rows through a direct ID-based playbook permission", func() {
-			ctx := DefaultContext.WithUser(guestUserDirectPerms)
-
-			payload, err := auth.GetRLSPayload(ctx)
-			Expect(err).ToNot(HaveOccurred())
-
-			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
-
-			// Inline selectors, ids included, aren't materialised: they're only checked on single resources
-			var count int64
-			Expect(tx.Model(&models.Playbook{}).Where("id = ?", dummy.EchoConfig.ID).Count(&count).Error).To(BeNil())
-			Expect(count).To(BeZero())
-		})
-
 		// Specific resource verification tests
 		It("should allow guest user to see specific config in permitted namespace (LogisticsDBRDS)", func() {
 			ctx := DefaultContext.WithUser(guestUser)
@@ -894,20 +768,6 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(count).To(Equal(int64(0)), "homelab manager should NOT see LogisticsDBRDS (no homelab agent)")
 		})
 
-		It("should grant guestUserDirectPerms no rows through a direct ID permission on NginxIngressPod", func() {
-			ctx := DefaultContext.WithUser(guestUserDirectPerms)
-
-			payload, err := auth.GetRLSPayload(ctx)
-			Expect(err).ToNot(HaveOccurred())
-
-			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
-
-			// guestUserDirectPerms has direct permission to NginxIngressPod config by ID
-			var count int64
-			Expect(tx.Model(&models.ConfigItem{}).Where("id = ?", dummy.NginxIngressPod.ID).Count(&count).Error).To(BeNil())
-			Expect(count).To(BeZero())
-		})
-
 		It("should allow homelab default manager to see only configs with homelab agent AND default namespace (combined scope)", func() {
 			ctx := DefaultContext.WithUser(homelabDefaultManager)
 
@@ -982,28 +842,6 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				dummy.ViewDev,
 				"guest user with no permissions should NOT have read access to dev dashboard view"),
 		)
-
-		DescribeTable("user with metrics view permission",
-			func(view models.View, action string, expectedAllowed bool, description string) {
-				attr := &models.ABACAttribute{
-					View: view,
-				}
-				allowed := rbac.HasPermission(DefaultContext, userMetrics.ID.String(), attr, action)
-				Expect(allowed).To(Equal(expectedAllowed), description)
-			},
-			Entry("should have read access to metrics view",
-				dummy.ImportedDummyViews["mc/metrics"],
-				policy.ActionRead, true,
-				"user with metrics permission should have read access to metrics view"),
-			Entry("should NOT have read access to pods view",
-				dummy.PodView,
-				policy.ActionRead, false,
-				"user with metrics permission should NOT have read access to pods view"),
-			Entry("should NOT have read access to dev dashboard view",
-				dummy.ViewDev,
-				policy.ActionRead, false,
-				"user with metrics permission should NOT have read access to dev dashboard view"),
-		)
 	})
 })
 
@@ -1028,80 +866,24 @@ func loadScopes() {
 	}
 }
 
-func loadPermissions() {
-	permFiles, err := os.ReadDir("testdata/permissions")
-	Expect(err).ToNot(HaveOccurred())
-
-	for _, file := range permFiles {
-		if file.IsDir() {
-			continue
-		}
-
-		permBytes, err := os.ReadFile("testdata/permissions/" + file.Name())
-		Expect(err).ToNot(HaveOccurred())
-
-		var permission v1.Permission
-		err = yaml.Unmarshal(permBytes, &permission)
-		Expect(err).ToNot(HaveOccurred())
-
-		err = db.PersistPermissionFromCRD(DefaultContext, &permission)
-		Expect(err).ToNot(HaveOccurred())
+// bindReader creates a Role with a read rule on each of the Scopes, and binds the person to it.
+func bindReader(person *models.Person, scopes ...string) *v1.RoleBinding {
+	GinkgoHelper()
+	name := "permissions-reader-" + person.ID.String()
+	role := &v1.Role{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", UID: k8sTypes.UID(uuid.NewString())},
+		Spec: v1.RoleSpec{Rules: lo.Map(scopes, func(scope string, _ int) v1.RoleRule {
+			return v1.RoleRule{Name: scope, Action: policy.ActionRead, Resource: &v1.ScopeReference{ScopeRef: scope}}
+		})},
 	}
-}
+	Expect(db.PersistRoleFromCRD(DefaultContext, role)).To(Succeed())
 
-func createDirectPermissions(userID string) []*models.Permission {
-	// Create direct ID-based permissions for guest user with direct permissions
-	// These test permissions that use specific resource IDs instead of object_selector.
-
-	directPlaybookPermission := &models.Permission{
-		ID:          uuid.New(),
-		Name:        "direct-playbook-permission",
-		Namespace:   "default",
-		Action:      policy.ActionRead,
-		Subject:     userID,
-		SubjectType: models.PermissionSubjectTypePerson,
-		PlaybookID:  &dummy.EchoConfig.ID,
+	binding := &v1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "default", UID: k8sTypes.UID(uuid.NewString())},
+		Spec:       v1.RoleBindingSpec{Role: name, Subjects: boundPeople(person)},
 	}
-	err := DefaultContext.DB().Create(directPlaybookPermission).Error
-	Expect(err).ToNot(HaveOccurred())
-
-	directCanaryPermission := &models.Permission{
-		ID:          uuid.New(),
-		Name:        "direct-canary-permission",
-		Namespace:   "default",
-		Action:      policy.ActionRead,
-		Subject:     userID,
-		SubjectType: models.PermissionSubjectTypePerson,
-		CanaryID:    &dummy.LogisticsAPICanary.ID,
-	}
-	err = DefaultContext.DB().Create(directCanaryPermission).Error
-	Expect(err).ToNot(HaveOccurred())
-
-	directComponentPermission := &models.Permission{
-		ID:          uuid.New(),
-		Name:        "direct-component-permission",
-		Namespace:   "default",
-		Action:      policy.ActionRead,
-		Subject:     userID,
-		SubjectType: models.PermissionSubjectTypePerson,
-		ComponentID: &dummy.Logistics.ID,
-	}
-	err = DefaultContext.DB().Create(directComponentPermission).Error
-	Expect(err).ToNot(HaveOccurred())
-
-	directConfigPermission := &models.Permission{
-		ID:          uuid.New(),
-		Name:        "direct-config-permission",
-		Namespace:   "default",
-		Action:      policy.ActionRead,
-		Subject:     userID,
-		SubjectType: models.PermissionSubjectTypePerson,
-		ConfigID:    &dummy.NginxIngressPod.ID,
-	}
-	err = DefaultContext.DB().Create(directConfigPermission).Error
-	Expect(err).ToNot(HaveOccurred())
-
-	return []*models.Permission{directPlaybookPermission, directCanaryPermission, directComponentPermission, directConfigPermission}
+	Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).To(Succeed())
+	return binding
 }
 
 // storeConfig stores the request's config, if any, which matches it to its Scopes:

@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=../playbook-fixture.schema.json
 config: LogisticsAPIPodConfig
 setup:
-  permissions:
+  rbac:
     - ../fixtures/allow-artifacts.yaml
 
 playbook:

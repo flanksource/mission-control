@@ -74,7 +74,7 @@ type fixtureSetup struct {
 	Facet       bool         `yaml:"facet"`
 	SMTP        bool         `yaml:"smtp"`
 	Connections []fixtureRef `yaml:"connections"`
-	Permissions []fixtureRef `yaml:"permissions"`
+	RBAC        []fixtureRef `yaml:"rbac"`
 }
 
 type playbookFixture struct {

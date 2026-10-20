@@ -122,7 +122,7 @@ func launchKopper(ctx context.Context) {
 	if _, err := kopper.SetupReconciler(ctx, mgr,
 		db.PersistPermissionGroupFromCRD,
 		db.DeletePermissionGroup,
-		db.DeleteStalePermissionGroup,
+		nil,
 		"permissiongroup.mission-control.flanksource.com",
 	); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for PermissionGroup: %v", err))
@@ -362,7 +362,7 @@ func init() {
 	ServerFlags(Serve.Flags())
 }
 
-// policyReloadWindow is how long a change to permissions, roles or scopes waits for others before the policy is reloaded.
+// policyReloadWindow is how long a change to roles, role bindings or scopes waits for others before the policy is reloaded.
 const policyReloadWindow = time.Second
 
 // tableUpdatesHandler handles all "table_activity" pg notifications.
@@ -374,8 +374,6 @@ func tableUpdatesHandler(ctx context.Context) {
 	teamsUpdateChan := notifyRouter.GetOrCreateChannel("teams")
 	playbooksUpdateChan := notifyRouter.GetOrCreateChannel("playbooks")
 	playbooksActionUpdateChan := notifyRouter.GetOrCreateChannel("playbook_run_actions")
-	permissionUpdateChan := notifyRouter.GetOrCreateChannel("permissions")
-	permissionGroupUpdateChan := notifyRouter.GetOrCreateChannel("permission_groups")
 	roleUpdateChan := notifyRouter.GetOrCreateChannel("roles")
 	roleBindingUpdateChan := notifyRouter.GetOrCreateChannel("role_bindings")
 	scopeUpdateChan := notifyRouter.GetOrCreateChannel("scopes")
@@ -485,12 +483,6 @@ func tableUpdatesHandler(ctx context.Context) {
 				auth.InvalidateRLSCacheForUser(personID)
 			}
 
-		case <-permissionUpdateChan:
-			schedulePolicyReload("permission")
-
-		case <-permissionGroupUpdateChan:
-			schedulePolicyReload("permission group")
-
 		case <-roleUpdateChan:
 			schedulePolicyReload("role")
 
@@ -516,7 +508,7 @@ func tableUpdatesHandler(ctx context.Context) {
 				ctx.Logger.Errorf("error rebuilding authorization policy: %v", err)
 			}
 
-			// permissions and scopes affect RLS so we need to invalidate the postgrest JWT
+			// role bindings and scopes affect RLS so we need to invalidate the postgrest JWT
 			// TODO: only invalidate tokens for the affected users
 			auth.FlushTokenCache()
 		}

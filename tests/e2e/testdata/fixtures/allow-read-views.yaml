@@ -1,14 +1,35 @@
 apiVersion: mission-control.flanksource.com/v1
-kind: Permission
+kind: Scope
 metadata:
-  name: allow-read-views
+  name: all-views
+  namespace: default
+spec:
+  targets:
+    - view:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: read-views
+  namespace: default
+spec:
+  description: allow reading every view
+  rules:
+    - name: read-views
+      action: read
+      resource:
+        scopeRef: all-views
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: RoleBinding
+metadata:
+  name: "{{playbookName}}-read-views"
   namespace: default
 spec:
   description: allow playbook to read the views it reports on
-  subject:
-    playbook: "{{playbookRef}}"
-  actions: ["read"]
-  object:
-    selectors:
-      views:
-        - name: "*"
+  role: read-views
+  subjects:
+    playbooks:
+      - name: "{{playbookName}}"
+        namespace: "{{playbookNamespace}}"

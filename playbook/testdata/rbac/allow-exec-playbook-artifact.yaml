@@ -1,0 +1,35 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: allow-exec-playbook-artifact
+  namespace: default
+spec:
+  targets:
+    - connection:
+        name: artifacts
+        namespace: default
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: allow-exec-playbook-artifact
+  namespace: default
+spec:
+  description: allow playbook default/exec-artifact to use connection default/artifacts
+  rules:
+    - name: use-connections
+      action: connection:use
+      resource:
+        scopeRef: allow-exec-playbook-artifact
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: RoleBinding
+metadata:
+  name: allow-exec-playbook-artifact
+  namespace: default
+spec:
+  role: allow-exec-playbook-artifact
+  subjects:
+    playbooks:
+      - name: exec-artifact
+        namespace: default
