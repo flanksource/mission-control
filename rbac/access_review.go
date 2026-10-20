@@ -3,7 +3,6 @@ package rbac
 import (
 	"cmp"
 	"errors"
-	"fmt"
 	"slices"
 	"strings"
 
@@ -73,8 +72,8 @@ type SubjectAccessReviewResult struct {
 	// those that don't are for the action but not for this resource. Denies come first.
 	Rules []ReviewedRule `json:"rules,omitempty"`
 
-	// Requirements are the other checks an operation makes, when explained, e.g. read on a run's target.
-	// Allowed only answers the action itself, so an operation is refused when it's allowed and a requirement isn't.
+	// Requirements are the other checks the operation makes, e.g. read on a run's target. Allowed only answers the
+	// action itself, so the operation is refused when it's allowed and a requirement isn't.
 	Requirements []ReviewRequirement `json:"requirements,omitempty"`
 }
 
@@ -107,7 +106,7 @@ type ReviewedRule struct {
 	Effect string `json:"effect"`
 
 	// Matches reports whether the rule matches the check. One that doesn't is for the action, but not for the
-	// resource, e.g. the resource is outside its Scopes or its binding's constraint.
+	// resource, e.g. the resource is outside its Scopes, its target or its binding's constraint.
 	Matches bool `json:"matches"`
 
 	RoleBinding *RoleBindingRef `json:"role_binding,omitempty"`
@@ -122,9 +121,6 @@ type ReviewedRule struct {
 
 	// Through are the subjects, e.g. teams, through which the subject holds the rule.
 	Through []ReviewSubjectRef `json:"through,omitempty"`
-
-	// Reason says why a rule that doesn't match the check doesn't, when it's known.
-	Reason string `json:"reason,omitempty"`
 
 	// Hidden is set when the reviewer may not read what grants the rule, so it isn't named.
 	Hidden bool `json:"hidden,omitempty"`
@@ -219,7 +215,7 @@ func planReview(ctx context.Context, resource SubjectAccessReviewResource, actio
 		check.target = &membership.Ref{Type: target, ID: uuid.MustParse(ids[target])}
 	}
 
-	if contract.CheckedOnObjects() {
+	if checkedOnType(contract, primary) {
 		if target != "" {
 			return reviewCheck{}, api.Errorf(api.EINVALID, "%s takes no target", action)
 		}
@@ -227,6 +223,12 @@ func planReview(ctx context.Context, resource SubjectAccessReviewResource, actio
 	}
 
 	return check, nil
+}
+
+// checkedOnType reports whether the operations check the action on the type's object rather than on each resource:
+// create, update and delete, and reading connections (specs/authorization/roles.md, Section 2.2).
+func checkedOnType(contract adapter.ActionContract, kind string) bool {
+	return contract.CheckedOnObjects() || contract.Action == policy.ActionRead && kind == policy.ResourceConnection
 }
 
 // splitReviewResources returns which of the named resources is the action's primary resource, and which its target.
@@ -283,11 +285,15 @@ func reviewableTypes(kinds []string) []string {
 	return out
 }
 
-// loadReviewResources loads the resources a review names. A resource the reviewer may not read is not found, so a
-// review never tells the reviewer about a resource they can't see (specs/authorization/roles.md, Section 2.3).
+// loadReviewResources loads the resources a review names, in a fixed order. A resource that doesn't exist and one the
+// reviewer may not read are not found alike, and nothing after it is looked up, so a review never tells the reviewer
+// about a resource they can't see (specs/authorization/roles.md, Section 2.3).
 func loadReviewResources(ctx context.Context, ids map[string]string) (*models.ABACAttribute, error) {
 	attr := &models.ABACAttribute{}
-	for kind, raw := range ids {
+	kinds := lo.Keys(ids)
+	slices.Sort(kinds)
+	for _, kind := range kinds {
+		raw := ids[kind]
 		id, err := uuid.Parse(raw)
 		if err != nil {
 			return nil, api.Errorf(api.EINVALID, "resource.%s must be a valid UUID", kind)
@@ -309,15 +315,10 @@ func loadReviewResources(ctx context.Context, ids map[string]string) (*models.AB
 			dest = &attr.Connection
 		}
 
-		if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", id).First(dest).Error; errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, api.Errorf(api.ENOTFOUND, "%s %q not found", kind, raw)
-		} else if err != nil {
+		err = ctx.DB().Where("id = ? AND deleted_at IS NULL", id).First(dest).Error
+		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ctx.Oops().Wrapf(err, "failed to resolve %s %q", kind, raw)
-		}
-	}
-
-	for kind, raw := range ids {
-		if !readableByReviewer(ctx, kind, attr) {
+		} else if err != nil || !readableByReviewer(ctx, kind, attr) {
 			return nil, api.Errorf(api.ENOTFOUND, "%s %q not found", kind, raw)
 		}
 	}
@@ -355,7 +356,7 @@ func RunSubjectAccessReview(ctx context.Context, req SubjectAccessReviewRequest)
 		return SubjectAccessReviewResponse{}, err
 	}
 
-	subjects, err := resolveReviewSubjects(req.Subjects)
+	subjects, err := resolveReviewSubjects(ctx, req.Subjects)
 	if err != nil {
 		return SubjectAccessReviewResponse{}, err
 	} else if req.Explain && len(subjects) > MaxExplainedSubjects {
@@ -367,6 +368,12 @@ func RunSubjectAccessReview(ctx context.Context, req SubjectAccessReviewRequest)
 		if ctx, err = membership.ForOperation(ctx, dutyRBAC.MembershipRefs(check.attr)...); err != nil {
 			return SubjectAccessReviewResponse{}, ctx.Oops().Wrapf(err, "failed to read the scope membership of the resource")
 		}
+	}
+
+	// Every subject's answer, requirements and explanation come from the same moment of the policy, so they agree
+	snapshot, err := dutyRBAC.SnapshotPolicy()
+	if err != nil {
+		return SubjectAccessReviewResponse{}, ctx.Oops().Wrap(err)
 	}
 
 	var names *ruleNames
@@ -386,26 +393,20 @@ func RunSubjectAccessReview(ctx context.Context, req SubjectAccessReviewRequest)
 
 	for _, subject := range subjects {
 		result := SubjectAccessReviewResult{Subject: subject}
-		switch {
-		case subject == "":
-			result.Error = "subject is required"
-		case check.object != "":
-			result.Allowed = dutyRBAC.Check(ctx, subject, check.object, check.action)
-		default:
-			result.Allowed = dutyRBAC.HasPermission(ctx, subject, check.attr, check.action)
+
+		explanation, err := snapshot.Explain(ctx, subject, check.checked(), check.action)
+		if err != nil {
+			return SubjectAccessReviewResponse{}, ctx.Oops().Wrapf(err, "failed to review %s for %s", check.action, subject)
+		}
+		result.Allowed = explanation.Allowed
+
+		if result.Requirements, err = reviewRequirements(ctx, snapshot, subject, check); err != nil {
+			return SubjectAccessReviewResponse{}, err
 		}
 
-		if names != nil && result.Error == "" {
-			if result.Rules, err = explainReview(ctx, names, subject, check); err != nil {
+		if names != nil {
+			if result.Rules, err = explainReview(names, explanation.Rules); err != nil {
 				return SubjectAccessReviewResponse{}, err
-			}
-			result.Requirements = reviewRequirements(ctx, subject, check)
-
-			// The explanation reads the policy as it is now, the answer the enforcer's: they differ only across a reload
-			explained := lo.SomeBy(result.Rules, func(r ReviewedRule) bool { return r.Matches && r.Effect == "allow" }) &&
-				!lo.SomeBy(result.Rules, func(r ReviewedRule) bool { return r.Matches && r.Effect == "deny" })
-			if explained != result.Allowed {
-				ctx.Warnf("access review of %s for %s: the explanation (%v) disagrees with the answer (%v)", check.action, subject, explained, result.Allowed)
 			}
 		}
 
@@ -415,41 +416,53 @@ func RunSubjectAccessReview(ctx context.Context, req SubjectAccessReviewRequest)
 	return response, nil
 }
 
-// reviewRequirements evaluates what an operation checks besides its action (ActionContract.Requires), as the
-// operations do: read on a run's target, read on the config a plugin operation is invoked on, and for mcp:run, mcp:use
-// and playbook:run on the playbook.
-func reviewRequirements(ctx context.Context, subject string, check reviewCheck) []ReviewRequirement {
-	if check.attr == nil {
-		return nil
-	}
-
-	switch {
-	case check.action == policy.ActionPlaybookRun && check.target != nil:
-		target := &models.ABACAttribute{Config: check.attr.Config, Component: check.attr.Component, Check: check.attr.Check}
-		return []ReviewRequirement{{Action: policy.ActionRead, On: check.target.Type, Allowed: dutyRBAC.HasPermission(ctx, subject, target, policy.ActionRead)}}
-
-	case strings.HasPrefix(check.action, policy.ActionPluginInvokePrefix):
-		config := &models.ABACAttribute{Config: check.attr.Config}
-		return []ReviewRequirement{{Action: policy.ActionRead, On: policy.ResourceConfig, Allowed: dutyRBAC.HasPermission(ctx, subject, config, policy.ActionRead)}}
-
-	case check.action == policy.ActionMCPRun:
-		return []ReviewRequirement{
-			{Action: policy.ActionMCPUse, On: policy.ObjectMCP, Allowed: dutyRBAC.Check(ctx, subject, policy.ObjectMCP, policy.ActionMCPUse)},
-			{Action: policy.ActionPlaybookRun, On: policy.ResourcePlaybook, Allowed: dutyRBAC.HasPermission(ctx, subject, &models.ABACAttribute{Playbook: check.attr.Playbook}, policy.ActionPlaybookRun)},
+// reviewRequirements evaluates what the operation checks besides its action (ActionContract.Requires), as the
+// operations do: read on the target of a run, an approval or a cancellation, read on the config a plugin operation is
+// invoked on, and mcp:use for mcp:run. A run started through MCP is then checked as any run, when it starts.
+func reviewRequirements(ctx context.Context, snapshot *dutyRBAC.PolicySnapshot, subject string, check reviewCheck) ([]ReviewRequirement, error) {
+	requirement := func(object any, action, on string) (ReviewRequirement, error) {
+		explanation, err := snapshot.Explain(ctx, subject, object, action)
+		if err != nil {
+			return ReviewRequirement{}, ctx.Oops().Wrapf(err, "failed to review %s on %s for %s", action, on, subject)
 		}
+		return ReviewRequirement{Action: action, On: on, Allowed: explanation.Allowed}, nil
 	}
-	return nil
+
+	var object any
+	var action, on string
+	switch {
+	case check.action == policy.ActionMCPRun:
+		object, action, on = policy.ObjectMCP, policy.ActionMCPUse, policy.ObjectMCP
+	case check.attr == nil:
+		return nil, nil
+	case slices.Contains(targetReadActions, check.action) && check.target != nil:
+		object = &models.ABACAttribute{Config: check.attr.Config, Component: check.attr.Component, Check: check.attr.Check}
+		action, on = policy.ActionRead, check.target.Type
+	case strings.HasPrefix(check.action, policy.ActionPluginInvokePrefix):
+		object, action, on = &models.ABACAttribute{Config: check.attr.Config}, policy.ActionRead, policy.ResourceConfig
+	default:
+		return nil, nil
+	}
+
+	r, err := requirement(object, action, on)
+	if err != nil {
+		return nil, err
+	}
+	return []ReviewRequirement{r}, nil
 }
 
-// resolveReviewSubjects returns the subjects a review names. ["*"] names every subject the policy grants something
-// to, directly or through a team: a subject with no grant may do nothing.
-func resolveReviewSubjects(subjects []string) ([]string, error) {
+// targetReadActions are the actions whose operations also need read on their target, when there is one.
+var targetReadActions = []string{policy.ActionPlaybookRun, policy.ActionPlaybookApprove, policy.ActionPlaybookCancel}
+
+// resolveReviewSubjects returns the subjects a review names. ["*"] names every person, team and playbook the policy
+// grants something to, directly or through a team, that the reviewer may read: a subject with no grant may do nothing.
+func resolveReviewSubjects(ctx context.Context, subjects []string) ([]string, error) {
 	if len(subjects) == 0 {
 		return nil, api.Errorf(api.EINVALID, "at least one subject is required")
 	}
 
 	if len(subjects) == 1 && strings.TrimSpace(subjects[0]) == "*" {
-		all, err := grantedSubjects()
+		all, err := grantedSubjects(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -463,7 +476,9 @@ func resolveReviewSubjects(subjects []string) ([]string, error) {
 	}
 
 	for _, subject := range subjects {
-		if !reviewableSubject(subject) {
+		if subject == "" {
+			return nil, api.Errorf(api.EINVALID, "subject is required")
+		} else if !reviewableSubject(subject) {
 			return nil, api.Errorf(api.EINVALID, "%q isn't a subject", subject)
 		}
 	}
@@ -480,42 +495,54 @@ func reviewableSubject(subject string) bool {
 		!strings.HasPrefix(subject, models.FederatedPrincipalPrefix)
 }
 
-// grantedSubjects returns every subject the policy holds a grant or a membership for, sorted: people, teams, plugins
-// and resources. Bindings, access tokens, users of external identity providers and the built-in roles aren't subjects.
-func grantedSubjects() ([]string, error) {
-	enforcer := dutyRBAC.Enforcer()
-	if enforcer == nil {
+// grantedSubjects returns the people, teams and playbooks the policy holds a grant or a membership for, that the
+// reviewer may read, sorted.
+func grantedSubjects(ctx context.Context) ([]string, error) {
+	snapshot, err := dutyRBAC.SnapshotPolicy()
+	if err != nil {
+		return nil, ctx.Oops().Wrap(err)
+	}
+
+	ids := lo.FilterMap(snapshot.Principals(), func(s string, _ int) (uuid.UUID, bool) {
+		id, err := uuid.Parse(s)
+		return id, err == nil
+	})
+	if len(ids) == 0 {
 		return nil, nil
 	}
 
-	groupings, err := enforcer.GetGroupingPolicy()
-	if err != nil {
-		return nil, err
+	var subjects []string
+	if CheckContext(ctx, adapter.ObjectForType(v1.ResourcePerson), policy.ActionRead) {
+		var people []string
+		if err := ctx.DB().Model(&models.Person{}).Where("id IN ? AND deleted_at IS NULL", ids).Pluck("id::text", &people).Error; err != nil {
+			return nil, ctx.Oops().Wrapf(err, "failed to list people")
+		}
+		subjects = append(subjects, people...)
 	}
-	direct, err := enforcer.GetAllSubjects()
-	if err != nil {
-		return nil, err
+	if CheckContext(ctx, adapter.ObjectForType(v1.ResourceTeam), policy.ActionRead) {
+		var teams []string
+		if err := ctx.DB().Model(&models.Team{}).Where("id IN ? AND deleted_at IS NULL", ids).Pluck("id::text", &teams).Error; err != nil {
+			return nil, ctx.Oops().Wrapf(err, "failed to list teams")
+		}
+		subjects = append(subjects, teams...)
 	}
 
-	candidates := direct
-	for _, g := range groupings {
-		candidates = append(candidates, g...)
+	var playbooks []models.Playbook
+	if err := ctx.DB().Where("id IN ? AND deleted_at IS NULL", ids).Find(&playbooks).Error; err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to list playbooks")
+	}
+	for _, playbook := range playbooks {
+		if readableByReviewer(ctx, policy.ResourcePlaybook, &models.ABACAttribute{Playbook: playbook}) {
+			subjects = append(subjects, playbook.ID.String())
+		}
 	}
 
-	subjects := lo.Filter(lo.Uniq(candidates), func(s string, _ int) bool {
-		return s != "" && !slices.Contains(adapter.BuiltInRoles, s) && reviewableSubject(s)
-	})
 	slices.Sort(subjects)
-	return subjects, nil
+	return slices.Compact(subjects), nil
 }
 
-// explainReview returns the rules the subject holds for the reviewed action, named for the reviewer.
-func explainReview(ctx context.Context, names *ruleNames, subject string, check reviewCheck) ([]ReviewedRule, error) {
-	explained, err := dutyRBAC.ExplainCheck(ctx, subject, check.checked(), check.action)
-	if err != nil {
-		return nil, ctx.Oops().Wrapf(err, "failed to explain %s for %s", check.action, subject)
-	}
-
+// explainReview names the rules that decide a review for the reviewer.
+func explainReview(names *ruleNames, explained []dutyRBAC.ExplainedRule) ([]ReviewedRule, error) {
 	// A rule can compile to several policies, e.g. a read on a Scope and on the whole type it selects
 	type key struct{ principal, id string }
 	merged := map[key]*dutyRBAC.ExplainedRule{}
@@ -532,7 +559,7 @@ func explainReview(ctx context.Context, names *ruleNames, subject string, check 
 
 	rules := make([]ReviewedRule, 0, len(order))
 	for _, k := range order {
-		reviewed, err := names.describe(*merged[k], check)
+		reviewed, err := names.describe(*merged[k])
 		if err != nil {
 			return nil, err
 		}
@@ -568,11 +595,9 @@ func (r ReviewedRule) sortKey() string {
 type ruleNames struct {
 	ctx context.Context
 
-	canReadBindings, canReadRoles, canReadTeams, canReadScopes bool
+	canReadBindings, canReadRoles, canReadTeams bool
 
 	bindings    map[uuid.UUID]*models.RoleBinding
-	compiled    map[uuid.UUID][]adapter.CompiledRule
-	scopes      map[string]*models.Scope
 	roles       map[string]*models.Role
 	permissions map[uuid.UUID]*models.Permission
 	teams       map[string]*models.Team
@@ -584,17 +609,14 @@ func newRuleNames(ctx context.Context) *ruleNames {
 		canReadBindings: CheckContext(ctx, adapter.ObjectForType(v1.ResourceRoleBinding), policy.ActionRead),
 		canReadRoles:    CheckContext(ctx, adapter.ObjectForType(v1.ResourceRole), policy.ActionRead),
 		canReadTeams:    CheckContext(ctx, adapter.ObjectForType(v1.ResourceTeam), policy.ActionRead),
-		canReadScopes:   CheckContext(ctx, adapter.ObjectForType(v1.ResourceScope), policy.ActionRead),
 		bindings:        map[uuid.UUID]*models.RoleBinding{},
-		compiled:        map[uuid.UUID][]adapter.CompiledRule{},
-		scopes:          map[string]*models.Scope{},
 		roles:           map[string]*models.Role{},
 		permissions:     map[uuid.UUID]*models.Permission{},
 		teams:           map[string]*models.Team{},
 	}
 }
 
-func (n *ruleNames) describe(rule dutyRBAC.ExplainedRule, check reviewCheck) (ReviewedRule, error) {
+func (n *ruleNames) describe(rule dutyRBAC.ExplainedRule) (ReviewedRule, error) {
 	reviewed := ReviewedRule{Effect: rule.Effect, Matches: rule.Matches}
 
 	if len(rule.Paths) == 0 {
@@ -633,17 +655,12 @@ func (n *ruleNames) describe(rule dutyRBAC.ExplainedRule, check reviewCheck) (Re
 			Constrained:   binding.Constraint != nil,
 		}
 
-		if !rule.Matches {
-			if reviewed.Reason, err = n.reason(binding.ID, ruleName, check); err != nil {
-				return ReviewedRule{}, err
-			}
-		}
-
-		if namespace, name, err := adapter.BindingRoleRef(*binding); err == nil {
+		// The Role, and the rule's name in it, are named only to a reviewer who may read Roles
+		if !n.canReadRoles {
+			reviewed.Rule = ""
+		} else if namespace, name, err := adapter.BindingRoleRef(*binding); err == nil {
 			reviewed.Role = &RBACObjectRef{Namespace: namespace, Name: name}
-			if !n.canReadRoles {
-				reviewed.Rule = ""
-			} else if role, err := n.role(namespace, name); err != nil {
+			if role, err := n.role(namespace, name); err != nil {
 				return ReviewedRule{}, err
 			} else if role != nil {
 				reviewed.Role.ID = role.ID.String()
@@ -668,86 +685,6 @@ func (n *ruleNames) describe(rule dutyRBAC.ExplainedRule, check reviewCheck) (Re
 	}
 
 	return reviewed, nil
-}
-
-// reason says why a rule of a binding doesn't match the check.
-func (n *ruleNames) reason(bindingID uuid.UUID, ruleName string, check reviewCheck) (string, error) {
-	if check.object != "" {
-		return fmt.Sprintf("it allows %s on the resources in its Scopes, not on %s as a whole", check.action, check.object), nil
-	}
-
-	compiled, ok := n.compiled[bindingID]
-	if !ok {
-		var err error
-		if compiled, err = adapter.LoadBindingRules(n.ctx, bindingID); err != nil {
-			return "", n.ctx.Oops().Wrapf(err, "failed to load the rules of role binding %s", bindingID)
-		}
-		n.compiled[bindingID] = compiled
-	}
-
-	rule, ok := lo.Find(compiled, func(r adapter.CompiledRule) bool { return r.Name == ruleName })
-	if !ok || check.resource == nil {
-		return "", nil
-	}
-
-	switch {
-	case len(rule.Target) > 0 && check.target == nil:
-		return fmt.Sprintf("it only allows %s with a target", check.action), nil
-	case len(rule.Target) == 0 && check.target != nil:
-		return fmt.Sprintf("it only allows %s without a target", check.action), nil
-	}
-
-	snapshot := membership.SnapshotFrom(n.ctx)
-	if snapshot == nil {
-		return "", nil
-	}
-
-	outside := func(ref membership.Ref, scopes []adapter.ScopeSelection, input string) (string, error) {
-		in := snapshot.Scopes(ref)
-		for i, scope := range scopes {
-			if slices.ContainsFunc(in, func(id uuid.UUID) bool { return id.String() == scope.ID }) {
-				continue
-			}
-
-			whose := lo.Ternary(i == 0, "the rule's "+input+" Scope", "the binding's constraint")
-			name, err := n.scopeName(scope.ID)
-			if err != nil || name == "" {
-				return fmt.Sprintf("the %s isn't in %s", ref.Type, whose), err
-			}
-			return fmt.Sprintf("the %s isn't in %s, %s", ref.Type, whose, name), nil
-		}
-		return "", nil
-	}
-
-	if reason, err := outside(*check.resource, rule.Resource, "resource"); err != nil || reason != "" {
-		return reason, err
-	}
-	if check.target != nil {
-		return outside(*check.target, rule.Target, "target")
-	}
-	return "", nil
-}
-
-// scopeName returns the namespace/name of a Scope, or nothing when the reviewer may not read Scopes.
-func (n *ruleNames) scopeName(id string) (string, error) {
-	if !n.canReadScopes {
-		return "", nil
-	}
-
-	scope, ok := n.scopes[id]
-	if !ok {
-		var found models.Scope
-		if err := n.ctx.DB().Where("id = ?", id).Limit(1).Find(&found).Error; err != nil {
-			return "", n.ctx.Oops().Wrapf(err, "failed to load scope %s", id)
-		}
-		scope = lo.Ternary(found.ID == uuid.Nil, nil, &found)
-		n.scopes[id] = scope
-	}
-
-	if scope == nil {
-		return "", nil
-	}
-	return scope.Namespace + "/" + scope.Name, nil
 }
 
 // subject returns a subject a rule is held through, e.g. a team.

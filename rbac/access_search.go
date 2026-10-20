@@ -23,7 +23,8 @@ type SubjectAccessSearchRequest struct {
 	Subject string `json:"subject"`
 	Action  string `json:"action"`
 
-	// ResourceTypes are the types to search: playbook, view and connection. Playbooks and views when empty.
+	// ResourceTypes are the types to search: playbook, view and connection. Every one the action is performed on when
+	// empty.
 	ResourceTypes []string `json:"resource_types,omitempty"`
 
 	// Target is the resource to check an action that takes a target on, e.g. the config to run playbooks on.
@@ -41,8 +42,13 @@ type SubjectAccessSearchResponse struct {
 	Action        string                      `json:"action"`
 	ResourceTypes []string                    `json:"resource_types"`
 	Target        SubjectAccessReviewResource `json:"target"`
-	Total         int                         `json:"total"`
-	Results       []SubjectAccessSearchResult `json:"results"`
+
+	// Requirements are the other checks the operation makes, e.g. read on the target. When the subject fails one, the
+	// operation is refused on every resource, so there are no results.
+	Requirements []ReviewRequirement `json:"requirements,omitempty"`
+
+	Total   int                         `json:"total"`
+	Results []SubjectAccessSearchResult `json:"results"`
 }
 
 func (req *SubjectAccessSearchRequest) validate() (adapter.ActionContract, error) {
@@ -62,7 +68,10 @@ func (req *SubjectAccessSearchRequest) validate() (adapter.ActionContract, error
 	}
 
 	if len(req.ResourceTypes) == 0 {
-		req.ResourceTypes = []string{policy.ResourcePlaybook, policy.ResourceView}
+		req.ResourceTypes = lo.Intersect(searchableTypes, contract.Resources)
+		if len(req.ResourceTypes) == 0 {
+			return adapter.ActionContract{}, api.Errorf(api.EINVALID, "%s isn't performed on a %s", req.Action, strings.Join(searchableTypes, ", "))
+		}
 	}
 
 	var types []string
@@ -89,35 +98,78 @@ func (req *SubjectAccessSearchRequest) validate() (adapter.ActionContract, error
 }
 
 // RunSubjectAccessSearch lists the resources the subject may perform the action on, of those the reviewer may read
-// (specs/authorization/roles.md, Section 2.3).
+// (specs/authorization/roles.md, Section 2.3). It decides each as a review does.
 func RunSubjectAccessSearch(ctx context.Context, req SubjectAccessSearchRequest) (SubjectAccessSearchResponse, error) {
 	contract, err := req.validate()
 	if err != nil {
 		return SubjectAccessSearchResponse{}, err
 	}
 
-	target, err := loadReviewResources(ctx, req.Target.ids())
+	targetIDs := req.Target.ids()
+	target, err := loadReviewResources(ctx, targetIDs)
 	if err != nil {
 		return SubjectAccessSearchResponse{}, err
 	}
 
-	results := make([]SubjectAccessSearchResult, 0)
+	response := SubjectAccessSearchResponse{
+		Subject:       req.Subject,
+		Action:        req.Action,
+		ResourceTypes: req.ResourceTypes,
+		Target:        req.Target,
+		Results:       make([]SubjectAccessSearchResult, 0),
+	}
+
+	snapshot, err := dutyRBAC.SnapshotPolicy()
+	if err != nil {
+		return SubjectAccessSearchResponse{}, ctx.Oops().Wrap(err)
+	}
+	decide := func(ctx context.Context, object any) (bool, error) {
+		explanation, err := snapshot.Explain(ctx, req.Subject, object, req.Action)
+		if err != nil {
+			return false, ctx.Oops().Wrapf(err, "failed to review %s for %s", req.Action, req.Subject)
+		}
+		return explanation.Allowed, nil
+	}
+
+	// What the operation also checks doesn't depend on the resource, e.g. read on the target
+	if len(targetIDs) == 1 {
+		kind := lo.Keys(targetIDs)[0]
+		ref := &membership.Ref{Type: kind, ID: uuid.MustParse(targetIDs[kind])}
+		checkCtx, err := membership.ForOperation(ctx, dutyRBAC.MembershipRefs(target)...)
+		if err != nil {
+			return SubjectAccessSearchResponse{}, ctx.Oops().Wrapf(err, "failed to read the scope membership of the target")
+		}
+		check := reviewCheck{action: req.Action, contract: contract, attr: target, target: ref}
+		if response.Requirements, err = reviewRequirements(checkCtx, snapshot, req.Subject, check); err != nil {
+			return SubjectAccessSearchResponse{}, err
+		}
+		if lo.SomeBy(response.Requirements, func(r ReviewRequirement) bool { return !r.Allowed }) {
+			return response, nil
+		}
+	}
+
 	for _, kind := range req.ResourceTypes {
 		attrs, err := readableResources(ctx, kind)
 		if err != nil {
 			return SubjectAccessSearchResponse{}, err
 		}
-		for _, attr := range attrs {
-			attr.Config, attr.Component, attr.Check = target.Config, target.Component, target.Check
-		}
 
-		if contract.CheckedOnObjects() {
-			if len(attrs) > 0 && dutyRBAC.Check(ctx, req.Subject, adapter.ObjectForType(kind), req.Action) {
+		if checkedOnType(contract, kind) {
+			if len(attrs) == 0 {
+				continue
+			}
+			if allowed, err := decide(ctx, adapter.ObjectForType(kind)); err != nil {
+				return SubjectAccessSearchResponse{}, err
+			} else if allowed {
 				for _, attr := range attrs {
-					results = append(results, SubjectAccessSearchResult{ResourceType: kind, ID: resourceID(kind, attr).String()})
+					response.Results = append(response.Results, SubjectAccessSearchResult{ResourceType: kind, ID: resourceID(kind, attr).String()})
 				}
 			}
 			continue
+		}
+
+		for _, attr := range attrs {
+			attr.Config, attr.Component, attr.Check = target.Config, target.Component, target.Check
 		}
 
 		// Every resource is checked against the same moment of the Scope membership
@@ -127,20 +179,16 @@ func RunSubjectAccessSearch(ctx context.Context, req SubjectAccessSearchRequest)
 		}
 
 		for _, attr := range attrs {
-			if dutyRBAC.HasPermission(checkCtx, req.Subject, attr, req.Action) {
-				results = append(results, SubjectAccessSearchResult{ResourceType: kind, ID: resourceID(kind, attr).String()})
+			if allowed, err := decide(checkCtx, attr); err != nil {
+				return SubjectAccessSearchResponse{}, err
+			} else if allowed {
+				response.Results = append(response.Results, SubjectAccessSearchResult{ResourceType: kind, ID: resourceID(kind, attr).String()})
 			}
 		}
 	}
 
-	return SubjectAccessSearchResponse{
-		Subject:       req.Subject,
-		Action:        req.Action,
-		ResourceTypes: req.ResourceTypes,
-		Target:        req.Target,
-		Total:         len(results),
-		Results:       results,
-	}, nil
+	response.Total = len(response.Results)
+	return response, nil
 }
 
 // readableResources lists the resources of the type the reviewer may read, sorted by name.

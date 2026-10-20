@@ -142,13 +142,15 @@ var contracts = map[string]ActionContract{
 	},
 	policy.ActionPlaybookApprove: {
 		Resources: []string{policy.ResourcePlaybook}, Targets: playbookTargets, enforcement: enforcedPerRequest,
+		Requires: "read on the run's target, when there is one",
 	},
 	policy.ActionPlaybookCancel: {
 		Resources: []string{policy.ResourcePlaybook}, Targets: playbookTargets, enforcement: enforcedPerRequest,
+		Requires: "read on the run's target, when there is one",
 	},
 	policy.ActionMCPRun: {
 		Resources: []string{policy.ResourcePlaybook}, enforcement: enforcedPerRequest,
-		Requires: "mcp:use; the run itself also needs playbook:run",
+		Requires: "mcp:use; the run it starts is then checked as any run",
 	},
 
 	// Connections are checked per request, on their stored Scope membership, so unlike read any connection selector works.
