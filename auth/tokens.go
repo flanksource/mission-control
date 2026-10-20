@@ -29,6 +29,7 @@ import (
 )
 
 func FlushTokenCache() {
+	voidAllRLSLeases()
 	tokenCache.Flush()
 	icrbac.FlushAccessSummaries()
 }

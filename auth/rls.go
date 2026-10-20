@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
@@ -42,9 +43,52 @@ func getRLSCacheKey(userID string) string {
 	return fmt.Sprintf("rls-payload-%s", userID)
 }
 
+// rlsPayloadLeases versions the RLS payloads cached in tokenCache.
+//
+// Building a payload reads the subject's grants and takes a few queries. If the grants change and the cache is
+// invalidated while a build is running, the invalidation finds nothing to delete and the build then caches
+// the payload it built from the old grants, which keeps listing revoked rows until it expires an hour later.
+//
+// So a request takes a lease before it reads the grants, and caches the payload only if the lease is still valid.
+// Invalidations void the leases.
+type rlsPayloadLeases struct {
+	sync.Mutex
+
+	// all is bumped when every payload is invalidated.
+	all uint64
+
+	// bySubject is bumped when the subject's payloads are invalidated.
+	bySubject map[string]uint64
+}
+
+var rlsLeases = rlsPayloadLeases{bySubject: map[string]uint64{}}
+
+type rlsLease struct{ all, subject uint64 }
+
+func takeRLSLease(subject string) rlsLease {
+	rlsLeases.Lock()
+	defer rlsLeases.Unlock()
+	return rlsLease{rlsLeases.all, rlsLeases.bySubject[subject]}
+}
+
+// voidAllRLSLeases voids the leases of every subject. Call it before flushing the cached payloads.
+func voidAllRLSLeases() {
+	rlsLeases.Lock()
+	defer rlsLeases.Unlock()
+	rlsLeases.all++
+	clear(rlsLeases.bySubject)
+}
+
 // InvalidateRLSCacheForUser removes the user's cached RLS payloads, including the ones
 // cached per access token (<key>:token=<id>).
+//
+// Call it after the change to the user's grants is applied. It voids the user's leases, so requests that read the
+// user's grants before the change don't cache what they built.
 func InvalidateRLSCacheForUser(userID string) {
+	rlsLeases.Lock()
+	defer rlsLeases.Unlock()
+	rlsLeases.bySubject[userID]++
+
 	cacheKey := getRLSCacheKey(userID)
 	for key := range tokenCache.Items() {
 		if key == cacheKey || strings.HasPrefix(key, cacheKey+":") {
@@ -78,6 +122,10 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		return cached.(*rls.Payload), nil
 	}
 
+	// Take the lease before reading grants: an invalidation while the payload is built voids it,
+	// and the payload is then returned without being cached.
+	lease := takeRLSLease(subject)
+
 	payload, err := buildRLSPayload(ctx, subject)
 	if err != nil {
 		return nil, ctx.Oops().Wrap(err)
@@ -89,7 +137,13 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		}
 	}
 
-	tokenCache.SetDefault(cacheKey, payload)
+	// Cache the payload only if no invalidation voided the lease while it was built. The check and the write hold
+	// the lock invalidations take, so an invalidation can't land between them.
+	rlsLeases.Lock()
+	if (rlsLease{rlsLeases.all, rlsLeases.bySubject[subject]}) == lease {
+		tokenCache.SetDefault(cacheKey, payload)
+	}
+	rlsLeases.Unlock()
 	return payload, nil
 }
 

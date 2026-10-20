@@ -466,23 +466,23 @@ func tableUpdatesHandler(ctx context.Context) {
 				if rbac.Enforcer() == nil {
 					break
 				}
-				auth.InvalidateRLSCacheForUser(personID)
 				if err := rbac.DeleteRoleForUser(personID, teamID); err != nil {
 					ctx.Errorf("failed to delete team(%s)->user(%s) rbac policy: %v", teamID, personID, err)
 				} else if err := adapter.ReloadPolicy(); err != nil {
 					ctx.Errorf("failed to reload rbac policy due to team_members updates: %v", err)
 				}
+				auth.InvalidateRLSCacheForUser(personID)
 
 			case TGOPInsert, TGOPUpdate:
 				if rbac.Enforcer() == nil {
 					break
 				}
-				auth.InvalidateRLSCacheForUser(personID)
 				if err := rbac.AddRoleForUser(personID, teamID); err != nil {
 					ctx.Errorf("failed to add team(%s)->user(%s) rbac policy: %v", teamID, personID, err)
 				} else if err := adapter.ReloadPolicy(); err != nil {
 					ctx.Errorf("failed to reload rbac policy due to team_members updates: %v", err)
 				}
+				auth.InvalidateRLSCacheForUser(personID)
 			}
 
 		case <-permissionUpdateChan:
