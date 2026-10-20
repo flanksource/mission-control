@@ -149,6 +149,14 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 		})
 
 		ginkgo.It("Expect the event consumer to NOT save a run for the playbook without a grant", func() {
+			Eventually(func() int64 {
+				var count int64
+				Expect(DefaultContext.DB().Model(&models.JobHistory{}).
+					Where("name = ? AND resource_id = ?", "SavePlaybookRun", ungrantedPlaybook.ID.String()).
+					Count(&count).Error).To(Succeed())
+				return count
+			}, "10s", "500ms").Should(BeNumerically(">", 0))
+
 			var runCount int64
 			Expect(DefaultContext.DB().Model(&models.PlaybookRun{}).Where("playbook_id = ?", ungrantedPlaybook.ID).Count(&runCount).Error).To(Succeed())
 			Expect(runCount).To(BeZero())
