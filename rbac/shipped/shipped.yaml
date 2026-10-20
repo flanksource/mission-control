@@ -556,6 +556,10 @@ spec:
       action: connection:use
       resource:
         scopeRef: all-connections
+    - name: write-through-kubernetes-proxy
+      action: kubernetes-proxy:write
+    - name: read-through-kubernetes-proxy
+      action: kubernetes-proxy:read
     - name: manage-people
       action: person:manage
     - name: review-access
