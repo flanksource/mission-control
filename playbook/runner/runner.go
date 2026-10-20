@@ -10,6 +10,7 @@ import (
 
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/commons/logger"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/gomplate/v3"
@@ -120,7 +121,7 @@ func CheckPlaybookFilter(ctx context.Context, playbookSpec v1.PlaybookSpec, temp
 
 		// The expression must return a boolean
 		if val != "true" {
-			return ctx.Oops().Errorf("%s", val)
+			return ctx.Oops().Code(dutyAPI.EINVALID).Errorf("%s", val)
 		}
 	}
 	return nil

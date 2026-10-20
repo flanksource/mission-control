@@ -56,6 +56,9 @@ type RunParams struct {
 
 	NotificationSendID *uuid.UUID `yaml:"notification_send_id,omitempty" json:"notification_send_id,omitempty"`
 	ParentID           *uuid.UUID `yaml:"parent_id,omitempty" json:"parent_id,omitempty"`
+
+	// runID, when set, is the id of the run to create. Creating it again returns the existing run.
+	runID uuid.UUID
 }
 
 func (p *RunParams) String() string {

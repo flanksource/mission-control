@@ -24,6 +24,7 @@ import (
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/flanksource/incident-commander/api"
@@ -119,7 +120,7 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 	}
 
 	if err := spec.Validate(); err != nil {
-		return nil, ctx.Oops().Wrapf(err, "invalid playbook spec")
+		return nil, ctx.Oops().Code(dutyAPI.EINVALID).Wrapf(err, "invalid playbook spec")
 	}
 
 	if err := req.Params.Sanitize(ctx, spec.Parameters); err != nil {
@@ -130,6 +131,7 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 	ctx.Infof("running \n%v\n", logger.Pretty(req))
 
 	run := models.PlaybookRun{
+		ID:                 req.runID,
 		PlaybookID:         playbook.ID,
 		Status:             models.PlaybookRunStatusScheduled,
 		AgentID:            req.AgentID,
@@ -155,7 +157,7 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 	} else {
 		timeout, err := duration.ParseDuration(spec.Timeout)
 		if err != nil {
-			return nil, ctx.Oops().Wrapf(err, "invalid timeout duration (%s)", spec.Timeout)
+			return nil, ctx.Oops().Code(dutyAPI.EINVALID).Wrapf(err, "invalid timeout duration (%s)", spec.Timeout)
 		}
 
 		run.Timeout = time.Duration(timeout)
@@ -206,7 +208,7 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 	}
 
 	if err := req.validateParams(spec.Parameters); err != nil {
-		return nil, ctx.Oops().Wrap(err)
+		return nil, ctx.Oops().Code(dutyAPI.EINVALID).Wrap(err)
 	}
 
 	run.Parameters = types.JSONStringMap{}
@@ -364,8 +366,14 @@ func savePlaybookRun(ctx context.Context, run *models.PlaybookRun) error {
 	defer tx.Rollback()
 
 	ctx = ctx.WithDB(tx, ctx.Pool())
-	if err := ctx.DB().Create(run).Error; err != nil {
-		return ctx.Oops("db").Wrap(err)
+	if res := ctx.DB().Clauses(clause.OnConflict{Columns: []clause.Column{{Name: "id"}}, DoNothing: true}).Create(run); res.Error != nil {
+		return ctx.Oops("db").Wrap(res.Error)
+	} else if res.RowsAffected == 0 {
+		// The run was created by an earlier attempt with the same id.
+		if err := ctx.DB().Where("id = ?", run.ID).First(run).Error; err != nil {
+			return ctx.Oops("db").Wrap(err)
+		}
+		return tx.Commit().Error
 	}
 
 	var spec v1.PlaybookSpec
