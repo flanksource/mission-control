@@ -44,6 +44,14 @@ const (
 	// ActionAccessReview allows asking what any subject may do: subject access reviews and searches.
 	// Checked on policy.ObjectRBAC.
 	ActionAccessReview = "access:review"
+
+	// ActionKubernetesProxyRead allows Kubernetes API requests through Mission Control's proxy as the
+	// mission-control-reader Kubernetes user. Checked on policy.ObjectKubernetesProxy.
+	ActionKubernetesProxyRead = "kubernetes-proxy:read"
+
+	// ActionKubernetesProxyWrite allows Kubernetes API requests through Mission Control's proxy as the
+	// mission-control-writer Kubernetes user. Checked on policy.ObjectKubernetesProxy.
+	ActionKubernetesProxyWrite = "kubernetes-proxy:write"
 )
 
 // ActionContract declares the inputs an action accepts.
@@ -148,6 +156,8 @@ var contracts = map[string]ActionContract{
 
 	ActionPersonManage:          {Object: policy.ObjectPeople, enforcement: enforcedWithoutResource},
 	ActionAccessReview:          {Object: policy.ObjectRBAC, enforcement: enforcedWithoutResource},
+	ActionKubernetesProxyRead:   {Object: policy.ObjectKubernetesProxy, enforcement: enforcedWithoutResource},
+	ActionKubernetesProxyWrite:  {Object: policy.ObjectKubernetesProxy, enforcement: enforcedWithoutResource},
 	policy.ActionMCPUse:         {Object: policy.ObjectMCP, enforcement: enforcedWithoutResource},
 	policy.ActionPropertyManage: {Object: policy.ObjectProperties, enforcement: enforcedWithoutResource},
 	policy.ActionEventRead:      {Object: policy.ObjectEvents, enforcement: enforcedWithoutResource},

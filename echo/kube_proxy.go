@@ -11,6 +11,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	icrbac "github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 func KubeProxyTokenMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
@@ -24,12 +25,13 @@ func KubeProxyTokenMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		ctx := c.Request().Context().(context.Context)
 
 		var impersonateUser string
-		if icrbac.CheckContext(ctx, policy.ObjectKubernetesProxy, policy.ActionUpdate) {
+		if icrbac.CheckContext(ctx, policy.ObjectKubernetesProxy, adapter.ActionKubernetesProxyWrite) {
 			impersonateUser = "mission-control-writer"
-		} else if icrbac.CheckContext(ctx, policy.ObjectKubernetesProxy, policy.ActionRead) {
+		} else if icrbac.CheckContext(ctx, policy.ObjectKubernetesProxy, adapter.ActionKubernetesProxyRead) {
 			impersonateUser = "mission-control-reader"
 		} else {
-			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "user cannot impersonate mission-control reader or writer"))
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "%s or %s is required to use the kubernetes proxy",
+				adapter.ActionKubernetesProxyRead, adapter.ActionKubernetesProxyWrite))
 		}
 		c.Request().Header.Set("Impersonate-User", impersonateUser)
 

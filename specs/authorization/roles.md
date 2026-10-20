@@ -95,14 +95,13 @@ Every action has a contract, defined in code: the resource types it accepts, and
 | `property:manage`                                     | None                                                   | None                               |
 | `event:read`                                          | None                                                   | None                               |
 | `job:read`                                            | None                                                   | None                               |
+| `kubernetes-proxy:read`, `kubernetes-proxy:write`     | None                                                   | None                               |
 
-The types are those of `scopes.md`, Section 3.1. Views are only read (Section 3.2): no other action accepts them. Checks are only written by Mission Control itself. Properties, the event queue and job history aren't types: they're reached through actions without a resource (Section 2.3). `connection:use` allows acting with a connection's credentials (Section 2.2).
+The types are those of `scopes.md`, Section 3.1. Views are only read (Section 3.2): no other action accepts them. Checks are only written by Mission Control itself. Properties, the event queue, job history and the Kubernetes proxy aren't types: they're reached through actions without a resource (Section 2.3). `connection:use` allows acting with a connection's credentials (Section 2.2).
 
 `person:manage` allows everything about accounts: inviting someone to Mission Control, disabling and re-enabling them, changing their properties, name or email, and deleting them. People aren't created, changed or deleted any other way, so `create`, `update` and `delete` don't apply to them. _Why:_ inviting someone and managing their account are what an admin actually does, and a named action says so. A rule allowing `create` on people would leave its reader asking where people are created.
 
 `person:manage` is as privileged as `admin`, and is only for subjects trusted as admins. An invite that names teams adds the person to them when it's accepted (`rolebindings.md`, Section 2.2), so it grants whatever the teams' bindings grant. Changing a person's email changes which `people` subjects select them (`rolebindings.md`, Section 2.1), so it moves bindings from one person to another. _Why one action:_ inviting, managing and deleting accounts are equally privileged, so splitting them would only suggest that one is safer to grant than the others.
-
-**TODO:** the Kubernetes proxy, i.e. the requests made through it, has no action, and the kubeconfig download is removed until it has one. It's left for a later design (`overview.md`, "Not covered yet").
 
 For `playbook:run`, `target` is optional. A rule without it matches only runs with no target. A rule with `target.scopeRef` matches only runs on Configs, Components or Checks in that Scope (Section 4.1).
 
@@ -148,6 +147,8 @@ A few actions aren't performed on a resource a Scope could select. They act on a
 | `property:manage` | Reading private properties and creating, changing and deleting any property. Reading public properties needs no rule (Section 3.1) |
 | `event:read`      | Reading Mission Control's event queue, and the recent events playbooks and notifications have handled |
 | `job:read`        | Reading all of Mission Control's job history                                                   |
+| `kubernetes-proxy:read`  | Kubernetes API requests through Mission Control's proxy, as the Kubernetes user `mission-control-reader` |
+| `kubernetes-proxy:write` | Kubernetes API requests through Mission Control's proxy, as the Kubernetes user `mission-control-writer` |
 
 ```yaml
 rules:
@@ -165,11 +166,15 @@ rules:
 - `job:read` covers all job history, e.g. a cleanup job's runs and a scraper's runs, whether or not a job ran for a resource. A subject with it sees all of it, and a subject without it sees none, whatever resources they may read (`collection-access.md`, Section 3.1). A resource's latest job status shown in its own row stays visible with the resource (Section 3.1).
 - `job:read` is as privileged as `admin`, like `person:manage`, and is only for subjects trusted as admins. A job's details and errors mention the resources it worked on, e.g. configs a scraper found or the playbook a run was refused for, which the holder may not otherwise be able to read. _Why not per resource:_ one job touches many resources, and its details aren't split by resource, so a row can't be shown only to those who may read everything it mentions.
 
+- The Kubernetes proxy reaches only the cluster Mission Control runs in. It authenticates as Mission Control's own service account and impersonates `mission-control-writer` when the subject has `kubernetes-proxy:write`, otherwise `mission-control-reader` when it has `kubernetes-proxy:read`, and otherwise the request is refused. _Why write implies read:_ the writer user may read everything the reader may, so a subject never needs both.
+- What each user may do in the cluster is decided by the cluster's RBAC, which Mission Control's installation sets up.
+- The proxy is checked on every request, as the subject making it, so a token's limit and a deny binding apply to the next request.
+
 - Every other action takes a resource, and a rule that omits it is rejected. `read`, `create`, `update`, `delete` and every other generic action always take one: no rule grants them on everything.
 - An action without a resource is named `<type>:<verb>`, after what it acts on, so the rule still says what it's about without a Scope.
 - A RoleBinding constraint has nothing to narrow on such a rule, so the rule never applies through a binding with a constraint, and the binding reports it (`rolebindings.md`, Section 3.2).
 
-_Why:_ the person being invited doesn't exist yet, and the MCP server isn't a resource, so a Scope would have nothing to select and would only repeat the action's name. Properties, events and job history are Mission Control's own settings and internals: nobody grants some of them and not others, so a Scope could only ever select all of them. Keeping the list closed and named means every other rule still says what it's on.
+_Why:_ the person being invited doesn't exist yet, and the MCP server isn't a resource, so a Scope would have nothing to select and would only repeat the action's name. The Kubernetes proxy reaches one cluster, so a Scope could only select all of it. Properties, events and job history are Mission Control's own settings and internals: nobody grants some of them and not others, so a Scope could only ever select all of them. Keeping the list closed and named means every other rule still says what it's on.
 
 ## 3. Which Scopes a rule accepts
 
@@ -380,6 +385,7 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Read private properties, or create, change or delete a property | `property:manage`                | None            | None                              |
 | Read the event queue or recent events | `event:read`                                | None            | None                              |
 | Read job history                      | `job:read`                                  | None            | None                              |
+| Send a request through the Kubernetes proxy | `kubernetes-proxy:write`, else `kubernetes-proxy:read` | None | None |
 | Use connection C, e.g. to send        | `connection:use`                            | C               | None                              |
 | Test connection C                     | `connection:use`                            | C               | None                              |
 
