@@ -30,9 +30,16 @@ const (
 	EventComponentWarning   = "component.warning"
 	EventComponentUnknown   = "component.unknown"
 
+	// EventPlaybookRun asks for a playbook run on behalf of whoever requested it: a notification whose recipient is
+	// the playbook, or a parent playbook run (e.g. an AI action). The run is checked as that requester, and the
+	// requester is told the outcome: the notification's send history is updated, or the parent's action is resumed.
+	// Handled by playbook.onNewRun.
 	EventPlaybookRun = "playbook.run"
 
-	// EventPlaybookTrigger asks for a run of one playbook whose event trigger matched a status event.
+	// EventPlaybookTrigger asks for a run that nobody requested: a status event (config, component or check) matched
+	// one playbook's `on` trigger. The run is checked as the playbook itself and there's nobody to report back to.
+	// There's one event per matched playbook, and its event_id is also the id of the run, so retries never create a
+	// second run. Queued by playbook.Handle and handled by playbook.createTriggeredRuns.
 	EventPlaybookTrigger = "playbook.trigger"
 
 	EventPlaybookSpecApprovalUpdated = "playbook.spec.approval.updated"
