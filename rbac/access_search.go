@@ -123,42 +123,56 @@ func RunSubjectAccessSearch(ctx context.Context, req SubjectAccessSearchRequest)
 	if err != nil {
 		return SubjectAccessSearchResponse{}, ctx.Oops().Wrap(err)
 	}
-	decide := func(ctx context.Context, object any) (bool, error) {
-		explanation, err := snapshot.Explain(ctx, req.Subject, object, req.Action)
+
+	// The resources to decide, each with the target
+	candidates := map[string][]*models.ABACAttribute{}
+	var all []*models.ABACAttribute
+	for _, kind := range req.ResourceTypes {
+		attrs, err := readableResources(ctx, kind)
+		if err != nil {
+			return SubjectAccessSearchResponse{}, err
+		}
+		for _, attr := range attrs {
+			attr.Config, attr.Component, attr.Check = target.Config, target.Component, target.Check
+		}
+		candidates[kind] = attrs
+		all = append(all, attrs...)
+	}
+
+	// The requirements and every resource are checked against the same moment of the Scope membership, as an
+	// operation checks its action and requirements
+	checkCtx, err := membership.ForOperation(ctx, dutyRBAC.MembershipRefs(append(all, target)...)...)
+	if err != nil {
+		return SubjectAccessSearchResponse{}, ctx.Oops().Wrapf(err, "failed to read the scope membership")
+	}
+	decide := func(object any) (bool, error) {
+		explanation, err := snapshot.Explain(checkCtx, req.Subject, object, req.Action)
 		if err != nil {
 			return false, ctx.Oops().Wrapf(err, "failed to review %s for %s", req.Action, req.Subject)
 		}
 		return explanation.Allowed, nil
 	}
 
-	// What the operation also checks doesn't depend on the resource, e.g. read on the target
+	// What the operation also checks doesn't depend on the resource, e.g. read on the target or mcp:use
+	check := reviewCheck{action: req.Action, contract: contract, attr: target}
 	if len(targetIDs) == 1 {
 		kind := lo.Keys(targetIDs)[0]
-		ref := &membership.Ref{Type: kind, ID: uuid.MustParse(targetIDs[kind])}
-		checkCtx, err := membership.ForOperation(ctx, dutyRBAC.MembershipRefs(target)...)
-		if err != nil {
-			return SubjectAccessSearchResponse{}, ctx.Oops().Wrapf(err, "failed to read the scope membership of the target")
-		}
-		check := reviewCheck{action: req.Action, contract: contract, attr: target, target: ref}
-		if response.Requirements, err = reviewRequirements(checkCtx, snapshot, req.Subject, check); err != nil {
-			return SubjectAccessSearchResponse{}, err
-		}
-		if lo.SomeBy(response.Requirements, func(r ReviewRequirement) bool { return !r.Allowed }) {
-			return response, nil
-		}
+		check.target = &membership.Ref{Type: kind, ID: uuid.MustParse(targetIDs[kind])}
+	}
+	if response.Requirements, err = reviewRequirements(checkCtx, snapshot, req.Subject, check); err != nil {
+		return SubjectAccessSearchResponse{}, err
+	}
+	if lo.SomeBy(response.Requirements, func(r ReviewRequirement) bool { return !r.Allowed }) {
+		return response, nil
 	}
 
 	for _, kind := range req.ResourceTypes {
-		attrs, err := readableResources(ctx, kind)
-		if err != nil {
-			return SubjectAccessSearchResponse{}, err
-		}
-
+		attrs := candidates[kind]
 		if checkedOnType(contract, kind) {
 			if len(attrs) == 0 {
 				continue
 			}
-			if allowed, err := decide(ctx, adapter.ObjectForType(kind)); err != nil {
+			if allowed, err := decide(adapter.ObjectForType(kind)); err != nil {
 				return SubjectAccessSearchResponse{}, err
 			} else if allowed {
 				for _, attr := range attrs {
@@ -169,17 +183,7 @@ func RunSubjectAccessSearch(ctx context.Context, req SubjectAccessSearchRequest)
 		}
 
 		for _, attr := range attrs {
-			attr.Config, attr.Component, attr.Check = target.Config, target.Component, target.Check
-		}
-
-		// Every resource is checked against the same moment of the Scope membership
-		checkCtx, err := membership.ForOperation(ctx, dutyRBAC.MembershipRefs(attrs...)...)
-		if err != nil {
-			return SubjectAccessSearchResponse{}, ctx.Oops().Wrapf(err, "failed to read the scope membership of %s", kind)
-		}
-
-		for _, attr := range attrs {
-			if allowed, err := decide(checkCtx, attr); err != nil {
+			if allowed, err := decide(attr); err != nil {
 				return SubjectAccessSearchResponse{}, err
 			} else if allowed {
 				response.Results = append(response.Results, SubjectAccessSearchResult{ResourceType: kind, ID: resourceID(kind, attr).String()})

@@ -356,7 +356,13 @@ func RunSubjectAccessReview(ctx context.Context, req SubjectAccessReviewRequest)
 		return SubjectAccessReviewResponse{}, err
 	}
 
-	subjects, err := resolveReviewSubjects(ctx, req.Subjects)
+	// Every subject, and its answer, requirements and explanation, come from the same moment of the policy
+	snapshot, err := dutyRBAC.SnapshotPolicy()
+	if err != nil {
+		return SubjectAccessReviewResponse{}, ctx.Oops().Wrap(err)
+	}
+
+	subjects, err := resolveReviewSubjects(ctx, snapshot, req.Subjects)
 	if err != nil {
 		return SubjectAccessReviewResponse{}, err
 	} else if req.Explain && len(subjects) > MaxExplainedSubjects {
@@ -368,12 +374,6 @@ func RunSubjectAccessReview(ctx context.Context, req SubjectAccessReviewRequest)
 		if ctx, err = membership.ForOperation(ctx, dutyRBAC.MembershipRefs(check.attr)...); err != nil {
 			return SubjectAccessReviewResponse{}, ctx.Oops().Wrapf(err, "failed to read the scope membership of the resource")
 		}
-	}
-
-	// Every subject's answer, requirements and explanation come from the same moment of the policy, so they agree
-	snapshot, err := dutyRBAC.SnapshotPolicy()
-	if err != nil {
-		return SubjectAccessReviewResponse{}, ctx.Oops().Wrap(err)
 	}
 
 	var names *ruleNames
@@ -456,13 +456,13 @@ var targetReadActions = []string{policy.ActionPlaybookRun, policy.ActionPlaybook
 
 // resolveReviewSubjects returns the subjects a review names. ["*"] names every person, team and playbook the policy
 // grants something to, directly or through a team, that the reviewer may read: a subject with no grant may do nothing.
-func resolveReviewSubjects(ctx context.Context, subjects []string) ([]string, error) {
+func resolveReviewSubjects(ctx context.Context, snapshot *dutyRBAC.PolicySnapshot, subjects []string) ([]string, error) {
 	if len(subjects) == 0 {
 		return nil, api.Errorf(api.EINVALID, "at least one subject is required")
 	}
 
 	if len(subjects) == 1 && strings.TrimSpace(subjects[0]) == "*" {
-		all, err := grantedSubjects(ctx)
+		all, err := grantedSubjects(ctx, snapshot)
 		if err != nil {
 			return nil, err
 		}
@@ -497,12 +497,7 @@ func reviewableSubject(subject string) bool {
 
 // grantedSubjects returns the people, teams and playbooks the policy holds a grant or a membership for, that the
 // reviewer may read, sorted.
-func grantedSubjects(ctx context.Context) ([]string, error) {
-	snapshot, err := dutyRBAC.SnapshotPolicy()
-	if err != nil {
-		return nil, ctx.Oops().Wrap(err)
-	}
-
+func grantedSubjects(ctx context.Context, snapshot *dutyRBAC.PolicySnapshot) ([]string, error) {
 	ids := lo.FilterMap(snapshot.Principals(), func(s string, _ int) (uuid.UUID, bool) {
 		id, err := uuid.Parse(s)
 		return id, err == nil
