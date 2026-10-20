@@ -107,7 +107,15 @@ var _ = ginkgo.Describe("Work no person started", func() {
 		handleWarning := func() {
 			ginkgo.GinkgoHelper()
 			scheduler := playbookScheduler{Ring: events.NewEventRing(10)}
-			Expect(scheduler.Handle(DefaultContext, models.Event{Name: api.EventConfigWarning, EventID: config.ID})).To(Succeed())
+			Expect(scheduler.Handle(DefaultContext, models.Event{ID: uuid.New(), Name: api.EventConfigWarning, EventID: config.ID})).To(Succeed())
+
+			Eventually(func() int64 {
+				var pending int64
+				Expect(DefaultContext.DB().Model(&models.Event{}).
+					Where("name = ? AND properties->>'playbook_id' = ?", api.EventPlaybookTrigger, playbook.ID.String()).
+					Count(&pending).Error).To(Succeed())
+				return pending
+			}, "10s", "200ms").Should(BeZero())
 		}
 
 		ginkgo.BeforeAll(func() {

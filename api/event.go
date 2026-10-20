@@ -32,6 +32,9 @@ const (
 
 	EventPlaybookRun = "playbook.run"
 
+	// EventPlaybookTrigger asks for a run of one playbook whose event trigger matched a status event.
+	EventPlaybookTrigger = "playbook.trigger"
+
 	EventPlaybookSpecApprovalUpdated = "playbook.spec.approval.updated"
 
 	EventPlaybookApprovalInserted = "playbook.approval.inserted"
