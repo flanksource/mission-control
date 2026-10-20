@@ -22,7 +22,6 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/notification"
-	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/flanksource/incident-commander/utils"
 )
 
@@ -107,72 +106,41 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 			continue
 		}
 
-		run := models.PlaybookRun{
-			PlaybookID: p.ID,
-			Status:     models.PlaybookRunStatusScheduled,
-			Spec:       p.Spec,
-		}
-
-		if playbook.Spec.Approval != nil && !playbook.Spec.Approval.Approvers.Empty() {
-			run.Status = models.PlaybookRunStatusPendingApproval
-		}
+		req := RunParams{ID: p.ID}
+		var matched bool
 
 		switch specEvent.Class {
 		case "canary":
-			run.CheckID = &eventResource.Check.ID
-			if ok, err := matchResource(ctx, eventResource.Check.Labels, celEnv, playbook.Spec.On.Canary); err != nil {
-				logToJobHistory(ctx, p.ID.String(), err.Error())
-				continue
-			} else if ok {
-				if err := startEventRun(ctx, &p, run); err != nil {
-					return err
-				}
-			}
+			req.CheckID = &eventResource.Check.ID
+			matched, err = matchResource(ctx, eventResource.Check.Labels, celEnv, playbook.Spec.On.Canary)
 		case "component":
-			run.ComponentID = &eventResource.Component.ID
-			if ok, err := matchResource(ctx, eventResource.Component.Labels, celEnv, playbook.Spec.On.Component); err != nil {
-				logToJobHistory(ctx, p.ID.String(), err.Error())
-				continue
-			} else if ok {
-				if err := startEventRun(ctx, &p, run); err != nil {
-					return err
-				}
-			}
+			req.ComponentID = &eventResource.Component.ID
+			matched, err = matchResource(ctx, eventResource.Component.Labels, celEnv, playbook.Spec.On.Component)
 		case "config":
-			run.ConfigID = &eventResource.Config.ID
-			if ok, err := matchResource(ctx, eventResource.Config.Tags, celEnv, playbook.Spec.On.Config); err != nil {
-				logToJobHistory(ctx, p.ID.String(), err.Error())
-				continue
-			} else if ok {
-				if err := startEventRun(ctx, &p, run); err != nil {
-					return err
-				}
-			}
+			req.ConfigID = &eventResource.Config.ID
+			matched, err = matchResource(ctx, eventResource.Config.Tags, celEnv, playbook.Spec.On.Config)
+		}
+
+		if err != nil {
+			logToJobHistory(ctx, p.ID.String(), err.Error())
+			continue
+		}
+		if !matched {
+			continue
+		}
+
+		// Avoid Run here because recording the run as a config change would emit
+		// another config.changed event and retrigger matching playbooks.
+		//
+		// Failures are per playbook (denied access, false filters, missing params, ...)
+		// and must not fail the event: that would retry runs already created for
+		// other playbooks in this loop and skip the ones after this.
+		if _, err := createPlaybookRun(RunAsPlaybook(ctx, &p), &p, req); err != nil {
+			logToJobHistory(ctx, p.ID.String(), err.Error())
 		}
 	}
 
 	return nil
-}
-
-// startEventRun creates the run of a playbook triggered by an event. No person started it, so it's created only if
-// the playbook passes, as itself, the checks a person starting it would. A refusal creates no run and is recorded in
-// the playbook's job history.
-func startEventRun(ctx context.Context, playbook *models.Playbook, run models.PlaybookRun) error {
-	playbookCtx := RunAsPlaybook(ctx, playbook)
-
-	templateEnv, err := runner.CreateTemplateEnv(playbookCtx, playbook, run, nil)
-	if err != nil {
-		logToJobHistory(ctx, playbook.ID.String(), err.Error())
-		return nil
-	}
-
-	if err := authorizeRunStart(playbookCtx, run, templateEnv); err != nil {
-		ctx.Warnf("playbook %s/%s was refused an event-triggered run: %v", playbook.Namespace, playbook.Name, err)
-		logToJobHistory(ctx, playbook.ID.String(), err.Error())
-		return nil
-	}
-
-	return ctx.DB().Create(&run).Error
 }
 
 // logToJobHistory logs any failures in saving a playbook run to the job history.

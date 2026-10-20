@@ -96,15 +96,9 @@ func CreateOrSaveFromFile(ctx context.Context, file string) (*models.Playbook, e
 	return db.SavePlaybook(ctx, &spec)
 }
 
-type playbookRunOptions struct {
-	CheckPermissions bool
-}
-
 // Run creates and saves a run from a run request after validating the run parameters.
 func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models.PlaybookRun, error) {
-	run, err := createPlaybookRun(ctx, playbook, req, playbookRunOptions{
-		CheckPermissions: true,
-	})
+	run, err := createPlaybookRun(ctx, playbook, req)
 	if err != nil {
 		return nil, err
 	}
@@ -116,7 +110,9 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 	return run, nil
 }
 
-func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunParams, opts playbookRunOptions) (*models.PlaybookRun, error) {
+// createPlaybookRun validates the request, authorizes the subject against the
+// run target and the playbook, and saves the run.
+func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunParams) (*models.PlaybookRun, error) {
 	var spec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
 		return nil, err
@@ -195,10 +191,8 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 		return nil, ctx.Oops().Wrap(err)
 	}
 
-	if opts.CheckPermissions {
-		if err := authorizeRunStart(ctx, run, templateEnv); err != nil {
-			return nil, err
-		}
+	if err := authorizeRunStart(ctx, run, templateEnv); err != nil {
+		return nil, err
 	}
 
 	// Auto approval must be checked against the caller, not the playbook.
