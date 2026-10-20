@@ -124,13 +124,3 @@ func getScope(ctx context.Context, cache *gocache.Cache, namespace, name string)
 
 	return result, nil
 }
-
-// LoadScope returns the id and targets of a valid Scope, with its agents resolved to ids.
-// It returns nil targets for a missing Scope, and a validation error for an invalid one.
-func LoadScope(ctx context.Context, cache *gocache.Cache, namespace, name string) (string, []v1.ScopeTarget, error) {
-	scope, err := getScope(ctx, cache, namespace, name)
-	if err != nil || scope == nil {
-		return "", nil, err
-	}
-	return scope.id, scope.targets, nil
-}

@@ -1,19 +1,9 @@
 package v1
 
 import (
-	"errors"
-	"fmt"
-	"strings"
-
-	dutyAPI "github.com/flanksource/duty/api"
-	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/policy"
-	"github.com/flanksource/duty/types"
 	"github.com/flanksource/kopper"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -65,107 +55,9 @@ func (t *Permission) GenerateStatusPatch(original runtime.Object) client.Patch {
 	return client.MergeFrom(clientObj)
 }
 
-func findUser(ctx context.Context, selector string) (string, models.PermissionSubjectType, error) {
-	query := ctx.DB().Select("id").Table("people").Where("deleted_at IS NULL")
-
-	if uuid.Validate(selector) == nil {
-		var id string
-		if err := query.Where("id = ?", selector).Find(&id).Error; err != nil {
-			return "", "", ctx.Oops().Wrap(err)
-		} else if id == "" {
-			return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", models.PermissionSubjectTypePerson, selector)
-		}
-		return id, models.PermissionSubjectTypePerson, nil
-	}
-
-	var id string
-	if err := query.Where("email = ?", selector).Find(&id).Error; err != nil {
-		return "", "", ctx.Oops().Wrap(err)
-	} else if id == "" {
-		return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", models.PermissionSubjectTypePerson, selector)
-	}
-
-	return id, models.PermissionSubjectTypePerson, nil
-}
-
-func findTeam(ctx context.Context, selector string) (string, models.PermissionSubjectType, error) {
-	query := ctx.DB().Select("id").Table("teams").Where("deleted_at IS NULL")
-
-	if uuid.Validate(selector) == nil {
-		var id string
-		if err := query.Where("id = ?", selector).Find(&id).Error; err != nil {
-			return "", "", ctx.Oops().Wrap(err)
-		} else if id == "" {
-			return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", models.PermissionSubjectTypeTeam, selector)
-		}
-		return id, models.PermissionSubjectTypeTeam, nil
-	}
-
-	var id string
-	if err := query.Where("name = ?", selector).Find(&id).Error; err != nil {
-		return "", "", ctx.Oops().Wrap(err)
-	} else if id == "" {
-		return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", models.PermissionSubjectTypeTeam, selector)
-	}
-
-	return id, models.PermissionSubjectTypeTeam, nil
-}
-
-func pluginSubject(selector string) (string, models.PermissionSubjectType, error) {
-	selector = strings.TrimSpace(selector)
-	if selector == "" {
-		return "", "", dutyAPI.Errorf(dutyAPI.EINVALID, "plugin subject is required")
-	}
-
-	splits := strings.Split(selector, "/")
-	if len(splits) != 2 || strings.TrimSpace(splits[1]) == "" {
-		return "", "", dutyAPI.Errorf(dutyAPI.EINVALID, "%s is not a valid plugin subject. Must be <namespace>/<name> or /<name>", selector)
-	}
-
-	// Since we do not persist plugins to the database, we don't have a handy namespacedName -> uuid lookup at this point.
-	// So we use the namespacedName as the casbin policy subject.
-	return PluginSubject(strings.TrimSpace(splits[0]), strings.TrimSpace(splits[1])), models.PermissionSubjectTypePlugin, nil
-}
-
 // PluginSubject is the casbin subject a plugin's checks are made as.
 func PluginSubject(namespace, name string) string {
 	return "plugin:" + namespace + "/" + name
-}
-
-func findNamespacedResource(ctx context.Context, table string, selector string, subjectType models.PermissionSubjectType) (string, models.PermissionSubjectType, error) {
-	query := ctx.DB().Select("id").Table(table).Where("deleted_at IS NULL")
-
-	if uuid.Validate(selector) == nil {
-		var id string
-		if err := query.Where("id = ?", selector).Find(&id).Error; err != nil {
-			return "", "", ctx.Oops().Wrap(err)
-		} else if id == "" {
-			return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", subjectType, selector)
-		}
-		return id, subjectType, nil
-	}
-
-	// Parse namespace/name format
-	splits := strings.Split(selector, "/")
-	if len(splits) != 2 {
-		return "", "", dutyAPI.Errorf(dutyAPI.EINVALID, "%s is not a valid subject. Must be <namespace>/<name>", selector)
-	}
-
-	namespace, name := strings.TrimSpace(splits[0]), strings.TrimSpace(splits[1])
-	if namespace == "" || name == "" {
-		return "", "", dutyAPI.Errorf(dutyAPI.EINVALID, "%s is not a valid subject. Must be <namespace>/<name>", selector)
-	}
-	var id string
-	err := query.
-		Where("namespace = ?", namespace).
-		Where("name = ?", name).
-		Find(&id).Error
-	if err != nil {
-		return "", "", ctx.Oops().Wrap(err)
-	} else if id == "" {
-		return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", subjectType, selector)
-	}
-	return id, subjectType, nil
 }
 
 type PermissionSubject struct {
@@ -197,55 +89,6 @@ type PermissionSubject struct {
 	Topology string `json:"topology,omitempty"`
 }
 
-func (t *PermissionSubject) Empty() bool {
-	return t.Person == "" && t.Team == "" && t.Notification == "" && t.Group == "" && t.Playbook == "" &&
-		t.Plugin == "" && t.Canary == "" && t.Scraper == "" && t.Topology == ""
-}
-
-func (t *PermissionSubject) Populate(ctx context.Context) (string, models.PermissionSubjectType, error) {
-	if t.Empty() {
-		return "", "", errors.New("permission subject not specified")
-	}
-
-	if t.Group != "" {
-		return string(t.Group), models.PermissionSubjectTypeGroup, nil
-	}
-
-	if t.Person != "" {
-		return findUser(ctx, string(t.Person))
-	}
-
-	if t.Team != "" {
-		return findTeam(ctx, string(t.Team))
-	}
-
-	if t.Notification != "" {
-		return findNamespacedResource(ctx, "notifications", string(t.Notification), models.PermissionSubjectTypeNotification)
-	}
-
-	if t.Playbook != "" {
-		return findNamespacedResource(ctx, "playbooks", string(t.Playbook), models.PermissionSubjectTypePlaybook)
-	}
-
-	if t.Plugin != "" {
-		return pluginSubject(string(t.Plugin))
-	}
-
-	if t.Canary != "" {
-		return findNamespacedResource(ctx, "canaries", string(t.Canary), models.PermissionSubjectTypeCanary)
-	}
-
-	if t.Scraper != "" {
-		return findNamespacedResource(ctx, "scrapers", string(t.Scraper), models.PermissionSubjectTypeScraper)
-	}
-
-	if t.Topology != "" {
-		return findNamespacedResource(ctx, "topologies", string(t.Topology), models.PermissionSubjectTypeTopology)
-	}
-
-	return "", "", errors.New("permission subject not specified")
-}
-
 // +kubebuilder:object:generate=false
 // +kubebuilder:validation:XValidation:rule="!(has(self.mcp) && self.mcp && (has(self.configs) || has(self.components) || has(self.playbooks) || has(self.connections) || has(self.views) || has(self.scopes)))",message="object.mcp cannot be combined with selectors or scopes"
 type PermissionObject struct {
@@ -257,70 +100,6 @@ type PermissionObject struct {
 
 	// Scopes that is expanded onto Selectors
 	Scopes []dutyRBAC.NamespacedNameIDSelector `json:"scopes,omitempty"`
-}
-
-// GlobalObject checks if the object selector semantically maps to a global object
-// and returns the corresponding global object if applicable.
-// For example:
-//
-//	configs:
-//		- name: '*'
-//
-// is interpreted as the object: catalog.
-func (t *PermissionObject) GlobalObject() (string, bool) {
-	if t.MCP && !t.HasSelectors() {
-		return policy.ObjectMCP, true
-	}
-
-	switch {
-	case t.isWildcardOnly(t.Playbooks, t.Configs, t.Components, t.Connections) && len(t.Views) == 0:
-		return policy.ObjectPlaybooks, true
-	case t.isWildcardOnly(t.Configs, t.Playbooks, t.Components, t.Connections) && len(t.Views) == 0:
-		return policy.ObjectCatalog, true
-	case t.isWildcardOnly(t.Components, t.Playbooks, t.Configs, t.Connections) && len(t.Views) == 0:
-		return policy.ObjectTopology, true
-	case t.isWildcardOnly(t.Connections, t.Playbooks, t.Configs, t.Components) && len(t.Views) == 0:
-		return policy.ObjectConnection, true
-	case t.isViewWildcardOnly():
-		return policy.ObjectViews, true
-	default:
-		return "", false
-	}
-}
-
-func (t *PermissionObject) HasSelectors() bool {
-	return len(t.Playbooks) > 0 || len(t.Configs) > 0 || len(t.Components) > 0 || len(t.Connections) > 0 || len(t.Views) > 0 || len(t.Scopes) > 0
-}
-
-func (t *PermissionObject) Validate() error {
-	if t.MCP && t.HasSelectors() {
-		return fmt.Errorf("permission object.mcp cannot be combined with selectors or scopes")
-	}
-
-	return nil
-}
-
-func (t *PermissionObject) isWildcardOnly(primary []types.ResourceSelector, others ...[]types.ResourceSelector) bool {
-	for _, other := range others {
-		if len(other) != 0 {
-			return false
-		}
-	}
-
-	return len(primary) == 1 && primary[0].Wildcard()
-}
-
-// isViewWildcardOnly checks if the permission object has only a wildcard view selector
-// and no other resource selectors
-func (t *PermissionObject) isViewWildcardOnly() bool {
-	// Check that all other selectors are empty
-	if len(t.Configs) != 0 || len(t.Components) != 0 ||
-		len(t.Playbooks) != 0 || len(t.Connections) != 0 {
-		return false
-	}
-
-	// Check that we have exactly one view with wildcard name
-	return len(t.Views) == 1 && t.Views[0].Name == "*"
 }
 
 // +kubebuilder:object:generate=true
