@@ -204,6 +204,11 @@ func (c ActionContract) TakesResource() bool {
 	return c.enforcement != enforcedWithoutResource
 }
 
+// CheckedOnObjects reports whether the action is only checked on whole object types, never on individual resources.
+func (c ActionContract) CheckedOnObjects() bool {
+	return c.enforcement == enforcedOnObjects
+}
+
 // validateInput checks that a Scope can fill an input ("resource" or "target") of the action:
 // every type it selects is accepted, and every selector can be enforced as written.
 func (c ActionContract) validateInput(input string, scope ScopeSelection) error {
