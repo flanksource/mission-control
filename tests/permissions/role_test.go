@@ -1110,7 +1110,8 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 				Expect(lo.Keys(actions)).To(ConsistOf(policy.ActionRead, policy.ActionCreate, policy.ActionUpdate, policy.ActionDelete))
 			}
 			Expect(lo.Keys(response.Payload.Actions)).To(ConsistOf(adapter.ActionPersonManage, adapter.ActionAccessReview, policy.ActionMCPUse,
-				policy.ActionPropertyManage, policy.ActionEventRead, policy.ActionJobRead))
+				policy.ActionPropertyManage, policy.ActionEventRead, policy.ActionJobRead,
+				adapter.ActionKubernetesProxyRead, adapter.ActionKubernetesProxyWrite))
 			return response.Payload.Access, response.Payload.Actions
 		}
 

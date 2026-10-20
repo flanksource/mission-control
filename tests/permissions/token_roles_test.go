@@ -379,6 +379,7 @@ var _ = ginkgo.Describe("Access tokens limited by Roles", ginkgo.Ordered, func()
 			Expect(response.Payload.Actions).To(Equal(map[string]bool{
 				adapter.ActionPersonManage: false, adapter.ActionAccessReview: false, policy.ActionMCPUse: false,
 				policy.ActionPropertyManage: false, policy.ActionEventRead: true, policy.ActionJobRead: tt.jobs,
+				adapter.ActionKubernetesProxyRead: false, adapter.ActionKubernetesProxyWrite: false,
 			}))
 		}
 	})
