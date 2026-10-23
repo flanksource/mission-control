@@ -36,3 +36,24 @@ var _ = ginkgo.Describe("initGenkit", func() {
 		})
 	}
 })
+
+var _ = ginkgo.Describe("generationConfig", func() {
+	tests := []struct {
+		model    string
+		expected map[string]any
+	}{
+		{"gpt-5.5", nil},
+		{"openai/gpt-5.1", nil},
+		{"gemini-2.5-flash", nil},
+		{"llama3.1:8b", nil},
+		{"claude-sonnet-4-6", map[string]any{"max_tokens": 2048}},
+		{"anthropic/claude-sonnet-5-5", map[string]any{"max_tokens": 2048}},
+		{"anthropic.claude-sonnet-4-6", map[string]any{"max_tokens": 2048}},
+	}
+
+	for _, tt := range tests {
+		ginkgo.It(tt.model, func() {
+			Expect(generationConfig(tt.model)).To(Equal(tt.expected))
+		})
+	}
+})

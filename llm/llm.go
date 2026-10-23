@@ -89,7 +89,7 @@ func PromptWithHistory(ctx dutyctx.Context, config Config, history []*genkitai.M
 		genkitai.WithModelName(modelName),
 		genkitai.WithMessages(messages...),
 	}
-	if genConfig := generationConfig(config.Backend, modelName); genConfig != nil {
+	if genConfig := generationConfig(modelName); genConfig != nil {
 		opts = append(opts, genkitai.WithConfig(genConfig))
 	}
 	if schema != nil {
@@ -245,33 +245,12 @@ func newBedrockAWSConfig(cfg Config) (aws.Config, error) {
 	return awsconfig.LoadDefaultConfig(context.Background(), opts...)
 }
 
-func generationConfig(backend api.LLMBackend, model string) map[string]any {
-	config := map[string]any{}
-
-	// Temperature 0 gives deterministic outputs, which is important because
-	// all response modes use structured JSON output (diagnosis, playbook
-	// recommendations, custom schema). Non‑deterministic sampling risks
-	// malformed or inconsistent JSON.
-	//
-	// GPT-5.5 only accepts the default temperature, so omit it entirely.
-	if backend != api.LLMBackendOpenAI || !isOpenAIDefaultTemperatureOnly(model) {
-		config["temperature"] = 0
-	}
-
+func generationConfig(model string) map[string]any {
 	// Anthropic's API requires max_tokens. 2048 is a conservative ceiling:
 	if isAnthropicModel(model) {
-		config["max_tokens"] = 2048
+		return map[string]any{"max_tokens": 2048}
 	}
-
-	if len(config) == 0 {
-		return nil
-	}
-	return config
-}
-
-func isOpenAIDefaultTemperatureOnly(model string) bool {
-	model = unqualifiedModelName(model)
-	return model == "gpt-5.5" || strings.HasPrefix(model, "gpt-5.5-")
+	return nil
 }
 
 func isAnthropicModel(model string) bool {
@@ -286,13 +265,13 @@ func defaultModel(backend api.LLMBackend, model string) string {
 
 	switch backend {
 	case api.LLMBackendOpenAI:
-		return "gpt-5.5"
+		return "gpt-6.1-sol"
 	case api.LLMBackendAnthropic:
-		return "claude-sonnet-4-6"
+		return "claude-sonnet-5-5"
 	case api.LLMBackendGemini:
-		return "gemini-2.5-flash"
+		return "gemini-3.8-flash"
 	case api.LLMBackendBedrock:
-		return "anthropic.claude-sonnet-4-6"
+		return "anthropic.claude-sonnet-5-5"
 	default:
 		return model
 	}
