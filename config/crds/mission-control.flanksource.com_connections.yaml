@@ -3329,10 +3329,6 @@ spec:
                     type: string
                   insecureSkipVerify:
                     type: boolean
-                  ntlm:
-                    type: boolean
-                  ntlmv2:
-                    type: boolean
                   password:
                     properties:
                       name:

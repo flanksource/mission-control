@@ -1037,10 +1037,6 @@ spec:
                             Method is the HTTP method (GET, POST, PUT, DELETE, PATCH, etc.)
                             Default: GET
                           type: string
-                        ntlm:
-                          type: boolean
-                        ntlmv2:
-                          type: boolean
                         oauth:
                           properties:
                             clientID:
@@ -1638,10 +1634,6 @@ spec:
                           items:
                             type: string
                           type: array
-                        ntlm:
-                          type: boolean
-                        ntlmv2:
-                          type: boolean
                         oauth:
                           properties:
                             clientID:

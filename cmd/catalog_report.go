@@ -77,7 +77,7 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logger.UseSlog()
 		if err := properties.LoadFile("mission-control.properties"); err != nil {
-			logger.Errorf(err.Error())
+			logger.Errorf("%s", err.Error())
 		}
 
 		ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)
@@ -126,7 +126,7 @@ Examples:
 		if result.DataFile != "" {
 			details += fmt.Sprintf(" data=%s", result.DataFile)
 		}
-		logger.Infof(details)
+		logger.Infof("%s", details)
 
 		if catalogReportOutFile != "" {
 			if err := os.WriteFile(catalogReportOutFile, result.Data, 0600); err != nil {

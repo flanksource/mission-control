@@ -328,10 +328,6 @@ spec:
                         description: Method is the HTTP method to use. Defaults to
                           POST.
                         type: string
-                      ntlm:
-                        type: boolean
-                      ntlmv2:
-                        type: boolean
                       oauth:
                         properties:
                           clientID:
@@ -1039,10 +1035,6 @@ spec:
                         description: Method is the HTTP method to use. Defaults to
                           POST.
                         type: string
-                      ntlm:
-                        type: boolean
-                      ntlmv2:
-                        type: boolean
                       oauth:
                         properties:
                           clientID:

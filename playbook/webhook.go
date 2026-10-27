@@ -264,7 +264,7 @@ func validateJWT(ctx gocontext.Context, jwksURL, jwtB64 string) error {
 		options := keyfunc.Options{
 			Ctx: ctx,
 			RefreshErrorHandler: func(err error) {
-				logger.Errorf("there was an error with the jwt.Keyfunc: %w", err)
+				logger.Errorf("there was an error with the jwt.Keyfunc: %v", err)
 			},
 			JWKUseWhitelist:   []keyfunc.JWKUse{},
 			RefreshInterval:   time.Hour,

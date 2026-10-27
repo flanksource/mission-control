@@ -472,7 +472,7 @@ func processNotificationConstraints(ctx context.Context,
 	}
 
 	if silencedBy := getFirstSilencer(ctx, celEnv, matchingSilences); silencedBy != nil {
-		ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", sourceEvent, matchingSilences)
+		ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", sourceEvent, len(matchingSilences))
 		ctx.Counter("notification_silenced", "id", n.ID.String(), "resource", payload.ResourceID.String()).Add(1)
 		return &validateResult{
 			BlockedWithStatus: models.NotificationStatusSilenced,

@@ -14,7 +14,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flanksource/commons/http/middlewares"
+	"github.com/flanksource/commons/http/middlewares/tracing"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/properties"
 	cutils "github.com/flanksource/commons/utils"
@@ -451,14 +451,14 @@ func proxyMiddleware(e *echov4.Echo, prefix, target string, opts *ForwardOptions
 		}
 
 		if properties.On(false, "log.kubeproxy") {
-			traceConfig := middlewares.TraceConfig{
+			traceConfig := tracing.TraceConfig{
 				MaxBodyLength:   1024,
 				Timing:          true,
 				ResponseHeaders: true,
 				Headers:         true,
 			}
 
-			proxyConfig.Transport = middlewares.NewLogger(traceConfig)(proxyConfig.Transport)
+			proxyConfig.Transport = tracing.NewLogger(traceConfig)(proxyConfig.Transport)
 		}
 	}
 
