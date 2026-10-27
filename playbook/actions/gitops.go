@@ -310,10 +310,10 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction, defau
 						Errorf("yq: %s", lo.CoalesceOrEmpty(res.Stderr, res.Stdout, fmt.Sprintf("exit code %d ", res.ExitCode)))
 				}
 				if res != nil && res.Stderr != "" {
-					t.log(res.Stderr)
+					t.log("%s", res.Stderr)
 				}
 				if res != nil && res.Stdout != "" {
-					t.log(res.Stdout)
+					t.log("%s", res.Stdout)
 				}
 
 				if _, err := t.workTree.Add(relativePath); err != nil {
@@ -332,10 +332,10 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction, defau
 				}
 
 				if res != nil && res.Stderr != "" {
-					t.log(res.Stderr)
+					t.log("%s", res.Stderr)
 				}
 				if res != nil && res.Stdout != "" {
-					t.log(res.Stdout)
+					t.log("%s", res.Stdout)
 				}
 
 				if _, err := t.workTree.Add(relativePath); err != nil {

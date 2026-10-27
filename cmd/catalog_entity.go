@@ -161,7 +161,7 @@ func getConfig(id string, flags map[string]string) (any, error) {
 func startDutyClient() (context.Context, error) {
 	logger.UseSlog()
 	if err := properties.LoadFile("mission-control.properties"); err != nil {
-		logger.Errorf(err.Error())
+		logger.Errorf("%s", err.Error())
 	}
 	ctx, _, err := duty.Start("mission-control", duty.ClientOnly)
 	if err != nil {

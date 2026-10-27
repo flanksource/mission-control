@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flanksource/clicky"
+	_ "github.com/flanksource/commons/logger/yamlcolor"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/clientcmd"
 	"github.com/flanksource/incident-commander/cmd"

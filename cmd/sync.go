@@ -21,7 +21,7 @@ var Sync = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx, _, err := duty.Start("mission-control")
 		if err != nil {
-			logger.Fatalf(err.Error())
+			logger.Fatalf("%s", err.Error())
 		}
 
 		cwd, _ := os.Getwd()

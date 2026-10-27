@@ -91,11 +91,11 @@ func parsePlaybookArgs(ctx context.Context, args []string) (*models.Playbook, *p
 func runLocalPlaybook(cmd *cobra.Command, args []string) error {
 	logger.UseSlog()
 	if err := properties.LoadFile("mission-control.properties"); err != nil {
-		logger.Errorf(err.Error())
+		logger.Errorf("%s", err.Error())
 	}
 	ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)
 	if err != nil {
-		logger.Fatalf(err.Error())
+		logger.Fatalf("%s", err.Error())
 		return nil
 	}
 
@@ -137,7 +137,7 @@ func runLocalPlaybook(cmd *cobra.Command, args []string) error {
 
 	action, step, err = runner.GetNextActionToRun(ctx, *run)
 	if err != nil {
-		logger.Fatalf(err.Error())
+		logger.Fatalf("%s", err.Error())
 		shutdown.ShutdownAndExit(1, err.Error())
 		return nil
 	}
@@ -234,7 +234,7 @@ var Submit = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logger.UseSlog()
 		if err := properties.LoadFile("mission-control.properties"); err != nil {
-			logger.Errorf(err.Error())
+			logger.Errorf("%s", err.Error())
 		}
 		ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)
 		if err != nil {

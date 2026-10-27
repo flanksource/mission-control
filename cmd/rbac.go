@@ -58,7 +58,7 @@ Examples:
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logger.UseSlog()
 		if err := properties.LoadFile("mission-control.properties"); err != nil {
-			logger.Errorf(err.Error())
+			logger.Errorf("%s", err.Error())
 		}
 
 		ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)

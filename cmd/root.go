@@ -67,7 +67,7 @@ var Root = &cobra.Command{
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		logger.UseSlog()
 		if err := properties.LoadFile("mission-control.properties"); err != nil {
-			logger.Errorf(err.Error())
+			logger.Errorf("%s", err.Error())
 		}
 		dutyApi.DefaultConfig.SkipMigrationFiles = []string{"012_changelog.sql"}
 		dutyApi.DefaultConfig = dutyApi.DefaultConfig.ReadEnv()

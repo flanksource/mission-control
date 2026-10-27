@@ -72,7 +72,7 @@ func (c *Pod) Run(ctx context.Context, action v1.PodAction, timeout time.Duratio
 		for _, path := range paths {
 			file, err := os.Open(path)
 			if err != nil {
-				logger.Errorf("error opening file. path=%s; %w", path, err)
+				logger.Errorf("error opening file. path=%s; %v", path, err)
 				continue
 			}
 

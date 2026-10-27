@@ -126,7 +126,7 @@ func projectionHTTPClient(query ProjectionHTTPQuery) (*chttp.Client, error) {
 		if err != nil {
 			return nil, err
 		}
-		client = client.Auth(username, password).Digest(query.Digest).NTLM(query.NTLM).NTLMV2(query.NTLMV2)
+		client = client.Auth(username, password).Digest(query.Digest)
 	}
 
 	for index, header := range query.Headers {
