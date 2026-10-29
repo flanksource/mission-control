@@ -37,14 +37,13 @@ current-context: {{.ContextName}}
 users:
 - name: default-user
   user:
-    username: "token"
-    password: "{{.Password}}"
+    token: "{{.Token}}"
 `
 
 type kubeConfigData struct {
 	Server      string
 	ClusterName string
-	Password    string
+	Token       string
 	ContextName string
 }
 
@@ -87,7 +86,7 @@ func DownloadKubeConfig(c echo.Context) error {
 		Server:      parsed.String(),
 		ClusterName: fmt.Sprintf("mission-control-%s", tenantSlug),
 		ContextName: "default",
-		Password:    token.PlainText(),
+		Token:       token.PlainText(),
 	}
 
 	tmpl, err := template.New("kubeconfig").Parse(kubeConfigTemplate)
