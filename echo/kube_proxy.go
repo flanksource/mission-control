@@ -3,12 +3,13 @@ package echo
 import (
 	"bytes"
 	"fmt"
-	"html/template"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
 	"strings"
+	"text/template"
+	"time"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
@@ -63,13 +64,18 @@ func DownloadKubeConfig(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "kubeconfigs can't be downloaded by users of external identity providers"))
 	}
 
+	// Tokens don't manage tokens (specs/authorization/access-tokens.md), so a kubeconfig can't mint another
+	if icrbac.MadeWithAccessToken(ctx) {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "kubeconfigs can't be downloaded with an access token"))
+	}
+
 	parsed, err := url.Parse(api.PublicURL)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "failed to parse public web url"))
 	}
 	parsed.Path = path.Join(parsed.Path, "kubeproxy")
 
-	token, _, err := db.CreateAccessTokenForPerson(ctx, ctx.User(), "kubeconfig", 0, false,
+	token, _, err := db.CreateAccessTokenForPerson(ctx, ctx.User(), fmt.Sprintf("kubeconfig-%s", time.Now().UTC().Format("20060102-150405.000")), 0, false,
 		db.AccessTokenRoles{{Namespace: adapter.ShippedNamespace, Name: shipped.RoleKubernetesProxy}})
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
