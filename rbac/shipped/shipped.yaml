@@ -649,6 +649,19 @@ spec:
         scopeRef: all-role-bindings
 ---
 apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: kubernetes-proxy
+  namespace: mission-control-builtin
+spec:
+  description: Kubernetes API requests through Mission Control's proxy. The Role of the access token in a downloaded kubeconfig
+  rules:
+    - name: read-kubernetes
+      action: kubernetes-proxy:read
+    - name: write-kubernetes
+      action: kubernetes-proxy:write
+---
+apiVersion: mission-control.flanksource.com/v1
 kind: Team
 metadata:
   name: admins

@@ -144,6 +144,7 @@ func New(ctx context.Context) *echov4.Echo {
 	e.Use(mcMiddleware.ServerTiming)
 	e.Use(warnRemovedScopeHeader)
 
+	e.GET("/kubeconfig", DownloadKubeConfig)
 	Forward(ctx, e, "/kubeproxy", "https://kubernetes.default.svc", &ForwardOptions{
 		Middlewares: []echov4.MiddlewareFunc{KubeProxyTokenMiddleware},
 	})
