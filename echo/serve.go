@@ -45,6 +45,7 @@ import (
 	"github.com/flanksource/incident-commander/logs"
 	mcMiddleware "github.com/flanksource/incident-commander/middleware"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/ui"
 	"github.com/flanksource/incident-commander/utils"
 )
@@ -144,6 +145,7 @@ func New(ctx context.Context) *echov4.Echo {
 	e.Use(mcMiddleware.ServerTiming)
 	e.Use(warnRemovedScopeHeader)
 
+	e.GET("/kubeconfig", DownloadKubeConfig)
 	Forward(ctx, e, "/kubeproxy", "https://kubernetes.default.svc", &ForwardOptions{
 		Middlewares: []echov4.MiddlewareFunc{KubeProxyTokenMiddleware},
 	})
@@ -190,7 +192,8 @@ func New(ctx context.Context) *echov4.Echo {
 	registerCanaryEndpoints(ctx, e)
 
 	Forward(ctx, e, "/config", api.ConfigDB, &ForwardOptions{
-		Middlewares: []echov4.MiddlewareFunc{rbac.Catalog("*")},
+		// config-db's API runs and manages scrapers, so it takes update on every scraper
+		Middlewares: []echov4.MiddlewareFunc{rbac.Authorization(adapter.ObjectScrapers, policy.ActionUpdate)},
 	})
 	Forward(ctx, e, "/apm", api.ApmHubPath, &ForwardOptions{ // Deprecated
 		Middlewares: []echov4.MiddlewareFunc{rbac.Authorization(policy.ObjectLogs, "*")},
