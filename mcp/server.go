@@ -13,8 +13,6 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/flanksource/incident-commander/api"
-
-	icrbac "github.com/flanksource/incident-commander/rbac"
 )
 
 type dutyContextType string
@@ -28,8 +26,9 @@ type MCPServer struct {
 	Server      *server.MCPServer
 }
 
-// AuthMiddleware allows MCP only when the subject has MCP channel access, limited by the Roles of the request's
-// access token.
+// AuthMiddleware allows MCP only when the subject has MCP channel access. An access token's Roles don't limit it:
+// mcp:use is granted to the owner by an admin, and each MCP tool still checks what it touches as the token
+// (specs/authorization/limiting-permissions.md, "Access tokens").
 func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 	return func(c echov4.Context) error {
 		setCORSHeaders(c.Response().Header())
@@ -41,7 +40,7 @@ func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 		}
 
-		if !allowed || !icrbac.TokenAllowsObject(ctx, subject, policy.ObjectMCP, policy.ActionMCPUse) {
+		if !allowed {
 			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "forbidden: user %s does not have mcp:use permission", subject))
 		}
 
