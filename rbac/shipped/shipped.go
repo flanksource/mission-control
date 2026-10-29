@@ -43,11 +43,12 @@ import (
 var manifests []byte
 
 const (
-	// RoleViewer, RoleAdmin, RoleAccessManage and RoleKubernetesProxy are the names of the shipped Roles written in shipped.yaml.
+	// RoleViewer, RoleAdmin, RoleAccessManage, RoleKubernetesProxy and RoleMCPUser are the names of the shipped Roles written in shipped.yaml.
 	RoleViewer          = "viewer"
 	RoleAdmin           = "admin"
 	RoleAccessManage    = "access-manage"
 	RoleKubernetesProxy = "kubernetes-proxy"
+	RoleMCPUser         = "mcp-user"
 
 	// RolePluginAdmin is the shipped Role that allows every operation of the installed plugins. It's built from
 	// them, apart from admin, so a plugin can only ever change or invalidate this Role.

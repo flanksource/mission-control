@@ -195,6 +195,7 @@ Mission Control ships these Roles in `mission-control-builtin`. They're ordinary
 | `admin`  | Every action on every type (`scopes.md`, Section 3.1) and every action without a resource (`roles.md`, Section 2.3), except plugin operations |
 | `access-manage` | `access:review`, `read` on `scope`, `role`, `roleBinding`, `person`, `team`, `playbook` and `connection`, and `create`, `update` and `delete` on `scope`, `role` and `roleBinding` |
 | `kubernetes-proxy` | `kubernetes-proxy:read` and `kubernetes-proxy:write`. It's the Role of the access token in a downloaded kubeconfig |
+| `mcp-user` | `mcp:use` |
 | `plugin-admin` | Every operation of the installed plugins (`invoke:<plugin>:<operation>`), on any config |
 
 #### Viewer access
@@ -204,6 +205,10 @@ Mission Control ships these Roles in `mission-control-builtin`. They're ordinary
 #### Access management
 
 `access-manage` is for subjects who review and manage access without being bound to `admin`, e.g. through the Settings → Permissions pages. It's as privileged as `admin`: it may bind anyone, itself included, to any Role. _Why ship it:_ it bundles what those pages need, so granting them doesn't take writing a Role. `admin` already allows everything in it.
+
+#### MCP access for tokens
+
+`mcp-user` is for access tokens made for AI agents. A token can connect to the MCP server only when both its owner and one of its Roles allow `mcp:use` (`limiting-permissions.md`, "Access tokens"), so a token for an agent is bound to `mcp-user` next to the Roles that say what it may reach, e.g. `viewer`. The UI's MCP setup selects it when it creates a token. Binding it grants nothing to a token whose owner lacks `mcp:use`. _Why ship it:_ `admin` is the only other shipped Role with `mcp:use`, and binding a token to `admin` for MCP would lift every other limit. _Why not exempt `mcp:use` from a token's limit:_ every check made with a token is limited the same way, with no exception to learn, and a token reaches MCP only when its owner chose that for it.
 
 #### Shared per-type Scopes
 
@@ -217,7 +222,7 @@ A RoleBinding in any other namespace can bind a shipped Role as `mission-control
 
 #### Shipped object updates
 
-Mission Control writes the shipped Roles and their Scopes when it starts, and writes `plugin-admin` again whenever a plugin is installed, upgraded or removed and its operations change. `viewer`, `admin`, `access-manage` and `kubernetes-proxy` are exactly as shipped, and only change with Mission Control itself. `plugin-admin` exists only while some plugin has an operation, since a Role needs a rule; a binding to it has no effect in between. The shipped objects aren't Kubernetes objects, and can't be changed or deleted through the API.
+Mission Control writes the shipped Roles and their Scopes when it starts, and writes `plugin-admin` again whenever a plugin is installed, upgraded or removed and its operations change. `viewer`, `admin`, `access-manage`, `kubernetes-proxy` and `mcp-user` are exactly as shipped, and only change with Mission Control itself. `plugin-admin` exists only while some plugin has an operation, since a Role needs a rule; a binding to it has no effect in between. The shipped objects aren't Kubernetes objects, and can't be changed or deleted through the API.
 
 #### Reserved namespace
 

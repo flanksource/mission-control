@@ -41,8 +41,11 @@ func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 		}
 
-		if !allowed || !icrbac.TokenAllowsObject(ctx, subject, policy.ObjectMCP, policy.ActionMCPUse) {
+		if !allowed {
 			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "forbidden: user %s does not have mcp:use permission", subject))
+		}
+		if !icrbac.TokenAllowsObject(ctx, subject, policy.ObjectMCP, policy.ActionMCPUse) {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "forbidden: the access token's roles don't grant mcp:use; create a token with the mission-control-builtin/mcp-user role"))
 		}
 
 		return next(c)

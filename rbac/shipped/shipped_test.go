@@ -39,7 +39,7 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 		}
 
 		roles = lo.KeyBy(shippedRoles, func(r v1.Role) string { return r.Name })
-		Expect(lo.Keys(roles)).To(ConsistOf(RoleViewer, RoleAdmin, RoleAccessManage, RoleKubernetesProxy, RolePluginAdmin))
+		Expect(lo.Keys(roles)).To(ConsistOf(RoleViewer, RoleAdmin, RoleAccessManage, RoleKubernetesProxy, RoleMCPUser, RolePluginAdmin))
 		for _, role := range shippedRoles {
 			Expect(role.Namespace).To(Equal(adapter.ShippedNamespace))
 			// Shipped Roles are the only ones that may take a built-in role's name, which ValidateRoleSpec alone refuses
@@ -162,7 +162,7 @@ var _ = ginkgo.Describe("Shipped roles", func() {
 	ginkgo.It("ships no plugin-admin, nor a binding to it, without a plugin operation", func() {
 		without, err := Build(map[string][]string{"bad": {"has space"}, "empty": nil})
 		Expect(err).ToNot(HaveOccurred())
-		Expect(lo.Map(without.Roles, func(r v1.Role, _ int) string { return r.Name })).To(ConsistOf(RoleViewer, RoleAdmin, RoleAccessManage, RoleKubernetesProxy))
+		Expect(lo.Map(without.Roles, func(r v1.Role, _ int) string { return r.Name })).To(ConsistOf(RoleViewer, RoleAdmin, RoleAccessManage, RoleKubernetesProxy, RoleMCPUser))
 		Expect(lo.Map(without.RoleBindings, func(b v1.RoleBinding, _ int) string { return b.Name })).To(ConsistOf(BindingAdmins))
 
 		with, err := Build(operations)

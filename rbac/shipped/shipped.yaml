@@ -662,6 +662,17 @@ spec:
       action: kubernetes-proxy:write
 ---
 apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: mcp-user
+  namespace: mission-control-builtin
+spec:
+  description: Connects to the MCP server. Bound to access tokens made for AI agents, it lets them reach MCP when their owner may; each tool still checks what it touches
+  rules:
+    - name: use-mcp
+      action: mcp:use
+---
+apiVersion: mission-control.flanksource.com/v1
 kind: Team
 metadata:
   name: admins
