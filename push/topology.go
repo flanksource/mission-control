@@ -15,6 +15,9 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// PushTopology saves a topology and its components pushed to POST /push/topology.
+//
+// Deprecated: the endpoint is no longer used, and isn't kept up with authorization changes.
 func PushTopology(c echo.Context) error {
 	if c.Request().Body == nil {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "request body is empty"))
