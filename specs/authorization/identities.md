@@ -4,7 +4,7 @@ Every check is made as a subject: the caller of the request, or, where there's n
 
 ## 1. The caller
 
-A request is checked as whoever made it: a person, a user of an external identity provider (`external-identity-providers.md`), or an agent (Section 5). A request made with an access token is checked as the token's owner (Section 4).
+A request is checked as whoever made it: a person, including a user of an external identity provider (`external-identity-providers.md`), or an agent (Section 5). A request made with an access token is checked as the token's owner (Section 4).
 
 ## 2. Work without a caller
 

@@ -4,6 +4,18 @@
 
 An ExternalIdentityProvider lets an external application send its own users to Mission Control. The application signs a JWT for the user with its own issuer, and Mission Control accepts it as a bearer token.
 
+A provider answers three questions, in this order:
+
+| Question                              | Answered by                 | Result                                    |
+| ------------------------------------- | --------------------------- | ----------------------------------------- |
+| Is this token real, and is it for us? | Top-level fields (Section 3) | The token is accepted or rejected         |
+| Who is this person?                   | `identity` (Section 5)      | A person record                           |
+| Which teams are they in?              | `identity.teams` (Section 6) | Team memberships, limited to an allowlist |
+
+What the person may do is never decided by the provider. It comes from RoleBindings that select the person or their teams (`rolebindings.md`, Sections 2.1, 2.2 and 2.4). RoleBindings never read claims.
+
+_Why:_ claims are interpreted in one place, the provider, so whoever writes a RoleBinding doesn't need to know the shape of any application's tokens. Access follows the person and their teams, which Mission Control stores, so "who is in this team" and "what could this person do" have answers when no request is in flight.
+
 ```yaml
 apiVersion: mission-control.flanksource.com/v1
 kind: ExternalIdentityProvider
@@ -13,13 +25,17 @@ metadata:
 spec:
   issuer: https://auth.oipa.example.com
   audience: https://mission-control.example.com
-  claims:
-    username: sub
-    name: name
-    email: email
+  identity:
+    username: claims.user.id
+    name: claims.user.profile.display_name
+    email: claims.user.profile.email
+    teams:
+      mapper: |
+        has(claims.org.roles) ? claims.org.roles.map(r, "acme-" + r) : []
+      allowed: [acme-operator, acme-viewer]
 ```
 
-A request carrying a token from `https://auth.oipa.example.com`, for the audience `https://mission-control.example.com`, is authenticated as the user in its `sub` claim:
+A request carrying a token from `https://auth.oipa.example.com`, for the audience `https://mission-control.example.com`, is authenticated as the person `oipa:u-4821`:
 
 ```http
 GET /api/catalog/summary
@@ -31,28 +47,35 @@ where the token's claims are:
 ```json
 {
   "iss": "https://auth.oipa.example.com",
-  "aud": "https://mission-control.example.com",
-  "sub": "u-4821",
-  "name": "Alice",
-  "email": "alice@tenant-a.example.com",
-  "groups": ["operators"],
-  "tenant": "a",
+  "aud": ["https://mission-control.example.com"],
+  "sub": "session-7f3a",
   "iat": 1790000000,
-  "exp": 1790000300
+  "exp": 1790000300,
+  "user": {
+    "id": "u-4821",
+    "profile": {
+      "display_name": "Alice Sharma",
+      "email": "alice@acme.example.com"
+    }
+  },
+  "org": {
+    "id": "acme",
+    "roles": ["operator", "admin"]
+  }
 }
 ```
 
-The provider only says which tokens are trusted. What the user may do comes from RoleBindings with `oidc` subjects (`rolebindings.md`, Section 2.4).
+The mapper returns `acme-operator` and `acme-admin`. Only `acme-operator` is allowed, so Alice joins `acme-operator` and nothing is done with `acme-admin`.
 
-| Field            | Type            | Required | Default                          | Meaning                                                                          |
-| ---------------- | --------------- | -------- | -------------------------------- | -------------------------------------------------------------------------------- |
-| `issuer`         | string          | Yes      |                                  | Must exactly match the token's `iss` claim.                                      |
-| `audience`       | string          | Yes      |                                  | Must be one of the token's `aud` claims. Usually the Mission Control URL.        |
-| `jwksURL`        | string          | No       | `jwks_uri` of the issuer's OpenID configuration | Where the issuer's signing keys are fetched from (Section 4).      |
-| `algorithms`     | list of strings | No       | `RS256`, `ES256`                 | Signature algorithms accepted (Section 3.1).                                     |
-| `maxTokenAge`    | duration        | No       | `5m`                             | Longest lifetime (`exp - iat`) a token may have.                                 |
-| `claims`         | object          | No       |                                  | Which claims describe the user (Section 5).                                      |
-| `disabled`       | bool            | No       | `false`                          | Rejects every token from this provider, without removing it.                     |
+| Field            | Type            | Required | Default                                         | Meaning                                                                   |
+| ---------------- | --------------- | -------- | ----------------------------------------------- | ------------------------------------------------------------------------- |
+| `issuer`         | string          | Yes      |                                                 | Must exactly match the token's `iss` claim.                               |
+| `audience`       | string          | Yes      |                                                 | Must be one of the token's `aud` claims. Usually the Mission Control URL. |
+| `jwksURL`        | string          | No       | `jwks_uri` of the issuer's OpenID configuration | Where the issuer's signing keys are fetched from (Section 4).             |
+| `algorithms`     | list of strings | No       | `RS256`, `ES256`                                | Signature algorithms accepted (Section 3.1).                              |
+| `maxTokenAge`    | duration        | No       | `5m`                                            | Longest lifetime (`exp - iat`) a token may have.                          |
+| `identity`       | object          | Yes      |                                                 | Who the person is and which teams they're in (Sections 5 and 6).          |
+| `disabled`       | bool            | No       | `false`                                         | Rejects every token from this provider, without removing it.              |
 
 ## 2. Authentication
 
@@ -69,21 +92,23 @@ A verified token authenticates only the request it's sent with. There's no sessi
 
 A token is accepted only when all of these hold:
 
-| Check      | Rule                                                                                      |
-| ---------- | ----------------------------------------------------------------------------------------- |
-| Provider   | The provider isn't `disabled`.                                                            |
-| Signature  | Signed with one of `algorithms`, by a key from the provider's signing keys (Section 4).   |
-| `iss`      | Exactly `issuer`.                                                                         |
-| `aud`      | Contains `audience`. `aud` may be a string or a list.                                     |
-| `exp`      | Present, and not in the past.                                                             |
-| `iat`      | Present, and not in the future.                                                           |
-| `nbf`      | If present, not in the future.                                                            |
-| Lifetime   | `exp - iat` is at most `maxTokenAge`.                                                     |
-| Username   | The `claims.username` claim is present and a non-empty string (Section 5).               |
+| Check     | Rule                                                                                    |
+| --------- | --------------------------------------------------------------------------------------- |
+| Provider  | The provider isn't `disabled`.                                                          |
+| Signature | Signed with one of `algorithms`, by a key from the provider's signing keys (Section 4). |
+| `iss`     | Exactly `issuer`.                                                                       |
+| `aud`     | Contains `audience`. `aud` may be a string or a list.                                   |
+| `exp`     | Present, and not in the past.                                                           |
+| `iat`     | Present, and not in the future.                                                         |
+| `nbf`     | If present, not in the future.                                                          |
+| Lifetime  | `exp - iat` is at most `maxTokenAge`.                                                   |
+| Username  | `identity.username` returns a non-empty string (Section 5).                             |
 
 Time checks tolerate 30 seconds of clock skew.
 
 `maxTokenAge` keeps tokens short-lived. Mission Control can't revoke a token, so a stolen token is only useful until it expires. An application that needs longer sessions issues new tokens, not longer ones.
+
+Every token that passes these checks is trusted. There is no further condition on its claims, so the issuer MUST be dedicated to the application (Section 10).
 
 ### 3.1 Algorithms
 
@@ -109,43 +134,68 @@ If the keys can't be fetched, the request fails with `500 Internal Server Error`
 
 Updating a provider keeps its cached keys unless `issuer` or `jwksURL` change.
 
-## 5. Users
+## 5. Identity
 
-Each user of a provider is represented by a person record, created on their first request, for display and audit. It's never matched by `people` subjects (`rolebindings.md`, Section 2).
+Each user of a provider is a person, created on their first request. `identity` says how the person is made from the token:
 
-| Claim mapping      | Default | Used for                                                                                                  |
-| ------------------ | ------- | --------------------------------------------------------------------------------------------------------- |
-| `claims.username`  | `sub`   | Identifies the user. The person is keyed by `<provider name>:<username>`, e.g. `oipa:u-4821`.            |
-| `claims.name`      |         | The person's display name. Falls back to the username.                                                    |
-| `claims.email`     |         | Shown on the person. Never used to identify or match anyone.                                              |
+| Field      | Required | Returns | Used for                                                                                             |
+| ---------- | -------- | ------- | ---------------------------------------------------------------------------------------------------- |
+| `username` | Yes      | string  | Identifies the person. Their key is `<provider name>:<username>`, e.g. `oipa:u-4821`.                |
+| `name`     | No       | string  | The person's display name. Falls back to the username.                                               |
+| `email`    | No       | string  | Shown on the person. Never used to identify or match anyone.                                         |
+| `teams`    | No       | object  | The person's teams (Section 6). Without it, the provider adds the person to no team.                 |
 
-- The username value MUST be unique and stable in the external application. The person is identified by the provider name and that value, regardless of which claim supplies it.
-- Name and email are updated from the token whenever they change.
+`username`, `name` and `email` are CEL expressions. `claims` holds every claim of the verified token, nested values included, so an expression can read a nested claim or combine several:
+
+```yaml
+identity:
+  username: claims.user.id
+  name: |
+    [claims.user.first_name,
+     has(claims.user.middle_name) ? claims.user.middle_name : "",
+     claims.user.last_name].filter(s, s != "").join(" ")
+  email: has(claims.user.work_email) ? claims.user.work_email : claims.user.email
+```
+
+_Why CEL:_ a path can only read one claim, and applications split names, nest profiles and fall back between fields. CEL is already how the team mapper reads claims, so the provider has one language.
+
+- **Each expression fails on its own.** `username` failing, or not returning a non-empty string, rejects the token with `401`. `name` or `email` failing, or not returning a string, leaves that field unset. _Why:_ only the username is needed to know who the request is from. A missing optional claim, e.g. one user without a middle name, must not lock that user out.
+- **Compiled when the provider is applied.** An expression that doesn't compile makes the provider invalid (Section 9).
+- **The username MUST be unique and stable** in the external application. It's the person's key, and RoleBindings name it (`rolebindings.md`, Section 2.4). A username that changes for the same user makes a new person, without the old one's teams or bindings. An expression MAY build the username, e.g. from several claims, but whoever writes it is responsible for its stability.
+- **Name and email are updated** from the token whenever they change.
+- **These people are separate from Mission Control's own users.** An external user whose email is `alice@example.com` is not the Mission Control user `alice@example.com`, and gets none of her access. The email is shown only: Mission Control doesn't verify it, so trusting it would let the external application impersonate anyone.
 - **TODO:** the key reuses the provider name. A provider deleted and recreated under the same name with a different issuer lands its users on the old person records (`oipa:u-4821` from either issuer). Decide whether the key should include something that changes with the issuer, before person records exist in the wild.
-- These people are separate from Mission Control's own users. An external user whose `email` claim is `alice@example.com` is not the Mission Control user `alice@example.com`, and gets none of her access: Mission Control doesn't verify the claim, so trusting it would let the external application impersonate anyone.
 
-## 6. Access
+## 6. Teams
 
-An external user gets exactly what the RoleBindings matching their token grant, and nothing else:
+```yaml
+identity:
+  teams:
+    mapper: |
+      has(claims.org.roles) ? claims.org.roles.map(r, "acme-" + r) : []
+    allowed: [acme-operator, acme-viewer]
+```
 
-- A RoleBinding reaches them only through an `oidc` subject naming this provider. `people` and `teams` subjects never match them, not even `people: ["*"]`. To select every user of the provider, use `match: "true"`.
-- Every claim of the token is available to `match`, not only the ones in `claims`:
+| Field     | Required                 | Meaning                                                                             |
+| --------- | ------------------------ | ----------------------------------------------------------------------------------- |
+| `mapper`  | Yes                      | A CEL expression over `claims` that returns a list of team names.                   |
+| `allowed` | Yes, at least one team   | The only teams this provider may add anyone to.                                     |
 
-  ```yaml
-  kind: RoleBinding
-  metadata:
-    name: tenant-a-operators
-  spec:
-    role: production-operator
-    subjects:
-      oidc:
-        - provider: oipa
-          match: "'operators' in claims.groups && claims.tenant == 'a'"
-  ```
+The person's teams from this provider become exactly the teams the mapper returns that are also in `allowed`:
 
-  With the token in Section 1, Alice gets `production-operator`.
+- **Allowed teams only.** A returned team that isn't in `allowed` is skipped and logged. Nothing is written for it. _Why:_ the application controls its claims. Without a fixed list, a claim it sets, by mistake or on purpose, could put its users in any team, `admins` included. The list is part of the provider, which only Mission Control admins may write (`overview.md`, "Who may manage these resources"), so it can't be computed from claims.
+- **Existing teams only.** A returned team that doesn't exist is skipped and logged. The provider never creates teams. An `allowed` entry naming a team that doesn't exist is reported in the provider's status, and the provider stays valid. _Why:_ a team is created and bound by an admin. Creating one from a claim would make an empty team that grants nothing, or one whose name an admin later binds without knowing who's in it.
+- **Kept in sync, both ways.** The person is added to returned teams they aren't in yet, and removed from teams this provider added them to that it no longer returns. _Why:_ leaving a group in the application has to remove what it gave, or access only ever grows.
+- **Only its own memberships.** The provider never removes a membership it didn't add: one an admin added, one from an invite, or one from another provider. A person an admin already added to a returned team stays a direct member.
+- **When it runs.** On a request whose claims, ignoring `exp`, `iat`, `nbf` and `jti`, differ from the ones the mapper last ran on for that person, and on the person's first request after `identity.teams` changes. The request that triggers it is checked with the new memberships.
+- **A failing mapper changes nothing.** If the expression fails, or doesn't return a list of strings, the person's memberships stay as they are, the error is logged, and the request is still authenticated. _Why:_ a broken mapper shouldn't lock every user out, and shouldn't remove access it can't decide on either.
+- **Removing a team from `allowed`** removes every membership this provider added to it, without waiting for requests.
+- **Without `teams`**, the provider adds no one to any team. Its users get only what RoleBindings grant them by name (`rolebindings.md`, Section 2.4), or teams an admin adds them to.
 
-- Bindings are matched on every request, so the user's access follows their latest token. If the next token has `"tenant": "b"`, Alice loses `tenant-a-operators` on that request.
+Memberships are stored, like every other team membership. The person's access is what their teams and bindings grant at the moment a request is checked, not what their latest token says.
+
+- **Access while idle.** A membership the application revokes is removed on the person's next request. Until then it stays, unused. _Why:_ a request is the first moment the membership could be used. Mission Control isn't told about changes in the application between requests.
+- **Concurrent tokens.** Two tokens for the same person with different claims, sent at the same time, each sync the person's teams. The memberships end up as the last sync left them. _Why:_ a person is one user with one set of teams. Acting in different contexts per token isn't supported (Section 10).
 
 ## 7. Uniqueness
 
@@ -161,8 +211,9 @@ A provider that's wrong on its own, like the examples in Section 9, is rejected 
 ## 8. How changes take effect
 
 - A provider takes effect as soon as it's valid. An invalid provider is `Ready=False` with the reason and its tokens are rejected with `401`, as if it were `disabled`. There is no previous version to fall back to; the provider is whatever was last written.
-- `disabled: true` rejects its tokens with `401`, keeping everything else.
-- Deleting a provider means its tokens no longer find a provider (Section 2), so they're left to the other authenticators, which reject them. Its people remain, with no access.
+- `disabled: true` rejects its tokens with `401`, keeping everything else, including its people's memberships.
+- Changing `identity.teams` applies to each person on their next request (Section 6). Removing a team from `allowed` applies at once.
+- Deleting a provider means its tokens no longer find a provider (Section 2), so they're left to the other authenticators, which reject them. Its people remain, for audit. The memberships it added are removed. Memberships an admin added stay.
 
 ## 9. Validity
 
@@ -171,6 +222,8 @@ A provider that's wrong on its own, like the examples in Section 9, is rejected 
 spec:
   issuer: http://auth.oipa.example.com
   audience: https://mission-control.example.com
+  identity:
+    username: claims.sub
 ```
 
 ```yaml
@@ -179,6 +232,8 @@ spec:
   issuer: https://auth.oipa.example.com
   audience: https://mission-control.example.com
   algorithms: [HS256]
+  identity:
+    username: claims.sub
 ```
 
 ```yaml
@@ -187,12 +242,45 @@ spec:
   issuer: https://auth.oipa.example.com
   audience: https://mission-control.example.com
   maxTokenAge: 0s
+  identity:
+    username: claims.sub
 ```
 
 ```yaml
 # Missing audience
 spec:
   issuer: https://auth.oipa.example.com
+  identity:
+    username: claims.sub
+```
+
+```yaml
+# Missing identity.username
+spec:
+  issuer: https://auth.oipa.example.com
+  audience: https://mission-control.example.com
+  identity:
+    name: claims.name
+```
+
+```yaml
+# An identity expression that doesn't compile
+spec:
+  issuer: https://auth.oipa.example.com
+  audience: https://mission-control.example.com
+  identity:
+    username: claims.user.
+```
+
+```yaml
+# A team mapper without an allowlist
+spec:
+  issuer: https://auth.oipa.example.com
+  audience: https://mission-control.example.com
+  identity:
+    username: claims.sub
+    teams:
+      mapper: claims.groups
 ```
 
 ## 10. Limitations
@@ -200,3 +288,5 @@ spec:
 - Providers are held in memory by the Mission Control process that reconciled them, which assumes a single replica.
 - Only JWT bearer tokens are supported: no opaque tokens, token introspection or userinfo lookups.
 - Tokens can't be revoked before they expire. `disabled` or deleting the provider is the only way to cut off all of its users at once.
+- Every token the issuer signs is trusted. Shared issuers, which sign tokens for many unrelated applications or organisations, e.g. Google, GitHub Actions or multi-tenant Microsoft Entra, aren't supported: there's no condition on claims to tell their users apart.
+- Access belongs to the person, not the token. An application can't give the same user different access per request, e.g. by switching a tenant claim between tokens. Each switch would rewrite the person's teams (Section 6).

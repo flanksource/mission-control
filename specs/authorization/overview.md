@@ -8,7 +8,7 @@ Mission Control decides who may do what with three resources:
 | Role        | What may be done to them: rules like "read the staging configs" or "run the monitoring playbooks on the staging configs". | `roles.md`        |
 | RoleBinding | Who gets a Role, or is refused it, optionally limited further, e.g. "tenant A's operators, only on tenant A's configs". | `rolebindings.md` |
 
-An ExternalIdentityProvider lets an external application's users sign in with its own tokens, so RoleBindings can grant them Roles (`external-identity-providers.md`).
+An ExternalIdentityProvider lets an external application's users sign in with its own tokens, as people in teams it maps them into, so RoleBindings can grant them Roles (`external-identity-providers.md`).
 
 `identities.md` says who each check is made as: the caller, the resource doing work no one started, a plugin, an access token's owner or an agent.
 
@@ -281,7 +281,7 @@ How the team gets its first members depends on how people sign in:
 | Kratos, basic  | `admin@local`, the local admin account Mission Control creates. It's added on every start, as a direct member, so a team mapper never removes it (`rolebindings.md`, Section 2.2). Its password comes from Mission Control's configuration. |
 | Clerk          | Organisation admins, through Clerk's default team mapper (`rolebindings.md`, Section 2.2). There's no `admin@local`.      |
 
-Anyone else becomes an admin by joining the team, or through a RoleBinding of their own, e.g. one binding `admin` to the `oidc` subjects of an external identity provider.
+Anyone else becomes an admin by joining the team, or through a RoleBinding of their own, e.g. one binding `admin` to a user of an external identity provider by `<provider>:<username>`. An external identity provider can't map its users into `admins` unless the provider allows that team (`external-identity-providers.md`, Section 6).
 
 _Why a team:_ the binding never changes, so it can be shipped and protected, and who's an admin is managed as team membership, where people already manage it. Configuration lists no emails, so an install is the same everywhere and nothing in it has to be kept up to date.
 
@@ -302,7 +302,7 @@ Scopes, Roles, RoleBindings and ExternalIdentityProviders are managed in one of 
 
 An invalid object is either rejected or stored `Ready=False`. Which one depends on why it's invalid:
 
-- **Rejected**: the object is wrong on its own, so no change elsewhere can make it valid. For example, a Scope target with two types or `namespace: "*"`; a Role with two rules of the same name, `action: playbook:*`, `deny: true`, or a `target` on an action that takes none; a RoleBinding with no subjects, a `people` entry that isn't an email or `*`, or an `oidc.match` that doesn't compile; an ExternalIdentityProvider with an `http` issuer or `HS256`.
+- **Rejected**: the object is wrong on its own, so no change elsewhere can make it valid. For example, a Scope target with two types or `namespace: "*"`; a Role with two rules of the same name, `action: playbook:*`, `deny: true`, or a `target` on an action that takes none; a RoleBinding with no subjects, or a `people` entry that isn't an email, `*`, `<provider>:<username>` or `<provider>:*`; an ExternalIdentityProvider with an `http` issuer, `HS256`, or a team mapper without `allowed`.
 - **Stored `Ready=False`**: the object is valid on its own, but not together with something it references, or with Mission Control's settings. For example, a Scope whose `agent` isn't registered; a Role whose Scope doesn't exist, is invalid, or selects types its rule can't use; a RoleBinding whose Role doesn't exist or is invalid, or whose constraint leaves none of the Role's rules applying; a deny RoleBinding whose Role's rules only select RoleBindings; an ExternalIdentityProvider whose `issuer` or `name` another provider already uses.
 
 ### Recovery after dependency changes
@@ -318,7 +318,7 @@ An object stored `Ready=False` takes effect, without being re-applied, as soon a
 How an object is rejected depends on how it's managed:
 
 - **Through Mission Control's API**, a create or update of an object that's wrong on its own fails with `400 Bad Request`, and nothing is stored. Unknown fields are rejected too, rather than ignored. An object that's only invalid because of what it references is stored, and the response carries why it isn't in effect.
-- **Through Kubernetes**, an object is rejected when it's applied if the CRD's schema can express the check, e.g. one type per Scope target. Mission Control doesn't run an admission webhook, so checks the schema can't express, e.g. compiling an `oidc.match`, are made when the object is reconciled: such an object is stored `Ready=False` with reason `Invalid`, and has no effect. It stays that way until it's fixed.
+- **Through Kubernetes**, an object is rejected when it's applied if the CRD's schema can express the check, e.g. one type per Scope target. Mission Control doesn't run an admission webhook, so checks the schema can't express, e.g. compiling an ExternalIdentityProvider's `identity` expressions, are made when the object is reconciled: such an object is stored `Ready=False` with reason `Invalid`, and has no effect. It stays that way until it's fixed.
 
 #### Unknown fields
 

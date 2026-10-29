@@ -39,12 +39,11 @@ _Why:_ a binding can grant a shared Role and narrow it with its own Scopes, with
 
 | Field                                                              | Type            | Selects                                                              |
 | ------------------------------------------------------------------ | --------------- | -------------------------------------------------------------------- |
-| `people`                                                           | list of strings | Humans who sign in to Mission Control, by email or `*`              |
+| `people`                                                           | list of strings | People, by email, by `<provider>:<username>`, or `*`                 |
 | `teams`                                                            | list of strings | Every member of the teams, by team name                              |
-| `oidc`                                                             | list of objects | Users of an external identity provider, by the claims in their token |
 | `playbooks`, `notifications`, `topologies`, `scrapers`, `canaries`, `plugins` | list of objects | Those resources, when they act on their own               |
 
-A person is a Mission Control user: someone who signs in through Mission Control's own authentication. Users of an external identity provider aren't people for the purpose of `people`; they're selected by `oidc` only (Section 2.4). Agents aren't people either, and no subject selects them (Section 2.3). An access token isn't an identity: a request made with one is checked as its owner (`identities.md`, Section 4). A token is selected only by the bindings created with it (Section 2.6). `people` selects humans only, whether by email or by `*`, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
+A person is a human who signs in: through Mission Control's own authentication (Kratos, Clerk, basic), or as a user of an external identity provider (Section 2.4). Both are selected by `people` and `teams`, by different kinds of entry (Section 2.1). Agents aren't people, and no subject selects them (Section 2.3). An access token isn't an identity: a request made with one is checked as its owner (`identities.md`, Section 4). A token is selected only by the bindings created with it (Section 2.6). `people` selects humans only, whether by email or by `*`, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
 
 ### 2.1 People
 
@@ -55,13 +54,28 @@ subjects:
     - bob@example.com
 ```
 
-Each entry MUST be a person's email address, never their name, or `*` alone to select every person, e.g. to bind `viewer` to everyone in the organisation:
+Each entry is one of:
+
+| Entry                    | Example             | Selects                                                                                           |
+| ------------------------ | ------------------- | ------------------------------------------------------------------------------------------------- |
+| An email address         | `alice@example.com` | The person of Mission Control's own authentication with that verified email                       |
+| `*`                      | `*`                 | Every person of Mission Control's own authentication. Never a user of an external identity provider |
+| `<provider>:<username>`  | `oipa:u-4821`       | The user of that external identity provider with that username (Section 2.4)                      |
+| `<provider>:*`           | `oipa:*`            | Every user of that external identity provider                                                     |
+
+An entry is never a person's name.
 
 - `*` MUST be the only entry. `["*", "alice@example.com"]` is rejected: the email adds nothing, and the list reads as if it narrowed `*`.
-- Any other entry containing `*` is rejected, e.g. `*@example.com`, `alice*@example.com` or `alice@*.example.com`. Patterns aren't supported, and an email parser would otherwise accept them as addresses that match no one.
-- `*` selects every person who exists when the policy is loaded. A person who signs up gets it at the next reload, like a person a binding names by email.
+- An entry containing `:` is a provider entry. It's split on its first `:`. The part before it MUST be a valid provider name, and the part after it a non-empty username or `*` alone. A provider name can't contain `:`, so the split is unambiguous, and the username may contain anything, `@` and `:` included.
+- Any other entry containing `*` is rejected, e.g. `*@example.com`, `alice*@example.com`, `alice@*.example.com` or `oipa:u-*`. Patterns aren't supported, and an email parser would otherwise accept them as addresses that match no one.
+- `*` and `<provider>:*` select every matching person who exists when the policy is loaded. A person who signs up, or a provider user's first request, gets it at the next reload, like a person a binding names directly.
+- A provider entry may name a provider or user that doesn't exist yet. It selects no one until they do.
 
-An email entry selects a person only by an email address they've verified. `*` names no address, so it doesn't depend on verification. _Why:_ a person can change their own email, e.g. through Kratos's settings flow. Matching an unverified address would let anyone take the bindings of an address they don't own, e.g. one bound for someone who hasn't signed up yet or has left.
+_Why `*` never reaches a provider's users:_ `people: ["*"]` is how everyone in the organisation gets a Role. An external application's users aren't the organisation, and the application decides who they are. `<provider>:*` grants all of one application's users explicitly.
+
+_Why provider users are in `people`, not a field of their own:_ they're people, stored like any other, and a binding selects a stored person by a stable key. The email is that key for Mission Control's own users, and `<provider>:<username>` is that key for a provider's users.
+
+An email entry selects a person only by an email address they've verified. A provider user's email is never verified, so an email entry never selects them. `*` names no address, so it doesn't depend on verification. _Why:_ a person can change their own email, e.g. through Kratos's settings flow. Matching an unverified address would let anyone take the bindings of an address they don't own, e.g. one bound for someone who hasn't signed up yet or has left.
 
 ### 2.2 Teams
 
@@ -76,22 +90,23 @@ Each entry is a team name. Members get the Role through their team, so joining o
 
 #### Team membership from login
 
-A person's teams can follow their login provider, through a **team mapper**: one CEL expression per install, given inline or as a file path prefixed with `file://`, set by the operator, that returns the teams a person belongs to. Only Mission Control's own logins have one:
+A person's teams can follow their login provider, through a **team mapper**: one CEL expression per install, given inline or as a file path prefixed with `file://`, set by the operator, that returns the teams a person belongs to. Mission Control's own logins set it with a flag; an external identity provider sets it in its own resource (`external-identity-providers.md`, Section 6):
 
 | Login  | Setting                  | Input                                                           |
 | ------ | ------------------------ | --------------------------------------------------------------- |
 | Kratos | `--identity-role-mapper` | `identity`, the person's Kratos identity: traits and metadata    |
 | Clerk  | `--clerk-team-mapper`    | `claims`, the claims of the verified Clerk session token        |
+| External identity provider | `spec.identity.teams.mapper` | `claims`, the claims of the verified token          |
 
-The expression returns `{"teams": [...]}`, a list of team names:
+The expression returns a list of team names:
 
 ```
-{
-  "teams": claims.org_role == "org:admin" ? ["clerk-admins"] : ["clerk-members"]
-}
+claims.org_role == "org:admin" ? ["clerk-admins"] : ["clerk-members"]
 ```
 
-- **Teams only.** A mapper never grants a Role. Admins bind Roles to the teams it returns, like to any team. A result with any other field, e.g. the `role` older Kratos scripts returned, is logged as an error and changes nothing.
+Kratos and Clerk mappers MAY also return `{"teams": [...]}`, the shape they returned before, so existing configuration keeps working. An external identity provider's mapper MUST return a list.
+
+- **Teams only.** A mapper never grants a Role. Admins bind Roles to the teams it returns, like to any team. An object result with any field other than `teams`, e.g. the `role` older Kratos scripts returned, is logged as an error and changes nothing.
 - **When it runs.** On a person's first request after they sign in, and again whenever their claims change, e.g. a refreshed Clerk token with a different organisation role.
 - **Kept in sync.** The person's mapped teams become exactly what the mapper returns: they're added to new teams and removed from mapped teams it no longer returns. Teams an admin added them to directly are never touched. A team that doesn't exist is skipped and logged.
 - **Without a mapper**, signing in to Kratos adds the person to no team. Clerk has a default, used when `--clerk-team-mapper` isn't set, which puts organisation admins in `admins`, guests in no team, and everyone else in `viewers`:
@@ -113,7 +128,7 @@ A mapper that reads attributes a person can change themselves, e.g. Kratos trait
 
 _Why teams:_ access stays in Mission Control, readable from its teams and RoleBindings, while the login provider only says who belongs where. _Why sync both ways:_ leaving a group in the login provider has to remove what it gave, or access only ever grows. A change reaches Mission Control on the person's next request, which is the first moment it could be used.
 
-Users of an external identity provider aren't mapped into teams. Their access comes from `oidc` subjects, matched on every request (Section 2.4).
+An external identity provider maps its users into teams the same way, from its own resource rather than a flag, and only into the teams it allows (`external-identity-providers.md`, Section 6).
 
 ### 2.3 Agents
 
@@ -121,26 +136,24 @@ Agents aren't subjects of a RoleBinding: no field selects them, and they can't b
 
 ### 2.4 External identity provider users
 
+A user of an external identity provider is a person (`external-identity-providers.md`, Section 5), selected like any other person: through their teams, or by name in `people`.
+
 ```yaml
 subjects:
-  oidc:
-    - provider: oipa
-      match: "'operators' in claims.groups && claims.tenant == 'a'"
+  teams:
+    - acme-operator        # the usual way: teams the provider maps them into
+  people:
+    - oipa:u-4821          # one user of the provider oipa
+    - oipa:*               # every user of the provider oipa
 ```
 
-Each entry is an object:
+- **Through teams.** The provider adds its users to teams from their claims, limited to the teams it allows (`external-identity-providers.md`, Section 6). An admin MAY also add them to a team directly. Either way, they get what the team's bindings grant, like any member.
+- **By name.** `<provider>:<username>` is the provider's `metadata.name` and the value its `identity.username` returns for that user. It's the key shown on the person, so an admin binding one user copies it from there, as they would an email.
+- **Never by claims.** A binding doesn't read a token. What a user may do depends on their stored person and teams, so it's the same for every request they make until those change.
 
-| Field      | Type   | Required | Meaning                                                                           |
-| ---------- | ------ | -------- | --------------------------------------------------------------------------------- |
-| `provider` | string | Yes      | Name of an `ExternalIdentityProvider`. Only tokens from it are considered.        |
-| `match`    | string | Yes      | A CEL expression that returns a bool. `claims` holds the verified token's claims. |
+_Why no claims in bindings:_ claims are interpreted once, by the provider, into teams. A binding that read claims would make whoever writes it learn every application's token shape, and repeat the same expression in every binding that cares about the same group.
 
-- `claims` is a map of every claim in the token. Values keep their type: `claims.groups` is a list, `claims.tenant` a string.
-- An expression that fails, e.g. on a missing claim, doesn't match.
-- A `match` that doesn't compile, or doesn't return a bool, is rejected.
-- The token is matched on every request, so a user loses the Role as soon as their token stops matching.
-
-The `ExternalIdentityProvider` says which tokens are trusted:
+The `ExternalIdentityProvider` says which tokens are trusted and what person and teams they become:
 
 ```yaml
 apiVersion: mission-control.flanksource.com/v1
@@ -151,10 +164,13 @@ metadata:
 spec:
   issuer: https://auth.oipa.example.com
   audience: https://mission-control.example.com
-  claims:
-    username: sub
-    name: name
-    email: email
+  identity:
+    username: claims.user.id
+    name: claims.user.profile.display_name
+    teams:
+      mapper: |
+        has(claims.org.roles) ? claims.org.roles.map(r, "acme-" + r) : []
+      allowed: [acme-operator, acme-viewer]
 ```
 
 See `external-identity-providers.md`.
@@ -245,9 +261,8 @@ metadata:
 spec:
   role: production-runner
   subjects:
-    oidc:
-      - provider: oipa
-        match: "claims.tenant == 'a'"
+    teams:
+      - tenant-a
   constraint:
     target:
       scopeRef: tenant-a
@@ -376,9 +391,8 @@ metadata:
 spec:
   role: production-operator
   subjects:
-    oidc:
-      - provider: oipa
-        match: "claims.tenant == 'a'"
+    teams:
+      - tenant-a
   constraint:
     resource:
       scopeRef: tenant-a
@@ -401,7 +415,7 @@ To narrow two rules differently, put them in two Roles and bind each with its ow
 
 A binding is validated against what it references: its Role, and the Scopes its constraint names. Nothing is ever validated against the binding.
 
-A binding that's wrong on its own is rejected (`overview.md`, "Rejected or not in effect"): no subjects, a `people` entry that isn't an email or `*` alone, an `oidc.match` that doesn't compile or doesn't return a bool, an empty or wildcard-namespace resource subject, or a `constraint` that sets neither `resource` nor `target`. Everything else is checked against the Role and Scopes, as follows.
+A binding that's wrong on its own is rejected (`overview.md`, "Rejected or not in effect"): no subjects, a `people` entry that isn't an email, `*` alone, `<provider>:<username>` or `<provider>:*`, an empty or wildcard-namespace resource subject, or a `constraint` that sets neither `resource` nor `target`. Everything else is checked against the Role and Scopes, as follows.
 
 - A binding takes effect only once its Role exists and is valid. Until then it's `Ready=False` with the reason and none of its rules apply. There is no previous version to fall back to; the binding is whatever was last written.
 - Its rules apply as the constraint narrows them (Section 3.2). When the Role or a Scope the constraint names changes, is deleted or becomes invalid, each rule is checked again. A Scope that's gone or invalid selects nothing (`scopes.md`, Section 7), so no rule applies through the binding while that holds. A rule the constraint can't narrow doesn't apply and is reported; the others keep applying.
@@ -461,9 +475,8 @@ A deny that isn't in effect denies nothing:
 
 - a binding that isn't `Ready`, e.g. its Role or a Scope of its constraint is missing or invalid (Section 4)
 - a rule its constraint can't narrow (Section 3.2)
-- an `oidc` subject whose `match` fails, e.g. on a missing claim (Section 2.4)
 
-Each of the first two is visible in the binding's `Ready` and `AllRulesApply` conditions. A binding `Ready=False` with reason `PersistFailed` is the exception: its previous version stays in effect (`overview.md`, "Persistence failures"), denies included. After writing a deny binding, check both.
+Both are visible in the binding's `Ready` and `AllRulesApply` conditions. A binding `Ready=False` with reason `PersistFailed` is the exception: its previous version stays in effect (`overview.md`, "Persistence failures"), denies included. After writing a deny binding, check both.
 
 _Why not deny everything instead:_ a typo in a deny binding would then refuse everything to everyone it selects, admins included, and no grant could undo it. An allow-only model fails closed on every mistake; denies give that up for these cases, and report each of them instead.
 
@@ -477,15 +490,5 @@ _Why not deny everything instead:_ a typo in a deny binding would then refuse ev
 Grant narrowly first. Use a deny as a guardrail on top of narrow grants, never instead of them.
 
 ## 6. Future work
-
-A constraint could choose its Scope from the subject's claims, so one binding serves every tenant:
-
-```yaml
-constraint:
-  target:
-    scopeRef: tenant-{{ claims.tenant }}
-```
-
-Selectors would still only live in Scopes that were reviewed on their own. This isn't supported yet.
 
 A constraint could also narrow one rule further than the others, within what it already allows for the whole binding. Until then, rules that need different narrowing go in different Roles.
