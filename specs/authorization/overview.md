@@ -194,6 +194,7 @@ Mission Control ships these Roles in `mission-control-builtin`. They're ordinary
 | `viewer` | `read` on `config`, `component`, `check`, `canary`, `playbook`, `view`, `application`, `person` and `team` |
 | `admin`  | Every action on every type (`scopes.md`, Section 3.1) and every action without a resource (`roles.md`, Section 2.3), except plugin operations |
 | `access-manage` | `access:review`, `read` on `scope`, `role`, `roleBinding`, `person`, `team`, `playbook` and `connection`, and `create`, `update` and `delete` on `scope`, `role` and `roleBinding` |
+| `kubernetes-proxy` | `kubernetes-proxy:read` and `kubernetes-proxy:write`. It's the Role of the access token in a downloaded kubeconfig |
 | `plugin-admin` | Every operation of the installed plugins (`invoke:<plugin>:<operation>`), on any config |
 
 #### Viewer access
@@ -216,7 +217,7 @@ A RoleBinding in any other namespace can bind a shipped Role as `mission-control
 
 #### Shipped object updates
 
-Mission Control writes the shipped Roles and their Scopes when it starts, and writes `plugin-admin` again whenever a plugin is installed, upgraded or removed and its operations change. `viewer`, `admin` and `access-manage` are exactly as shipped, and only change with Mission Control itself. `plugin-admin` exists only while some plugin has an operation, since a Role needs a rule; a binding to it has no effect in between. The shipped objects aren't Kubernetes objects, and can't be changed or deleted through the API.
+Mission Control writes the shipped Roles and their Scopes when it starts, and writes `plugin-admin` again whenever a plugin is installed, upgraded or removed and its operations change. `viewer`, `admin`, `access-manage` and `kubernetes-proxy` are exactly as shipped, and only change with Mission Control itself. `plugin-admin` exists only while some plugin has an operation, since a Role needs a rule; a binding to it has no effect in between. The shipped objects aren't Kubernetes objects, and can't be changed or deleted through the API.
 
 #### Reserved namespace
 
