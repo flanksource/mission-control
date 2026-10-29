@@ -172,7 +172,9 @@ authorization server, registers, and opens a browser for you to log in and
 approve it. Approval shows the application's name and the address it will be
 redirected to — check that address before allowing.
 
-Users additionally need the `mcp:use` permission.
+Users additionally need the `mcp:use` permission. An access token used for MCP
+also needs the `mission-control-builtin/mcp-user` Role, next to the Roles that
+say what it may reach.
 
 #### Claude
 

@@ -369,7 +369,7 @@ A rule is matched against the actual resource and target of an operation:
 - The operation MUST name its resource, and its target if it has one. A missing or unknown target is never treated as "no target".
 - An operation that doesn't fit the action, such as a target of the wrong type, matches no rule.
 - An entry point may require an extra permission, e.g. `mcp:run` for playbooks run through MCP. It never replaces the check of the operation itself.
-- Reaching an entry point needs authentication. Mission Control's MCP server also needs `mcp:use` (Section 2.3), and each MCP tool then checks the resources it touches, e.g. `mcp:run` and the run's own checks for a playbook, and `read` for a view. _Why `mcp:use`:_ it lets an admin allow someone to use Mission Control directly but not through an AI agent, whatever else they're granted. For the same reason, an access token's bindings don't limit `mcp:use` (`limiting-permissions.md`, "Access tokens").
+- Reaching an entry point needs authentication. Mission Control's MCP server also needs `mcp:use` (Section 2.3), and each MCP tool then checks the resources it touches, e.g. `mcp:run` and the run's own checks for a playbook, and `read` for a view. _Why `mcp:use`:_ it lets an admin allow someone to use Mission Control directly but not through an AI agent, whatever else they're granted.
 
 A check carries only the resources its action's contract can match (Section 2). An action without a target carries the resource alone, even when the operation it gates has one. So each operation makes these checks:
 
