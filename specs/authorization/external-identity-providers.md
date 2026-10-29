@@ -69,7 +69,7 @@ The mapper returns `acme-operator` and `acme-admin`. Only `acme-operator` is all
 
 | Field            | Type            | Required | Default                                         | Meaning                                                                   |
 | ---------------- | --------------- | -------- | ----------------------------------------------- | ------------------------------------------------------------------------- |
-| `issuer`         | string          | Yes      |                                                 | Must exactly match the token's `iss` claim.                               |
+| `issuer`         | string          | Yes      |                                                 | Must exactly match the token's `iss` claim. Can't be changed (Section 8). |
 | `audience`       | string          | Yes      |                                                 | Must be one of the token's `aud` claims. Usually the Mission Control URL. |
 | `jwksURL`        | string          | No       | `jwks_uri` of the issuer's OpenID configuration | Where the issuer's signing keys are fetched from (Section 4).             |
 | `algorithms`     | list of strings | No       | `RS256`, `ES256`                                | Signature algorithms accepted (Section 3.1).                              |
@@ -83,6 +83,8 @@ Mission Control looks at a bearer token's `iss` claim before verifying it:
 
 - If no provider has that issuer, the token isn't for an ExternalIdentityProvider. Mission Control's other authenticators (its own OIDC, Kratos, Clerk, basic auth) try it as usual.
 - If a provider has that issuer, the token MUST pass that provider's verification (Section 3). A token that fails is rejected with `401 Unauthorized` and a `WWW-Authenticate` header. It isn't passed on to other authenticators.
+
+A provider whose `issuer` is one Mission Control's own authentication uses, i.e. its embedded OIDC issuer or the configured Clerk issuer, is `Ready=False` and claims no tokens. _Why:_ it would capture the tokens of Mission Control's own users and sign them in as provider people instead.
 
 A verified token authenticates only the request it's sent with. There's no session or cookie: the application sends a token on every request.
 
@@ -102,7 +104,7 @@ A token is accepted only when all of these hold:
 | `iat`     | Present, and not in the future.                                                         |
 | `nbf`     | If present, not in the future.                                                          |
 | Lifetime  | `exp - iat` is at most `maxTokenAge`.                                                   |
-| Username  | `identity.username` returns a non-empty string (Section 5).                             |
+| Username  | `identity.username` returns a non-empty string without `*` (Section 5).                 |
 
 Time checks tolerate 30 seconds of clock skew.
 
@@ -132,7 +134,7 @@ Keys are fetched on the first token from the provider, not when the provider is 
 
 If the keys can't be fetched, the request fails with `500 Internal Server Error`, and the next token retries the fetch.
 
-Updating a provider keeps its cached keys unless `issuer` or `jwksURL` change.
+Updating a provider keeps its cached keys unless `jwksURL` changes. `issuer` can't change (Section 8).
 
 ## 5. Identity
 
@@ -159,12 +161,14 @@ identity:
 
 _Why CEL:_ a path can only read one claim, and applications split names, nest profiles and fall back between fields. CEL is already how the team mapper reads claims, so the provider has one language.
 
-- **Each expression fails on its own.** `username` failing, or not returning a non-empty string, rejects the token with `401`. `name` or `email` failing, or not returning a string, leaves that field unset. _Why:_ only the username is needed to know who the request is from. A missing optional claim, e.g. one user without a middle name, must not lock that user out.
+- **Each expression fails on its own.** `username` failing, or not returning a non-empty string, rejects the token with `401`. A username that's a number, e.g. a numeric user id, MUST be converted with `string()`. `name` or `email` failing, or not returning a string, keeps the value stored on the person, or leaves it unset on their first request. _Why:_ only the username is needed to know who the request is from. A missing optional claim, e.g. one user without a middle name, must not lock that user out or blank a name that was there.
+- **A username MUST NOT contain `*`.** A token whose username does is rejected with `401`. _Why:_ `<provider>:*` selects every user of the provider (`rolebindings.md`, Section 2.1). A user named `*` couldn't be told apart from it, and patterns aren't supported, so a username containing `*` couldn't be selected on its own.
 - **Compiled when the provider is applied.** An expression that doesn't compile makes the provider invalid (Section 9).
-- **The username MUST be unique and stable** in the external application. It's the person's key, and RoleBindings name it (`rolebindings.md`, Section 2.4). A username that changes for the same user makes a new person, without the old one's teams or bindings. An expression MAY build the username, e.g. from several claims, but whoever writes it is responsible for its stability.
-- **Name and email are updated** from the token whenever they change.
-- **These people are separate from Mission Control's own users.** An external user whose email is `alice@example.com` is not the Mission Control user `alice@example.com`, and gets none of her access. The email is shown only: Mission Control doesn't verify it, so trusting it would let the external application impersonate anyone.
-- **TODO:** the key reuses the provider name. A provider deleted and recreated under the same name with a different issuer lands its users on the old person records (`oipa:u-4821` from either issuer). Decide whether the key should include something that changes with the issuer, before person records exist in the wild.
+- **The username MUST be unique and stable** in the external application. It's the person's key, and RoleBindings name it (`rolebindings.md`, Sections 2.1 and 2.4). A username that changes for the same user makes a new person, without the old one's teams or bindings. An expression MAY build the username, e.g. from several claims, but whoever writes it is responsible for its stability.
+- **Name and email are updated** from the token whenever their expressions return a different value.
+- **These people are separate from Mission Control's own users.** An external user whose email is `alice@example.com` is not the Mission Control user `alice@example.com`, and gets none of her access. The email is shown only: Mission Control doesn't verify it, so trusting it would let the external application impersonate anyone. Nothing is ever sent to it, notifications included.
+- **Shown as a provider person.** Wherever a person is shown, e.g. in approvals, audit and team members, a provider person MUST be shown with their key, `<provider>:<username>`. _Why:_ the application chooses their name and email, so it could make them look exactly like a Mission Control user.
+- **One issuer per person.** A person belongs to the provider that created them, and only that provider's issuer can sign in as them. A provider's `issuer` can't change, and deleting a provider retires its people (Section 8), so a different issuer under the same name never signs in as an existing person. _Why:_ the person's teams and bindings were given to users of one application. Another issuer, whoever controls it, mustn't inherit them.
 
 ## 6. Teams
 
@@ -183,18 +187,18 @@ identity:
 
 The person's teams from this provider become exactly the teams the mapper returns that are also in `allowed`:
 
-- **Allowed teams only.** A returned team that isn't in `allowed` is skipped and logged. Nothing is written for it. _Why:_ the application controls its claims. Without a fixed list, a claim it sets, by mistake or on purpose, could put its users in any team, `admins` included. The list is part of the provider, which only Mission Control admins may write (`overview.md`, "Who may manage these resources"), so it can't be computed from claims.
+- **Allowed teams only.** A returned team that isn't in `allowed` is skipped and logged. Nothing is written for it. _Why:_ the application controls its claims. Without a fixed list, a claim it sets, by mistake or on purpose, could put its users in any team, `admins` included. The list is part of the provider, which only Mission Control admins may write (`overview.md`, "Who may manage these resources"), so it can't be computed from claims. An `allowed` that includes the shipped `admins` team is reported in the provider's status as a warning, since it lets the application's claims decide who is a Mission Control admin.
 - **Existing teams only.** A returned team that doesn't exist is skipped and logged. The provider never creates teams. An `allowed` entry naming a team that doesn't exist is reported in the provider's status, and the provider stays valid. _Why:_ a team is created and bound by an admin. Creating one from a claim would make an empty team that grants nothing, or one whose name an admin later binds without knowing who's in it.
 - **Kept in sync, both ways.** The person is added to returned teams they aren't in yet, and removed from teams this provider added them to that it no longer returns. _Why:_ leaving a group in the application has to remove what it gave, or access only ever grows.
-- **Only its own memberships.** The provider never removes a membership it didn't add: one an admin added, one from an invite, or one from another provider. A person an admin already added to a returned team stays a direct member.
-- **When it runs.** On a request whose claims, ignoring `exp`, `iat`, `nbf` and `jti`, differ from the ones the mapper last ran on for that person, and on the person's first request after `identity.teams` changes. The request that triggers it is checked with the new memberships.
-- **A failing mapper changes nothing.** If the expression fails, or doesn't return a list of strings, the person's memberships stay as they are, the error is logged, and the request is still authenticated. _Why:_ a broken mapper shouldn't lock every user out, and shouldn't remove access it can't decide on either.
-- **Removing a team from `allowed`** removes every membership this provider added to it, without waiting for requests.
+- **Only its own memberships.** The provider never removes a membership it didn't add, e.g. one an admin added or one from an invite. A person an admin already added to a returned team stays a direct member. An admin who adds a person to a team the provider added them to makes it a direct membership, which the provider then never removes. An admin who removes a membership the provider added removes it until the provider's next sync returns it again; to keep a provider user out of a team, the admin changes `allowed` or the application's claims.
+- **When it runs.** On every request, before the request is checked. Memberships are written only when the result differs from what's stored, and the request is checked with the result. _Why:_ the result can change without the claims changing, e.g. when an allowed team is created or `allowed` changes. Running on every request leaves nothing to track about what changed.
+- **A failing mapper refuses the request.** If the expression fails, or doesn't return a list of strings, the request is rejected with `401` and the error is logged. The person's stored memberships stay as they are. _Why:_ a mapper fails when the claims aren't what it expects, e.g. a group claim the application leaves out once the user has no groups left. Letting the request through on the memberships it last had would keep access the application has revoked, and miss teams a deny binding selects. Keeping what's stored lets the user carry on once the mapper or claims are fixed.
+- **Removing a team from `allowed`**, or removing `identity.teams` entirely, removes every membership this provider added to the teams no longer allowed, without waiting for requests.
 - **Without `teams`**, the provider adds no one to any team. Its users get only what RoleBindings grant them by name (`rolebindings.md`, Section 2.4), or teams an admin adds them to.
 
-Memberships are stored, like every other team membership. The person's access is what their teams and bindings grant at the moment a request is checked, not what their latest token says.
+Memberships are stored, like every other team membership. The person's access is what their stored teams and bindings grant. Their token only changes it through the mapper.
 
-- **Access while idle.** A membership the application revokes is removed on the person's next request. Until then it stays, unused. _Why:_ a request is the first moment the membership could be used. Mission Control isn't told about changes in the application between requests.
+- **Memberships are last observed.** A membership the application revokes is removed on the person's next request. Until then, it counts everywhere a membership counts, including where no request is involved, e.g. team approvers, access reviews and the list of a team's members. A person who never returns keeps their memberships until the provider changes them (Section 8). _Why:_ Mission Control isn't told about changes in the application between requests, so what it last saw is the best it knows.
 - **Concurrent tokens.** Two tokens for the same person with different claims, sent at the same time, each sync the person's teams. The memberships end up as the last sync left them. _Why:_ a person is one user with one set of teams. Acting in different contexts per token isn't supported (Section 10).
 
 ## 7. Uniqueness
@@ -210,10 +214,12 @@ A provider that's wrong on its own, like the examples in Section 9, is rejected 
 
 ## 8. How changes take effect
 
-- A provider takes effect as soon as it's valid. An invalid provider is `Ready=False` with the reason and its tokens are rejected with `401`, as if it were `disabled`. There is no previous version to fall back to; the provider is whatever was last written.
+- A provider takes effect as soon as it's valid. An invalid provider is `Ready=False` with the reason and its tokens are rejected with `401`, as if it were `disabled`, keeping its people's memberships. There is no previous version to fall back to; the provider is whatever was last written.
 - `disabled: true` rejects its tokens with `401`, keeping everything else, including its people's memberships.
-- Changing `identity.teams` applies to each person on their next request (Section 6). Removing a team from `allowed` applies at once.
-- Deleting a provider means its tokens no longer find a provider (Section 2), so they're left to the other authenticators, which reject them. Its people remain, for audit. The memberships it added are removed. Memberships an admin added stay.
+- `issuer` can't be changed. A provider for another issuer is a new provider. _Why:_ the provider's people were signed in by its issuer, and a new issuer mustn't inherit them (Section 5).
+- Changing `identity.teams` applies to each person on their next request (Section 6). Removing a team from `allowed`, or removing `identity.teams`, applies at once.
+- Deleting a provider means its tokens no longer find a provider (Section 2), so they're left to the other authenticators, which reject them. Its people are retired: kept for audit, but never signed in as or selected again, and removed from every team, including teams an admin added them to. A provider created later under the same name, or one that wins the name once this one is gone (Section 7), creates new people for its users.
+- RoleBindings that name a provider's users, e.g. `people: [oipa:u-4821]`, refer to the provider by name. They stay after the provider is deleted, and select the users of whichever provider later has that name. _Why:_ a binding is written for an application, which the provider name stands for. Whoever replaces the provider is a Mission Control admin, who is responsible for what the bindings to that name grant.
 
 ## 9. Validity
 
@@ -290,3 +296,4 @@ spec:
 - Tokens can't be revoked before they expire. `disabled` or deleting the provider is the only way to cut off all of its users at once.
 - Every token the issuer signs is trusted. Shared issuers, which sign tokens for many unrelated applications or organisations, e.g. Google, GitHub Actions or multi-tenant Microsoft Entra, aren't supported: there's no condition on claims to tell their users apart.
 - Access belongs to the person, not the token. An application can't give the same user different access per request, e.g. by switching a tenant claim between tokens. Each switch would rewrite the person's teams (Section 6).
+- A provider user can't be removed from a team the provider maps them into while their claims keep returning it. Change `allowed` or the claims instead (Section 6).

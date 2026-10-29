@@ -2,7 +2,7 @@
 
 ## 1. What a RoleBinding is
 
-A RoleBinding gives a Role to subjects: people, teams, users of an external identity provider, and a few kinds of resources. With `deny: true`, it refuses the Role to them instead (Section 5).
+A RoleBinding gives a Role to subjects: people, including users of an external identity provider, teams, and a few kinds of resources. With `deny: true`, it refuses the Role to them instead (Section 5).
 
 ```yaml
 apiVersion: mission-control.flanksource.com/v1
@@ -43,7 +43,7 @@ _Why:_ a binding can grant a shared Role and narrow it with its own Scopes, with
 | `teams`                                                            | list of strings | Every member of the teams, by team name                              |
 | `playbooks`, `notifications`, `topologies`, `scrapers`, `canaries`, `plugins` | list of objects | Those resources, when they act on their own               |
 
-A person is a human who signs in: through Mission Control's own authentication (Kratos, Clerk, basic), or as a user of an external identity provider (Section 2.4). Both are selected by `people` and `teams`, by different kinds of entry (Section 2.1). Agents aren't people, and no subject selects them (Section 2.3). An access token isn't an identity: a request made with one is checked as its owner (`identities.md`, Section 4). A token is selected only by the bindings created with it (Section 2.6). `people` selects humans only, whether by email or by `*`, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
+A person is a human who signs in: through Mission Control's own authentication (Kratos, Clerk, basic), or as a user of an external identity provider (Section 2.4). Both are selected by `people` and `teams`, by different kinds of entry (Section 2.1). Agents aren't people, and no subject selects them (Section 2.3). An access token isn't an identity: a request made with one is checked as its owner (`identities.md`, Section 4). A token is selected only by the bindings created with it (Section 2.6). `people` selects humans only, by any kind of entry, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
 
 ### 2.1 People
 
@@ -66,9 +66,10 @@ Each entry is one of:
 An entry is never a person's name.
 
 - `*` MUST be the only entry. `["*", "alice@example.com"]` is rejected: the email adds nothing, and the list reads as if it narrowed `*`.
-- An entry containing `:` is a provider entry. It's split on its first `:`. The part before it MUST be a valid provider name, and the part after it a non-empty username or `*` alone. A provider name can't contain `:`, so the split is unambiguous, and the username may contain anything, `@` and `:` included.
+- An entry containing `:` is a provider entry. It's split on its first `:`. The part before it MUST be a valid provider name, and the part after it a non-empty username or `*` alone. A provider name can't contain `:`, so the split is unambiguous, and the username may contain anything but `*`, `@` and `:` included. An email address containing `:`, e.g. in a quoted local part, can't be named in `people`.
 - Any other entry containing `*` is rejected, e.g. `*@example.com`, `alice*@example.com`, `alice@*.example.com` or `oipa:u-*`. Patterns aren't supported, and an email parser would otherwise accept them as addresses that match no one.
-- `*` and `<provider>:*` select every matching person who exists when the policy is loaded. A person who signs up, or a provider user's first request, gets it at the next reload, like a person a binding names directly.
+- `*` selects every matching person who exists when the policy is loaded. A person who signs up gets it at the next reload, like a person a binding names by email.
+- A provider user is selected by `<provider>:<username>` and `<provider>:*` from their first request: every binding that selects them, deny bindings included, MUST be in effect before that request is checked. _Why:_ a provider user has no sign-up before their first request, and their mapped teams apply to it (`external-identity-providers.md`, Section 6). Waiting for a reload would refuse them what a name binding grants, and let a team grant through before a provider-wide deny.
 - A provider entry may name a provider or user that doesn't exist yet. It selects no one until they do.
 
 _Why `*` never reaches a provider's users:_ `people: ["*"]` is how everyone in the organisation gets a Role. An external application's users aren't the organisation, and the application decides who they are. `<provider>:*` grants all of one application's users explicitly.
@@ -90,7 +91,7 @@ Each entry is a team name. Members get the Role through their team, so joining o
 
 #### Team membership from login
 
-A person's teams can follow their login provider, through a **team mapper**: one CEL expression per install, given inline or as a file path prefixed with `file://`, set by the operator, that returns the teams a person belongs to. Mission Control's own logins set it with a flag; an external identity provider sets it in its own resource (`external-identity-providers.md`, Section 6):
+A person's teams can follow their login provider, through a **team mapper**: a CEL expression that returns the teams a person belongs to. Mission Control's own logins have one per install, set by the operator with a flag, inline or as a file path prefixed with `file://`. An external identity provider sets it in its own resource (`external-identity-providers.md`, Section 6):
 
 | Login  | Setting                  | Input                                                           |
 | ------ | ------------------------ | --------------------------------------------------------------- |
@@ -104,7 +105,9 @@ The expression returns a list of team names:
 claims.org_role == "org:admin" ? ["clerk-admins"] : ["clerk-members"]
 ```
 
-Kratos and Clerk mappers MAY also return `{"teams": [...]}`, the shape they returned before, so existing configuration keeps working. An external identity provider's mapper MUST return a list.
+Kratos and Clerk mappers MAY return either a list or `{"teams": [...]}`. An external identity provider's mapper MUST return a list.
+
+The rules below hold for every mapper, except that an external identity provider's mapper runs on every request and refuses the request when it fails (`external-identity-providers.md`, Section 6).
 
 - **Teams only.** A mapper never grants a Role. Admins bind Roles to the teams it returns, like to any team. An object result with any field other than `teams`, e.g. the `role` older Kratos scripts returned, is logged as an error and changes nothing.
 - **When it runs.** On a person's first request after they sign in, and again whenever their claims change, e.g. a refreshed Clerk token with a different organisation role.

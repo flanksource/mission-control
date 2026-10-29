@@ -302,7 +302,7 @@ Scopes, Roles, RoleBindings and ExternalIdentityProviders are managed in one of 
 
 An invalid object is either rejected or stored `Ready=False`. Which one depends on why it's invalid:
 
-- **Rejected**: the object is wrong on its own, so no change elsewhere can make it valid. For example, a Scope target with two types or `namespace: "*"`; a Role with two rules of the same name, `action: playbook:*`, `deny: true`, or a `target` on an action that takes none; a RoleBinding with no subjects, or a `people` entry that isn't an email, `*`, `<provider>:<username>` or `<provider>:*`; an ExternalIdentityProvider with an `http` issuer, `HS256`, or a team mapper without `allowed`.
+- **Rejected**: the object is wrong on its own, so no change elsewhere can make it valid. For example, a Scope target with two types or `namespace: "*"`; a Role with two rules of the same name, `action: playbook:*`, `deny: true`, or a `target` on an action that takes none; a RoleBinding with no subjects, or a `people` entry that isn't an email, `*`, `<provider>:<username>` or `<provider>:*`; an ExternalIdentityProvider with an `http` issuer, `HS256`, a team mapper without `allowed`, or a changed `issuer`.
 - **Stored `Ready=False`**: the object is valid on its own, but not together with something it references, or with Mission Control's settings. For example, a Scope whose `agent` isn't registered; a Role whose Scope doesn't exist, is invalid, or selects types its rule can't use; a RoleBinding whose Role doesn't exist or is invalid, or whose constraint leaves none of the Role's rules applying; a deny RoleBinding whose Role's rules only select RoleBindings; an ExternalIdentityProvider whose `issuer` or `name` another provider already uses.
 
 ### Recovery after dependency changes
