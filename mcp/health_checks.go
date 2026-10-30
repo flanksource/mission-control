@@ -3,9 +3,7 @@ package mcp
 import (
 	gocontext "context"
 	"fmt"
-	"net/url"
 
-	"github.com/flanksource/commons/http"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -13,8 +11,8 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/canary"
 )
 
 const (
@@ -82,27 +80,21 @@ func healthCheckRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	endpoint, err := url.JoinPath(api.CanaryCheckerPath, fmt.Sprintf("/run/check/%s", checkID))
+	resp, err := canary.RunCheck(ctx, checkID)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to call health check URL: %v", err)), nil
-	}
-
-	resp, err := http.NewClient().R(ctx).Post(endpoint, nil)
-	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to call health check URL: %v", err)), nil
-	}
-
-	if !resp.IsOK() {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to call health check URL: %v", err)), nil
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	body, err := resp.AsString()
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to call health check URL: %v", err)), nil
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to read the health check response: %v", err)), nil
+	}
+
+	if !resp.IsOK() {
+		return mcp.NewToolResultError(fmt.Sprintf("Failed to run health check (status %d): %s", resp.StatusCode, body)), nil
 	}
 
 	return structToMCPResponse(req, body), nil
-
 }
 
 func listAllChecksHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
