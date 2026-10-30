@@ -23,6 +23,7 @@ import (
 	"github.com/flanksource/kopper"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/cel-go/cel"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 	slogecho "github.com/samber/slog-echo"
@@ -64,11 +65,13 @@ type federatedProvider struct {
 	keys                *federatedKeys
 	identity            v1.CompiledIdentity
 
+	// lifecycle is shared by every version of the provider. Requests hold it for reading from the moment they find the
+	// provider until their person and memberships are written, and updates and deletion hold it for writing, so no
+	// request writes with a version of the provider that's been replaced or deleted.
+	lifecycle *sync.RWMutex
+
 	// ownIssuer is set when the issuer is one Mission Control's own authentication uses: the provider claims no tokens.
 	ownIssuer bool
-
-	// deleting is set while a deleted provider's people are retired. Its tokens are rejected.
-	deleting bool
 
 	// ownInvalid is why the provider is wrong on its own, regardless of other providers.
 	ownInvalid error
@@ -284,8 +287,48 @@ func discoverJWKSURL(ctx gocontext.Context, issuer string) (string, error) {
 // Mission Control runs as a single replica, so the reconciler keeps them in memory.
 var federation = struct {
 	sync.RWMutex
-	providers map[string]*federatedProvider
-}{providers: map[string]*federatedProvider{}}
+	providers  map[string]*federatedProvider
+	lifecycles map[string]*sync.RWMutex
+}{providers: map[string]*federatedProvider{}, lifecycles: map[string]*sync.RWMutex{}}
+
+// providerLifecycle returns the lifecycle lock of the provider with the id.
+func providerLifecycle(id string) *sync.RWMutex {
+	federation.Lock()
+	defer federation.Unlock()
+	lifecycle, ok := federation.lifecycles[id]
+	if !ok {
+		lifecycle = &sync.RWMutex{}
+		federation.lifecycles[id] = lifecycle
+	}
+	return lifecycle
+}
+
+// SeedExternalIdentityProviders registers every provider that exists, before any is reconciled, so that which provider
+// holds a name or issuer is decided against all of them, whatever order they're reconciled in after a restart.
+// A seeded provider claims its name and issuer, and rejects its tokens until it's reconciled.
+func SeedExternalIdentityProviders(ctx context.Context, objs []v1.ExternalIdentityProvider) {
+	federation.Lock()
+	for _, obj := range objs {
+		id := string(obj.GetUID())
+		if _, ok := federation.providers[id]; ok {
+			continue
+		}
+		federation.providers[id] = &federatedProvider{
+			id:         id,
+			namespace:  obj.Namespace,
+			name:       obj.Name,
+			created:    obj.CreationTimestamp.Time,
+			spec:       obj.Spec,
+			keys:       &federatedKeys{issuer: obj.Spec.Issuer, jwksURL: obj.Spec.JWKSURL},
+			ownIssuer:  isOwnIssuer(obj.Spec.Issuer),
+			ownInvalid: ctx.Oops().Code(api.EINVALID).Errorf("external identity provider %s/%s isn't reconciled yet", obj.Namespace, obj.Name),
+		}
+	}
+	changed := resolveFederatedConflicts(ctx, "")
+	federation.Unlock()
+
+	notifyProviderValidityChanged(changed)
+}
 
 // ProviderValidityChanged is called with a provider whose validity changed because of another provider,
 // so its Ready condition can be updated.
@@ -301,16 +344,29 @@ func PersistExternalIdentityProvider(ctx context.Context, obj *v1.ExternalIdenti
 		name:      obj.Name,
 		created:   obj.CreationTimestamp.Time,
 		spec:      obj.Spec,
+		lifecycle: providerLifecycle(string(obj.GetUID())),
+		ownIssuer: isOwnIssuer(obj.Spec.Issuer),
 	}
 
-	if err := obj.Spec.Validate(); err != nil {
+	provider.lifecycle.Lock()
+	defer provider.lifecycle.Unlock()
+
+	federation.RLock()
+	existing, exists := federation.providers[provider.id]
+	federation.RUnlock()
+
+	if exists && existing.spec.Issuer != obj.Spec.Issuer {
+		// The provider keeps holding the issuer it had
+		provider.spec.Issuer = existing.spec.Issuer
+		provider.ownIssuer = existing.ownIssuer
+		provider.ownInvalid = ctx.Oops().Code(api.EINVALID).Errorf("issuer can't be changed from %s", existing.spec.Issuer)
+	} else if err := obj.Spec.Validate(); err != nil {
 		provider.ownInvalid = ctx.Oops().Code(api.EINVALID).Wrapf(err, "invalid external identity provider")
 	} else if provider.maxTokenAge, err = obj.Spec.GetMaxTokenAge(); err != nil {
 		provider.ownInvalid = ctx.Oops().Code(api.EINVALID).Wrap(err)
 	} else if provider.identity, err = obj.Spec.Identity.Compile(); err != nil {
 		provider.ownInvalid = ctx.Oops().Code(api.EINVALID).Wrap(err)
-	} else if isOwnIssuer(obj.Spec.Issuer) {
-		provider.ownIssuer = true
+	} else if provider.ownIssuer {
 		provider.ownInvalid = ctx.Oops().Code(api.EINVALID).Errorf("issuer %s is used by Mission Control's own authentication", obj.Spec.Issuer)
 	}
 
@@ -418,15 +474,16 @@ func applyRemovedMemberships(ctx context.Context, removed []dbModels.TeamMember)
 // DeleteExternalIdentityProvider unregisters the provider. When it held its name, its people are retired first,
 // so a provider that takes the name next creates new people. Its tokens are rejected meanwhile.
 func DeleteExternalIdentityProvider(ctx context.Context, id string) error {
-	federation.Lock()
+	lifecycle := providerLifecycle(id)
+	lifecycle.Lock()
+	defer lifecycle.Unlock()
+
+	federation.RLock()
 	provider, ok := federation.providers[id]
 	holdsName := ok && !slices.ContainsFunc(lo.Values(federation.providers), func(other *federatedProvider) bool {
 		return other.id != id && other.name == provider.name && olderFederatedProvider(other, provider)
 	})
-	if ok {
-		provider.deleting = true
-	}
-	federation.Unlock()
+	federation.RUnlock()
 
 	if holdsName {
 		removed, err := db.RetireFederatedPeople(ctx, provider.name)
@@ -438,6 +495,7 @@ func DeleteExternalIdentityProvider(ctx context.Context, id string) error {
 
 	federation.Lock()
 	removeFederatedProvider(id)
+	delete(federation.lifecycles, id)
 	changed := resolveFederatedConflicts(ctx, "")
 	federation.Unlock()
 
@@ -526,6 +584,18 @@ func removeFederatedProvider(id string) {
 	delete(federation.providers, id)
 }
 
+// currentFederatedProvider returns a snapshot of the registered provider with the id, or nil when there's none.
+func currentFederatedProvider(id string) *federatedProvider {
+	federation.RLock()
+	defer federation.RUnlock()
+	provider, ok := federation.providers[id]
+	if !ok {
+		return nil
+	}
+	snapshot := *provider
+	return &snapshot
+}
+
 // findFederatedProvider returns a snapshot of the provider with the issuer, preferring a valid one to an invalid one.
 func findFederatedProvider(issuer string) *federatedProvider {
 	federation.RLock()
@@ -553,10 +623,6 @@ func (p *federatedProvider) verify(ctx context.Context, token string) (jwt.MapCl
 
 	if p.spec.Disabled {
 		return nil, federatedAuthErrorf("external identity provider %s is disabled", p.name)
-	}
-
-	if p.deleting {
-		return nil, federatedAuthErrorf("external identity provider %s is being deleted", p.name)
 	}
 
 	keyfunc, err := p.keys.keyfunc(ctx)
@@ -635,6 +701,46 @@ func timeClaim(claims jwt.MapClaims, name string, required bool) (time.Time, err
 	}
 }
 
+// loadedFederatedPeople holds the federated people the loaded policy is known to include: everyone who existed when
+// ensureBindingsLoaded last reloaded it.
+var loadedFederatedPeople = struct {
+	sync.Mutex
+	ids sync.Map
+}{}
+
+// ensureBindingsLoaded makes sure the policy includes the bindings that select the federated person by
+// <provider>:<username> or <provider>:*, deny bindings included, reloading it when it might not.
+// Concurrent first requests wait for the same reload, and a failed reload is retried on the next request.
+func ensureBindingsLoaded(ctx context.Context, personID uuid.UUID) error {
+	if _, ok := loadedFederatedPeople.ids.Load(personID); ok {
+		return nil
+	}
+
+	loadedFederatedPeople.Lock()
+	defer loadedFederatedPeople.Unlock()
+	if _, ok := loadedFederatedPeople.ids.Load(personID); ok {
+		return nil
+	}
+
+	// Read before reloading: everyone read is then in the reloaded policy
+	var ids []uuid.UUID
+	if err := ctx.DB().Model(&models.Person{}).Where("type = ? AND deleted_at IS NULL", db.PersonTypeFederated).
+		Pluck("id", &ids).Error; err != nil {
+		return err
+	}
+	if err := adapter.ReloadPolicy(); err != nil {
+		return err
+	}
+	for _, id := range ids {
+		loadedFederatedPeople.ids.Store(id, struct{}{})
+	}
+
+	if _, ok := loadedFederatedPeople.ids.Load(personID); !ok {
+		return fmt.Errorf("person %s isn't a federated person", personID)
+	}
+	return nil
+}
+
 // evalString evaluates an identity expression that returns a string.
 func evalString(program cel.Program, claims jwt.MapClaims) (string, error) {
 	out, _, err := program.Eval(map[string]any{"claims": map[string]any(claims)})
@@ -705,6 +811,15 @@ func authenticateFederatedToken(c echo.Context, token string) (matched bool, err
 		return false, nil
 	}
 
+	// Hold the provider's lifecycle until the person and memberships are written, and use the version current then
+	if provider.lifecycle != nil {
+		provider.lifecycle.RLock()
+		defer provider.lifecycle.RUnlock()
+	}
+	if provider = currentFederatedProvider(provider.id); provider == nil || provider.spec.Issuer != issuer {
+		return true, federatedAuthErrorf("external identity provider was removed or changed")
+	}
+
 	ctx := c.Request().Context().(context.Context)
 	claims, err := provider.verify(ctx, token)
 	if err != nil {
@@ -720,16 +835,13 @@ func authenticateFederatedToken(c echo.Context, token string) (matched bool, err
 
 	name := optionalString(ctx, "name", provider.identity.Name, claims, username)
 	email := optionalString(ctx, "email", provider.identity.Email, claims, "")
-	person, created, err := db.GetOrCreateFederatedPerson(ctx, provider.name, username, name, email)
+	person, err := db.GetOrCreateFederatedPerson(ctx, provider.name, username, name, email)
 	if err != nil {
 		return true, err
 	}
 
-	// The bindings that name the person, deny bindings included, apply from their first request
-	if created {
-		if err := adapter.ReloadPolicy(); err != nil {
-			return true, ctx.Oops().Wrapf(err, "failed to apply the role bindings of %s", person.ExternalID)
-		}
+	if err := ensureBindingsLoaded(ctx, person.ID); err != nil {
+		return true, ctx.Oops().Wrapf(err, "failed to apply the role bindings of %s", person.ExternalID)
 	}
 
 	ctx = ctx.WithUser(person)
@@ -741,7 +853,7 @@ func authenticateFederatedToken(c echo.Context, token string) (matched bool, err
 		teams, err := provider.mapTeams(ctx, claims)
 		if err != nil {
 			ctx.Logger.Warnf("team mapper of external identity provider %s failed for %s: %v", provider.name, person.ExternalID, err)
-			return true, federatedAuthErrorf("team mapping failed: %v", err)
+			return true, federatedAuthErrorf("team mapping failed")
 		}
 		if err := syncMappedTeams(ctx, person.ID, db.FederatedTeamSource(provider.name), teams); err != nil {
 			return true, ctx.Oops().Wrapf(err, "failed to sync the teams of %s", person.ExternalID)

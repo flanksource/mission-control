@@ -49,17 +49,16 @@ func RemoveFederatedMemberships(ctx context.Context, provider string, allowed []
 }
 
 // GetOrCreateFederatedPerson returns the person representing a user of an external identity provider,
-// creating it on first sight, and reports whether it was created. The person is keyed by <provider>:<username>.
+// creating it on first sight. The person is keyed by <provider>:<username>.
 //
 // A nil name or email keeps the stored value. A person created without a name is named after the username.
 //
 // The claimed email is kept in the person's properties, never in people.email: it isn't verified
 // by Mission Control, so it must not collide with or be matched against Mission Control users.
-func GetOrCreateFederatedPerson(ctx context.Context, provider, username string, name, email *string) (*models.Person, bool, error) {
+func GetOrCreateFederatedPerson(ctx context.Context, provider, username string, name, email *string) (*models.Person, error) {
 	externalID := provider + ":" + username
 
 	var person models.Person
-	var created bool
 	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
 		// Serializes concurrent first requests for the same user so only one person is created
 		if err := ctx.DB().Exec("SELECT pg_advisory_xact_lock(hashtext(?))", externalID).Error; err != nil {
@@ -68,7 +67,6 @@ func GetOrCreateFederatedPerson(ctx context.Context, provider, username string, 
 
 		err := ctx.DB().Where("external_id = ? AND type = ? AND deleted_at IS NULL", externalID, PersonTypeFederated).First(&person).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			created = true
 			person = models.Person{
 				Name:       lo.FromPtrOr(name, username),
 				Type:       PersonTypeFederated,
@@ -92,10 +90,10 @@ func GetOrCreateFederatedPerson(ctx context.Context, provider, username string, 
 			Updates(map[string]any{"name": newName, "properties": properties}).Error
 	})
 	if err != nil {
-		return nil, false, ctx.Oops().Wrapf(err, "failed to get or create federated person %s", externalID)
+		return nil, ctx.Oops().Wrapf(err, "failed to get or create federated person %s", externalID)
 	}
 
-	return &person, created, nil
+	return &person, nil
 }
 
 // RetireFederatedPeople retires the people of a deleted external identity provider: they're kept for audit, but
