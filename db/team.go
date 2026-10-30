@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/flanksource/duty"
@@ -9,6 +10,7 @@ import (
 	"github.com/flanksource/kopper"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -91,9 +93,11 @@ func syncTeamMembers(ctx context.Context, teamID uuid.UUID, members []string) er
 	newMemberIDs := make(map[uuid.UUID]struct{})
 	for _, member := range members {
 		personID, err := resolvePersonID(ctx, member)
-		if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			ctx.Warnf("failed to resolve member %q: %v", member, err)
 			continue
+		} else if err != nil {
+			return err
 		}
 		newMemberIDs[personID] = struct{}{}
 	}
