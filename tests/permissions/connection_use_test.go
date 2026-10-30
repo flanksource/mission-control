@@ -149,17 +149,6 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 	})
 
 	Describe("read", func() {
-		expectMasked := func(c models.Connection) {
-			GinkgoHelper()
-			Expect(c.Name).To(Equal(conn.Name))
-			Expect(c.Type).To(Equal(conn.Type))
-			Expect(c.Username).To(Equal(db.MaskedValue))
-			Expect(c.Password).ToNot(ContainSubstring(password))
-			Expect(c.URL).To(Equal("http://connection-use-user:***@example.com/$(username)"))
-			Expect(c.Properties).To(HaveKeyWithValue("bearer", db.MaskedValue))
-			Expect(c.Properties).To(HaveKeyWithValue("region", "eu-west-1"))
-		}
-
 		It("masks credentials, but keeps the secrets they reference", func() {
 			masked := db.MaskConnection(models.Connection{
 				Username:    "secret://creds/username",
@@ -189,33 +178,41 @@ var _ = Describe("Reading and using a connection", Ordered, func() {
 			Expect(do(guest, http.MethodGet, "/db/connections_list").Code).To(Equal(http.StatusForbidden))
 		})
 
-		It("masks credentials in the MCP list_connections tool", func() {
-			conns, err := db.ListConnections(DefaultContext)
-			Expect(err).ToNot(HaveOccurred())
-			var found bool
-			for _, c := range conns {
-				if c.ID == conn.ID {
-					found = true
-					expectMasked(c)
-				}
-			}
-			Expect(found).To(BeTrue())
-		})
-
-		It("masks credentials in the MCP connection resource", func() {
-			var req mcp.ReadResourceRequest
-			req.Params.URI = fmt.Sprintf("connection://%s/%s", namespace, conn.Name)
-			contents, err := mcpServer.ConnectionResourceHandler(DefaultContext.WithUser(admin), req)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(contents).To(HaveLen(1))
-
-			text := contents[0].(mcp.TextResourceContents).Text
+		expectSummary := func(text string) {
+			GinkgoHelper()
 			Expect(text).ToNot(ContainSubstring(password))
 			Expect(text).ToNot(ContainSubstring("connection-use-bearer"))
 
-			var c models.Connection
-			Expect(json.Unmarshal([]byte(text), &c)).To(Succeed())
-			expectMasked(c)
+			var summary map[string]any
+			Expect(json.Unmarshal([]byte(text), &summary)).To(Succeed())
+			Expect(summary).To(Equal(map[string]any{
+				"id": conn.ID.String(), "name": conn.Name, "namespace": conn.Namespace, "type": conn.Type, "source": conn.Source,
+			}))
+		}
+
+		It("lists only what identifies a connection in the MCP list_connections tool", func() {
+			conns, err := connection.ListSummaries(DefaultContext.WithUser(reader))
+			Expect(err).ToNot(HaveOccurred())
+			summary, found := lo.Find(conns, func(c connection.Summary) bool { return c.ID == conn.ID })
+			Expect(found).To(BeTrue())
+			text, err := json.Marshal(summary)
+			Expect(err).ToNot(HaveOccurred())
+			expectSummary(string(text))
+
+			_, err = connection.ListSummaries(DefaultContext.WithUser(guest))
+			Expect(err).To(HaveOccurred())
+		})
+
+		It("returns only what identifies a connection in the MCP connection resource", func() {
+			var req mcp.ReadResourceRequest
+			req.Params.URI = fmt.Sprintf("connection://%s/%s", namespace, conn.Name)
+			contents, err := mcpServer.ConnectionResourceHandler(DefaultContext.WithUser(reader), req)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(contents).To(HaveLen(1))
+			expectSummary(contents[0].(mcp.TextResourceContents).Text)
+
+			_, err = mcpServer.ConnectionResourceHandler(DefaultContext.WithUser(guest), req)
+			Expect(err).To(HaveOccurred())
 		})
 	})
 
