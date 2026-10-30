@@ -20,7 +20,7 @@ const (
 	// dbLookup is a lookup view derived from the type, e.g. the distinct values or counts the UI's filters offer.
 	dbLookup
 	// dbAction is read whole or not at all through an action without a resource: job:read, event:read,
-	// or properties (specs/authorization/roles.md, Section 2.3).
+	// access:review, or properties (specs/authorization/roles.md, Section 2.3).
 	dbAction
 	// dbUnclassified fits none of the other kinds, and is only served because the UI calls it.
 	// TODO: each is an open question for the spec, which says /db doesn't serve such a table.
@@ -229,7 +229,7 @@ var dbTables = map[string]dbTable{
 	"permissions":                      unclassified(ofUnclassifiedLegacyPermissions),
 	"permissions_summary":              unclassified(ofUnclassifiedLegacyPermissions),
 	"permission_groups":                unclassified(ofUnclassifiedLegacyPermissions),
-	"permission_subjects":              unclassified(ofUnclassifiedLegacyPermissions),
+	"permission_subjects":              readWithAction(policy.ObjectRBAC),
 	"rpc/permissions_for_obj_selector": unclassified(ofUnclassifiedLegacyPermissions),
 	"external_users":                   unclassified(ofUnclassifiedExternalIdentities),
 	"external_groups":                  unclassified(ofUnclassifiedExternalIdentities),
