@@ -31,7 +31,7 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /upstream routes")
 
-	e.POST("/push/topology", push.PushTopology, rbac.Topology(policy.ActionUpdate))
+	e.POST("/push/topology", push.PushTopology, rbac.Topology(policy.ActionUpdate)) //nolint:staticcheck // deprecated endpoint is still served for older agents
 
 	// An agent acts on its own data by its token's identity, with no Role or RoleBinding (specs/authorization/roles.md, Section 4.6)
 	upstreamGroup := e.Group("/upstream", upstream.AgentAuthMiddleware())
