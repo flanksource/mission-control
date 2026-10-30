@@ -155,7 +155,7 @@ var _ = ginkgo.Describe("Dynamic client registration", func() {
 			rec := register(`{
 				"client_name": "Claude",
 				"redirect_uris": ["https://claude.ai/api/mcp/auth_callback"],
-				"grant_types": ["authorization_code", "refresh_token"],
+				"grant_types": ["authorization_code", "refresh_token", "urn:ietf:params:oauth:grant-type:jwt-bearer"],
 				"response_types": ["code"],
 				"token_endpoint_auth_method": "none"
 			}`)
@@ -167,6 +167,7 @@ var _ = ginkgo.Describe("Dynamic client registration", func() {
 			Expect(resp).ToNot(HaveKey("client_secret"))
 			Expect(resp["token_endpoint_auth_method"]).To(Equal("none"))
 			Expect(resp["client_id"]).To(HavePrefix(dynamicClientIDPrefix))
+			Expect(resp["grant_types"]).To(ConsistOf("authorization_code", "refresh_token"))
 
 			decoded, err := decodeClientID(resp["client_id"].(string))
 			Expect(err).ToNot(HaveOccurred())
@@ -191,7 +192,7 @@ var _ = ginkgo.Describe("Dynamic client registration", func() {
 			Expect(resp.Error).To(Equal("invalid_client_metadata"))
 		})
 
-		ginkgo.It("rejects an unsupported grant type", func() {
+		ginkgo.It("rejects grant types without authorization_code", func() {
 			rec := register(`{"redirect_uris": ["https://example.com/cb"], "grant_types": ["implicit"]}`)
 			Expect(rec.Code).To(Equal(http.StatusBadRequest))
 		})

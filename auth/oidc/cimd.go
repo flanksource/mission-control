@@ -173,23 +173,9 @@ func validateClientIDMetadataDocument(clientID string, document clientIDMetadata
 		return nil, fmt.Errorf("client metadata must not contain a client secret")
 	}
 
-	grantTypes := []oidc.GrantType{oidc.GrantTypeCode}
-	if len(document.GrantTypes) > 0 {
-		grantTypes = make([]oidc.GrantType, 0, len(document.GrantTypes))
-	}
-	hasAuthorizationCode := false
-	for _, grantType := range document.GrantTypes {
-		switch grantType {
-		case string(oidc.GrantTypeCode):
-			hasAuthorizationCode = true
-		case string(oidc.GrantTypeRefreshToken):
-		default:
-			return nil, fmt.Errorf("client metadata contains unsupported grant_type %q", grantType)
-		}
-		grantTypes = append(grantTypes, oidc.GrantType(grantType))
-	}
-	if len(document.GrantTypes) > 0 && !hasAuthorizationCode {
-		return nil, fmt.Errorf("client metadata must support the authorization_code grant")
+	grantTypes, err := validateGrantTypes(document.GrantTypes)
+	if err != nil {
+		return nil, fmt.Errorf("client metadata: %w", err)
 	}
 
 	hasCodeResponse := len(document.ResponseTypes) == 0
