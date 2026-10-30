@@ -13,13 +13,14 @@ import (
 	"github.com/samber/lo"
 	"gorm.io/gorm/clause"
 
+	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/events"
 )
 
 var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 	var _ = ginkgo.Describe("Config Events", ginkgo.Ordered, func() {
-		var playbook models.Playbook
+		var playbook, ungrantedPlaybook, filteredPlaybook models.Playbook
 		var newConfigItems []string
 
 		ginkgo.BeforeAll(func() {
@@ -48,6 +49,32 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 			spec, err := json.Marshal(playbookSpec)
 			Expect(err).NotTo(HaveOccurred())
 
+			// Created before the granted playbook so a denial that aborted the loop
+			// would also starve the granted playbook of its run.
+			ungrantedPlaybook = models.Playbook{
+				Name:      "new config writer (no grant)",
+				Namespace: "default",
+				Spec:      spec,
+				Source:    models.SourceConfigFile,
+			}
+			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&ungrantedPlaybook).Error
+			Expect(err).NotTo(HaveOccurred())
+
+			// Granted, but its filter never passes. A filter failure must not fail
+			// the event either.
+			filteredSpec := playbookSpec
+			filteredSpec.Filters = []string{"config.name == 'never'"}
+			filteredSpecJSON, err := json.Marshal(filteredSpec)
+			Expect(err).NotTo(HaveOccurred())
+			filteredPlaybook = models.Playbook{
+				Name:      "new config writer (filtered out)",
+				Namespace: "default",
+				Spec:      filteredSpecJSON,
+				Source:    models.SourceConfigFile,
+			}
+			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&filteredPlaybook).Error
+			Expect(err).NotTo(HaveOccurred())
+
 			playbook = models.Playbook{
 				Name:      "new config writer",
 				Namespace: "default",
@@ -58,14 +85,16 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&playbook).Error
 			Expect(err).NotTo(HaveOccurred())
 
-			ginkgo.DeferCleanup(bindPlaybook(playbook,
-				runOnItself(playbook, &allConfigs),
-				playbookGrant{Action: policy.ActionRead, Resource: allConfigs},
-			))
+			for _, pb := range []models.Playbook{playbook, filteredPlaybook} {
+				ginkgo.DeferCleanup(bindPlaybook(pb,
+					runOnItself(pb, &allConfigs),
+					playbookGrant{Action: policy.ActionRead, Resource: allConfigs},
+				))
+			}
 		})
 
 		ginkgo.AfterAll(func() {
-			err := DefaultContext.DB().Delete(&models.PlaybookRun{}, "playbook_id = ?", playbook.ID).Error
+			err := DefaultContext.DB().Delete(&models.PlaybookRun{}, "playbook_id IN ?", []uuid.UUID{playbook.ID, ungrantedPlaybook.ID, filteredPlaybook.ID}).Error
 			Expect(err).NotTo(HaveOccurred())
 
 			err = DefaultContext.DB().Delete(&models.ConfigItem{}, "id IN ?", newConfigItems).Error
@@ -117,6 +146,39 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 				DefaultContext.DB().Where("config_id = ? and playbook_id = ?", newConfigItems[1], playbook.ID).First(&run)
 				return run.Status
 			}, "10s", "1s").Should(BeElementOf(models.PlaybookRunStatusScheduled, models.PlaybookRunStatusRunning, models.PlaybookRunStatusCompleted))
+		})
+
+		ginkgo.It("Expect the event consumer to NOT save a run for the playbook without a grant", func() {
+			Eventually(func() int64 {
+				var count int64
+				Expect(DefaultContext.DB().Model(&models.JobHistory{}).
+					Where("name = ? AND resource_id = ?", "SavePlaybookRun", ungrantedPlaybook.ID.String()).
+					Count(&count).Error).To(Succeed())
+				return count
+			}, "10s", "500ms").Should(BeNumerically(">", 0))
+
+			var runCount int64
+			Expect(DefaultContext.DB().Model(&models.PlaybookRun{}).Where("playbook_id = ?", ungrantedPlaybook.ID).Count(&runCount).Error).To(Succeed())
+			Expect(runCount).To(BeZero())
+			expectScheduledRunJobHistory(ungrantedPlaybook.ID, "access denied")
+		})
+
+		ginkgo.It("Expect the event consumer to NOT save a run for the playbook whose filter failed", func() {
+			var runCount int64
+			Expect(DefaultContext.DB().Model(&models.PlaybookRun{}).Where("playbook_id = ?", filteredPlaybook.ID).Count(&runCount).Error).To(Succeed())
+			Expect(runCount).To(BeZero())
+		})
+
+		ginkgo.It("Expect the event to be consumed without retries and exactly one run for the granted playbook", func() {
+			var pending int64
+			Expect(DefaultContext.DB().Model(&models.Event{}).
+				Where("name = ? AND properties->>'id' = ?", api.EventConfigCreated, newConfigItems[1]).
+				Count(&pending).Error).To(Succeed())
+			Expect(pending).To(BeZero())
+
+			var runCount int64
+			Expect(DefaultContext.DB().Model(&models.PlaybookRun{}).Where("config_id = ? and playbook_id = ?", newConfigItems[1], playbook.ID).Count(&runCount).Error).To(Succeed())
+			Expect(runCount).To(Equal(int64(1)))
 		})
 	})
 

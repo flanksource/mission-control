@@ -107,7 +107,15 @@ var _ = ginkgo.Describe("Work no person started", func() {
 		handleWarning := func() {
 			ginkgo.GinkgoHelper()
 			scheduler := playbookScheduler{Ring: events.NewEventRing(10)}
-			Expect(scheduler.Handle(DefaultContext, models.Event{Name: api.EventConfigWarning, EventID: config.ID})).To(Succeed())
+			Expect(scheduler.Handle(DefaultContext, models.Event{ID: uuid.New(), Name: api.EventConfigWarning, EventID: config.ID})).To(Succeed())
+
+			Eventually(func() int64 {
+				var pending int64
+				Expect(DefaultContext.DB().Model(&models.Event{}).
+					Where("name = ? AND properties->>'playbook_id' = ?", api.EventPlaybookTrigger, playbook.ID.String()).
+					Count(&pending).Error).To(Succeed())
+				return pending
+			}, "10s", "200ms").Should(BeZero())
 		}
 
 		ginkgo.BeforeAll(func() {
@@ -155,6 +163,11 @@ var _ = ginkgo.Describe("Work no person started", func() {
 			Expect(DefaultContext.DB().Where("playbook_id = ?", playbook.ID).First(&run).Error).To(Succeed())
 			Expect(run.ConfigID).To(Equal(&config.ID))
 			Expect(run.CreatedBy).To(BeNil())
+
+			Eventually(func() models.PlaybookRunStatus {
+				Expect(DefaultContext.DB().Where("id = ?", run.ID).First(&run).Error).To(Succeed())
+				return run.Status
+			}, "15s", "500ms").Should(BeElementOf(models.PlaybookRunStatusCompleted, models.PlaybookRunStatusFailed))
 		})
 	})
 

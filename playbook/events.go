@@ -2,6 +2,7 @@ package playbook
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -15,6 +16,8 @@ import (
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"github.com/samber/oops"
+	"gorm.io/gorm/clause"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -22,7 +25,6 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/notification"
-	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/flanksource/incident-commander/utils"
 )
 
@@ -62,6 +64,7 @@ func RegisterEvents(ctx context.Context) {
 	EventRing = events.NewEventRing(ctx.Properties().Int("events.audit.size", events.DefaultEventLogSize))
 	ps := playbookScheduler{Ring: EventRing}
 	events.RegisterSyncHandlerNamed("playbook.Handle", ps.Handle, api.EventStatusGroup...)
+	events.RegisterAsyncHandler("playbook.createTriggeredRuns", createTriggeredRuns, 1, 5, api.EventPlaybookTrigger)
 
 	events.RegisterSyncHandlerNamed("playbook.onNewRun", onNewRun, api.EventPlaybookRun)
 	events.RegisterSyncHandlerNamed("playbook.onApprovalUpdated", onApprovalUpdated, api.EventPlaybookSpecApprovalUpdated)
@@ -96,6 +99,7 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 		return err
 	}
 
+	var enqueueErrs []error
 	for _, p := range playbooks {
 		celEnv := eventResource.AsMap()
 		t.Ring.Add(event, celEnv)
@@ -107,72 +111,140 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 			continue
 		}
 
-		run := models.PlaybookRun{
-			PlaybookID: p.ID,
-			Status:     models.PlaybookRunStatusScheduled,
-			Spec:       p.Spec,
-		}
-
-		if playbook.Spec.Approval != nil && !playbook.Spec.Approval.Approvers.Empty() {
-			run.Status = models.PlaybookRunStatusPendingApproval
-		}
+		req := RunParams{ID: p.ID}
+		var matched bool
 
 		switch specEvent.Class {
 		case "canary":
-			run.CheckID = &eventResource.Check.ID
-			if ok, err := matchResource(ctx, eventResource.Check.Labels, celEnv, playbook.Spec.On.Canary); err != nil {
-				logToJobHistory(ctx, p.ID.String(), err.Error())
-				continue
-			} else if ok {
-				if err := startEventRun(ctx, &p, run); err != nil {
-					return err
-				}
-			}
+			req.CheckID = &eventResource.Check.ID
+			matched, err = matchResource(ctx, eventResource.Check.Labels, celEnv, playbook.Spec.On.Canary)
 		case "component":
-			run.ComponentID = &eventResource.Component.ID
-			if ok, err := matchResource(ctx, eventResource.Component.Labels, celEnv, playbook.Spec.On.Component); err != nil {
-				logToJobHistory(ctx, p.ID.String(), err.Error())
-				continue
-			} else if ok {
-				if err := startEventRun(ctx, &p, run); err != nil {
-					return err
-				}
-			}
+			req.ComponentID = &eventResource.Component.ID
+			matched, err = matchResource(ctx, eventResource.Component.Labels, celEnv, playbook.Spec.On.Component)
 		case "config":
-			run.ConfigID = &eventResource.Config.ID
-			if ok, err := matchResource(ctx, eventResource.Config.Tags, celEnv, playbook.Spec.On.Config); err != nil {
-				logToJobHistory(ctx, p.ID.String(), err.Error())
-				continue
-			} else if ok {
-				if err := startEventRun(ctx, &p, run); err != nil {
-					return err
-				}
-			}
+			req.ConfigID = &eventResource.Config.ID
+			matched, err = matchResource(ctx, eventResource.Config.Tags, celEnv, playbook.Spec.On.Config)
+		}
+
+		if err != nil {
+			logToJobHistory(ctx, p.ID.String(), err.Error())
+			continue
+		}
+		if !matched {
+			continue
+		}
+
+		if err := enqueuePlaybookTrigger(ctx, event, req); err != nil {
+			enqueueErrs = append(enqueueErrs, fmt.Errorf("playbook %s: %w", p.ID, err))
 		}
 	}
 
-	return nil
+	// Enqueueing is idempotent, so retrying the event can't trigger a playbook twice.
+	return errors.Join(enqueueErrs...)
 }
 
-// startEventRun creates the run of a playbook triggered by an event. No person started it, so it's created only if
-// the playbook passes, as itself, the checks a person starting it would. A refusal creates no run and is recorded in
-// the playbook's job history.
-func startEventRun(ctx context.Context, playbook *models.Playbook, run models.PlaybookRun) error {
-	playbookCtx := RunAsPlaybook(ctx, playbook)
+// enqueuePlaybookTrigger queues the run of a matched playbook for createTriggeredRuns.
+//
+// The trigger's id is derived from the playbook and the source event's queue row, and it's also the id of the run,
+// so neither a retried source event nor a retried trigger can create a second run.
+func enqueuePlaybookTrigger(ctx context.Context, source models.Event, req RunParams) error {
+	properties := map[string]string{
+		"playbook_id":     req.ID.String(),
+		"source_event":    source.Name,
+		"source_event_id": source.ID.String(),
+	}
+	if req.CheckID != nil {
+		properties["check_id"] = req.CheckID.String()
+	}
+	if req.ComponentID != nil {
+		properties["component_id"] = req.ComponentID.String()
+	}
+	if req.ConfigID != nil {
+		properties["config_id"] = req.ConfigID.String()
+	}
 
-	templateEnv, err := runner.CreateTemplateEnv(playbookCtx, playbook, run, nil)
+	trigger := models.Event{
+		Name:       api.EventPlaybookTrigger,
+		EventID:    uuid.NewSHA1(req.ID, []byte(source.ID.String())),
+		Properties: properties,
+	}
+
+	// Unlike events.EventQueueOnConflictClause, this keeps the attempts of a trigger that's already queued.
+	return ctx.DB().Clauses(clause.OnConflict{Columns: models.EventQueueUniqueConstraint(), DoNothing: true}).Create(&trigger).Error
+}
+
+// createTriggeredRuns creates the runs queued by playbook.Handle, each as its playbook.
+//
+// A failure that a retry can't fix (denied, invalid, filtered out, ...) is recorded in the playbook's job history and
+// dropped. Any other failure is returned for a retry of that trigger alone.
+func createTriggeredRuns(ctx context.Context, triggers models.Events) models.Events {
+	var failed models.Events
+	for _, trigger := range triggers {
+		err := createTriggeredRun(ctx, trigger)
+		if err == nil {
+			continue
+		}
+
+		logToJobHistory(ctx, trigger.Properties["playbook_id"], err.Error())
+		if isPermanentRunError(err) {
+			continue
+		}
+
+		trigger.SetError(err.Error())
+		trigger.LastAttempt = lo.ToPtr(time.Now())
+		failed = append(failed, trigger)
+	}
+
+	return failed
+}
+
+func createTriggeredRun(ctx context.Context, trigger models.Event) error {
+	playbookID, err := uuid.Parse(trigger.Properties["playbook_id"])
 	if err != nil {
-		logToJobHistory(ctx, playbook.ID.String(), err.Error())
+		return dutyAPI.Errorf(dutyAPI.EINVALID, "invalid playbook trigger: playbook_id: %v", err)
+	}
+
+	req := RunParams{ID: playbookID, runID: trigger.EventID}
+	for key, target := range map[string]**uuid.UUID{"check_id": &req.CheckID, "component_id": &req.ComponentID, "config_id": &req.ConfigID} {
+		if v, ok := trigger.Properties[key]; ok {
+			id, err := uuid.Parse(v)
+			if err != nil {
+				return dutyAPI.Errorf(dutyAPI.EINVALID, "invalid playbook trigger: %s: %v", key, err)
+			}
+			*target = &id
+		}
+	}
+
+	var existing int64
+	if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", req.runID).Count(&existing).Error; err != nil {
+		return ctx.Oops().Wrap(err)
+	} else if existing > 0 {
 		return nil
 	}
 
-	if err := authorizeRunStart(playbookCtx, run, templateEnv); err != nil {
-		ctx.Warnf("playbook %s/%s was refused an event-triggered run: %v", playbook.Namespace, playbook.Name, err)
-		logToJobHistory(ctx, playbook.ID.String(), err.Error())
-		return nil
+	var playbook models.Playbook
+	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", playbookID).Find(&playbook).Error; err != nil {
+		return ctx.Oops().Wrap(err)
+	} else if playbook.ID == uuid.Nil {
+		return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "playbook %s not found", playbookID)
 	}
 
-	return ctx.DB().Create(&run).Error
+	// Avoid Run here because recording the run as a config change would emit
+	// another config.changed event and retrigger matching playbooks.
+	_, err = createPlaybookRun(RunAsPlaybook(ctx, &playbook), &playbook, req)
+	return err
+}
+
+// isPermanentRunError reports whether retrying the creation of a run would fail the same way.
+func isPermanentRunError(err error) bool {
+	code := dutyAPI.ErrorCode(err)
+	if oopsErr, ok := oops.AsOops(err); ok {
+		if c, ok := oopsErr.Code().(string); ok && c != "" {
+			code = c
+		}
+	}
+
+	return lo.Contains([]string{dutyAPI.EINVALID, dutyAPI.EFORBIDDEN, dutyAPI.ENOTFOUND}, code)
 }
 
 // logToJobHistory logs any failures in saving a playbook run to the job history.

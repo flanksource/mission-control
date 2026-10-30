@@ -31,12 +31,14 @@ var _ = ginkgo.Describe("scheduled playbook runs", func() {
 			},
 		})
 
+		ginkgo.DeferCleanup(bindPlaybook(playbook, runOnItself(playbook, nil)))
+
 		agent := saveScheduledRunAgentForTest()
 		req := RunParams{
 			ID:      playbook.ID,
 			AgentID: &agent.ID,
 		}
-		run, err := createPlaybookRun(DefaultContext.WithObject(&playbook, req), &playbook, req, playbookRunOptions{})
+		run, err := createPlaybookRun(DefaultContext.WithSubject(playbook.ID.String()), &playbook, req)
 		Expect(err).To(Succeed())
 
 		Expect(run.Parameters["message"]).To(Equal(playbook.Name))
@@ -55,8 +57,10 @@ var _ = ginkgo.Describe("scheduled playbook runs", func() {
 			},
 		})
 
+		ginkgo.DeferCleanup(bindPlaybook(playbook, runOnItself(playbook, nil)))
+
 		req := RunParams{ID: playbook.ID}
-		run, err := createPlaybookRun(DefaultContext.WithUser(&dummy.JohnDoe).WithObject(&playbook, req), &playbook, req, playbookRunOptions{})
+		run, err := createPlaybookRun(DefaultContext.WithUser(&dummy.JohnDoe).WithSubject(playbook.ID.String()), &playbook, req)
 		Expect(err).To(Succeed())
 		Expect(run.Status).To(Equal(models.PlaybookRunStatusPendingApproval))
 	})
@@ -86,13 +90,15 @@ var _ = ginkgo.Describe("scheduled playbook runs", func() {
 		})
 		Expect(err).To(Succeed())
 
+		ginkgo.DeferCleanup(bindPlaybook(playbook, runOnItself(playbook, nil)))
+
 		agent := saveScheduledRunAgentForTest()
 		req := RunParams{
 			ID:      playbook.ID,
 			AgentID: &agent.ID,
 			Params:  templatedParams,
 		}
-		run, err := createPlaybookRun(DefaultContext.WithObject(&playbook, req), &playbook, req, playbookRunOptions{})
+		run, err := createPlaybookRun(DefaultContext.WithSubject(playbook.ID.String()), &playbook, req)
 		Expect(err).To(Succeed())
 		Expect(run.Parameters["message"]).To(Equal(playbook.Name))
 	})
