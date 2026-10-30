@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/flanksource/duty/context"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/flanksource/incident-commander/connection"
 )
 
 const toolListConnections = "list_connections"
@@ -20,7 +20,7 @@ func ConnectionListHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 		return nil, err
 	}
 
-	conns, err := db.ListConnections(ctx)
+	conns, err := connection.ListSummaries(ctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -38,16 +38,12 @@ func ConnectionResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 		return nil, fmt.Errorf("invalid connection format: %s", req.Params.URI)
 	}
 
-	conn, err := context.FindConnection(ctx, name, namespace)
+	conn, err := connection.GetSummary(ctx, namespace, name)
 	if err != nil {
 		return nil, err
 	}
 
-	if conn == nil {
-		return nil, fmt.Errorf("connection not found")
-	}
-
-	jsonData, err := json.Marshal(db.MaskConnection(*conn))
+	jsonData, err := json.Marshal(conn)
 	if err != nil {
 		return nil, err
 	}
@@ -63,11 +59,11 @@ func ConnectionResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 
 func registerConnections(s *server.MCPServer) {
 	s.AddResourceTemplate(
-		mcp.NewResourceTemplate("connection://{namespace}/{name}", "Config Item",
-			mcp.WithTemplateDescription("Config Item Data"), mcp.WithTemplateMIMEType(echo.MIMEApplicationJSON)),
+		mcp.NewResourceTemplate("connection://{namespace}/{name}", "Connection",
+			mcp.WithTemplateDescription("A connection's id, name, namespace, type and source"), mcp.WithTemplateMIMEType(echo.MIMEApplicationJSON)),
 		ConnectionResourceHandler)
 
 	s.AddTool(mcp.NewTool(toolListConnections,
-		mcp.WithDescription("List all connection endpoints, with their credentials masked. Returns empty array if no connections configured. Use for discovering available data sources."),
+		mcp.WithDescription("List connections by id, name, namespace, type and source. Settings and credentials aren't returned. Returns empty array if no connections configured. Use for discovering available data sources."),
 		mcp.WithReadOnlyHintAnnotation(true)), ConnectionListHandler)
 }

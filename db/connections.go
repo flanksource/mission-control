@@ -94,15 +94,6 @@ func DeleteStaleConnection(ctx context.Context, newer *v1.Connection) error {
 		Update("deleted_at", duty.Now()).Error
 }
 
-// ListConnections lists connections with their credentials masked.
-func ListConnections(ctx context.Context) ([]models.Connection, error) {
-	var c []models.Connection
-	if err := ctx.DB().Omit("password", "certificate").Where("deleted_at IS NULL").Find(&c).Error; err != nil {
-		return nil, err
-	}
-	return lo.Map(c, func(conn models.Connection, _ int) models.Connection { return MaskConnection(conn) }), nil
-}
-
 func FindDefaultLLMProviderConnection(ctx context.Context) (*models.Connection, error) {
 	if localAPI.DefaultLLMConnection == "" {
 		return nil, api.Errorf(api.ENOTFOUND, "no default LLM connection configured. Use --llm-connection flag to specify one")
