@@ -34,23 +34,30 @@
         "message"
       ]
     },
-    "ExternalIdentityClaims": {
+    "ExternalIdentity": {
       "properties": {
         "username": {
           "type": "string",
-          "description": "Username is the claim that uniquely and stably identifies the user in the external application.\nDefaults to sub."
+          "description": "Username is a CEL expression over claims that returns the string uniquely and stably identifying the user\nin the external application. The person is keyed by \u003cprovider\u003e:\u003cusername\u003e."
         },
         "name": {
           "type": "string",
-          "description": "Name is the claim with the user's display name."
+          "description": "Name is a CEL expression over claims that returns the user's display name. Defaults to the username."
         },
         "email": {
           "type": "string",
-          "description": "Email is the claim with the user's email.\nIt's only displayed and never used to match Mission Control users."
+          "description": "Email is a CEL expression over claims that returns the user's email.\nIt's only displayed and never used to match Mission Control users."
+        },
+        "teams": {
+          "$ref": "#/$defs/ExternalIdentityTeams",
+          "description": "Teams maps the user into existing teams. Without it, the provider adds no one to any team."
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "required": [
+        "username"
+      ]
     },
     "ExternalIdentityProvider": {
       "properties": {
@@ -72,13 +79,13 @@
       },
       "additionalProperties": false,
       "type": "object",
-      "description": "ExternalIdentityProvider lets an external application authenticate its users to Mission Control\nwith JWTs signed by its own issuer.\n\nA user is represented by a federated person (keyed by \u003cprovider\u003e:\u003cusername\u003e), and their access\ncomes only from RoleBindings whose oidc subjects match the claims of their token."
+      "description": "ExternalIdentityProvider lets an external application authenticate its users to Mission Control\nwith JWTs signed by its own issuer.\n\nA user is represented by a federated person (keyed by \u003cprovider\u003e:\u003cusername\u003e), who may be mapped into\nthe teams the provider allows. RoleBindings select them through those teams, or by \u003cprovider\u003e:\u003cusername\u003e in people."
     },
     "ExternalIdentityProviderSpec": {
       "properties": {
         "issuer": {
           "type": "string",
-          "description": "Issuer must exactly match the iss claim of accepted tokens."
+          "description": "Issuer must exactly match the iss claim of accepted tokens. It can't be changed."
         },
         "audience": {
           "type": "string",
@@ -99,9 +106,9 @@
           "type": "string",
           "description": "MaxTokenAge rejects tokens whose lifetime (exp - iat) is longer. Defaults to 5m."
         },
-        "claims": {
-          "$ref": "#/$defs/ExternalIdentityClaims",
-          "description": "Claims maps token claims to the federated person.\nRoleBindings can match any claim of the token."
+        "identity": {
+          "$ref": "#/$defs/ExternalIdentity",
+          "description": "Identity says what person a token becomes, and which teams they're in."
         },
         "disabled": {
           "type": "boolean",
@@ -112,7 +119,8 @@
       "type": "object",
       "required": [
         "issuer",
-        "audience"
+        "audience",
+        "identity"
       ]
     },
     "ExternalIdentityProviderStatus": {
@@ -129,6 +137,27 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "ExternalIdentityTeams": {
+      "properties": {
+        "mapper": {
+          "type": "string",
+          "description": "Mapper is a CEL expression over claims that returns a list of team names."
+        },
+        "allowed": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Allowed are the only teams the provider may add anyone to."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "mapper",
+        "allowed"
+      ]
     },
     "FieldsV1": {
       "properties": {},

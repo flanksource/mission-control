@@ -23,19 +23,40 @@ import (
 const (
 	// PersonTypeFederated is a user of an external application, authenticated by an ExternalIdentityProvider
 	PersonTypeFederated = "federated"
+
+	// FederatedTeamSourcePrefix prefixes the source of the team memberships an external identity provider adds.
+	FederatedTeamSourcePrefix = "provider/"
 )
+
+// FederatedTeamSource is the source of the team memberships the external identity provider adds.
+func FederatedTeamSource(provider string) string {
+	return FederatedTeamSourcePrefix + provider
+}
+
+// RemoveFederatedMemberships removes the memberships the external identity provider added to teams that aren't
+// allowed, and returns them.
+func RemoveFederatedMemberships(ctx context.Context, provider string, allowed []string) ([]dbModels.TeamMember, error) {
+	query := ctx.DB().Clauses(clause.Returning{}).Where("source = ?", FederatedTeamSource(provider))
+	if len(allowed) > 0 {
+		query = query.Where("team_id NOT IN (SELECT id FROM teams WHERE name IN ? AND deleted_at IS NULL)", allowed)
+	}
+
+	var removed []dbModels.TeamMember
+	if err := query.Delete(&removed).Error; err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to remove the team memberships of external identity provider %s", provider)
+	}
+	return removed, nil
+}
 
 // GetOrCreateFederatedPerson returns the person representing a user of an external identity provider,
 // creating it on first sight. The person is keyed by <provider>:<username>.
 //
+// A nil name or email keeps the stored value. A person created without a name is named after the username.
+//
 // The claimed email is kept in the person's properties, never in people.email: it isn't verified
 // by Mission Control, so it must not collide with or be matched against Mission Control users.
-func GetOrCreateFederatedPerson(ctx context.Context, provider, username, name, email string) (*models.Person, error) {
+func GetOrCreateFederatedPerson(ctx context.Context, provider, username string, name, email *string) (*models.Person, error) {
 	externalID := provider + ":" + username
-	if name == "" {
-		name = username
-	}
-	properties := models.PersonProperties{Provider: provider, Email: email}
 
 	var person models.Person
 	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
@@ -46,26 +67,61 @@ func GetOrCreateFederatedPerson(ctx context.Context, provider, username, name, e
 
 		err := ctx.DB().Where("external_id = ? AND type = ? AND deleted_at IS NULL", externalID, PersonTypeFederated).First(&person).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			person = models.Person{Name: name, Type: PersonTypeFederated, ExternalID: externalID, Properties: properties}
+			person = models.Person{
+				Name:       lo.FromPtrOr(name, username),
+				Type:       PersonTypeFederated,
+				ExternalID: externalID,
+				Properties: models.PersonProperties{Provider: provider, Email: lo.FromPtr(email)},
+			}
 			return ctx.DB().Create(&person).Error
 		} else if err != nil {
 			return err
 		}
 
-		if person.Name == name && person.Properties == properties {
+		properties := models.PersonProperties{Provider: provider, Email: lo.FromPtrOr(email, person.Properties.Email)}
+		newName := lo.FromPtrOr(name, person.Name)
+		if person.Name == newName && person.Properties == properties {
 			return nil
 		}
 
-		person.Name = name
+		person.Name = newName
 		person.Properties = properties
 		return ctx.DB().Model(&models.Person{}).Where("id = ?", person.ID).
-			Updates(map[string]any{"name": name, "properties": properties}).Error
+			Updates(map[string]any{"name": newName, "properties": properties}).Error
 	})
 	if err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to get or create federated person %s", externalID)
 	}
 
 	return &person, nil
+}
+
+// RetireFederatedPeople retires the people of a deleted external identity provider: they're kept for audit, but
+// deleted, so they're never signed in as or selected again, and removed from every team.
+// It returns the memberships it removed.
+func RetireFederatedPeople(ctx context.Context, provider string) ([]dbModels.TeamMember, error) {
+	var removed []dbModels.TeamMember
+	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
+		var ids []uuid.UUID
+		if err := ctx.DB().Model(&models.Person{}).
+			Where("type = ? AND properties->>'provider' = ? AND deleted_at IS NULL", PersonTypeFederated, provider).
+			Pluck("id", &ids).Error; err != nil {
+			return err
+		}
+		if len(ids) == 0 {
+			return nil
+		}
+
+		if err := ctx.DB().Clauses(clause.Returning{}).Where("person_id IN ?", ids).Delete(&removed).Error; err != nil {
+			return err
+		}
+
+		return ctx.DB().Model(&models.Person{}).Where("id IN ?", ids).Update("deleted_at", duty.Now()).Error
+	})
+	if err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to retire the people of external identity provider %s", provider)
+	}
+	return removed, nil
 }
 
 func UpdateUserProperties(ctx context.Context, userID string, newProps api.PersonProperties) error {

@@ -483,13 +483,12 @@ func resolveReviewSubjects(ctx context.Context, snapshot *dutyRBAC.PolicySnapsho
 	return subjects, nil
 }
 
-// reviewableSubject reports whether a review may be run as the subject. Bindings, access tokens and users of external
-// identity providers aren't subjects. An access token's limit is filed under its bindings, and isn't for anyone allowed
-// to review access to probe (specs/authorization/token-bindings.md).
+// reviewableSubject reports whether a review may be run as the subject. Bindings and access tokens aren't subjects.
+// An access token's limit is filed under its bindings, and isn't for anyone allowed to review access to probe
+// (specs/authorization/token-bindings.md).
 func reviewableSubject(subject string) bool {
 	return !strings.HasPrefix(subject, models.AccessTokenPrincipalPrefix) &&
-		!strings.HasPrefix(subject, models.BindingPrincipalPrefix) &&
-		!strings.HasPrefix(subject, models.FederatedPrincipalPrefix)
+		!strings.HasPrefix(subject, models.BindingPrincipalPrefix)
 }
 
 // grantedSubjects returns the people, teams and playbooks the policy holds a grant or a membership for, that the

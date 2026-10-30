@@ -880,10 +880,10 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 
 		It("filters rows for federated users by their bindings only", func() {
 			federatedUser := func(username string, bindings ...string) (*models.Person, string) {
-				person, err := db.GetOrCreateFederatedPerson(DefaultContext, "appx", username, username, "")
+				person, err := db.GetOrCreateFederatedPerson(DefaultContext, "appx", username, &username, nil)
 				Expect(err).ToNot(HaveOccurred())
 
-				subject := models.FederatedPrincipal(person.ID.String())
+				subject := person.ID.String()
 				if len(bindings) > 0 {
 					Expect(rbac.AddRoleForUser(subject, bindings...)).To(Succeed())
 				}
@@ -1002,9 +1002,9 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 
 			listStatus := func(bindingName, table string) int {
 				GinkgoHelper()
-				person, err := db.GetOrCreateFederatedPerson(DefaultContext, "appx", "lister-"+bindingName, "lister", "")
+				person, err := db.GetOrCreateFederatedPerson(DefaultContext, "appx", "lister-"+bindingName, lo.ToPtr("lister"), nil)
 				Expect(err).ToNot(HaveOccurred())
-				subject := models.FederatedPrincipal(person.ID.String())
+				subject := person.ID.String()
 				Expect(rbac.AddRoleForUser(subject, models.BindingPrincipal(namespace, bindingName))).To(Succeed())
 				DeferCleanup(func() {
 					Expect(rbac.DeleteAllRolesForUser(subject)).To(Succeed())

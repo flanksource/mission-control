@@ -469,12 +469,58 @@ func RoleBindingSpec(binding models.RoleBinding) (v1.RoleBindingSpec, error) {
 }
 
 // resolvePeople returns the ids of the people a binding selects: every person for people: ["*"], otherwise those
-// with the listed emails.
+// with the listed emails, and the users of external identity providers the <provider>:<username> and <provider>:*
+// entries name.
 func (a *PermissionAdapter) resolvePeople(people []string) ([]string, error) {
 	if len(people) == 1 && people[0] == "*" {
 		return a.resolveAllPeople()
 	}
-	return a.resolvePeopleByEmail(people)
+
+	var emails, federated []string
+	for _, entry := range people {
+		if _, _, ok := v1.ParseProviderPerson(entry); ok {
+			federated = append(federated, entry)
+		} else {
+			emails = append(emails, entry)
+		}
+	}
+
+	ids, err := a.resolvePeopleByEmail(emails)
+	if err != nil {
+		return nil, err
+	}
+
+	federatedIDs, err := a.resolveFederatedPeople(federated)
+	if err != nil {
+		return nil, err
+	}
+	return append(ids, federatedIDs...), nil
+}
+
+// resolveFederatedPeople returns the ids of the users of external identity providers that the entries name, by
+// <provider>:<username>, or every user of a provider by <provider>:*.
+func (a *PermissionAdapter) resolveFederatedPeople(entries []string) ([]string, error) {
+	if len(entries) == 0 {
+		return nil, nil
+	}
+
+	var externalIDs, providers []string
+	for _, entry := range entries {
+		provider, username, _ := v1.ParseProviderPerson(entry)
+		if username == "*" {
+			providers = append(providers, provider)
+		} else {
+			externalIDs = append(externalIDs, entry)
+		}
+	}
+
+	var ids []string
+	err := a.ctx.DB().Select("id").Model(&models.Person{}).
+		Where("deleted_at IS NULL").
+		Where("type = ?", "federated").
+		Where("external_id IN ? OR properties->>'provider' IN ?", externalIDs, providers).
+		Find(&ids).Error
+	return ids, err
 }
 
 // resolveAllPeople returns the ids of every human user of Mission Control. Agents, users of external identity

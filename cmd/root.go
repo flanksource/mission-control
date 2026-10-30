@@ -150,7 +150,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringSliceVar(&echo.AllowedCORS, "allowed-cors", []string{"https://app.flanksource.com", "https://beta.flanksource.com"}, "Allowed CORS credential origins")
 	flags.BoolVar(&echo.UIEnabled, "ui", false, "Serve the catalog explorer UI at /ui")
 	flags.StringVar(&auth.IdentityRoleMapper, "identity-role-mapper", "", "CEL-Go expression to map a Kratos identity to teams (input: identity, return: {teams: []string}). Supports file path (prefixed with 'file://').")
-	flags.StringVar(&auth.ClerkTeamMapper, "clerk-team-mapper", "", "CEL-Go expression to map Clerk session claims to teams (input: claims, return: {teams: []string}). Supports file path (prefixed with 'file://'). Defaults to org admins in 'admins', guests in no team, everyone else in 'viewers'.")
+	flags.StringVar(&auth.ClerkTeamMapper, "clerk-team-mapper", "", "CEL-Go expression to map Clerk session claims to teams (input: claims, return: a list of team names, or {teams: []string}). Supports file path (prefixed with 'file://'). Defaults to org admins in 'admins', guests in no team, everyone else in 'viewers'.")
 	flags.StringVar(&api.DefaultArtifactConnection, "artifact-connection", "", "Specify the default connection to use for artifacts (can be the connection string or the connection id)")
 	flags.StringVar(&api.DefaultLLMConnection, "llm-connection", "", "Specify the default connection to use for LLM provider (can be the connection string or the connection id)")
 	flags.StringVar(&secret.KMSConnection, "secret-keeper-connection", "", "Specify the connection to use for secret keepers (can be the connection string or the connection id)")

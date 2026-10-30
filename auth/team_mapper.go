@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
+	"go.opentelemetry.io/otel/trace"
 
 	dbModels "github.com/flanksource/incident-commander/db/models"
 )
@@ -95,7 +96,7 @@ func mapTeams(ctx context.Context, personID uuid.UUID, expr string, env map[stri
 		return err
 	}
 
-	if err := syncMappedTeams(ctx, personID, teams); err != nil {
+	if err := syncMappedTeams(ctx, personID, SourceTeamMapper, teams); err != nil {
 		return err
 	}
 
@@ -123,7 +124,7 @@ func runTeamMapper(ctx context.Context, expr string, env map[string]any) ([]stri
 		return nil, ctx.Oops().Wrapf(err, "failed to run team mapper")
 	}
 
-	// A mapper returns a map, or older scripts a JSON encoded string
+	// A mapper returns a list or a map, or older scripts a JSON encoded string
 	res, ok := out.(string)
 	if !ok {
 		b, err := json.Marshal(out)
@@ -131,6 +132,14 @@ func runTeamMapper(ctx context.Context, expr string, env map[string]any) ([]stri
 			return nil, ctx.Oops().Wrapf(err, "team mapper returned %v", out)
 		}
 		res = string(b)
+	}
+
+	if strings.HasPrefix(strings.TrimSpace(res), "[") {
+		var teams []string
+		if err := json.Unmarshal([]byte(res), &teams); err != nil {
+			return nil, ctx.Oops().With("result", res).Errorf("team mapper must return a list of team names, got %s", res)
+		}
+		return lo.Uniq(lo.Compact(teams)), nil
 	}
 
 	var result struct {
@@ -142,69 +151,84 @@ func runTeamMapper(ctx context.Context, expr string, env map[string]any) ([]stri
 		return nil, ctx.Oops().
 			With("result", res).
 			Hint("https://docs.flanksource.com/reference/helm/mission-control/#identity-mapper").
-			Errorf("team mapper must return only {\"teams\": [...]}, got %s", res)
+			Errorf("team mapper must return a list of teams or {\"teams\": [...]}, got %s", res)
 	}
 
 	return lo.Uniq(lo.Compact(*result.Teams)), nil
 }
 
-// syncMappedTeams makes the person's mapped team memberships exactly the given teams.
+// syncMappedTeams makes the person's team memberships with the source exactly the given teams.
 // Memberships with any other source, e.g. added by an admin, are never touched.
 // A team that doesn't exist is skipped.
-func syncMappedTeams(ctx context.Context, personID uuid.UUID, teamNames []string) error {
-	var teams []models.Team
-	if len(teamNames) > 0 {
-		if err := ctx.DB().Where("name IN ? AND deleted_at IS NULL", teamNames).Find(&teams).Error; err != nil {
-			return ctx.Oops().Wrapf(err, "failed to find teams %v", teamNames)
-		}
-	}
-
-	for _, name := range teamNames {
-		if !slices.ContainsFunc(teams, func(t models.Team) bool { return t.Name == name }) {
-			ctx.Logger.Errorf("team mapper returned team %q for person %s, which doesn't exist", name, personID)
-		}
-	}
-
-	var mapped []dbModels.TeamMember
-	if err := ctx.DB().Where("person_id = ? AND source = ?", personID, SourceTeamMapper).Find(&mapped).Error; err != nil {
-		return ctx.Oops().Wrapf(err, "failed to get mapped teams of person %s", personID)
-	}
-
-	for _, team := range teams {
-		if slices.ContainsFunc(mapped, func(m dbModels.TeamMember) bool { return m.TeamID == team.ID }) {
-			continue
-		}
-
-		// A direct membership in the team is kept as it is
-		result := ctx.DB().Exec(`INSERT INTO team_members (team_id, person_id, source) VALUES (?, ?, ?)
-			ON CONFLICT (team_id, person_id) DO NOTHING`, team.ID, personID, SourceTeamMapper)
-		if result.Error != nil {
-			return ctx.Oops().Wrapf(result.Error, "failed to add person %s to team %s", personID, team.Name)
-		}
-		if result.RowsAffected > 0 {
-			ctx.Logger.V(3).Infof("team mapper added person %s to team %s", personID, team.Name)
-			if err := applyMembership(personID, team.ID, true); err != nil {
-				return ctx.Oops().Wrapf(err, "failed to add person %s to team %s", personID, team.Name)
+//
+// The memberships are written in one transaction, and the policy is updated only once it commits,
+// so a failed write changes nothing.
+func syncMappedTeams(ctx context.Context, personID uuid.UUID, source string, teamNames []string) error {
+	var added, removed []uuid.UUID
+	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
+		var teams []models.Team
+		if len(teamNames) > 0 {
+			if err := ctx.DB().Where("name IN ? AND deleted_at IS NULL", teamNames).Find(&teams).Error; err != nil {
+				return ctx.Oops().Wrapf(err, "failed to find teams %v", teamNames)
 			}
 		}
+
+		for _, name := range teamNames {
+			if !slices.ContainsFunc(teams, func(t models.Team) bool { return t.Name == name }) {
+				ctx.Logger.Errorf("team mapper returned team %q for person %s, which doesn't exist", name, personID)
+			}
+		}
+
+		var mapped []dbModels.TeamMember
+		if err := ctx.DB().Where("person_id = ? AND source = ?", personID, source).Find(&mapped).Error; err != nil {
+			return ctx.Oops().Wrapf(err, "failed to get mapped teams of person %s", personID)
+		}
+
+		for _, team := range teams {
+			if slices.ContainsFunc(mapped, func(m dbModels.TeamMember) bool { return m.TeamID == team.ID }) {
+				continue
+			}
+
+			// A direct membership in the team is kept as it is
+			result := ctx.DB().Exec(`INSERT INTO team_members (team_id, person_id, source) VALUES (?, ?, ?)
+				ON CONFLICT (team_id, person_id) DO NOTHING`, team.ID, personID, source)
+			if result.Error != nil {
+				return ctx.Oops().Wrapf(result.Error, "failed to add person %s to team %s", personID, team.Name)
+			} else if result.RowsAffected > 0 {
+				added = append(added, team.ID)
+			}
+		}
+
+		for _, m := range mapped {
+			if slices.ContainsFunc(teams, func(t models.Team) bool { return t.ID == m.TeamID }) {
+				continue
+			}
+
+			result := ctx.DB().Where("team_id = ? AND person_id = ? AND source = ?", m.TeamID, personID, source).
+				Delete(&dbModels.TeamMember{})
+			if result.Error != nil {
+				return ctx.Oops().Wrapf(result.Error, "failed to remove person %s from team %s", personID, m.TeamID)
+			} else if result.RowsAffected > 0 {
+				// None removed means an admin made it a direct membership in the meantime
+				removed = append(removed, m.TeamID)
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 
-	for _, m := range mapped {
-		if slices.ContainsFunc(teams, func(t models.Team) bool { return t.ID == m.TeamID }) {
-			continue
+	for _, teamID := range added {
+		ctx.Logger.V(3).Infof("team mapper added person %s to team %s", personID, teamID)
+		if err := applyMembership(personID, teamID, true); err != nil {
+			return ctx.Oops().Wrapf(err, "failed to add person %s to team %s", personID, teamID)
 		}
-
-		result := ctx.DB().Where("team_id = ? AND person_id = ? AND source = ?", m.TeamID, personID, SourceTeamMapper).
-			Delete(&dbModels.TeamMember{})
-		if result.Error != nil {
-			return ctx.Oops().Wrapf(result.Error, "failed to remove person %s from team %s", personID, m.TeamID)
-		} else if result.RowsAffected == 0 {
-			// An admin made it a direct membership in the meantime
-			continue
-		}
-		ctx.Logger.V(3).Infof("team mapper removed person %s from team %s", personID, m.TeamID)
-		if err := applyMembership(personID, m.TeamID, false); err != nil {
-			return ctx.Oops().Wrapf(err, "failed to remove person %s from team %s", personID, m.TeamID)
+	}
+	for _, teamID := range removed {
+		ctx.Logger.V(3).Infof("team mapper removed person %s from team %s", personID, teamID)
+		if err := applyMembership(personID, teamID, false); err != nil {
+			return ctx.Oops().Wrapf(err, "failed to remove person %s from team %s", personID, teamID)
 		}
 	}
 
@@ -214,7 +238,8 @@ func syncMappedTeams(ctx context.Context, personID uuid.UUID, teamNames []string
 // applyMembership updates the policy right away, so the request that triggered the sync already sees it.
 // The team_members notification does the same shortly after.
 func applyMembership(personID, teamID uuid.UUID, member bool) error {
-	if dutyRBAC.Enforcer() == nil {
+	enforcer := dutyRBAC.Enforcer()
+	if enforcer == nil {
 		return nil
 	}
 
@@ -223,6 +248,11 @@ func applyMembership(personID, teamID uuid.UUID, member bool) error {
 		err = dutyRBAC.AddRoleForUser(personID.String(), teamID.String())
 	} else {
 		err = dutyRBAC.DeleteRoleForUser(personID.String(), teamID.String())
+	}
+
+	// Cached decisions don't account for grouping changes
+	if cacheErr := enforcer.InvalidateCache(); err == nil {
+		err = cacheErr
 	}
 	InvalidateRLSCacheForUser(personID.String())
 	return err

@@ -19,6 +19,7 @@ import (
 	"github.com/flanksource/kopper"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
+	k8sMeta "k8s.io/apimachinery/pkg/api/meta"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/flanksource/incident-commander/api"
@@ -64,6 +65,13 @@ func launchKopper(ctx context.Context) {
 	if err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("error creating manager: %v", err))
 	}
+
+	// Which provider holds a name or issuer is decided against every provider, not only those reconciled so far
+	var providers v1.ExternalIdentityProviderList
+	if err := mgr.GetAPIReader().List(ctx, &providers); err != nil && !k8sMeta.IsNoMatchError(err) {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to list ExternalIdentityProviders: %v", err))
+	}
+	auth.SeedExternalIdentityProviders(ctx, providers.Items)
 
 	if _, err := kopper.SetupReconciler(ctx, mgr,
 		db.PersistConnectionFromCRD,
@@ -498,13 +506,13 @@ func tableUpdatesHandler(ctx context.Context) {
 		case <-agentUpdateChan:
 			schedulePolicyReload("agent")
 
-		// A created or deleted person changes who a RoleBinding selects, by email or by people: ["*"].
+		// A created or deleted person changes who a RoleBinding selects, by email, <provider>:<username> or people: ["*"].
 		case <-peopleUpdateChan:
 			schedulePolicyReload("people")
 
 		case <-policyReloadTimer.C:
 			policyReloadPending = false
-			if err := auth.RebuildOIDCBindings(ctx); err != nil {
+			if err := adapter.ReloadPolicy(); err != nil {
 				ctx.Logger.Errorf("error rebuilding authorization policy: %v", err)
 			}
 

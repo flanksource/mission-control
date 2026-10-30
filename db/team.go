@@ -101,7 +101,12 @@ func syncTeamMembers(ctx context.Context, teamID uuid.UUID, members []string) er
 	// Add new members
 	for personID := range newMemberIDs {
 		if _, exists := existingMemberIDs[personID]; !exists {
-			if err := ctx.DB().Clauses(clause.OnConflict{DoNothing: true}).Create(&dbModels.TeamMember{
+			// A membership an external identity provider added becomes the team's own, which the provider never removes
+			if err := ctx.DB().Clauses(clause.OnConflict{
+				Columns:   []clause.Column{{Name: "team_id"}, {Name: "person_id"}},
+				DoUpdates: clause.Assignments(map[string]any{"source": models.SourceCRD}),
+				Where:     clause.Where{Exprs: []clause.Expression{clause.Expr{SQL: "team_members.source LIKE ?", Vars: []any{FederatedTeamSourcePrefix + "%"}}}},
+			}).Create(&dbModels.TeamMember{
 				TeamID:   teamID,
 				PersonID: personID,
 				Source:   models.SourceCRD,

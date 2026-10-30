@@ -59,8 +59,8 @@ func DownloadKubeConfig(c echo.Context) error {
 			adapter.ActionKubernetesProxyRead, adapter.ActionKubernetesProxyWrite))
 	}
 
-	// The kubeconfig embeds an access token, which authenticates as the person without the grants the subject is limited to
-	if !icrbac.ActsAsPerson(ctx) {
+	// The kubeconfig embeds an access token, which users of external identity providers can't have (specs/authorization/access-tokens.md)
+	if user := ctx.User(); user != nil && user.Type == db.PersonTypeFederated {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "kubeconfigs can't be downloaded by users of external identity providers"))
 	}
 

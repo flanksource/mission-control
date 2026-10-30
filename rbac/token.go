@@ -142,11 +142,3 @@ func TokenAllows(ctx context.Context, subject string, attr *models.ABACAttribute
 		return rbac.HasPermission(ctx, principal, attr, action)
 	})
 }
-
-// ActsAsPerson reports whether the request is checked as its person. A user of an external identity provider is
-// checked as the bindings their token's claims match instead, so a credential that authenticates as the person,
-// e.g. an access token, would give them grants they don't have.
-func ActsAsPerson(ctx context.Context) bool {
-	user := ctx.User()
-	return user != nil && ctx.Subject() == user.ID.String()
-}

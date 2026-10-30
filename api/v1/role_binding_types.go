@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"net/mail"
 	"strings"
-	"sync"
 
 	"github.com/flanksource/kopper"
-	"github.com/google/cel-go/cel"
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -38,7 +37,7 @@ type RoleBindingSpec struct {
 	Role string `json:"role" yaml:"role"`
 
 	// Subjects the role is granted to. At least one is required.
-	// +kubebuilder:validation:XValidation:rule="[has(self.people) && size(self.people) > 0, has(self.teams) && size(self.teams) > 0, has(self.oidc) && size(self.oidc) > 0, has(self.notifications) && size(self.notifications) > 0, has(self.playbooks) && size(self.playbooks) > 0, has(self.topologies) && size(self.topologies) > 0, has(self.scrapers) && size(self.scrapers) > 0, has(self.canaries) && size(self.canaries) > 0, has(self.plugins) && size(self.plugins) > 0].exists(x, x)",message="at least one subject is required"
+	// +kubebuilder:validation:XValidation:rule="[has(self.people) && size(self.people) > 0, has(self.teams) && size(self.teams) > 0, has(self.notifications) && size(self.notifications) > 0, has(self.playbooks) && size(self.playbooks) > 0, has(self.topologies) && size(self.topologies) > 0, has(self.scrapers) && size(self.scrapers) > 0, has(self.canaries) && size(self.canaries) > 0, has(self.plugins) && size(self.plugins) > 0].exists(x, x)",message="at least one subject is required"
 	Subjects RoleBindingSubjects `json:"subjects" yaml:"subjects"`
 
 	// Constraint narrows every rule of the role for this binding's subjects.
@@ -71,9 +70,6 @@ type RoleBindingSubjects struct {
 	// +kubebuilder:validation:MaxItems=0
 	Roles []string `json:"roles,omitempty" yaml:"roles,omitempty"`
 
-	// OIDC selects users of external identity providers by the claims of their tokens.
-	OIDC []OIDCSubject `json:"oidc,omitempty" yaml:"oidc,omitempty"`
-
 	// Plugins selects plugins by the namespace and name of their Plugin resource.
 	// A binding that selects one can only grant read on connections.
 	Plugins []PermissionGroupSelector `json:"plugins,omitempty" yaml:"plugins,omitempty"`
@@ -81,57 +77,15 @@ type RoleBindingSubjects struct {
 
 func (t RoleBindingSubjects) Empty() bool {
 	s := t.PermissionGroupSubjects
-	return len(t.OIDC) == 0 && len(t.Plugins) == 0 && len(s.People) == 0 && len(s.Teams) == 0 &&
+	return len(t.Plugins) == 0 && len(s.People) == 0 && len(s.Teams) == 0 &&
 		len(s.Notifications) == 0 && len(s.Playbooks) == 0 && len(s.Topologies) == 0 &&
 		len(s.Scrapers) == 0 && len(s.Canaries) == 0
 }
 
-// +kubebuilder:object:generate=true
-type OIDCSubject struct {
-	// Provider is the name of an ExternalIdentityProvider.
-	// +kubebuilder:validation:MinLength=1
-	Provider string `json:"provider" yaml:"provider"`
-
-	// Match is a CEL expression over claims, the verified token's claims, that returns a bool.
-	// e.g. 'operators' in claims.groups && claims.tenant == 'a'
-	// An error, such as a missing claim, is no match.
-	// +kubebuilder:validation:MinLength=1
-	Match string `json:"match" yaml:"match"`
-}
-
-var claimsEnv = sync.OnceValues(func() (*cel.Env, error) {
-	return cel.NewEnv(cel.Variable("claims", cel.MapType(cel.StringType, cel.DynType)))
-})
-
-// CompileClaimsMatch compiles a CEL expression over claims that returns a bool.
-func CompileClaimsMatch(expression string) (cel.Program, error) {
-	env, err := claimsEnv()
-	if err != nil {
-		return nil, err
-	}
-
-	ast, issues := env.Compile(expression)
-	if issues != nil && issues.Err() != nil {
-		return nil, issues.Err()
-	}
-
-	if ast.OutputType() != cel.BoolType && ast.OutputType() != cel.DynType {
-		return nil, fmt.Errorf("must return a bool, not %s", ast.OutputType())
-	}
-
-	return env.Program(ast)
-}
-
-// EvalClaimsMatch reports whether the claims satisfy a program from CompileClaimsMatch.
-// An error, or a result that isn't true, is no match.
-func EvalClaimsMatch(program cel.Program, claims map[string]any) bool {
-	out, _, err := program.Eval(map[string]any{"claims": claims})
-	if err != nil {
-		return false
-	}
-
-	matched, ok := out.Value().(bool)
-	return ok && matched
+// ParseProviderPerson splits a people entry naming a user of an external identity provider, <provider>:<username>,
+// on its first ':'. ok is false for any other entry, e.g. an email address.
+func ParseProviderPerson(entry string) (provider, username string, ok bool) {
+	return strings.Cut(entry, ":")
 }
 
 func (t RoleBindingSpec) Validate() error {
@@ -179,6 +133,17 @@ func (t RoleBindingSpec) Validate() error {
 			continue
 		}
 
+		if provider, username, ok := ParseProviderPerson(person); ok {
+			if errs := validation.IsDNS1123Subdomain(provider); len(errs) > 0 {
+				return fmt.Errorf("person %q must name an external identity provider before ':': %s", person, strings.Join(errs, ", "))
+			} else if username == "" {
+				return fmt.Errorf("person %q must have a username after ':', or '*' for every user of the provider", person)
+			} else if username != "*" && strings.Contains(username, "*") {
+				return fmt.Errorf(`person %q: patterns aren't supported, use "%s:*" to select every user of the provider`, person, provider)
+			}
+			continue
+		}
+
 		if strings.Contains(person, "*") {
 			return fmt.Errorf(`person %q must be an email address; patterns aren't supported, use "*" alone to select every person`, person)
 		}
@@ -200,16 +165,6 @@ func (t RoleBindingSpec) Validate() error {
 			if err := validateResourceSubject(selector); err != nil {
 				return fmt.Errorf("%s subject %d: %w", kind, i, err)
 			}
-		}
-	}
-
-	for i, subject := range t.Subjects.OIDC {
-		if strings.TrimSpace(subject.Provider) == "" {
-			return fmt.Errorf("oidc subject %d: provider is required", i)
-		}
-
-		if _, err := CompileClaimsMatch(subject.Match); err != nil {
-			return fmt.Errorf("oidc subject %d: invalid match %q: %w", i, subject.Match, err)
 		}
 	}
 

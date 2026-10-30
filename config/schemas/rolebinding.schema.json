@@ -66,24 +66,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "OIDCSubject": {
-      "properties": {
-        "provider": {
-          "type": "string",
-          "description": "Provider is the name of an ExternalIdentityProvider."
-        },
-        "match": {
-          "type": "string",
-          "description": "Match is a CEL expression over claims, the verified token's claims, that returns a bool.\ne.g. 'operators' in claims.groups \u0026\u0026 claims.tenant == 'a'\nAn error, such as a missing claim, is no match."
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "provider",
-        "match"
-      ]
-    },
     "ObjectMeta": {
       "properties": {
         "name": {
@@ -326,13 +308,6 @@
           },
           "type": "array",
           "description": "Deprecated: built-in roles were removed, so a binding that sets roles is rejected. Select teams instead."
-        },
-        "oidc": {
-          "items": {
-            "$ref": "#/$defs/OIDCSubject"
-          },
-          "type": "array",
-          "description": "OIDC selects users of external identity providers by the claims of their tokens."
         },
         "plugins": {
           "items": {

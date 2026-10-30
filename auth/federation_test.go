@@ -40,6 +40,7 @@ var _ = ginkgo.Describe("External identity providers", ginkgo.Ordered, func() {
 		signingKey *rsa.PrivateKey
 		issuer     *httptest.Server
 		provider   *v1.ExternalIdentityProvider
+		team       models.Team
 	)
 
 	sign := func(key *rsa.PrivateKey, claims jwt.MapClaims) string {
@@ -126,9 +127,22 @@ var _ = ginkgo.Describe("External identity providers", ginkgo.Ordered, func() {
 			Spec: v1.ExternalIdentityProviderSpec{
 				Issuer:   issuer.URL,
 				Audience: audience,
-				Claims:   v1.ExternalIdentityClaims{Name: "name", Email: "email"},
+				Identity: v1.ExternalIdentity{
+					Username: "claims.sub",
+					Name:     "claims.name",
+					Email:    "claims.email",
+					Teams: &v1.ExternalIdentityTeams{
+						Mapper:  `claims.groups.map(g, "appx-" + g)`,
+						Allowed: []string{"appx-operators"},
+					},
+				},
 			},
 		}
+		creator := models.Person{ID: uuid.New(), Name: "Federation Team Creator"}
+		Expect(DefaultContext.DB().Create(&creator).Error).To(Succeed())
+		team = models.Team{ID: uuid.New(), Name: "appx-operators", CreatedBy: creator.ID}
+		Expect(DefaultContext.DB().Create(&team).Error).To(Succeed())
+
 		Expect(PersistExternalIdentityProvider(DefaultContext, provider)).To(Succeed())
 
 		scope := &v1.Scope{
@@ -147,48 +161,30 @@ var _ = ginkgo.Describe("External identity providers", ginkgo.Ordered, func() {
 		}
 		Expect(db.PersistRoleFromCRD(DefaultContext, role)).To(Succeed())
 
-		for name, match := range map[string]string{
-			"appx-operators": "'operators' in claims.groups",
-			"appx-tenant-a":  "claims.tenant == 'a'",
-		} {
-			binding := &v1.RoleBinding{
-				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
-				Spec: v1.RoleBindingSpec{
-					Role:     "run-playbooks",
-					Subjects: v1.RoleBindingSubjects{OIDC: []v1.OIDCSubject{{Provider: "appx", Match: match}}},
-				},
-			}
-			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).To(Succeed())
+		binding := &v1.RoleBinding{
+			ObjectMeta: metav1.ObjectMeta{Name: "appx-operators", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
+			Spec: v1.RoleBindingSpec{
+				Role:     "run-playbooks",
+				Subjects: v1.RoleBindingSubjects{PermissionGroupSubjects: v1.PermissionGroupSubjects{Teams: []string{"appx-operators"}}},
+			},
 		}
+		Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).To(Succeed())
 
 		Expect(dutyRBAC.ReloadPolicy()).To(Succeed())
-		Expect(RebuildOIDCBindings(DefaultContext)).To(Succeed())
 	})
 
 	ginkgo.AfterAll(func() {
 		Expect(DeleteExternalIdentityProvider(DefaultContext, string(provider.UID))).To(Succeed())
 		issuer.Close()
 
-		var people []models.Person
-		Expect(DefaultContext.DB().Where("external_id LIKE ?", "appx:%").Find(&people).Error).To(Succeed())
-		for _, person := range people {
-			prefix := models.FederatedPrincipal(person.ID.String()) + ":"
-			policies, err := dutyRBAC.Enforcer().GetGroupingPolicy()
-			Expect(err).ToNot(HaveOccurred())
-			for _, policy := range policies {
-				if len(policy) > 0 && strings.HasPrefix(policy[0], prefix) {
-					_, err = dutyRBAC.Enforcer().DeleteRolesForUser(policy[0])
-					Expect(err).ToNot(HaveOccurred())
-				}
-			}
-		}
-		Expect(DefaultContext.DB().Exec("DELETE FROM people WHERE external_id LIKE ?", "appx:%").Error).To(Succeed())
+		Expect(DefaultContext.DB().Exec("DELETE FROM team_members WHERE team_id = ?", team.ID).Error).To(Succeed())
+		Expect(DefaultContext.DB().Exec("DELETE FROM teams WHERE id = ?", team.ID).Error).To(Succeed())
+		Expect(DefaultContext.DB().Exec("DELETE FROM people WHERE external_id LIKE ? OR id = ?", "appx:%", team.CreatedBy).Error).To(Succeed())
 
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.RoleBinding{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Role{}).Error).To(Succeed())
 		Expect(DefaultContext.DB().Where("namespace = ?", namespace).Delete(&models.Scope{}).Error).To(Succeed())
 		Expect(dutyRBAC.ReloadPolicy()).To(Succeed())
-		Expect(RebuildOIDCBindings(DefaultContext)).To(Succeed())
 	})
 
 	ginkgo.It("represents the user as a federated person", func() {
@@ -202,13 +198,15 @@ var _ = ginkgo.Describe("External identity providers", ginkgo.Ordered, func() {
 		Expect(person.Email).To(BeEmpty())
 		Expect(person.Properties).To(Equal(models.PersonProperties{Provider: "appx", Email: "tina@client.com"}))
 
-		Expect(ctx.Subject()).To(HavePrefix(models.FederatedPrincipal(person.ID.String()) + ":"))
+		Expect(ctx.Subject()).To(Equal(person.ID.String()))
 	})
 
-	bindingsOf := func(ctx context.Context) []string {
-		bindings, err := dutyRBAC.Enforcer().GetRolesForUser(ctx.Subject())
-		Expect(err).ToNot(HaveOccurred())
-		return bindings
+	teamsOf := func(ctx context.Context) []string {
+		var teams []string
+		Expect(DefaultContext.DB().Raw(`SELECT teams.name FROM team_members JOIN teams ON teams.id = team_members.team_id
+			WHERE team_members.person_id = ? AND team_members.source = ?`, ctx.User().ID, db.FederatedTeamSource("appx")).
+			Scan(&teams).Error).To(Succeed())
+		return teams
 	}
 
 	canRunPlaybooks := func(ctx context.Context) bool {
@@ -216,35 +214,29 @@ var _ = ginkgo.Describe("External identity providers", ginkgo.Ordered, func() {
 		return dutyRBAC.HasPermission(ctx, ctx.Subject(), attr, policy.ActionPlaybookRun)
 	}
 
-	ginkgo.It("makes the user a member of the role bindings whose match accepts the token's claims", func() {
-		ctx := serveOK(tokenClaims(map[string]any{"tenant": "a"}))
-		Expect(bindingsOf(ctx)).To(ConsistOf(
-			models.BindingPrincipal(namespace, "appx-operators"),
-			models.BindingPrincipal(namespace, "appx-tenant-a"),
-		))
+	ginkgo.It("adds the user to the allowed teams the mapper returns", func() {
+		ctx := serveOK(tokenClaims(nil))
+		Expect(teamsOf(ctx)).To(ConsistOf("appx-operators"), "appx-viewers isn't allowed")
 	})
 
-	ginkgo.It("treats a match that fails to evaluate, e.g. on a missing claim, as no match", func() {
-		ctx := serveOK(tokenClaims(nil))
-		Expect(bindingsOf(ctx)).To(ConsistOf(models.BindingPrincipal(namespace, "appx-operators")))
+	ginkgo.It("refuses the request when the mapper fails, keeping the stored teams", func() {
+		person := serveOK(tokenClaims(nil)).User()
+
+		handled, rec, _ := serve(sign(signingKey, tokenClaims(map[string]any{"groups": nil})))
+		Expect(handled).To(BeTrue())
+		Expect(rec.Code).To(Equal(http.StatusUnauthorized))
+		Expect(rec.Body.String()).To(ContainSubstring("team mapping failed"))
+
+		var count int64
+		Expect(DefaultContext.DB().Table("team_members").Where("person_id = ? AND team_id = ?", person.ID, team.ID).Count(&count).Error).To(Succeed())
+		Expect(count).To(Equal(int64(1)))
 	})
 
 	ginkgo.It("authorizes only through role bindings", func() {
 		ctx := serveOK(tokenClaims(nil))
 
 		Expect(canRunPlaybooks(ctx)).To(BeTrue())
-
-		// no implicit viewer access and no everyone role
 		Expect(dutyRBAC.CheckContext(ctx, policy.ObjectCatalog, policy.ActionRead)).To(BeFalse())
-		hasEveryone, err := dutyRBAC.Enforcer().HasRoleForUser(ctx.Subject(), policy.RoleEveryone)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(hasEveryone).To(BeFalse())
-
-		for _, binding := range bindingsOf(ctx) {
-			hasEveryone, err := dutyRBAC.Enforcer().HasRoleForUser(binding, policy.RoleEveryone)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(hasEveryone).To(BeFalse())
-		}
 	})
 
 	ginkgo.It("reuses the same person across requests", func() {
@@ -257,24 +249,19 @@ var _ = ginkgo.Describe("External identity providers", ginkgo.Ordered, func() {
 		Expect(count).To(Equal(int64(1)))
 	})
 
-	ginkgo.It("revokes the bindings the token's claims no longer match on the next request", func() {
+	ginkgo.It("removes the teams the mapper no longer returns on the next request", func() {
 		Expect(canRunPlaybooks(serveOK(tokenClaims(nil)))).To(BeTrue())
 
 		ctx := serveOK(tokenClaims(map[string]any{"groups": []string{"viewers"}}))
-		Expect(bindingsOf(ctx)).To(BeEmpty())
+		Expect(teamsOf(ctx)).To(BeEmpty())
 		Expect(canRunPlaybooks(ctx)).To(BeFalse())
 	})
 
-	ginkgo.It("rejects a role binding with an invalid match", func() {
-		for _, match := range []string{"claims.groups +", "'operators'", "unknown == 'a'"} {
-			binding := &v1.RoleBinding{
-				ObjectMeta: metav1.ObjectMeta{Name: "invalid-match", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
-				Spec: v1.RoleBindingSpec{
-					Role:     "run-playbooks",
-					Subjects: v1.RoleBindingSubjects{OIDC: []v1.OIDCSubject{{Provider: "appx", Match: match}}},
-				},
-			}
-			Expect(db.PersistRoleBindingFromCRD(DefaultContext, binding)).ToNot(Succeed(), match)
+	ginkgo.It("rejects an identity expression that doesn't compile", func() {
+		for _, expression := range []string{"claims.sub +", "unknown"} {
+			invalid := provider.Spec
+			invalid.Identity.Username = expression
+			Expect(invalid.Validate()).ToNot(Succeed(), expression)
 		}
 	})
 
