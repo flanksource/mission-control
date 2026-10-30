@@ -10,7 +10,6 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"time"
 
 	"github.com/flanksource/duty/models"
@@ -43,6 +42,7 @@ var _ = ginkgo.Describe("Federated requests through the server", ginkgo.Ordered,
 		allowed, denied models.ConfigItem
 		echoPlaybook    models.Playbook
 		otherPlaybook   models.Playbook
+		team            models.Team
 	)
 
 	sign := func(key *rsa.PrivateKey, claims jwt.MapClaims) string {
@@ -134,13 +134,26 @@ var _ = ginkgo.Describe("Federated requests through the server", ginkgo.Ordered,
 		})
 		issuer = httptest.NewServer(mux)
 
+		creator := models.Person{ID: uuid.New(), Name: "Federation E2E Team Creator"}
+		Expect(ctx.DB().Create(&creator).Error).To(Succeed())
+		team = models.Team{ID: uuid.New(), Name: "tenant-a-operators", CreatedBy: creator.ID}
+		Expect(ctx.DB().Create(&team).Error).To(Succeed())
+
 		// What the reconciler does for an ExternalIdentityProvider
 		Expect(auth.PersistExternalIdentityProvider(ctx, &v1.ExternalIdentityProvider{
 			ObjectMeta: metav1.ObjectMeta{Name: "appx", Namespace: "default", UID: k8sTypes.UID(uuid.NewString())},
 			Spec: v1.ExternalIdentityProviderSpec{
 				Issuer:   issuer.URL,
 				Audience: audience,
-				Claims:   v1.ExternalIdentityClaims{Name: "name", Email: "email"},
+				Identity: v1.ExternalIdentity{
+					Username: "claims.sub",
+					Name:     "claims.name",
+					Email:    "claims.email",
+					Teams: &v1.ExternalIdentityTeams{
+						Mapper:  `'operators' in claims.groups && claims.tenant == 'a' ? ["tenant-a-operators"] : []`,
+						Allowed: []string{"tenant-a-operators"},
+					},
+				},
 			},
 		})).To(Succeed())
 
@@ -211,11 +224,8 @@ var _ = ginkgo.Describe("Federated requests through the server", ginkgo.Ordered,
 		Expect(db.PersistRoleBindingFromCRD(ctx, &v1.RoleBinding{
 			ObjectMeta: metav1.ObjectMeta{Name: "tenant-a-operators", Namespace: namespace, UID: k8sTypes.UID(uuid.NewString())},
 			Spec: v1.RoleBindingSpec{
-				Role: "playbook-runner",
-				Subjects: v1.RoleBindingSubjects{OIDC: []v1.OIDCSubject{{
-					Provider: "appx",
-					Match:    "'operators' in claims.groups && claims.tenant == 'a'",
-				}}},
+				Role:     "playbook-runner",
+				Subjects: v1.RoleBindingSubjects{PermissionGroupSubjects: v1.PermissionGroupSubjects{Teams: []string{"tenant-a-operators"}}},
 				Constraint: &v1.RoleBindingConstraint{
 					Resource: &v1.ScopeReference{ScopeRef: "tenant-a"},
 					Target:   &v1.ScopeReference{ScopeRef: "tenant-a"},
@@ -225,7 +235,6 @@ var _ = ginkgo.Describe("Federated requests through the server", ginkgo.Ordered,
 
 		// What the notify listeners do when roles and role_bindings change
 		Expect(dutyRBAC.ReloadPolicy()).To(Succeed())
-		Expect(auth.RebuildOIDCBindings(ctx)).To(Succeed())
 	})
 
 	ginkgo.AfterAll(func() {
@@ -245,16 +254,10 @@ var _ = ginkgo.Describe("Federated requests through the server", ginkgo.Ordered,
 		Expect(whoami.Payload.User.Name).To(Equal("Tina"))
 		Expect(whoami.Payload.User.Type).To(Equal(db.PersonTypeFederated))
 		Expect(whoami.Payload.User.ExternalID).To(Equal("appx:tina-123"))
-		// A federated person is checked as a subject of their own per set of bindings, which whoami doesn't report
-		memberships, err := dutyRBAC.Enforcer().GetGroupingPolicy()
+		// The provider's team mapper put Tina in the team the binding selects
+		roles, err := dutyRBAC.Enforcer().GetRolesForUser(whoami.Payload.User.ID.String())
 		Expect(err).ToNot(HaveOccurred())
-		var roles []string
-		for _, membership := range memberships {
-			if strings.HasPrefix(membership[0], models.FederatedPrincipal(whoami.Payload.User.ID.String())+":") {
-				roles = append(roles, membership[1])
-			}
-		}
-		Expect(lo.Uniq(roles)).To(ConsistOf(models.BindingPrincipal(namespace, "tenant-a-operators")))
+		Expect(roles).To(ContainElement(team.ID.String()))
 	})
 
 	ginkgo.It("runs a playbook on a config Tina may read, recorded as Tina", func() {
@@ -301,7 +304,7 @@ var _ = ginkgo.Describe("Federated requests through the server", ginkgo.Ordered,
 		Expect(code).To(Equal(http.StatusForbidden), string(body))
 	})
 
-	ginkgo.It("refuses to run the playbook once Tina's claims no longer match the binding", func() {
+	ginkgo.It("refuses to run the playbook once Tina's claims no longer map her into the team", func() {
 		code, body := request(http.MethodPost, "/playbook/run", tinaToken("b", "operators"), map[string]any{
 			"id":        echoPlaybook.ID,
 			"config_id": allowed.ID,

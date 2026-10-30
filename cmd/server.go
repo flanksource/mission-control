@@ -498,13 +498,13 @@ func tableUpdatesHandler(ctx context.Context) {
 		case <-agentUpdateChan:
 			schedulePolicyReload("agent")
 
-		// A created or deleted person changes who a RoleBinding selects, by email or by people: ["*"].
+		// A created or deleted person changes who a RoleBinding selects, by email, <provider>:<username> or people: ["*"].
 		case <-peopleUpdateChan:
 			schedulePolicyReload("people")
 
 		case <-policyReloadTimer.C:
 			policyReloadPending = false
-			if err := auth.RebuildOIDCBindings(ctx); err != nil {
+			if err := adapter.ReloadPolicy(); err != nil {
 				ctx.Logger.Errorf("error rebuilding authorization policy: %v", err)
 			}
 

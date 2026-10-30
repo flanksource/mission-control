@@ -157,8 +157,8 @@ func CreateToken(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "error fetching user"))
 	}
 
-	// An access token authenticates as the person, without the grants the subject is limited to
-	if !icrbac.ActsAsPerson(ctx) {
+	// A user of an external identity provider signs in only with the short-lived tokens their application signs
+	if user.Type == db.PersonTypeFederated {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "access tokens can't be created by users of external identity providers"))
 	}
 

@@ -95,7 +95,7 @@ func mapTeams(ctx context.Context, personID uuid.UUID, expr string, env map[stri
 		return err
 	}
 
-	if err := syncMappedTeams(ctx, personID, teams); err != nil {
+	if err := syncMappedTeams(ctx, personID, SourceTeamMapper, teams); err != nil {
 		return err
 	}
 
@@ -123,7 +123,7 @@ func runTeamMapper(ctx context.Context, expr string, env map[string]any) ([]stri
 		return nil, ctx.Oops().Wrapf(err, "failed to run team mapper")
 	}
 
-	// A mapper returns a map, or older scripts a JSON encoded string
+	// A mapper returns a list or a map, or older scripts a JSON encoded string
 	res, ok := out.(string)
 	if !ok {
 		b, err := json.Marshal(out)
@@ -131,6 +131,11 @@ func runTeamMapper(ctx context.Context, expr string, env map[string]any) ([]stri
 			return nil, ctx.Oops().Wrapf(err, "team mapper returned %v", out)
 		}
 		res = string(b)
+	}
+
+	var teams []string
+	if err := json.Unmarshal([]byte(res), &teams); err == nil {
+		return lo.Uniq(lo.Compact(teams)), nil
 	}
 
 	var result struct {
@@ -142,16 +147,16 @@ func runTeamMapper(ctx context.Context, expr string, env map[string]any) ([]stri
 		return nil, ctx.Oops().
 			With("result", res).
 			Hint("https://docs.flanksource.com/reference/helm/mission-control/#identity-mapper").
-			Errorf("team mapper must return only {\"teams\": [...]}, got %s", res)
+			Errorf("team mapper must return a list of teams or {\"teams\": [...]}, got %s", res)
 	}
 
 	return lo.Uniq(lo.Compact(*result.Teams)), nil
 }
 
-// syncMappedTeams makes the person's mapped team memberships exactly the given teams.
+// syncMappedTeams makes the person's team memberships with the source exactly the given teams.
 // Memberships with any other source, e.g. added by an admin, are never touched.
 // A team that doesn't exist is skipped.
-func syncMappedTeams(ctx context.Context, personID uuid.UUID, teamNames []string) error {
+func syncMappedTeams(ctx context.Context, personID uuid.UUID, source string, teamNames []string) error {
 	var teams []models.Team
 	if len(teamNames) > 0 {
 		if err := ctx.DB().Where("name IN ? AND deleted_at IS NULL", teamNames).Find(&teams).Error; err != nil {
@@ -166,7 +171,7 @@ func syncMappedTeams(ctx context.Context, personID uuid.UUID, teamNames []string
 	}
 
 	var mapped []dbModels.TeamMember
-	if err := ctx.DB().Where("person_id = ? AND source = ?", personID, SourceTeamMapper).Find(&mapped).Error; err != nil {
+	if err := ctx.DB().Where("person_id = ? AND source = ?", personID, source).Find(&mapped).Error; err != nil {
 		return ctx.Oops().Wrapf(err, "failed to get mapped teams of person %s", personID)
 	}
 
@@ -177,7 +182,7 @@ func syncMappedTeams(ctx context.Context, personID uuid.UUID, teamNames []string
 
 		// A direct membership in the team is kept as it is
 		result := ctx.DB().Exec(`INSERT INTO team_members (team_id, person_id, source) VALUES (?, ?, ?)
-			ON CONFLICT (team_id, person_id) DO NOTHING`, team.ID, personID, SourceTeamMapper)
+			ON CONFLICT (team_id, person_id) DO NOTHING`, team.ID, personID, source)
 		if result.Error != nil {
 			return ctx.Oops().Wrapf(result.Error, "failed to add person %s to team %s", personID, team.Name)
 		}
@@ -194,7 +199,7 @@ func syncMappedTeams(ctx context.Context, personID uuid.UUID, teamNames []string
 			continue
 		}
 
-		result := ctx.DB().Where("team_id = ? AND person_id = ? AND source = ?", m.TeamID, personID, SourceTeamMapper).
+		result := ctx.DB().Where("team_id = ? AND person_id = ? AND source = ?", m.TeamID, personID, source).
 			Delete(&dbModels.TeamMember{})
 		if result.Error != nil {
 			return ctx.Oops().Wrapf(result.Error, "failed to remove person %s from team %s", personID, m.TeamID)

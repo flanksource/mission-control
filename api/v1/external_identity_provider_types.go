@@ -5,19 +5,21 @@ import (
 	"net"
 	"net/url"
 	"slices"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/flanksource/kopper"
+	"github.com/google/cel-go/cel"
+	"github.com/google/cel-go/ext"
 	"github.com/google/go-cmp/cmp"
+	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	DefaultExternalIdentityMaxTokenAge = 5 * time.Minute
-	DefaultExternalIdentityUsername    = "sub"
-)
+const DefaultExternalIdentityMaxTokenAge = 5 * time.Minute
 
 var (
 	DefaultExternalIdentityAlgorithms = []string{"RS256", "ES256"}
@@ -33,8 +35,8 @@ var (
 // ExternalIdentityProvider lets an external application authenticate its users to Mission Control
 // with JWTs signed by its own issuer.
 //
-// A user is represented by a federated person (keyed by <provider>:<username>), and their access
-// comes only from RoleBindings whose oidc subjects match the claims of their token.
+// A user is represented by a federated person (keyed by <provider>:<username>), who may be mapped into
+// the teams the provider allows. RoleBindings select them through those teams, or by <provider>:<username> in people.
 type ExternalIdentityProvider struct {
 	metav1.TypeMeta   `json:",inline" yaml:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty"`
@@ -45,8 +47,9 @@ type ExternalIdentityProvider struct {
 
 // +kubebuilder:object:generate=true
 type ExternalIdentityProviderSpec struct {
-	// Issuer must exactly match the iss claim of accepted tokens.
+	// Issuer must exactly match the iss claim of accepted tokens. It can't be changed.
 	// +kubebuilder:validation:MinLength=1
+	// +kubebuilder:validation:XValidation:rule="self == oldSelf",message="issuer can't be changed"
 	// +kubebuilder:validation:Pattern=`^(https://.+|http://(localhost|127(\.[0-9]{1,3}){3}|\[::1\])(:[0-9]+)?([/?#].*)?)$`
 	Issuer string `json:"issuer" yaml:"issuer"`
 
@@ -67,26 +70,40 @@ type ExternalIdentityProviderSpec struct {
 	// +kubebuilder:validation:XValidation:rule="duration(self) > duration('0s')",message="maxTokenAge must be a positive duration"
 	MaxTokenAge string `json:"maxTokenAge,omitempty" yaml:"maxTokenAge,omitempty"`
 
-	// Claims maps token claims to the federated person.
-	// RoleBindings can match any claim of the token.
-	Claims ExternalIdentityClaims `json:"claims,omitempty" yaml:"claims,omitempty"`
+	// Identity says what person a token becomes, and which teams they're in.
+	Identity ExternalIdentity `json:"identity" yaml:"identity"`
 
 	// Disabled rejects every token from this provider.
 	Disabled bool `json:"disabled,omitempty" yaml:"disabled,omitempty"`
 }
 
 // +kubebuilder:object:generate=true
-type ExternalIdentityClaims struct {
-	// Username is the claim that uniquely and stably identifies the user in the external application.
-	// Defaults to sub.
-	Username string `json:"username,omitempty" yaml:"username,omitempty"`
+type ExternalIdentity struct {
+	// Username is a CEL expression over claims that returns the string uniquely and stably identifying the user
+	// in the external application. The person is keyed by <provider>:<username>.
+	// +kubebuilder:validation:MinLength=1
+	Username string `json:"username" yaml:"username"`
 
-	// Name is the claim with the user's display name.
+	// Name is a CEL expression over claims that returns the user's display name. Defaults to the username.
 	Name string `json:"name,omitempty" yaml:"name,omitempty"`
 
-	// Email is the claim with the user's email.
+	// Email is a CEL expression over claims that returns the user's email.
 	// It's only displayed and never used to match Mission Control users.
 	Email string `json:"email,omitempty" yaml:"email,omitempty"`
+
+	// Teams maps the user into existing teams. Without it, the provider adds no one to any team.
+	Teams *ExternalIdentityTeams `json:"teams,omitempty" yaml:"teams,omitempty"`
+}
+
+// +kubebuilder:object:generate=true
+type ExternalIdentityTeams struct {
+	// Mapper is a CEL expression over claims that returns a list of team names.
+	// +kubebuilder:validation:MinLength=1
+	Mapper string `json:"mapper" yaml:"mapper"`
+
+	// Allowed are the only teams the provider may add anyone to.
+	// +kubebuilder:validation:MinItems=1
+	Allowed []string `json:"allowed" yaml:"allowed"`
 }
 
 func (t ExternalIdentityProviderSpec) GetMaxTokenAge() (time.Duration, error) {
@@ -109,13 +126,6 @@ func (t ExternalIdentityProviderSpec) GetAlgorithms() []string {
 		return DefaultExternalIdentityAlgorithms
 	}
 	return t.Algorithms
-}
-
-func (t ExternalIdentityClaims) GetUsername() string {
-	if t.Username == "" {
-		return DefaultExternalIdentityUsername
-	}
-	return t.Username
 }
 
 func (t ExternalIdentityProviderSpec) Validate() error {
@@ -143,7 +153,76 @@ func (t ExternalIdentityProviderSpec) Validate() error {
 		return err
 	}
 
+	if _, err := t.Identity.Compile(); err != nil {
+		return err
+	}
+
 	return nil
+}
+
+// CompiledIdentity holds the compiled expressions of an ExternalIdentity. Name, Email and Mapper are nil when unset.
+// +kubebuilder:object:generate=false
+type CompiledIdentity struct {
+	Username, Name, Email, Mapper cel.Program
+}
+
+var claimsEnv = sync.OnceValues(func() (*cel.Env, error) {
+	return cel.NewEnv(cel.Variable("claims", cel.MapType(cel.StringType, cel.DynType)), ext.Strings())
+})
+
+// Compile compiles the identity's expressions, and checks that a team mapper has an allowlist.
+func (t ExternalIdentity) Compile() (CompiledIdentity, error) {
+	var compiled CompiledIdentity
+	if strings.TrimSpace(t.Username) == "" {
+		return compiled, fmt.Errorf("identity.username is required")
+	}
+
+	var err error
+	if compiled.Username, err = compileClaimsExpression("identity.username", t.Username, cel.StringType); err != nil {
+		return compiled, err
+	}
+	if t.Name != "" {
+		if compiled.Name, err = compileClaimsExpression("identity.name", t.Name, cel.StringType); err != nil {
+			return compiled, err
+		}
+	}
+	if t.Email != "" {
+		if compiled.Email, err = compileClaimsExpression("identity.email", t.Email, cel.StringType); err != nil {
+			return compiled, err
+		}
+	}
+
+	if t.Teams != nil {
+		if strings.TrimSpace(t.Teams.Mapper) == "" {
+			return compiled, fmt.Errorf("identity.teams.mapper is required")
+		} else if len(lo.Compact(t.Teams.Allowed)) == 0 {
+			return compiled, fmt.Errorf("identity.teams.allowed must name at least one team")
+		}
+		if compiled.Mapper, err = compileClaimsExpression("identity.teams.mapper", t.Teams.Mapper, cel.ListType(cel.StringType)); err != nil {
+			return compiled, err
+		}
+	}
+
+	return compiled, nil
+}
+
+// compileClaimsExpression compiles a CEL expression over claims that returns the given type, or dyn.
+func compileClaimsExpression(field, expression string, output *cel.Type) (cel.Program, error) {
+	env, err := claimsEnv()
+	if err != nil {
+		return nil, err
+	}
+
+	ast, issues := env.Compile(expression)
+	if issues != nil && issues.Err() != nil {
+		return nil, fmt.Errorf("%s: %w", field, issues.Err())
+	}
+
+	if !output.IsAssignableType(ast.OutputType()) && ast.OutputType() != cel.DynType {
+		return nil, fmt.Errorf("%s must return %s, not %s", field, output, ast.OutputType())
+	}
+
+	return env.Program(ast)
 }
 
 // ValidateIssuerURL requires https, except for loopback hosts.
@@ -166,6 +245,10 @@ func ValidateIssuerURL(field, raw string) error {
 
 	return fmt.Errorf("%s %q must use https", field, raw)
 }
+
+// ConditionAllowedTeams is the condition of an ExternalIdentityProvider with a team mapper that reports
+// whether every allowed team exists, and warns when the shipped admins team is allowed.
+const ConditionAllowedTeams = "AllowedTeams"
 
 type ExternalIdentityProviderStatus struct {
 	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`

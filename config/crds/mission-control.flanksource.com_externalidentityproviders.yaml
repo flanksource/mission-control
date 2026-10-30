@@ -21,8 +21,8 @@ spec:
           ExternalIdentityProvider lets an external application authenticate its users to Mission Control
           with JWTs signed by its own issuer.
 
-          A user is represented by a federated person (keyed by <provider>:<username>), and their access
-          comes only from RoleBindings whose oidc subjects match the claims of their token.
+          A user is represented by a federated person (keyed by <provider>:<username>), who may be mapped into
+          the teams the provider allows. RoleBindings select them through those teams, or by <provider>:<username> in people.
         properties:
           apiVersion:
             description: |-
@@ -65,33 +65,60 @@ spec:
                   usually the Mission Control URL.
                 minLength: 1
                 type: string
-              claims:
-                description: |-
-                  Claims maps token claims to the federated person.
-                  RoleBindings can match any claim of the token.
-                properties:
-                  email:
-                    description: |-
-                      Email is the claim with the user's email.
-                      It's only displayed and never used to match Mission Control users.
-                    type: string
-                  name:
-                    description: Name is the claim with the user's display name.
-                    type: string
-                  username:
-                    description: |-
-                      Username is the claim that uniquely and stably identifies the user in the external application.
-                      Defaults to sub.
-                    type: string
-                type: object
               disabled:
                 description: Disabled rejects every token from this provider.
                 type: boolean
+              identity:
+                description: Identity says what person a token becomes, and which
+                  teams they're in.
+                properties:
+                  email:
+                    description: |-
+                      Email is a CEL expression over claims that returns the user's email.
+                      It's only displayed and never used to match Mission Control users.
+                    type: string
+                  name:
+                    description: Name is a CEL expression over claims that returns
+                      the user's display name. Defaults to the username.
+                    type: string
+                  teams:
+                    description: Teams maps the user into existing teams. Without
+                      it, the provider adds no one to any team.
+                    properties:
+                      allowed:
+                        description: Allowed are the only teams the provider may add
+                          anyone to.
+                        items:
+                          type: string
+                        minItems: 1
+                        type: array
+                      mapper:
+                        description: Mapper is a CEL expression over claims that returns
+                          a list of team names.
+                        minLength: 1
+                        type: string
+                    required:
+                    - allowed
+                    - mapper
+                    type: object
+                  username:
+                    description: |-
+                      Username is a CEL expression over claims that returns the string uniquely and stably identifying the user
+                      in the external application. The person is keyed by <provider>:<username>.
+                    minLength: 1
+                    type: string
+                required:
+                - username
+                type: object
               issuer:
                 description: Issuer must exactly match the iss claim of accepted tokens.
+                  It can't be changed.
                 minLength: 1
                 pattern: ^(https://.+|http://(localhost|127(\.[0-9]{1,3}){3}|\[::1\])(:[0-9]+)?([/?#].*)?)$
                 type: string
+                x-kubernetes-validations:
+                - message: issuer can't be changed
+                  rule: self == oldSelf
               jwksURL:
                 description: |-
                   JWKSURL is where the issuer's signing keys are fetched from.
@@ -107,6 +134,7 @@ spec:
                   rule: duration(self) > duration('0s')
             required:
             - audience
+            - identity
             - issuer
             type: object
           status:
