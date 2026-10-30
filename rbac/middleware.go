@@ -99,6 +99,14 @@ func DbMiddleware() MiddlewareFunc {
 				object = adapter.ObjectChecks
 			}
 
+			// The subjects access is reviewed for are listed to those who may review access
+			if resource == "permission_subjects" {
+				if action != policy.ActionRead {
+					return c.String(http.StatusMethodNotAllowed, "permission_subjects is read-only")
+				}
+				action = adapter.ActionAccessReview
+			}
+
 			if readAction, ok := readOnlyObjects[object]; ok {
 				if action != policy.ActionRead {
 					return c.String(http.StatusMethodNotAllowed, fmt.Sprintf("%s is read-only", resource))
