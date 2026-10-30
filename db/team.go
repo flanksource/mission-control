@@ -1,6 +1,7 @@
 package db
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/flanksource/duty"
@@ -9,6 +10,7 @@ import (
 	"github.com/flanksource/kopper"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -91,9 +93,11 @@ func syncTeamMembers(ctx context.Context, teamID uuid.UUID, members []string) er
 	newMemberIDs := make(map[uuid.UUID]struct{})
 	for _, member := range members {
 		personID, err := resolvePersonID(ctx, member)
-		if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			ctx.Warnf("failed to resolve member %q: %v", member, err)
 			continue
+		} else if err != nil {
+			return err
 		}
 		newMemberIDs[personID] = struct{}{}
 	}
@@ -131,14 +135,17 @@ func syncTeamMembers(ctx context.Context, teamID uuid.UUID, members []string) er
 
 // resolvePersonID resolves a person identifier (UUID or email) to a person ID
 func resolvePersonID(ctx context.Context, identifier string) (uuid.UUID, error) {
-	// Check if it's already a UUID
+	// Agents can't be team members
+	query := ctx.DB().Where("type IS DISTINCT FROM ?", PersonTypeAgent)
 	if id, err := uuid.Parse(identifier); err == nil {
-		return id, nil
+		query = query.Where("id = ?", id)
+	} else {
+		query = query.Where("email = ?", identifier)
 	}
 
 	var person models.Person
-	if err := ctx.DB().Where("email = ?", identifier).First(&person).Error; err != nil {
-		return uuid.Nil, ctx.Oops().Wrapf(err, "person with email %q not found", identifier)
+	if err := query.First(&person).Error; err != nil {
+		return uuid.Nil, ctx.Oops().Wrapf(err, "person %q not found", identifier)
 	}
 
 	return person.ID, nil
