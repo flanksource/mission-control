@@ -97,10 +97,8 @@ func registrationHandler(c echo.Context) error {
 			fmt.Sprintf("only token_endpoint_auth_method %q is supported", oidc.AuthMethodNone))
 	}
 
-	for _, gt := range req.GrantTypes {
-		if gt != string(oidc.GrantTypeCode) && gt != string(oidc.GrantTypeRefreshToken) {
-			return registrationFailure(c, "invalid_client_metadata", fmt.Sprintf("unsupported grant_type %q", gt))
-		}
+	if _, err := validateGrantTypes(req.GrantTypes); err != nil {
+		return registrationFailure(c, "invalid_client_metadata", err.Error())
 	}
 
 	for _, rt := range req.ResponseTypes {

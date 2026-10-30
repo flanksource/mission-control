@@ -72,6 +72,34 @@ func validateRedirectURIs(uris []string) ([]string, error) {
 	return validated, nil
 }
 
+// validateGrantTypes returns the requested grant types this server supports.
+// Unsupported grant types are ignored rather than rejected, because clients
+// advertise grants (e.g. jwt-bearer) that this server simply never issues.
+// An empty request defaults to authorization_code (RFC 7591 §2); otherwise
+// authorization_code must be among the requested grants.
+func validateGrantTypes(requested []string) ([]oidc.GrantType, error) {
+	if len(requested) == 0 {
+		return []oidc.GrantType{oidc.GrantTypeCode}, nil
+	}
+
+	var supported []oidc.GrantType
+	hasAuthorizationCode := false
+	for _, grantType := range requested {
+		switch grantType {
+		case string(oidc.GrantTypeCode):
+			hasAuthorizationCode = true
+		case string(oidc.GrantTypeRefreshToken):
+		default:
+			continue
+		}
+		supported = append(supported, oidc.GrantType(grantType))
+	}
+	if !hasAuthorizationCode {
+		return nil, fmt.Errorf("grant_types must include %q", oidc.GrantTypeCode)
+	}
+	return supported, nil
+}
+
 func isLoopbackHost(host string) bool {
 	return host == "127.0.0.1" || host == "::1" || host == "localhost"
 }
