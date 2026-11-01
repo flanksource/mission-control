@@ -1,6 +1,6 @@
 module github.com/flanksource/incident-commander
 
-go 1.26.1
+go 1.26.10
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1
@@ -11,7 +11,7 @@ require (
 	github.com/fergusstrange/embedded-postgres v1.34.0
 	github.com/flanksource/commons v1.56.0
 	github.com/flanksource/duty v1.0.1419
-	github.com/flanksource/gomplate/v3 v3.24.90
+	github.com/flanksource/gomplate/v3 v3.24.91
 	github.com/flanksource/incident-commander/plugin/api v0.0.0
 	github.com/flanksource/kopper v1.0.32
 	github.com/gomarkdown/markdown v0.0.0-20260411013819-759bbc3e3207
@@ -98,7 +98,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.44.0
 	go.opentelemetry.io/otel/sdk v1.44.0
 	go.opentelemetry.io/otel/trace v1.44.0
-	golang.org/x/sync v0.22.0
+	golang.org/x/sync v0.24.0
 	gorm.io/hints v1.1.2
 	k8s.io/api v0.36.1
 )
@@ -378,9 +378,9 @@ require (
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	gocloud.dev v0.46.0 // indirect
 	golang.org/x/exp v0.0.0-20260527015227-08cc5374adb3 // indirect
-	golang.org/x/mod v0.37.0 // indirect
-	golang.org/x/term v0.44.0 // indirect
-	golang.org/x/tools v0.47.0 // indirect
+	golang.org/x/mod v0.41.0 // indirect
+	golang.org/x/term v0.47.0 // indirect
+	golang.org/x/tools v0.51.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	gonum.org/v1/gonum v0.17.0 // indirect
@@ -456,11 +456,11 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/crypto v0.53.0
-	golang.org/x/net v0.56.0 // indirect
+	golang.org/x/crypto v0.58.0
+	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
-	golang.org/x/text v0.40.0
+	golang.org/x/sys v0.49.0 // indirect
+	golang.org/x/text v0.43.0
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/api v0.286.0
 	google.golang.org/genproto v0.0.0-20260319201613-d00831a3d3e7 // indirect
