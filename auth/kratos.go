@@ -89,6 +89,11 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 		return k.basicAuthLogin(ctx, "token", bearerToken)
 	}
 
+	return k.cookieSession(r)
+}
+
+// cookieSession validates the request's Kratos browser session cookie against Kratos.
+func (k *kratosMiddleware) cookieSession(r *http.Request) (*client.Session, error) {
 	cookie, err := r.Cookie("ory_kratos_session")
 	if err != nil {
 		return nil, err
@@ -261,7 +266,11 @@ func (k *KratosCredentialChecker) LoginRedirectURL(authRequestID string) (string
 func (k *KratosCredentialChecker) CallbackSubject(c echo.Context) (string, error) {
 	ctx := c.Request().Context().(context.Context)
 
-	session, err := k.middleware.validateSession(ctx, c.Request())
+	if c.Request().Header.Get(echo.HeaderAuthorization) != "" {
+		return "", fmt.Errorf("only a Kratos browser session can complete Kratos browser login")
+	}
+
+	session, err := k.middleware.cookieSession(c.Request())
 	if err != nil {
 		return "", err
 	}
