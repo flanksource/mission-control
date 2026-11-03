@@ -65,7 +65,11 @@ func DbMiddleware() MiddlewareFunc {
 				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
 			}
 
-			if _, ok := rlsOnlyTables[resource]; ok {
+			if writer, ok := readOnlyTables[resource]; ok && action != policy.ActionRead {
+				return c.String(http.StatusMethodNotAllowed, fmt.Sprintf("%s is read-only through /db; %s", resource, writer))
+			}
+
+			if _, ok := readsLeftToRLS[resource]; ok && action == policy.ActionRead {
 				return next(c)
 			}
 
@@ -178,12 +182,22 @@ func readsWholeTypes(ctx context.Context, table dbTable, action string) bool {
 	})
 }
 
-// rlsOnlyTables are the tables and views /db leaves entirely to their RLS policies, for every request.
-var rlsOnlyTables = map[string]struct{}{
+// readsLeftToRLS are the tables and views whose reads /db leaves entirely to their RLS policies. Their RLS policies
+// filter only what's read, so writes are checked like any other table's.
+var readsLeftToRLS = map[string]struct{}{
 	"artifacts":        {},
 	"artifact_summary": {},
 	"view_panels":      {},
 	"views_summary":    {},
+}
+
+// readOnlyTables are the tables and views only read through /db, with what writes them instead. Their RLS policies
+// refuse every write, so /db refuses them first, whatever the subject's grants.
+var readOnlyTables = map[string]string{
+	"artifacts":        "artifacts are written by what produces them",
+	"artifact_summary": "artifacts are written by what produces them",
+	"view_panels":      "a view's panels are written when it's refreshed",
+	"views_summary":    "write views through Kubernetes",
 }
 
 // legacyPermissionTables are the tables and views of the deprecated Permissions and PermissionGroups.
