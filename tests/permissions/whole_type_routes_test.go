@@ -433,6 +433,78 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 	})
 })
 
+var _ = Describe("Notification send history", Ordered, func() {
+	const namespace = "notification-send-history-routes"
+
+	var (
+		e                      *echo.Echo
+		reader, viewer, nobody *models.Person
+		config                 models.ConfigItem
+		notif                  models.Notification
+		history                models.NotificationSendHistory
+	)
+
+	serve := func(person *models.Person, method, path, body string) (int, string) {
+		GinkgoHelper()
+		req := httptest.NewRequest(method, path, strings.NewReader(body))
+		req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+		req = req.WithContext(DefaultContext.WithUser(person))
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		return rec.Code, rec.Body.String()
+	}
+
+	BeforeAll(func() {
+		Expect(mcRBAC.Init(DefaultContext)).To(Succeed())
+		reader = setup.CreateUserWithRole(DefaultContext, "Send History Reader", "send-history-reader@test.com")
+		viewer = newViewer("Send History Viewer", "send-history-viewer@test.com")
+		nobody = setup.CreateUserWithRole(DefaultContext, "Send History Nobody", "send-history-nobody@test.com")
+		bindWholeType(namespace, "read-notifications", v1.ResourceNotification, boundPeople(reader), policy.ActionRead)
+		Expect(rbac.ReloadPolicy()).To(Succeed())
+
+		config = models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr("send-history-target"), ConfigClass: models.ConfigClassPod,
+			Type: lo.ToPtr("Kubernetes::Pod"), Tags: map[string]string{"team": "payments"}}
+		Expect(DefaultContext.DB().Create(&config).Error).To(Succeed())
+		notif = models.Notification{ID: uuid.New(), Name: "send-history", Namespace: namespace, Source: models.SourceUI,
+			Events: []string{"config.unhealthy"}}
+		Expect(DefaultContext.DB().Create(&notif).Error).To(Succeed())
+		history = models.NotificationSendHistory{NotificationID: notif.ID, ResourceID: config.ID, SourceEvent: "config.unhealthy",
+			Status: models.NotificationStatusSent, Body: lo.ToPtr("payments pod is unhealthy")}
+		Expect(DefaultContext.DB().Create(&history).Error).To(Succeed())
+
+		e = wholeTypeRoutes()
+	})
+
+	AfterAll(func() {
+		Expect(DefaultContext.DB().Where("notification_id = ?", notif.ID).Delete(&models.NotificationSendHistory{}).Error).To(Succeed())
+		Expect(DefaultContext.DB().Delete(&notif).Error).To(Succeed())
+		Expect(DefaultContext.DB().Delete(&config).Error).To(Succeed())
+		for _, p := range []*models.Person{reader, viewer, nobody} {
+			Expect(DefaultContext.DB().Delete(p).Error).To(Succeed())
+		}
+		deleteNamespace(namespace)
+	})
+
+	It("is refused to a subject without read on notifications", func() {
+		for _, p := range []*models.Person{nobody, viewer} {
+			code, body := serve(p, http.MethodPost, "/notification/summary", `{}`)
+			Expect(code).To(Equal(http.StatusForbidden), "%s: %s", p.Email, body)
+			code, body = serve(p, http.MethodGet, "/notification/send_history/"+history.ID.String(), "")
+			Expect(code).To(Equal(http.StatusForbidden), "%s: %s", p.Email, body)
+		}
+	})
+
+	It("is read by a subject with read on notifications", func() {
+		code, body := serve(reader, http.MethodPost, "/notification/summary", `{}`)
+		Expect(code).To(Equal(http.StatusOK), body)
+		Expect(body).To(ContainSubstring("payments pod is unhealthy"))
+
+		code, body = serve(reader, http.MethodGet, "/notification/send_history/"+history.ID.String(), "")
+		Expect(code).To(Equal(http.StatusOK), body)
+		Expect(body).To(ContainSubstring(history.ID.String()))
+	})
+})
+
 var _ = Describe("Records and lookup views of a type through /db", Ordered, func() {
 	const namespace = "records-of-types"
 
