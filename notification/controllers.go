@@ -29,8 +29,9 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	g := e.Group("/notification")
 
-	g.POST("/summary", NotificationSendHistorySummary, echoSrv.RLSMiddleware)
-	g.GET("/send_history/:id", GetNotificationSendHistoryDetail, echoSrv.RLSMiddleware)
+	readSendHistory := rbac.Authorization(policy.ObjectNotification, policy.ActionRead)
+	g.POST("/summary", NotificationSendHistorySummary, readSendHistory, echoSrv.RLSMiddleware)
+	g.GET("/send_history/:id", GetNotificationSendHistoryDetail, readSendHistory, echoSrv.RLSMiddleware)
 
 	g.GET("/events", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, EventRing.Get())
