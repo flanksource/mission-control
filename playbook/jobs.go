@@ -14,6 +14,7 @@ import (
 	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace"
+	"gorm.io/gorm"
 )
 
 var pushPullLagBuckets = []float64{100, 200, 500, 1000, 1500, 3000, 5000, 10_000, 20_000, 30_000, 60_000, 100_000}
@@ -144,6 +145,61 @@ func MarkTimedOutPlaybookRuns(ctx context.Context) error {
 		if err := run.EndAsTimedOut(ctx.DB()); err != nil {
 			return ctx.Oops("db").Wrapf(err, "failed to mark playbook run %s as timed out", run.ID)
 		}
+	}
+
+	return nil
+}
+
+const defaultActionOrphanTimeout = 20 * time.Minute
+
+func actionOrphanTimeout(ctx context.Context) time.Duration {
+	timeout := ctx.Properties().Duration("playbook.action.orphan_timeout", defaultActionOrphanTimeout)
+	if timeout <= 0 {
+		return defaultActionOrphanTimeout
+	}
+	return timeout
+}
+
+// ReapOrphanedActions resets actions stuck in the running state past the orphan timeout so
+// they are retried. Agent-pulled actions have no local run and return to waiting. Local actions
+// are only retried while their parent run is still executing and has not timed out.
+func ReapOrphanedActions(ctx context.Context) error {
+	timeout := actionOrphanTimeout(ctx)
+	var activeActionIDs []uuid.UUID
+	activePlaybookActions.Range(func(id uuid.UUID, _ struct{}) bool {
+		activeActionIDs = append(activeActionIDs, id)
+		return true
+	})
+
+	query := ctx.DB().Model(&models.PlaybookRunAction{}).
+		Where("status = ?", models.PlaybookActionStatusRunning).
+		Where("agent_id IS NULL OR agent_id = ?", uuid.Nil).
+		Where("start_time < NOW() - INTERVAL '1 second' * ?", int64(timeout.Seconds()))
+	if len(activeActionIDs) > 0 {
+		query = query.Where("id NOT IN ?", activeActionIDs)
+	}
+
+	tx := query.
+		Where(`
+			playbook_run_id IS NULL OR EXISTS (
+				SELECT 1
+				FROM playbook_runs
+				WHERE playbook_runs.id = playbook_run_actions.playbook_run_id
+				AND playbook_runs.status IN ?
+				AND (playbook_runs.timeout IS NULL OR playbook_runs.timeout > EXTRACT(EPOCH FROM (NOW() - playbook_runs.scheduled_time)) * 1000000000)
+			)
+		`, models.PlaybookRunStatusExecutingGroup).
+		Updates(map[string]any{
+			"status": gorm.Expr("CASE WHEN playbook_run_id IS NULL THEN ? ELSE ? END",
+				models.PlaybookActionStatusWaiting, models.PlaybookActionStatusScheduled),
+			"start_time": nil,
+		})
+	if tx.Error != nil {
+		return ctx.Oops("db").Wrapf(tx.Error, "failed to reap orphaned playbook actions")
+	}
+
+	if tx.RowsAffected > 0 {
+		ctx.Logger.Infof("reset %d orphaned playbook action(s) from running for retry", tx.RowsAffected)
 	}
 
 	return nil
