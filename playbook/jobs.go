@@ -2,6 +2,7 @@ package playbook
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -142,6 +143,10 @@ func MarkTimedOutPlaybookRuns(ctx context.Context) error {
 
 	for _, run := range runs {
 		if err := run.EndAsTimedOut(ctx.DB()); err != nil {
+			if errors.Is(err, models.ErrPlaybookTransition) {
+				// The run ended after it was selected.
+				continue
+			}
 			return ctx.Oops("db").Wrapf(err, "failed to mark playbook run %s as timed out", run.ID)
 		}
 	}
