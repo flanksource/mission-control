@@ -111,8 +111,8 @@ func _getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAge
 	if err != nil {
 		return nil, ctx.Oops().Wrap(err)
 	}
-	if run.Status == models.PlaybookRunStatusCancelled {
-		if err := skipCancelledAction(ctx, step); err != nil {
+	if run.Status.IsFinal() {
+		if err := step.Skip(ctx.DB()); err != nil {
 			return nil, ctx.Oops().Wrap(err)
 		}
 		return nil, nil
