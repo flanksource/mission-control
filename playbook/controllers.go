@@ -302,6 +302,10 @@ func HandlePlaybookRunCancel(c echo.Context) error {
 	}
 
 	if err := run.Cancel(ctx.DB()); err != nil {
+		var terr *models.PlaybookTransitionError
+		if errors.As(err, &terr) {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "playbook run(id=%s) is in %s state and cannot be cancelled", runID, terr.From))
+		}
 		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
