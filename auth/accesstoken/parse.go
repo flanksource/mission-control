@@ -14,7 +14,22 @@ const (
 
 var ErrInvalidFormat = errors.New("invalid access token format")
 
+// Parse parses an access token. Tokens whose hashing costs differ from the server's
+// are rejected, since hashing with caller-supplied costs lets anyone exhaust memory or CPU.
 func Parse(accessToken string) (Token, error) {
+	token, err := parse(accessToken)
+	if err != nil {
+		return Token{}, err
+	}
+
+	if token.TimeCost != timeCost || token.MemoryCost != memoryCost || token.Parallelism != parallelism {
+		return Token{}, ErrInvalidFormat
+	}
+
+	return token, nil
+}
+
+func parse(accessToken string) (Token, error) {
 	fields := strings.Split(accessToken, ".")
 
 	switch len(fields) {
