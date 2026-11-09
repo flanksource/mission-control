@@ -38,7 +38,9 @@ func FlushTokenCache() {
 // - JWT for postgREST
 // - RLS payloads
 // - access tokens
-var tokenCache = cache.New(1*time.Hour, 1*time.Hour)
+var tokenCache = cache.New(tokenCacheExpiration, 1*time.Hour)
+
+const tokenCacheExpiration = 1 * time.Hour
 
 // deletedTokensCache maintains a blacklist of deleted token IDs.
 // Required because tokenCache is keyed by the full token string, not the ID,
@@ -187,10 +189,10 @@ func getAccessToken(ctx context.Context, token string) (*models.AccessToken, err
 		return nil, errTokenExpired
 	}
 
-	expiry := accessToken.ExpiresAt
-	if expiry == nil {
-		tokenCache.Set(token, &accessToken, -1)
-	} else {
+	// Cached for well under deletedTokensCache's expiration, so a deleted token is looked up again, and not found,
+	// before it leaves the deny list.
+	ttl := tokenCacheExpiration
+	if expiry := accessToken.ExpiresAt; expiry != nil {
 		if expiry.Before(time.Now()) {
 			return nil, errTokenExpired
 		}
@@ -201,8 +203,11 @@ func getAccessToken(ctx context.Context, token string) (*models.AccessToken, err
 			}
 		}
 
-		tokenCache.Set(token, &accessToken, time.Until(*expiry))
+		if untilExpiry := time.Until(*expiry); untilExpiry < tokenCacheExpiration {
+			ttl = untilExpiry
+		}
 	}
+	tokenCache.Set(token, &accessToken, ttl)
 
 	return &accessToken, nil
 }
