@@ -196,8 +196,7 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 		FOR UPDATE SKIP LOCKED`
 
 		statuses := []string{models.NotificationStatusEvaluatingWaitFor, models.NotificationStatusPending}
-		maxRetries := ctx.Properties().Int("notification.max-retries", 4) - 1
-		if err := ctx.DB().Raw(query, statuses, maxRetries).Find(&pending).Error; err != nil {
+		if err := ctx.DB().Raw(query, statuses, maxSendAttempts(ctx)).Find(&pending).Error; err != nil {
 			return fmt.Errorf("failed to get pending notifications: %w", err)
 		}
 
@@ -209,12 +208,12 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 		currentHistory := pending[0]
 
 		if err := processPendingNotification(ctx, currentHistory); err != nil {
-			if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
-				"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusError, models.NotificationStatusPending),
-				"error":   err.Error(),
-				"retries": gorm.Expr("retries + 1"),
-			}).Error; dberr != nil {
+			exhausted, dberr := recordFailedSend(ctx, currentHistory, err, nil)
+			if dberr != nil {
 				return ctx.Oops().Join(dberr, err)
+			}
+			if !exhausted {
+				return nil
 			}
 
 			notif, notifErr := GetNotification(ctx, currentHistory.NotificationID.String())
@@ -223,7 +222,6 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 			}
 
 			if notif.HasFallbackSet() {
-				// If the notification has fallback, we send to it after exhausting retries
 				if err := models.GenerateFallbackAttempt(ctx.DB(), notif.Notification, currentHistory); err != nil {
 					return fmt.Errorf("failed to generate fallback attempt: %w", err)
 				}
@@ -283,12 +281,11 @@ func ProcessFallbackNotifications(parentCtx context.Context) (bool, error) {
 		ctx := parentCtx.WithDB(tx, parentCtx.Pool())
 
 		var pending []models.NotificationSendHistory
-		maxRetries := ctx.Properties().Int("notification.max-retries", 4) - 1
 		if err := ctx.DB().Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate, Options: clause.LockingOptionsSkipLocked}).
 			Where("status = ?", models.NotificationStatusAttemptingFallback).
 			Where("NOT EXISTS (SELECT 1 FROM notifications n WHERE n.id = notification_send_history.notification_id AND n.on_resolved->>'enabled' = 'true')").
 			Where("not_before <= NOW()").
-			Where("retries < ?", maxRetries).
+			Where("retries < ?", maxSendAttempts(ctx)).
 			Order("not_before ASC").
 			Limit(1). // one at a time; as one notification failure shouldn't affect a previous successful one
 			Find(&pending).Error; err != nil {
@@ -308,11 +305,7 @@ func ProcessFallbackNotifications(parentCtx context.Context) (bool, error) {
 		)
 
 		if err := sendFallbackNotification(ctx, currentHistory); err != nil {
-			if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
-				"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", maxRetries, models.NotificationStatusError, models.NotificationStatusAttemptingFallback),
-				"error":   err.Error(),
-				"retries": gorm.Expr("retries + 1"),
-			}).Error; dberr != nil {
+			if _, dberr := recordFailedSend(ctx, currentHistory, err, nil); dberr != nil {
 				return ctx.Oops().Join(dberr, err)
 			}
 		}
@@ -322,6 +315,28 @@ func ProcessFallbackNotifications(parentCtx context.Context) (bool, error) {
 	})
 
 	return noMorePending, err
+}
+
+// maxSendAttempts is the number of times a pending or fallback notification is attempted before it ends in error.
+func maxSendAttempts(ctx context.Context) int {
+	return ctx.Properties().Int("notification.max-retries", 4)
+}
+
+// recordFailedSend counts a failed attempt to send a pending or fallback notification, and writes the extra columns.
+// The send history keeps its status, so that it's attempted again, until it has used all its attempts: then it ends in error.
+func recordFailedSend(ctx context.Context, history models.NotificationSendHistory, sendErr error, columns map[string]any) (exhausted bool, err error) {
+	updates := map[string]any{
+		"error":   sendErr.Error(),
+		"retries": gorm.Expr("retries + 1"),
+	}
+	for k, v := range columns {
+		updates[k] = v
+	}
+
+	if history.Retries+1 < maxSendAttempts(ctx) {
+		return false, history.Update(ctx.DB(), updates)
+	}
+	return true, history.Transition(ctx.DB(), models.NotificationStatusError, updates)
 }
 
 // If the resource is still unhealthy, it returns false
@@ -356,10 +371,9 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 			if notif.OnResolved != nil && notif.OnResolved.Enabled {
 				deadline = time.Now().Add(lo.CoalesceOrEmpty(lo.FromPtr(notif.WaitForEvalPeriod), time.Second*30))
 			}
-			if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
-				"status":     models.NotificationStatusEvaluatingWaitFor,
+			if dberr := currentHistory.Transition(ctx.DB(), models.NotificationStatusEvaluatingWaitFor, map[string]any{
 				"not_before": deadline,
-			}).Error; dberr != nil {
+			}); dberr != nil {
 				return false, dberr
 			}
 
@@ -405,10 +419,9 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 	if exists, err := ResourceExists(ctx, currentHistory.SourceEvent, currentHistory.ResourceID); err != nil {
 		return fmt.Errorf("failed to check resource existence: %w", err)
 	} else if !exists {
-		if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
-			"status": models.NotificationStatusSkipped,
-			"error":  ResourceNoLongerExistsReason,
-		}).Error; dberr != nil {
+		if dberr := currentHistory.Transition(ctx.DB(), models.NotificationStatusSkipped, map[string]any{
+			"error": ResourceNoLongerExistsReason,
+		}); dberr != nil {
 			return fmt.Errorf("failed to mark notification as skipped: %w", dberr)
 		}
 		return nil
@@ -458,10 +471,7 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 	if blocker, err := processNotificationConstraints(ctx, *notif, payload, celEnv, matchingSilences); err != nil {
 		return fmt.Errorf("failed to check all conditions for notification[%s]: %w", notif.ID, err)
 	} else if blocker != nil {
-		columns := map[string]any{
-			"status": blocker.BlockedWithStatus,
-		}
-
+		columns := map[string]any{}
 		if blocker.ParentID != nil {
 			columns["parent_id"] = blocker.ParentID.String()
 		}
@@ -469,8 +479,8 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 			columns["silenced_by"] = blocker.SilencedBy.String()
 		}
 
-		if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(columns).Error; err != nil {
-			return fmt.Errorf("failed to save notification status as skipped: %w", err)
+		if err := currentHistory.Transition(ctx.DB(), blocker.BlockedWithStatus, columns); err != nil {
+			return fmt.Errorf("failed to save notification status as %s: %w", blocker.BlockedWithStatus, err)
 		}
 
 		return nil
@@ -478,10 +488,6 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 
 	if err := sendPendingNotification(ctx, currentHistory, payload); err != nil {
 		return fmt.Errorf("failed to send pending notification: %w", err)
-	} else if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ? AND status != ?", currentHistory.ID, models.NotificationStatusSkipped).UpdateColumns(map[string]any{
-		"status": models.NotificationStatusSent,
-	}).Error; dberr != nil {
-		return fmt.Errorf("failed to save notification status as sent: %w", dberr)
 	}
 
 	return nil

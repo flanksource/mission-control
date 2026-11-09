@@ -629,15 +629,13 @@ func sendFallbackNotification(ctx context.Context, sendHistory models.Notificati
 
 	if err := sendPendingNotification(ctx, sendHistory, payload); err != nil {
 		return fmt.Errorf("failed to send fallback notification: %w", err)
-	} else if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", sendHistory.ID).UpdateColumns(map[string]any{
-		"status": models.NotificationStatusSent,
-	}).Error; dberr != nil {
-		return fmt.Errorf("failed to save notification status as sent: %w", dberr)
 	}
 
 	return nil
 }
 
+// sendPendingNotification dispatches a pending or fallback send history and moves it to the status the dispatch ended in.
+// When the dispatch fails, the send history is left as is: the caller counts the failed attempt.
 func sendPendingNotification(ctx context.Context, history models.NotificationSendHistory, payload NotificationEventPayload) error {
 	notificationContext := NewContext(ctx.WithSubject(payload.NotificationID.String()), payload.NotificationID).WithHistory(history)
 	ctx.Debugf("[notification.send] %s ", payload.EventName)
@@ -645,23 +643,18 @@ func sendPendingNotification(ctx context.Context, history models.NotificationSen
 	notificationContext.WithGroupID(payload.GroupID)
 
 	err := _sendNotification(notificationContext, payload)
-	if err != nil {
-		if IsStaleResourceEventError(err) {
-			notificationContext.log.Status = models.NotificationStatusSkipped
-			notificationContext.log.Error = lo.ToPtr(ResourceNoLongerExistsReason)
-		} else {
-			notificationContext.WithError(err)
-		}
+	if IsStaleResourceEventError(err) {
+		notificationContext.log.Status = models.NotificationStatusSkipped
+		notificationContext.log.Error = lo.ToPtr(ResourceNoLongerExistsReason)
+	} else if err != nil {
+		recordRefusedSend(ctx, payload.NotificationID.String(), err)
+		return err
 	}
 
 	if endLogErr := notificationContext.EndLog(); endLogErr != nil {
 		logNotificationEndLogError(notificationContext, err, endLogErr)
 	}
-	if IsStaleResourceEventError(err) {
-		return nil
-	}
-	recordRefusedSend(ctx, payload.NotificationID.String(), err)
-	return err
+	return nil
 }
 
 func calculateGroupByHash(ctx context.Context, groupBy []string, resourceID, event string) (string, error) {
@@ -739,10 +732,11 @@ func sendNotification(ctx context.Context, payload NotificationEventPayload) err
 		if result.Error != nil {
 			return result.Error
 		}
-		if existing.Status == models.NotificationStatusSent {
-			return nil
-		}
 		if existing.ID != uuid.Nil {
+			// Only a failed or interrupted send is dispatched again.
+			if existing.Status != models.NotificationStatusError && existing.Status != models.NotificationStatusSending {
+				return nil
+			}
 			notificationContext = notificationContext.WithHistory(existing)
 		} else {
 			notificationContext.log.ID = id

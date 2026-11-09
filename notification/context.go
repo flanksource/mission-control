@@ -47,12 +47,41 @@ func (t Context) WithHistory(h models.NotificationSendHistory) *Context {
 	return &t
 }
 
+// StartLog records the send as in flight before it's dispatched, so that what dispatch creates
+// (playbook runs, delivery receipts) can refer to it.
+// A send that failed before is moved back to sending; one that is already in flight is left as is.
 func (t *Context) StartLog() error {
-	return t.DB().Save(t.log).Error
+	switch t.log.Status {
+	case "":
+		t.log.Status = models.NotificationStatusSending
+		return t.DB().Create(t.log).Error
+	case models.NotificationStatusSending:
+		return nil
+	}
+
+	if err := t.log.Transition(t.DB(), models.NotificationStatusSending, map[string]any{"error": nil}); err != nil {
+		return err
+	}
+	t.log.Status = models.NotificationStatusSending
+	t.log.Error = nil
+	return nil
 }
 
+// EndLog moves the send history to the status its dispatch ended in, and records what the dispatch produced.
 func (t *Context) EndLog() error {
-	return t.DB().Save(t.log.End()).Error
+	t.log.End()
+	return t.log.Transition(t.DB(), t.log.Status, map[string]any{
+		"error":           t.log.Error,
+		"body":            t.log.Body,
+		"body_payload":    t.log.BodyPayload,
+		"payload":         t.log.Payload,
+		"duration_millis": t.log.DurationMillis,
+		"person_id":       t.log.PersonID,
+		"team_id":         t.log.TeamID,
+		"connection_id":   t.log.ConnectionID,
+		"playbook_run_id": t.log.PlaybookRunID,
+		"group_id":        t.log.GroupID,
+	})
 }
 
 func (t *Context) WithMessage(message string) {

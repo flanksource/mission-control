@@ -238,7 +238,7 @@ func SetNotificationError(ctx context.Context, id string, err string) error {
 func ResetNotificationError(ctx context.Context, id string) error {
 	return ctx.DB().Model(&models.Notification{}).Where("id = ?", id).
 		Updates(map[string]any{
-			"error":    "",
+			"error":    nil,
 			"error_at": nil,
 		}).
 		Error

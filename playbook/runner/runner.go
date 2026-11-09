@@ -248,7 +248,7 @@ func saveAIResultToSendHistory(ctx context.Context, run models.PlaybookRun) erro
 			updates["body_payload"] = gorm.Expr("NULL")
 		}
 
-		if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", sendHistoryUpdate.ID).UpdateColumns(updates).Error; err != nil {
+		if err := sendHistoryUpdate.Update(ctx.DB(), updates); err != nil {
 			return ctx.Oops().Wrap(err)
 		}
 	}

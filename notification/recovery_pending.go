@@ -7,7 +7,6 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -47,16 +46,11 @@ func processRecoveryPending(ctx context.Context, fallback bool) (bool, error) {
 	if err == nil {
 		return true, nil
 	}
-	status := history.Status
-	if history.Retries+1 >= ctx.Properties().Int("notification.max-retries", 4) {
-		status = models.NotificationStatusError
-	}
-	if dbErr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", history.ID).Updates(map[string]any{
-		"status": status, "error": err.Error(), "retries": gorm.Expr("retries + 1"), "not_before": time.Now().Add(time.Minute),
-	}).Error; dbErr != nil {
+	exhausted, dbErr := recordFailedSend(ctx, history, err, map[string]any{"not_before": time.Now().Add(time.Minute)})
+	if dbErr != nil {
 		return true, fmt.Errorf("pending recovery send failed: %v; persist: %w", err, dbErr)
 	}
-	if !fallback && n.HasFallbackSet() {
+	if exhausted && !fallback && n.HasFallbackSet() {
 		if err := materializeRecoveryFallback(ctx, n, history); err != nil {
 			return true, err
 		}
