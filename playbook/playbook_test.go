@@ -863,7 +863,7 @@ var _ = Describe("Playbook", Ordered, func() {
 		})
 
 		It("(azure) should push the action result to the upstream", func() {
-			pushed, err := PushPlaybookActions(azureAgentContext, awsAgentUpstreamConfig, 10)
+			pushed, err := PushPlaybookActions(azureAgentContext, azureAgentUpstreamConfig, 10)
 			Expect(err).To(BeNil())
 			Expect(pushed).To(Equal(1))
 		})
