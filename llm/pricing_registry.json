@@ -628,6 +628,18 @@
         "cacheWritesPrice": 2.75,
         "cacheReadsPrice": 0.22
       },
+      "au.anthropic.claude-sonnet-5-5": {
+        "provider": "bedrock",
+        "modelID": "au.anthropic.claude-sonnet-5-5",
+        "maxTokens": 128000,
+        "contextWindow": 1000000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 2.2,
+        "outputPrice": 11,
+        "cacheWritesPrice": 2.75,
+        "cacheReadsPrice": 0.11
+      },
       "ca.amazon.nova-lite-v1:0": {
         "provider": "bedrock",
         "modelID": "ca.amazon.nova-lite-v1:0",
@@ -1254,6 +1266,27 @@
             "outputPrice": 15,
             "cacheWritesPrice": 5,
             "cacheReadsPrice": 0.2
+          }
+        ]
+      },
+      "global.openai.gpt-6.1-terra": {
+        "provider": "bedrock",
+        "modelID": "global.openai.gpt-6.1-terra",
+        "maxTokens": 128000,
+        "contextWindow": 1050000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 1,
+        "outputPrice": 5,
+        "cacheWritesPrice": 1.25,
+        "cacheReadsPrice": 0.05,
+        "contextPriceTiers": [
+          {
+            "tokenThreshold": 272000,
+            "inputPrice": 2,
+            "outputPrice": 7.5,
+            "cacheWritesPrice": 2.5,
+            "cacheReadsPrice": 0.1
           }
         ]
       },
@@ -1914,6 +1947,27 @@
           }
         ]
       },
+      "openai.gpt-6.1-terra": {
+        "provider": "bedrock",
+        "modelID": "openai.gpt-6.1-terra",
+        "maxTokens": 128000,
+        "contextWindow": 1050000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 1.1,
+        "outputPrice": 5.5,
+        "cacheWritesPrice": 1.375,
+        "cacheReadsPrice": 0.055,
+        "contextPriceTiers": [
+          {
+            "tokenThreshold": 272000,
+            "inputPrice": 2.2,
+            "outputPrice": 8.25,
+            "cacheWritesPrice": 2.75,
+            "cacheReadsPrice": 0.11
+          }
+        ]
+      },
       "openai.gpt-oss-120b": {
         "provider": "bedrock",
         "modelID": "openai.gpt-oss-120b",
@@ -2513,6 +2567,27 @@
           }
         ]
       },
+      "us.openai.gpt-6.1-terra": {
+        "provider": "bedrock",
+        "modelID": "us.openai.gpt-6.1-terra",
+        "maxTokens": 128000,
+        "contextWindow": 1050000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 1.1,
+        "outputPrice": 5.5,
+        "cacheWritesPrice": 1.375,
+        "cacheReadsPrice": 0.055,
+        "contextPriceTiers": [
+          {
+            "tokenThreshold": 272000,
+            "inputPrice": 2.2,
+            "outputPrice": 8.25,
+            "cacheWritesPrice": 2.75,
+            "cacheReadsPrice": 0.11
+          }
+        ]
+      },
       "us.writer.palmyra-x4-v1:0": {
         "provider": "bedrock",
         "modelID": "us.writer.palmyra-x4-v1:0",
@@ -2768,29 +2843,11 @@
         "inputPrice": 2,
         "outputPrice": 120
       },
-      "gemini-3-pro-image-preview": {
-        "provider": "gemini",
-        "modelID": "gemini-3-pro-image-preview",
-        "maxTokens": 32768,
-        "contextWindow": 131072,
-        "supportsImages": true,
-        "inputPrice": 2,
-        "outputPrice": 120
-      },
       "gemini-3.1-flash-image": {
         "provider": "gemini",
         "modelID": "gemini-3.1-flash-image",
         "maxTokens": 32768,
         "contextWindow": 131072,
-        "supportsImages": true,
-        "inputPrice": 0.5,
-        "outputPrice": 60
-      },
-      "gemini-3.1-flash-image-preview": {
-        "provider": "gemini",
-        "modelID": "gemini-3.1-flash-image-preview",
-        "maxTokens": 65536,
-        "contextWindow": 65536,
         "supportsImages": true,
         "inputPrice": 0.5,
         "outputPrice": 60
@@ -3506,6 +3563,27 @@
             "outputPrice": 15,
             "cacheWritesPrice": 5,
             "cacheReadsPrice": 0.2
+          }
+        ]
+      },
+      "gpt-6.1-terra": {
+        "provider": "openai",
+        "modelID": "gpt-6.1-terra",
+        "maxTokens": 128000,
+        "contextWindow": 1050000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 1,
+        "outputPrice": 5,
+        "cacheWritesPrice": 1.25,
+        "cacheReadsPrice": 0.05,
+        "contextPriceTiers": [
+          {
+            "tokenThreshold": 272000,
+            "inputPrice": 2,
+            "outputPrice": 7.5,
+            "cacheWritesPrice": 2.5,
+            "cacheReadsPrice": 0.1
           }
         ]
       },
