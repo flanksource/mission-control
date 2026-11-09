@@ -177,7 +177,7 @@ func registerNotifications(s *server.MCPServer) {
 			mcp.Description("End time filter using datemath expressions (e.g., 'now-1h', 'now-1d')"),
 		),
 		mcp.WithString("status",
-			mcp.Description("Filter by notification status (sent, error, pending, silenced, repeat-interval, inhibited, pending_playbook_run, pending_playbook_completion, evaluating-waitfor, attempting_fallback)"),
+			mcp.Description("Filter by notification status (sending, sent, error, pending, silenced, repeat-interval, inhibited, pending_playbook_run, pending_playbook_completion, evaluating-waitfor, attempting_fallback)"),
 		),
 		mcp.WithArray("select",
 			mcp.WithStringItems(),

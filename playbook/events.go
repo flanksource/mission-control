@@ -314,21 +314,23 @@ func onNewRun(ctx context.Context, event models.Event) error {
 
 	switch initiatorType {
 	case RunInitiatorTypeNotification:
-		columnUpdates := map[string]any{}
+		dispatch := models.NotificationSendHistory{ID: *runParam.NotificationSendID}
+		var updateErr error
 		if newRun != nil {
-			columnUpdates["playbook_run_id"] = newRun.ID.String()
-			columnUpdates["status"] = models.NotificationStatusPendingPlaybookCompletion
+			updateErr = dispatch.Transition(ctx.DB(), models.NotificationStatusPendingPlaybookCompletion, map[string]any{
+				"playbook_run_id": newRun.ID.String(),
+			})
 		} else {
-			columnUpdates["error"] = fmt.Sprintf("playbook run failed: %v", err)
-			columnUpdates["status"] = models.NotificationStatusError
+			updateErr = dispatch.Transition(ctx.DB(), models.NotificationStatusError, map[string]any{
+				"error": fmt.Sprintf("playbook run failed: %v", err),
+			})
 		}
 
-		if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", notificationDispatchID).UpdateColumns(columnUpdates).Error; err != nil {
-			ctx.Errorf("playbook run initiated but failed to update the notification status (%s): %v", notificationDispatchID, err)
-		}
-
-		// Attempt fallback on error if applicable
-		if newRun == nil {
+		if updateErr != nil {
+			// A send history that already ended, e.g. because the run already ended, keeps its status and gets no fallback.
+			ctx.Errorf("playbook run initiated but failed to update the notification status (%s): %v", notificationDispatchID, updateErr)
+		} else if newRun == nil {
+			// Attempt fallback on error if applicable
 			notif, err := notification.GetNotification(ctx, notificationID)
 			if err != nil {
 				return fmt.Errorf("failed to get notification: %w", err)
