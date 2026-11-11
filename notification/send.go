@@ -66,6 +66,7 @@ type NotificationEventPayload struct {
 	ResourceHealth            models.Health `json:"resource_health"`
 	ResourceStatus            string        `json:"resource_status"`
 	ResourceHealthDescription string        `json:"resource_health_description"`
+	ResourceGeneration        string        `json:"resource_generation,omitempty"`
 
 	RecoveryEpisode string     `json:"recovery_episode,omitempty"`
 	EventID         uuid.UUID  `json:"event_id"`                  // The id of the original event this notification is for.
@@ -573,7 +574,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		}
 	}
 
-	var resourceHealth, resourceStatus, resourceHealthDescription string
+	var resourceHealth, resourceStatus, resourceHealthDescription, resourceGeneration string
 	if resource != nil {
 		var err error
 		resourceHealth, err = resource.GetHealth()
@@ -590,6 +591,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			resourceHealthDescription = dd.GetHealthDescription()
 		}
 	}
+	resourceGeneration = getConfigGeneration(celEnv.ConfigItem)
 
 	if n.PlaybookID != nil {
 		payload := NotificationEventPayload{
@@ -599,6 +601,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			ResourceHealth:            models.Health(resourceHealth),
 			ResourceStatus:            resourceStatus,
 			ResourceHealthDescription: resourceHealthDescription,
+			ResourceGeneration:        resourceGeneration,
 			ResourceID:                resourceID,
 			PlaybookID:                n.PlaybookID,
 			EventCreatedAt:            event.CreatedAt,
@@ -616,6 +619,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			NotificationID:            n.ID,
 			ResourceHealth:            models.Health(resourceHealth),
 			ResourceHealthDescription: resourceHealthDescription,
+			ResourceGeneration:        resourceGeneration,
 			ResourceStatus:            resourceStatus,
 			ResourceID:                resourceID,
 			PersonID:                  n.PersonID,
@@ -649,6 +653,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 				NotificationID:            n.ID,
 				ResourceHealth:            models.Health(resourceHealth),
 				ResourceHealthDescription: resourceHealthDescription,
+				ResourceGeneration:        resourceGeneration,
 				ResourceStatus:            resourceStatus,
 				ResourceID:                resourceID,
 				TeamID:                    n.TeamID,
@@ -678,6 +683,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			NotificationID:            n.ID,
 			ResourceHealth:            models.Health(resourceHealth),
 			ResourceHealthDescription: resourceHealthDescription,
+			ResourceGeneration:        resourceGeneration,
 			ResourceStatus:            resourceStatus,
 			CustomService:             cn.DeepCopy(),
 			ResourceID:                resourceID,
