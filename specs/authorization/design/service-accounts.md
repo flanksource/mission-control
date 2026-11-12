@@ -54,6 +54,8 @@ _Why not `/db/people`:_ a table write is gated by one action for every column an
 
 Rows of `people` are read through the database API with `read` on `person`, service accounts' included: a name, a type and a description, never a credential. _Why not filtered out:_ a record names who acted by their row of `people`, so a reader who couldn't read a service account's row would see a run with no creator. Listing a service account's tokens, or the accounts with them, goes through the routes below.
 
+The subjects offered for an access review include service accounts, by name, as a kind of their own. A review or search run as one is checked as its person id, like a person's.
+
 ## API
 
 All routes take `service-account:manage`, and refuse a request made with an access token or by a `federated` person, whatever their grants. The kubeconfig download for a service account refuses them too.
@@ -62,7 +64,7 @@ All routes take `service-account:manage`, and refuse a request made with an acce
 | ----------------------------------------------------- | ----------------------------------------------------------- |
 | `GET /service-accounts`                               | Lists service accounts                                      |
 | `POST /service-accounts`                              | Creates one: `name`, `description`                          |
-| `GET /service-accounts/:name`                         | Reads one, with the RoleBindings that name it               |
+| `GET /service-accounts/:name`                         | Reads one, with whether it holds `kubernetes-proxy:read` or `kubernetes-proxy:write`, and, for a caller with `read` on `roleBinding`, the RoleBindings that name it |
 | `PATCH /service-accounts/:name`                       | Changes its description                                     |
 | `DELETE /service-accounts/:name`                      | Deletes it and its tokens                                   |
 | `GET /service-accounts/:name/tokens`                  | Lists its tokens, with their Roles, never the token         |
@@ -85,15 +87,19 @@ _Why a parameter, not a route under `/service-accounts`:_ the kubeconfig templat
 - `service-account token create <name> --role <namespace/name> [--expiry] [--auto-renew]`, `service-account token list|revoke`
 - `--service-account <name> [--expiry] [--auto-renew]` on the kubeconfig download
 
+The commands call the API as the person signed in through the browser login. A CLI context that holds an access token is refused, like any token (`service-accounts.md`, Section 3).
+
+_Why not against the database, like `auth token`:_ a command run there is checked by no action, has no issuer to record on the token, and its token isn't usable at once (`access-tokens.md`, Section 2).
+
 ## UI
 
 - The avatar menu's **Download kubeconfig** stays as it is, and is always for the signed-in person.
 - The **Users** page lists the people a person operation reaches, so never a service account.
 - **Settings → Service Accounts**, shown to subjects with `service-account:manage`:
   - A list with **Create**, taking a name and description.
-  - An account page listing the RoleBindings that name it, read-only, linking to the RoleBindings page to edit them.
+  - An account page listing the RoleBindings that name it, to those who may read RoleBindings, read-only, linking to the RoleBindings page to edit them.
   - A **Tokens** tab to issue a token (name, expiry, auto-renew, Roles), shown once, and to revoke tokens.
-  - **Download kubeconfig**, which issues a proxy token for the account, with the expiry and auto-renew chosen there. The page warns when the account holds neither `kubernetes-proxy:read` nor `kubernetes-proxy:write`, since such a kubeconfig is refused on every request.
+  - **Download kubeconfig**, which issues a proxy token for the account, with the expiry and auto-renew chosen there. The page warns when the account holds neither `kubernetes-proxy:read` nor `kubernetes-proxy:write`, since such a kubeconfig is refused on every request. It reads that from the account, so it needs no `access:review`.
 
 The UI never acts as a service account: an admin, signed in as themselves, manages the account and its credentials, as GCP's and AWS's consoles do for service account keys.
 
