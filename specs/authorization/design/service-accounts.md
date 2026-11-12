@@ -46,9 +46,11 @@ Writing such a membership is refused as well, by a rule in the database on `team
 
 ### Person writes
 
-`people` is read-only through the database API. People are written only by the person operations (`roles.md`, Section 2.3), through the routes under "People" below. Each writes a fixed set of fields, never `type`, and finds its row through the person-operation row of the allowlist, so one that names a service account fails as not found.
+`people` and Kratos's `identities` are read-only through the database API. `person:manage` writes a person only through the person operations (`roles.md`, Section 2.3), by the routes under "People" below. Each writes a fixed set of fields, never `type`, and finds its row through the person-operation row of the allowlist, so one that names a service account fails as not found.
 
 _Why not `/db/people`:_ a table write is gated by one action for every column and every row, so it reaches whatever a release adds to the table until something forbids it, which is a denylist again. An operation that names its fields reaches nothing else. Scopes, Roles and RoleBindings are written only through their API for the same reason: what's written has to be validated.
+
+_Why `identities` too:_ a change to an identity is copied into the row of `people` that has the identity's id, whatever that row's type. A write that set an identity's id to a service account's would rename the service account, and deleting that identity would delete it without revoking its tokens.
 
 ### Reads
 
@@ -94,7 +96,7 @@ _Why a parameter, not a route under `/service-accounts`:_ the kubeconfig templat
 
 ### People
 
-These routes are the person operations (`roles.md`, Section 2.3): the only way a holder of `person:manage` writes a person, since `/db/people` is read-only. All take `person:manage`, and none takes a `type`.
+These routes are the person operations (`roles.md`, Section 2.3): the only way a holder of `person:manage` writes a person, since `/db/people` and `/db/identities` are read-only. All take `person:manage`, and none takes a `type`.
 
 | Route                                                 | Does                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------- |
