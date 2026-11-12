@@ -56,9 +56,20 @@ Rows of `people` are read through the database API with `read` on `person`, serv
 
 The subjects offered for an access review include service accounts, by name, as a kind of their own. A review or search run as one is checked as its person id, like a person's.
 
+## What duty provides
+
+The schema of `people`, `team_members` and `access_tokens`, and the views over them, belongs to duty, not to Mission Control. So these parts of the design are duty's, and service accounts need a duty version that has them:
+
+- the partial unique index on service account names (Storage),
+- the rule that a person's `type` never changes,
+- the rule on `team_members` that refuses other types (Team membership),
+- service accounts among the subjects offered for an access review (Reads).
+
+The allowlist, the routes and the policy are Mission Control's.
+
 ## API
 
-All routes take `service-account:manage`, and refuse a request made with an access token or by a `federated` person, whatever their grants. The kubeconfig download for a service account refuses them too.
+The `/service-accounts` routes all take `service-account:manage`, and refuse a request made with an access token or by a `federated` person, whatever their grants. The kubeconfig download for a service account refuses them too.
 
 | Route                                                 | Does                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------- |
