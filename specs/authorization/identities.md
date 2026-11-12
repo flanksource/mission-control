@@ -4,7 +4,7 @@ Every check is made as a subject: the caller of the request, or, where there's n
 
 ## 1. The caller
 
-A request is checked as whoever made it: a person, including a user of an external identity provider (`external-identity-providers.md`), or an agent (Section 5). A request made with an access token is checked as the token's owner (Section 4).
+A request is checked as whoever made it: a person, including a user of an external identity provider (`external-identity-providers.md`), a service account (Section 6), or an agent (Section 5). A request made with an access token is checked as the token's owner (Section 4).
 
 ## 2. Work without a caller
 
@@ -72,7 +72,7 @@ _Why the caller:_ a plugin does work someone asked for, so it reads with their a
 
 ## 4. Access tokens
 
-An access token is a credential, not an identity. A request made with a person's token is checked as that person, and what it may do is limited by the RoleBindings that select it. `access-tokens.md` says who may create and manage tokens, and `token-bindings.md` how they're limited.
+An access token is a credential, not an identity. A request made with a person's token is checked as that person, and what it may do is limited by the RoleBindings that select it. A request made with a service account's token is checked as the service account, and limited the same way (Section 6). `access-tokens.md` says who may create and manage tokens, and `token-bindings.md` how they're limited.
 
 ## 5. Agents
 
@@ -91,3 +91,9 @@ An agent may do nothing else, e.g. read configs other agents pushed or list play
 _Why no Role:_ everything above acts on the agent's own data, and the token already proves which agent is asking. A rule would be the same for every agent, so it would grant nothing a reader of a Role couldn't assume. Creating the agent is the grant: only a subject with `create` on `agent` can, and only they receive its token. Kubernetes authorizes a kubelet the same way, by the node its credential names rather than by RBAC.
 
 An agent sets the tags and labels of what it pushes. A Scope that selects by them, e.g. `tagSelector: env=prod`, includes an agent's resources when the agent tags them so, and grants on that Scope reach them. To keep an agent's resources out of a Scope, select by `agent` too (`scopes.md`, Section 5.4).
+
+## 6. Service accounts
+
+A service account is a subject that isn't a person, for automation that acts on its own behalf, e.g. a CI job or a bot. It signs in only with its own access tokens, and may do what the RoleBindings that name it in `serviceAccounts` grant (`rolebindings.md`, Section 2.7), and nothing else: `people`, `*` included, and teams never select it. `service-accounts.md` says how service accounts and their tokens are managed.
+
+_Why not a person or an agent:_ a token borrowed from a person stops working when they leave and does whatever they may do, and an agent can't be granted a Role. A service account is granted only what bindings name it for, and outlives whoever created it.

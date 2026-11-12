@@ -10,12 +10,12 @@ A token may do what its owner may do, and only what a rule of one of its binding
 
 ## 2. Who may write it
 
-A person MAY create the RoleBindings of their own tokens without any grant on RoleBindings. This is the only way a person writes a RoleBinding without one (`overview.md`, "Access").
+A person MAY create the RoleBindings of their own tokens without any grant on RoleBindings, and a subject with `service-account:manage` those of the service account tokens they issue (`service-accounts.md`, Section 4). These are the only ways to write a RoleBinding without a grant on RoleBindings (`overview.md`, "Access").
 
 - **Only when the token is created.** A token's bindings MUST be created with the token, one per Role it's created with, in the same transaction: the token and all of its bindings are created, or none of them is (`access-tokens.md`, Section 2). Nothing else MAY create them.
 - **Never changed.** A token's bindings MUST NOT be changed, and none MAY be added or removed, while the token exists. To change what a token may do, its owner creates a new token. _Why:_ a token's limit is fixed when it's handed out, so whoever holds it can rely on it, and no endpoint can lift it later.
 - **Not as a custom resource, nor through the RoleBinding API.** Neither has a field that selects a token, so neither can write a token binding. Token bindings live in a reserved namespace (Section 4) where neither MAY write anything, so neither can change, delete or replace one either.
-- **One token, the caller's own.** A token binding MUST select exactly one token, which the caller owns and created, and no other subject. It MUST NOT be written through a token, nor for a token of an agent or of another person.
+- **One token, the caller's own or one they issue.** A token binding MUST select exactly one token, and no other subject: one the caller owns and created, or one of a service account that the caller issues. It MUST NOT be written through a token, nor for a token of an agent or of another person.
 - **Never a deny.** A token binding MUST NOT set `deny`; one stored with it is invalid and limits nothing, so the token may do nothing. _Why:_ a token binding narrows by what it allows, and the owner's own deny bindings already apply to every request made with the token (`rolebindings.md`, Section 5.3).
 - **Any Role.** A token MAY be bound to any Role, named by namespace and name, whether or not its owner may read it. _Why:_ a token binding only limits, so binding a Role takes no grant on it, as binding one to a person takes none on the person.
 - **Deleted with the token.** A token's bindings MUST be deleted in the same transaction as the token, however it's deleted: by its owner, or when it expires.
@@ -39,7 +39,7 @@ _Why not a custom resource:_ a binding from Git is applied by whoever deploys it
 | `role`       | `<role namespace>/<role name>` |
 | `subjects`   | `accessToken: <token id>`, and nothing else |
 | `source`     | `AccessToken` |
-| `created_by` | The token's owner |
+| `created_by` | The token's owner, or for a service account's token, whoever issued it |
 
 - **By id.** The token is selected by its id, so a token deleted and created again with the same name isn't selected. _Why:_ the binding belongs to that one credential.
 - **Found by its subject.** A token's bindings are those whose `subjects.accessToken` is its id. The name only has to be unique in the namespace and short enough for a Kubernetes name: the token id and a hash of the Role's reference are both fixed length.

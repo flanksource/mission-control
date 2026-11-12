@@ -2,7 +2,7 @@
 
 ## 1. What a RoleBinding is
 
-A RoleBinding gives a Role to subjects: people, including users of an external identity provider, teams, and a few kinds of resources. With `deny: true`, it refuses the Role to them instead (Section 5).
+A RoleBinding gives a Role to subjects: people, including users of an external identity provider, teams, service accounts, and a few kinds of resources. With `deny: true`, it refuses the Role to them instead (Section 5).
 
 ```yaml
 apiVersion: mission-control.flanksource.com/v1
@@ -41,9 +41,10 @@ _Why:_ a binding can grant a shared Role and narrow it with its own Scopes, with
 | ------------------------------------------------------------------ | --------------- | -------------------------------------------------------------------- |
 | `people`                                                           | list of strings | People, by email, by `<provider>:<username>`, or `*`                 |
 | `teams`                                                            | list of strings | Every member of the teams, by team name                              |
+| `serviceAccounts`                                                  | list of strings | Service accounts, by name (Section 2.7)                              |
 | `playbooks`, `notifications`, `topologies`, `scrapers`, `canaries`, `plugins` | list of objects | Those resources, when they act on their own               |
 
-A person is a human who signs in: through Mission Control's own authentication (Kratos, Clerk, basic), or as a user of an external identity provider (Section 2.4). Both are selected by `people` and `teams`, by different kinds of entry (Section 2.1). Agents aren't people, and no subject selects them (Section 2.3). An access token isn't an identity: a request made with one is checked as its owner (`identities.md`, Section 4). A token is selected only by the bindings created with it (Section 2.6). `people` selects humans only, by any kind of entry, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
+A person is a human who signs in: through Mission Control's own authentication (Kratos, Clerk, basic), or as a user of an external identity provider (Section 2.4). Both are selected by `people` and `teams`, by different kinds of entry (Section 2.1). Agents aren't people, and no subject selects them (Section 2.3). Service accounts aren't people either, and only `serviceAccounts` selects them (Section 2.7). An access token isn't an identity: a request made with one is checked as its owner (`identities.md`, Section 4). A token is selected only by the bindings created with it (Section 2.6). `people` selects humans only, by any kind of entry, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
 
 ### 2.1 People
 
@@ -228,6 +229,20 @@ Bind by exact namespace and name wherever the Role is sensitive, e.g. `connectio
 ### 2.6 Access tokens
 
 A RoleBinding can select an access token, to limit it, but only when the token is created, for its owner (`token-bindings.md`). Neither a custom resource nor the RoleBinding API has a field that selects a token, and both are refused in the reserved namespace token bindings live in, so neither can write, change or delete one.
+
+### 2.7 Service accounts
+
+```yaml
+subjects:
+  serviceAccounts:
+    - github-actions
+    - backup-bot
+```
+
+Each entry is the name of a service account (`service-accounts.md`). `serviceAccounts` is the only field that selects one: `people`, `*` included, and `teams` never do.
+
+- An entry MUST be a valid service account name (`service-accounts.md`, Section 2). Patterns, `*` included, are rejected. _Why:_ each service account is granted on purpose. `*` would hand a Role to every service account created later, by whoever may create one.
+- An entry MAY name a service account that doesn't exist yet. It selects no one until it does, and selects it as soon as it's created.
 
 ## 3. Constraint
 
