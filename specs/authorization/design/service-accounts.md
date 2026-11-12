@@ -4,13 +4,13 @@
 
 `service-accounts.md` makes service accounts subjects that only `serviceAccounts` selects, managed with `service-account:manage`, and signed in only with their own tokens. They can be stored in a table of their own, or as rows of `people`, the table every identity that signs in already lives in. We store them in `people`, with `type = 'service_account'`, because access tokens, `created_by` columns, the request's user and casbin subjects all refer to a person's id. A table of its own would need a second owner column on access tokens and a second kind of user on every request.
 
-The cost of sharing `people` is that every query that picks people must keep service accounts out where they don't belong. That's met with an allowlist of person types (below), rather than the denylists in place today.
+The cost of sharing `people` is that every query that picks people must keep service accounts out where they don't belong. That's met with an allowlist of person types (below).
 
 ## Storage
 
 - A service account is a row of `people` with `type = 'service_account'`, its name in `name`, no email, and its description in `properties`. Its name is unique among the rows of that type that aren't deleted, enforced by a partial unique index.
-- Its tokens are rows of `access_tokens` whose `person_id` is the service account and whose `created_by` is the issuer. Their bindings are token bindings like a person's (`token-bindings.md`, Section 4), created in the token's transaction.
-- Deleting a service account soft-deletes its row, and hard-deletes its tokens and their bindings, in one transaction, then reloads the policy.
+- Its tokens are rows of `access_tokens` whose `person_id` is the service account and whose `created_by` is the issuer. Their bindings are token bindings like a person's (`token-bindings.md`, Section 4), created in the token's transaction. A person is only ever soft-deleted, so a token keeps naming its issuer after they're deleted.
+- Deleting a service account soft-deletes its row, and hard-deletes its tokens and their bindings, in one transaction, then reloads the policy. Each of its tokens is revoked as one token is (`design/tokens.md`): its id goes on the deny list of deleted tokens, and what's cached for it is dropped. _Why:_ a valid token is cached until it expires, so deleting its row alone would leave a cached copy working.
 - The casbin subject of a service account is its person id, like a person's. `serviceAccounts` entries resolve by name to that id when the policy loads, so a binding written before the account exists takes effect on the reload its creation triggers.
 
 ## Subjects are chosen by allowlist
@@ -24,21 +24,31 @@ Every query that picks people as subjects, as owners of something, as the person
 | `serviceAccounts`                                     | `service_account`         |
 | Members of a team                                     | humans, `federated`       |
 | A login or session of Mission Control's own authentication (Kratos, Clerk, basic, embedded OIDC) | humans |
-| Managed through the person APIs and `/db/people`, `/db/team_members` | humans, `federated` |
+| Reached by a person operation (`roles.md`, Section 2.3) | humans, `federated`       |
 | Owner of a token limited by its bindings              | humans, `service_account` |
 | Owner of an unlimited token                           | `agent`                   |
 
 Humans are the rows Mission Control's own authentication (Kratos, Clerk, basic) creates, which have a `NULL` type, less the `System` row, which has neither a type nor an email. A type missing from a row is never selected by it, including types added later.
 
-_Why not a denylist:_ a query that excludes the types it knows about selects every type added after it was written. Adding `service_account` to today's queries would have given every service account the Roles bound to `people: ["*"]`, and let teams take them as members. With an allowlist, a new type selects nothing until a row of this table names it.
+_Why not a denylist:_ a query that excludes the types it knows about selects every type added after it was written. One written before `service_account` existed would give every service account the Roles bound to `people: ["*"]`, and let teams take them as members. With an allowlist, a new type selects nothing until a row of this table names it.
 
-The allowlist replaces the type filters spread across the RoleBinding subject resolver, team membership and token ownership. It changes no behaviour for existing types, so it lands before service accounts.
+A person's `type` MUST NOT change once the row is written, whatever the type, enforced by the database. _Why:_ each check reads the type once, and a row that changed type afterwards would keep what it was let into.
 
-### Logins and person writes
+### Logins
 
 Every lookup that turns a login into a person, e.g. the htpasswd and embedded OIDC lookup by name or email, and session restoration, uses the login row of the allowlist, so a username equal to a service account's name finds no one. Access-token authentication is a separate path and looks the token's owner up by id.
 
-The person APIs and `/db` writes to `people` and `team_members` only reach rows of the person-management row of the allowlist: a write naming a service account fails as not found, and `type` is never writable through them. Updating a person's properties by id applies the same filter.
+### Team membership
+
+A team's members are resolved through the allowlist where a membership becomes a grant: when one is applied to the policy, and when the policy loads its stored groupings. A membership of any other type of person is skipped there, so it grants nothing, however it was written. Whatever else reads a team's members, e.g. to list them, resolves them the same way.
+
+Writing such a membership is refused as well, by a rule in the database on `team_members` that accepts the same types. _Why in the database:_ memberships are written from several places, `/db/team_members` among them (`design/bootstrap.md`), where no handler sees the row. It's the one copy of an allowlist row outside the table. It's an allowlist too, so a type it doesn't name is refused, and the policy is the authority either way: a membership it let through wrongly still grants nothing.
+
+### Person writes
+
+`people` is read-only through the database API. People are written only by the person operations (`roles.md`, Section 2.3). Each writes a fixed set of fields, never `type`, and finds its row through the person-operation row of the allowlist, so one that names a service account fails as not found. Updating a person's properties by id is one of them, and so is creating a person where the login doesn't, e.g. for basic authentication.
+
+_Why not `/db/people`:_ a table write is gated by one action for every column and every row, so it reaches whatever a release adds to the table until something forbids it, which is a denylist again. An operation that names its fields reaches nothing else. Scopes, Roles and RoleBindings are written only through their API for the same reason: what's written has to be validated.
 
 ## API
 
@@ -84,5 +94,7 @@ The UI never acts as a service account: an admin, signed in as themselves, manag
 
 - **A table of its own.** Keeps `people` to humans, but every reference to a token's owner or a request's user would have to accept either table. Rejected for the cost, since the allowlist already keeps service accounts out of what selects humans.
 - **A person with a flag, e.g. `is_service_account`.** Equivalent to a type, but a second column describing the same thing as `type`. Rejected.
+- **Refusing a service account's team membership only where it's written.** One rule in the database covers every writer, but it would be all that stands between a stray row and a team's Roles, in a second copy of the allowlist. Rejected as the only check: the policy resolves members through the allowlist, and the rule only keeps a membership that grants nothing from being stored.
+- **Guarding `/db/people` writes instead of closing them.** A guard has to work out which rows and fields a database API request touches, which it can only do for requests it restricts to ids and JSON bodies, as `/db/teams` is for the shipped team (`design/bootstrap.md`). Rejected: every column added to `people` would be writable until the guard learnt of it.
 - **Separate actions to create accounts and to issue their tokens.** Rejected in `service-accounts.md`, Section 3: whoever may create an account could issue tokens for it once an admin granted it Roles.
 - **Tokens without Roles, like an agent's.** Simpler, but a kubeconfig, which is written to a file that's easily shared, would carry everything the account may do. Rejected so each token carries only what it's for.
