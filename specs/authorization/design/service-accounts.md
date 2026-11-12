@@ -15,7 +15,7 @@ The cost of sharing `people` is that every query that picks people must keep ser
 
 ## Subjects are chosen by allowlist
 
-Every query that picks people as subjects, or as owners of something, MUST say which person types it accepts, from one table kept in one place in code:
+Every query that picks people as subjects, as owners of something, as the person a login signs in as, or as rows a person write may reach, MUST say which person types it accepts, from one table kept in one place in code:
 
 | Who                                                   | Person types              |
 | ----------------------------------------------------- | ------------------------- |
@@ -23,6 +23,8 @@ Every query that picks people as subjects, or as owners of something, MUST say w
 | `people` as `<provider>:<username>` or `<provider>:*` | `federated`               |
 | `serviceAccounts`                                     | `service_account`         |
 | Members of a team                                     | humans, `federated`       |
+| A login or session of Mission Control's own authentication (Kratos, Clerk, basic, embedded OIDC) | humans |
+| Managed through the person APIs and `/db/people`, `/db/team_members` | humans, `federated` |
 | Owner of a token limited by its bindings              | humans, `service_account` |
 | Owner of an unlimited token                           | `agent`                   |
 
@@ -32,9 +34,15 @@ _Why not a denylist:_ a query that excludes the types it knows about selects eve
 
 The allowlist replaces the type filters spread across the RoleBinding subject resolver, team membership and token ownership. It changes no behaviour for existing types, so it lands before service accounts.
 
+### Logins and person writes
+
+Every lookup that turns a login into a person, e.g. the htpasswd and embedded OIDC lookup by name or email, and session restoration, uses the login row of the allowlist, so a username equal to a service account's name finds no one. Access-token authentication is a separate path and looks the token's owner up by id.
+
+The person APIs and `/db` writes to `people` and `team_members` only reach rows of the person-management row of the allowlist: a write naming a service account fails as not found, and `type` is never writable through them. Updating a person's properties by id applies the same filter.
+
 ## API
 
-All routes take `service-account:manage`, and refuse a request made with an access token.
+All routes take `service-account:manage`, and refuse a request made with an access token or by a `federated` person, whatever their grants. The kubeconfig download for a service account refuses them too.
 
 | Route                                                 | Does                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------- |
