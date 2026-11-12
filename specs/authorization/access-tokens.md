@@ -21,7 +21,9 @@ A person MAY create, list and delete their own tokens without any grant, but MUS
 
 _Why no grant:_ a token adds no access its owner doesn't already have, so there's nothing for a Role to decide.
 
-## 3. Agents' tokens
+## 3. Agents' and service accounts' tokens
+
+### 3.1 Agents' tokens
 
 An agent's token is created with the agent, by a subject with `create` on `agent`, and handed to them (`identities.md`, Section 5). Listing an agent's tokens takes `read` on `agent`; it shows when each was created and expires, never the token. Rotating or revoking an agent's token takes `update` on `agent`.
 
@@ -29,9 +31,13 @@ An agent's token isn't limited on requests made as its agent, so no RoleBinding 
 
 _Why:_ an agent only pushes its own data and fetches what's assigned to it, which the token alone allows (`identities.md`, Section 5).
 
+### 3.2 Service accounts' tokens
+
+A service account's token signs in as the service account (`service-accounts.md`, Section 4). It's issued, listed and revoked by a subject with `service-account:manage`, never through a token, and handed to them. Like a person's token, it MUST be created with at least one Role, and is limited by the RoleBindings that select it (`token-bindings.md`), with the service account as its owner.
+
 ## 4. Lifetime
 
-- **Expiry.** A person's token expires after the expiry given when it's created. Without one, a token created through the API expires after 90 days, configurable with `access_token.default_expiry`, and one created with the `auth token` CLI command after 4 hours. An agent's token expires after 365 days.
+- **Expiry.** A person's token expires after the expiry given when it's created. Without one, a token created through the API expires after 90 days, configurable with `access_token.default_expiry`, and one created with the `auth token` CLI command after 4 hours. An agent's token expires after 365 days. A service account's token expires as `service-accounts.md`, Section 4 says.
 - **Auto-renew.** A token created with auto-renew has its expiry extended by 30 days when it's used within its last 15 days. _Why:_ a token in steady use, e.g. by CI, keeps working, while an abandoned one still expires.
 - **Revocation.** Deleting a token revokes it at once: the next request made with it is refused with `401 Unauthorized`, and the RoleBindings that select it are deleted with it. Expired tokens are deleted on a schedule.
 

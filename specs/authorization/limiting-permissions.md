@@ -1,6 +1,6 @@
 # Limiting Permissions
 
-A request made with an access token can be limited to less than its owner may do: every token is, except an agent's own token on requests made as that agent. A limit never grants anything: it only removes what's outside it, and the owner's own rules still decide everything else.
+A request made with an access token can be limited to less than its owner may do: every token is, except an agent's own token on requests made as that agent. A service account's token is limited like a person's, with the service account as its owner (`service-accounts.md`, Section 4). A limit never grants anything: it only removes what's outside it, and the owner's own rules still decide everything else.
 
 ## Access tokens
 

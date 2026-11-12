@@ -90,6 +90,7 @@ Every action has a contract, defined in code: the resource types it accepts, and
 | `invoke:<plugin>:<operation>`                         | Config                                                 | None                               |
 | `connection:use`                                      | Connection                                             | None                               |
 | `person:manage`                                       | None                                                   | None                               |
+| `service-account:manage`                              | None                                                   | None                               |
 | `access:review`                                       | None                                                   | None                               |
 | `mcp:use`                                             | None                                                   | None                               |
 | `property:manage`                                     | None                                                   | None                               |
@@ -99,7 +100,7 @@ Every action has a contract, defined in code: the resource types it accepts, and
 
 The types are those of `scopes.md`, Section 3.1. Views are only read (Section 3.2): no other action accepts them. Checks are only written by Mission Control itself. Properties, the event queue, job history and the Kubernetes proxy aren't types: they're reached through actions without a resource (Section 2.3). `connection:use` allows acting with a connection's credentials (Section 2.2).
 
-`person:manage` allows everything about accounts: inviting someone to Mission Control, disabling and re-enabling them, changing their properties, name or email, and deleting them. People aren't created, changed or deleted any other way, so `create`, `update` and `delete` don't apply to them. _Why:_ inviting someone and managing their account are what an admin actually does, and a named action says so. A rule allowing `create` on people would leave its reader asking where people are created.
+`person:manage` allows everything about accounts: inviting someone to Mission Control, or creating their account where signing in doesn't, disabling and re-enabling them, changing their properties, name or email, and deleting them. People aren't created, changed or deleted any other way, so `create`, `update` and `delete` don't apply to them. _Why:_ inviting someone and managing their account are what an admin actually does, and a named action says so. A rule allowing `create` on people would leave its reader asking where people are created.
 
 `person:manage` is as privileged as `admin`, and is only for subjects trusted as admins. An invite that names teams adds the person to them when it's accepted (`rolebindings.md`, Section 2.2), so it grants whatever the teams' bindings grant. Changing a person's email changes which `people` subjects select them (`rolebindings.md`, Section 2.1), so it moves bindings from one person to another. _Why one action:_ inviting, managing and deleting accounts are equally privileged, so splitting them would only suggest that one is safer to grant than the others.
 
@@ -141,7 +142,8 @@ A few actions aren't performed on a resource a Scope could select. They act on a
 
 | Action            | Allows                                                                                         |
 | ----------------- | ---------------------------------------------------------------------------------------------- |
-| `person:manage`   | Inviting, disabling, re-enabling and deleting accounts, and changing their properties, name or email |
+| `person:manage`   | Inviting or creating, disabling, re-enabling and deleting accounts, and changing their properties, name or email |
+| `service-account:manage` | Listing, creating and deleting service accounts, changing their descriptions, and issuing and revoking their tokens, a kubeconfig's included (`service-accounts.md`, Section 3) |
 | `access:review`   | Asking what any subject may do: subject access reviews and searches (`/rbac/subject-access-reviews`, `/rbac/subject-access-search`) |
 | `mcp:use`         | Using Mission Control's MCP server at all. Each MCP tool still checks what it touches (Section 4.3) |
 | `property:manage` | Reading private properties and creating, changing and deleting any property. Reading public properties needs no rule (Section 3.1) |
@@ -170,6 +172,7 @@ rules:
 
 - The Kubernetes proxy reaches only the cluster Mission Control runs in. It authenticates as Mission Control's own service account and impersonates `mission-control-writer` when the subject has `kubernetes-proxy:write`, otherwise `mission-control-reader` when it has `kubernetes-proxy:read`, and otherwise the request is refused. _Why write implies read:_ the writer user may read everything the reader may, so a subject never needs both.
 - Downloading a kubeconfig for the proxy takes `kubernetes-proxy:read` or `kubernetes-proxy:write`. Its credential is a new access token of the person, bound to the shipped `kubernetes-proxy` Role (`overview.md`, "Shipped Roles"), so it can do nothing but use the proxy, and no more there than its owner may. Users of external identity providers can't download one, since a token signs in as a person (`limiting-permissions.md`), and neither can a request made with an access token, since tokens don't manage tokens (`access-tokens.md`). _Why a Role of its own:_ the token is written into a file that's easily shared, so it carries only what the file is for.
+- Downloading a kubeconfig for a service account takes `service-account:manage` instead. Its credential is a token of the service account, so the service account's own grants decide what it may do in the cluster (`service-accounts.md`, Section 4.1). A user of an external identity provider is refused it even when a binding grants them `service-account:manage`, and so is a request made with an access token (`service-accounts.md`, Section 3).
 - What each user may do in the cluster is decided by the cluster's RBAC, which Mission Control's installation sets up.
 - The proxy is checked on every request, as the subject making it, so a token's limit and a deny binding apply to the next request.
 
@@ -390,6 +393,8 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Read job history                      | `job:read`                                  | None            | None                              |
 | Send a request through the Kubernetes proxy | `kubernetes-proxy:write`, else `kubernetes-proxy:read` | None | None |
 | Download a kubeconfig | `kubernetes-proxy:write` or `kubernetes-proxy:read` | None | None |
+| Download a kubeconfig for a service account | `service-account:manage` | None | None |
+| List, create or delete service accounts, or issue or revoke their tokens | `service-account:manage` | None | None |
 | Use connection C, e.g. to send        | `connection:use`                            | C               | None                              |
 | Test connection C                     | `connection:use`                            | C               | None                              |
 
