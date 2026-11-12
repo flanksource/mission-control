@@ -94,7 +94,7 @@ _Why a parameter, not a route under `/service-accounts`:_ the kubeconfig templat
 
 ### People
 
-With `/db/people` read-only, these routes are the only way a person is written. All take `person:manage`, and none takes a `type`.
+These routes are the person operations (`roles.md`, Section 2.3): the only way a holder of `person:manage` writes a person, since `/db/people` is read-only. All take `person:manage`, and none takes a `type`.
 
 | Route                                                 | Does                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------- |
@@ -104,7 +104,7 @@ With `/db/people` read-only, these routes are the only way a person is written. 
 | `POST /auth/:id/properties`                           | Changes a person's properties                               |
 | `POST /auth/invite_user`, `POST /auth/:id/update_state` | Invites a person, and disables or re-enables one, under Kratos |
 
-_Why a route to create one:_ under basic authentication nothing else creates a person, and `/db/people` no longer can. _Why the other routes outside Kratos:_ they're the only other way a name or email is changed, or a person deleted, there.
+_Why a route to create one:_ under basic authentication signing in doesn't create a person, and nothing else does. _Why the other routes outside Kratos:_ they're the only other way a name or email is changed, or a person deleted, there.
 
 ## CLI
 
