@@ -50,6 +50,10 @@ Writing such a membership is refused as well, by a rule in the database on `team
 
 _Why not `/db/people`:_ a table write is gated by one action for every column and every row, so it reaches whatever a release adds to the table until something forbids it, which is a denylist again. An operation that names its fields reaches nothing else. Scopes, Roles and RoleBindings are written only through their API for the same reason: what's written has to be validated.
 
+### Reads
+
+Rows of `people` are read through the database API with `read` on `person`, service accounts' included: a name, a type and a description, never a credential. _Why not filtered out:_ a record names who acted by their row of `people`, so a reader who couldn't read a service account's row would see a run with no creator. Listing a service account's tokens, or the accounts with them, goes through the routes below.
+
 ## API
 
 All routes take `service-account:manage`, and refuse a request made with an access token or by a `federated` person, whatever their grants. The kubeconfig download for a service account refuses them too.
@@ -82,6 +86,7 @@ _Why a parameter, not a route under `/service-accounts`:_ the kubeconfig templat
 ## UI
 
 - The avatar menu's **Download kubeconfig** stays as it is, and is always for the signed-in person.
+- The **Users** page lists the people a person operation reaches, so never a service account.
 - **Settings → Service Accounts**, shown to subjects with `service-account:manage`:
   - A list with **Create**, taking a name and description.
   - An account page listing the RoleBindings that name it, read-only, linking to the RoleBindings page to edit them.
