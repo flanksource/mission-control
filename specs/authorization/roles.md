@@ -100,7 +100,7 @@ Every action has a contract, defined in code: the resource types it accepts, and
 
 The types are those of `scopes.md`, Section 3.1. Views are only read (Section 3.2): no other action accepts them. Checks are only written by Mission Control itself. Properties, the event queue, job history and the Kubernetes proxy aren't types: they're reached through actions without a resource (Section 2.3). `connection:use` allows acting with a connection's credentials (Section 2.2).
 
-`person:manage` allows everything about accounts: inviting someone to Mission Control, disabling and re-enabling them, changing their properties, name or email, and deleting them. People aren't created, changed or deleted any other way, so `create`, `update` and `delete` don't apply to them. _Why:_ inviting someone and managing their account are what an admin actually does, and a named action says so. A rule allowing `create` on people would leave its reader asking where people are created.
+`person:manage` allows everything about accounts: inviting someone to Mission Control, or creating their account where signing in doesn't, disabling and re-enabling them, changing their properties, name or email, and deleting them. People aren't created, changed or deleted any other way, so `create`, `update` and `delete` don't apply to them. _Why:_ inviting someone and managing their account are what an admin actually does, and a named action says so. A rule allowing `create` on people would leave its reader asking where people are created.
 
 `person:manage` is as privileged as `admin`, and is only for subjects trusted as admins. An invite that names teams adds the person to them when it's accepted (`rolebindings.md`, Section 2.2), so it grants whatever the teams' bindings grant. Changing a person's email changes which `people` subjects select them (`rolebindings.md`, Section 2.1), so it moves bindings from one person to another. _Why one action:_ inviting, managing and deleting accounts are equally privileged, so splitting them would only suggest that one is safer to grant than the others.
 
@@ -142,7 +142,7 @@ A few actions aren't performed on a resource a Scope could select. They act on a
 
 | Action            | Allows                                                                                         |
 | ----------------- | ---------------------------------------------------------------------------------------------- |
-| `person:manage`   | Inviting, disabling, re-enabling and deleting accounts, and changing their properties, name or email |
+| `person:manage`   | Inviting or creating, disabling, re-enabling and deleting accounts, and changing their properties, name or email |
 | `service-account:manage` | Listing, creating and deleting service accounts, changing their descriptions, and issuing and revoking their tokens, a kubeconfig's included (`service-accounts.md`, Section 3) |
 | `access:review`   | Asking what any subject may do: subject access reviews and searches (`/rbac/subject-access-reviews`, `/rbac/subject-access-search`) |
 | `mcp:use`         | Using Mission Control's MCP server at all. Each MCP tool still checks what it touches (Section 4.3) |

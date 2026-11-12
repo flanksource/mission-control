@@ -101,8 +101,8 @@ These routes are the person operations (`roles.md`, Section 2.3): the only way a
 | Route                                                 | Does                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------- |
 | `POST /people`                                        | Creates a person: `name`, `email`. Only under basic authentication, where signing in creates no one and a login is matched to a person by name or email. Refused elsewhere: Kratos creates a person when an invite is accepted, and Clerk on their first sign-in |
-| `POST /people/update`                                 | Changes a person's name or email: through their identity under Kratos, on the row otherwise |
-| `DELETE /people/:id`                                  | Deletes a person: through their identity under Kratos, soft-deleting the row otherwise |
+| `POST /people/update`                                 | Changes a person's name or email: through their Kratos identity when they have one, on the row otherwise |
+| `DELETE /people/:id`                                  | Deletes a person: through their Kratos identity when they have one, soft-deleting the row otherwise |
 | `POST /auth/:id/properties`                           | Changes a person's properties                               |
 | `POST /auth/invite_user`, `POST /auth/:id/update_state` | Invites a person, and disables or re-enables one, under Kratos |
 
