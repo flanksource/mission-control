@@ -46,7 +46,7 @@ Writing such a membership is refused as well, by a rule in the database on `team
 
 ### Person writes
 
-`people` is read-only through the database API. People are written only by the person operations (`roles.md`, Section 2.3). Each writes a fixed set of fields, never `type`, and finds its row through the person-operation row of the allowlist, so one that names a service account fails as not found. Updating a person's properties by id is one of them, and so is creating a person where the login doesn't, e.g. for basic authentication.
+`people` is read-only through the database API. People are written only by the person operations (`roles.md`, Section 2.3), through the routes under "People" below. Each writes a fixed set of fields, never `type`, and finds its row through the person-operation row of the allowlist, so one that names a service account fails as not found.
 
 _Why not `/db/people`:_ a table write is gated by one action for every column and every row, so it reaches whatever a release adds to the table until something forbids it, which is a denylist again. An operation that names its fields reaches nothing else. Scopes, Roles and RoleBindings are written only through their API for the same reason: what's written has to be validated.
 
@@ -91,6 +91,20 @@ Issuing a token shares the code path of a person's token: one transaction creati
 With `serviceAccount`, the request MAY also carry the `name`, `expiry` and `autoRenew` of the token, as when one is issued. Without them the token is named after the time of the download, expires after the default expiry and doesn't auto-renew.
 
 _Why a parameter, not a route under `/service-accounts`:_ the kubeconfig template, tenant naming and download headers stay in one handler.
+
+### People
+
+With `/db/people` read-only, these routes are the only way a person is written. All take `person:manage`, and none takes a `type`.
+
+| Route                                                 | Does                                                        |
+| ----------------------------------------------------- | ----------------------------------------------------------- |
+| `POST /people`                                        | Creates a person: `name`, `email`. Only under basic authentication, where signing in creates no one and a login is matched to a person by name or email. Refused elsewhere: Kratos creates a person when an invite is accepted, and Clerk on their first sign-in |
+| `POST /people/update`                                 | Changes a person's name or email: through their identity under Kratos, on the row otherwise |
+| `DELETE /people/:id`                                  | Deletes a person: through their identity under Kratos, soft-deleting the row otherwise |
+| `POST /auth/:id/properties`                           | Changes a person's properties                               |
+| `POST /auth/invite_user`, `POST /auth/:id/update_state` | Invites a person, and disables or re-enables one, under Kratos |
+
+_Why a route to create one:_ under basic authentication nothing else creates a person, and `/db/people` no longer can. _Why the other routes outside Kratos:_ they're the only other way a name or email is changed, or a person deleted, there.
 
 ## CLI
 
