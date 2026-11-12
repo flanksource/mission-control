@@ -242,7 +242,7 @@ subjects:
 Each entry is the name of a service account (`service-accounts.md`). `serviceAccounts` is the only field that selects one: `people`, `*` included, and `teams` never do.
 
 - An entry MUST be a valid service account name (`service-accounts.md`, Section 2). Patterns, `*` included, are rejected. _Why:_ each service account is granted on purpose. `*` would hand a Role to every service account created later, by whoever may create one.
-- An entry MAY name a service account that doesn't exist yet. It selects no one until it does, and selects it as soon as it's created.
+- An entry MAY name a service account that doesn't exist yet. It selects no one until it does, and selects it as soon as it's created. Whoever may create service accounts can take such a name, and the Role with it (`service-accounts.md`, Section 3), as with a resource subject's exact name (Section 2.5).
 
 ## 3. Constraint
 
@@ -503,6 +503,7 @@ _Why not deny everything instead:_ a typo in a deny binding would then refuse ev
 - **Other paths to the same data.** A deny refuses actions, not information. Denying `read` on a config doesn't stop someone allowed to run a playbook on another config from fetching it, nor someone who may update a connection from using its credentials.
 - **Runs on a target, through a rule without one.** A rule without a target only matches operations without one (`roles.md`, Section 4.1), and a deny rule is matched the same way. A deny of `playbook:run` on a playbook, written without a target, refuses running it alone, not running it on a config. To refuse both, the Role needs two rules: one without a target, and one whose target Scope selects every type the action takes, e.g. configs, components and checks. The same holds for `playbook:approve` and `playbook:cancel`. _Why:_ a deny rule means the same operations as the allow rule it's written as, so a Role reads the same whether it's granted or denied.
 - **Views.** A view is granted whole, and its rows are shared by every reader (`roles.md`, Section 3.2). Denying `read` on configs doesn't remove them from a view that shows them. Deny the view instead.
+- **Service accounts, unless named.** `people: ["*"]` and teams never select a service account, and `serviceAccounts` takes no `*` (Section 2.7). A deny meant for everyone doesn't reach them: it has to name each service account, and one created later isn't covered until it's added.
 - **What's added later.** Rules name actions exactly (`roles.md`, Section 2), so a deny covers the actions and Scopes its Role names today. "Deny everything but X" can't be written, and a deny of every action one by one doesn't cover the next one added.
 
 Grant narrowly first. Use a deny as a guardrail on top of narrow grants, never instead of them.
