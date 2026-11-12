@@ -72,7 +72,9 @@ A service account's token is an access token (`access-tokens.md`) that signs in 
 
 A kubeconfig for the Kubernetes proxy can be downloaded for a service account, as well as for oneself (`roles.md`, Section 2.3). Downloading one for a service account takes `service-account:manage`. Its credential is a new token of the service account bound to the shipped `kubernetes-proxy` Role, so it may do in the cluster what the service account's own `kubernetes-proxy:read` or `kubernetes-proxy:write` grants, and nothing else. A service account with neither gets a kubeconfig that's refused on every request.
 
-_Why:_ a kubeconfig in CI or a tool shouldn't stop working when the person who downloaded it leaves, and shouldn't carry that person's access to the cluster.
+The token is one of the account's tokens like any other (Section 4). Whoever downloads the kubeconfig MAY give it a name, an expiry and auto-renew, with the same defaults, and it's listed and revoked with the account's other tokens.
+
+_Why:_ a kubeconfig in CI or a tool shouldn't stop working when the person who downloaded it leaves, and shouldn't carry that person's access to the cluster. _Why its lifetime is chosen:_ it's meant to keep working unattended, which the default expiry without auto-renew doesn't allow.
 
 ## 5. Lifecycle
 

@@ -73,7 +73,9 @@ Issuing a token shares the code path of a person's token: one transaction creati
 
 ### Kubeconfig
 
-`GET /kubeconfig` takes an optional `serviceAccount` query parameter. Without it, it behaves as today. With it, the request takes `service-account:manage` instead of `kubernetes-proxy:read` or `kubernetes-proxy:write`, and the kubeconfig carries a new token of the service account bound to `mission-control-builtin/kubernetes-proxy`. The proxy then checks the service account's own grants on every request.
+`GET /kubeconfig` takes an optional `serviceAccount` query parameter. Without it, the kubeconfig is the caller's own (`roles.md`, Section 2.3). With it, the request takes `service-account:manage` instead of `kubernetes-proxy:read` or `kubernetes-proxy:write`, and the kubeconfig carries a new token of the service account bound to `mission-control-builtin/kubernetes-proxy`. The proxy then checks the service account's own grants on every request.
+
+With `serviceAccount`, the request MAY also carry the `name`, `expiry` and `autoRenew` of the token, as when one is issued. Without them the token is named after the time of the download, expires after the default expiry and doesn't auto-renew.
 
 _Why a parameter, not a route under `/service-accounts`:_ the kubeconfig template, tenant naming and download headers stay in one handler.
 
@@ -81,7 +83,7 @@ _Why a parameter, not a route under `/service-accounts`:_ the kubeconfig templat
 
 - `service-account list|create|delete <name>`
 - `service-account token create <name> --role <namespace/name> [--expiry] [--auto-renew]`, `service-account token list|revoke`
-- `--service-account <name>` on the kubeconfig download
+- `--service-account <name> [--expiry] [--auto-renew]` on the kubeconfig download
 
 ## UI
 
@@ -91,7 +93,7 @@ _Why a parameter, not a route under `/service-accounts`:_ the kubeconfig templat
   - A list with **Create**, taking a name and description.
   - An account page listing the RoleBindings that name it, read-only, linking to the RoleBindings page to edit them.
   - A **Tokens** tab to issue a token (name, expiry, auto-renew, Roles), shown once, and to revoke tokens.
-  - **Download kubeconfig**, which issues a proxy token for the account. The page warns when the account holds neither `kubernetes-proxy:read` nor `kubernetes-proxy:write`, since such a kubeconfig is refused on every request.
+  - **Download kubeconfig**, which issues a proxy token for the account, with the expiry and auto-renew chosen there. The page warns when the account holds neither `kubernetes-proxy:read` nor `kubernetes-proxy:write`, since such a kubeconfig is refused on every request.
 
 The UI never acts as a service account: an admin, signed in as themselves, manages the account and its credentials, as GCP's and AWS's consoles do for service account keys.
 
