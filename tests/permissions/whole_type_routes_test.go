@@ -543,7 +543,7 @@ var _ = Describe("Records and lookup views of a type through /db", Ordered, func
 		Expect(serveAs(e, peopleReader, http.MethodGet, "/db/people_roles")).To(Equal(http.StatusOK))
 		Expect(serveAs(e, peopleReader, http.MethodGet, "/db/team_components")).To(Equal(http.StatusForbidden), "team_components takes read on teams and components too")
 		Expect(serveAs(e, peopleReader, http.MethodGet, "/db/notification_send_history")).To(Equal(http.StatusForbidden))
-		Expect(serveAs(e, peopleReader, http.MethodPatch, "/db/identities")).To(Equal(http.StatusForbidden))
+		Expect(serveAs(e, peopleReader, http.MethodPatch, "/db/identities")).To(Equal(http.StatusMethodNotAllowed))
 		Expect(serveAs(e, nobody, http.MethodGet, "/db/identities")).To(Equal(http.StatusForbidden))
 	})
 })
