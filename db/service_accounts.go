@@ -10,6 +10,8 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/secret"
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
 
@@ -75,28 +77,18 @@ func CreateServiceAccount(ctx context.Context, name string) (*ServiceAccount, er
 		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "service account name %v", err)
 	}
 
+	person := models.Person{Name: name, Type: PersonTypeServiceAccount}
+	if err := ctx.DB().Create(&person).Error; err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation && pgErr.ConstraintName == "people_service_account_name_unique_idx" {
+			return nil, dutyAPI.Errorf(dutyAPI.ECONFLICT, "service account %s already exists", name)
+		}
+		return nil, ctx.Oops().Wrapf(err, "failed to create service account %s", name)
+	}
+
 	var account ServiceAccount
-	err := ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
-		// Names are unique among service accounts. Until duty indexes them, creations of a name are serialized here.
-		if err := txCtx.DB().Exec("SELECT pg_advisory_xact_lock(hashtext(?))", PersonTypeServiceAccount+"/"+name).Error; err != nil {
-			return ctx.Oops().Wrapf(err, "failed to lock service account name %s", name)
-		}
-
-		var taken int64
-		if err := serviceAccounts(txCtx).Where("name = ?", name).Count(&taken).Error; err != nil {
-			return ctx.Oops().Wrapf(err, "failed to get service account %s", name)
-		} else if taken > 0 {
-			return dutyAPI.Errorf(dutyAPI.ECONFLICT, "service account %s already exists", name)
-		}
-
-		person := models.Person{Name: name, Type: PersonTypeServiceAccount}
-		if err := txCtx.DB().Create(&person).Error; err != nil {
-			return ctx.Oops().Wrapf(err, "failed to create service account %s", name)
-		}
-		return serviceAccounts(txCtx).Where("id = ?", person.ID).First(&account).Error
-	})
-	if err != nil {
-		return nil, err
+	if err := serviceAccounts(ctx).Where("id = ?", person.ID).First(&account).Error; err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to get service account %s", name)
 	}
 	return &account, nil
 }
