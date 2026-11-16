@@ -23,7 +23,7 @@ _Why:_ automation that borrows a person's token stops working when that person l
 
 - **A subject, not a person.** A service account is checked like any other subject (`overview.md`, "Access"). It's selected only by `serviceAccounts` in a RoleBinding (`rolebindings.md`, Section 2.7). `people`, by any entry, `*` included, never selects it, and it can't be a member of a team. _Why:_ `people: ["*"]` and teams are how organisations grant their people, and a service account would otherwise pick up Roles meant for humans. Naming it in every binding that grants it keeps what it may do readable from those bindings alone.
 - **Deny bindings apply.** A deny RoleBinding that names a service account refuses it the Role, like any subject (`rolebindings.md`, Section 5). Only one that names it does: a deny on `people: ["*"]` or on a team never selects it (`rolebindings.md`, Section 5.6).
-- **Reviewable.** An access review or search MAY be run as a service account, by a subject with `access:review`, as for any subject (`roles.md`, Section 2.3). It answers for the service account, not for any one of its tokens.
+- **Reviewable.** An access review or search MUST accept a service account as its subject, for a subject with `access:review`, as for any subject (`roles.md`, Section 2.3). It answers for the service account, not for any one of its tokens.
 - **No session.** A service account MUST NOT sign in interactively, through Kratos, Clerk, basic authentication or any other login. A login whose username or email matches a service account's name never signs in as the service account. Its tokens are its only credential. _Why:_ a session isn't limited by a token's Roles and may manage service accounts, so a login that reached a service account would lift every limit its tokens carry.
 - **Recorded as itself.** Actions taken with a service account's token are recorded as the service account, e.g. as the creator of a playbook run. Its name and description are read with `read` on `person`, like those of anyone a record names. _Why:_ whoever may read a run must be able to see which service account started it. Nothing else about it is read that way: its tokens take `service-account:manage` (Section 3).
 - **No owner.** A service account doesn't belong to whoever created it, and its creator gets nothing through it. Who created it is recorded for audit only.
@@ -43,7 +43,7 @@ Everything about service accounts takes one action without a resource, `service-
 
 - listing service accounts and their tokens,
 - creating a service account, changing its description and deleting it,
-- issuing and revoking its tokens, and downloading a kubeconfig for it (Section 4.1).
+- issuing and revoking its tokens, and downloading a kubeconfig for it (`roles.md`, Section 2.3).
 
 The one thing it doesn't gate is a service account's name and description, which `read` on `person` shows wherever the account is named (Section 1).
 
@@ -68,14 +68,6 @@ A service account's token is an access token (`access-tokens.md`) that signs in 
 - **Usable at once**, and shown once, as for every token (`access-tokens.md`, Sections 2 and 5).
 - **Revocation.** Revoking a token deletes it and its bindings at once, and the next request made with it is refused with `401 Unauthorized`. Expired tokens are deleted on a schedule.
 - **Listing** a service account's tokens shows each token's name, its Roles, who issued it, and when it was created and expires, never the token.
-
-### 4.1 Kubeconfig
-
-A kubeconfig for the Kubernetes proxy can be downloaded for a service account, as well as for oneself (`roles.md`, Section 2.3). Downloading one for a service account takes `service-account:manage`. Its credential is a new token of the service account bound to the shipped `kubernetes-proxy` Role, so it may do in the cluster what the service account's own `kubernetes-proxy:read` or `kubernetes-proxy:write` grants, and nothing else. A service account with neither gets a kubeconfig that's refused on every request.
-
-The token is one of the account's tokens like any other (Section 4). Whoever downloads the kubeconfig MAY give it a name, an expiry and auto-renew, with the same defaults, and it's listed and revoked with the account's other tokens.
-
-_Why:_ a kubeconfig in CI or a tool shouldn't stop working when the person who downloaded it leaves, and shouldn't carry that person's access to the cluster. _Why its lifetime is chosen:_ it's meant to keep working unattended, which the default expiry without auto-renew doesn't allow.
 
 ## 5. Lifecycle
 
