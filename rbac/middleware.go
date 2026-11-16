@@ -126,16 +126,8 @@ func DbMiddleware() MiddlewareFunc {
 				return next(c)
 			}
 
-			if _, ok := accountTables[resource]; ok && action != policy.ActionRead {
-				object, action = policy.ObjectPeople, adapter.ActionPersonManage
-			}
-
 			allowed := false
 			if typeObject, ok := typeTables[resource]; ok {
-				// A team's members are part of the team, so changing them takes update on teams
-				if resource == "team_members" && action != policy.ActionRead {
-					action = policy.ActionUpdate
-				}
 				object = typeObject
 				allowed = CheckContext(ctx, object, action)
 			} else {
@@ -191,13 +183,16 @@ var readsLeftToRLS = map[string]struct{}{
 	"views_summary":    {},
 }
 
-// readOnlyTables are the tables and views only read through /db, with what writes them instead. Their RLS policies
-// refuse every write, so /db refuses them first, whatever the subject's grants.
+// readOnlyTables are the tables and views only read through /db, with what writes them instead. /db refuses every
+// write to them, whatever the subject's grants.
 var readOnlyTables = map[string]string{
 	"artifacts":        "artifacts are written by what produces them",
 	"artifact_summary": "artifacts are written by what produces them",
 	"view_panels":      "a view's panels are written when it's refreshed",
 	"views_summary":    "write views through Kubernetes",
+	"people":           "people are written through the person operations, e.g. POST /people and POST /people/update",
+	"identities":       "people are written through the person operations, e.g. POST /people/update",
+	"team_members":     "a team's members are written through /teams/:id/members",
 }
 
 // legacyPermissionTables are the tables and views of the deprecated Permissions and PermissionGroups.

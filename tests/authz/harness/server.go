@@ -210,10 +210,10 @@ func (s *Server) waitReady(timeout time.Duration) error {
 	}
 }
 
-// createPerson creates the user's person through the database API, as the admin.
+// createPerson creates the user's person through POST /people, as the admin.
 // Mission Control doesn't create one when a basic auth user signs in.
 func (s *Server) createPerson(user *Caller) error {
-	resp := s.Admin.Do(POST("/db/people", map[string]any{
+	resp := s.Admin.Do(POST("/people", map[string]any{
 		"name": strings.TrimSuffix(user.username, "@authz.test"), "email": user.username,
 	}))
 	if resp.Status != http.StatusCreated {

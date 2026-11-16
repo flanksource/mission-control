@@ -69,6 +69,7 @@ func wholeTypeRoutes() *echo.Echo {
 	application.RegisterRoutes(e)
 	notification.RegisterRoutes(e)
 	agent.RegisterRoutes(e)
+	echoSrv.RegisterTeamRoutes(e)
 	e.Any("/db/*", func(c echo.Context) error { return c.NoContent(http.StatusOK) }, mcRBAC.DbMiddleware())
 	return e
 }
@@ -207,7 +208,8 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 		{v1.ResourceTeam, http.MethodGet, "/db/teams_with_status", false, read(policy.ObjectDatabasePublic)},
 		{v1.ResourceTeam, http.MethodGet, "/db/team_members", false, read(policy.ObjectDatabasePublic)},
 		{v1.ResourceTeam, http.MethodDelete, "/db/teams?id=eq." + uuid.NewString(), true, grant(policy.ObjectDatabasePublic, policy.ActionDelete)},
-		{v1.ResourceTeam, http.MethodPost, "/db/team_members", true, grant(policy.ObjectDatabasePublic, policy.ActionCreate)},
+		{v1.ResourceTeam, http.MethodPost, "/teams/" + uuid.NewString() + "/members", true, grant(policy.ObjectDatabasePublic, policy.ActionCreate)},
+		{v1.ResourceTeam, http.MethodDelete, "/teams/" + uuid.NewString() + "/members/" + uuid.NewString(), true, grant(policy.ObjectDatabasePublic, policy.ActionDelete)},
 
 		{v1.ResourceScope, http.MethodGet, "/rbac/scopes", false, read(policy.ObjectRBAC)},
 		{v1.ResourceScope, http.MethodGet, "/db/scopes", false, read(policy.ObjectRBAC)},
@@ -362,7 +364,7 @@ var _ = Describe("Routes of whole-type resources", Ordered, func() {
 		switch {
 		case r.path == "/agent/token", strings.HasPrefix(r.path, "/agent/") && r.method == http.MethodDelete:
 			return objectAction{objects[r.resource], policy.ActionUpdate}
-		case strings.HasSuffix(strings.Split(r.path, "?")[0], "/team_members") && r.write:
+		case strings.HasPrefix(r.path, "/teams/") && r.write:
 			return objectAction{objects[r.resource], policy.ActionUpdate}
 		}
 		return objectAction{objects[r.resource], map[string]string{

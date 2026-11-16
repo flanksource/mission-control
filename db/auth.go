@@ -35,17 +35,24 @@ type AccessTokenRoles []AccessTokenRole
 // limits it (specs/authorization/limiting-permissions.md). An agent's is created with none: it isn't limited
 // (specs/authorization/identities.md, Section 5).
 func CreateAccessToken(ctx context.Context, personID uuid.UUID, name string, expiry *time.Duration, createdBy *uuid.UUID, autoRenew bool, roles AccessTokenRoles) (secret.Sensitive, *models.AccessToken, error) {
-	var person models.Person
-	if err := ctx.DB().Select("id", "type").Where("id = ?", personID).First(&person).Error; err != nil {
+	unlimited, err := adapter.UnlimitedTokenOwners.Has(ctx.DB(), personID)
+	if err != nil {
 		return nil, nil, ctx.Oops().Wrapf(err, "failed to get person %s", personID)
+	}
+	if !unlimited {
+		if limited, err := adapter.LimitedTokenOwners.Has(ctx.DB(), personID); err != nil {
+			return nil, nil, ctx.Oops().Wrapf(err, "failed to get person %s", personID)
+		} else if !limited {
+			return nil, nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("person %s can't own an access token", personID)
+		}
 	}
 
 	// A Role listed twice binds it once
 	roles = lo.Uniq(roles)
 
-	if person.Type == PersonTypeAgent && len(roles) > 0 {
+	if unlimited && len(roles) > 0 {
 		return nil, nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("an agent's access token can't list roles")
-	} else if person.Type != PersonTypeAgent && len(roles) == 0 {
+	} else if !unlimited && len(roles) == 0 {
 		return nil, nil, ctx.Oops().Code(dutyAPI.EINVALID).Errorf("an access token must list at least one role")
 	}
 
@@ -156,8 +163,9 @@ type LegacyTokenPersonMigration struct {
 	// Person is the token's former person, which was soft-deleted.
 	Person uuid.UUID
 
-	// Deleted is set when the token was deleted, rather than moved to its owner, since it names no owner that's a
-	// person: created_by is empty, or a person that's deleted, an agent or another token's person.
+	// Deleted is set when the token was deleted, rather than moved to its owner, since it names no owner that may own
+	// a token: created_by is empty, or a person that's deleted or isn't a human, e.g. an agent or another token's
+	// person.
 	Deleted bool
 
 	// Renamed is the token's new name when its owner already had a token of its name, or empty.
@@ -165,7 +173,7 @@ type LegacyTokenPersonMigration struct {
 }
 
 // MigrateLegacyTokenPeople moves every access token of a person of type access_token to its owner, created_by,
-// soft-deletes that person and removes its rules from casbin_rule. A token without an owner that's a person is
+// soft-deletes that person and removes its rules from casbin_rule. A token without an owner who may own one is
 // deleted, and a token whose name its owner already uses is renamed.
 // It's idempotent: each token is migrated in a transaction, and a migrated token's person is its owner.
 func MigrateLegacyTokenPeople(ctx context.Context) ([]LegacyTokenPersonMigration, error) {
@@ -223,8 +231,7 @@ func MigrateLegacyTokenPeople(ctx context.Context) ([]LegacyTokenPersonMigration
 	return migrated, errors.Join(errs...)
 }
 
-// isTokenOwner reports whether the person may own a token: they exist, aren't deleted, and are neither an agent
-// nor a token's person.
+// isTokenOwner reports whether the person may own a token limited by its bindings, and isn't deleted.
 func isTokenOwner(tx *gorm.DB, id *uuid.UUID) (bool, error) {
 	if id == nil {
 		return false, nil
@@ -232,7 +239,7 @@ func isTokenOwner(tx *gorm.DB, id *uuid.UUID) (bool, error) {
 	var count int64
 	err := tx.Model(&models.Person{}).
 		Where("id = ? AND deleted_at IS NULL", *id).
-		Where("(type IS NULL OR type NOT IN ?)", []string{legacyPersonTypeAccessToken, PersonTypeAgent}).
+		Scopes(adapter.LimitedTokenOwners.Scope).
 		Count(&count).Error
 	return count > 0, err
 }
