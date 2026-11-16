@@ -25,8 +25,8 @@ _Why:_ automation that borrows a person's token stops working when that person l
 - **Deny bindings apply.** A deny RoleBinding that names a service account refuses it the Role, like any subject (`rolebindings.md`, Section 5). Only one that names it does: a deny on `people: ["*"]` or on a team never selects it (`rolebindings.md`, Section 5.6).
 - **Reviewable.** An access review or search MUST accept a service account as its subject, for a subject with `access:review`, as for any subject (`roles.md`, Section 2.3). It answers for the service account, not for any one of its tokens.
 - **No session.** A service account MUST NOT sign in interactively, through Kratos, Clerk, basic authentication or any other login. A login whose username or email matches a service account's name never signs in as the service account. Its tokens are its only credential. _Why:_ a session isn't limited by a token's Roles and may manage service accounts, so a login that reached a service account would lift every limit its tokens carry.
-- **Recorded as itself.** Actions taken with a service account's token are recorded as the service account, e.g. as the creator of a playbook run. Its name and description are read with `read` on `person`, like those of anyone a record names. _Why:_ whoever may read a run must be able to see which service account started it. Nothing else about it is read that way: its tokens take `service-account:manage` (Section 3).
-- **No owner.** A service account doesn't belong to whoever created it, and its creator gets nothing through it. Who created it is recorded for audit only.
+- **Recorded as itself.** Actions taken with a service account's token are recorded as the service account, e.g. as the creator of a playbook run. Its name is read with `read` on `person`, like that of anyone a record names. _Why:_ whoever may read a run must be able to see which service account started it. Nothing else about it is read that way: its tokens take `service-account:manage` (Section 3).
+- **No owner.** A service account doesn't belong to whoever created it, and its creator gets nothing through it. Who created it, and when, is recorded for audit only.
 
 ## 2. Identity
 
@@ -34,7 +34,7 @@ A service account is identified by its name, which is unique among service accou
 
 - A name MUST be a valid DNS-1123 label: at most 63 lowercase letters, digits and `-`, starting and ending with a letter or digit. _Why:_ it's written in RoleBindings, URLs and CLI flags, so it needs no quoting or escaping anywhere.
 - Service accounts have no namespace. _Why:_ teams and agents, the other subjects named by a single name, have none either, and a namespace limits nothing (`overview.md`, "Namespaces do not limit access").
-- A service account MAY have a description. Its name can't be changed.
+- A service account has only its name. Its name can't be changed. _Why:_ bindings select it by name, so a rename would move its grants to whichever account took the old name.
 - Its name is unrelated to any person's: a service account named `alice` and a person whose email is `alice@example.com` are different subjects.
 
 ## 3. Managing service accounts
@@ -42,16 +42,16 @@ A service account is identified by its name, which is unique among service accou
 Everything about service accounts takes one action without a resource, `service-account:manage` (`roles.md`, Section 2.3):
 
 - listing service accounts and their tokens,
-- creating a service account, changing its description and deleting it,
+- creating and deleting a service account,
 - issuing and revoking its tokens, and downloading a kubeconfig for it (`roles.md`, Section 2.3).
 
-The one thing it doesn't gate is a service account's name and description, which `read` on `person` shows wherever the account is named (Section 1).
+The one thing it doesn't gate is a service account's name, which `read` on `person` shows wherever the account is named (Section 1).
 
 Giving a service account Roles is writing a RoleBinding that names it, which takes `create` or `update` on `roleBinding` like any other binding (`overview.md`, "Who may manage these resources"). Reading the bindings that name it takes `read` on `roleBinding`: `service-account:manage` doesn't show them.
 
 - **As privileged as every service account.** Whoever may issue a service account's token may act as it, so `service-account:manage` reaches every grant of every service account, and is only for subjects trusted with all of them. It grants no Roles: only a subject who may write RoleBindings can give a service account any access, and that is already as privileged as `admin` (`overview.md`, "Who may manage these resources"). So a subject with `service-account:manage` alone can create a service account, which can do nothing unless a binding already names it. A binding that names an account that doesn't exist, written ahead of it or left behind by a deleted one (Section 5), is taken by whoever creates an account of that name.
 - **Why one action.** Creating a service account grants nothing on its own: a new one has no token, so nothing can act as it, whatever bindings already name it. Issuing its token is what gives power, since it lets the holder act as the account. If creating and issuing were separate actions, someone allowed to create an account could later issue tokens for it after an admin had granted it Roles, and gain those Roles. Deleting an account and revoking its tokens only take access away. None of these is safer to grant than the others, so splitting them would only suggest that one is. _Why not an action per service account:_ actions without a resource can't pick some service accounts. Letting a team manage its own needs a Scope over service accounts and a check that a binding grants no more than its author holds, which RoleBindings don't have yet (Section 6).
-- **Not a resource type.** Service accounts are identities, managed through one named action like accounts are through `person:manage`. No Scope selects them, and `read`, `create`, `update` and `delete` don't apply to them, apart from `read` on `person` showing their name and description (Section 1).
+- **Not a resource type.** Service accounts are identities, managed through one named action like accounts are through `person:manage`. No Scope selects them, and `read`, `create`, `update` and `delete` don't apply to them, apart from `read` on `person` showing their name (Section 1).
 - **Not a custom resource.** There's no `ServiceAccount` CRD. _Why:_ a service account is useless without a token, and tokens can only be created through the API, so declaring the account in Git would only move half of it there. Kubernetes already has a kind named `ServiceAccount`, so a CRD of the same kind would be ambiguous in `kubectl`. RoleBindings from Git can still name a service account (Section 5).
 - **Not as a person.** Service accounts MUST NOT be created, changed or deleted through the ways people are managed, e.g. with `person:manage`, and MUST NOT be added to a team. Nothing changes a person into a service account, or a service account into a person. _Why:_ `service-account:manage` is the only boundary around service accounts. A person write that reached one could rename it into the name another account's bindings select, or turn it into a person that `people: ["*"]` grants.
 - **Not by users of an external identity provider.** A user of an external identity provider MUST NOT do anything `service-account:manage` allows, even when a binding grants it to them. _Why:_ the same reason they can't create tokens of their own (`access-tokens.md`, Section 2): a service account's token would let them act long after the application that signed them in stops vouching for them.

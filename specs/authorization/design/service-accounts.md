@@ -8,7 +8,7 @@ The cost of sharing `people` is that every query that picks people must keep ser
 
 ## Storage
 
-- A service account is a row of `people` with `type = 'service_account'`, its name in `name`, no email, and its description in `properties`. Its name is unique among the rows of that type that aren't deleted, enforced by a partial unique index.
+- A service account is a row of `people` with `type = 'service_account'`, its name in `name`, no email, and whoever created it in `created_by`, a column of `people` that's empty for every other type. Its name is unique among the rows of that type that aren't deleted, enforced by a partial unique index.
 - Its tokens are rows of `access_tokens` whose `person_id` is the service account and whose `created_by` is the issuer. Their bindings are token bindings like a person's (`token-bindings.md`, Section 4), created in the token's transaction. A person is only ever soft-deleted, so a token keeps naming its issuer after they're deleted.
 - Deleting a service account soft-deletes its row, and hard-deletes its tokens and their bindings, in one transaction, then reloads the policy. Each of its tokens is revoked as one token is (`design/tokens.md`): its id goes on the deny list of deleted tokens, and what's cached for it is dropped. _Why:_ a valid token is cached until it expires, so deleting its row alone would leave a cached copy working.
 - The casbin subject of a service account is its person id, like a person's. `serviceAccounts` entries resolve by name to that id when the policy loads, so a binding written before the account exists takes effect on the reload its creation triggers.
@@ -54,7 +54,7 @@ _Why `identities` too:_ a change to an identity is copied into the row of `peopl
 
 ### Reads
 
-Rows of `people` are read through the database API with `read` on `person`, service accounts' included: a name, a type and a description, never a credential. _Why not filtered out:_ a record names who acted by their row of `people`, so a reader who couldn't read a service account's row would see a run with no creator. Listing a service account's tokens, or the accounts with them, goes through the routes below.
+Rows of `people` are read through the database API with `read` on `person`, service accounts' included: a name and a type, never a credential. _Why not filtered out:_ a record names who acted by their row of `people`, so a reader who couldn't read a service account's row would see a run with no creator. Listing a service account's tokens, or the accounts with them, goes through the routes below.
 
 The subjects offered for an access review include service accounts, by name, as a kind of their own. A review or search run as one is checked as its person id, like a person's.
 
@@ -62,7 +62,7 @@ The subjects offered for an access review include service accounts, by name, as 
 
 The schema of `people`, `team_members` and `access_tokens`, and the views over them, belongs to duty, not to Mission Control. So these parts of the design are duty's, and service accounts need a duty version that has them:
 
-- the partial unique index on service account names (Storage),
+- the partial unique index on service account names, and the `created_by` column of `people` (Storage),
 - the rule that a person's `type` never changes,
 - service accounts among the subjects offered for an access review (Reads).
 
@@ -75,9 +75,8 @@ The `/service-accounts` routes all take `service-account:manage`, and refuse a r
 | Route                                                 | Does                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------- |
 | `GET /service-accounts`                               | Lists service accounts                                      |
-| `POST /service-accounts`                              | Creates one: `name`, `description`                          |
+| `POST /service-accounts`                              | Creates one: `name`                                         |
 | `GET /service-accounts/:name`                         | Reads one, with whether it holds `kubernetes-proxy:read` or `kubernetes-proxy:write`, and, for a caller with `read` on `roleBinding`, the RoleBindings that name it |
-| `PATCH /service-accounts/:name`                       | Changes its description                                     |
 | `DELETE /service-accounts/:name`                      | Deletes it and its tokens                                   |
 | `GET /service-accounts/:name/tokens`                  | Lists its tokens, with their Roles, never the token         |
 | `POST /service-accounts/:name/tokens`                 | Issues a token: `name`, `expiry`, `autoRenew`, `roles`      |
@@ -134,7 +133,7 @@ _Why not against the database, like `auth token`:_ a command run there is checke
 - The **Users** page lists the people a person operation reaches, so never a service account.
 - Every person picker, e.g. a RoleBinding's `people`, a team's members, notification recipients and playbook `people` parameters, offers only the types its field accepts, so never a service account. RoleBinding subjects get a separate service account picker.
 - **Settings → Service Accounts**, shown to subjects with `service-account:manage`:
-  - A list with **Create**, taking a name and description.
+  - A list with **Create**, taking a name, and each account's creator and creation time.
   - An account page listing the RoleBindings that name it, to those who may read RoleBindings, read-only, linking to the RoleBindings page to edit them.
   - A **Tokens** tab to issue a token (name, expiry, auto-renew, Roles), shown once, and to revoke tokens.
   - **Download kubeconfig**, which issues a proxy token for the account, with the expiry and auto-renew chosen there. The page warns when the account holds neither `kubernetes-proxy:read` nor `kubernetes-proxy:write`, since such a kubeconfig is refused on every request. It reads that from the account, so it needs no `access:review`.

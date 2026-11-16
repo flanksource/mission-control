@@ -143,7 +143,7 @@ A few actions aren't performed on a resource a Scope could select. They act on a
 | Action            | Allows                                                                                         |
 | ----------------- | ---------------------------------------------------------------------------------------------- |
 | `person:manage`   | Inviting or creating, disabling, re-enabling and deleting accounts, and changing their properties, name or email |
-| `service-account:manage` | Listing, creating and deleting service accounts, changing their descriptions, and issuing and revoking their tokens, a kubeconfig's included (`service-accounts.md`, Section 3) |
+| `service-account:manage` | Listing, creating and deleting service accounts, and issuing and revoking their tokens, a kubeconfig's included (`service-accounts.md`, Section 3) |
 | `access:review`   | Asking what any subject may do: subject access reviews and searches (`/rbac/subject-access-reviews`, `/rbac/subject-access-search`) |
 | `mcp:use`         | Using Mission Control's MCP server at all. Each MCP tool still checks what it touches (Section 4.3) |
 | `property:manage` | Reading private properties and creating, changing and deleting any property. Reading public properties needs no rule (Section 3.1) |
