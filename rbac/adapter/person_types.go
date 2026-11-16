@@ -3,6 +3,7 @@ package adapter
 import (
 	"strings"
 
+	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -13,6 +14,10 @@ const (
 
 	// PersonTypeFederated is a user of an external application, authenticated by an ExternalIdentityProvider.
 	PersonTypeFederated = "federated"
+
+	// PersonTypeServiceAccount is a subject for automation, signed in only with its own access tokens
+	// (specs/authorization/service-accounts.md).
+	PersonTypeServiceAccount = "service_account"
 )
 
 // PersonTypes is a row of the allowlist of person types: the people a query that picks people accepts
@@ -34,6 +39,9 @@ var (
 	// FederatedPeople are the people a RoleBinding selects as <provider>:<username> or <provider>:*.
 	FederatedPeople = PersonTypes{Types: []string{PersonTypeFederated}}
 
+	// ServiceAccounts are the people a RoleBinding selects by serviceAccounts.
+	ServiceAccounts = PersonTypes{Types: []string{PersonTypeServiceAccount}}
+
 	// TeamMembers are the people a team can have as members.
 	TeamMembers = PersonTypes{Humans: true, Types: []string{PersonTypeFederated}}
 
@@ -44,7 +52,7 @@ var (
 	PersonOperations = PersonTypes{Humans: true, Types: []string{PersonTypeFederated}}
 
 	// LimitedTokenOwners are the people who may own an access token limited by its bindings.
-	LimitedTokenOwners = PersonTypes{Humans: true}
+	LimitedTokenOwners = PersonTypes{Humans: true, Types: []string{PersonTypeServiceAccount}}
 
 	// UnlimitedTokenOwners are the people who may own an access token that isn't limited.
 	UnlimitedTokenOwners = PersonTypes{Types: []string{PersonTypeAgent}}
@@ -65,6 +73,20 @@ func (p PersonTypes) Scope(db *gorm.DB) *gorm.DB {
 		return db.Where("FALSE")
 	}
 	return db.Where("("+strings.Join(conditions, " OR ")+")", args...)
+}
+
+// ApplyTeamMembership adds the person to the team in the policy, and reports whether it did. A person who can't be a
+// team member is skipped, so the membership grants nothing however it was written
+// (specs/authorization/design/service-accounts.md, "Team membership").
+func ApplyTeamMembership(db *gorm.DB, personID, teamID string) (bool, error) {
+	id, err := uuid.Parse(personID)
+	if err != nil {
+		return false, nil
+	}
+	if member, err := TeamMembers.Has(db, id); err != nil || !member {
+		return false, err
+	}
+	return true, dutyRBAC.AddRoleForUser(id.String(), teamID)
 }
 
 // Has reports whether the person with the id, deleted or not, is of the person types.

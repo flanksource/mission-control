@@ -17,6 +17,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	icrbac "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
@@ -50,8 +51,41 @@ type kubeConfigData struct {
 
 // DownloadKubeConfig returns a kubeconfig for the Kubernetes proxy. Its credential is a new access token of the
 // person, limited by the shipped kubernetes-proxy Role, so it can only be used for the proxy.
+//
+// With the serviceAccount query parameter, the token is one of that service account instead, issued with
+// service-account:manage and the name, expiry and autoRenew parameters (specs/authorization/roles.md, Section 2.3).
 func DownloadKubeConfig(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
+
+	proxyRoles := db.AccessTokenRoles{{Namespace: adapter.ShippedNamespace, Name: shipped.RoleKubernetesProxy}}
+	tokenName := fmt.Sprintf("kubeconfig-%s", time.Now().UTC().Format("20060102-150405.000"))
+
+	if accountName := c.QueryParam("serviceAccount"); accountName != "" {
+		if err := icrbac.ServiceAccountManageRefusal(ctx); err != nil {
+			return dutyAPI.WriteError(c, err)
+		} else if !icrbac.CheckContext(ctx, adapter.ObjectServiceAccounts, adapter.ActionServiceAccountManage) {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "%s is required to download a service account's kubeconfig", adapter.ActionServiceAccountManage))
+		}
+
+		account, err := db.FindServiceAccount(ctx, accountName)
+		if err != nil {
+			return dutyAPI.WriteError(c, err)
+		}
+
+		expiry, err := auth.ParseTokenExpiry(c.QueryParam("expiry"))
+		if err != nil {
+			return dutyAPI.WriteError(c, err)
+		}
+		if name := c.QueryParam("name"); name != "" {
+			tokenName = name
+		}
+
+		token, _, err := db.CreateServiceAccountToken(ctx, *account, ctx.User().ID, tokenName, expiry, c.QueryParam("autoRenew") == "true", proxyRoles)
+		if err != nil {
+			return dutyAPI.WriteError(c, err)
+		}
+		return writeKubeConfig(c, token.PlainText())
+	}
 
 	if !icrbac.CheckContext(ctx, policy.ObjectKubernetesProxy, adapter.ActionKubernetesProxyWrite) &&
 		!icrbac.CheckContext(ctx, policy.ObjectKubernetesProxy, adapter.ActionKubernetesProxyRead) {
@@ -69,17 +103,22 @@ func DownloadKubeConfig(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "kubeconfigs can't be downloaded with an access token"))
 	}
 
+	token, _, err := db.CreateAccessTokenForPerson(ctx, ctx.User(), tokenName, 0, false, proxyRoles)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+	return writeKubeConfig(c, token.PlainText())
+}
+
+// writeKubeConfig responds with a kubeconfig for the Kubernetes proxy that authenticates with the access token.
+func writeKubeConfig(c echo.Context, token string) error {
+	ctx := c.Request().Context().(context.Context)
+
 	parsed, err := url.Parse(api.PublicURL)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "failed to parse public web url"))
 	}
 	parsed.Path = path.Join(parsed.Path, "kubeproxy")
-
-	token, _, err := db.CreateAccessTokenForPerson(ctx, ctx.User(), fmt.Sprintf("kubeconfig-%s", time.Now().UTC().Format("20060102-150405.000")), 0, false,
-		db.AccessTokenRoles{{Namespace: adapter.ShippedNamespace, Name: shipped.RoleKubernetesProxy}})
-	if err != nil {
-		return dutyAPI.WriteError(c, err)
-	}
 
 	// TODO: use the actual tenant slug once we pass it on from the chart
 	tenantSlug := strings.TrimSuffix(parsed.Hostname(), ".flanksource.com")
@@ -87,7 +126,7 @@ func DownloadKubeConfig(c echo.Context) error {
 		Server:      parsed.String(),
 		ClusterName: fmt.Sprintf("mission-control-%s", tenantSlug),
 		ContextName: "default",
-		Password:    token.PlainText(),
+		Password:    token,
 	}
 
 	tmpl, err := template.New("kubeconfig").Parse(kubeConfigTemplate)

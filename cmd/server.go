@@ -483,8 +483,10 @@ func tableUpdatesHandler(ctx context.Context) {
 				if rbac.Enforcer() == nil {
 					break
 				}
-				if err := rbac.AddRoleForUser(personID, teamID); err != nil {
+				if applied, err := adapter.ApplyTeamMembership(ctx.DB(), personID, teamID); err != nil {
 					ctx.Errorf("failed to add team(%s)->user(%s) rbac policy: %v", teamID, personID, err)
+				} else if !applied {
+					ctx.Warnf("skipped team(%s)->user(%s) membership: the person can't be a team member", teamID, personID)
 				} else if err := adapter.ReloadPolicy(); err != nil {
 					ctx.Errorf("failed to reload rbac policy due to team_members updates: %v", err)
 				}

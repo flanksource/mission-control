@@ -117,16 +117,6 @@ These routes are the person operations (`roles.md`, Section 2.3): the only way a
 
 _Why a route to create one:_ under basic authentication signing in doesn't create a person, and nothing else does. _Why the other routes outside Kratos:_ they're the only other way a name or email is changed, or a person deleted, there.
 
-## CLI
-
-- `service-account list|create|delete <name>`
-- `service-account token create <name> --role <namespace/name> [--expiry] [--auto-renew]`, `service-account token list|revoke`
-- `--service-account <name> [--expiry] [--auto-renew]` on the kubeconfig download
-
-The commands call the API as the person signed in through the browser login. A CLI context that holds an access token is refused, like any token (`service-accounts.md`, Section 3).
-
-_Why not against the database, like `auth token`:_ a command run there is checked by no action, has no issuer to record on the token, and its token isn't usable at once (`access-tokens.md`, Section 2).
-
 ## UI
 
 - The avatar menu's **Download kubeconfig** stays as it is, and is always for the signed-in person.

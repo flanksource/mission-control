@@ -41,6 +41,11 @@ const (
 	// properties, name or email. Checked on policy.ObjectPeople.
 	ActionPersonManage = "person:manage"
 
+	// ActionServiceAccountManage allows listing, creating and deleting service accounts, and issuing and revoking
+	// their tokens. Checked on ObjectServiceAccounts. Never allowed through an access token, nor to a user of an
+	// external identity provider (specs/authorization/service-accounts.md, Section 3).
+	ActionServiceAccountManage = "service-account:manage"
+
 	// ActionAccessReview allows asking what any subject may do: subject access reviews and searches.
 	// Checked on policy.ObjectRBAC.
 	ActionAccessReview = "access:review"
@@ -88,6 +93,9 @@ const (
 	ObjectScopes               = "scopes"
 	ObjectRoles                = "roles"
 	ObjectRoleBindings         = "role-bindings"
+
+	// ObjectServiceAccounts is what service-account:manage is checked on. Service accounts aren't a resource type.
+	ObjectServiceAccounts = "service-accounts"
 
 	// ObjectScrapers is what whole-type grants on scrapers compile to. duty files config_scrapers under
 	// database.config_scrapers, which logging backends share.
@@ -157,6 +165,7 @@ var contracts = map[string]ActionContract{
 	ActionConnectionUse: {Resources: []string{policy.ResourceConnection}, enforcement: enforcedPerRequest},
 
 	ActionPersonManage:          {Object: policy.ObjectPeople, enforcement: enforcedWithoutResource},
+	ActionServiceAccountManage:  {Object: ObjectServiceAccounts, enforcement: enforcedWithoutResource},
 	ActionAccessReview:          {Object: policy.ObjectRBAC, enforcement: enforcedWithoutResource},
 	ActionKubernetesProxyRead:   {Object: policy.ObjectKubernetesProxy, enforcement: enforcedWithoutResource},
 	ActionKubernetesProxyWrite:  {Object: policy.ObjectKubernetesProxy, enforcement: enforcedWithoutResource},

@@ -156,8 +156,8 @@ func resolvePersonID(ctx context.Context, identifier string) (uuid.UUID, error) 
 // A team mapper only ever removes memberships with this source.
 const SourceTeamMapper = "team-mapper"
 
-// AddTeamMembers adds the people to the team, all or none. A person who can't be a team member, or is one of the
-// team already, fails it as not found.
+// AddTeamMembers adds the people to the team, all or none. A person who can't be a team member fails it as not found,
+// and one who's a member of the team already as a conflict.
 func AddTeamMembers(ctx context.Context, teamID uuid.UUID, personIDs []uuid.UUID) error {
 	return ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
 		var teams int64
@@ -181,7 +181,7 @@ func AddTeamMembers(ctx context.Context, teamID uuid.UUID, personIDs []uuid.UUID
 			if result.Error != nil {
 				return ctx.Oops().Wrapf(result.Error, "failed to add person %s to team %s", personID, teamID)
 			} else if result.RowsAffected == 0 {
-				return api.Errorf(api.ENOTFOUND, "person %s is already a member of team %s", personID, teamID)
+				return api.Errorf(api.ECONFLICT, "person %s is already a member of team %s", personID, teamID)
 			}
 		}
 		return nil

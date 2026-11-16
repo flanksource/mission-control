@@ -156,6 +156,15 @@ spec:
                           type: string
                       type: object
                     type: array
+                  serviceAccounts:
+                    description: |-
+                      ServiceAccounts selects service accounts by name. A name may be of a service account that doesn't exist yet:
+                      it's selected once it's created. people and teams never select a service account.
+                    items:
+                      maxLength: 63
+                      pattern: ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$
+                      type: string
+                    type: array
                   teams:
                     description: Teams is a list of team names
                     items:
@@ -178,7 +187,8 @@ spec:
                     > 0, has(self.playbooks) && size(self.playbooks) > 0, has(self.topologies)
                     && size(self.topologies) > 0, has(self.scrapers) && size(self.scrapers)
                     > 0, has(self.canaries) && size(self.canaries) > 0, has(self.plugins)
-                    && size(self.plugins) > 0].exists(x, x)'
+                    && size(self.plugins) > 0, has(self.serviceAccounts) && size(self.serviceAccounts)
+                    > 0].exists(x, x)'
             required:
             - role
             - subjects
