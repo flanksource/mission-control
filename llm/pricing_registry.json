@@ -25,6 +25,18 @@
         "cacheWritesPrice": 12.5,
         "cacheReadsPrice": 0.25
       },
+      "claude-fable-5-2": {
+        "provider": "anthropic",
+        "modelID": "claude-fable-5-2",
+        "maxTokens": 128000,
+        "contextWindow": 1000000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 8,
+        "outputPrice": 40,
+        "cacheWritesPrice": 10,
+        "cacheReadsPrice": 0.2
+      },
       "claude-haiku-4-5": {
         "provider": "anthropic",
         "modelID": "claude-haiku-4-5",
@@ -286,6 +298,18 @@
         "outputPrice": 50,
         "cacheWritesPrice": 12.5,
         "cacheReadsPrice": 0.25
+      },
+      "anthropic.claude-fable-5-2": {
+        "provider": "bedrock",
+        "modelID": "anthropic.claude-fable-5-2",
+        "maxTokens": 128000,
+        "contextWindow": 1000000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 8,
+        "outputPrice": 40,
+        "cacheWritesPrice": 10,
+        "cacheReadsPrice": 0.2
       },
       "anthropic.claude-haiku-4-5-20251001-v1:0": {
         "provider": "bedrock",
@@ -628,6 +652,18 @@
         "cacheWritesPrice": 2.75,
         "cacheReadsPrice": 0.22
       },
+      "au.anthropic.claude-sonnet-5-5": {
+        "provider": "bedrock",
+        "modelID": "au.anthropic.claude-sonnet-5-5",
+        "maxTokens": 128000,
+        "contextWindow": 1000000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 2.2,
+        "outputPrice": 11,
+        "cacheWritesPrice": 2.75,
+        "cacheReadsPrice": 0.11
+      },
       "ca.amazon.nova-lite-v1:0": {
         "provider": "bedrock",
         "modelID": "ca.amazon.nova-lite-v1:0",
@@ -933,6 +969,18 @@
         "cacheWritesPrice": 12.5,
         "cacheReadsPrice": 0.25
       },
+      "global.anthropic.claude-fable-5-2": {
+        "provider": "bedrock",
+        "modelID": "global.anthropic.claude-fable-5-2",
+        "maxTokens": 128000,
+        "contextWindow": 1000000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 8,
+        "outputPrice": 40,
+        "cacheWritesPrice": 10,
+        "cacheReadsPrice": 0.2
+      },
       "global.anthropic.claude-haiku-4-5-20251001-v1:0": {
         "provider": "bedrock",
         "modelID": "global.anthropic.claude-haiku-4-5-20251001-v1:0",
@@ -1110,6 +1158,18 @@
         "cacheWritesPrice": 3.75,
         "cacheReadsPrice": 0.3
       },
+      "global.moonshotai.kimi-k3.1": {
+        "provider": "bedrock",
+        "modelID": "global.moonshotai.kimi-k3.1",
+        "maxTokens": 1048576,
+        "contextWindow": 1048576,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 4,
+        "outputPrice": 20,
+        "cacheWritesPrice": 5,
+        "cacheReadsPrice": 0.2
+      },
       "global.openai.gpt-5.6-luna": {
         "provider": "bedrock",
         "modelID": "global.openai.gpt-5.6-luna",
@@ -1254,6 +1314,27 @@
             "outputPrice": 15,
             "cacheWritesPrice": 5,
             "cacheReadsPrice": 0.2
+          }
+        ]
+      },
+      "global.openai.gpt-6.1-terra": {
+        "provider": "bedrock",
+        "modelID": "global.openai.gpt-6.1-terra",
+        "maxTokens": 128000,
+        "contextWindow": 1050000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 1,
+        "outputPrice": 5,
+        "cacheWritesPrice": 1.25,
+        "cacheReadsPrice": 0.05,
+        "contextPriceTiers": [
+          {
+            "tokenThreshold": 272000,
+            "inputPrice": 2,
+            "outputPrice": 7.5,
+            "cacheWritesPrice": 2.5,
+            "cacheReadsPrice": 0.1
           }
         ]
       },
@@ -1914,6 +1995,27 @@
           }
         ]
       },
+      "openai.gpt-6.1-terra": {
+        "provider": "bedrock",
+        "modelID": "openai.gpt-6.1-terra",
+        "maxTokens": 128000,
+        "contextWindow": 1050000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 1.1,
+        "outputPrice": 5.5,
+        "cacheWritesPrice": 1.375,
+        "cacheReadsPrice": 0.055,
+        "contextPriceTiers": [
+          {
+            "tokenThreshold": 272000,
+            "inputPrice": 2.2,
+            "outputPrice": 8.25,
+            "cacheWritesPrice": 2.75,
+            "cacheReadsPrice": 0.11
+          }
+        ]
+      },
       "openai.gpt-oss-120b": {
         "provider": "bedrock",
         "modelID": "openai.gpt-oss-120b",
@@ -2117,6 +2219,18 @@
         "outputPrice": 55,
         "cacheWritesPrice": 13.75,
         "cacheReadsPrice": 0.275
+      },
+      "us.anthropic.claude-fable-5-2": {
+        "provider": "bedrock",
+        "modelID": "us.anthropic.claude-fable-5-2",
+        "maxTokens": 128000,
+        "contextWindow": 1000000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 8.8,
+        "outputPrice": 44,
+        "cacheWritesPrice": 11,
+        "cacheReadsPrice": 0.22
       },
       "us.anthropic.claude-haiku-4-5-20251001-v1:0": {
         "provider": "bedrock",
@@ -2366,6 +2480,18 @@
         "cacheWritesPrice": 4.125,
         "cacheReadsPrice": 0.33
       },
+      "us.moonshotai.kimi-k3.1": {
+        "provider": "bedrock",
+        "modelID": "us.moonshotai.kimi-k3.1",
+        "maxTokens": 1048576,
+        "contextWindow": 1048576,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 4.4,
+        "outputPrice": 22,
+        "cacheWritesPrice": 5.5,
+        "cacheReadsPrice": 0.22
+      },
       "us.openai.gpt-5.6-luna": {
         "provider": "bedrock",
         "modelID": "us.openai.gpt-5.6-luna",
@@ -2513,6 +2639,27 @@
           }
         ]
       },
+      "us.openai.gpt-6.1-terra": {
+        "provider": "bedrock",
+        "modelID": "us.openai.gpt-6.1-terra",
+        "maxTokens": 128000,
+        "contextWindow": 1050000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 1.1,
+        "outputPrice": 5.5,
+        "cacheWritesPrice": 1.375,
+        "cacheReadsPrice": 0.055,
+        "contextPriceTiers": [
+          {
+            "tokenThreshold": 272000,
+            "inputPrice": 2.2,
+            "outputPrice": 8.25,
+            "cacheWritesPrice": 2.75,
+            "cacheReadsPrice": 0.11
+          }
+        ]
+      },
       "us.writer.palmyra-x4-v1:0": {
         "provider": "bedrock",
         "modelID": "us.writer.palmyra-x4-v1:0",
@@ -2630,7 +2777,7 @@
         "provider": "gemini",
         "modelID": "deep-research-max-preview-04-2026",
         "maxTokens": 65536,
-        "contextWindow": 131072,
+        "contextWindow": 1048576,
         "supportsImages": true,
         "supportsPromptCache": true,
         "inputPrice": 2,
@@ -2649,7 +2796,7 @@
         "provider": "gemini",
         "modelID": "deep-research-preview-04-2026",
         "maxTokens": 65536,
-        "contextWindow": 131072,
+        "contextWindow": 1048576,
         "supportsImages": true,
         "supportsPromptCache": true,
         "inputPrice": 2,
@@ -2671,14 +2818,7 @@
         "contextWindow": 128000,
         "supportsImages": true,
         "inputPrice": 1.25,
-        "outputPrice": 10,
-        "contextPriceTiers": [
-          {
-            "tokenThreshold": 200000,
-            "inputPrice": 2.5,
-            "outputPrice": 15
-          }
-        ]
+        "outputPrice": 10
       },
       "gemini-2.5-flash": {
         "provider": "gemini",
@@ -2699,7 +2839,7 @@
         "supportsImages": true,
         "supportsPromptCache": true,
         "inputPrice": 0.3,
-        "outputPrice": 30,
+        "outputPrice": 2.5,
         "cacheReadsPrice": 0.075
       },
       "gemini-2.5-flash-lite": {
@@ -2766,16 +2906,7 @@
         "contextWindow": 65536,
         "supportsImages": true,
         "inputPrice": 2,
-        "outputPrice": 120
-      },
-      "gemini-3-pro-image-preview": {
-        "provider": "gemini",
-        "modelID": "gemini-3-pro-image-preview",
-        "maxTokens": 32768,
-        "contextWindow": 131072,
-        "supportsImages": true,
-        "inputPrice": 2,
-        "outputPrice": 120
+        "outputPrice": 12
       },
       "gemini-3.1-flash-image": {
         "provider": "gemini",
@@ -2784,16 +2915,7 @@
         "contextWindow": 131072,
         "supportsImages": true,
         "inputPrice": 0.5,
-        "outputPrice": 60
-      },
-      "gemini-3.1-flash-image-preview": {
-        "provider": "gemini",
-        "modelID": "gemini-3.1-flash-image-preview",
-        "maxTokens": 65536,
-        "contextWindow": 65536,
-        "supportsImages": true,
-        "inputPrice": 0.5,
-        "outputPrice": 60
+        "outputPrice": 3
       },
       "gemini-3.1-flash-lite": {
         "provider": "gemini",
@@ -2813,7 +2935,7 @@
         "contextWindow": 65536,
         "supportsImages": true,
         "inputPrice": 0.25,
-        "outputPrice": 30
+        "outputPrice": 1.5
       },
       "gemini-3.1-flash-lite-preview": {
         "provider": "gemini",
@@ -2906,7 +3028,7 @@
       "gemini-3.5-live-translate-preview": {
         "provider": "gemini",
         "modelID": "gemini-3.5-live-translate-preview",
-        "maxTokens": 32768,
+        "maxTokens": 16384,
         "contextWindow": 16384,
         "inputPrice": 3.5,
         "outputPrice": 21
@@ -2954,6 +3076,28 @@
         "inputPrice": 2,
         "outputPrice": 10,
         "cacheReadsPrice": 0.1
+      },
+      "gemini-4-carbon": {
+        "provider": "gemini",
+        "modelID": "gemini-4-carbon",
+        "maxTokens": 32768,
+        "contextWindow": 1048576,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 2,
+        "outputPrice": 10,
+        "cacheReadsPrice": 0.1
+      },
+      "gemini-4-hydrogen": {
+        "provider": "gemini",
+        "modelID": "gemini-4-hydrogen",
+        "maxTokens": 65536,
+        "contextWindow": 1048576,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 1.5,
+        "outputPrice": 7.5,
+        "cacheReadsPrice": 0.075
       },
       "gemini-embedding-001": {
         "provider": "gemini",
@@ -3022,6 +3166,24 @@
           }
         ]
       },
+      "gemma-4-26b-a4b-it": {
+        "provider": "gemini",
+        "modelID": "gemma-4-26b-a4b-it",
+        "maxTokens": 32768,
+        "contextWindow": 262144,
+        "supportsImages": true,
+        "inputPrice": 0,
+        "outputPrice": 0
+      },
+      "gemma-4-31b-it": {
+        "provider": "gemini",
+        "modelID": "gemma-4-31b-it",
+        "maxTokens": 32768,
+        "contextWindow": 262144,
+        "supportsImages": true,
+        "inputPrice": 0,
+        "outputPrice": 0
+      },
       "lyria-3-clip-preview": {
         "provider": "gemini",
         "modelID": "lyria-3-clip-preview",
@@ -3042,6 +3204,15 @@
       }
     },
     "openai": {
+      "chatgpt-image-latest": {
+        "provider": "openai",
+        "modelID": "chatgpt-image-latest",
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 5,
+        "outputPrice": 10,
+        "cacheReadsPrice": 1.25
+      },
       "gpt-3.5-turbo": {
         "provider": "openai",
         "modelID": "gpt-3.5-turbo",
@@ -3509,6 +3680,27 @@
           }
         ]
       },
+      "gpt-6.1-terra": {
+        "provider": "openai",
+        "modelID": "gpt-6.1-terra",
+        "maxTokens": 128000,
+        "contextWindow": 1050000,
+        "supportsImages": true,
+        "supportsPromptCache": true,
+        "inputPrice": 1,
+        "outputPrice": 5,
+        "cacheWritesPrice": 1.25,
+        "cacheReadsPrice": 0.05,
+        "contextPriceTiers": [
+          {
+            "tokenThreshold": 272000,
+            "inputPrice": 2,
+            "outputPrice": 7.5,
+            "cacheWritesPrice": 2.5,
+            "cacheReadsPrice": 0.1
+          }
+        ]
+      },
       "gpt-daybreak-blue-latest": {
         "provider": "openai",
         "modelID": "gpt-daybreak-blue-latest",
@@ -3542,13 +3734,13 @@
         "cacheWritesPrice": 15.625,
         "cacheReadsPrice": 1.25
       },
-      "gpt-image-2": {
+      "gpt-image-1.5": {
         "provider": "openai",
-        "modelID": "gpt-image-2",
+        "modelID": "gpt-image-1.5",
         "supportsImages": true,
         "supportsPromptCache": true,
         "inputPrice": 5,
-        "outputPrice": 30,
+        "outputPrice": 10,
         "cacheReadsPrice": 1.25
       },
       "gpt-realtime-2.1": {
