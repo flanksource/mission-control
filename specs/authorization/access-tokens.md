@@ -33,7 +33,7 @@ _Why:_ an agent only pushes its own data and fetches what's assigned to it, whic
 
 ### 3.2 Service accounts' tokens
 
-A service account's token signs in as the service account (`service-accounts.md`, Section 4). It's issued, listed and revoked by a subject with `service-account:manage`, never through a token, and handed to them. Like a person's token, it MUST be created with at least one Role, and is limited by the RoleBindings that select it (`token-bindings.md`), with the service account as its owner.
+A service account's token signs in as the service account (`service-accounts.md`, Section 4). It's issued, listed and revoked by a subject with `service-account:manage`, never through a token nor by a user of an external identity provider (`service-accounts.md`, Section 3), and handed to them. Like a person's token, it MUST be created with at least one Role, and is limited by the RoleBindings that select it (`token-bindings.md`), with the service account as its owner.
 
 ## 4. Lifetime
 

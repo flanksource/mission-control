@@ -132,6 +132,7 @@ _Why not against the database, like `auth token`:_ a command run there is checke
 
 - The avatar menu's **Download kubeconfig** stays as it is, and is always for the signed-in person.
 - The **Users** page lists the people a person operation reaches, so never a service account.
+- Every person picker, e.g. a RoleBinding's `people`, a team's members, notification recipients and playbook `people` parameters, offers only the types its field accepts, so never a service account. RoleBinding subjects get a separate service account picker.
 - **Settings → Service Accounts**, shown to subjects with `service-account:manage`:
   - A list with **Create**, taking a name and description.
   - An account page listing the RoleBindings that name it, to those who may read RoleBindings, read-only, linking to the RoleBindings page to edit them.

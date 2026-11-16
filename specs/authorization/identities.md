@@ -94,6 +94,6 @@ An agent sets the tags and labels of what it pushes. A Scope that selects by the
 
 ## 6. Service accounts
 
-A service account is a subject that isn't a person, for automation that acts on its own behalf, e.g. a CI job or a bot. It signs in only with its own access tokens, and may do what the RoleBindings that name it in `serviceAccounts` grant (`rolebindings.md`, Section 2.7), and nothing else: `people`, `*` included, and teams never select it. `service-accounts.md` says how service accounts and their tokens are managed.
+A service account is a subject that isn't a person, for automation that acts on its own behalf, e.g. a CI job or a bot. It signs in only with its own access tokens, and may do what the RoleBindings that name it in `serviceAccounts` grant (`rolebindings.md`, Section 2.7), within each token's Roles (Section 4), and nothing else: `people`, `*` included, and teams never select it. `service-accounts.md` says how service accounts and their tokens are managed.
 
 _Why not a person or an agent:_ a token borrowed from a person stops working when they leave and does whatever they may do, and an agent can't be granted a Role. A service account is granted only what bindings name it for, and outlives whoever created it.
