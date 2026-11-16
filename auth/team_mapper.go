@@ -20,12 +20,13 @@ import (
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
 
+	"github.com/flanksource/incident-commander/db"
 	dbModels "github.com/flanksource/incident-commander/db/models"
 )
 
 // SourceTeamMapper is the source of the team memberships a team mapper adds.
 // A team mapper only ever removes memberships with this source.
-const SourceTeamMapper = "team-mapper"
+const SourceTeamMapper = db.SourceTeamMapper
 
 // DefaultClerkTeamMapper is used when --clerk-team-mapper isn't set.
 // It puts organisation admins in admins, guests in no team and everyone else in viewers.

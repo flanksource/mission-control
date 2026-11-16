@@ -25,6 +25,7 @@ import (
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	dbModels "github.com/flanksource/incident-commander/db/models"
+	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/plugin"
 	pluginAPI "github.com/flanksource/incident-commander/plugin/api"
 	mcRBAC "github.com/flanksource/incident-commander/rbac"
@@ -125,6 +126,7 @@ var _ = Describe("Shipped admins team", Ordered, func() {
 
 		e = echo.New()
 		mcRBAC.RegisterRoutes(e)
+		echoSrv.RegisterTeamRoutes(e)
 		e.Any("/db/*", func(c echo.Context) error { return c.NoContent(http.StatusOK) }, mcRBAC.DbMiddleware())
 	})
 
@@ -166,8 +168,8 @@ var _ = Describe("Shipped admins team", Ordered, func() {
 
 	It("lets members be added and removed as usual", func() {
 		team := storedTeam()
-		Expect(request(http.MethodPost, "/db/team_members", map[string]any{"team_id": team.ID, "person_id": member.ID}).Code).To(Equal(http.StatusOK))
-		Expect(request(http.MethodDelete, "/db/team_members?person_id=eq."+member.ID.String(), nil).Code).To(Equal(http.StatusOK))
+		Expect(request(http.MethodPost, "/teams/"+team.ID.String()+"/members", map[string]any{"personIds": []uuid.UUID{member.ID}}).Code).To(Equal(http.StatusNoContent))
+		Expect(request(http.MethodDelete, "/teams/"+team.ID.String()+"/members/"+member.ID.String(), nil).Code).To(Equal(http.StatusNoContent))
 
 		// As the team_members notification handler does
 		Expect(db.AddPersonToTeam(DefaultContext, member.ID, team.ID)).To(Succeed())
@@ -180,7 +182,7 @@ var _ = Describe("Shipped admins team", Ordered, func() {
 		Expect(canManagePeople(member)).To(BeFalse())
 	})
 
-	It("lets someone who's an admin only through the team manage teams and their members through /db", func() {
+	It("lets someone who's an admin only through the team manage teams through /db, and their members through /teams", func() {
 		team := storedTeam()
 		Expect(db.AddPersonToTeam(DefaultContext, member.ID, team.ID)).To(Succeed())
 		Expect(rbac.AddRoleForUser(member.ID.String(), team.ID.String())).To(Succeed())
@@ -198,15 +200,16 @@ var _ = Describe("Shipped admins team", Ordered, func() {
 		}
 		Expect(asMember(http.MethodGet, "/db/teams", nil)).To(Equal(http.StatusOK))
 		Expect(asMember(http.MethodGet, "/db/team_members?team_id=eq."+team.ID.String(), nil)).To(Equal(http.StatusOK))
-		Expect(asMember(http.MethodPost, "/db/team_members", map[string]any{"team_id": team.ID, "person_id": outsider.ID})).To(Equal(http.StatusOK))
-		Expect(asMember(http.MethodDelete, "/db/team_members?person_id=eq."+outsider.ID.String(), nil)).To(Equal(http.StatusOK))
+		Expect(asMember(http.MethodPost, "/db/team_members", map[string]any{"team_id": team.ID, "person_id": outsider.ID})).To(Equal(http.StatusMethodNotAllowed))
+		Expect(asMember(http.MethodPost, "/teams/"+team.ID.String()+"/members", map[string]any{"personIds": []uuid.UUID{outsider.ID}})).To(Equal(http.StatusNoContent))
+		Expect(asMember(http.MethodDelete, "/teams/"+team.ID.String()+"/members/"+outsider.ID.String(), nil)).To(Equal(http.StatusNoContent))
 		Expect(asMember(http.MethodPatch, "/db/teams?id=eq."+otherTeam.ID.String(), map[string]any{"icon": "x"})).To(Equal(http.StatusOK))
 		Expect(asMember(http.MethodDelete, "/db/teams?id=eq."+team.ID.String(), nil)).To(Equal(http.StatusConflict))
 
 		asOutsider := func(method, path string, body any) int {
 			return requestAs(outsider, method, path, echo.MIMEApplicationJSON, body).Code
 		}
-		Expect(asOutsider(http.MethodPost, "/db/team_members", map[string]any{"team_id": team.ID, "person_id": outsider.ID})).To(Equal(http.StatusForbidden))
+		Expect(asOutsider(http.MethodPost, "/teams/"+team.ID.String()+"/members", map[string]any{"personIds": []uuid.UUID{outsider.ID}})).To(Equal(http.StatusForbidden))
 		Expect(asOutsider(http.MethodPatch, "/db/teams?id=eq."+otherTeam.ID.String(), map[string]any{"icon": "x"})).To(Equal(http.StatusForbidden))
 	})
 

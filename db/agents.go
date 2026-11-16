@@ -9,9 +9,11 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
-const PersonTypeAgent = "agent"
+const PersonTypeAgent = adapter.PersonTypeAgent
 
 func FindFirstAgent(ctx context.Context, names ...string) (*models.Agent, error) {
 	for _, name := range names {

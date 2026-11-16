@@ -17,6 +17,7 @@ import (
 	"github.com/flanksource/incident-commander/auth/basic_static"
 	"github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/flanksource/incident-commander/auth/signing"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/tg123/go-htpasswd"
@@ -158,7 +159,7 @@ func authenticateFromCookie(c echo.Context) bool {
 
 	ctx := c.Request().Context().(context.Context)
 	var person models.Person
-	if err := ctx.DB().Where("id = ?", userID).First(&person).Error; err != nil {
+	if err := ctx.DB().Where("id = ?", userID).Scopes(adapter.Logins.Scope).First(&person).Error; err != nil {
 		return false
 	}
 
@@ -315,10 +316,11 @@ func (h *HtpasswdChecker) Match(ctx context.Context, user, pass string) error {
 	return nil
 }
 
+// lookupPerson finds the person a login signs in as, by name or email.
 func lookupPerson(ctx context.Context, user string) (*models.Person, error) {
 	user = strings.ToLower(user)
 	var person models.Person
-	if err := ctx.DB().Where("LOWER(name) = ? or LOWER(email) = ?", user, user).First(&person).Error; err != nil {
+	if err := ctx.DB().Where("(LOWER(name) = ? OR LOWER(email) = ?)", user, user).Scopes(adapter.Logins.Scope).First(&person).Error; err != nil {
 		logger.Warnf("user authenticated via htpasswd, but not found in the db: %s", user)
 		return nil, err
 	}

@@ -517,28 +517,24 @@ func (a *PermissionAdapter) resolveFederatedPeople(entries []string) ([]string, 
 	var ids []string
 	err := a.ctx.DB().Select("id").Model(&models.Person{}).
 		Where("deleted_at IS NULL").
-		Where("type = ?", "federated").
+		Scopes(FederatedPeople.Scope).
 		Where("external_id IN ? OR properties->>'provider' IN ?", externalIDs, providers).
 		Find(&ids).Error
 	return ids, err
 }
 
-// resolveAllPeople returns the ids of every human user of Mission Control. Agents, users of external identity
-// providers and the system user aren't selected, and neither are the people access tokens had before they signed in
-// as their owners: one left over when its migration failed must not gain what everyone is granted.
+// resolveAllPeople returns the ids of every human user of Mission Control.
 // It doesn't depend on email verification: it names no address.
 func (a *PermissionAdapter) resolveAllPeople() ([]string, error) {
 	var ids []string
 	err := a.ctx.DB().Select("id").Model(&models.Person{}).
 		Where("deleted_at IS NULL").
-		Where("(type IS NULL OR type NOT IN ?)", []string{"agent", "federated", "access_token"}).
-		Where("NOT (name = 'System' AND email IS NULL)").
+		Scopes(PeopleByEmail.Scope).
 		Find(&ids).Error
 	return ids, err
 }
 
-// resolvePeopleByEmail returns the ids of the Mission Control users with the given emails.
-// Agents and users of external identity providers aren't people.
+// resolvePeopleByEmail returns the ids of the human users of Mission Control with the given emails.
 func (a *PermissionAdapter) resolvePeopleByEmail(emails []string) ([]string, error) {
 	if len(emails) == 0 {
 		return nil, nil
@@ -547,18 +543,21 @@ func (a *PermissionAdapter) resolvePeopleByEmail(emails []string) ([]string, err
 	var ids []string
 	err := a.ctx.DB().Select("id").Model(&models.Person{}).
 		Where("deleted_at IS NULL").
-		Where("(type IS NULL OR type NOT IN ?)", []string{"agent", "federated"}).
+		Scopes(PeopleByEmail.Scope).
 		Where("email IN ?", emails).
 		Find(&ids).Error
 	return ids, err
 }
 
-// resolveAccessToken returns the principal of the person's access token with the id, or none when it doesn't exist.
-// Agents' tokens aren't limited, so they're never selected.
+// resolveAccessToken returns the principal of the access token with the id, or none when it doesn't exist or its
+// owner can't own a token limited by its bindings, e.g. an agent, whose tokens aren't limited.
 func (a *PermissionAdapter) resolveAccessToken(id uuid.UUID) ([]string, error) {
 	var found []uuid.UUID
-	err := a.ctx.DB().Raw(`SELECT t.id FROM access_tokens t JOIN people p ON p.id = t.person_id
-		WHERE t.id = ? AND p.type IS DISTINCT FROM ?`, id, "agent").Scan(&found).Error
+	err := a.ctx.DB().Table("access_tokens").Select("access_tokens.id").
+		Joins("JOIN people ON people.id = access_tokens.person_id").
+		Where("access_tokens.id = ?", id).
+		Scopes(LimitedTokenOwners.Scope).
+		Scan(&found).Error
 	if err != nil {
 		return nil, err
 	}

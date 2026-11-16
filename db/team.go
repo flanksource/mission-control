@@ -5,11 +5,13 @@ import (
 	"fmt"
 
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/kopper"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -133,10 +135,9 @@ func syncTeamMembers(ctx context.Context, teamID uuid.UUID, members []string) er
 	return nil
 }
 
-// resolvePersonID resolves a person identifier (UUID or email) to a person ID
+// resolvePersonID resolves a person identifier (UUID or email) to the ID of a person who can be a team member
 func resolvePersonID(ctx context.Context, identifier string) (uuid.UUID, error) {
-	// Agents can't be team members
-	query := ctx.DB().Where("type IS DISTINCT FROM ?", PersonTypeAgent)
+	query := ctx.DB().Model(&models.Person{}).Scopes(adapter.TeamMembers.Scope)
 	if id, err := uuid.Parse(identifier); err == nil {
 		query = query.Where("id = ?", id)
 	} else {
@@ -149,6 +150,56 @@ func resolvePersonID(ctx context.Context, identifier string) (uuid.UUID, error) 
 	}
 
 	return person.ID, nil
+}
+
+// SourceTeamMapper is the source of the team memberships a team mapper adds.
+// A team mapper only ever removes memberships with this source.
+const SourceTeamMapper = "team-mapper"
+
+// AddTeamMembers adds the people to the team, all or none. A person who can't be a team member, or is one of the
+// team already, fails it as not found.
+func AddTeamMembers(ctx context.Context, teamID uuid.UUID, personIDs []uuid.UUID) error {
+	return ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
+		var teams int64
+		if err := txCtx.DB().Model(&models.Team{}).Where("id = ? AND deleted_at IS NULL", teamID).Count(&teams).Error; err != nil {
+			return ctx.Oops().Wrapf(err, "failed to get team %s", teamID)
+		} else if teams == 0 {
+			return api.Errorf(api.ENOTFOUND, "team %s not found", teamID)
+		}
+
+		for _, personID := range lo.Uniq(personIDs) {
+			var people int64
+			if err := txCtx.DB().Model(&models.Person{}).Where("id = ? AND deleted_at IS NULL", personID).
+				Scopes(adapter.TeamMembers.Scope).Count(&people).Error; err != nil {
+				return ctx.Oops().Wrapf(err, "failed to get person %s", personID)
+			} else if people == 0 {
+				return api.Errorf(api.ENOTFOUND, "person %s not found", personID)
+			}
+
+			result := txCtx.DB().Exec(`INSERT INTO team_members (team_id, person_id, source) VALUES (?, ?, ?)
+				ON CONFLICT (team_id, person_id) DO NOTHING`, teamID, personID, models.SourceUI)
+			if result.Error != nil {
+				return ctx.Oops().Wrapf(result.Error, "failed to add person %s to team %s", personID, teamID)
+			} else if result.RowsAffected == 0 {
+				return api.Errorf(api.ENOTFOUND, "person %s is already a member of team %s", personID, teamID)
+			}
+		}
+		return nil
+	})
+}
+
+// RemoveTeamMember removes a direct member of the team. A membership a team mapper or an external identity provider
+// added is left to them, and fails it as not found.
+func RemoveTeamMember(ctx context.Context, teamID, personID uuid.UUID) error {
+	result := ctx.DB().Where("team_id = ? AND person_id = ?", teamID, personID).
+		Where("source <> ? AND source NOT LIKE ?", SourceTeamMapper, FederatedTeamSourcePrefix+"%").
+		Delete(&dbModels.TeamMember{})
+	if result.Error != nil {
+		return ctx.Oops().Wrapf(result.Error, "failed to remove person %s from team %s", personID, teamID)
+	} else if result.RowsAffected == 0 {
+		return api.Errorf(api.ENOTFOUND, "person %s is not a direct member of team %s", personID, teamID)
+	}
+	return nil
 }
 
 // DeleteTeam soft deletes a Team by ID

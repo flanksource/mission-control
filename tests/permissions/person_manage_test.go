@@ -172,22 +172,12 @@ var _ = Describe("person:manage", Ordered, func() {
 	Describe("through /db", func() {
 		writes := []string{http.MethodPost, http.MethodPatch, http.MethodDelete}
 
-		for _, table := range []string{"people", "identities"} {
-			It("lets a subject with only person:manage write "+table, func() {
+		for _, table := range []string{"people", "identities", "team_members"} {
+			It("refuses writing "+table+" whatever the subject's grants", func() {
 				for _, method := range writes {
-					Expect(dbWrite(manager, method, table)).To(Equal(http.StatusOK), method)
-				}
-			})
-
-			It("refuses writing "+table+" to a subject with only the built-in admin role, and the table's own object", func() {
-				for _, method := range writes {
-					Expect(dbWrite(legacyAdmin, method, table)).To(Equal(http.StatusForbidden), method)
-				}
-			})
-
-			It("refuses writing "+table+" to a subject with read on people", func() {
-				for _, method := range writes {
-					Expect(dbWrite(reader, method, table)).To(Equal(http.StatusForbidden), method)
+					for _, person := range []*models.Person{manager, legacyAdmin, reader} {
+						Expect(dbWrite(person, method, table)).To(Equal(http.StatusMethodNotAllowed), method+" as "+person.Email)
+					}
 				}
 			})
 		}

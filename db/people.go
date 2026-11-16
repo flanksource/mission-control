@@ -7,6 +7,7 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
@@ -22,7 +23,7 @@ import (
 
 const (
 	// PersonTypeFederated is a user of an external application, authenticated by an ExternalIdentityProvider
-	PersonTypeFederated = "federated"
+	PersonTypeFederated = adapter.PersonTypeFederated
 
 	// FederatedTeamSourcePrefix prefixes the source of the team memberships an external identity provider adds.
 	FederatedTeamSourcePrefix = "provider/"
@@ -124,7 +125,48 @@ func RetireFederatedPeople(ctx context.Context, provider string) ([]dbModels.Tea
 	return removed, nil
 }
 
+// FindPersonForOperation returns the person, not deleted, that a person operation reaches
+// (specs/authorization/design/service-accounts.md, "Person writes"), or ENOTFOUND.
+func FindPersonForOperation(ctx context.Context, id string) (*models.Person, error) {
+	if _, err := uuid.Parse(id); err != nil {
+		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid person id %q", id)
+	}
+
+	var person models.Person
+	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", id).Scopes(adapter.PersonOperations.Scope).First(&person).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "person %s not found", id)
+		}
+		return nil, ctx.Oops().Wrapf(err, "failed to get person %s", id)
+	}
+	return &person, nil
+}
+
+// UpdatePersonRow changes the name and email of a person who has no Kratos identity. Neither is changed when nil.
+func UpdatePersonRow(ctx context.Context, id uuid.UUID, name, email *string) error {
+	updates := map[string]any{}
+	if name != nil {
+		updates["name"] = *name
+	}
+	if email != nil {
+		updates["email"] = *email
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+	return ctx.DB().Model(&models.Person{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// SoftDeletePerson soft-deletes a person who has no Kratos identity.
+func SoftDeletePerson(ctx context.Context, id uuid.UUID) error {
+	return ctx.DB().Model(&models.Person{}).Where("id = ? AND deleted_at IS NULL", id).Update("deleted_at", duty.Now()).Error
+}
+
 func UpdateUserProperties(ctx context.Context, userID string, newProps api.PersonProperties) error {
+	if _, err := FindPersonForOperation(ctx, userID); err != nil {
+		return err
+	}
+
 	var current api.Person
 	if err := ctx.DB().Table("people").Where("id = ?", userID).First(&current).Error; err != nil {
 		return err
@@ -139,6 +181,9 @@ func UpdateUserProperties(ctx context.Context, userID string, newProps api.Perso
 }
 
 func UpdateIdentityState(ctx context.Context, id, state string) error {
+	if _, err := FindPersonForOperation(ctx, id); err != nil {
+		return err
+	}
 	return ctx.DB().Table("identities").Where("id = ?", id).Update("state", state).Error
 }
 

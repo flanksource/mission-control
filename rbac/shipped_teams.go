@@ -19,7 +19,7 @@ import (
 // guardShippedTeams refuses a write through /db/teams that could change or delete a team Mission Control ships,
 // and returns the error to respond with. Writes that change or delete teams must select them by id, so the request
 // says which teams it touches, and inserts must be JSON, so the guard can read which teams they name.
-// Their members are written through /db/team_members, which isn't guarded.
+// Their members are written through /teams/:id/members, which isn't guarded.
 func guardShippedTeams(c echo.Context, ctx context.Context) error {
 	var ids []uuid.UUID
 	var names []string
