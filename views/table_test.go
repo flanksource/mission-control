@@ -12,11 +12,13 @@ import (
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sTypes "k8s.io/apimachinery/pkg/types"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -462,3 +464,60 @@ func loadViewFromYAML(filename string) (*v1.View, error) {
 
 	return &view, nil
 }
+
+var _ = Describe("Panels-only refresh fallback", func() {
+	for _, timeout := range []bool{false, true} {
+		for _, cached := range []bool{false, true} {
+			name := "refresh error"
+			if timeout {
+				name = "refresh timeout"
+			}
+			if cached {
+				name += " with cached panels"
+			} else {
+				name += " without matching fingerprint"
+			}
+			It(name, func() {
+				viewObj, err := loadViewFromYAML("cache-test-view.yaml")
+				Expect(err).NotTo(HaveOccurred())
+				viewObj.UID = k8sTypes.UID(uuid.NewString())
+				viewObj.Name = "panels-" + string(viewObj.UID)
+				viewObj.Spec.Columns = nil
+				viewObj.Spec.Mapping = nil
+				viewObj.Spec.Queries["pod"].Configs.Search = "name >= test"
+				Expect(db.PersistViewFromCRD(DefaultContext, viewObj)).To(Succeed())
+				uid, err := viewObj.GetUUID()
+				Expect(err).NotTo(HaveOccurred())
+				panels := []api.PanelResult{{PanelMeta: api.PanelMeta{Name: "cached", Type: "text"}}}
+				request := &requestOpt{}
+				Expect(db.InsertPanelResults(DefaultContext, uid, panels, request.Fingerprint())).To(Succeed())
+				if !cached {
+					request.variables = map[string]string{"other": "fingerprint"}
+				}
+				options := &v1.CacheOptions{RefreshTimeout: time.Minute}
+				if timeout {
+					options.RefreshTimeout = time.Nanosecond
+				}
+				Expect(viewObj.HasTable()).To(BeFalse())
+				result, info, err := handleViewRefresh(DefaultContext, viewObj, options, false, request)
+				if !cached {
+					Expect(err).To(HaveOccurred())
+					Expect(result).To(BeNil())
+					if timeout {
+						Expect(err.Error()).To(ContainSubstring("refresh timeout reached"))
+					}
+					return
+				}
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.Panels).To(Equal(panels))
+				Expect(result.RequestFingerprint).To(Equal(request.Fingerprint()))
+				Expect(info.status).To(Equal(api.ViewRefreshStatusError))
+				Expect(info.usedCache).To(BeTrue())
+				Expect(info.err).To(HaveOccurred())
+				if timeout {
+					Expect(info.err.Error()).To(ContainSubstring("refresh timeout reached"))
+				}
+			})
+		}
+	}
+})

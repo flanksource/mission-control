@@ -580,9 +580,14 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 
 // handleViewRefresh deduplicates concurrent view refresh operations using singleflight
 func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.CacheOptions, tableExists bool, request *requestOpt) (*api.ViewResult, *refreshInfo, error) {
+	lastRefresh, err := getLastRefresh(ctx, string(view.GetUID()), request.Fingerprint())
+	if err != nil {
+		return nil, nil, err
+	}
+	hasCachedData := lastRefresh != nil && (!view.HasTable() || tableExists)
+
 	done := make(chan struct{})
 	var result *api.ViewResult
-	var err error
 
 	go func() {
 		defer close(done)
@@ -611,7 +616,7 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 	select {
 	case <-done:
 		if err != nil {
-			if tableExists {
+			if hasCachedData {
 				ctx.Logger.Errorf("failed to refresh view %s: %v", view.GetNamespacedName(), err)
 				result, cacheErr := readCachedViewData(ctx, view, request)
 				if cacheErr != nil {
@@ -626,7 +631,7 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 		return result, &refreshInfo{status: api.ViewRefreshStatusFresh, usedCache: false}, nil
 
 	case <-time.After(cacheOptions.RefreshTimeout):
-		if tableExists {
+		if hasCachedData {
 			ctx.Logger.Debugf("view %s refresh timeout reached. returning cached data", view.GetNamespacedName())
 			result, cacheErr := readCachedViewData(ctx, view, request)
 			if cacheErr != nil {
