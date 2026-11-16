@@ -484,6 +484,11 @@ var _ = Describe("Panels-only refresh fallback", func() {
 				viewObj.Name = "panels-" + string(viewObj.UID)
 				viewObj.Spec.Columns = nil
 				viewObj.Spec.Mapping = nil
+				viewObj.Spec.Panels = []api.PanelDef{{
+					PanelMeta: api.PanelMeta{Name: "Pods", Type: "number"},
+					Query:     "SELECT COUNT(*) AS value FROM pod",
+				}}
+				Expect(viewObj.Spec.Validate()).To(Succeed())
 				viewObj.Spec.Queries["pod"].Configs.Search = "name >= test"
 				Expect(db.PersistViewFromCRD(DefaultContext, viewObj)).To(Succeed())
 				uid, err := viewObj.GetUUID()
@@ -499,12 +504,16 @@ var _ = Describe("Panels-only refresh fallback", func() {
 					options.RefreshTimeout = time.Nanosecond
 				}
 				Expect(viewObj.HasTable()).To(BeFalse())
+				_, refreshErr := populateView(DefaultContext, viewObj, request)
+				Expect(refreshErr).To(MatchError(ContainSubstring("failed to run view")))
 				result, info, err := handleViewRefresh(DefaultContext, viewObj, options, false, request)
 				if !cached {
 					Expect(err).To(HaveOccurred())
 					Expect(result).To(BeNil())
 					if timeout {
 						Expect(err.Error()).To(ContainSubstring("refresh timeout reached"))
+					} else {
+						Expect(err.Error()).To(ContainSubstring(refreshErr.Error()))
 					}
 					return
 				}
@@ -516,6 +525,8 @@ var _ = Describe("Panels-only refresh fallback", func() {
 				Expect(info.err).To(HaveOccurred())
 				if timeout {
 					Expect(info.err.Error()).To(ContainSubstring("refresh timeout reached"))
+				} else {
+					Expect(info.err).To(MatchError(refreshErr))
 				}
 			})
 		}
