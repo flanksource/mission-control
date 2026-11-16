@@ -143,7 +143,7 @@ func MarkTimedOutPlaybookRuns(ctx context.Context) error {
 
 	for _, run := range runs {
 		if err := run.EndAsTimedOut(ctx.DB()); err != nil {
-			if errors.Is(err, models.ErrPlaybookTransition) {
+			if errors.Is(err, models.ErrTransition) {
 				// The run ended after it was selected.
 				continue
 			}
