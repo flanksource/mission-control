@@ -2,7 +2,7 @@
 
 ## 1. What a RoleBinding is
 
-A RoleBinding gives a Role to subjects: people, including users of an external identity provider, teams, and a few kinds of resources. With `deny: true`, it refuses the Role to them instead (Section 5).
+A RoleBinding gives a Role to subjects: people, including users of an external identity provider, teams, service accounts, and a few kinds of resources. With `deny: true`, it refuses the Role to them instead (Section 5).
 
 ```yaml
 apiVersion: mission-control.flanksource.com/v1
@@ -41,9 +41,10 @@ _Why:_ a binding can grant a shared Role and narrow it with its own Scopes, with
 | ------------------------------------------------------------------ | --------------- | -------------------------------------------------------------------- |
 | `people`                                                           | list of strings | People, by email, by `<provider>:<username>`, or `*`                 |
 | `teams`                                                            | list of strings | Every member of the teams, by team name                              |
+| `serviceAccounts`                                                  | list of strings | Service accounts, by name (Section 2.7)                              |
 | `playbooks`, `notifications`, `topologies`, `scrapers`, `canaries`, `plugins` | list of objects | Those resources, when they act on their own               |
 
-A person is a human who signs in: through Mission Control's own authentication (Kratos, Clerk, basic), or as a user of an external identity provider (Section 2.4). Both are selected by `people` and `teams`, by different kinds of entry (Section 2.1). Agents aren't people, and no subject selects them (Section 2.3). An access token isn't an identity: a request made with one is checked as its owner (`identities.md`, Section 4). A token is selected only by the bindings created with it (Section 2.6). `people` selects humans only, by any kind of entry, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
+A person is a human who signs in: through Mission Control's own authentication (Kratos, Clerk, basic), or as a user of an external identity provider (Section 2.4). Both are selected by `people` and `teams`, by different kinds of entry (Section 2.1). Agents aren't people, and no subject selects them (Section 2.3). Service accounts aren't people either, and only `serviceAccounts` selects them (Section 2.7). An access token isn't an identity: a request made with one is checked as its owner (`identities.md`, Section 4). A token is selected only by the bindings created with it (Section 2.6). `people` selects humans only, by any kind of entry, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
 
 ### 2.1 People
 
@@ -228,6 +229,20 @@ Bind by exact namespace and name wherever the Role is sensitive, e.g. `connectio
 ### 2.6 Access tokens
 
 A RoleBinding can select an access token, to limit it, but only when the token is created, for its owner (`token-bindings.md`). Neither a custom resource nor the RoleBinding API has a field that selects a token, and both are refused in the reserved namespace token bindings live in, so neither can write, change or delete one.
+
+### 2.7 Service accounts
+
+```yaml
+subjects:
+  serviceAccounts:
+    - github-actions
+    - backup-bot
+```
+
+Each entry is the name of a service account (`service-accounts.md`). `serviceAccounts` is the only field that selects one: `people`, `*` included, and `teams` never do.
+
+- An entry MUST be a valid service account name (`service-accounts.md`, Section 2). Patterns, `*` included, are rejected. _Why:_ each service account is granted on purpose. `*` would hand a Role to every service account created later, by whoever may create one.
+- An entry MAY name a service account that doesn't exist yet. It selects no one until it does, and selects it as soon as it's created. Whoever may create service accounts can take such a name, and the Role with it (`service-accounts.md`, Section 3), as with a resource subject's exact name (Section 2.5).
 
 ## 3. Constraint
 
@@ -418,7 +433,7 @@ To narrow two rules differently, put them in two Roles and bind each with its ow
 
 A binding is validated against what it references: its Role, and the Scopes its constraint names. Nothing is ever validated against the binding.
 
-A binding that's wrong on its own is rejected (`overview.md`, "Rejected or not in effect"): no subjects, a `people` entry that isn't an email, `*` alone, `<provider>:<username>` or `<provider>:*`, an empty or wildcard-namespace resource subject, or a `constraint` that sets neither `resource` nor `target`. Everything else is checked against the Role and Scopes, as follows.
+A binding that's wrong on its own is rejected (`overview.md`, "Rejected or not in effect"): no subjects, a `people` entry that isn't an email, `*` alone, `<provider>:<username>` or `<provider>:*`, a `serviceAccounts` entry that isn't a valid service account name, an empty or wildcard-namespace resource subject, or a `constraint` that sets neither `resource` nor `target`. Everything else is checked against the Role and Scopes, as follows.
 
 - A binding takes effect only once its Role exists and is valid. Until then it's `Ready=False` with the reason and none of its rules apply. There is no previous version to fall back to; the binding is whatever was last written.
 - Its rules apply as the constraint narrows them (Section 3.2). When the Role or a Scope the constraint names changes, is deleted or becomes invalid, each rule is checked again. A Scope that's gone or invalid selects nothing (`scopes.md`, Section 7), so no rule applies through the binding while that holds. A rule the constraint can't narrow doesn't apply and is reported; the others keep applying.
@@ -488,6 +503,7 @@ _Why not deny everything instead:_ a typo in a deny binding would then refuse ev
 - **Other paths to the same data.** A deny refuses actions, not information. Denying `read` on a config doesn't stop someone allowed to run a playbook on another config from fetching it, nor someone who may update a connection from using its credentials.
 - **Runs on a target, through a rule without one.** A rule without a target only matches operations without one (`roles.md`, Section 4.1), and a deny rule is matched the same way. A deny of `playbook:run` on a playbook, written without a target, refuses running it alone, not running it on a config. To refuse both, the Role needs two rules: one without a target, and one whose target Scope selects every type the action takes, e.g. configs, components and checks. The same holds for `playbook:approve` and `playbook:cancel`. _Why:_ a deny rule means the same operations as the allow rule it's written as, so a Role reads the same whether it's granted or denied.
 - **Views.** A view is granted whole, and its rows are shared by every reader (`roles.md`, Section 3.2). Denying `read` on configs doesn't remove them from a view that shows them. Deny the view instead.
+- **Service accounts, unless named.** `people: ["*"]` and teams never select a service account, and `serviceAccounts` takes no `*` (Section 2.7). A deny meant for everyone doesn't reach them: it has to name each service account, and one created later isn't covered until it's added.
 - **What's added later.** Rules name actions exactly (`roles.md`, Section 2), so a deny covers the actions and Scopes its Role names today. "Deny everything but X" can't be written, and a deny of every action one by one doesn't cover the next one added.
 
 Grant narrowly first. Use a deny as a guardrail on top of narrow grants, never instead of them.

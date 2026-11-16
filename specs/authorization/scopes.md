@@ -80,7 +80,7 @@ These are the only places a whole type is required. Roles (`roles.md`, Sections 
 
 _Why some types are all-only:_ picking some resources of a type needs Scope membership and row filtering for that type, which only the types marked "Some or all" have. For the others, `name: "*"` is the only valid target, and every other value is rejected. Each type can get the fields its resources have, and picking some, when it's needed, without breaking a Scope written today.
 
-Everything Mission Control protects is one of these types, apart from what the few actions without a resource reach: accounts (`person:manage`), the MCP server (`mcp:use`), properties, the event queue and job history (`roles.md`, Section 2.3). There's no other kind of object a Role can grant.
+Everything Mission Control protects is one of these types, apart from what the few actions without a resource reach: accounts (`person:manage`), service accounts (`service-account:manage`), the MCP server (`mcp:use`), properties, the event queue and job history (`roles.md`, Section 2.3). There's no other kind of object a Role can grant.
 
 Keys are exact. `playbooks`, `configs` or any other spelling is not a resource type. An entry with two keys, or none, is invalid.
 

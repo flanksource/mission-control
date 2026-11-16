@@ -117,7 +117,7 @@ Mission Control computes the answer. Clients MUST NOT derive it themselves from 
 Every authenticated subject MUST receive their **access summary** from `GET /auth/whoami`, users of external identity providers included. It MUST report:
 
 - Every type accepted by `read`, `create`, `update` or `delete` ([roles.md, Section 2](roles.md#2-actions)), with an answer for each of those actions: `all`, `some` or `none`. An action that doesn't accept the type is `none`.
-- A boolean for each action without a resource: `person:manage`, `access:review`, `mcp:use`, `property:manage`, `event:read` and `job:read`. It is true exactly when the subject may perform that action.
+- A boolean for each action without a resource: `person:manage`, `service-account:manage`, `access:review`, `mcp:use`, `property:manage`, `event:read` and `job:read`. It is true exactly when the subject may perform that action. So `service-account:manage` is false for a request made with an access token and for a user of an external identity provider, whatever their bindings: neither may use it ([service-accounts.md, Section 3](service-accounts.md#3-managing-service-accounts)).
 
 A request made with an access token MUST receive the summary of what the token may do, the limit of the RoleBindings that select it included ([limiting-permissions.md, "Access tokens"](limiting-permissions.md#access-tokens)), for both type answers and action booleans.
 
@@ -153,6 +153,7 @@ Each page MUST have exactly one gate. Its sidebar entry and route MUST use the s
 | Permissions (Roles)                       | `read` on `role`             |
 | Role Bindings                             | `read` on `roleBinding`      |
 | Scopes                                    | `read` on `scope`            |
+| Service Accounts                          | `service-account:manage`     |
 | Subjects                                  | `access:review`              |
 | Jobs History, including resource job tabs | `job:read`                   |
 | Event Queue, including recent event tabs  | `event:read`                 |
