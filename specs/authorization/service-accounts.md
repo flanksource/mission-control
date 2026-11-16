@@ -26,7 +26,7 @@ _Why:_ automation that borrows a person's token stops working when that person l
 - **Reviewable.** An access review or search MUST accept a service account as its subject, for a subject with `access:review`, as for any subject (`roles.md`, Section 2.3). It answers for the service account, not for any one of its tokens.
 - **No session.** A service account MUST NOT sign in interactively, through Kratos, Clerk, basic authentication or any other login. A login whose username or email matches a service account's name never signs in as the service account. Its tokens are its only credential. _Why:_ a session isn't limited by a token's Roles and may manage service accounts, so a login that reached a service account would lift every limit its tokens carry.
 - **Recorded as itself.** Actions taken with a service account's token are recorded as the service account, e.g. as the creator of a playbook run. Its name is read with `read` on `person`, like that of anyone a record names. _Why:_ whoever may read a run must be able to see which service account started it. Nothing else about it is read that way: its tokens take `service-account:manage` (Section 3).
-- **No owner.** A service account doesn't belong to whoever created it, and its creator gets nothing through it. Who created it, and when, is recorded for audit only.
+- **No owner.** A service account doesn't belong to whoever created it, and its creator gets nothing through it. When it was created is recorded; who created it isn't.
 
 ## 2. Identity
 

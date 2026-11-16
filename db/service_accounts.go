@@ -21,8 +21,6 @@ import (
 const PersonTypeServiceAccount = adapter.PersonTypeServiceAccount
 
 // ServiceAccount is a subject for automation, stored as a row of people (specs/authorization/service-accounts.md).
-//
-// Who created it isn't recorded yet: people has no created_by column until duty adds one.
 type ServiceAccount struct {
 	ID        uuid.UUID `json:"id"`
 	Name      string    `json:"name"`
