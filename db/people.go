@@ -281,15 +281,22 @@ func ListAccessTokens(ctx context.Context, owner uuid.UUID) ([]AccessTokenWithUs
 	}
 
 	for i, token := range tokens {
-		bindings, err := adapter.AccessTokenBindings(ctx, token.ID)
-		if err != nil {
+		if tokens[i].RoleBindings, err = accessTokenBindings(ctx, token.ID); err != nil {
 			return nil, err
 		}
-		tokens[i].RoleBindings = lo.Map(bindings, func(b models.RoleBinding, _ int) AccessTokenBinding {
-			return AccessTokenBinding{ID: b.ID, Name: b.Name, Role: b.Role, Ready: b.Error == nil, ErrorReason: b.ErrorReason, Error: b.Error}
-		})
 	}
 	return tokens, nil
+}
+
+// accessTokenBindings returns what's shown of the RoleBindings that limit the access token.
+func accessTokenBindings(ctx context.Context, tokenID uuid.UUID) ([]AccessTokenBinding, error) {
+	bindings, err := adapter.AccessTokenBindings(ctx, tokenID)
+	if err != nil {
+		return nil, err
+	}
+	return lo.Map(bindings, func(b models.RoleBinding, _ int) AccessTokenBinding {
+		return AccessTokenBinding{ID: b.ID, Name: b.Name, Role: b.Role, Ready: b.Error == nil, ErrorReason: b.ErrorReason, Error: b.Error}
+	}), nil
 }
 
 // ListPersonAccessTokens lists the access tokens of the person, e.g. an agent's, without their values.
@@ -333,18 +340,27 @@ func GetPersonType(ctx context.Context, id string) (string, error) {
 // DeleteAccessToken deletes the access token, and the RoleBindings created with it.
 func DeleteAccessToken(ctx context.Context, id string) error {
 	return ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
-		if err := txCtx.DB().Model(&models.RoleBinding{}).
-			Where("source = ? AND namespace = ? AND deleted_at IS NULL", adapter.SourceAccessToken, adapter.AccessTokenNamespace).
-			Where("subjects->>'accessToken' = ?", id).
-			Update("deleted_at", duty.Now()).Error; err != nil {
-			return ctx.Oops().Wrapf(err, "failed to delete the role bindings of access token %s", id)
-		}
-
-		if err := txCtx.DB().Where("id = ?", id).Delete(&models.AccessToken{}).Error; err != nil {
-			return ctx.Oops().Wrapf(err, "failed to delete access token %s", id)
-		}
-		return nil
+		return deleteAccessTokens(txCtx, id)
 	})
+}
+
+// deleteAccessTokens deletes the access tokens, and the RoleBindings created with them, in the context's transaction.
+func deleteAccessTokens(ctx context.Context, ids ...string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	if err := ctx.DB().Model(&models.RoleBinding{}).
+		Where("source = ? AND namespace = ? AND deleted_at IS NULL", adapter.SourceAccessToken, adapter.AccessTokenNamespace).
+		Where("subjects->>'accessToken' IN ?", ids).
+		Update("deleted_at", duty.Now()).Error; err != nil {
+		return ctx.Oops().Wrapf(err, "failed to delete the role bindings of access tokens %v", ids)
+	}
+
+	if err := ctx.DB().Where("id IN ?", ids).Delete(&models.AccessToken{}).Error; err != nil {
+		return ctx.Oops().Wrapf(err, "failed to delete access tokens %v", ids)
+	}
+	return nil
 }
 
 func AddPersonToTeam(ctx context.Context, personID uuid.UUID, teamID uuid.UUID) error {

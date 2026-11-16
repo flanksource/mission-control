@@ -562,6 +562,8 @@ spec:
       action: kubernetes-proxy:read
     - name: manage-people
       action: person:manage
+    - name: manage-service-accounts
+      action: service-account:manage
     - name: review-access
       action: access:review
     - name: use-mcp
@@ -579,10 +581,12 @@ metadata:
   name: access-manage
   namespace: mission-control-builtin
 spec:
-  description: Reviews and manages who may do what - Scopes, Roles, RoleBindings and subject access reviews. As privileged as admin, since it may bind anyone to any Role
+  description: Reviews and manages who may do what - Scopes, Roles, RoleBindings, service accounts and subject access reviews. As privileged as admin, since it may bind anyone to any Role
   rules:
     - name: review-access
       action: access:review
+    - name: manage-service-accounts
+      action: service-account:manage
     - name: read-scopes
       action: read
       resource:

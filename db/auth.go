@@ -78,13 +78,28 @@ func CreateAccessToken(ctx context.Context, personID uuid.UUID, name string, exp
 		accessTokenModel.CreatedBy = createdBy
 	}
 
+	// Whoever issued the token writes its bindings: its owner, or for a service account, the issuer
+	bindingCreator := personID
+	if createdBy != nil {
+		bindingCreator = *createdBy
+	}
+
 	err = ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
+		// Locked so that deleting the owner, e.g. a service account with its tokens, can't miss this one
+		var owners int64
+		if err := txCtx.DB().Raw("SELECT COUNT(*) FROM (SELECT 1 FROM people WHERE id = ? AND deleted_at IS NULL FOR SHARE) owner", personID).
+			Scan(&owners).Error; err != nil {
+			return ctx.Oops().Wrapf(err, "failed to get person %s", personID)
+		} else if owners == 0 {
+			return ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("person %s not found", personID)
+		}
+
 		if err := txCtx.DB().Create(&accessTokenModel).Error; err != nil {
 			return ctx.Oops().Wrapf(err, "failed to create access token")
 		}
 
 		for _, role := range roles {
-			if err := createAccessTokenBinding(txCtx, accessTokenModel, role, personID); err != nil {
+			if err := createAccessTokenBinding(txCtx, accessTokenModel, role, bindingCreator); err != nil {
 				return err
 			}
 		}
@@ -106,9 +121,9 @@ func CreateAccessToken(ctx context.Context, personID uuid.UUID, name string, exp
 }
 
 // createAccessTokenBinding creates the RoleBinding that limits the access token by the Role, in the reserved
-// namespace of access tokens' bindings. Its only subject is the token, which no custom resource or RoleBinding API
-// write can express, so it's stored directly.
-func createAccessTokenBinding(ctx context.Context, token *models.AccessToken, role AccessTokenRole, owner uuid.UUID) error {
+// namespace of access tokens' bindings, written by whoever issued the token. Its only subject is the token, which no
+// custom resource or RoleBinding API write can express, so it's stored directly.
+func createAccessTokenBinding(ctx context.Context, token *models.AccessToken, role AccessTokenRole, issuer uuid.UUID) error {
 	subjects, err := adapter.AccessTokenBindingSubjects(token.ID)
 	if err != nil {
 		return err
@@ -122,7 +137,7 @@ func createAccessTokenBinding(ctx context.Context, token *models.AccessToken, ro
 		Source:      adapter.SourceAccessToken,
 		Role:        role.Namespace + "/" + role.Name,
 		Subjects:    subjects,
-		CreatedBy:   &owner,
+		CreatedBy:   &issuer,
 	}
 
 	// A Role that's missing or invalid is stored as not ready, as for any binding: it limits the token to nothing.
@@ -140,16 +155,20 @@ func createAccessTokenBinding(ctx context.Context, token *models.AccessToken, ro
 // CreateAccessTokenForPerson creates an access token of the user, limited by the given Roles. The token signs in as
 // the user: it's no subject of its own.
 func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenName string, expiry time.Duration, autoRenew bool, roles AccessTokenRoles) (secret.Sensitive, *models.AccessToken, error) {
-	// 0 expiry means default
-	if expiry == 0 {
-		expiry = properties.Duration(90*24*time.Hour, "access_token.default_expiry")
-	}
-
+	expiry = tokenExpiry(expiry)
 	token, accessToken, err := CreateAccessToken(ctx, user.ID, tokenName, &expiry, new(user.ID), autoRenew, roles)
 	if err != nil {
 		return nil, nil, ctx.Oops().Wrapf(err, "failed to create access token %q", tokenName)
 	}
 	return token, accessToken, nil
+}
+
+// tokenExpiry returns the expiry of a token created through the API: the given one, or the default when it's 0.
+func tokenExpiry(expiry time.Duration) time.Duration {
+	if expiry == 0 {
+		return properties.Duration(90*24*time.Hour, "access_token.default_expiry")
+	}
+	return expiry
 }
 
 // legacyPersonTypeAccessToken is the type of the people access tokens were created for before tokens signed in as

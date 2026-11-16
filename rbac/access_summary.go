@@ -168,7 +168,9 @@ func AccessActions(ctx context.Context) map[string]bool {
 	actions := map[string]bool{}
 	for _, action := range adapter.Actions() {
 		contract, _ := adapter.ContractFor(action)
-		if !contract.TakesResource() {
+		if action == adapter.ActionServiceAccountManage {
+			actions[action] = CanManageServiceAccounts(ctx)
+		} else if !contract.TakesResource() {
 			actions[action] = CheckContext(ctx, contract.Object, action)
 		}
 	}

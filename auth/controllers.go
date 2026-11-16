@@ -5,9 +5,7 @@ import (
 	"net/http"
 	"os"
 	"slices"
-	"time"
 
-	"github.com/flanksource/commons/duration"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac/policy"
@@ -29,6 +27,8 @@ func RegisterRoutes(e *echo.Echo) {
 	e.POST("/auth/create_token", CreateToken)
 	e.GET("/auth/tokens", ListTokens)
 	e.DELETE("/auth/token/:id", DeleteToken)
+
+	RegisterServiceAccountRoutes(e)
 }
 
 type InviteUserRequest struct {
@@ -166,31 +166,21 @@ func CreateToken(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "access tokens can't be created with an access token"))
 	}
 
-	var err error
 	var reqData CreateTokenRequest
 	if err := c.Bind(&reqData); err != nil {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
 	}
 
-	if len(reqData.Roles) == 0 {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "a token must list at least one role; list mission-control-builtin/admin and mission-control-builtin/plugin-admin for all of your access"))
+	if err := ValidateTokenRoles(reqData.Roles); err != nil {
+		return dutyAPI.WriteError(c, err)
 	}
 
-	for _, role := range reqData.Roles {
-		if role.Namespace == "" || role.Name == "" {
-			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "role %q must have a namespace and a name", role.Namespace+"/"+role.Name))
-		}
+	expiry, err := ParseTokenExpiry(reqData.Expiry)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
 	}
 
-	var expiry duration.Duration = 0 // Default
-	if reqData.Expiry != "" {
-		expiry, err = duration.ParseDuration(reqData.Expiry)
-		if err != nil {
-			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "error parsing expiry[%s]: %v", reqData.Expiry, err))
-		}
-	}
-
-	token, _, err := db.CreateAccessTokenForPerson(ctx, user, reqData.Name, time.Duration(expiry), reqData.AutoRenew, reqData.Roles)
+	token, _, err := db.CreateAccessTokenForPerson(ctx, user, reqData.Name, expiry, reqData.AutoRenew, reqData.Roles)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error creating access token"))
 	}

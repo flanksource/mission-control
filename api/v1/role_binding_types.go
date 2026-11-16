@@ -37,7 +37,7 @@ type RoleBindingSpec struct {
 	Role string `json:"role" yaml:"role"`
 
 	// Subjects the role is granted to. At least one is required.
-	// +kubebuilder:validation:XValidation:rule="[has(self.people) && size(self.people) > 0, has(self.teams) && size(self.teams) > 0, has(self.notifications) && size(self.notifications) > 0, has(self.playbooks) && size(self.playbooks) > 0, has(self.topologies) && size(self.topologies) > 0, has(self.scrapers) && size(self.scrapers) > 0, has(self.canaries) && size(self.canaries) > 0, has(self.plugins) && size(self.plugins) > 0].exists(x, x)",message="at least one subject is required"
+	// +kubebuilder:validation:XValidation:rule="[has(self.people) && size(self.people) > 0, has(self.teams) && size(self.teams) > 0, has(self.notifications) && size(self.notifications) > 0, has(self.playbooks) && size(self.playbooks) > 0, has(self.topologies) && size(self.topologies) > 0, has(self.scrapers) && size(self.scrapers) > 0, has(self.canaries) && size(self.canaries) > 0, has(self.plugins) && size(self.plugins) > 0, has(self.serviceAccounts) && size(self.serviceAccounts) > 0].exists(x, x)",message="at least one subject is required"
 	Subjects RoleBindingSubjects `json:"subjects" yaml:"subjects"`
 
 	// Constraint narrows every rule of the role for this binding's subjects.
@@ -73,11 +73,17 @@ type RoleBindingSubjects struct {
 	// Plugins selects plugins by the namespace and name of their Plugin resource.
 	// A binding that selects one can only grant read on connections.
 	Plugins []PermissionGroupSelector `json:"plugins,omitempty" yaml:"plugins,omitempty"`
+
+	// ServiceAccounts selects service accounts by name. A name may be of a service account that doesn't exist yet:
+	// it's selected once it's created. people and teams never select a service account.
+	// +kubebuilder:validation:items:Pattern=`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`
+	// +kubebuilder:validation:items:MaxLength=63
+	ServiceAccounts []string `json:"serviceAccounts,omitempty" yaml:"serviceAccounts,omitempty"`
 }
 
 func (t RoleBindingSubjects) Empty() bool {
 	s := t.PermissionGroupSubjects
-	return len(t.Plugins) == 0 && len(s.People) == 0 && len(s.Teams) == 0 &&
+	return len(t.Plugins) == 0 && len(t.ServiceAccounts) == 0 && len(s.People) == 0 && len(s.Teams) == 0 &&
 		len(s.Notifications) == 0 && len(s.Playbooks) == 0 && len(s.Topologies) == 0 &&
 		len(s.Scrapers) == 0 && len(s.Canaries) == 0
 }
@@ -153,6 +159,12 @@ func (t RoleBindingSpec) Validate() error {
 		}
 	}
 
+	for _, name := range t.Subjects.ServiceAccounts {
+		if err := ValidateServiceAccountName(name); err != nil {
+			return fmt.Errorf("service account %w", err)
+		}
+	}
+
 	for kind, selectors := range map[string][]PermissionGroupSelector{
 		"playbooks":     t.Subjects.Playbooks,
 		"notifications": t.Subjects.Notifications,
@@ -168,6 +180,15 @@ func (t RoleBindingSpec) Validate() error {
 		}
 	}
 
+	return nil
+}
+
+// ValidateServiceAccountName checks that the name is a valid service account name: a DNS-1123 label, without patterns
+// (specs/authorization/service-accounts.md, Section 2).
+func ValidateServiceAccountName(name string) error {
+	if errs := validation.IsDNS1123Label(name); len(errs) > 0 {
+		return fmt.Errorf("%q must be a DNS-1123 label: %s", name, strings.Join(errs, ", "))
+	}
 	return nil
 }
 

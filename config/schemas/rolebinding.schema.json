@@ -315,6 +315,13 @@
           },
           "type": "array",
           "description": "Plugins selects plugins by the namespace and name of their Plugin resource.\nA binding that selects one can only grant read on connections."
+        },
+        "serviceAccounts": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "ServiceAccounts selects service accounts by name. A name may be of a service account that doesn't exist yet:\nit's selected once it's created. people and teams never select a service account."
         }
       },
       "additionalProperties": false,

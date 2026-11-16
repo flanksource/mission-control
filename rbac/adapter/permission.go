@@ -266,18 +266,48 @@ func (a *PermissionAdapter) loadBasePolicy(m model.Model) error {
 		return err
 	}
 
+	teams, members, err := a.teamMembershipFilter()
+	if err != nil {
+		return err
+	}
+
 	for _, line := range lines {
 		// A token's principal only holds the bindings that select it. A stored row for it, e.g. a grouping
 		// into everyone written by a check made as it, would widen the token's limit.
 		if strings.HasPrefix(line.V0, models.AccessTokenPrincipalPrefix) {
 			continue
 		}
+
+		// A team grants only to the people who can be its members, however the membership was written
+		if line.Ptype == "g" && teams[line.V1] && !members[line.V0] {
+			continue
+		}
+
 		if err := loadCasbinRule(line, m); err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+// teamMembershipFilter returns the ids of every team, and of every person who can be a team member
+// (specs/authorization/design/service-accounts.md, "Team membership").
+func (a *PermissionAdapter) teamMembershipFilter() (map[string]bool, map[string]bool, error) {
+	var teamIDs []string
+	if err := a.ctx.DB().Model(&models.Team{}).Pluck("id::text", &teamIDs).Error; err != nil {
+		return nil, nil, fmt.Errorf("failed to load teams: %w", err)
+	}
+
+	var memberIDs []string
+	if err := a.ctx.DB().Model(&models.Person{}).Scopes(TeamMembers.Scope).Pluck("people.id::text", &memberIDs).Error; err != nil {
+		return nil, nil, fmt.Errorf("failed to load the people who can be team members: %w", err)
+	}
+
+	toSet := func(ids []string) map[string]bool {
+		return lo.SliceToMap(ids, func(id string) (string, bool) { return id, true })
+	}
+	return toSet(teamIDs), toSet(memberIDs), nil
 }
 
 func loadCasbinRule(line gormadapter.CasbinRule, m model.Model) error {
@@ -414,9 +444,15 @@ func (a *PermissionAdapter) roleBindingToCasbinRules(binding models.RoleBinding,
 		return nil, nil, fmt.Errorf("failed to resolve plugins for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
 	}
 
+	serviceAccounts, err := a.resolveServiceAccounts(subjects.ServiceAccounts)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to resolve service accounts for role binding %s/%s: %w", binding.Namespace, binding.Name, err)
+	}
+
 	allSubjects = append(allSubjects, people...)
 	allSubjects = append(allSubjects, teams...)
 	allSubjects = append(allSubjects, plugins...)
+	allSubjects = append(allSubjects, serviceAccounts...)
 
 	tokenID, isToken, err := bindingAccessToken(binding)
 	if err != nil {
@@ -545,6 +581,22 @@ func (a *PermissionAdapter) resolvePeopleByEmail(emails []string) ([]string, err
 		Where("deleted_at IS NULL").
 		Scopes(PeopleByEmail.Scope).
 		Where("email IN ?", emails).
+		Find(&ids).Error
+	return ids, err
+}
+
+// resolveServiceAccounts returns the ids of the service accounts with the given names. A name no service account has
+// yet selects no one.
+func (a *PermissionAdapter) resolveServiceAccounts(names []string) ([]string, error) {
+	if len(names) == 0 {
+		return nil, nil
+	}
+
+	var ids []string
+	err := a.ctx.DB().Select("id").Model(&models.Person{}).
+		Where("deleted_at IS NULL").
+		Scopes(ServiceAccounts.Scope).
+		Where("name IN ?", names).
 		Find(&ids).Error
 	return ids, err
 }

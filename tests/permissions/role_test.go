@@ -1105,7 +1105,7 @@ var _ = Describe("Role and RoleBinding", Ordered, func() {
 			}
 			Expect(lo.Keys(response.Payload.Actions)).To(ConsistOf(adapter.ActionPersonManage, adapter.ActionAccessReview, policy.ActionMCPUse,
 				policy.ActionPropertyManage, policy.ActionEventRead, policy.ActionJobRead,
-				adapter.ActionKubernetesProxyRead, adapter.ActionKubernetesProxyWrite))
+				adapter.ActionKubernetesProxyRead, adapter.ActionKubernetesProxyWrite, adapter.ActionServiceAccountManage))
 			return response.Payload.Access, response.Payload.Actions
 		}
 

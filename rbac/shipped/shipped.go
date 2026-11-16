@@ -322,6 +322,12 @@ func AddToAdmins(ctx context.Context, personID uuid.UUID) error {
 		return fmt.Errorf("shipped.yaml has no %s team", TeamAdmins)
 	}
 
+	if member, err := adapter.TeamMembers.Has(ctx.DB(), personID); err != nil {
+		return ctx.Oops().Wrapf(err, "failed to get person %s", personID)
+	} else if !member {
+		return ctx.Oops().Errorf("person %s can't be a member of team %s", personID, TeamAdmins)
+	}
+
 	syncLock.Lock()
 	defer syncLock.Unlock()
 	if err := syncTeam(ctx, &team); err != nil {
