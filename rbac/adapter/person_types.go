@@ -1,8 +1,10 @@
 package adapter
 
 import (
+	"slices"
 	"strings"
 
+	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -87,6 +89,14 @@ func ApplyTeamMembership(db *gorm.DB, personID, teamID string) (bool, error) {
 		return false, err
 	}
 	return true, dutyRBAC.AddRoleForUser(id.String(), teamID)
+}
+
+// Accepts reports whether the person, as loaded, is of the person types. It mirrors Scope for a row already read.
+func (p PersonTypes) Accepts(person models.Person) bool {
+	if person.Type == "" {
+		return p.Humans && (person.Name != "System" || person.Email != "")
+	}
+	return slices.Contains(p.Types, person.Type)
 }
 
 // Has reports whether the person with the id, deleted or not, is of the person types.

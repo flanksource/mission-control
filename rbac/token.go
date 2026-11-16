@@ -7,6 +7,8 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/google/uuid"
+
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 type accessTokenKey struct{}
@@ -84,14 +86,17 @@ func ForgetAccessToken(id uuid.UUID) {
 // token's person. Checks made as another subject, e.g. a playbook during a run the request started, aren't limited,
 // and neither are requests made without a token.
 //
-// Only an agent's token, on a request made as that agent, isn't limited. Any other token is limited by the
+// Only an agent's token, on a request made as that agent, isn't limited: its owner must be a person of type agent,
+// not merely a person an agent row points at, since that association is writable. Any other token is limited by the
 // RoleBindings that select it, so a token no binding selects may do nothing.
 func TokenLimit(ctx context.Context, subject string) (uuid.UUID, bool) {
 	token, ok := ctx.Value(accessTokenKey{}).(requestToken)
 	if !ok || subject != token.person {
 		return uuid.Nil, false
 	}
-	if agent := ctx.Agent(); agent != nil && agent.PersonID != nil && agent.PersonID.String() == token.person {
+	user, agent := ctx.User(), ctx.Agent()
+	if user != nil && user.ID.String() == token.person && adapter.UnlimitedTokenOwners.Accepts(*user) &&
+		agent != nil && agent.PersonID != nil && agent.PersonID.String() == token.person {
 		return uuid.Nil, false
 	}
 	return token.id, true
