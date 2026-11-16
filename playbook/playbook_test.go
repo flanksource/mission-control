@@ -717,7 +717,7 @@ var _ = Describe("Playbook", Ordered, func() {
 				awsAgentContext = awsAgentContext.WithName("aws-agent").WithDBLogger("aws-agent", "info")
 
 				// save the agent to the db
-				agentPerson := &models.Person{Name: awsAgentName}
+				agentPerson := &models.Person{Name: awsAgentName, Type: db.PersonTypeAgent}
 				Expect(agentPerson.Save(DefaultContext.DB())).To(BeNil())
 
 				awsAgent = models.Agent{Name: awsAgentName, PersonID: &agentPerson.ID}
@@ -746,7 +746,7 @@ var _ = Describe("Playbook", Ordered, func() {
 				azureAgentContext = azureAgentContext.WithName("azure-agent").WithDBLogger("azure-agent", "info")
 
 				// save the agent to the db
-				agentPerson := &models.Person{Name: azureAgentName}
+				agentPerson := &models.Person{Name: azureAgentName, Type: db.PersonTypeAgent}
 				Expect(agentPerson.Save(DefaultContext.DB())).To(BeNil())
 
 				azureAgent = models.Agent{Name: azureAgentName, PersonID: &agentPerson.ID}
