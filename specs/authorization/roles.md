@@ -102,6 +102,8 @@ The types are those of `scopes.md`, Section 3.1. Views are only read (Section 3.
 
 `person:manage` allows everything about accounts: inviting someone to Mission Control, or creating their account where signing in doesn't, disabling and re-enabling them, changing their properties, name or email, and deleting them. People aren't created, changed or deleted any other way, so `create`, `update` and `delete` don't apply to them. _Why:_ inviting someone and managing their account are what an admin actually does, and a named action says so. A rule allowing `create` on people would leave its reader asking where people are created.
 
+These person operations are the only writes to people: `people` and `identities` are read-only through the database API, and an operation never changes a person's type. _Why:_ a table write is gated by one action for every column and row, so it would reach whatever a release adds to the table; an operation reaches only the fields it names.
+
 `person:manage` is as privileged as `admin`, and is only for subjects trusted as admins. An invite that names teams adds the person to them when it's accepted (`rolebindings.md`, Section 2.2), so it grants whatever the teams' bindings grant. Changing a person's email changes which `people` subjects select them (`rolebindings.md`, Section 2.1), so it moves bindings from one person to another. _Why one action:_ inviting, managing and deleting accounts are equally privileged, so splitting them would only suggest that one is safer to grant than the others.
 
 For `playbook:run`, `target` is optional. A rule without it matches only runs with no target. A rule with `target.scopeRef` matches only runs on Configs, Components or Checks in that Scope (Section 4.1).

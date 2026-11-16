@@ -98,7 +98,7 @@ These routes replace writes to `/db/team_members`. Both take `update` on `team`,
 
 | Route                                                 | Does                                                        |
 | ----------------------------------------------------- | ----------------------------------------------------------- |
-| `POST /teams/:id/members`                             | Adds people to the team: `personIds`, all or none. A person the team-membership row of the allowlist doesn't reach fails the request as not found, and so does one already a member |
+| `POST /teams/:id/members`                             | Adds people to the team: `personIds`, all or none. A person the team-membership row of the allowlist doesn't reach fails the request with `404`, and one already a member with `409` |
 | `DELETE /teams/:id/members/:personId`                 | Removes a direct member. A member a team mapper added is removed by the next sign-in's mapping, not here |
 
 _Why a list on add:_ the Team page adds several people at once, and adding only some of them would leave it guessing which.
