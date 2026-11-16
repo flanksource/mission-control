@@ -42,7 +42,7 @@ Every lookup that turns a login into a person, e.g. the htpasswd and embedded OI
 
 A team's members are resolved through the allowlist where a membership becomes a grant: when one is applied to the policy, and when the policy loads its stored groupings. A membership of any other type of person is skipped there, so it grants nothing, however it was written. Whatever else reads a team's members, e.g. to list them, resolves them the same way.
 
-Writing such a membership is refused as well, by a rule in the database on `team_members` that accepts the same types. _Why in the database:_ memberships are written from several places, `/db/team_members` among them (`design/bootstrap.md`), where no handler sees the row. It's the one copy of an allowlist row outside the table. It's an allowlist too, so a type it doesn't name is refused, and the policy is the authority either way: a membership it let through wrongly still grants nothing.
+Writing such a membership is refused as well. `team_members` is read-only through the database API, and members are added and removed only by the routes under "Teams" below, which find each person through the team-membership row of the allowlist, so one that names a service account fails as not found. The other writers are Mission Control's own: team mappers, accepted invites, Team custom resources and the shipped `admins` team. Each finds its people through the same row, e.g. a Team resource that lists a service account's id skips it. _Why not a rule in the database:_ with every writer in Mission Control, the allowlist in code covers them all, and a second copy of it in duty's schema would only have to be kept in step.
 
 ### Person writes
 
@@ -64,7 +64,6 @@ The schema of `people`, `team_members` and `access_tokens`, and the views over t
 
 - the partial unique index on service account names (Storage),
 - the rule that a person's `type` never changes,
-- the rule on `team_members` that refuses other types (Team membership),
 - service accounts among the subjects offered for an access review (Reads).
 
 The allowlist, the routes and the policy are Mission Control's.
@@ -93,6 +92,17 @@ Issuing a token shares the code path of a person's token: one transaction creati
 With `serviceAccount`, the request MAY also carry the `name`, `expiry` and `autoRenew` of the token, as when one is issued. Without them the token is named after the time of the download, expires after the default expiry and doesn't auto-renew.
 
 _Why a parameter, not a route under `/service-accounts`:_ the kubeconfig template, tenant naming and download headers stay in one handler.
+
+### Teams
+
+These routes replace writes to `/db/team_members`. Both take `update` on `team`, as changing a team's members does today (`design/bootstrap.md`).
+
+| Route                                                 | Does                                                        |
+| ----------------------------------------------------- | ----------------------------------------------------------- |
+| `POST /teams/:id/members`                             | Adds people to the team: `personIds`, all or none. A person the team-membership row of the allowlist doesn't reach fails the request as not found, and so does one already a member |
+| `DELETE /teams/:id/members/:personId`                 | Removes a direct member. A member a team mapper added is removed by the next sign-in's mapping, not here |
+
+_Why a list on add:_ the Team page adds several people at once, and adding only some of them would leave it guessing which.
 
 ### People
 
@@ -134,7 +144,8 @@ The UI never acts as a service account: an admin, signed in as themselves, manag
 
 - **A table of its own.** Keeps `people` to humans, but every reference to a token's owner or a request's user would have to accept either table. Rejected for the cost, since the allowlist already keeps service accounts out of what selects humans.
 - **A person with a flag, e.g. `is_service_account`.** Equivalent to a type, but a second column describing the same thing as `type`. Rejected.
-- **Refusing a service account's team membership only where it's written.** One rule in the database covers every writer, but it would be all that stands between a stray row and a team's Roles, in a second copy of the allowlist. Rejected as the only check: the policy resolves members through the allowlist, and the rule only keeps a membership that grants nothing from being stored.
+- **Refusing a service account's team membership only where it's written.** It would be all that stands between a stray row and a team's Roles. Rejected as the only check: the policy resolves members through the allowlist too.
+- **A rule in the database on `team_members`.** It would refuse a wrong membership whoever wrote it, but `/db/team_members` was the only writer outside Mission Control's code, and closing it leaves none. Rejected as a second copy of the allowlist, in duty's schema.
 - **Guarding `/db/people` writes instead of closing them.** A guard has to work out which rows and fields a database API request touches, which it can only do for requests it restricts to ids and JSON bodies, as `/db/teams` is for the shipped team (`design/bootstrap.md`). Rejected: every column added to `people` would be writable until the guard learnt of it.
 - **Separate actions to create accounts and to issue their tokens.** Rejected in `service-accounts.md`, Section 3: whoever may create an account could issue tokens for it once an admin granted it Roles.
 - **Tokens without Roles, like an agent's.** Simpler, but a kubeconfig, which is written to a file that's easily shared, would carry everything the account may do. Rejected so each token carries only what it's for.
