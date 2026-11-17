@@ -19,6 +19,7 @@ import (
 	reportCatalog "github.com/flanksource/incident-commander/report/catalog"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 	"gorm.io/gorm"
 )
 
@@ -293,23 +294,9 @@ func resolveCatalogReportConfigs(ctx context.Context, req CatalogReportRequest, 
 		return nil, api.Errorf(api.EINVALID, "select at least one config item")
 	}
 
-	loaded, err := getExistingCatalogReportConfigs(ctx, ids)
+	configs, err := getExistingCatalogReportConfigs(ctx, ids)
 	if err != nil {
 		return nil, ctx.Oops().Wrap(err)
-	}
-
-	byID := make(map[uuid.UUID]models.ConfigItem, len(loaded))
-	for _, config := range loaded {
-		byID[config.ID] = config
-	}
-
-	configs := make([]models.ConfigItem, 0, len(ids))
-	for _, id := range ids {
-		config, ok := byID[id]
-		if !ok {
-			continue
-		}
-		configs = append(configs, config)
 	}
 
 	if len(configs) == 0 && !allowEmpty {
@@ -319,17 +306,20 @@ func resolveCatalogReportConfigs(ctx context.Context, req CatalogReportRequest, 
 	return configs, nil
 }
 
+// getExistingCatalogReportConfigs reads the configs that exist and are visible under ctx's row-level security, in the
+// order of ids.
 func getExistingCatalogReportConfigs(ctx context.Context, ids []uuid.UUID) ([]models.ConfigItem, error) {
-	configs := make([]models.ConfigItem, 0, len(ids))
+	var found []models.ConfigItem
+	if err := ctx.DB().Where("id IN ?", ids).Where("deleted_at IS NULL").Find(&found).Error; err != nil {
+		return nil, err
+	}
+
+	byID := lo.KeyBy(found, func(config models.ConfigItem) uuid.UUID { return config.ID })
+	configs := make([]models.ConfigItem, 0, len(found))
 	for _, id := range ids {
-		config, err := query.ConfigItemFromCache(ctx, id.String())
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				continue
-			}
-			return nil, err
+		if config, ok := byID[id]; ok {
+			configs = append(configs, config)
 		}
-		configs = append(configs, config)
 	}
 	return configs, nil
 }
