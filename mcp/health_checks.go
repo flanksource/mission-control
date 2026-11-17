@@ -58,13 +58,21 @@ func checkStatusHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 	}
 	limit := req.GetInt("limit", 30)
 
+	// check_statuses has no row-level security, so the history is read only when the check itself is visible
+	var visible int64
 	var checkStatuses []models.CheckStatus
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		if err := rlsCtx.DB().Model(&models.Check{}).Where("id = ?", checkID).Count(&visible).Error; err != nil || visible == 0 {
+			return err
+		}
 		return rlsCtx.DB().Where("check_id = ?", checkID).Order("time DESC").Limit(limit).Find(&checkStatuses).Error
 	})
 
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if visible == 0 {
+		return mcp.NewToolResultError(fmt.Sprintf("check[%s] not found", checkID)), nil
 	}
 	return structToMCPResponse(req, checkStatuses), nil
 }

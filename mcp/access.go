@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -80,13 +81,21 @@ func searchCatalogAccessLogHandler(goctx gocontext.Context, req mcp.CallToolRequ
 
 	limit := req.GetInt("limit", 50)
 
+	// config_access_logs has no row-level security, so the logs are read only when the config itself is visible
+	var visible int64
 	var rows []db.AccessLogRow
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		if err := rlsCtx.DB().Model(&models.ConfigItem{}).Where("id = ?", configID).Count(&visible).Error; err != nil || visible == 0 {
+			return err
+		}
 		rows, err = db.GetAccessLogs(rlsCtx, configID, userID, limit)
 		return err
 	})
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if visible == 0 {
+		return mcp.NewToolResultError(fmt.Sprintf("config item[%s] not found", configID)), nil
 	}
 
 	return structToMCPResponse(req, rows), nil
