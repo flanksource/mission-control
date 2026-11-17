@@ -5,11 +5,13 @@ import (
 	"fmt"
 
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
+	icrbac "github.com/flanksource/incident-commander/rbac"
 )
 
 const (
@@ -21,6 +23,9 @@ const (
 func resolveExternalUserHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := requireCatalogRead(ctx); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -46,6 +51,9 @@ func resolveExternalUserHandler(goctx gocontext.Context, req mcp.CallToolRequest
 func resolveExternalGroupHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := requireCatalogRead(ctx); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -92,6 +100,15 @@ func resolveConfigHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 	}
 
 	return structToMCPResponse(req, result), nil
+}
+
+// requireCatalogRead checks read on the whole catalog, which the /db API requires for external users and groups.
+// Those tables have no row-level security, so they're served only to a caller who may read every config.
+func requireCatalogRead(ctx context.Context) error {
+	if !icrbac.CheckContext(ctx, policy.ObjectCatalog, policy.ActionRead) {
+		return fmt.Errorf("forbidden: %s does not have %s permission on %s", ctx.Subject(), policy.ActionRead, policy.ObjectCatalog)
+	}
+	return nil
 }
 
 func registerResolve(s *server.MCPServer) {
