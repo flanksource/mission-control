@@ -1,6 +1,7 @@
 package playbook
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/flanksource/artifacts"
@@ -18,7 +20,9 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/secret"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
@@ -35,6 +39,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
+	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/flanksource/incident-commander/playbook/sdk"
 	"github.com/flanksource/incident-commander/playbook/testdata"
 )
@@ -537,6 +542,199 @@ var _ = Describe("Playbook", Ordered, func() {
 			f, err := os.ReadFile(tempFile)
 			Expect(err).To(BeNil())
 			Expect(string(f)).To(Equal(fmt.Sprintf("%s\n%s\n", dummy.EKSCluster.ConfigClass, dummy.Logistics.Name)))
+		})
+	})
+
+	var _ = Describe("resource parameters", Ordered, func() {
+		const secretType = "Repro::Secret"
+
+		var (
+			alice            *models.Person
+			aliceCtx         context.Context
+			secretX, publicY models.ConfigItem
+		)
+
+		configNamed := func(name string) v1.ScopeTarget {
+			return v1.ScopeTarget{Config: &v1.ScopeConfigSelector{ScopeResourceRef: v1.ScopeResourceRef{Name: name}}}
+		}
+
+		createConfig := func(name, config string) models.ConfigItem {
+			GinkgoHelper()
+			item := models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr(fmt.Sprintf("%s-%s", name, uuid.NewString()[:8])),
+				ConfigClass: "Secret",
+				Type:        lo.ToPtr(secretType),
+				Config:      lo.ToPtr(config),
+			}
+			Expect(DefaultContext.DB().Create(&item).Error).To(Succeed())
+			DeferCleanup(func() { Expect(DefaultContext.DB().Delete(&item).Error).To(Succeed()) })
+			return item
+		}
+
+		countRuns := func(playbookID uuid.UUID) int64 {
+			GinkgoHelper()
+			var count int64
+			Expect(DefaultContext.DB().Model(&models.PlaybookRun{}).Where("playbook_id = ?", playbookID).Count(&count).Error).To(Succeed())
+			return count
+		}
+
+		// refusal returns the error's code and its message with the id left out, so refusals of different ids compare.
+		refusal := func(err error, id uuid.UUID) (any, string) {
+			GinkgoHelper()
+			Expect(err).To(HaveOccurred())
+			Expect(fmt.Sprintf("%+v", err)).ToNot(ContainSubstring("hunter2"))
+			oopsErr, ok := oops.AsOops(err)
+			Expect(ok).To(BeTrue(), err.Error())
+			return oopsErr.Code(), strings.ReplaceAll(err.Error(), id.String(), "<id>")
+		}
+
+		configParam := []v1.PlaybookParameter{{Name: "target", Type: v1.PlaybookParameterTypeConfig}}
+		echoTarget := []v1.PlaybookAction{{Name: "echo", Exec: &v1.ExecAction{Script: "echo {{.params.target.config}}"}}}
+
+		BeforeAll(func() {
+			var err error
+			alice, err = db.CreatePerson(DefaultContext, "Alice", fmt.Sprintf("alice-%s@example.com", uuid.NewString()[:8]), "")
+			Expect(err).To(Succeed())
+			aliceCtx = DefaultContext.WithUser(alice)
+
+			allPlaybooks := v1.ScopeTarget{Playbook: &v1.ScopePlaybookRef{Name: "*"}}
+			DeferCleanup(bindPerson(alice.Email,
+				playbookGrant{Action: policy.ActionPlaybookRun, Resource: allPlaybooks},
+				playbookGrant{Action: policy.ActionRead, Resource: allPlaybooks},
+			))
+
+			secretX = createConfig("secret-x", `{"password":"hunter2"}`)
+			publicY = createConfig("pub-y", `{"greeting":"hello"}`)
+		})
+
+		It("refuses a config the starter can't read exactly like a missing one", func() {
+			playbook := saveScheduledPlaybookForTest("echo-param", v1.PlaybookSpec{Parameters: configParam, Actions: echoTarget})
+
+			_, err := Run(aliceCtx, &playbook, RunParams{ID: playbook.ID, Params: map[string]string{"target": secretX.ID.String()}})
+			code, message := refusal(err, secretX.ID)
+
+			missing := uuid.New()
+			_, err = Run(aliceCtx, &playbook, RunParams{ID: playbook.ID, Params: map[string]string{"target": missing.String()}})
+			missingCode, missingMessage := refusal(err, missing)
+
+			Expect(code).To(Equal(dutyApi.ENOTFOUND))
+			Expect(message).To(ContainSubstring("parameter target: config <id> not found"))
+			Expect(code).To(Equal(missingCode))
+			Expect(message).To(Equal(missingMessage))
+			Expect(countRuns(playbook.ID)).To(BeZero())
+		})
+
+		It("runs on a config the starter can read, with no binding on the playbook", func() {
+			playbook := saveScheduledPlaybookForTest("echo-param", v1.PlaybookSpec{Parameters: configParam, Actions: echoTarget})
+			DeferCleanup(bindPerson(alice.Email, playbookGrant{Action: policy.ActionRead, Resource: configNamed(*secretX.Name)}))
+
+			run, err := Run(aliceCtx, &playbook, RunParams{ID: playbook.ID, Params: map[string]string{"target": secretX.ID.String()}})
+			Expect(err).To(Succeed())
+
+			env, err := runner.CreateTemplateEnv(DefaultContext.WithSubject(playbook.ID.String()), &playbook, *run, nil)
+			Expect(err).To(Succeed())
+			Expect(env.Params["target"]).To(HaveKeyWithValue("config", HaveKeyWithValue("password", "hunter2")))
+		})
+
+		It("refuses a default the starter can't read", func() {
+			playbook := saveScheduledPlaybookForTest("default-param", v1.PlaybookSpec{
+				Parameters: []v1.PlaybookParameter{{Name: "target", Type: v1.PlaybookParameterTypeConfig, Default: types.GoTemplate(secretX.ID.String())}},
+				Actions:    echoTarget,
+			})
+
+			_, err := Run(aliceCtx, &playbook, RunParams{ID: playbook.ID})
+			code, message := refusal(err, secretX.ID)
+			Expect(code).To(Equal(dutyApi.ENOTFOUND))
+			Expect(message).To(ContainSubstring("parameter target: config <id> not found"))
+			Expect(countRuns(playbook.ID)).To(BeZero())
+		})
+
+		It("pins a configs selector to the configs the starter can read", func() {
+			playbook := saveScheduledPlaybookForTest("configs-param", v1.PlaybookSpec{
+				Parameters: []v1.PlaybookParameter{{Name: "configs", Type: v1.PlaybookParameterTypeConfigs}},
+				Actions:    []v1.PlaybookAction{{Name: "echo", Exec: &v1.ExecAction{Script: "echo {{len .params.configs}}"}}},
+			})
+			DeferCleanup(bindPerson(alice.Email, playbookGrant{Action: policy.ActionRead, Resource: configNamed(*publicY.Name)}))
+
+			run, err := Run(aliceCtx, &playbook, RunParams{ID: playbook.ID, Params: map[string]string{"configs": fmt.Sprintf(`{"types":[%q]}`, secretType)}})
+			Expect(err).To(Succeed())
+
+			var stored types.ResourceSelector
+			Expect(json.Unmarshal([]byte(run.Parameters["configs"]), &stored)).To(Succeed())
+			selected, err := query.FindConfigsByResourceSelector(DefaultContext, -1, stored)
+			Expect(err).To(Succeed())
+			Expect(lo.Map(selected, func(c models.ConfigItem, _ int) uuid.UUID { return c.ID })).To(Equal([]uuid.UUID{publicY.ID}))
+
+			// A config that starts matching the selector later isn't in the run
+			createConfig("secret-z", `{"password":"hunter2"}`)
+			env, err := runner.CreateTemplateEnv(DefaultContext.WithSubject(playbook.ID.String()), &playbook, *run, nil)
+			Expect(err).To(Succeed())
+			Expect(lo.Map(env.ResolvedConfigs, func(c models.ConfigItem, _ int) uuid.UUID { return c.ID })).To(Equal([]uuid.UUID{publicY.ID}))
+		})
+
+		Describe("on a schedule", func() {
+			scheduledSpec := func() v1.PlaybookSpec {
+				return v1.PlaybookSpec{
+					On: &v1.PlaybookTrigger{Schedule: []v1.PlaybookTriggerSchedule{{
+						Schedule:   "@every 1h",
+						Parameters: map[string]string{"target": secretX.ID.String()},
+					}}},
+					Parameters: configParam,
+					Actions:    echoTarget,
+				}
+			}
+
+			It("isn't created on a config the playbook can't read, and the refusal is in its job history", func() {
+				playbook := saveScheduledPlaybookForTest("scheduled-param", scheduledSpec())
+				DeferCleanup(bindPlaybook(playbook, runOnItself(playbook, nil)))
+
+				triggerScheduledRun(DefaultContext, playbook.ID, 0, "@every 1h")
+
+				Expect(countRuns(playbook.ID)).To(BeZero())
+				expectScheduledRunJobHistory(playbook.ID, fmt.Sprintf("parameter target: config %s not found", secretX.ID))
+			})
+
+			It("is created on a config the playbook can read", func() {
+				playbook := saveScheduledPlaybookForTest("scheduled-param", scheduledSpec())
+				DeferCleanup(bindPlaybook(playbook,
+					runOnItself(playbook, nil),
+					playbookGrant{Action: policy.ActionRead, Resource: configNamed(*secretX.Name)},
+				))
+
+				triggerScheduledRun(DefaultContext, playbook.ID, 0, "@every 1h")
+
+				var run models.PlaybookRun
+				Expect(DefaultContext.DB().Where("playbook_id = ?", playbook.ID).First(&run).Error).To(Succeed())
+				Expect(run.Parameters).To(HaveKeyWithValue("target", secretX.ID.String()))
+			})
+		})
+
+		It("refuses the parameters endpoint a config the caller can't read exactly like a missing one", func() {
+			playbook := saveScheduledPlaybookForTest("echo-param", v1.PlaybookSpec{Parameters: configParam, Actions: echoTarget})
+
+			getParams := func(target uuid.UUID) (int, string) {
+				GinkgoHelper()
+				body, err := json.Marshal(RunParams{ID: playbook.ID, Params: map[string]string{"target": target.String()}})
+				Expect(err).To(Succeed())
+				req := httptest.NewRequest(gohttp.MethodPost, "/playbook/params", bytes.NewReader(body)).WithContext(aliceCtx)
+				req.Header.Set("Content-Type", "application/json")
+				rec := httptest.NewRecorder()
+				Expect(HandleGetPlaybookParams(e.NewContext(req, rec))).To(Succeed())
+				Expect(rec.Body.String()).ToNot(ContainSubstring("hunter2"))
+
+				var response map[string]any
+				Expect(json.Unmarshal(rec.Body.Bytes(), &response)).To(Succeed())
+				return rec.Code, strings.ReplaceAll(fmt.Sprint(response["error"]), target.String(), "<id>")
+			}
+
+			status, message := getParams(secretX.ID)
+			missingStatus, missingMessage := getParams(uuid.New())
+
+			Expect(status).To(Equal(gohttp.StatusNotFound))
+			Expect(message).To(ContainSubstring("parameter target: config <id> not found"))
+			Expect(status).To(Equal(missingStatus))
+			Expect(message).To(Equal(missingMessage))
 		})
 	})
 

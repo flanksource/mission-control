@@ -104,13 +104,13 @@ func invalidateRLSCacheForToken(tokenID uuid.UUID) {
 	}
 }
 
+// GetRLSPayload returns the row filters of ctx.Subject(): a person, or a subject with no user on the context, such as
+// a playbook running on its schedule.
 func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
-	user := ctx.User()
-	if user == nil {
-		return nil, fmt.Errorf("user is required for RLS payload")
-	}
-
 	subject := ctx.Subject()
+	if subject == "" {
+		return nil, fmt.Errorf("subject is required for RLS payload")
+	}
 
 	// The subject's sessions and each of their access tokens are limited differently
 	cacheKey := getRLSCacheKey(subject) + rbac.AccessTokenCacheKey(ctx)
@@ -205,7 +205,7 @@ func WithRLS(ctx context.Context, fn func(context.Context) error) error {
 	}
 
 	if ctx.Properties().On(false, "rls.debug") {
-		ctx.Logger.WithValues("user", lo.FromPtr(ctx.User()).ID).Infof("RLS payload: %s", logger.Pretty(rlsPayload))
+		ctx.Logger.WithValues("subject", ctx.Subject()).Infof("RLS payload: %s", logger.Pretty(rlsPayload))
 	}
 
 	if rlsPayload.Disable {
