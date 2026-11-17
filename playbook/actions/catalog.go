@@ -8,12 +8,17 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 )
 
-type Catalog struct{}
+// Catalog creates a config as Playbook, during its run RunID.
+type Catalog struct {
+	Playbook models.Playbook
+	RunID    uuid.UUID
+}
 
 type CatalogResult struct {
 	ID          uuid.UUID         `json:"id"`
@@ -29,6 +34,10 @@ type CatalogResult struct {
 }
 
 func (c *Catalog) Run(ctx context.Context, action v1.CatalogAction) (*CatalogResult, error) {
+	if err := rbac.AuthorizeConfigCreate(ctx); err != nil {
+		return nil, err
+	}
+
 	scraperID, err := resolveScraperID(ctx, action.Scraper)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve scraper %q: %w", action.Scraper, err)
@@ -54,6 +63,7 @@ func (c *Catalog) Run(ctx context.Context, action v1.CatalogAction) (*CatalogRes
 		Type:        lo.ToPtr(action.Type),
 		ConfigClass: action.ConfigClass,
 		Tags:        types.JSONStringMap(action.Tags),
+		Source:      lo.ToPtr(v1.SourcePlaybook),
 	}
 
 	if scraperID != "" {
@@ -70,10 +80,12 @@ func (c *Catalog) Run(ctx context.Context, action v1.CatalogAction) (*CatalogRes
 	if action.Status != "" {
 		item.Status = lo.ToPtr(action.Status)
 	}
-	if len(action.Labels) > 0 {
-		labels := types.JSONStringMap(action.Labels)
-		item.Labels = &labels
-	}
+	labels := types.JSONStringMap(lo.Assign(action.Labels, map[string]string{
+		v1.LabelCreatorPlaybookID:    c.Playbook.ID.String(),
+		v1.LabelCreatorPlaybook:      c.Playbook.Namespace + "/" + c.Playbook.Name,
+		v1.LabelCreatorPlaybookRunID: c.RunID.String(),
+	}))
+	item.Labels = &labels
 
 	if err := ctx.DB().Create(&item).Error; err != nil {
 		return nil, fmt.Errorf("failed to create config item: %w", err)
@@ -88,7 +100,7 @@ func (c *Catalog) Run(ctx context.Context, action v1.CatalogAction) (*CatalogRes
 		Health:      action.Health,
 		Status:      action.Status,
 		Tags:        action.Tags,
-		Labels:      action.Labels,
+		Labels:      labels,
 		ScraperID:   scraperID,
 	}, nil
 }

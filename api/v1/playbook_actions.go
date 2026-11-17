@@ -722,6 +722,20 @@ type FacetRenderOptions struct {
 	TimestampURL     string `json:"timestampUrl,omitempty" yaml:"timestampUrl,omitempty" template:"true"`
 }
 
+// SourcePlaybook is the source of a config a playbook's catalog action created. It belongs with duty's source values
+// (models.SourceUI, models.SourceCRD, ...).
+const SourcePlaybook = "Playbook"
+
+// Labels a catalog action sets on every config it creates, recording which playbook and run created it. They record
+// provenance only: scrapers copy labels from the systems they scrape, so only source = Playbook together with them
+// means a playbook created the config.
+const (
+	LabelCreatorPrefix        = "mission-control/creator-"
+	LabelCreatorPlaybookID    = LabelCreatorPrefix + "playbook-id"
+	LabelCreatorPlaybook      = LabelCreatorPrefix + "playbook"
+	LabelCreatorPlaybookRunID = LabelCreatorPrefix + "playbook-run-id"
+)
+
 // CatalogAction creates a config item in the catalog.
 type CatalogAction struct {
 	// Name of the config item
@@ -995,6 +1009,14 @@ func (p *PlaybookAction) Validate() error {
 	if p.Report != nil {
 		if err := p.Report.Validate(); err != nil {
 			return fmt.Errorf("action %q: %w", name, err)
+		}
+	}
+
+	if p.Catalog != nil {
+		for key := range p.Catalog.Labels {
+			if strings.HasPrefix(key, LabelCreatorPrefix) {
+				return fmt.Errorf("action %q: label %q is reserved: it's set on every config the action creates", name, key)
+			}
 		}
 	}
 

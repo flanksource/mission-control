@@ -143,7 +143,7 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 			result, err = e.Run(ctx, *actionSpec.Report)
 		}
 	} else if actionSpec.Catalog != nil {
-		var e actions.Catalog
+		e := actions.Catalog{Playbook: templateEnv.Playbook, RunID: templateEnv.Run.ID}
 		result, err = e.Run(ctx, *actionSpec.Catalog)
 	}
 
@@ -175,7 +175,7 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 
 	// notifications can run standalone or as part of another step
 	if actionSpec.Notification != nil {
-		e := actions.Notification{RunID: runID}
+		e := actions.Notification{RunID: templateEnv.Run.ID}
 		var err2 error
 		if result, err2 = e.Run(ctx, *actionSpec.Notification); err != nil && err2 != nil {
 			err = oops.Join(err, err2)

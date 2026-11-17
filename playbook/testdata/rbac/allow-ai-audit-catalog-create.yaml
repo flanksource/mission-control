@@ -1,0 +1,34 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: allow-ai-audit-catalog-create
+  namespace: default
+spec:
+  targets:
+    - config:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: allow-ai-audit-catalog-create
+  namespace: default
+spec:
+  description: allow playbook default/ai-audit-catalog to create configs with its catalog action
+  rules:
+    - name: create-configs
+      action: create
+      resource:
+        scopeRef: allow-ai-audit-catalog-create
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: RoleBinding
+metadata:
+  name: allow-ai-audit-catalog-create
+  namespace: default
+spec:
+  role: allow-ai-audit-catalog-create
+  subjects:
+    playbooks:
+      - name: ai-audit-catalog
+        namespace: default

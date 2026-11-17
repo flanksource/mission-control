@@ -10,6 +10,8 @@ import (
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/membership"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
@@ -155,6 +157,95 @@ var _ = ginkgo.Describe("Work no person started", func() {
 			Expect(DefaultContext.DB().Where("playbook_id = ?", playbook.ID).First(&run).Error).To(Succeed())
 			Expect(run.ConfigID).To(Equal(&config.ID))
 			Expect(run.CreatedBy).To(BeNil())
+		})
+	})
+
+	ginkgo.Describe("an action writing configs", func() {
+		catalogPlaybook := func(configName string, labels map[string]string) models.Playbook {
+			ginkgo.GinkgoHelper()
+			return saveScheduledPlaybookForTest("catalog-pb", v1.PlaybookSpec{
+				Actions: []v1.PlaybookAction{
+					{Name: "plant", Catalog: &v1.CatalogAction{Name: configName, Type: "Repro::Created", Labels: labels}},
+				},
+			})
+		}
+
+		runToEnd := func(pb models.Playbook) (*models.PlaybookRun, models.PlaybookRunAction) {
+			ginkgo.GinkgoHelper()
+			run, err := Run(RunAsPlaybook(DefaultContext, &pb), &pb, RunParams{})
+			Expect(err).To(Succeed())
+			run = waitFor(run)
+
+			var action models.PlaybookRunAction
+			Expect(DefaultContext.DB().Where("playbook_run_id = ?", run.ID).First(&action).Error).To(Succeed())
+			return run, action
+		}
+
+		configsNamed := func(name string) []models.ConfigItem {
+			ginkgo.GinkgoHelper()
+			var items []models.ConfigItem
+			Expect(DefaultContext.DB().Where("name = ? AND type = ?", name, "Repro::Created").Find(&items).Error).To(Succeed())
+			return items
+		}
+
+		ginkgo.It("fails without create on the catalog, and writes no config", func() {
+			name := "planted-" + uuid.NewString()
+			playbook := catalogPlaybook(name, nil)
+			ginkgo.DeferCleanup(bindPlaybook(playbook, runOnItself(playbook, nil)))
+
+			run, action := runToEnd(playbook)
+
+			Expect(run.Status).To(Equal(models.PlaybookRunStatusFailed))
+			Expect(lo.FromPtr(action.Error)).To(ContainSubstring("create on the catalog required"))
+			Expect(configsNamed(name)).To(BeEmpty())
+		})
+
+		ginkgo.It("creates the config as the playbook's, overriding the spec's labels, and a Scope can select it by the playbook's id", func() {
+			name := "planted-" + uuid.NewString()
+			playbook := catalogPlaybook(name, map[string]string{"team": "payments"})
+			ginkgo.DeferCleanup(bindPlaybook(playbook,
+				runOnItself(playbook, nil),
+				playbookGrant{Action: policy.ActionCreate, Resource: allConfigs},
+			))
+			ginkgo.DeferCleanup(func() {
+				Expect(DefaultContext.DB().Where("name = ? AND type = ?", name, "Repro::Created").Delete(&models.ConfigItem{}).Error).To(Succeed())
+			})
+
+			run, action := runToEnd(playbook)
+			Expect(run.Status).To(Equal(models.PlaybookRunStatusCompleted), lo.FromPtr(action.Error))
+
+			created := configsNamed(name)
+			Expect(created).To(HaveLen(1))
+			Expect(lo.FromPtr(created[0].Source)).To(Equal("Playbook"))
+			Expect(lo.FromPtr(created[0].Labels)).To(Equal(types.JSONStringMap{
+				"team":                                    "payments",
+				"mission-control/creator-playbook-id":     playbook.ID.String(),
+				"mission-control/creator-playbook":        playbook.Namespace + "/" + playbook.Name,
+				"mission-control/creator-playbook-run-id": run.ID.String(),
+			}))
+
+			ginkgo.DeferCleanup(bindPlaybook(playbook, playbookGrant{
+				Action: policy.ActionRead,
+				Resource: v1.ScopeTarget{Config: &v1.ScopeConfigSelector{
+					LabelSelector: "mission-control/creator-playbook-id=" + playbook.ID.String(),
+				}},
+			}))
+			var scope models.Scope
+			Expect(DefaultContext.DB().Where("namespace = ? AND targets::text LIKE ?", playbook.Namespace, "%"+playbook.ID.String()+"%").First(&scope).Error).To(Succeed())
+			Expect(scope.Error).To(BeNil())
+
+			attr := &models.ABACAttribute{Config: created[0]}
+			checkCtx, err := membership.ForOperation(DefaultContext, dutyRBAC.MembershipRefs(attr)...)
+			Expect(err).To(Succeed())
+			Expect(rbac.HasPermission(checkCtx, playbook.ID.String(), attr, policy.ActionRead)).To(BeTrue())
+		})
+
+		ginkgo.It("can't set the creator labels itself", func() {
+			spec := v1.PlaybookSpec{Actions: []v1.PlaybookAction{{Name: "plant", Catalog: &v1.CatalogAction{
+				Name: "planted", Type: "Repro::Created",
+				Labels: map[string]string{"mission-control/creator-playbook-id": uuid.NewString()},
+			}}}}
+			Expect(spec.Validate()).To(MatchError(ContainSubstring("mission-control/creator-playbook-id")))
 		})
 	})
 

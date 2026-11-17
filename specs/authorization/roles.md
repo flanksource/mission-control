@@ -384,6 +384,7 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Run playbook P with no resource       | `playbook:run`                              | P               | None                              |
 | Run playbook P on resource X          | `playbook:run`, then `read`                 | P, then X       | X, then none                      |
 | Run playbook P through MCP            | `mcp:run`, then the checks of the run       | P               | None                              |
+| P's catalog action creates a config, as P | `create`                                | All configs     | None                              |
 | Approve or cancel run R               | `playbook:approve` or `playbook:cancel`, then `read` if R had a resource | R's playbook, then R's resource | R's resource, then none |
 | Invoke a plugin operation on config C | `invoke:<plugin>:<operation>`, then `read`  | C, then C       | None                              |
 | Open resource X                       | `read`                                      | X               | None                              |
@@ -401,6 +402,12 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Test connection C                     | `connection:use`                            | C               | None                              |
 
 The plugin's checks during the operation are made as the caller, except looking up a connection, which is checked as the plugin (`identities.md`, Section 3). Approving or cancelling a run checks `read` on its resource for the same reason running it does: the run, its parameters and its results are about that resource, and are only readable with it (Section 3.1).
+
+A playbook's catalog action MUST be refused, and create nothing, unless the playbook may `create` configs. It's checked as the playbook, never as whoever started the run. _Why:_ creating a config is a step of the run, and every step is checked as its playbook (`identities.md`, Section 2), so whoever may run the playbook creates configs through it without `create` of their own. `create` is granted on whole types, so checking the person too would mean granting them `create` on every config just to run one vetted playbook. A playbook that creates configs SHOULD NOT take their type, tags or labels from its parameters: those decide which Scopes the config lands in, so taking them from parameters comes close to granting `create` to whoever may run it.
+
+Every config a catalog action creates has source `Playbook` and the labels `mission-control/creator-playbook-id` (the playbook's id), `mission-control/creator-playbook` (its `<namespace>/<name>`, for display only) and `mission-control/creator-playbook-run-id` (the run's id). They're set on every config the action creates, and a catalog action MUST NOT set any `mission-control/creator-*` label itself. _Why:_ configs have no creator of their own, and these record which playbook and run made one. They record provenance only, and access MUST NOT be granted by them: scrapers copy labels from the systems they scrape, so anyone who can label a scraped resource can put them on a config, and only the source `Playbook`, which no Scope can select, together with them means a playbook made it.
+
+**TODO:** a catalog action that runs on an agent isn't checked (`identities.md`, Section 2).
 
 Each check is made as the subject performing the operation: the caller, or, where there's none, the resource doing the work (`identities.md`).
 
