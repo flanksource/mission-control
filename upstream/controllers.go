@@ -117,7 +117,7 @@ func artifactsPushHandler(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 	artifactID := c.Param("id")
 
-	if err := artifacts.UploadArtifact(ctx, artifactID, c.Request().Body); err != nil {
+	if err := artifacts.UploadArtifact(ctx, ctx.Agent().ID, artifactID, c.Request().Body); err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
 
