@@ -362,8 +362,9 @@ func authorizeWith(object, action string, check func(ctx context.Context, action
 			}
 
 			// If action is unset, extract from HTTP Method
-			if action == "" {
-				action = rbac.GetActionFromHttpMethod(c.Request().Method)
+			reqAction := action
+			if reqAction == "" {
+				reqAction = rbac.GetActionFromHttpMethod(c.Request().Method)
 			}
 
 			ctx := c.Request().Context().(context.Context)
@@ -372,14 +373,14 @@ func authorizeWith(object, action string, check func(ctx context.Context, action
 			if u == nil {
 				return c.String(http.StatusUnauthorized, "Not logged in")
 			}
-			if object == "" || action == "" {
+			if object == "" || reqAction == "" {
 				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
 			}
 
-			if !check(ctx, action) {
+			if !check(ctx, reqAction) {
 				c.Response().Header().Add("X-Rbac-Subject", ctx.Subject())
 				c.Response().Header().Add("X-Rbac-Object", object)
-				c.Response().Header().Add("X-Rbac-Action", action)
+				c.Response().Header().Add("X-Rbac-Action", reqAction)
 
 				return c.String(http.StatusForbidden, ErrAccessDenied.Error())
 			}
