@@ -382,7 +382,7 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Operation                             | Check                                       | Resource        | Target                            |
 | ------------------------------------- | ------------------------------------------- | --------------- | --------------------------------- |
 | Run playbook P with no resource       | `playbook:run`                              | P               | None                              |
-| Run playbook P on resource X          | `playbook:run`, then `read`                 | P, then X       | X, then none                      |
+| Run playbook P on resource X          | `playbook:run`, then `read`, then `read` on each resource a parameter names, as the caller | P, then X, then each such resource | X, then none, then none |
 | Run playbook P through MCP            | `mcp:run`, then the checks of the run       | P               | None                              |
 | Approve or cancel run R               | `playbook:approve` or `playbook:cancel`, then `read` if R had a resource | R's playbook, then R's resource | R's resource, then none |
 | Invoke a plugin operation on config C | `invoke:<plugin>:<operation>`, then `read`  | C, then C       | None                              |
@@ -399,6 +399,12 @@ A check carries only the resources its action's contract can match (Section 2). 
 | List, create or delete service accounts, or issue or revoke their tokens | `service-account:manage` | None | None |
 | Use connection C, e.g. to send        | `connection:use`                            | C               | None                              |
 | Test connection C                     | `connection:use`                            | C               | None                              |
+
+Starting a run checks `read` on each resource its parameters name, whether or not the run has a resource X. Those are the `config`, `configs`, `check` and `component` parameters, including the ones filled in from the playbook's defaults. They're read once, when the run is created, under the caller's row filters (Section 3.1):
+
+- A resource the caller may not read is refused exactly like one that doesn't exist, with the same error. _Why:_ a different error would tell the caller the resource exists (`collection-access.md`, Section 3).
+- A `configs` selector keeps only the configs the caller may read, and the run stores their ids in place of the selector. _Why:_ refusing the run when any match is hidden would tell the caller hidden configs match, and the run's later steps reload its parameters without a check, so it must name exactly what was checked, not what starts matching later.
+- The run's steps reload these resources without a check, as they do X. _Why:_ the caller hands them to P like X, so P needs no grant on them (`identities.md`, Section 2).
 
 The plugin's checks during the operation are made as the caller, except looking up a connection, which is checked as the plugin (`identities.md`, Section 3). Approving or cancelling a run checks `read` on its resource for the same reason running it does: the run, its parameters and its results are about that resource, and are only readable with it (Section 3.1).
 

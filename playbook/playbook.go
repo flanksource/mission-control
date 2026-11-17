@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/membership"
 	"github.com/flanksource/duty/rbac/policy"
@@ -28,6 +30,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/flanksource/incident-commander/playbook/runner"
@@ -130,6 +133,13 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 		return nil, ctx.Oops().Wrapf(err, "failed to sanitize parameters")
 	}
 
+	// The caller's parameters are read as the caller before any template is filled with them
+	params, err := fetchResourceParams(ctx, spec.Parameters, req.Params)
+	if err != nil {
+		return nil, err
+	}
+	req.Params = params
+
 	ctx = ctx.WithObject(playbook, req).WithLoggingValues("req", req)
 	ctx.Infof("running \n%v\n", logger.Pretty(req))
 
@@ -213,6 +223,11 @@ func createPlaybookRun(ctx context.Context, playbook *models.Playbook, req RunPa
 
 	if err := req.validateParams(spec.Parameters); err != nil {
 		return nil, ctx.Oops().Wrap(err)
+	}
+
+	// Defaults are read as the caller too: they see the run's results, which hold the defaults' data
+	if req.Params, err = fetchResourceParams(callerCtx, spec.Parameters, req.Params); err != nil {
+		return nil, err
 	}
 
 	run.Parameters = types.JSONStringMap{}
@@ -307,6 +322,63 @@ func authorizeRunStart(ctx context.Context, run models.PlaybookRun, templateEnv 
 	}
 
 	return nil
+}
+
+// fetchResourceParams reads the resources the parameters name as ctx.Subject(), who starts the run, under their row
+// filters (specs/authorization/roles.md, Section 4.3). A resource they may not read is refused like a missing one.
+// It returns the parameters with each configs selector pinned to the ids of the configs it selected.
+func fetchResourceParams(ctx context.Context, specs []v1.PlaybookParameter, params map[string]string) (map[string]string, error) {
+	// The tables resource parameters are read from. A configs parameter is a selector, resolved to its configs.
+	tables := map[v1.PlaybookParameterType]string{
+		v1.PlaybookParameterTypeConfig:    "config_items",
+		v1.PlaybookParameterTypeCheck:     "checks",
+		v1.PlaybookParameterTypeComponent: "components",
+		v1.PlaybookParameterTypeConfigs:   "config_items",
+	}
+	resources := lo.Filter(specs, func(p v1.PlaybookParameter, _ int) bool {
+		return tables[p.Type] != "" && params[p.Name] != ""
+	})
+	if len(resources) == 0 {
+		return params, nil
+	}
+
+	pinned := maps.Clone(params)
+	err := auth.WithRLS(ctx, func(ctx context.Context) error {
+		for _, p := range resources {
+			value := params[p.Name]
+			if p.Type == v1.PlaybookParameterTypeConfigs {
+				var selector types.ResourceSelector
+				if err := json.Unmarshal([]byte(value), &selector); err != nil {
+					return ctx.Oops().Code(dutyAPI.EINVALID).Errorf("parameter %s: not a valid resource selector", p.Name)
+				}
+
+				configs, err := query.FindConfigsByResourceSelector(ctx, -1, selector)
+				if err != nil {
+					return ctx.Oops().Wrapf(err, "parameter %s", p.Name)
+				}
+
+				ids := lo.Map(configs, func(c models.ConfigItem, _ int) string { return c.ID.String() })
+				selected, err := json.Marshal(types.ResourceSelector{ID: strings.Join(ids, ",")})
+				if err != nil {
+					return ctx.Oops().Wrap(err)
+				}
+				pinned[p.Name] = string(selected)
+				continue
+			}
+
+			var count int64
+			if _, err := uuid.Parse(value); err == nil {
+				if err := ctx.DB().Table(tables[p.Type]).Where("id = ?", value).Count(&count).Error; err != nil {
+					return ctx.Oops().Wrapf(err, "parameter %s", p.Name)
+				}
+			}
+			if count == 0 {
+				return ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("parameter %s: %s %s not found", p.Name, p.Type, value)
+			}
+		}
+		return nil
+	})
+	return pinned, err
 }
 
 // RunAsPlaybook returns a context that checks as the playbook itself, for a run no person started

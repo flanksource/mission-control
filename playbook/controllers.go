@@ -117,11 +117,21 @@ func HandleGetPlaybookParams(c echo.Context) error {
 
 	ctx = ctx.WithNamespace(playbook.Namespace)
 
+	var spec v1.PlaybookSpec
+	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	}
+
+	params, err := fetchResourceParams(ctx, spec.Parameters, req.Params)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
 	dummyRun := models.PlaybookRun{
 		PlaybookID: playbook.ID,
 		Spec:       playbook.Spec,
 		CreatedBy:  lo.ToPtr(ctx.User().ID),
-		Parameters: types.JSONStringMap(req.Params),
+		Parameters: types.JSONStringMap(params),
 	}
 	if req.ComponentID != nil {
 		dummyRun.ComponentID = req.ComponentID
@@ -161,11 +171,6 @@ func HandleGetPlaybookParams(c echo.Context) error {
 			Code(dutyAPI.EFORBIDDEN).
 			With("permission", policy.ActionPlaybookRun, "objects", attr).
 			Wrap(fmt.Errorf("access denied to subject(%s): cannot run playbook on this resource", ctx.Subject())))
-	}
-
-	var spec v1.PlaybookSpec
-	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
 	if err := runner.CheckPlaybookFilter(ctx, spec, env); err != nil {

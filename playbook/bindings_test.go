@@ -13,6 +13,7 @@ import (
 	k8sTypes "k8s.io/apimachinery/pkg/types"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 )
 
@@ -38,11 +39,24 @@ func runOnItself(pb models.Playbook, target *v1.ScopeTarget) playbookGrant {
 // It returns a function that removes them.
 func bindPlaybook(pb models.Playbook, grants ...playbookGrant) func() {
 	ginkgo.GinkgoHelper()
+	return bindSubjects(pb.Namespace, v1.RoleBindingSubjects{PermissionGroupSubjects: v1.PermissionGroupSubjects{
+		Playbooks: []v1.PermissionGroupSelector{{Name: pb.Name, Namespace: pb.Namespace}},
+	}}, grants...)
+}
+
+// bindPerson binds the person, by email, the way bindPlaybook binds a playbook, in the default namespace.
+func bindPerson(email string, grants ...playbookGrant) func() {
+	ginkgo.GinkgoHelper()
+	return bindSubjects("default", v1.RoleBindingSubjects{PermissionGroupSubjects: v1.PermissionGroupSubjects{People: []string{email}}}, grants...)
+}
+
+func bindSubjects(namespace string, subjects v1.RoleBindingSubjects, grants ...playbookGrant) func() {
+	ginkgo.GinkgoHelper()
 
 	name := fmt.Sprintf("pb-%s", uuid.NewString()[:8])
 	uid := func() k8sTypes.UID { return k8sTypes.UID(uuid.NewString()) }
 	meta := func(n string) metav1.ObjectMeta {
-		return metav1.ObjectMeta{Name: n, Namespace: pb.Namespace, UID: uid()}
+		return metav1.ObjectMeta{Name: n, Namespace: namespace, UID: uid()}
 	}
 	persistScope := func(n string, target v1.ScopeTarget) *v1.ScopeReference {
 		Expect(db.PersistScopeFromCRD(DefaultContext, &v1.Scope{
@@ -68,19 +82,17 @@ func bindPlaybook(pb models.Playbook, grants ...playbookGrant) func() {
 	Expect(db.PersistRoleFromCRD(DefaultContext, &v1.Role{ObjectMeta: meta(name), Spec: v1.RoleSpec{Rules: rules}})).To(Succeed())
 	Expect(db.PersistRoleBindingFromCRD(DefaultContext, &v1.RoleBinding{
 		ObjectMeta: meta(name),
-		Spec: v1.RoleBindingSpec{Role: name, Subjects: v1.RoleBindingSubjects{
-			PermissionGroupSubjects: v1.PermissionGroupSubjects{
-				Playbooks: []v1.PermissionGroupSelector{{Name: pb.Name, Namespace: pb.Namespace}},
-			},
-		}},
+		Spec:       v1.RoleBindingSpec{Role: name, Subjects: subjects},
 	})).To(Succeed())
 	Expect(rbac.ReloadPolicy()).To(Succeed())
+	auth.FlushTokenCache()
 
 	return func() {
 		ginkgo.GinkgoHelper()
-		Expect(DefaultContext.DB().Where("namespace = ? AND name = ?", pb.Namespace, name).Delete(&models.RoleBinding{}).Error).To(Succeed())
-		Expect(DefaultContext.DB().Where("namespace = ? AND name = ?", pb.Namespace, name).Delete(&models.Role{}).Error).To(Succeed())
-		Expect(DefaultContext.DB().Where("namespace = ? AND name LIKE ?", pb.Namespace, name+"-%").Delete(&models.Scope{}).Error).To(Succeed())
+		Expect(DefaultContext.DB().Where("namespace = ? AND name = ?", namespace, name).Delete(&models.RoleBinding{}).Error).To(Succeed())
+		Expect(DefaultContext.DB().Where("namespace = ? AND name = ?", namespace, name).Delete(&models.Role{}).Error).To(Succeed())
+		Expect(DefaultContext.DB().Where("namespace = ? AND name LIKE ?", namespace, name+"-%").Delete(&models.Scope{}).Error).To(Succeed())
 		Expect(rbac.ReloadPolicy()).To(Succeed())
+		auth.FlushTokenCache()
 	}
 }

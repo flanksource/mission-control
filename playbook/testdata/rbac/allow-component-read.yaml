@@ -1,0 +1,33 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: john-component-read
+  namespace: default
+spec:
+  targets:
+    - component:
+        name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Role
+metadata:
+  name: john-component-read
+  namespace: default
+spec:
+  description: Grant John read permissions to components, e.g. the component parameter of default/action-params
+  rules:
+    - name: read-components
+      action: read
+      resource:
+        scopeRef: john-component-read
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: RoleBinding
+metadata:
+  name: john-component-read
+  namespace: default
+spec:
+  role: john-component-read
+  subjects:
+    people:
+      - john@doe.com
