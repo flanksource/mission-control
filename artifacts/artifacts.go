@@ -11,9 +11,9 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/utils"
 	dutyAPI "github.com/flanksource/duty/api"
-	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/upstream"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
@@ -29,9 +29,14 @@ type ArtifactContent struct {
 	Content  []byte `json:"content"`
 }
 
+// GetArtifactFS returns the artifact store for the server to write to, e.g. the content an agent uploads.
+// The caller needs no permission on the artifact connection, since it never sees it: an agent may push its
+// artifacts without any Role (specs/authorization/identities.md, Section 5).
 // TODO: Memoize this
 func GetArtifactFS(ctx context.Context) (fs.FilesystemRW, *models.Connection, error) {
-	return getArtifactFS(ctx, pkgConnection.Get)
+	return getArtifactFS(ctx, func(ctx context.Context, ref string) (*models.Connection, error) {
+		return ctx.HydrateConnectionByURL(ref)
+	})
 }
 
 // getArtifactFSForUse returns the artifact store to write or read a playbook run's artifacts with, as the playbook.
@@ -140,19 +145,26 @@ func GetArtifactContents(ctx context.Context, actionIDs ...string) ([]ArtifactCo
 	return contents, nil
 }
 
-// UploadArtifact Uploads the given artifact data to the default artifact store
-func UploadArtifact(ctx context.Context, artifactID string, reader io.ReadCloser) error {
-	if _, err := uuid.Parse(artifactID); err != nil {
+// UploadArtifact uploads the content of the agent's artifact to the default artifact store.
+func UploadArtifact(ctx context.Context, agentID uuid.UUID, artifactID string, reader io.ReadCloser) error {
+	id, err := uuid.Parse(artifactID)
+	if err != nil {
 		return dutyAPI.Errorf(dutyAPI.EINVALID, "(%s) is not a valid uuid", artifactID)
 	}
 
 	var artifact models.Artifact
-	if err := ctx.DB().Where("id = ?", artifactID).Find(&artifact).Error; err != nil {
+	if err := ctx.DB().Where("id = ?", id).First(&artifact).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "artifact(%s) was not found", artifactID)
 		}
 
 		return fmt.Errorf("failed to get artifact: %w", err)
+	}
+
+	if owned, err := upstream.IsOwnedBy(ctx, "artifacts", agentID, id); err != nil {
+		return err
+	} else if !owned {
+		return dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "artifact(%s) belongs to another agent", artifactID)
 	}
 
 	fs, _, err := GetArtifactFS(ctx)
