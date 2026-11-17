@@ -331,23 +331,29 @@ func CanSilenceViaFilter(ctx context.Context, n []models.NotificationSendHistory
 	return silenced, nil
 }
 
+// GetResourceAsMapFromEvent reads the config, component, check or canary the event is about through ctx.DB(),
+// so it's subject to ctx's row-level security. It returns nil when the resource doesn't exist or isn't visible.
 func GetResourceAsMapFromEvent(ctx context.Context, event, id string) (map[string]any, error) {
-	var c gomplate.AsMapper
-	var err error
+	var resource gomplate.AsMapper
+	q := ctx.DB().Where("id = ?", id)
 	switch strings.Split(event, ".")[0] {
 	case "config":
-		c, err = query.ConfigItemFromCache(ctx, id)
+		resource = &models.ConfigItem{}
+		q = q.Where("deleted_at IS NULL")
 	case "component":
-		var g models.Component
-		g, err = query.ComponentFromCache(ctx, id, true)
-		c = &g
+		resource = &models.Component{}
 	case "check":
-		c, err = query.FindCachedCheck(ctx, id)
+		resource = &models.Check{}
 	case "canary":
-		c, err = query.FindCachedCanary(ctx, id)
+		resource = &models.Canary{}
+	default:
+		return nil, nil
 	}
-	if c == nil || err != nil {
+	if err := q.First(resource).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
 		return nil, err
 	}
-	return c.AsMap("spec", "config"), nil
+	return resource.AsMap("spec", "config"), nil
 }

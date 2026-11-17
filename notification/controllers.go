@@ -16,6 +16,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
@@ -112,7 +113,7 @@ func GetNotificationSendHistoryDetail(c echo.Context) error {
 
 type NotificationSilencePreviewItem struct {
 	models.NotificationSendHistory `json:",inline"`
-	Resource                       map[string]any `json:"resource"`
+	Resource                       map[string]any `json:"resource,omitempty"`
 	BodyMarkdown                   string         `json:"body_markdown,omitempty"`
 }
 
@@ -153,19 +154,26 @@ func NotificationSilencePreview(c echo.Context) error {
 		return api.WriteError(c, err)
 	}
 
+	// The history is listed whatever resource it's about. The resource is shown only if the caller reads it.
 	var resp []NotificationSilencePreviewItem
-	for _, s := range silenced {
-		rMap, err := GetResourceAsMapFromEvent(ctx, s.SourceEvent, s.ResourceID.String())
-		if err != nil {
-			return api.WriteError(c, err)
-		}
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		for _, s := range silenced {
+			rMap, err := GetResourceAsMapFromEvent(rlsCtx, s.SourceEvent, s.ResourceID.String())
+			if err != nil {
+				return err
+			}
 
-		item := NotificationSilencePreviewItem{
-			NotificationSendHistory: s,
-			Resource:                rMap,
+			item := NotificationSilencePreviewItem{
+				NotificationSendHistory: s,
+				Resource:                rMap,
+			}
+			item.BodyMarkdown = RenderBodyMarkdown(s)
+			resp = append(resp, item)
 		}
-		item.BodyMarkdown = RenderBodyMarkdown(s)
-		resp = append(resp, item)
+		return nil
+	})
+	if err != nil {
+		return api.WriteError(c, err)
 	}
 
 	return c.JSON(200, resp)
