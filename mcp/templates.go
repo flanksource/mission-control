@@ -49,60 +49,6 @@ func runTemplateHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 		args.Env = map[string]any{}
 	}
 
-	changeID := strings.TrimSpace(args.ChangeID)
-	configID := strings.TrimSpace(args.ConfigID)
-	checkID := strings.TrimSpace(args.CheckID)
-	if changeID != "" || configID != "" || checkID != "" {
-		err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
-			if changeID != "" {
-				if _, err := uuid.Parse(changeID); err != nil {
-					return err
-				}
-				var change models.CatalogChange
-				if err := rlsCtx.DB().Where("id = ?", changeID).First(&change).Error; err != nil {
-					if errors.Is(err, gorm.ErrRecordNotFound) {
-						return fmt.Errorf("change[%s] not found", changeID)
-					}
-					return err
-				}
-				args.Env["change"] = change.AsMap()
-			}
-
-			if configID != "" {
-				if _, err := uuid.Parse(configID); err != nil {
-					return err
-				}
-				config, err := findVisible[models.ConfigItem](rlsCtx, "id", configID)
-				if err != nil {
-					return err
-				}
-				if config == nil {
-					return fmt.Errorf("config item[%s] not found", configID)
-				}
-				args.Env["config"] = config.AsMap()
-			}
-
-			if checkID != "" {
-				if _, err := uuid.Parse(checkID); err != nil {
-					return err
-				}
-				check, err := findVisible[models.Check](rlsCtx, "id", checkID)
-				if err != nil {
-					return err
-				}
-				if check == nil {
-					return fmt.Errorf("check[%s] not found", checkID)
-				}
-				args.Env["check"] = check.AsMap()
-			}
-
-			return nil
-		})
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-	}
-
 	maxTemplateBytes := ctx.Properties().Int("mcp.template.max-length", defaultMaxTemplateBytes)
 	if maxTemplateBytes <= 0 {
 		maxTemplateBytes = defaultMaxTemplateBytes
@@ -132,10 +78,57 @@ func runTemplateHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 		templateTimeout = defaultTemplateTimeout
 	}
 
-	// The template's catalog helpers read under the caller's row filters
+	changeID := strings.TrimSpace(args.ChangeID)
+	configID := strings.TrimSpace(args.ConfigID)
+	checkID := strings.TrimSpace(args.CheckID)
+
+	// The template runs in the same transaction as the lookups, so its catalog helpers read under the caller's
+	// row filters too.
 	var res string
 	var timedOut bool
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		if changeID != "" {
+			if _, err := uuid.Parse(changeID); err != nil {
+				return err
+			}
+			var change models.CatalogChange
+			if err := rlsCtx.DB().Where("id = ?", changeID).First(&change).Error; err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					return fmt.Errorf("change[%s] not found", changeID)
+				}
+				return err
+			}
+			args.Env["change"] = change.AsMap()
+		}
+
+		if configID != "" {
+			if _, err := uuid.Parse(configID); err != nil {
+				return err
+			}
+			config, err := findVisible[models.ConfigItem](rlsCtx, "id", configID)
+			if err != nil {
+				return err
+			}
+			if config == nil {
+				return fmt.Errorf("config item[%s] not found", configID)
+			}
+			args.Env["config"] = config.AsMap()
+		}
+
+		if checkID != "" {
+			if _, err := uuid.Parse(checkID); err != nil {
+				return err
+			}
+			check, err := findVisible[models.Check](rlsCtx, "id", checkID)
+			if err != nil {
+				return err
+			}
+			if check == nil {
+				return fmt.Errorf("check[%s] not found", checkID)
+			}
+			args.Env["check"] = check.AsMap()
+		}
+
 		templateCtx, cancel := rlsCtx.WithTimeout(templateTimeout)
 		defer cancel()
 
