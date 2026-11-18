@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/utils"
 	dutyAPI "github.com/flanksource/duty/api"
+	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
@@ -29,11 +30,16 @@ type ArtifactContent struct {
 	Content  []byte `json:"content"`
 }
 
-// GetArtifactFS returns the artifact store for the server to write to, e.g. the content an agent uploads.
-// The caller needs no permission on the artifact connection, since it never sees it: an agent may push its
-// artifacts without any Role (specs/authorization/identities.md, Section 5).
 // TODO: Memoize this
 func GetArtifactFS(ctx context.Context) (fs.FilesystemRW, *models.Connection, error) {
+	return getArtifactFS(ctx, pkgConnection.Get)
+}
+
+// dangerouslyGetArtifactFSBypassingAuthz returns the artifact store without checking any permission of
+// ctx.Subject() on the artifact connection. Only use it where the server itself writes on behalf of a caller that
+// can't be granted one, e.g. an agent uploading its own artifact's content: an agent can hold no Role
+// (specs/authorization/identities.md, Section 5) and never sees the connection. Authorize the request some other way first.
+func dangerouslyGetArtifactFSBypassingAuthz(ctx context.Context) (fs.FilesystemRW, *models.Connection, error) {
 	return getArtifactFS(ctx, func(ctx context.Context, ref string) (*models.Connection, error) {
 		return ctx.HydrateConnectionByURL(ref)
 	})
@@ -167,7 +173,7 @@ func UploadArtifact(ctx context.Context, agentID uuid.UUID, artifactID string, r
 		return dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "artifact(%s) belongs to another agent", artifactID)
 	}
 
-	fs, _, err := GetArtifactFS(ctx)
+	fs, _, err := dangerouslyGetArtifactFSBypassingAuthz(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get artifact fs: %w", err)
 	}
