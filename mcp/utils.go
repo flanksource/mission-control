@@ -3,6 +3,7 @@ package mcp
 import (
 	gocontext "context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -10,8 +11,11 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
+	"gorm.io/gorm"
 )
 
 func getDutyCtx(ctx gocontext.Context) (context.Context, error) {
@@ -27,6 +31,29 @@ func getDutyCtx(ctx gocontext.Context) (context.Context, error) {
 	}
 
 	return context.New(), fmt.Errorf("no duty ctx")
+}
+
+// findVisible reads the row whose field equals value through ctx.DB(), so under auth.WithRLS it finds only a row the
+// caller can read. It returns nil when the row doesn't exist or the caller can't read it.
+// duty's cached getters aren't used here: a cache hit returns the row without the caller's row filters.
+func findVisible[T any](ctx context.Context, field, value string) (*T, error) {
+	var row T
+	if err := ctx.DB().Where(field+" = ?", value).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &row, nil
+}
+
+// findVisiblePlaybook finds a playbook by id or name, as query.FindPlaybook does, under the caller's row filters.
+func findVisiblePlaybook(ctx context.Context, identifier string) (*models.Playbook, error) {
+	field := "name"
+	if _, err := uuid.Parse(identifier); err == nil {
+		field = "id"
+	}
+	return findVisible[models.Playbook](ctx, field, identifier)
 }
 
 // fixMCPToolNameIfRequired removes invalid chars that do not

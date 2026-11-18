@@ -9,7 +9,6 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac/membership"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
@@ -162,7 +161,7 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 
 	var pb *models.Playbook
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
-		pb, err = query.FindPlaybook(rlsCtx, playbookID)
+		pb, err = findVisiblePlaybook(rlsCtx, playbookID)
 		if err != nil {
 			return err
 		} else if pb == nil {
@@ -258,7 +257,7 @@ func playbookResourceHandler(goctx gocontext.Context, req mcp.ReadResourceReques
 
 	var pb *models.Playbook
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
-		pb, err = query.FindPlaybook(rlsCtx, id)
+		pb, err = findVisiblePlaybook(rlsCtx, id)
 		return err
 	})
 

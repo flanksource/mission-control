@@ -97,7 +97,7 @@ func describeConfigHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 	var config *models.ConfigItem
 	var availableTools []string
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
-		config, err = query.GetCachedConfig(rlsCtx, rawID)
+		config, err = findVisible[models.ConfigItem](rlsCtx, "id", rawID)
 		if err != nil || config == nil {
 			return err
 		}
@@ -301,7 +301,7 @@ func ConfigItemResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 
 	var ci *models.ConfigItem
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
-		ci, err = query.GetCachedConfig(rlsCtx, id)
+		ci, err = findVisible[models.ConfigItem](rlsCtx, "id", id)
 		return err
 	})
 
