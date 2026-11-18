@@ -9,7 +9,6 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/query"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -73,7 +72,7 @@ func runTemplateHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 				if _, err := uuid.Parse(configID); err != nil {
 					return err
 				}
-				config, err := query.GetCachedConfig(rlsCtx, configID)
+				config, err := findVisible[models.ConfigItem](rlsCtx, "id", configID)
 				if err != nil {
 					return err
 				}
@@ -87,7 +86,7 @@ func runTemplateHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 				if _, err := uuid.Parse(checkID); err != nil {
 					return err
 				}
-				check, err := query.FindCachedCheck(rlsCtx, checkID)
+				check, err := findVisible[models.Check](rlsCtx, "id", checkID)
 				if err != nil {
 					return err
 				}
@@ -132,14 +131,23 @@ func runTemplateHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 	if templateTimeout <= 0 {
 		templateTimeout = defaultTemplateTimeout
 	}
-	templateCtx, cancel := ctx.WithTimeout(templateTimeout)
-	defer cancel()
 
-	res, err := templateCtx.RunTemplate(template, args.Env)
+	// The template's catalog helpers read under the caller's row filters
+	var res string
+	var timedOut bool
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		templateCtx, cancel := rlsCtx.WithTimeout(templateTimeout)
+		defer cancel()
+
+		var err error
+		res, err = templateCtx.RunTemplate(template, args.Env)
+		timedOut = errors.Is(err, gocontext.DeadlineExceeded)
+		return err
+	})
+	if timedOut {
+		return mcp.NewToolResultError(fmt.Sprintf("template execution timed out after %s", templateTimeout)), nil
+	}
 	if err != nil {
-		if errors.Is(err, gocontext.DeadlineExceeded) {
-			return mcp.NewToolResultError(fmt.Sprintf("template execution timed out after %s", templateTimeout)), nil
-		}
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
