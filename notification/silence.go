@@ -72,9 +72,10 @@ func (t *SilenceSaveRequest) Validate() error {
 	return nil
 }
 
-func SaveNotificationSilence(ctx context.Context, req SilenceSaveRequest) error {
+// SaveNotificationSilence validates and stores the silence, and returns it as stored.
+func SaveNotificationSilence(ctx context.Context, req SilenceSaveRequest) (*models.NotificationSilence, error) {
 	if err := req.Validate(); err != nil {
-		return api.Errorf(api.EINVALID, "%s", err)
+		return nil, api.Errorf(api.EINVALID, "%s", err)
 	}
 
 	silence := models.NotificationSilence{
@@ -93,7 +94,7 @@ func SaveNotificationSilence(ctx context.Context, req SilenceSaveRequest) error 
 	if len(req.Selectors) > 0 {
 		selectorsRaw, err := json.Marshal(req.Selectors)
 		if err != nil {
-			return api.Errorf(api.EINVALID, "%s", err.Error())
+			return nil, api.Errorf(api.EINVALID, "%s", err.Error())
 		}
 		silence.Selectors = selectorsRaw
 	}
@@ -102,7 +103,10 @@ func SaveNotificationSilence(ctx context.Context, req SilenceSaveRequest) error 
 		silence.CreatedBy = lo.ToPtr(ctx.User().ID)
 	}
 
-	return dutydb.ErrorDetails(ctx.DB().Save(&silence).Error)
+	if err := ctx.DB().Save(&silence).Error; err != nil {
+		return nil, dutydb.ErrorDetails(err)
+	}
+	return &silence, nil
 }
 
 func PersistNotificationSilenceFromCRD(ctx context.Context, obj *v1.NotificationSilence) error {
@@ -124,7 +128,8 @@ func PersistNotificationSilenceFromCRD(ctx context.Context, obj *v1.Notification
 		Recursive:   obj.Spec.Recursive,
 	}
 
-	return SaveNotificationSilence(ctx, request)
+	_, err = SaveNotificationSilence(ctx, request)
+	return err
 }
 
 func DeleteStaleNotificationSilence(ctx context.Context, newer *v1.NotificationSilence) error {
