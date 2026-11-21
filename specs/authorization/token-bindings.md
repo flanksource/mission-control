@@ -10,12 +10,15 @@ A token may do what its owner may do, and only what a rule of one of its binding
 
 ## 2. Who may write it
 
-A person MAY create the RoleBindings of their own tokens without any grant on RoleBindings, and a subject with `service-account:manage` those of the service account tokens they issue (`service-accounts.md`, Section 4). These are the only ways to write a RoleBinding without a grant on RoleBindings (`overview.md`, "Access").
+A person MAY write the RoleBindings of their own tokens without any grant on RoleBindings, and a subject with `service-account:manage` those of any service account's tokens (`service-accounts.md`, Section 4). These are the only ways to write a RoleBinding without a grant on RoleBindings (`overview.md`, "Access").
 
-- **Only when the token is created.** A token's bindings MUST be created with the token, one per Role it's created with, in the same transaction: the token and all of its bindings are created, or none of them is (`access-tokens.md`, Section 2). Nothing else MAY create them.
-- **Never changed.** A token's bindings MUST NOT be changed, and none MAY be added or removed, while the token exists. To change what a token may do, a new token is created: by its owner, or for a service account, by a subject with `service-account:manage`. _Why:_ a token's limit is fixed when it's handed out, so whoever holds it can rely on it, and no endpoint can lift it later.
+- **Created with the token.** A token's bindings MUST be created with the token, one per Role it's created with, in the same transaction: the token and all of its bindings are created, or none of them is (`access-tokens.md`, Section 2).
+- **Added and removed while it exists.** While the token exists, whoever may write its bindings MAY bind it to another Role, or remove one of its bindings. Nothing else MAY create or delete a token binding. _Why:_ a token's limit is its owner's choice, which they could always change by creating a token with other Roles and deleting the old one. Changing it in place takes nothing away from that, and spares reconfiguring every client that holds the token.
+- **Never edited.** A binding's Role and subject MUST NOT change: to move a token to another Role, a binding is added and the old one removed. Binding a token to a Role it's already bound to changes nothing. _Why:_ a binding's name comes from its token and Role (Section 4), so one binding always names one Role of one token.
+- **The last one MAY be removed.** A token with no bindings left can do nothing until one is added (`access-tokens.md`, Section 2). _Why:_ that's already the state of a token whose only Role is deleted, and refusing would make its owner bind a placeholder Role just to remove the last real one.
+- **In effect at once.** A change MUST apply to the next request made with the token. _Why:_ removing a Role is how a token in the wrong hands is narrowed without breaking every client that holds it, so it can't wait for a cache to expire.
 - **Not as a custom resource, nor through the RoleBinding API.** Neither has a field that selects a token, so neither can write a token binding. Token bindings live in a reserved namespace (Section 4) where neither MAY write anything, so neither can change, delete or replace one either.
-- **One token, the caller's own or one they issue.** A token binding MUST select exactly one token, and no other subject: one the caller owns and created, or one of a service account that the caller issues. It MUST NOT be written through a token, nor for a token of an agent or of another person.
+- **One token, the caller's own or a service account's.** A token binding MUST select exactly one token, and no other subject: one the caller owns and created, or one of a service account, written by a subject with `service-account:manage`. It MUST NOT be written or removed through a token, nor for a token of an agent or of another person. _Why not through a token:_ a token could otherwise bind itself to `admin` and lift its own limit (`access-tokens.md`, Section 2, "Tokens don't manage tokens").
 - **Never a deny.** A token binding MUST NOT set `deny`; one stored with it is invalid and limits nothing, so the token may do nothing. _Why:_ a token binding narrows by what it allows, and the owner's own deny bindings already apply to every request made with the token (`rolebindings.md`, Section 5.3).
 - **Any Role.** A token MAY be bound to any Role, named by namespace and name, whether or not its owner may read it. _Why:_ a token binding only limits, so binding a Role takes no grant on it, as binding one to a person takes none on the person.
 - **Deleted with the token.** A token's bindings MUST be deleted in the same transaction as the token, however it's deleted: by its owner, by a subject with `service-account:manage`, with its service account, or when it expires.
@@ -28,7 +31,8 @@ _Why not a custom resource:_ a binding from Git is applied by whoever deploys it
 
 - **With the token.** A person listing their tokens sees each token's bindings, without needing to read RoleBindings: the Role each names, and whether it's `Ready`, with the reason. The binding's validation message is shown only when the person may read its Role. _Why:_ a Role's validation message names its rules, actions and Scopes, e.g. "rule run-ops: scope platform/prod-payments not found", which a person who can't read the Role mustn't learn. Whether a binding is `Ready`, and the reason, do reveal whether a Role of that name exists and is valid; a Role's name is accepted as discoverable, its rules aren't. A subject listing a service account's tokens sees their bindings the same way (`service-accounts.md`, Section 4).
 - **Not with other RoleBindings.** The Role Bindings page MUST NOT show token bindings, and the RoleBinding API MUST NOT list them unless asked to include them, e.g. `include=access-tokens`. Including them takes the same `read` on RoleBindings as listing any other binding, and shows each token's id and owner. _Why:_ a token binding grants nothing, so among the bindings that decide who has access it's noise. Including them on request keeps them auditable.
-- **Picking Roles.** When creating a token, a person picks from the Roles they may read, and MAY type any other as `namespace/name`.
+- **Changed with the token.** A token's details let whoever may write its bindings add a Role or remove one. The Role Bindings page isn't where they change, for the same reason it doesn't show them.
+- **Picking Roles.** When creating a token or adding a Role to one, a person picks from the Roles they may read, and MAY type any other as `namespace/name`.
 
 ## 4. How it's stored
 
@@ -39,7 +43,7 @@ _Why not a custom resource:_ a binding from Git is applied by whoever deploys it
 | `role`       | `<role namespace>/<role name>` |
 | `subjects`   | `accessToken: <token id>`, and nothing else |
 | `source`     | `AccessToken` |
-| `created_by` | The token's owner, or for a service account's token, whoever issued it |
+| `created_by` | Whoever wrote the binding: the token's owner, or for a service account's token, the subject with `service-account:manage` who issued the token or added the Role |
 
 - **By id.** The token is selected by its id, so a token deleted and created again with the same name isn't selected. _Why:_ the binding belongs to that one credential.
 - **Found by its subject.** A token's bindings are those whose `subjects.accessToken` is its id. The name only has to be unique in the namespace and short enough for a Kubernetes name: the token id and a hash of the Role's reference are both fixed length.
@@ -48,8 +52,8 @@ _Why not a custom resource:_ a binding from Git is applied by whoever deploys it
 
 _Why a RoleBinding:_ a token's limit is a Role bound to the token, which is what a RoleBinding is. Storing it as one keeps a single way to bind a Role, compiled, reported and narrowed the same way, instead of a second list of Roles on the token.
 
-_Why no link table or column:_ a token's bindings are only ever written with it and deleted with it, in one transaction, so a lookup by subject is enough. A foreign key would only add a guarantee for tokens deleted outside Mission Control, whose leftover bindings select nothing.
+_Why no link table or column:_ a token's bindings are only ever written for it by whoever may write them, and deleted with it in one transaction, so a lookup by subject is enough. A foreign key would only add a guarantee for tokens deleted outside Mission Control, whose leftover bindings select nothing.
 
 ## 5. Not covered yet
 
-- **Bindings beyond the owner's access. TODO.** A token can be bound to a Role with rules its owner doesn't hold. Those rules do nothing today, but take effect for the token as soon as its owner gains matching grants. Nothing warns about this, at creation or later. A warning needs to tell whether a Role's rules are within the owner's grants for any resources, not only those that exist today, and that is left for a later design.
+- **Bindings beyond the owner's access. TODO.** A token can be bound to a Role with rules its owner doesn't hold. Those rules do nothing today, but take effect for the token as soon as its owner gains matching grants. Nothing warns about this, when the Role is bound or later. A warning needs to tell whether a Role's rules are within the owner's grants for any resources, not only those that exist today, and that is left for a later design.
