@@ -81,6 +81,8 @@ The `/service-accounts` routes all take `service-account:manage`, and refuse a r
 | `GET /service-accounts/:name/tokens`                  | Lists its tokens, with their Roles, never the token         |
 | `POST /service-accounts/:name/tokens`                 | Issues a token: `name`, `expiry`, `autoRenew`, `roles`      |
 | `DELETE /service-accounts/:name/tokens/:id`           | Revokes a token                                             |
+| `POST /service-accounts/:name/tokens/:id/roles`       | Adds a Role to a token: `namespace`, `name` (`design/tokens.md`) |
+| `DELETE /service-accounts/:name/tokens/:id/roles/:namespace/:name` | Removes a Role from a token (`design/tokens.md`) |
 
 Issuing a token shares the code path of a person's token: one transaction creating the token and its bindings, then a policy reload before the response, so it's usable as soon as it's returned (`design/tokens.md`).
 
@@ -125,7 +127,7 @@ _Why a route to create one:_ under basic authentication signing in doesn't creat
 - **Settings → Service Accounts**, shown to subjects with `service-account:manage`:
   - A list with **Create**, taking a name, and each account's creation time.
   - An account page listing the RoleBindings that name it, to those who may read RoleBindings, read-only, linking to the RoleBindings page to edit them.
-  - A **Tokens** tab to issue a token (name, expiry, auto-renew, Roles), shown once, and to revoke tokens.
+  - A **Tokens** tab to issue a token (name, expiry, auto-renew, Roles), shown once, to add or remove a token's Roles, and to revoke tokens.
   - **Download kubeconfig**, which issues a proxy token for the account, with the expiry and auto-renew chosen there. The page warns when the account holds neither `kubernetes-proxy:read` nor `kubernetes-proxy:write`, since such a kubeconfig is refused on every request. It reads that from the account, so it needs no `access:review`.
 
 The UI never acts as a service account: an admin, signed in as themselves, manages the account and its credentials, as GCP's and AWS's consoles do for service account keys.

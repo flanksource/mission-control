@@ -53,8 +53,6 @@ For `/auth/create_token`:
 
 Each of a token's RoleBindings is compiled like any other binding, under its own principal, and `token:<id>` is grouped into it. The token API reloads the policy from the database after the token's transaction commits and before it returns, so the token works as soon as it's returned. Policy reloads MUST run one at a time, each holding one lock from reading the database to swapping in the new policy. _Why:_ casbin reads the database under a read lock and swaps under the write lock, so two reloads can read at once and the one that read before the commit can swap last, dropping the token. With reloads serialized, any reload that swaps after the token API's reload also read after it, so after the commit. A token created by the `auth token` command, in another process, is picked up by the reload its commit notifies, which serialization keeps from being overwritten the same way. Mission Control runs as one replica, so a lock in the process is enough.
 
-Adding a Role to a token or removing one goes through the token API too, never the RoleBinding API, with the same owner checks as creating the token. It writes or deletes that one binding, reloads the policy the same way before it returns, and drops what's cached for the token (below), so the change applies to the token's next request. Adding a Role the token is already bound to finds the binding by its name and writes nothing.
-
 Every token binding to a large Role adds a copy of its rules, e.g. roughly 80 to 160 policies for `admin`, and casbin walks every policy on each check. That's accepted at the expected number of tokens. Sharing one copy of a Role's rules between bindings without a constraint would remove the cost, and is left for later.
 
 `token:<id>` is never the subject of a request, gets no implicit grants (the `everyone` role a subject joins on its first check), and is refused as the subject of an access review or access search. A stored casbin row for it is ignored when the policy loads.
@@ -62,6 +60,24 @@ Every token binding to a large Role adds a copy of its rules, e.g. roughly 80 to
 _Why a casbin subject per token:_ its bindings are compiled the same way as every other binding, so a token's limit needs no evaluator of its own.
 
 Since the owner's sessions and tokens share a subject, caches of per-subject results (RLS payloads, access summaries, PostgREST JWTs) are also keyed by the token.
+
+#### Changing a token's Roles
+
+A token's Roles could be changed one at a time, or by replacing the whole set. We change them one at a time, because two changes made at once then both land: adding and removing different Roles commute, and repeating one is a no-op. Replacing the whole set was rejected because two people editing one token, e.g. two holders of `service-account:manage`, would each overwrite the other's change.
+
+| Route | Change |
+| ----- | ------ |
+| `POST /auth/token/:id/roles` | Binds the caller's own token to a Role: `namespace`, `name` |
+| `DELETE /auth/token/:id/roles/:namespace/:name` | Removes the binding of the caller's own token to that Role |
+| `POST /service-accounts/:name/tokens/:id/roles` | The same for a service account's token, with `service-account:manage` |
+| `DELETE /service-accounts/:name/tokens/:id/roles/:namespace/:name` | The same for a service account's token, with `service-account:manage` |
+
+Each goes through the token API, never the RoleBinding API, and refuses a request made with an access token:
+
+1. In one transaction, the token's row is read and locked. It MUST be the caller's own and created by them, as deleting it checks, or have the service account named in the route as its person, and it MUST NOT have expired. Otherwise the request is refused with `404`. Deleting a token MUST lock its row the same way before deleting its bindings. _Why the lock:_ an add racing a delete would otherwise leave a binding for a token that's gone, which no delete would clear.
+2. Adding writes one binding, with `created_by` set to the caller. A Role the token is already bound to by a binding that isn't deleted writes nothing, and so does a unique-name conflict with a binding added at the same moment. Removing soft-deletes the one binding, as deleting the token does, and a Role the token isn't bound to deletes nothing. A removed Role added again gets a new binding, so the name is unique only among bindings that aren't deleted.
+3. After the commit, the policy is reloaded as creating a token reloads it, but a failed reload fails the request with `500`, saying the change is stored and may not be in effect yet. _Why:_ until a reload succeeds, casbin keeps the token grouped into a removed binding, and a caller told it was narrowed would rely on that.
+4. The per-token caches of RLS payloads, access summaries and PostgREST JWTs are dropped, and any result being built for the token is kept from being cached, as invalidating a subject's cache does. _Why:_ a request made with the token that read the old bindings before the change committed would otherwise cache them for as long as the cache lives. Deleting a token doesn't need this, since the deny list of deleted tokens refuses it outright, but removing a Role has no such backstop.
 
 ### Authentication
 
