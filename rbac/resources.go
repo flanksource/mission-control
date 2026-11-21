@@ -1,9 +1,11 @@
 package rbac
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"maps"
 	"net/http"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
+	"go.opentelemetry.io/otel/trace"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/validation"
@@ -211,56 +214,97 @@ func (k managedKind) load(ctx context.Context, id uuid.UUID) (any, error) {
 func (k managedKind) list(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
+	list, err := k.listObjects(ctx, c.QueryParam("namespace"), c.QueryParam("include") == "access-tokens")
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+	return c.JSON(http.StatusOK, list)
+}
+
+// listObjects lists the stored objects, of every namespace when namespace is empty.
+func (k managedKind) listObjects(ctx context.Context, namespace string, includeAccessTokens bool) (any, error) {
 	query := ctx.DB().Where("deleted_at IS NULL").Order("namespace, name")
-	namespace := c.QueryParam("namespace")
 	if namespace != "" {
 		query = query.Where("namespace = ?", namespace)
 	}
 	// Access tokens' bindings grant nothing, so they're left out unless asked for, or their namespace is
-	if k.table == "role_bindings" && c.QueryParam("include") != "access-tokens" && namespace != adapter.AccessTokenNamespace {
+	if k.table == "role_bindings" && !includeAccessTokens && namespace != adapter.AccessTokenNamespace {
 		query = query.Where("namespace != ?", adapter.AccessTokenNamespace)
 	}
 
 	list := k.newList()
 	if err := query.Find(list).Error; err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+		return nil, ctx.Oops().Wrap(err)
 	}
-	return c.JSON(http.StatusOK, list)
+	return list, nil
 }
 
 func (k managedKind) get(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
-	stored, err := k.find(ctx, c.Param("namespace"), c.Param("name"))
+	body, err := k.getObject(ctx, c.Param("namespace"), c.Param("name"))
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
-	} else if stored == nil {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %s/%s not found", k.path, c.Param("namespace"), c.Param("name")))
 	}
+	return c.JSON(http.StatusOK, body)
+}
 
-	return k.respond(c, ctx, http.StatusOK, stored.ID)
+// getObject describes the stored object with the namespace and name.
+func (k managedKind) getObject(ctx context.Context, namespace, name string) (any, error) {
+	stored, err := k.find(ctx, namespace, name)
+	if err != nil {
+		return nil, err
+	} else if stored == nil {
+		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %s/%s not found", k.path, namespace, name)
+	}
+	return k.describe(ctx, stored.ID)
 }
 
 func (k managedKind) create(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
-	obj, err := k.decode(c, "", "")
+	body, err := k.createObject(ctx, c.Request().Body)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
+	return c.JSON(http.StatusCreated, body)
+}
 
+// createObject stores a new object read from body, and describes it.
+func (k managedKind) createObject(ctx context.Context, body io.Reader) (any, error) {
+	obj, err := k.decode(body, "", "")
+	if err != nil {
+		return nil, err
+	}
+	if err := k.creatable(ctx, obj); err != nil {
+		return nil, err
+	}
+
+	id, err := k.insert(ctx, obj)
+	if err != nil {
+		return nil, err
+	}
+	return k.describe(ctx, id)
+}
+
+// creatable checks that a new object can be stored with the object's namespace and name.
+func (k managedKind) creatable(ctx context.Context, obj client.Object) error {
 	if obj.GetNamespace() == adapter.ShippedNamespace {
-		return dutyAPI.WriteError(c, errShippedNamespace())
+		return errShippedNamespace()
 	} else if obj.GetNamespace() == adapter.AccessTokenNamespace {
-		return dutyAPI.WriteError(c, errAccessTokenNamespace())
+		return errAccessTokenNamespace()
 	}
 
 	if stored, err := k.find(ctx, obj.GetNamespace(), obj.GetName()); err != nil {
-		return dutyAPI.WriteError(c, err)
+		return err
 	} else if stored != nil {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ECONFLICT, "%s %s/%s already exists", k.path, obj.GetNamespace(), obj.GetName()))
+		return dutyAPI.Errorf(dutyAPI.ECONFLICT, "%s %s/%s already exists", k.path, obj.GetNamespace(), obj.GetName())
 	}
+	return nil
+}
 
+// insert stores a new object, created by the request's user, and returns its id.
+func (k managedKind) insert(ctx context.Context, obj client.Object) (uuid.UUID, error) {
 	id := uuid.New()
 	obj.SetUID(k8sTypes.UID(id.String()))
 	var createdBy *uuid.UUID
@@ -269,51 +313,67 @@ func (k managedKind) create(c echo.Context) error {
 	}
 
 	if err := k.save(ctx, obj, createdBy); err != nil {
-		return dutyAPI.WriteError(c, err)
+		return uuid.Nil, err
 	}
-	return k.respond(c, ctx, http.StatusCreated, id)
+	return id, nil
 }
 
 func (k managedKind) update(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
-	namespace, name := c.Param("namespace"), c.Param("name")
 
-	stored, err := k.editable(ctx, namespace, name)
+	body, err := k.updateObject(ctx, c.Param("namespace"), c.Param("name"), c.Request().Body)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
+	return c.JSON(http.StatusOK, body)
+}
 
-	obj, err := k.decode(c, namespace, name)
+// updateObject replaces the object with the namespace and name with one read from body, and describes it.
+func (k managedKind) updateObject(ctx context.Context, namespace, name string, body io.Reader) (any, error) {
+	stored, err := k.editable(ctx, namespace, name)
 	if err != nil {
-		return dutyAPI.WriteError(c, err)
+		return nil, err
+	}
+
+	obj, err := k.decode(body, namespace, name)
+	if err != nil {
+		return nil, err
 	}
 
 	obj.SetUID(k8sTypes.UID(stored.ID.String()))
 	if err := k.save(ctx, obj, stored.CreatedBy); err != nil {
-		return dutyAPI.WriteError(c, err)
+		return nil, err
 	}
-	return k.respond(c, ctx, http.StatusOK, stored.ID)
+	return k.describe(ctx, stored.ID)
 }
 
 func (k managedKind) remove(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
-	stored, err := k.editable(ctx, c.Param("namespace"), c.Param("name"))
-	if err != nil {
+	if err := k.removeObject(ctx, c.Param("namespace"), c.Param("name")); err != nil {
 		return dutyAPI.WriteError(c, err)
-	}
-
-	if err := k.delete(ctx, stored.ID.String()); err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: fmt.Sprintf("%s %s/%s deleted", k.path, c.Param("namespace"), c.Param("name"))})
 }
 
-// decode reads the object from the request body, in the same shape as the CRD, and rejects it when it's invalid on its own.
+// removeObject deletes the object with the namespace and name.
+func (k managedKind) removeObject(ctx context.Context, namespace, name string) error {
+	stored, err := k.editable(ctx, namespace, name)
+	if err != nil {
+		return err
+	}
+
+	if err := k.delete(ctx, stored.ID.String()); err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+	return nil
+}
+
+// decode reads the object from body, in the same shape as the CRD, and rejects it when it's invalid on its own.
 // Unknown fields are rejected rather than ignored. When namespace and name are given (from the route),
 // the body must match them or leave them out.
-func (k managedKind) decode(c echo.Context, namespace, name string) (client.Object, error) {
-	decoder := json.NewDecoder(c.Request().Body)
+func (k managedKind) decode(body io.Reader, namespace, name string) (client.Object, error) {
+	decoder := json.NewDecoder(body)
 	decoder.DisallowUnknownFields()
 
 	var obj client.Object
@@ -336,18 +396,25 @@ func (k managedKind) decode(c echo.Context, namespace, name string) (client.Obje
 		obj.SetName(name)
 	}
 
+	if err := k.validateObject(obj); err != nil {
+		return nil, err
+	}
+	return obj, nil
+}
+
+// validateObject rejects an object that's invalid on its own.
+func (k managedKind) validateObject(obj client.Object) error {
 	if errs := validation.IsDNS1123Label(obj.GetNamespace()); len(errs) > 0 {
-		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid metadata.namespace %q: %v", obj.GetNamespace(), errs)
+		return dutyAPI.Errorf(dutyAPI.EINVALID, "invalid metadata.namespace %q: %v", obj.GetNamespace(), errs)
 	}
 	if errs := validation.IsDNS1123Subdomain(obj.GetName()); len(errs) > 0 {
-		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid metadata.name %q: %v", obj.GetName(), errs)
+		return dutyAPI.Errorf(dutyAPI.EINVALID, "invalid metadata.name %q: %v", obj.GetName(), errs)
 	}
 
 	if err := k.validate(obj); err != nil {
-		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid %s %s/%s: %v", k.path, obj.GetNamespace(), obj.GetName(), err)
+		return dutyAPI.Errorf(dutyAPI.EINVALID, "invalid %s %s/%s: %v", k.path, obj.GetNamespace(), obj.GetName(), err)
 	}
-
-	return obj, nil
+	return nil
 }
 
 // save stores the object. An object that's invalid because of what it references, e.g. a missing Scope, is stored too,
@@ -361,29 +428,30 @@ func (k managedKind) save(ctx context.Context, obj client.Object, createdBy *uui
 	return nil
 }
 
-func (k managedKind) respond(c echo.Context, ctx context.Context, status int, id uuid.UUID) error {
+// describe returns the stored object with the id, with what the kind's report adds about it.
+func (k managedKind) describe(ctx context.Context, id uuid.UUID) (any, error) {
 	model, err := k.load(ctx, id)
 	if err != nil {
-		return dutyAPI.WriteError(c, err)
+		return nil, err
 	} else if k.report == nil {
-		return c.JSON(status, model)
+		return model, nil
 	}
 
 	report, err := k.report(ctx, model)
 	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+		return nil, ctx.Oops().Wrap(err)
 	}
 
 	raw, err := json.Marshal(model)
 	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+		return nil, ctx.Oops().Wrap(err)
 	}
 	var body map[string]any
 	if err := json.Unmarshal(raw, &body); err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+		return nil, ctx.Oops().Wrap(err)
 	}
 	maps.Copy(body, report)
-	return c.JSON(status, body)
+	return body, nil
 }
 
 // roleRequest is a Role as the API takes it. Its rules have no deny: rules only allow.
@@ -424,4 +492,124 @@ func decodeRoleRequest(decoder *json.Decoder) (client.Object, error) {
 		})
 	}
 	return role, nil
+}
+
+// managedKindByPath returns the managed kind with the path, e.g. role-bindings.
+func managedKindByPath(path string) (managedKind, error) {
+	for _, kind := range managedKinds {
+		if kind.path == path {
+			return kind, nil
+		}
+	}
+	return managedKind{}, dutyAPI.Errorf(dutyAPI.EINVALID, "unknown kind %q: use scopes, roles or role-bindings", path)
+}
+
+// authorized finds the managed kind with the path, when the request's subject may perform the action on it, as the
+// route for the action checks.
+func authorized(ctx context.Context, path, action string) (managedKind, error) {
+	kind, err := managedKindByPath(path)
+	if err != nil {
+		return kind, err
+	}
+	if !CheckContext(ctx, kind.object, action) {
+		return kind, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("forbidden: %s does not have %s permission on %s", ctx.Subject(), action, kind.object)
+	}
+	return kind, nil
+}
+
+// ListManagedObjects lists the Scopes, Roles or RoleBindings (kind is their path, e.g. role-bindings), as GET /rbac/<kind> does.
+func ListManagedObjects(ctx context.Context, kind, namespace string) (any, error) {
+	k, err := authorized(ctx, kind, policy.ActionRead)
+	if err != nil {
+		return nil, err
+	}
+	return k.listObjects(ctx, namespace, false)
+}
+
+// GetManagedObject describes one Scope, Role or RoleBinding, as GET /rbac/<kind>/<namespace>/<name> does.
+func GetManagedObject(ctx context.Context, kind, namespace, name string) (any, error) {
+	k, err := authorized(ctx, kind, policy.ActionRead)
+	if err != nil {
+		return nil, err
+	}
+	return k.getObject(ctx, namespace, name)
+}
+
+// CreateManagedObject creates a Scope, Role or RoleBinding from its JSON, as POST /rbac/<kind> does.
+func CreateManagedObject(ctx context.Context, kind string, object []byte) (any, error) {
+	k, err := authorized(ctx, kind, policy.ActionCreate)
+	if err != nil {
+		return nil, err
+	}
+	return k.createObject(ctx, bytes.NewReader(object))
+}
+
+// UpdateManagedObject replaces a Scope, Role or RoleBinding with its JSON, as PUT /rbac/<kind>/<namespace>/<name> does.
+func UpdateManagedObject(ctx context.Context, kind, namespace, name string, object []byte) (any, error) {
+	k, err := authorized(ctx, kind, policy.ActionUpdate)
+	if err != nil {
+		return nil, err
+	}
+	return k.updateObject(ctx, namespace, name, bytes.NewReader(object))
+}
+
+// DeleteManagedObject deletes a Scope, Role or RoleBinding, as DELETE /rbac/<kind>/<namespace>/<name> does.
+func DeleteManagedObject(ctx context.Context, kind, namespace, name string) error {
+	k, err := authorized(ctx, kind, policy.ActionDelete)
+	if err != nil {
+		return err
+	}
+	return k.removeObject(ctx, namespace, name)
+}
+
+// ManagedObject is a Scope, Role or RoleBinding to create: its kind's path, and its JSON as POST /rbac/<kind> takes it.
+type ManagedObject struct {
+	Kind   string
+	Object []byte
+}
+
+// CreateManagedObjects creates every object, in order, or none: each is checked and validated as POST /rbac/<kind>
+// checks and validates it, and when any is refused, rejected or already exists, nothing is stored.
+// It describes the objects it created, in order.
+func CreateManagedObjects(ctx context.Context, objects []ManagedObject) ([]any, error) {
+	kinds := make([]managedKind, len(objects))
+	decoded := make([]client.Object, len(objects))
+	for i, object := range objects {
+		var err error
+		if kinds[i], err = authorized(ctx, object.Kind, policy.ActionCreate); err != nil {
+			return nil, err
+		}
+		if decoded[i], err = kinds[i].decode(bytes.NewReader(object.Object), "", ""); err != nil {
+			return nil, err
+		}
+	}
+
+	var created []any
+	err := ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
+		ids := make([]uuid.UUID, len(objects))
+		for i, obj := range decoded {
+			if err := kinds[i].creatable(txCtx, obj); err != nil {
+				return err
+			}
+			id, err := kinds[i].insert(txCtx, obj)
+			if err != nil {
+				return err
+			}
+			ids[i] = id
+		}
+
+		// Described once all are stored, so a Role's report sees the binding created with it
+		for i, id := range ids {
+			body, err := kinds[i].describe(txCtx, id)
+			if err != nil {
+				return err
+			}
+			created = append(created, body)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return created, nil
 }
