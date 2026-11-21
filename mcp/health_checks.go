@@ -36,7 +36,7 @@ func healthCheckSearchHandler(goctx gocontext.Context, req mcp.CallToolRequest) 
 
 	var checks []models.Check
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
-		checks, err = query.FindChecks(rlsCtx, limit, types.ResourceSelector{Search: q})
+		checks, err = query.FindChecks(rlsCtx, limit, types.ResourceSelector{Search: q, Agent: "all"})
 		return err
 	})
 
@@ -113,7 +113,7 @@ func listAllChecksHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 
 	var checks []models.Check
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
-		checks, err = query.FindChecks(rlsCtx, -1, types.ResourceSelector{Search: "limit=-1"})
+		checks, err = query.FindChecks(rlsCtx, -1, types.ResourceSelector{Search: "limit=-1", Agent: "all"})
 		return err
 	})
 
