@@ -145,7 +145,7 @@ A few actions aren't performed on a resource a Scope could select. They act on a
 | Action            | Allows                                                                                         |
 | ----------------- | ---------------------------------------------------------------------------------------------- |
 | `person:manage`   | Inviting or creating, disabling, re-enabling and deleting accounts, and changing their properties, name or email |
-| `service-account:manage` | Listing, creating and deleting service accounts, and issuing and revoking their tokens, a kubeconfig's included (`service-accounts.md`, Section 3) |
+| `service-account:manage` | Listing, creating and deleting service accounts, and issuing and revoking their tokens and changing their tokens' Roles, a kubeconfig's included (`service-accounts.md`, Section 3) |
 | `access:review`   | Asking what any subject may do: subject access reviews and searches (`/rbac/subject-access-reviews`, `/rbac/subject-access-search`) |
 | `mcp:use`         | Using Mission Control's MCP server at all. Each MCP tool still checks what it touches (Section 4.3) |
 | `property:manage` | Reading private properties and creating, changing and deleting any property. Reading public properties needs no rule (Section 3.1) |
@@ -396,7 +396,7 @@ A check carries only the resources its action's contract can match (Section 2). 
 | Send a request through the Kubernetes proxy | `kubernetes-proxy:write`, else `kubernetes-proxy:read` | None | None |
 | Download a kubeconfig | `kubernetes-proxy:write` or `kubernetes-proxy:read` | None | None |
 | Download a kubeconfig for a service account | `service-account:manage` | None | None |
-| List, create or delete service accounts, or issue or revoke their tokens | `service-account:manage` | None | None |
+| List, create or delete service accounts, issue or revoke their tokens, or change their tokens' Roles | `service-account:manage` | None | None |
 | Use connection C, e.g. to send        | `connection:use`                            | C               | None                              |
 | Test connection C                     | `connection:use`                            | C               | None                              |
 
