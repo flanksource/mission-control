@@ -31,6 +31,32 @@ func RegisterServiceAccountRoutes(e *echo.Echo) {
 	group.GET("/:name/tokens", ListServiceAccountTokens)
 	group.POST("/:name/tokens", CreateServiceAccountToken)
 	group.DELETE("/:name/tokens/:id", RevokeServiceAccountToken)
+	group.POST("/:name/tokens/:id/roles", AddServiceAccountTokenRole)
+	group.DELETE("/:name/tokens/:id/roles/:roleNamespace/:roleName", RemoveServiceAccountTokenRole)
+}
+
+// AddServiceAccountTokenRole binds a token of the service account to a Role.
+func AddServiceAccountTokenRole(c echo.Context) error {
+	return changeServiceAccountTokenRole(c, true)
+}
+
+// RemoveServiceAccountTokenRole removes the binding of a token of the service account to a Role.
+func RemoveServiceAccountTokenRole(c echo.Context) error {
+	return changeServiceAccountTokenRole(c, false)
+}
+
+// changeServiceAccountTokenRole changes a Role of a token of the service account in the route. A token of anyone
+// else is not found.
+func changeServiceAccountTokenRole(c echo.Context, add bool) error {
+	ctx := c.Request().Context().(context.Context)
+
+	account, err := db.FindServiceAccount(ctx, c.Param("name"))
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+	return changeTokenRole(c, add, func(token models.AccessToken) bool {
+		return token.PersonID == account.ID
+	})
 }
 
 func ListServiceAccounts(c echo.Context) error {
