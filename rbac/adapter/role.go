@@ -47,12 +47,9 @@ func ParseBindingRuleID(id string) (bindingID uuid.UUID, rule string, ok bool) {
 	return bindingID, rule, true
 }
 
-// The RoleBindings created with an access token, one per Role it's created with, have this source and are in this
-// reserved namespace (specs/authorization/token-bindings.md). Nothing else can be stored there.
-const (
-	SourceAccessToken    = "AccessToken"
-	AccessTokenNamespace = "mission-control-access-tokens"
-)
+// AccessTokenNamespace is the reserved namespace of access tokens' RoleBindings, one per Role a token is bound to
+// (specs/authorization/token-bindings.md). Nothing else can be stored there.
+const AccessTokenNamespace = "mission-control-access-tokens"
 
 // AccessTokenBindingName returns the name of the RoleBinding created with an access token for one of its Roles.
 // The token id and the hash are fixed length, so the name fits a Kubernetes name.
@@ -104,7 +101,7 @@ func bindingAccessToken(binding models.RoleBinding) (uuid.UUID, bool, error) {
 	switch {
 	case len(subjects) > 1:
 		return uuid.Nil, false, NewValidationError("role binding %s/%s: a binding that selects an access token can't select any other subject", binding.Namespace, binding.Name)
-	case binding.Namespace != AccessTokenNamespace || binding.Source != SourceAccessToken:
+	case binding.Namespace != AccessTokenNamespace:
 		return uuid.Nil, false, NewValidationError("role binding %s/%s: only an access token's own bindings, in %s, can select it", binding.Namespace, binding.Name, AccessTokenNamespace)
 	case binding.Constraint != nil:
 		return uuid.Nil, false, NewValidationError("role binding %s/%s: an access token's binding has no constraint", binding.Namespace, binding.Name)
@@ -118,7 +115,7 @@ func bindingAccessToken(binding models.RoleBinding) (uuid.UUID, bool, error) {
 // AccessTokenBindings returns the RoleBindings that select the access token.
 func AccessTokenBindings(ctx context.Context, tokenID uuid.UUID) ([]models.RoleBinding, error) {
 	var bindings []models.RoleBinding
-	err := ctx.DB().Where("deleted_at IS NULL AND namespace = ? AND source = ?", AccessTokenNamespace, SourceAccessToken).
+	err := ctx.DB().Where("deleted_at IS NULL AND namespace = ?", AccessTokenNamespace).
 		Where("subjects->>'accessToken' = ?", tokenID.String()).
 		Order("role").
 		Find(&bindings).Error

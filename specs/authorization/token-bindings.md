@@ -44,7 +44,7 @@ _Why not a custom resource:_ a binding from Git is applied by whoever deploys it
 | `name`       | `token-<token id>-<hash of role namespace/name>` |
 | `role`       | `<role namespace>/<role name>` |
 | `subjects`   | `accessToken: <token id>`, and nothing else |
-| `source`     | `AccessToken` |
+| `source`     | Where it was created, as for any binding: `UI` through the API, the UI or the `auth token` CLI command |
 | `created_by` | Whoever wrote the binding: the token's owner, or for a service account's token, the subject with `service-account:manage` who issued the token or added the Role |
 
 - **By id.** The token is selected by its id, so a token deleted and created again with the same name isn't selected. _Why:_ the binding belongs to that one credential.

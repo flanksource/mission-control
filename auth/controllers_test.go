@@ -126,7 +126,7 @@ var _ = Describe("CreateToken", Ordered, func() {
 			Expect(bindings[0].Namespace).To(Equal(adapter.AccessTokenNamespace))
 			Expect(bindings[0].Name).To(Equal(adapter.AccessTokenBindingName(token.ID, "anywhere", "readonly")))
 			Expect(bindings[0].Role).To(Equal("anywhere/readonly"))
-			Expect(bindings[0].Source).To(Equal(adapter.SourceAccessToken))
+			Expect(bindings[0].Namespace).To(Equal(adapter.AccessTokenNamespace))
 			Expect(token.PersonID).To(Equal(testUser.ID))
 			Expect(token.CreatedBy).To(Equal(&testUser.ID))
 
