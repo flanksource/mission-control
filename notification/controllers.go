@@ -56,7 +56,7 @@ func handleCreateSilence(c echo.Context) error {
 	}
 
 	req.Source = models.SourceUI
-	if err := SaveNotificationSilence(ctx, req); err != nil {
+	if _, err := SaveNotificationSilence(ctx, req); err != nil {
 		return api.WriteError(c, err)
 	}
 
