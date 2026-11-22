@@ -183,7 +183,7 @@ func createAccessTokenBinding(ctx context.Context, token *models.AccessToken, ro
 		Name:        adapter.AccessTokenBindingName(token.ID, role.Namespace, role.Name),
 		Namespace:   adapter.AccessTokenNamespace,
 		Description: fmt.Sprintf("Limits access token %s", token.Name),
-		Source:      adapter.SourceAccessToken,
+		Source:      models.SourceUI,
 		Role:        role.Namespace + "/" + role.Name,
 		Subjects:    subjects,
 		CreatedBy:   &issuer,

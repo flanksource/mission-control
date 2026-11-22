@@ -229,7 +229,7 @@ func DeleteRoleBinding(ctx context.Context, id string) error {
 }
 
 // DeleteStaleRoleBinding replaces an older binding of the same name with the newer one.
-// An access token's binding is never replaced, whatever its namespace.
+// An access token's binding is never replaced: its reserved namespace is refused above.
 func DeleteStaleRoleBinding(ctx context.Context, newer *v1.RoleBinding) error {
 	if err := notShipped(newer.GetNamespace()); err != nil {
 		return err
@@ -238,7 +238,7 @@ func DeleteStaleRoleBinding(ctx context.Context, newer *v1.RoleBinding) error {
 	if err := ctx.DB().Model(&models.RoleBinding{}).
 		Where("namespace = ? AND name = ?", newer.Namespace, newer.Name).
 		Where("id != ?", newer.UID).
-		Where("source NOT IN ?", []string{adapter.SourceShipped, adapter.SourceAccessToken}).
+		Where("source != ?", adapter.SourceShipped).
 		Where("deleted_at IS NULL").
 		Update("deleted_at", duty.Now()).Error; err != nil {
 		return err

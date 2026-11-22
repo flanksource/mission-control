@@ -359,7 +359,7 @@ func deleteAccessTokens(ctx context.Context, ids ...string) error {
 	}
 
 	if err := ctx.DB().Model(&models.RoleBinding{}).
-		Where("source = ? AND namespace = ? AND deleted_at IS NULL", adapter.SourceAccessToken, adapter.AccessTokenNamespace).
+		Where("namespace = ? AND deleted_at IS NULL", adapter.AccessTokenNamespace).
 		Where("subjects->>'accessToken' IN ?", ids).
 		Update("deleted_at", duty.Now()).Error; err != nil {
 		return ctx.Oops().Wrapf(err, "failed to delete the role bindings of access tokens %v", ids)
