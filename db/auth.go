@@ -120,12 +120,12 @@ func CreateAccessToken(ctx context.Context, personID uuid.UUID, name string, exp
 	return token.V2(), accessTokenModel, nil
 }
 
-// ChangeAccessTokenRole binds the access token to the Role, or removes its binding to it, written by writer. The token
-// is locked first, as deleting it locks it, and must not have expired and must be one owns accepts; otherwise it's
-// not found. Adding a Role the token is already bound to, or removing one it isn't, changes nothing, and changed is
-// false. It returns the token so its owner's caches can be dropped (specs/authorization/token-bindings.md, Section 2).
-func ChangeAccessTokenRole(ctx context.Context, tokenID uuid.UUID, owns func(models.AccessToken) bool, role AccessTokenRole, writer uuid.UUID, add bool) (token models.AccessToken, changed bool, err error) {
-	name := adapter.AccessTokenBindingName(tokenID, role.Namespace, role.Name)
+// SetAccessTokenRoles sets the Roles the access token is bound to, written by writer: Roles new to the list are bound,
+// and the bindings of Roles left out of it are soft-deleted, in one transaction. The token is locked first, as
+// deleting it locks it, and must not have expired and must be one owns accepts; otherwise it's not found. changed is
+// false when the token was already bound to exactly these Roles (specs/authorization/token-bindings.md, Section 2).
+func SetAccessTokenRoles(ctx context.Context, tokenID uuid.UUID, owns func(models.AccessToken) bool, roles AccessTokenRoles, writer uuid.UUID) (token models.AccessToken, changed bool, err error) {
+	roles = lo.Uniq(roles)
 	err = ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
 		if err := txCtx.DB().Raw(`SELECT id, name, person_id, created_by FROM access_tokens
 			WHERE id = ? AND (expires_at IS NULL OR expires_at > NOW()) FOR UPDATE`, tokenID).
@@ -135,27 +135,36 @@ func ChangeAccessTokenRole(ctx context.Context, tokenID uuid.UUID, owns func(mod
 			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "access token %s not found", tokenID)
 		}
 
-		bound := txCtx.DB().Model(&models.RoleBinding{}).
-			Where("namespace = ? AND name = ? AND source = ? AND deleted_at IS NULL", adapter.AccessTokenNamespace, name, adapter.SourceAccessToken).
-			Where("subjects->>'accessToken' = ?", tokenID.String())
-
-		if !add {
-			result := bound.Update("deleted_at", duty.Now())
-			if result.Error != nil {
-				return ctx.Oops().Wrapf(result.Error, "failed to remove role %s/%s from access token %q", role.Namespace, role.Name, token.Name)
-			}
-			changed = result.RowsAffected > 0
-			return nil
-		}
-
-		var existing int64
-		if err := bound.Count(&existing).Error; err != nil {
+		bound, err := adapter.AccessTokenBindings(txCtx, tokenID)
+		if err != nil {
 			return ctx.Oops().Wrapf(err, "failed to get the role bindings of access token %q", token.Name)
-		} else if existing > 0 {
-			return nil
 		}
-		changed = true
-		return createAccessTokenBinding(txCtx, &token, role, writer)
+
+		wanted := lo.SliceToMap(roles, func(r AccessTokenRole) (string, AccessTokenRole) { return r.Namespace + "/" + r.Name, r })
+		var removed []uuid.UUID
+		for _, binding := range bound {
+			if _, keep := wanted[binding.Role]; keep {
+				delete(wanted, binding.Role)
+			} else {
+				removed = append(removed, binding.ID)
+			}
+		}
+
+		if len(removed) > 0 {
+			if err := txCtx.DB().Model(&models.RoleBinding{}).Where("id IN ?", removed).
+				Update("deleted_at", duty.Now()).Error; err != nil {
+				return ctx.Oops().Wrapf(err, "failed to remove roles from access token %q", token.Name)
+			}
+		}
+		for _, role := range roles {
+			if _, add := wanted[role.Namespace+"/"+role.Name]; add {
+				if err := createAccessTokenBinding(txCtx, &token, role, writer); err != nil {
+					return err
+				}
+			}
+		}
+		changed = len(removed) > 0 || len(wanted) > 0
+		return nil
 	})
 	return token, changed, err
 }

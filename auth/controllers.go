@@ -29,8 +29,7 @@ func RegisterRoutes(e *echo.Echo) {
 	e.POST("/auth/create_token", CreateToken)
 	e.GET("/auth/tokens", ListTokens)
 	e.DELETE("/auth/token/:id", DeleteToken)
-	e.POST("/auth/token/:id/roles", AddTokenRole)
-	e.DELETE("/auth/token/:id/roles/:roleNamespace/:roleName", RemoveTokenRole)
+	e.PUT("/auth/token/:id/roles", SetTokenRoles)
 
 	RegisterServiceAccountRoutes(e)
 }
@@ -220,19 +219,9 @@ func ListTokens(c echo.Context) error {
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success", Payload: payload})
 }
 
-// AddTokenRole binds one of the caller's own tokens to a Role.
-func AddTokenRole(c echo.Context) error {
-	return changeOwnTokenRole(c, true)
-}
-
-// RemoveTokenRole removes the binding of one of the caller's own tokens to a Role.
-func RemoveTokenRole(c echo.Context) error {
-	return changeOwnTokenRole(c, false)
-}
-
-// changeOwnTokenRole changes a Role of a token the caller owns and created. Another person's token, or a token that
-// doesn't exist, is not found (specs/authorization/token-bindings.md, Section 2).
-func changeOwnTokenRole(c echo.Context, add bool) error {
+// SetTokenRoles sets the Roles of one of the caller's own tokens. Another person's token, or a token that doesn't
+// exist, is not found (specs/authorization/token-bindings.md, Section 2).
+func SetTokenRoles(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 	user := ctx.User()
 	if user == nil {
@@ -241,14 +230,19 @@ func changeOwnTokenRole(c echo.Context, add bool) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "an access token's roles can't be changed with an access token"))
 	}
 
-	return changeTokenRole(c, add, func(token models.AccessToken) bool {
+	return setTokenRoles(c, func(token models.AccessToken) bool {
 		return token.PersonID == user.ID && lo.FromPtr(token.CreatedBy) == user.ID
 	})
 }
 
-// changeTokenRole adds or removes the Role named by the request on the token in the route, if owns accepts it. The
-// change applies to the token's next request: the policy is reloaded, and a failed reload fails the request.
-func changeTokenRole(c echo.Context, add bool, owns func(models.AccessToken) bool) error {
+// SetTokenRolesRequest is the whole list of Roles a token is bound to after the change.
+type SetTokenRolesRequest struct {
+	Roles db.AccessTokenRoles `json:"roles"`
+}
+
+// setTokenRoles sets the Roles of the token in the route, if owns accepts it. The change applies to the token's next
+// request: the policy is reloaded, and a failed reload fails the request.
+func setTokenRoles(c echo.Context, owns func(models.AccessToken) bool) error {
 	ctx := c.Request().Context().(context.Context)
 
 	tokenID, err := uuid.Parse(c.Param("id"))
@@ -256,24 +250,24 @@ func changeTokenRole(c echo.Context, add bool, owns func(models.AccessToken) boo
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "access token %s not found", c.Param("id")))
 	}
 
-	role := db.AccessTokenRole{Namespace: c.Param("roleNamespace"), Name: c.Param("roleName")}
-	if add {
-		if err := c.Bind(&role); err != nil {
-			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
+	var req SetTokenRolesRequest
+	if err := c.Bind(&req); err != nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
+	}
+	for _, role := range req.Roles {
+		if role.Namespace == "" || role.Name == "" {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "role %q must have a namespace and a name", role.Namespace+"/"+role.Name))
 		}
 	}
-	if err := ValidateTokenRoles(db.AccessTokenRoles{role}); err != nil {
-		return dutyAPI.WriteError(c, err)
-	}
 
-	token, changed, err := db.ChangeAccessTokenRole(ctx, tokenID, owns, role, ctx.User().ID, add)
+	token, changed, err := db.SetAccessTokenRoles(ctx, tokenID, owns, req.Roles, ctx.User().ID)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
 
 	if changed {
 		if err := adapter.ReloadPolicy(); err != nil {
-			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "the role of access token %q was changed, but may not be in effect yet: the policy failed to reload", token.Name))
+			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "the roles of access token %q were changed, but may not be in effect yet: the policy failed to reload", token.Name))
 		}
 		forgetAccessTokenLimit(token)
 	}

@@ -63,19 +63,17 @@ Since the owner's sessions and tokens share a subject, caches of per-subject res
 
 #### Changing a token's Roles
 
-A token's Roles could be changed one at a time, or by replacing the whole set. We change them one at a time, because two changes made at once then both land: adding and removing different Roles commute, and repeating one is a no-op. Replacing the whole set was rejected because two people editing one token, e.g. two holders of `service-account:manage`, would each overwrite the other's change.
+A token's Roles could be changed one at a time, or by replacing the whole list. We replace the whole list, because the UI edits a token's Roles as a form that's reviewed and saved, and saving it must land all of its changes or none. Changing them one at a time was rejected: a save would be several requests, and one failing partway would leave the token with only some of the changes. The cost is that two people saving one token's Roles at the same moment don't merge; the last to save wins.
 
 | Route | Change |
 | ----- | ------ |
-| `POST /auth/token/:id/roles` | Binds the caller's own token to a Role: `namespace`, `name` |
-| `DELETE /auth/token/:id/roles/:namespace/:name` | Removes the binding of the caller's own token to that Role |
-| `POST /service-accounts/:name/tokens/:id/roles` | The same for a service account's token, with `service-account:manage` |
-| `DELETE /service-accounts/:name/tokens/:id/roles/:namespace/:name` | The same for a service account's token, with `service-account:manage` |
+| `PUT /auth/token/:id/roles` | Sets the Roles of the caller's own token: `roles`, a list of `namespace` and `name` |
+| `PUT /service-accounts/:name/tokens/:id/roles` | The same for a service account's token, with `service-account:manage` |
 
-Each goes through the token API, never the RoleBinding API, and refuses a request made with an access token:
+Both go through the token API, never the RoleBinding API, and refuse a request made with an access token:
 
 1. In one transaction, the token's row is read and locked. It MUST be the caller's own and created by them, as deleting it checks, or have the service account named in the route as its person, and it MUST NOT have expired. Otherwise the request is refused with `404`. Deleting a token MUST lock its row the same way before deleting its bindings. _Why the lock:_ an add racing a delete would otherwise leave a binding for a token that's gone, which no delete would clear.
-2. Adding writes one binding, with `created_by` set to the caller. A Role the token is already bound to by a binding that isn't deleted writes nothing, and so does a unique-name conflict with a binding added at the same moment. Removing soft-deletes the one binding, as deleting the token does, and a Role the token isn't bound to deletes nothing. A removed Role added again gets a new binding, so the name is unique only among bindings that aren't deleted.
+2. A binding is written, with `created_by` set to the caller, for each Role in the list the token isn't bound to by a binding that isn't deleted. The binding of each Role left out of the list is soft-deleted, as deleting the token does. A Role still in the list keeps its binding as it is. A Role listed twice is bound once. A removed Role added again gets a new binding, so the name is unique only among bindings that aren't deleted.
 3. After the commit, the policy is reloaded as creating a token reloads it, but a failed reload fails the request with `500`, saying the change is stored and may not be in effect yet. _Why:_ until a reload succeeds, casbin keeps the token grouped into a removed binding, and a caller told it was narrowed would rely on that.
 4. The per-token caches of RLS payloads, access summaries and PostgREST JWTs are dropped, and any result being built for the token is kept from being cached, as invalidating a subject's cache does. _Why:_ a request made with the token that read the old bindings before the change committed would otherwise cache them for as long as the cache lives. Deleting a token doesn't need this, since the deny list of deleted tokens refuses it outright, but removing a Role has no such backstop.
 
