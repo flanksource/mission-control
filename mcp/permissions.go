@@ -33,6 +33,9 @@ var toolPermissions = map[string]toolPermission{
 	toolListPersonTeams:             {adapter.ObjectTeams, policy.ActionRead},
 	toolAddTeamMembers:              {adapter.ObjectTeams, policy.ActionUpdate},
 	toolRemoveTeamMember:            {adapter.ObjectTeams, policy.ActionUpdate},
+	toolCreateTeam:                  {adapter.ObjectTeams, policy.ActionCreate},
+	toolUpdateTeam:                  {adapter.ObjectTeams, policy.ActionUpdate},
+	toolDeleteTeam:                  {adapter.ObjectTeams, policy.ActionDelete},
 }
 
 // rbacToolActions are the actions the RBAC tools require on the kind they're called with, which is the object checked.
