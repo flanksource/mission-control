@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -75,9 +76,16 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 	return structToMCPResponse(req, cis), nil
 }
 
+// ConfigDescription is a row of the config_detail view plus the tools that can act on the config.
 type ConfigDescription struct {
 	models.ConfigItem
-	AvailableTools []string `json:"available_tools"`
+	LastScrapedTime *time.Time    `json:"last_scraped_time,omitempty"`
+	Summary         types.JSONMap `json:"summary,omitempty"`
+	AvailableTools  []string      `json:"available_tools" gorm:"-"`
+}
+
+func (ConfigDescription) TableName() string {
+	return "config_detail"
 }
 
 func describeConfigHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -94,20 +102,19 @@ func describeConfigHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	var config *models.ConfigItem
-	var availableTools []string
+	var config *ConfigDescription
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
-		config, err = findVisible[models.ConfigItem](rlsCtx, "id", rawID)
+		config, err = findVisible[ConfigDescription](rlsCtx, "id", rawID)
 		if err != nil || config == nil {
 			return err
 		}
 
-		_, pbs, err := db.FindPlaybooksForConfig(rlsCtx, *config)
+		_, pbs, err := db.FindPlaybooksForConfig(rlsCtx, config.ConfigItem)
 		if err != nil {
 			return err
 		}
 
-		availableTools = lo.Map(pbs, func(p *models.Playbook, _ int) string {
+		config.AvailableTools = lo.Map(pbs, func(p *models.Playbook, _ int) string {
 			return generatePlaybookToolName(lo.FromPtr(p))
 		})
 
@@ -122,10 +129,7 @@ func describeConfigHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError(fmt.Sprintf("config item[%s] not found", rawID)), nil
 	}
 
-	return structToMCPResponse(req, []ConfigDescription{{
-		ConfigItem:     *config,
-		AvailableTools: availableTools,
-	}}), nil
+	return structToMCPResponse(req, []ConfigDescription{*config}), nil
 }
 
 func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
