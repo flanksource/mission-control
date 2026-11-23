@@ -36,6 +36,17 @@ var toolPermissions = map[string]toolPermission{
 	toolCreateTeam:                  {adapter.ObjectTeams, policy.ActionCreate},
 	toolUpdateTeam:                  {adapter.ObjectTeams, policy.ActionUpdate},
 	toolDeleteTeam:                  {adapter.ObjectTeams, policy.ActionDelete},
+	toolListNotificationSilences:    {adapter.ObjectNotificationSilences, policy.ActionRead},
+	toolDeleteNotificationSilence:   {adapter.ObjectNotificationSilences, policy.ActionDelete},
+	toolCheckAccess:                 {policy.ObjectRBAC, adapter.ActionAccessReview},
+}
+
+// resourceToolPermissions are the actions a tool's handler checks on the resource it's called with. The tool is
+// offered to a caller who holds the action on any resource, as its handler can't refuse them every call.
+var resourceToolPermissions = map[string]toolPermission{
+	toolApprovePlaybookRun: {policy.ObjectPlaybooks, policy.ActionPlaybookApprove},
+	toolCancelPlaybookRun:  {policy.ObjectPlaybooks, policy.ActionPlaybookCancel},
+	toolTestConnection:     {policy.ObjectConnection, adapter.ActionConnectionUse},
 }
 
 // rbacToolActions are the actions the RBAC tools require on the kind they're called with, which is the object checked.
@@ -59,6 +70,9 @@ func filterToolsByPermission(goctx gocontext.Context, tools []mcp.Tool) []mcp.To
 	return lo.FilterMap(tools, func(tool mcp.Tool, _ int) (mcp.Tool, bool) {
 		if p, ok := toolPermissions[tool.Name]; ok {
 			return tool, allowed(p.object, p.action)
+		}
+		if p, ok := resourceToolPermissions[tool.Name]; ok {
+			return tool, err == nil && icrbac.HoldsAction(ctx, p.object, p.action)
 		}
 		if action, ok := rbacToolActions[tool.Name]; ok {
 			kinds := lo.Filter(rbacKinds, func(kind string, _ int) bool { return allowed(kind, action) })

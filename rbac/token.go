@@ -6,7 +6,9 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
@@ -120,6 +122,28 @@ func CheckContext(ctx context.Context, object, action string) bool {
 		return false
 	}
 	return rbac.Check(ctx, ctx.Subject(), object, action) && TokenAllowsObject(ctx, ctx.Subject(), object, action)
+}
+
+// HoldsAction reports whether ctx.Subject() may perform the action on the whole object or on some of its resources,
+// limited by the request's access token. It's an allow on the action somewhere, not a check on any one resource:
+// a deny or a resource outside the rule's Scopes still refuses the action on that resource.
+func HoldsAction(ctx context.Context, object, action string) bool {
+	if CheckContext(ctx, object, action) {
+		return true
+	}
+	if ctx.User() == nil {
+		return false
+	}
+
+	holds := func(principal string) bool {
+		perms, err := rbac.PermsForUser(principal)
+		if err != nil {
+			ctx.Errorf("failed to get the permissions of %s: %v", principal, err)
+			return false
+		}
+		return lo.SomeBy(perms, func(p policy.Permission) bool { return p.Action == action || p.Action == "*" })
+	}
+	return holds(ctx.Subject()) && withinTokenLimit(ctx, ctx.Subject(), holds)
 }
 
 // HasPermission is rbac.HasPermission, limited by the request's access token when the subject is the request's own

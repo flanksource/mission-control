@@ -72,18 +72,22 @@ func TestConnection(c echo.Context) error {
 		return dutyAPI.WriteError(c, err)
 	}
 
-	if err := rbac.AuthorizeConnectionUse(ctx, connection); err != nil {
-		return dutyAPI.WriteError(c, err)
-	}
-
-	hydrated, err := ctx.HydrateConnection(&connection)
-	if err != nil {
-		return dutyAPI.WriteError(c, err)
-	}
-
-	result, err := Test(ctx, hydrated)
+	result, err := TestAs(ctx, connection)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "ok", Payload: result})
+}
+
+// TestAs tests the connection with its credentials filled in, when the request's subject may use it (connection:use).
+func TestAs(ctx context.Context, connection models.Connection) (TestResult, error) {
+	if err := rbac.AuthorizeConnectionUse(ctx, connection); err != nil {
+		return TestResult{}, err
+	}
+
+	hydrated, err := ctx.HydrateConnection(&connection)
+	if err != nil {
+		return TestResult{}, err
+	}
+	return Test(ctx, hydrated)
 }

@@ -36,6 +36,8 @@ const (
 	toolGetPlaybookRunSteps   = "get_playbook_run_steps"
 	toolGetFailedPlaybookRuns = "get_playbook_failed_runs"
 	toolGetRecentPlaybookRuns = "get_playbook_recent_runs"
+	toolApprovePlaybookRun    = "approve_playbook_run"
+	toolCancelPlaybookRun     = "cancel_playbook_run"
 )
 
 func addPlaybooksAsTool(goctx gocontext.Context, srv *server.MCPServer, session server.ClientSession) error {
@@ -369,6 +371,35 @@ func generatePlaybookToolName(pb models.Playbook) string {
 	return fixMCPToolNameIfRequired(toolName)
 }
 
+func approvePlaybookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return playbookRunActionHandler(goctx, req, playbook.ApproveRun, "approved")
+}
+
+func cancelPlaybookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return playbookRunActionHandler(goctx, req, playbook.CancelRun, "cancelled")
+}
+
+// playbookRunActionHandler runs an action on the playbook run, which checks the caller's permission on it.
+func playbookRunActionHandler(goctx gocontext.Context, req mcp.CallToolRequest, action func(context.Context, uuid.UUID) error, done string) (*mcp.CallToolResult, error) {
+	ctx, err := getDutyCtx(goctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	runID, err := req.RequireString("run_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	id, err := uuid.Parse(runID)
+	if err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid run id %q", runID)), nil
+	}
+
+	if err := action(ctx, id); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	return mcp.NewToolResultText(fmt.Sprintf("playbook run %s %s", runID, done)), nil
+}
+
 func registerPlaybook(s *server.MCPServer) {
 	s.AddResourceTemplate(
 		mcp.NewResourceTemplate("playbook://{idOrName}", "Playbook",
@@ -412,4 +443,19 @@ func registerPlaybook(s *server.MCPServer) {
 		mcp.WithReadOnlyHintAnnotation(true))
 
 	s.AddTool(playbookRunStepsTool, getPlaybookRunStepsHandler)
+
+	runID := mcp.WithString("run_id", mcp.Required(), mcp.Description("UUID of the playbook run"))
+	s.AddTool(mcp.NewTool(toolApprovePlaybookRun,
+		mcp.WithDescription("Approve a playbook run waiting for approval, as the caller. The run starts once it has the approvals its playbook requires."),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		runID,
+	), approvePlaybookRunHandler)
+
+	s.AddTool(mcp.NewTool(toolCancelPlaybookRun,
+		mcp.WithDescription("Cancel a playbook run that hasn't finished."),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		runID,
+	), cancelPlaybookRunHandler)
 }
