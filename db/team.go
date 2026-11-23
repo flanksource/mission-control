@@ -3,6 +3,7 @@ package db
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/api"
@@ -10,6 +11,8 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/kopper"
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
@@ -200,6 +203,117 @@ func RemoveTeamMember(ctx context.Context, teamID, personID uuid.UUID) error {
 		return api.Errorf(api.ENOTFOUND, "person %s is not a direct member of team %s", personID, teamID)
 	}
 	return nil
+}
+
+// TeamChanges are the fields of a team that can be changed; a nil field is left as it is.
+type TeamChanges struct {
+	Name *string `json:"name,omitempty"`
+	Icon *string `json:"icon,omitempty"`
+}
+
+// CreateTeam creates a team, without members, as the request's user. A team with the name of an existing one fails it
+// as a conflict.
+func CreateTeam(ctx context.Context, name, icon string) (*models.Team, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, api.Errorf(api.EINVALID, "name is required")
+	}
+	user := ctx.User()
+	if user == nil {
+		return nil, api.Errorf(api.EUNAUTHORIZED, "a team can only be created by a user")
+	}
+
+	team := models.Team{Name: name, Icon: icon, Source: models.SourceUI, CreatedBy: user.ID}
+	if err := ctx.DB().Create(&team).Error; err != nil {
+		if isTeamNameTaken(err) {
+			return nil, api.Errorf(api.ECONFLICT, "team %s already exists", name)
+		}
+		return nil, ctx.Oops().Wrapf(err, "failed to create team %s", name)
+	}
+	return &team, nil
+}
+
+// UpdateTeam changes a team's name or icon. Teams shipped with Mission Control or managed through Kubernetes can't
+// be changed here. Renaming a team reloads the policy, because RoleBindings select teams by name.
+func UpdateTeam(ctx context.Context, id uuid.UUID, changes TeamChanges) (*models.Team, error) {
+	team, err := getChangeableTeam(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	updates := map[string]any{}
+	if changes.Name != nil {
+		name := strings.TrimSpace(*changes.Name)
+		if name == "" {
+			return nil, api.Errorf(api.EINVALID, "name can't be empty")
+		}
+		if name != team.Name {
+			updates["name"] = name
+		}
+	}
+	if changes.Icon != nil && *changes.Icon != team.Icon {
+		updates["icon"] = *changes.Icon
+	}
+	if len(updates) == 0 {
+		return team, nil
+	}
+
+	if err := ctx.DB().Model(team).Updates(updates).Error; err != nil {
+		if isTeamNameTaken(err) {
+			return nil, api.Errorf(api.ECONFLICT, "team %s already exists", updates["name"])
+		}
+		return nil, ctx.Oops().Wrapf(err, "failed to update team %s", id)
+	}
+	if err := ctx.DB().Where("id = ?", id).First(team).Error; err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to get team %s", id)
+	}
+	if _, renamed := updates["name"]; renamed {
+		if err := adapter.ReloadPolicy(); err != nil {
+			return nil, ctx.Oops().Wrapf(err, "renamed team %s, but failed to reload the policy", id)
+		}
+	}
+	return team, nil
+}
+
+// DeleteTeamWithMembers soft deletes a team and removes its members, so they lose what the team grants. Teams shipped
+// with Mission Control or managed through Kubernetes can't be deleted here.
+func DeleteTeamWithMembers(ctx context.Context, id uuid.UUID) error {
+	if _, err := getChangeableTeam(ctx, id); err != nil {
+		return err
+	}
+	return ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
+		if err := txCtx.DB().Where("team_id = ?", id).Delete(&dbModels.TeamMember{}).Error; err != nil {
+			return ctx.Oops().Wrapf(err, "failed to remove the members of team %s", id)
+		}
+		if err := txCtx.DB().Model(&models.Team{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error; err != nil {
+			return ctx.Oops().Wrapf(err, "failed to delete team %s", id)
+		}
+		return nil
+	})
+}
+
+// getChangeableTeam returns the team, when it exists and can be changed or deleted through the API.
+func getChangeableTeam(ctx context.Context, id uuid.UUID) (*models.Team, error) {
+	var team models.Team
+	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", id).First(&team).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, api.Errorf(api.ENOTFOUND, "team %s not found", id)
+		}
+		return nil, ctx.Oops().Wrapf(err, "failed to get team %s", id)
+	}
+	switch team.Source {
+	case adapter.SourceShipped:
+		return nil, api.Errorf(api.ECONFLICT, "team %s is shipped with Mission Control and can't be changed or deleted; its members can", team.Name)
+	case models.SourceCRD:
+		return nil, api.Errorf(api.ECONFLICT, "team %s is managed through a Kubernetes Team and can only be changed or deleted there", team.Name)
+	}
+	return &team, nil
+}
+
+// isTeamNameTaken reports whether the error is a write that names a team with the name of another.
+func isTeamNameTaken(err error) bool {
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) && pgErr.Code == pgerrcode.UniqueViolation && pgErr.ConstraintName == "team_name_key"
 }
 
 // DeleteTeam soft deletes a Team by ID

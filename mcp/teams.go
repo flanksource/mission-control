@@ -23,7 +23,16 @@ const (
 	toolListPersonTeams  = "list_person_teams"
 	toolAddTeamMembers   = "add_team_members"
 	toolRemoveTeamMember = "remove_team_member"
+	toolCreateTeam       = "create_team"
+	toolUpdateTeam       = "update_team"
+	toolDeleteTeam       = "delete_team"
 )
+
+type teamRef struct {
+	ID   uuid.UUID `json:"id"`
+	Name string    `json:"name"`
+	Icon string    `json:"icon,omitempty"`
+}
 
 type teamResponse struct {
 	ID      uuid.UUID `json:"id"`
@@ -256,6 +265,84 @@ func removeTeamMemberHandler(goctx gocontext.Context, req mcp.CallToolRequest) (
 	return mcp.NewToolResultText(fmt.Sprintf("removed %s from team %s", personRef, teamRef)), nil
 }
 
+func createTeamHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	ctx, err := getDutyCtx(goctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := requireTeams(ctx, policy.ActionCreate); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	name, err := req.RequireString("name")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	team, err := db.CreateTeam(ctx, name, req.GetString("icon", ""))
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	return structToMCPResponse(req, teamRef{ID: team.ID, Name: team.Name, Icon: team.Icon}), nil
+}
+
+func updateTeamHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	ctx, err := getDutyCtx(goctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := requireTeams(ctx, policy.ActionUpdate); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	ref, err := req.RequireString("team")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	var changes db.TeamChanges
+	if name, ok := req.GetArguments()["name"].(string); ok {
+		changes.Name = &name
+	}
+	if icon, ok := req.GetArguments()["icon"].(string); ok {
+		changes.Icon = &icon
+	}
+	if changes.Name == nil && changes.Icon == nil {
+		return mcp.NewToolResultError("name or icon is required"), nil
+	}
+
+	teamID, err := findTeamID(ctx, ref)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	team, err := db.UpdateTeam(ctx, teamID, changes)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	return structToMCPResponse(req, teamRef{ID: team.ID, Name: team.Name, Icon: team.Icon}), nil
+}
+
+func deleteTeamHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	ctx, err := getDutyCtx(goctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := requireTeams(ctx, policy.ActionDelete); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	ref, err := req.RequireString("team")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	teamID, err := findTeamID(ctx, ref)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if err := db.DeleteTeamWithMembers(ctx, teamID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	return mcp.NewToolResultText(fmt.Sprintf("deleted team %s", ref)), nil
+}
+
 func registerTeams(s *server.MCPServer) {
 	team := mcp.WithString("team", mcp.Required(), mcp.Description("Name or UUID of the team"))
 	person := mcp.WithString("person", mcp.Required(), mcp.Description("Email or UUID of the person"))
@@ -294,4 +381,30 @@ func registerTeams(s *server.MCPServer) {
 		mcp.WithDestructiveHintAnnotation(true),
 		team, person,
 	), removeTeamMemberHandler)
+
+	s.AddTool(mcp.NewTool(toolCreateTeam,
+		mcp.WithDescription("Create a team without members. Add members with add_team_members."),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(false),
+		mcp.WithString("name", mcp.Required(), mcp.Description("Name of the team, unique among teams")),
+		mcp.WithString("icon", mcp.Description("Icon of the team")),
+	), createTeamHandler)
+
+	s.AddTool(mcp.NewTool(toolUpdateTeam,
+		mcp.WithDescription("Rename a team or change its icon. Teams shipped with Mission Control or managed through Kubernetes can't be changed here. "+
+			"Renaming a team changes which RoleBindings select it, since they select teams by name."),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		team,
+		mcp.WithString("name", mcp.Description("New name of the team")),
+		mcp.WithString("icon", mcp.Description("New icon of the team")),
+	), updateTeamHandler)
+
+	s.AddTool(mcp.NewTool(toolDeleteTeam,
+		mcp.WithDescription("Delete a team and remove its members, who lose what the team grants. "+
+			"Teams shipped with Mission Control or managed through Kubernetes can't be deleted here."),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		team,
+	), deleteTeamHandler)
 }
