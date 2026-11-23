@@ -271,48 +271,55 @@ func targetCount(values ...string) int {
 func HandlePlaybookRunCancel(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
-	runID := c.Param("run_id")
-	runUUID, err := uuid.Parse(runID)
+	runID, err := uuid.Parse(c.Param("run_id"))
 	if err != nil {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid run id: %v", err))
 	}
 
-	run, err := models.PlaybookRun{ID: runUUID}.Load(ctx.DB())
+	if err := CancelRun(ctx, runID); err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "playbook run cancelled"})
+}
+
+// CancelRun cancels a playbook run that hasn't finished, as the request's subject. It takes playbook:cancel on the
+// run and read on its target.
+func CancelRun(ctx context.Context, runID uuid.UUID) error {
+	run, err := models.PlaybookRun{ID: runID}.Load(ctx.DB())
 	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+		return ctx.Oops().Wrap(err)
 	} else if run == nil {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "playbook run(id=%s) not found", runID))
+		return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "playbook run(id=%s) not found", runID)
 	}
 
 	attr, err := run.GetABACAttributes(ctx.DB())
 	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+		return ctx.Oops().Wrap(err)
 	}
 
 	checkCtx, err := membership.ForOperation(ctx, dutyRBAC.MembershipRefs(attr)...)
 	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+		return ctx.Oops().Wrap(err)
 	}
 	if !rbac.HasPermission(checkCtx, ctx.Subject(), attr, policy.ActionPlaybookCancel) {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("you do not have permission to cancel this playbook run"))
+		return ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("you do not have permission to cancel this playbook run")
 	}
 
 	target := &models.ABACAttribute{Config: attr.Config, Component: attr.Component, Check: attr.Check}
 	if (run.ConfigID != nil || run.ComponentID != nil || run.CheckID != nil) && !rbac.HasPermission(checkCtx, ctx.Subject(), target, policy.ActionRead) {
-		return dutyAPI.WriteError(c, ctx.Oops().With("permission", policy.ActionRead, "objects", target).Code(dutyAPI.EFORBIDDEN).Errorf("access denied: read access to the playbook run resource required"))
+		return ctx.Oops().With("permission", policy.ActionRead, "objects", target).Code(dutyAPI.EFORBIDDEN).Errorf("access denied: read access to the playbook run resource required")
 	}
 
 	if lo.Contains(models.PlaybookRunStatusFinalStates, run.Status) {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "playbook run(id=%s) is in %s state and cannot be cancelled", runID, run.Status))
+		return dutyAPI.Errorf(dutyAPI.EINVALID, "playbook run(id=%s) is in %s state and cannot be cancelled", runID, run.Status)
 	}
 
 	if err := run.Cancel(ctx.DB()); err != nil {
 		var terr *models.TransitionError
 		if errors.As(err, &terr) {
-			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "playbook run(id=%s) is in %s state and cannot be cancelled", runID, terr.From))
+			return dutyAPI.Errorf(dutyAPI.EINVALID, "playbook run(id=%s) is in %s state and cannot be cancelled", runID, terr.From)
 		}
-		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+		return ctx.Oops().Wrap(err)
 	}
-
-	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "playbook run cancelled"})
+	return nil
 }

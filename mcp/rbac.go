@@ -3,13 +3,20 @@ package mcp
 import (
 	gocontext "context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
+	"time"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/samber/lo"
+	"gorm.io/gorm"
 
+	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/notification"
 	icrbac "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
@@ -22,6 +29,9 @@ const (
 	toolUpdateRBACObject          = "update_rbac_object"
 	toolDeleteRBACObject          = "delete_rbac_object"
 	toolCreateNotificationSilence = "create_notification_silence"
+	toolListNotificationSilences  = "list_notification_silences"
+	toolDeleteNotificationSilence = "delete_notification_silence"
+	toolCheckAccess               = "check_access"
 )
 
 // rbacKinds are the kinds the RBAC tools take, each the path of its /rbac routes and the object they check.
@@ -145,6 +155,138 @@ func createNotificationSilenceHandler(goctx gocontext.Context, req mcp.CallToolR
 	return structToMCPResponse(req, saved), nil
 }
 
+func listNotificationSilencesHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	ctx, err := getDutyCtx(goctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if !icrbac.CheckContext(ctx, adapter.ObjectNotificationSilences, policy.ActionRead) {
+		return mcp.NewToolResultError(fmt.Sprintf("forbidden: %s does not have %s permission on %s", ctx.Subject(), policy.ActionRead, adapter.ObjectNotificationSilences)), nil
+	}
+
+	query := ctx.DB().Where("deleted_at IS NULL").Order("created_at DESC")
+	if !req.GetBool("include_expired", false) {
+		query = query.Where("until IS NULL OR until > NOW()")
+	}
+	if search := req.GetString("search", ""); search != "" {
+		query = query.Where("name ILIKE ? OR description ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	var silences []models.NotificationSilence
+	if err := query.Find(&silences).Error; err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	return structToMCPResponse(req, lo.Map(silences, func(s models.NotificationSilence, _ int) silenceResponse {
+		resource := lo.Ternary(s.ConfigID != nil, "config "+lo.FromPtr(s.ConfigID), "")
+		for kind, id := range map[string]*string{"component": s.ComponentID, "check": s.CheckID, "canary": s.CanaryID} {
+			if id != nil {
+				resource = kind + " " + *id
+			}
+		}
+		return silenceResponse{
+			ID: s.ID, Name: s.Name, Namespace: s.Namespace, Description: lo.FromPtr(s.Description), Source: s.Source,
+			From: s.From, Until: s.Until, Resource: resource, Recursive: s.Recursive, Filter: string(s.Filter),
+			Selectors: string(s.Selectors), Error: lo.FromPtr(s.Error),
+		}
+	})), nil
+}
+
+type silenceResponse struct {
+	ID          uuid.UUID  `json:"id"`
+	Name        string     `json:"name"`
+	Namespace   string     `json:"namespace,omitempty"`
+	Description string     `json:"description,omitempty"`
+	Source      string     `json:"source"`
+	From        *time.Time `json:"from,omitempty"`
+	Until       *time.Time `json:"until,omitempty"`
+	Resource    string     `json:"resource,omitempty"`
+	Recursive   bool       `json:"recursive,omitempty"`
+	Filter      string     `json:"filter,omitempty"`
+	Selectors   string     `json:"selectors,omitempty"`
+	Error       string     `json:"error,omitempty"`
+}
+
+func deleteNotificationSilenceHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	ctx, err := getDutyCtx(goctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if !icrbac.CheckContext(ctx, adapter.ObjectNotificationSilences, policy.ActionDelete) {
+		return mcp.NewToolResultError(fmt.Sprintf("forbidden: %s does not have %s permission on %s", ctx.Subject(), policy.ActionDelete, adapter.ObjectNotificationSilences)), nil
+	}
+
+	id, err := req.RequireString("id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if _, err := uuid.Parse(id); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid silence id %q", id)), nil
+	}
+
+	var silence models.NotificationSilence
+	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", id).First(&silence).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return mcp.NewToolResultError(fmt.Sprintf("notification silence %s not found", id)), nil
+		}
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if silence.Source == models.SourceCRD {
+		return mcp.NewToolResultError(fmt.Sprintf("notification silence %s/%s is managed through a Kubernetes NotificationSilence and can only be deleted there", silence.Namespace, silence.Name)), nil
+	}
+
+	if err := db.DeleteNotificationSilence(ctx, id); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	return mcp.NewToolResultText(fmt.Sprintf("notification silence %s deleted", id)), nil
+}
+
+func checkAccessHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	ctx, err := getDutyCtx(goctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	if !icrbac.CheckContext(ctx, policy.ObjectRBAC, adapter.ActionAccessReview) {
+		return mcp.NewToolResultError(fmt.Sprintf("forbidden: %s does not have %s permission on %s", ctx.Subject(), adapter.ActionAccessReview, policy.ObjectRBAC)), nil
+	}
+
+	raw, err := json.Marshal(req.GetArguments())
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	var review icrbac.SubjectAccessReviewRequest
+	if err := json.Unmarshal(raw, &review); err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("invalid arguments: %v", err)), nil
+	}
+
+	// Subjects are ids; people may also be named by email and teams by name
+	for i, subject := range review.Subjects {
+		if _, err := uuid.Parse(subject); err == nil || subject == "*" || strings.Contains(subject, ":") {
+			continue
+		}
+		var id uuid.UUID
+		if strings.Contains(subject, "@") {
+			id, err = findPersonID(ctx, subject)
+		} else {
+			id, err = findTeamID(ctx, subject)
+		}
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		review.Subjects[i] = id.String()
+	}
+
+	response, err := icrbac.RunSubjectAccessReview(ctx, review)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	// JSON, as the explained rules are nested too deep for a table
+	out, err := json.Marshal(response)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	return mcp.NewToolResultText(string(out)), nil
+}
+
 func requireRBACAddress(req mcp.CallToolRequest) (kind, namespace, name string, err error) {
 	if kind, err = req.RequireString("kind"); err != nil {
 		return
@@ -238,4 +380,30 @@ func registerRBAC(s *server.MCPServer) {
 		mcp.WithString("filter", mcp.Description("CEL expression a notification's event must match to be silenced")),
 		mcp.WithArray("selectors", mcp.Items(map[string]any{"type": "object"}), mcp.Description("Resource selectors of the resources to silence, e.g. [{\"types\": [\"Kubernetes::Pod\"], \"namespace\": \"staging\"}]")),
 	), createNotificationSilenceHandler)
+
+	s.AddTool(mcp.NewTool(toolListNotificationSilences,
+		mcp.WithDescription("List notification silences, newest first. Expired silences are left out unless include_expired is set."),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithString("search", mcp.Description("Only list silences whose name or description contains this, case-insensitive")),
+		mcp.WithBoolean("include_expired", mcp.Description("Also list silences whose until has passed")),
+	), listNotificationSilencesHandler)
+
+	s.AddTool(mcp.NewTool(toolDeleteNotificationSilence,
+		mcp.WithDescription("Delete a notification silence, so the notifications it stopped are sent again. Silences managed through Kubernetes can't be deleted here."),
+		mcp.WithReadOnlyHintAnnotation(false),
+		mcp.WithDestructiveHintAnnotation(true),
+		mcp.WithString("id", mcp.Required(), mcp.Description("UUID of the silence, from list_notification_silences")),
+	), deleteNotificationSilenceHandler)
+
+	s.AddTool(mcp.NewTool(toolCheckAccess,
+		mcp.WithDescription("Check whether subjects may perform an action on a resource, and with explain, which rules decide it. "+
+			"Use it to answer why someone can or can't do something."),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithString("action", mcp.Required(), mcp.Description("The action, e.g. read, update, playbook:run, playbook:approve, connection:use")),
+		mcp.WithObject("resource", mcp.Required(), mcp.Description("The resource, by UUID: one of {playbook, config, component, check, view, connection}, "+
+			"or {global: <RBAC object>} to check the action on a whole type, e.g. {global: \"catalog\"}. Use {} for an action that takes no resource.")),
+		mcp.WithArray("subjects", mcp.Required(), mcp.WithStringItems(),
+			mcp.Description("People by email or UUID, teams by name or UUID, or [\"*\"] for every subject the policy grants something to")),
+		mcp.WithBoolean("explain", mcp.Description("Include the rules that decide each subject's answer")),
+	), checkAccessHandler)
 }
