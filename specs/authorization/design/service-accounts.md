@@ -9,7 +9,7 @@ The cost of sharing `people` is that every query that picks people must keep ser
 ## Storage
 
 - A service account is a row of `people` with `type = 'service_account'`, its name in `name` and no email. Who created it isn't recorded: like GCP, AWS IAM and Kubernetes service accounts, it keeps only its creation time, `created_at`. If service accounts ever need columns of their own, they go in a table keyed by `person_id`, as `agents` is, not in `people`. Its name is unique among the rows of that type that aren't deleted, enforced by a partial unique index.
-- Its tokens are rows of `access_tokens` whose `person_id` is the service account and whose `created_by` is the issuer. Their bindings are token bindings like a person's (`token-bindings.md`, Section 4), created in the token's transaction. A person is only ever soft-deleted, so a token keeps naming its issuer after they're deleted.
+- Its tokens are rows of `access_tokens` whose `person_id` is the service account and whose `created_by` is the issuer. Their bindings are token bindings like a person's (`token-bindings.md`, Section 4), created in the token's transaction or added later, with `created_by` set to whoever wrote each one. A person is only ever soft-deleted, so a token keeps naming its issuer after they're deleted.
 - Deleting a service account soft-deletes its row, and hard-deletes its tokens and their bindings, in one transaction, then reloads the policy. Each of its tokens is revoked as one token is (`design/tokens.md`): its id goes on the deny list of deleted tokens, and what's cached for it is dropped. _Why:_ a valid token is cached until it expires, so deleting its row alone would leave a cached copy working.
 - The casbin subject of a service account is its person id, like a person's. `serviceAccounts` entries resolve by name to that id when the policy loads, so a binding written before the account exists takes effect on the reload its creation triggers.
 
@@ -81,6 +81,7 @@ The `/service-accounts` routes all take `service-account:manage`, and refuse a r
 | `GET /service-accounts/:name/tokens`                  | Lists its tokens, with their Roles, never the token         |
 | `POST /service-accounts/:name/tokens`                 | Issues a token: `name`, `expiry`, `autoRenew`, `roles`      |
 | `DELETE /service-accounts/:name/tokens/:id`           | Revokes a token                                             |
+| `PUT /service-accounts/:name/tokens/:id/roles`        | Sets a token's Roles: `roles` (`design/tokens.md`) |
 
 Issuing a token shares the code path of a person's token: one transaction creating the token and its bindings, then a policy reload before the response, so it's usable as soon as it's returned (`design/tokens.md`).
 
@@ -125,7 +126,7 @@ _Why a route to create one:_ under basic authentication signing in doesn't creat
 - **Settings → Service Accounts**, shown to subjects with `service-account:manage`:
   - A list with **Create**, taking a name, and each account's creation time.
   - An account page listing the RoleBindings that name it, to those who may read RoleBindings, read-only, linking to the RoleBindings page to edit them.
-  - A **Tokens** tab to issue a token (name, expiry, auto-renew, Roles), shown once, and to revoke tokens.
+  - A **Tokens** tab to issue a token (name, expiry, auto-renew, Roles), shown once, to edit a token's Roles, and to revoke tokens.
   - **Download kubeconfig**, which issues a proxy token for the account, with the expiry and auto-renew chosen there. The page warns when the account holds neither `kubernetes-proxy:read` nor `kubernetes-proxy:write`, since such a kubeconfig is refused on every request. It reads that from the account, so it needs no `access:review`.
 
 The UI never acts as a service account: an admin, signed in as themselves, manages the account and its credentials, as GCP's and AWS's consoles do for service account keys.

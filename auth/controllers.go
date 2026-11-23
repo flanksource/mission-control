@@ -8,7 +8,9 @@ import (
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 
@@ -27,6 +29,7 @@ func RegisterRoutes(e *echo.Echo) {
 	e.POST("/auth/create_token", CreateToken)
 	e.GET("/auth/tokens", ListTokens)
 	e.DELETE("/auth/token/:id", DeleteToken)
+	e.PUT("/auth/token/:id/roles", SetTokenRoles)
 
 	RegisterServiceAccountRoutes(e)
 }
@@ -214,6 +217,61 @@ func ListTokens(c echo.Context) error {
 		}
 	}
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success", Payload: payload})
+}
+
+// SetTokenRoles sets the Roles of one of the caller's own tokens. Another person's token, or a token that doesn't
+// exist, is not found (specs/authorization/token-bindings.md, Section 2).
+func SetTokenRoles(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+	user := ctx.User()
+	if user == nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "error fetching user"))
+	} else if madeWithAccessToken(ctx) {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "an access token's roles can't be changed with an access token"))
+	}
+
+	return setTokenRoles(c, func(token models.AccessToken) bool {
+		return token.PersonID == user.ID && lo.FromPtr(token.CreatedBy) == user.ID
+	})
+}
+
+// SetTokenRolesRequest is the whole list of Roles a token is bound to after the change.
+type SetTokenRolesRequest struct {
+	Roles db.AccessTokenRoles `json:"roles"`
+}
+
+// setTokenRoles sets the Roles of the token in the route, if owns accepts it. The change applies to the token's next
+// request: the policy is reloaded, and a failed reload fails the request.
+func setTokenRoles(c echo.Context, owns func(models.AccessToken) bool) error {
+	ctx := c.Request().Context().(context.Context)
+
+	tokenID, err := uuid.Parse(c.Param("id"))
+	if err != nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "access token %s not found", c.Param("id")))
+	}
+
+	var req SetTokenRolesRequest
+	if err := c.Bind(&req); err != nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
+	}
+	for _, role := range req.Roles {
+		if role.Namespace == "" || role.Name == "" {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "role %q must have a namespace and a name", role.Namespace+"/"+role.Name))
+		}
+	}
+
+	token, changed, err := db.SetAccessTokenRoles(ctx, tokenID, owns, req.Roles, ctx.User().ID)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	if changed {
+		if err := adapter.ReloadPolicy(); err != nil {
+			return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "the roles of access token %q were changed, but may not be in effect yet: the policy failed to reload", token.Name))
+		}
+		forgetAccessTokenLimit(token)
+	}
+	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success"})
 }
 
 func DeleteToken(c echo.Context) error {

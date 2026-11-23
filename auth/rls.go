@@ -8,6 +8,7 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/rls"
@@ -92,6 +93,14 @@ func InvalidateRLSCacheForUser(userID string) {
 			tokenCache.Delete(key)
 		}
 	}
+}
+
+// forgetAccessTokenLimit drops what's cached for requests made with the access token after its RoleBindings change,
+// and keeps results being built from the old bindings from being cached: its owner's RLS leases are voided and every
+// access summary is flushed. The PostgREST JWT is keyed by its RLS claims, so a new payload gets a new one.
+func forgetAccessTokenLimit(token models.AccessToken) {
+	InvalidateRLSCacheForUser(token.PersonID.String())
+	rbac.FlushAccessSummaries()
 }
 
 // invalidateRLSCacheForToken removes the RLS payloads cached for requests made with the access token.

@@ -267,6 +267,9 @@ type AccessTokenBinding struct {
 	Ready       bool      `json:"ready"`
 	ErrorReason *string   `json:"error_reason,omitempty"`
 	Error       *string   `json:"error,omitempty"`
+
+	// CreatedBy is whoever bound the token to the Role.
+	CreatedBy *uuid.UUID `json:"created_by,omitempty"`
 }
 
 // ListAccessTokens lists the person's own tokens: those they created that sign in as them.
@@ -295,7 +298,7 @@ func accessTokenBindings(ctx context.Context, tokenID uuid.UUID) ([]AccessTokenB
 		return nil, err
 	}
 	return lo.Map(bindings, func(b models.RoleBinding, _ int) AccessTokenBinding {
-		return AccessTokenBinding{ID: b.ID, Name: b.Name, Role: b.Role, Ready: b.Error == nil, ErrorReason: b.ErrorReason, Error: b.Error}
+		return AccessTokenBinding{ID: b.ID, Name: b.Name, Role: b.Role, Ready: b.Error == nil, ErrorReason: b.ErrorReason, Error: b.Error, CreatedBy: b.CreatedBy}
 	}), nil
 }
 
@@ -348,6 +351,11 @@ func DeleteAccessToken(ctx context.Context, id string) error {
 func deleteAccessTokens(ctx context.Context, ids ...string) error {
 	if len(ids) == 0 {
 		return nil
+	}
+
+	// Locked as changing a token's Roles locks it, so a Role added meanwhile is deleted here, or finds no token
+	if err := ctx.DB().Exec("SELECT 1 FROM access_tokens WHERE id IN ? FOR UPDATE", ids).Error; err != nil {
+		return ctx.Oops().Wrapf(err, "failed to lock access tokens %v", ids)
 	}
 
 	if err := ctx.DB().Model(&models.RoleBinding{}).

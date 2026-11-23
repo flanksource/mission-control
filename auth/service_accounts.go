@@ -31,6 +31,21 @@ func RegisterServiceAccountRoutes(e *echo.Echo) {
 	group.GET("/:name/tokens", ListServiceAccountTokens)
 	group.POST("/:name/tokens", CreateServiceAccountToken)
 	group.DELETE("/:name/tokens/:id", RevokeServiceAccountToken)
+	group.PUT("/:name/tokens/:id/roles", SetServiceAccountTokenRoles)
+}
+
+// SetServiceAccountTokenRoles sets the Roles of a token of the service account in the route. A token of anyone else
+// is not found.
+func SetServiceAccountTokenRoles(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	account, err := db.FindServiceAccount(ctx, c.Param("name"))
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+	return setTokenRoles(c, func(token models.AccessToken) bool {
+		return token.PersonID == account.ID
+	})
 }
 
 func ListServiceAccounts(c echo.Context) error {

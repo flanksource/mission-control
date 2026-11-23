@@ -43,7 +43,7 @@ Everything about service accounts takes one action without a resource, `service-
 
 - listing service accounts and their tokens,
 - creating and deleting a service account,
-- issuing and revoking its tokens, and downloading a kubeconfig for it (`roles.md`, Section 2.3).
+- issuing and revoking its tokens, adding or removing their Roles, and downloading a kubeconfig for it (`roles.md`, Section 2.3).
 
 The one thing it doesn't gate is a service account's name, which `read` on `person` shows wherever the account is named (Section 1).
 
@@ -61,13 +61,14 @@ Giving a service account Roles is writing a RoleBinding that names it, which tak
 
 A service account's token is an access token (`access-tokens.md`) that signs in as the service account.
 
-- **Created with Roles.** A token MUST be created with at least one Role, which limits it like a person's token: it may do what its service account may do, and only what a rule of one of its Roles also matches (`limiting-permissions.md`). The Roles become RoleBindings that select the token, written by whoever issues it (`token-bindings.md`). A token meant to do everything its service account may is bound to `admin` and `plugin-admin`. _Why:_ a token's reach is chosen when it's handed out, never everything by default. One service account can then serve several clients, each with a token that carries only what it's for, e.g. a kubeconfig that reaches only the proxy.
+- **Created with Roles.** A token MUST be created with at least one Role, which limits it like a person's token: it may do what its service account may do, and only what a rule of one of its Roles also matches (`limiting-permissions.md`). The Roles become RoleBindings that select the token, written by whoever issues it (`token-bindings.md`). A token meant to do everything its service account may is bound to `admin` and `plugin-admin`. _Why:_ a token's reach is chosen by whoever manages it, never everything by default. One service account can then serve several clients, each with a token that carries only what it's for, e.g. a kubeconfig that reaches only the proxy.
+- **Roles can change.** A subject with `service-account:manage` MAY add or remove a token's Roles while it exists, as a person may for their own tokens (`token-bindings.md`, Section 2). _Why:_ revoking and reissuing the token would change its Roles too, but would also break every client that holds it.
 - **Outlives its issuer.** A token's access comes from its service account's bindings and its own Roles, never from who issued it. It keeps working when its issuer loses access or is deleted.
 - **Expiry.** A token expires after the expiry given when it's created, or after `access_token.default_expiry`, 90 days by default, when none is given. It MAY be created with auto-renew, which extends it as `access-tokens.md`, Section 4 says. A token that never expires can't be created. _Why:_ an abandoned credential must stop working on its own, while auto-renew keeps one in steady use alive.
 - **Names are unique per service account.** A service account can't have two tokens of the same name.
 - **Usable at once**, and shown once, as for every token (`access-tokens.md`, Sections 2 and 5).
 - **Revocation.** Revoking a token deletes it and its bindings at once, and the next request made with it is refused with `401 Unauthorized`. Expired tokens are deleted on a schedule.
-- **Listing** a service account's tokens shows each token's name, its Roles, who issued it, and when it was created and expires, never the token.
+- **Listing** a service account's tokens shows each token's name, its Roles and who added each, who issued it, and when it was created and expires, never the token.
 
 ## 5. Lifecycle
 
@@ -78,7 +79,7 @@ A service account's token is an access token (`access-tokens.md`) that signs in 
 
 ## 6. Not covered yet
 
-- **Delegated management. TODO.** Letting a team create service accounts and issue their tokens without being trusted as admins needs `service-account:manage` to pick some service accounts, and a check that no one can bind a service account to more than they hold themselves. Kubernetes checks the second when a RoleBinding is written. Both are left for later, with delegated administration of RoleBindings (`overview.md`, "Not covered yet").
+- **Delegated management. TODO.** Letting a team create service accounts and issue their tokens without being trusted as admins needs `service-account:manage` to pick some service accounts, a check that no one can bind a service account to more than they hold themselves, and a limit on whose tokens' Roles they may change. Kubernetes checks the second when a RoleBinding is written. All three are left for later, with delegated administration of RoleBindings (`overview.md`, "Not covered yet").
 - **Denying every service account. TODO.** A deny binding can't select every service account, present and future, since `serviceAccounts` takes no `*` (`rolebindings.md`, Section 5.6). Unlike a grant, a deny on `*` would hand nothing to an account created later, so `*` could be accepted on deny bindings alone.
 - **Federated credentials. TODO.** A CI system that issues its own signed tokens, e.g. GitHub Actions OIDC, could sign in as a service account without a stored token. That's a later extension of external identity providers.
 

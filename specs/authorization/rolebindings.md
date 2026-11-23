@@ -44,7 +44,7 @@ _Why:_ a binding can grant a shared Role and narrow it with its own Scopes, with
 | `serviceAccounts`                                                  | list of strings | Service accounts, by name (Section 2.7)                              |
 | `playbooks`, `notifications`, `topologies`, `scrapers`, `canaries`, `plugins` | list of objects | Those resources, when they act on their own               |
 
-A person is a human who signs in: through Mission Control's own authentication (Kratos, Clerk, basic), or as a user of an external identity provider (Section 2.4). Both are selected by `people` and `teams`, by different kinds of entry (Section 2.1). Agents aren't people, and no subject selects them (Section 2.3). Service accounts aren't people either, and only `serviceAccounts` selects them (Section 2.7). An access token isn't an identity: a request made with one is checked as its owner (`identities.md`, Section 4). A token is selected only by the bindings created with it (Section 2.6). `people` selects humans only, by any kind of entry, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
+A person is a human who signs in: through Mission Control's own authentication (Kratos, Clerk, basic), or as a user of an external identity provider (Section 2.4). Both are selected by `people` and `teams`, by different kinds of entry (Section 2.1). Agents aren't people, and no subject selects them (Section 2.3). Service accounts aren't people either, and only `serviceAccounts` selects them (Section 2.7). An access token isn't an identity: a request made with one is checked as its owner (`identities.md`, Section 4). A token is selected only by its own token bindings (Section 2.6). `people` selects humans only, by any kind of entry, even where Mission Control stores other identities in the same table. _Why:_ `people: ["*"]` is how everyone in the organisation gets a Role, e.g. `viewer`. Reaching agents too would hand them access no one meant to grant.
 
 ### 2.1 People
 
@@ -228,7 +228,7 @@ Bind by exact namespace and name wherever the Role is sensitive, e.g. `connectio
 
 ### 2.6 Access tokens
 
-A RoleBinding can select an access token, to limit it, but only when the token is created, for its owner (`token-bindings.md`). Neither a custom resource nor the RoleBinding API has a field that selects a token, and both are refused in the reserved namespace token bindings live in, so neither can write, change or delete one.
+A RoleBinding can select an access token, to limit it, but only when it's written for the token by whoever may write its bindings: when the token is created, or when a Role is added to it (`token-bindings.md`). Neither a custom resource nor the RoleBinding API has a field that selects a token, and both are refused in the reserved namespace token bindings live in, so neither can write, change or delete one.
 
 ### 2.7 Service accounts
 

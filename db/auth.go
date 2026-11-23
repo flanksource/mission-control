@@ -120,6 +120,55 @@ func CreateAccessToken(ctx context.Context, personID uuid.UUID, name string, exp
 	return token.V2(), accessTokenModel, nil
 }
 
+// SetAccessTokenRoles sets the Roles the access token is bound to, written by writer: Roles new to the list are bound,
+// and the bindings of Roles left out of it are soft-deleted, in one transaction. The token is locked first, as
+// deleting it locks it, and must not have expired and must be one owns accepts; otherwise it's not found. changed is
+// false when the token was already bound to exactly these Roles (specs/authorization/token-bindings.md, Section 2).
+func SetAccessTokenRoles(ctx context.Context, tokenID uuid.UUID, owns func(models.AccessToken) bool, roles AccessTokenRoles, writer uuid.UUID) (token models.AccessToken, changed bool, err error) {
+	roles = lo.Uniq(roles)
+	err = ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
+		if err := txCtx.DB().Raw(`SELECT id, name, person_id, created_by FROM access_tokens
+			WHERE id = ? AND (expires_at IS NULL OR expires_at > NOW()) FOR UPDATE`, tokenID).
+			Scan(&token).Error; err != nil {
+			return ctx.Oops().Wrapf(err, "failed to get access token %s", tokenID)
+		} else if token.ID == uuid.Nil || !owns(token) {
+			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "access token %s not found", tokenID)
+		}
+
+		bound, err := adapter.AccessTokenBindings(txCtx, tokenID)
+		if err != nil {
+			return ctx.Oops().Wrapf(err, "failed to get the role bindings of access token %q", token.Name)
+		}
+
+		wanted := lo.SliceToMap(roles, func(r AccessTokenRole) (string, AccessTokenRole) { return r.Namespace + "/" + r.Name, r })
+		var removed []uuid.UUID
+		for _, binding := range bound {
+			if _, keep := wanted[binding.Role]; keep {
+				delete(wanted, binding.Role)
+			} else {
+				removed = append(removed, binding.ID)
+			}
+		}
+
+		if len(removed) > 0 {
+			if err := txCtx.DB().Model(&models.RoleBinding{}).Where("id IN ?", removed).
+				Update("deleted_at", duty.Now()).Error; err != nil {
+				return ctx.Oops().Wrapf(err, "failed to remove roles from access token %q", token.Name)
+			}
+		}
+		for _, role := range roles {
+			if _, add := wanted[role.Namespace+"/"+role.Name]; add {
+				if err := createAccessTokenBinding(txCtx, &token, role, writer); err != nil {
+					return err
+				}
+			}
+		}
+		changed = len(removed) > 0 || len(wanted) > 0
+		return nil
+	})
+	return token, changed, err
+}
+
 // createAccessTokenBinding creates the RoleBinding that limits the access token by the Role, in the reserved
 // namespace of access tokens' bindings, written by whoever issued the token. Its only subject is the token, which no
 // custom resource or RoleBinding API write can express, so it's stored directly.
