@@ -24,7 +24,8 @@ const (
 	toolCreateNotificationSilence = "create_notification_silence"
 )
 
-var rbacKinds = []string{"scopes", "roles", "role-bindings"}
+// rbacKinds are the kinds the RBAC tools take, each the path of its /rbac routes and the object they check.
+var rbacKinds = []string{adapter.ObjectScopes, adapter.ObjectRoles, adapter.ObjectRoleBindings}
 
 func listRBACObjectsHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)

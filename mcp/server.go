@@ -89,6 +89,7 @@ func RegisterStaticTools(s *server.MCPServer) {
 	registerResolve(s)
 	registerJobs(s)
 	registerRBAC(s)
+	registerTeams(s)
 }
 
 func Server(ctx context.Context, serverOpts ...server.StreamableHTTPOption) *MCPServer {
@@ -100,6 +101,7 @@ func Server(ctx context.Context, serverOpts ...server.StreamableHTTPOption) *MCP
 		server.WithPromptCapabilities(true),
 		server.WithRecovery(),
 		server.WithHooks(hooks),
+		server.WithToolFilter(filterToolsByPermission),
 	)
 
 	RegisterStaticTools(s)
