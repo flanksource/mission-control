@@ -25,6 +25,7 @@ var toolPermissions = map[string]toolPermission{
 	toolGetJobRun:                   {policy.ObjectJobs, policy.ActionJobRead},
 	toolGetNotificationDetail:       {policy.ObjectNotification, policy.ActionRead},
 	toolGetNotificationsForResource: {policy.ObjectNotification, policy.ActionRead},
+	toolListNotificationSends:       {policy.ObjectNotification, policy.ActionRead},
 	toolResolveExternalUser:         {policy.ObjectCatalog, policy.ActionRead},
 	toolResolveExternalGroup:        {policy.ObjectCatalog, policy.ActionRead},
 	toolCreateNotificationSilence:   {adapter.ObjectNotificationSilences, policy.ActionCreate},
