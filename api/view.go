@@ -422,11 +422,12 @@ const (
 )
 
 // +kubebuilder:object:generate=true
-// +kubebuilder:validation:XValidation:rule="(has(self.values) && !has(self.valueFrom)) || (!has(self.values) && has(self.valueFrom))",message="exactly one of values or valueFrom is required"
+// +kubebuilder:validation:XValidation:rule="!(has(self.values) && has(self.valueFrom))",message="values and valueFrom can't both be set"
 //
 // A variable represents a dynamic parameter that can be substituted into data queries.
 // Modifying the variable's value will update all elements that reference it.
 // Variables appear as interactive controls (dropdown menus or text inputs) at the top of the view interface.
+// A variable with neither values nor valueFrom is a text input, which takes any value.
 type ViewVariable struct {
 	// Key is the unique identifier of the variable.
 	// The variable's value is accessible in the dataquery templates as $(var.<key>)
