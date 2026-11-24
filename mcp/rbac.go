@@ -16,6 +16,7 @@ import (
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/notification"
 	icrbac "github.com/flanksource/incident-commander/rbac"
@@ -51,7 +52,53 @@ func listRBACObjectsHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return structToMCPResponse(req, list), nil
+	return rbacObjectsResponse(list)
+}
+
+// rbacSpecFields are the stored fields of a Scope, Role or RoleBinding that belong to its spec.
+var rbacSpecFields = []string{"description", "targets", "rules", "role", "subjects", "constraint", "deny"}
+
+// rbacObjectsResponse returns stored Scopes, Roles or RoleBindings as JSON, each in the shape create_rbac_object
+// takes, {metadata, spec}, with what's stored about it beyond that, e.g. whether it's in effect, in status.
+// JSON, as a table or Markdown would hide the structure of targets, rules and subjects.
+func rbacObjectsResponse(stored any) (*mcp.CallToolResult, error) {
+	raw, err := json.Marshal(stored)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	toObject := func(fields map[string]any) map[string]any {
+		metadata := map[string]any{"uid": fields["id"], "name": fields["name"], "namespace": fields["namespace"]}
+		spec := map[string]any{}
+		status := map[string]any{"ready": fields["error"] == nil}
+		for key, value := range fields {
+			switch {
+			case key == "id" || key == "name" || key == "namespace":
+			case lo.Contains(rbacSpecFields, key):
+				spec[key] = value
+			default:
+				status[key] = value
+			}
+		}
+		return map[string]any{"metadata": metadata, "spec": spec, "status": status}
+	}
+
+	var out any
+	var list []map[string]any
+	if err := json.Unmarshal(raw, &list); err == nil {
+		out = lo.Map(list, func(fields map[string]any, _ int) map[string]any { return toObject(fields) })
+	} else {
+		var fields map[string]any
+		if err := json.Unmarshal(raw, &fields); err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		out = toObject(fields)
+	}
+
+	if raw, err = json.Marshal(out); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	return mcp.NewToolResultText(string(raw)), nil
 }
 
 func getRBACObjectHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -68,7 +115,7 @@ func getRBACObjectHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return structToMCPResponse(req, object), nil
+	return rbacObjectsResponse(object)
 }
 
 func createRBACObjectHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -89,7 +136,7 @@ func createRBACObjectHandler(goctx gocontext.Context, req mcp.CallToolRequest) (
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return structToMCPResponse(req, created), nil
+	return rbacObjectsResponse(created)
 }
 
 func updateRBACObjectHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -110,7 +157,7 @@ func updateRBACObjectHandler(goctx gocontext.Context, req mcp.CallToolRequest) (
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return structToMCPResponse(req, updated), nil
+	return rbacObjectsResponse(updated)
 }
 
 func deleteRBACObjectHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -322,20 +369,28 @@ func registerRBAC(s *server.MCPServer) {
 	name := mcp.WithString("name", mcp.Required(), mcp.Description("Name of the object"))
 	object := mcp.WithObject("object", mcp.Required(),
 		mcp.Description("The object as the /rbac API and the CRD take it: {metadata: {name, namespace}, spec: {...}}. "+
-			"Scope spec: {description, targets: [{config|component|check|canary|playbook|connection|scraper|view: {id, name, namespace, agent, types, tagSelector, labelSelector}} or {<type>: {name: \"*\"}}]}. "+
+			"Scope spec: {description, targets: [...]}, where each target sets exactly one type: "+
+			"config: {id, name, namespace, agent, types, tagSelector, labelSelector}; "+
+			"component or check: {id, name, namespace, agent, types, labelSelector}; "+
+			"canary: {id, name, namespace, agent, labelSelector}; scraper: {id, name, namespace, agent}; "+
+			"connection: {id, name, namespace, types}; playbook or view: {id, name, namespace}; "+
+			strings.Join(v1.WholeTypeResources, ", ")+": {name: \"*\"}, the whole type, e.g. {team: {name: \"*\"}}. "+
 			"Role spec: {description, rules: [{name, action, resource: {scopeRef}, target: {scopeRef}}]}. "+
 			"RoleBinding spec: {description, role, subjects: {people, teams, serviceAccounts, playbooks, notifications, ...}, constraint: {resource: {scopeRef}, target: {scopeRef}}, deny}."),
 	)
 
 	s.AddTool(mcp.NewTool(toolListRBACObjects,
-		mcp.WithDescription("List Mission Control Scopes, Roles or RoleBindings, with whether each is in effect (error, error_reason)."),
+		mcp.WithDescription("List Mission Control Scopes, Roles or RoleBindings as JSON, each as {metadata, spec, status}: metadata and spec in the shape create_rbac_object takes, "+
+			"and status with whether it's in effect (ready, error, error_reason), its source, created_by and timestamps."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		kind(true),
 		mcp.WithString("namespace", mcp.Description("Only list objects in this namespace. Lists every namespace when omitted.")),
 	), listRBACObjectsHandler)
 
 	s.AddTool(mcp.NewTool(toolGetRBACObject,
-		mcp.WithDescription("Get one Mission Control Scope, Role or RoleBinding by namespace and name, with whether it's in effect and, for Roles and RoleBindings, which rules don't apply through a binding."),
+		mcp.WithDescription("Get one Mission Control Scope, Role or RoleBinding by namespace and name as JSON, {metadata, spec, status}: metadata and spec in the shape create_rbac_object and update_rbac_object take, "+
+			"and status with whether it's in effect (ready, error, error_reason), its source, created_by and timestamps, and for Roles and RoleBindings, which rules don't apply through a binding. "+
+			"Pass metadata and spec back to update_rbac_object; status isn't accepted."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		kind(true), namespace, name,
 	), getRBACObjectHandler)
