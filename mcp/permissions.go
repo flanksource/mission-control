@@ -37,6 +37,7 @@ var toolPermissions = map[string]toolPermission{
 	toolCreateTeam:                  {adapter.ObjectTeams, policy.ActionCreate},
 	toolUpdateTeam:                  {adapter.ObjectTeams, policy.ActionUpdate},
 	toolDeleteTeam:                  {adapter.ObjectTeams, policy.ActionDelete},
+	toolGetPerson:                   {policy.ObjectPeople, policy.ActionRead},
 	toolListNotificationSilences:    {adapter.ObjectNotificationSilences, policy.ActionRead},
 	toolDeleteNotificationSilence:   {adapter.ObjectNotificationSilences, policy.ActionDelete},
 	toolCheckAccess:                 {policy.ObjectRBAC, adapter.ActionAccessReview},
