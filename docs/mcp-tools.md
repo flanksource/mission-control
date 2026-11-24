@@ -40,7 +40,7 @@
 | [`get_playbook_failed_runs`](#get_playbook_failed_runs) | read-only | Get recent failed playbook runs as JSON array. |
 | [`get_playbook_recent_runs`](#get_playbook_recent_runs) | read-only | Get recent playbook execution history as JSON array. |
 | [`get_playbook_run_steps`](#get_playbook_run_steps) | read-only | Get detailed information about a playbook run including all actions. |
-| [`get_rbac_object`](#get_rbac_object) | read-only | Get one Mission Control Scope, Role or RoleBinding by namespace and name, with whether it's in effect and, for Roles and RoleBindings, which rules don't apply through a binding. |
+| [`get_rbac_object`](#get_rbac_object) | read-only | Get one Mission Control Scope, Role or RoleBinding by namespace and name as JSON, {metadata, spec, status}: metadata and spec in the shape create_rbac_object and update_rbac_object take, and status with whether it's in effect (ready, error, error_reason), its source, created_by and timestamps, and for Roles and RoleBindings, which rules don't apply through a binding. |
 | [`get_related_configs`](#get_related_configs) | read-only | Find configuration items related to a specific config by relationships and dependencies |
 | [`list_all_checks`](#list_all_checks) | read-only | List all health checks with complete metadata including names, IDs, and current status |
 | [`list_catalog_types`](#list_catalog_types) | read-only | List all config types |
@@ -50,7 +50,7 @@
 | [`list_notification_sends`](#list_notification_sends) | read-only | List recent notification sends across all notifications, newest first, to find failing or silenced notifications. |
 | [`list_notification_silences`](#list_notification_silences) | read-only | List notification silences, newest first. |
 | [`list_person_teams`](#list_person_teams) | read-only | List the teams a person is a member of, with how each membership was added (source). |
-| [`list_rbac_objects`](#list_rbac_objects) | read-only | List Mission Control Scopes, Roles or RoleBindings, with whether each is in effect (error, error_reason). |
+| [`list_rbac_objects`](#list_rbac_objects) | read-only | List Mission Control Scopes, Roles or RoleBindings as JSON, each as {metadata, spec, status}: metadata and spec in the shape create_rbac_object takes, and status with whether it's in effect (ready, error, error_reason), its source, created_by and timestamps. |
 | [`list_team_members`](#list_team_members) | read-only | List the members of a team. |
 | [`list_teams`](#list_teams) | read-only | List teams with their number of members. |
 | [`read_artifact_content`](#read_artifact_content) | read-only | Read the actual content of an artifact file. |
@@ -378,7 +378,7 @@ Get detailed information about a playbook run including all actions. Returns act
 
 ### `get_rbac_object`
 
-Get one Mission Control Scope, Role or RoleBinding by namespace and name, with whether it's in effect and, for Roles and RoleBindings, which rules don't apply through a binding.
+Get one Mission Control Scope, Role or RoleBinding by namespace and name as JSON, {metadata, spec, status}: metadata and spec in the shape create_rbac_object and update_rbac_object take, and status with whether it's in effect (ready, error, error_reason), its source, created_by and timestamps, and for Roles and RoleBindings, which rules don't apply through a binding. Pass metadata and spec back to update_rbac_object; status isn't accepted.
 
 **Hints:** read-only
 
@@ -500,7 +500,7 @@ List the teams a person is a member of, with how each membership was added (sour
 
 ### `list_rbac_objects`
 
-List Mission Control Scopes, Roles or RoleBindings, with whether each is in effect (error, error_reason).
+List Mission Control Scopes, Roles or RoleBindings as JSON, each as {metadata, spec, status}: metadata and spec in the shape create_rbac_object takes, and status with whether it's in effect (ready, error, error_reason), its source, created_by and timestamps.
 
 **Hints:** read-only
 
