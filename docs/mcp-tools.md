@@ -16,7 +16,7 @@
 | `Unhealthy catalog items` | Searches for all unhealthy items using `search_catalog` with query `health!=healthy` |
 | `troubleshoot_kubernetes_resource` | Troubleshoots Kubernetes resources. Accepts optional `query` argument (default: `health!=healthy type=Kubernetes::*`) |
 
-## Tools (48 static + dynamic)
+## Tools (50 static + dynamic)
 
 | Tool | Hints | Description |
 |------|-------|-------------|
@@ -36,6 +36,7 @@
 | [`get_job_run`](#get_job_run) | read-only | Get the complete persisted record for a job execution, including its details and errors. |
 | [`get_notification_detail`](#get_notification_detail) | read-only | Get one notification send by ID: its status and full error, body, body_payload and body_markdown (rendered body), the original event payload, the recipient (person, team, connection or playbook run), the resource it was sent for, and the notification rule that sent it. |
 | [`get_notifications_for_resource`](#get_notifications_for_resource) | read-only | Get notification history for a specific resource (config item, component, check, or canary) with optional time and status filtering. |
+| [`get_person`](#get_person) | read-only | Get a Mission Control person by id, e.g. the created_by of an RBAC object, including people who were deleted. |
 | [`get_playbook_failed_runs`](#get_playbook_failed_runs) | read-only | Get recent failed playbook runs as JSON array. |
 | [`get_playbook_recent_runs`](#get_playbook_recent_runs) | read-only | Get recent playbook execution history as JSON array. |
 | [`get_playbook_run_steps`](#get_playbook_run_steps) | read-only | Get detailed information about a playbook run including all actions. |
@@ -68,6 +69,7 @@
 | [`test_connection`](#test_connection) | read-only | Test whether a connection works, by connecting with its credentials. |
 | [`update_rbac_object`](#update_rbac_object) | destructive | Replace a Mission Control Scope, Role or RoleBinding created through the UI, API or MCP. |
 | [`update_team`](#update_team) | destructive | Rename a team or change its icon. |
+| [`whoami`](#whoami) | read-only | Show who the caller is signed in as: their person (id, name, email, type), how they're signed in (oidc: a token of Mission Control's OIDC provider; session: a login session or basic auth; access_token: a personal access token; service_account: a service account's access token), the access token's name, expiry and the role bindings that limit it, the role bindings that grant the caller, and what they may do: the actions they hold and, by resource type and action, whether they may act on all, some or none of it. |
 | `{playbook}_{namespace}_{category}` | mutating | Dynamic per-session playbook tools. Parameters derived from playbook spec. |
 | `view_{name}_{namespace}` | read-only | Dynamic view tools synced hourly. Returns table rows by default with select/page/limit controls. |
 
@@ -322,6 +324,18 @@ Get notification history for a specific resource (config item, component, check,
 | `select` | array |  | Array of field names to return (default: ["id","status","count","resource_health","resource_status","resource_health_description","first_observed","source_event","created_at","resource_id","notification_id"]) |
 | `since` | string |  | Start time filter using datemath expressions (e.g., 'now-24h', 'now-7d', 'now-30m') |
 | `status` | string |  | Filter by notification status (sending, sent, error, pending, silenced, repeat-interval, inhibited, pending_playbook_run, pending_playbook_completion, evaluating-waitfor, attempting_fallback) |
+
+### `get_person`
+
+Get a Mission Control person by id, e.g. the created_by of an RBAC object, including people who were deleted.
+
+**Hints:** read-only
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `id` | string | Yes | UUID of the person |
 
 ### `get_playbook_failed_runs`
 
@@ -775,4 +789,10 @@ Rename a team or change its icon. Teams shipped with Mission Control or managed 
 | `icon` | string |  | New icon of the team |
 | `name` | string |  | New name of the team |
 | `team` | string | Yes | Name or UUID of the team |
+
+### `whoami`
+
+Show who the caller is signed in as: their person (id, name, email, type), how they're signed in (oidc: a token of Mission Control's OIDC provider; session: a login session or basic auth; access_token: a personal access token; service_account: a service account's access token), the access token's name, expiry and the role bindings that limit it, the role bindings that grant the caller, and what they may do: the actions they hold and, by resource type and action, whether they may act on all, some or none of it.
+
+**Hints:** read-only
 

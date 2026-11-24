@@ -19,6 +19,14 @@ import (
 
 var oidcPublicKeyCache = cache.New(5*time.Minute, 10*time.Minute)
 
+type oidcTokenKey struct{}
+
+// MadeWithOIDCToken reports whether the request was authenticated by a token Mission Control's OIDC provider issued.
+func MadeWithOIDCToken(ctx context.Context) bool {
+	made, _ := ctx.Value(oidcTokenKey{}).(bool)
+	return made
+}
+
 // authenticateOIDCToken validates a Bearer JWT token against OIDC public keys.
 // Returns (true, nil) if the token is valid, (false, nil) if it's not an OIDC token,
 // and (false, err) on internal error.
@@ -77,7 +85,7 @@ func authenticateOIDCToken(c echo.Context, tokenStr string) (bool, error) {
 		if err != nil {
 			return false, err
 		}
-		c.SetRequest(c.Request().WithContext(ctx))
+		c.SetRequest(c.Request().WithContext(ctx.WithValue(oidcTokenKey{}, true)))
 		return true, nil
 	}
 
